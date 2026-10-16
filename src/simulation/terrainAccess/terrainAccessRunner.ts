@@ -51,7 +51,9 @@ import { prepareTerrainAccessRun } from './terrainAccessPrepare';
 import { aStarTerrain, type AStarOutcome } from './aStarTerrain';
 import { computeRouteDiagnostics, type RouteDiagnostics } from './routeDiagnostics';
 import { terrainAccessResultDigest } from './terrainAccessDigest';
-import { derivativeEstimateStatement, type DerivativeEstimatedConstraint } from './terrainAccessExplain';
+import {
+  derivativeEstimateStatement, obstructionEstimateStatement, type DerivativeEstimatedConstraint,
+} from './terrainAccessExplain';
 import { basisLimitations } from '../simulationInputBasis';
 import { sealRunRecord, type FieldSimulationRunRecord } from '../simulationRunRecord';
 import { methodRef } from '../../science/methodRegistry';
@@ -151,10 +153,13 @@ export interface TerrainAccessRunIdentity {
  * applied — a profile that asks for it anyway is refused before a run),
  * `recorded-not-enforced` (kept in the record, not used by eligibility),
  * `disclosed` (computed for every cell and reported, not used to block), or
- * `estimated` (applied, but on at least one route cell the slope it reads was
- * computed with a substituted Horn neighbour, so the figure it compared is an
- * estimate; only the slope-derived limits can carry it, and only under the
- * exploratory evidence policy, which allows those cells).
+ * `estimated` (applied, but what it compared is not fully supported). The
+ * slope-derived limits read `estimated` when a route cell's slope, or for
+ * ruggedness its VRM window, used a substituted Horn neighbour; only the
+ * exploratory evidence policy allows such cells, since conservative blocks
+ * them. The above-ground obstruction limit reads `estimated` when its surface
+ * was built from a sample of the scan (under either policy), or when route
+ * cells had no above-ground return (exploratory only).
  */
 export type TerrainAccessConstraintStatus =
   | 'evaluated' | 'disabled' | 'unavailable' | 'recorded-not-enforced' | 'disclosed' | 'estimated';
@@ -171,11 +176,14 @@ export type DerivativeRouteSupport = Pick<RouteDiagnostics,
  * cell's slope used a substituted neighbour, and an evaluated ruggedness limit
  * reads `estimated` when any route cell's VRM window holds such a cell. Step
  * height is a raw height difference between two cells and is never estimated.
+ * An evaluated obstruction limit reads `estimated` when the surface basis is
+ * a sample, or when `obstructionUnevaluatedRouteCells` is above zero.
  */
 export function terrainAccessConstraintStatus(
   profile: TerrainAccessProfile,
   grid: TerrainAccessGrid,
   route: DerivativeRouteSupport | null = null,
+  obstructionUnevaluatedRouteCells = 0,
 ): Readonly<Record<string, TerrainAccessConstraintStatus>> {
   const slopeStatus: TerrainAccessConstraintStatus = (route?.derivativeSynthesisedRouteCells ?? 0) > 0
     ? 'estimated' : 'evaluated';
@@ -189,11 +197,19 @@ export function terrainAccessConstraintStatus(
     vehicleWidth: 'evaluated',
     ruggedness: profile.maxRuggedness == null ? 'disabled' : ruggednessStatus,
     vehicleLength: profile.vehicleLength == null ? 'disabled' : 'recorded-not-enforced',
-    aboveGroundObstruction: grid.heightAboveGround == null
-      ? 'unavailable'
-      : profile.obstacleHeightThreshold == null ? 'disabled' : 'evaluated',
+    aboveGroundObstruction: obstructionStatus(profile, grid, obstructionUnevaluatedRouteCells),
     derivativeSupport: resolveEvidenceGapPolicy(profile) === 'conservative' ? 'evaluated' : 'disclosed',
   };
+}
+
+function obstructionStatus(
+  profile: TerrainAccessProfile,
+  grid: TerrainAccessGrid,
+  unevaluatedRouteCells: number,
+): TerrainAccessConstraintStatus {
+  if (grid.heightAboveGround == null) return 'unavailable';
+  if (profile.obstacleHeightThreshold == null) return 'disabled';
+  return grid.aboveGroundBasis?.sampled === true || unevaluatedRouteCells > 0 ? 'estimated' : 'evaluated';
 }
 
 /**
@@ -202,7 +218,9 @@ export function terrainAccessConstraintStatus(
  */
 export function constraintEstimateStatements(
   constraints: Readonly<Record<string, TerrainAccessConstraintStatus>>,
-  route: DerivativeRouteSupport,
+  route: DerivativeRouteSupport & Pick<RouteDiagnostics, 'cellCount'>,
+  grid: Pick<TerrainAccessGrid, 'aboveGroundBasis'> | null = null,
+  obstructionUnevaluatedRouteCells = 0,
 ): Readonly<Record<string, string>> {
   const out: Record<string, string> = {};
   const order: readonly DerivativeEstimatedConstraint[] = ['crossSlope', 'longitudinalGrade', 'ruggedness'];
@@ -212,6 +230,14 @@ export function constraintEstimateStatements(
       routeCells: key === 'ruggedness' ? route.ruggednessSynthesisedRouteCells : route.derivativeSynthesisedRouteCells,
       boundaryRouteCells: route.derivativeSynthesisedBoundaryRouteCells,
       holeRouteCells: route.derivativeSynthesisedHoleRouteCells,
+    });
+  }
+  if (constraints.aboveGroundObstruction === 'estimated') {
+    const basis = grid?.aboveGroundBasis;
+    out.aboveGroundObstruction = obstructionEstimateStatement({
+      sample: basis?.sampled ? basis : null,
+      unevaluatedRouteCells: obstructionUnevaluatedRouteCells,
+      routeCells: route.cellCount,
     });
   }
   return out;
@@ -284,13 +310,17 @@ export function runTerrainAccess(
   }
 
   const diagnostics = computeRouteDiagnostics(grid, features, search.path, weights, profile);
-  const constraints = terrainAccessConstraintStatus(profile, grid, diagnostics);
-  const constraintEstimates = constraintEstimateStatements(constraints, diagnostics);
-  // Cells on the route where an evaluated obstruction limit had no
-  // above-ground return to read: not known to be clear, so disclosed.
-  const obstructionUnevaluatedRouteCells = constraints.aboveGroundObstruction === 'evaluated'
+  // Cells on the route where an applied obstruction limit had no
+  // above-ground return to read: not known to be clear, so the limit is an
+  // estimate there.
+  const obstructionApplied = grid.heightAboveGround != null && profile.obstacleHeightThreshold != null;
+  const obstructionUnevaluatedRouteCells = obstructionApplied
     ? search.path.filter((i) => features.obstruction[i] === 'not-evaluated').length
     : null;
+  const constraints = terrainAccessConstraintStatus(profile, grid, diagnostics, obstructionUnevaluatedRouteCells ?? 0);
+  const constraintEstimates = constraintEstimateStatements(
+    constraints, diagnostics, grid, obstructionUnevaluatedRouteCells ?? 0,
+  );
   const gaps = evidenceGapTreatment(profile, grid);
   let derivativeSynthesisedGridCells = 0;
   for (let i = 0; i < features.derivativeSynthesised.length; i++) {
@@ -304,7 +334,7 @@ export function runTerrainAccess(
   const limitations = [
     ...basisLimitations(basis, 'terrain-access'),
     ...gridWarnings,
-    ...modelLimitations(profile, diagnostics, obstructionUnevaluatedRouteCells),
+    ...modelLimitations(profile, diagnostics),
     ...evidenceGapLimitations(gaps, diagnostics, gapBlockedCells),
     ...Object.values(constraintEstimates),
   ];
@@ -402,7 +432,6 @@ export function runTerrainAccess(
 function modelLimitations(
   profile: TerrainAccessProfile,
   diagnostics: RouteDiagnostics,
-  obstructionUnevaluatedRouteCells: number | null,
 ): readonly string[] {
   const out: string[] = [
     'A geometry-based traversability screening over the declared terrain and mobility limits. '
@@ -421,14 +450,6 @@ function modelLimitations(
     );
   }
 
-  if (obstructionUnevaluatedRouteCells != null && obstructionUnevaluatedRouteCells > 0) {
-    out.push(
-      `The above-ground obstruction limit could not be checked on ${obstructionUnevaluatedRouteCells} of `
-      + `${diagnostics.cellCount} route cells: the surface has no above-ground evidence there, so those cells `
-      + 'are not known to be clear.',
-    );
-  }
-
   if (profile.vehicleLength != null) {
     out.push(
       `Vehicle length (${profile.vehicleLength} m) is recorded but not enforced: eligibility uses `
@@ -443,7 +464,7 @@ function modelLimitations(
  * What the evidence-gap policy obliges the result to disclose: under
  * exploratory, the route cells whose slope used a synthesised neighbour;
  * under conservative, how many cells the policy blocked. The obstruction
- * cells with no return are disclosed by {@link modelLimitations}.
+ * cells with no return are disclosed by {@link obstructionEstimateStatement}.
  */
 function evidenceGapLimitations(
   gaps: EvidenceGapTreatment,
@@ -454,7 +475,8 @@ function evidenceGapLimitations(
     if (gapBlockedCells === 0) return [];
     return [
       `The conservative evidence policy blocked ${gapBlockedCells} cells whose slope used a synthesised `
-      + 'neighbour (the grid\'s outer ring or beside a void), or, when the obstruction limit is evaluated, '
+      + 'neighbour (the grid\'s outer ring or beside a void), or, when the ruggedness limit is evaluated, '
+      + 'whose ruggedness window holds such a cell, or, when the obstruction limit is evaluated, '
       + 'that have no above-ground return.',
     ];
   }

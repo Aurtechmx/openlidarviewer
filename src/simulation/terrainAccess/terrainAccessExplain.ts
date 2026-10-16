@@ -126,6 +126,36 @@ export function derivativeEstimateStatement(
     + `${countText(counts.holeRouteCells)} beside interior NoData holes).`;
 }
 
+/** What makes an above-ground obstruction limit an estimate, from the run's surface basis and route. */
+export interface ObstructionEstimateCounts {
+  /** The surface's points when they are a sample of the scan; null when they are not. */
+  readonly sample: { readonly pointsRead: number | null; readonly sourcePoints: number | null } | null;
+  /** Route cells with no above-ground return, out of `routeCells`. */
+  readonly unevaluatedRouteCells: number;
+  readonly routeCells: number;
+}
+
+/**
+ * The obstruction counterpart of {@link derivativeEstimateStatement}: one
+ * string for the run card, limitations, CSV, README and run record. Empty
+ * when nothing makes the limit an estimate.
+ */
+export function obstructionEstimateStatement(counts: ObstructionEstimateCounts): string {
+  const parts: string[] = [];
+  const { sample } = counts;
+  if (sample) {
+    const of = sample.pointsRead != null && sample.sourcePoints != null && sample.sourcePoints > sample.pointsRead
+      ? `${countText(sample.pointsRead)} of ${countText(sample.sourcePoints)} points` : 'the points';
+    parts.push(`Above-ground obstruction is estimated from a sample of ${of}; thin returns such as posts or wires can be missed.`);
+  }
+  if (counts.unevaluatedRouteCells > 0) {
+    parts.push(`Above-ground obstruction could not be checked on ${countText(counts.unevaluatedRouteCells)} of `
+      + `${countText(counts.routeCells)} route cells: the surface has no above-ground evidence there, so those cells `
+      + 'are not known to be clear.');
+  }
+  return parts.join(' ');
+}
+
 /** The preview's grid-wide form of {@link derivativeEstimateStatement}, under the exploratory policy. */
 export function derivativeEstimateGridStatement(cells: number, boundary: number, hole: number): string {
   return `Longitudinal grade and cross-slope estimated from substituted neighbours on ${cellsText(cells, 'grid')} `

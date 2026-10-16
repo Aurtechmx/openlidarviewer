@@ -167,11 +167,26 @@ export interface NodeEligibility {
   readonly reason: readonly (NodeBlockReason | null)[];
 }
 
+/** True when the 3×3 window around `index` (clipped to the grid) holds a flagged cell. */
+export function windowHoldsFlagged(mask: Uint8Array, cols: number, rows: number, index: number): boolean {
+  const row = Math.floor(index / cols);
+  const col = index - row * cols;
+  for (let r = Math.max(0, row - 1); r <= Math.min(rows - 1, row + 1); r++) {
+    for (let c = Math.max(0, col - 1); c <= Math.min(cols - 1, col + 1); c++) {
+      if (mask[r * cols + c] === 1) return true;
+    }
+  }
+  return false;
+}
+
 /**
  * Direction-independent eligibility: NoData, ROI, support, ruggedness,
  * obstruction, then, under the conservative evidence policy, a cell with no
- * above-ground return while an obstruction limit is evaluated, and a cell
- * whose slope used a synthesised neighbour. Does not yet account for vehicle
+ * above-ground return while an obstruction limit is evaluated, a cell whose
+ * slope used a synthesised neighbour, and, while a ruggedness limit is
+ * evaluated, a cell whose 3×3 VRM window holds such a cell (its VRM reads
+ * that slope). So a route found under conservative reads every limit it
+ * applies from fully supported values. Does not yet account for vehicle
  * width — see {@link applyWidthClearance}.
  */
 export function nodeEligibility(grid: TerrainAccessGrid, features: TerrainAccessFeatures, profile: TerrainAccessProfile): NodeEligibility {
@@ -196,7 +211,10 @@ export function nodeEligibility(grid: TerrainAccessGrid, features: TerrainAccess
     if (obstructionEvaluated && features.obstruction[i] === 'not-evaluated') {
       blocked[i] = 1; reason[i] = 'obstruction-unknown'; continue;
     }
-    if (features.derivativeSynthesised[i] === 1) { blocked[i] = 1; reason[i] = 'derivative-support'; }
+    if (features.derivativeSynthesised[i] === 1
+      || (profile.maxRuggedness != null && windowHoldsFlagged(features.derivativeSynthesised, grid.cols, grid.rows, i))) {
+      blocked[i] = 1; reason[i] = 'derivative-support';
+    }
   }
   return { blocked, reason };
 }
@@ -560,6 +578,10 @@ function nodeDetail(
     case 'obstruction-unknown':
       return 'no above-ground return here, so the obstruction limit cannot be checked; the conservative evidence policy blocks it';
     case 'derivative-support':
+      if (features.derivativeSynthesised[index] !== 1) {
+        return 'ruggedness here reads a neighbour whose slope used a synthesised neighbour (grid edge or void); '
+          + 'with a ruggedness limit set, the conservative evidence policy blocks it';
+      }
       return 'slope and aspect here were computed with at least one synthesised neighbour (grid edge or void); '
         + 'the conservative evidence policy blocks it';
     case 'vehicle-width':

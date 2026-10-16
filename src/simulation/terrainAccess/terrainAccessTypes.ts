@@ -31,6 +31,8 @@
  * Pure data: no DOM, no three.js, no I/O. Deterministic.
  */
 
+import type { SurfaceSampleBasis } from '../../terrain/surface/buildDsm';
+
 /** A cell's elevation, validity and evidence, on a fixed-size grid. */
 export interface TerrainAccessGrid {
   /** Elevation per cell, metres, row-major. Not read where `valid[i] === 0`. */
@@ -58,6 +60,8 @@ export interface TerrainAccessGrid {
    * would read as "confirmed clear" instead of "not evaluated".
    */
   readonly heightAboveGround: Float32Array | null;
+  /** Which points the above-ground surface rests on; absent or null without one. */
+  readonly aboveGroundBasis?: SurfaceSampleBasis | null;
   /**
    * Optional ROI mask — 1 = inside the declared region, 0 = outside. Null
    * means no ROI was declared, so every cell with an elevation is in scope.

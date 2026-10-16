@@ -58,6 +58,7 @@ import {
   surfaceStats,
   heightAboveGround,
   type SurfaceGrid,
+  type SurfaceSampleBasis,
   type SurfaceStats,
   type CanopyHeight,
 } from '../surface/buildDsm';
@@ -72,7 +73,7 @@ import {
   cosLatitude,
   METRES_PER_DEGREE,
 } from '../ground/horizontalScale';
-import { excludeNonGroundClasses } from '../ground/classificationFilter';
+import { alignedClasses, excludeNonGroundClasses, isNoiseClass, NOISE_CLASSES } from '../ground/classificationFilter';
 import { holdoutValidateDtm } from '../validate/holdoutRmse';
 import { makeTrainOnlyReclassifier } from '../validate/trainOnlyReclassify';
 import { splitReliability, type ReliabilitySplit } from '../validate/reliabilitySplit';
@@ -448,6 +449,11 @@ export interface TerrainCore {
     /** The top-surface DSM itself, on exactly the DTM grid (same origin, cols, rows,
      *  cell size), Z in the DTM's own vertical unit; NaN where a cell has no return. */
     readonly dsmGrid: SurfaceGrid;
+    /** The DSM above-ground obstruction reads: `dsmGrid` without ASPRS noise
+     *  (classes 7, 18). Null when no noise return was read, so `dsmGrid` is it. */
+    readonly obstructionGrid: SurfaceGrid | null;
+    /** Which points the obstruction surface rests on. */
+    readonly obstructionBasis: SurfaceSampleBasis;
     readonly canopy: CanopyHeight;
     readonly slope: SlopeStats;
     readonly hillshade: HillshadeResult;
@@ -605,6 +611,11 @@ export interface AnalyseContoursResult {
     /** The top-surface DSM itself, on exactly the DTM grid (same origin, cols, rows,
      *  cell size), Z in the DTM's own vertical unit; NaN where a cell has no return. */
     readonly dsmGrid: SurfaceGrid;
+    /** The DSM above-ground obstruction reads: `dsmGrid` without ASPRS noise
+     *  (classes 7, 18). Null when no noise return was read, so `dsmGrid` is it. */
+    readonly obstructionGrid: SurfaceGrid | null;
+    /** Which points the obstruction surface rests on. */
+    readonly obstructionBasis: SurfaceSampleBasis;
     readonly canopy: CanopyHeight;
     readonly slope: SlopeStats;
     readonly hillshade: HillshadeResult;
@@ -1408,6 +1419,13 @@ export function computeTerrainCore(
   const dsm = dtmHasCoverage
     ? buildDsm(points, { grid: dsmGridSpec, verticalAxis })
     : emptySurfaceGrid(dsmGridSpec);
+  // Above-ground obstruction reads the same top surface without noise
+  // returns: one bird return 40 m up must not block a cell. A second grid is
+  // built only when the gather read noise; otherwise the DSM is that surface.
+  const obstructionBasis = surfaceSampleBasis(points.length, params, dtm.coverageMode, alignedClasses(params.classification, points.length));
+  const obstructionGrid = dtmHasCoverage && obstructionBasis.noiseExcluded > 0
+    ? buildDsm(points, { grid: dsmGridSpec, verticalAxis, classification: params.classification, excludeClasses: NOISE_CLASSES })
+    : null;
   // Slope/hillshade divide ΔZ (metres) by the horizontal cell size; when the
   // frame is geographic that cell size is in degrees, so convert to metres to
   // keep the gradient dimensionless. Per-axis: a degree of longitude spans
@@ -1463,6 +1481,8 @@ export function computeTerrainCore(
   const surface = {
     dsm: surfaceStats(dsm),
     dsmGrid: dsm,
+    obstructionGrid,
+    obstructionBasis,
     canopy: heightAboveGround(dsm, dtm.z, dtm.coverage),
     slope: slopeStats(slopeDegField, dtm.coverage),
     hillshade: engine.hillshadeSync(sa.slope, sa.aspect, dtm.coverage, dtm.cols, dtm.rows),
@@ -1772,4 +1792,26 @@ export function analyseContours(
   params: AnalyseContoursParams,
 ): AnalyseContoursResult {
   return contoursFromCore(computeTerrainCore(input, params), params);
+}
+
+/** Which points the obstruction surface rests on; see {@link SurfaceSampleBasis}. */
+function surfaceSampleBasis(
+  pointsRead: number,
+  params: Pick<TerrainCoreParams, 'samplePointScale' | 'withheldExcluded' | 'withheldExcludedCount'>,
+  coverage: SurfaceSampleBasis['coverage'],
+  classes: ArrayLike<number> | undefined,
+): SurfaceSampleBasis {
+  let noiseExcluded = 0;
+  if (classes) for (let i = 0; i < classes.length; i++) if (isNoiseClass(classes[i])) noiseExcluded++;
+  const scale = params.samplePointScale;
+  const sourcePoints = Number.isFinite(scale) && (scale as number) > 1 ? Math.round(pointsRead * (scale as number)) : pointsRead;
+  const unread = sourcePoints - pointsRead - (params.withheldExcludedCount ?? 0);
+  return {
+    sampled: coverage !== 'full' || unread > 0,
+    coverage,
+    pointsRead,
+    sourcePoints,
+    noiseExcluded,
+    withheldExcluded: params.withheldExcluded ?? null,
+  };
 }

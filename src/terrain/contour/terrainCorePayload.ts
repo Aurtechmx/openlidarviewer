@@ -21,8 +21,9 @@ import type { TerrainCore } from './analyseContours';
  * payloads miss. 2: the DTM grid carries verticalDispersion (terrain evidence
  * band 5); a version-1 core lacks it and would export that band as NoData.
  * 3: the core carries inputSha256, the digest of the points it read.
+ * 4: the surface carries the obstruction grid and the basis it rests on.
  */
-export const TERRAIN_CORE_PAYLOAD_VERSION = 3;
+export const TERRAIN_CORE_PAYLOAD_VERSION = 4;
 
 type GridKind = 'f32' | 'f64' | 'u8' | 'u8c' | 'u16' | 'u32' | 'i8' | 'i16' | 'i32';
 

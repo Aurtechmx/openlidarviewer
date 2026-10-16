@@ -145,6 +145,7 @@ describe('above-ground obstruction is never accepted without aligned evidence', 
     expect(r.ok).toBe(true);
     if (!r.ok) return;
     expect(r.record.result.obstructionUnevaluatedRouteCells).toBe(1);
+    expect(r.record.result.constraints).toMatchObject({ aboveGroundObstruction: 'estimated' });
     expect(r.limitations.join(' ')).toMatch(/1 of 3 route cells.*no above-ground evidence/);
   });
 });
@@ -267,7 +268,7 @@ describe('the simulation input digest moves with every routing input', () => {
   it('is deterministic and versioned', () => {
     expect(terrainAccessSimulationInputDigest(base)).toBe(ref);
     expect(ref).toMatch(/^[0-9a-f]{64}$/);
-    expect(TERRAIN_ACCESS_INPUT_DIGEST_SCHEME).toMatch(/v3$/);
+    expect(TERRAIN_ACCESS_INPUT_DIGEST_SCHEME).toMatch(/v4$/);
   });
 
   it('is the run\'s analysisInputDigest, and presentation state does not move it', () => {

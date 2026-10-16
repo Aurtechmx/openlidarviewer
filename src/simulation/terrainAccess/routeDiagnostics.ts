@@ -30,7 +30,7 @@
  */
 
 import {
-  DERIVATIVE_CAUSE_BOUNDARY, DERIVATIVE_CAUSE_HOLE, edgeGeometry, utilization,
+  DERIVATIVE_CAUSE_BOUNDARY, DERIVATIVE_CAUSE_HOLE, edgeGeometry, utilization, windowHoldsFlagged,
   type CostWeights, type TerrainAccessFeatures,
 } from './traversabilityCost';
 import type { TerrainAccessGrid } from './terrainAccessTypes';
@@ -114,23 +114,12 @@ export interface RouteDiagnostics {
   /**
    * Route cells whose 3×3 ruggedness (VRM) window holds a cell flagged in
    * `derivativeSynthesised`, itself included: their VRM reads at least one
-   * slope computed with a substituted neighbour.
+   * slope computed with a substituted neighbour. Zero under the conservative
+   * evidence policy while a ruggedness limit is set, which blocks them.
    */
   readonly ruggednessSynthesisedRouteCells: number;
   /** Ordered, largest contributor first. */
   readonly dominantCostContributors: readonly CostContributor[];
-}
-
-/** True when the 3×3 window around `index` (clipped to the grid) holds a flagged cell. */
-function windowHoldsFlagged(mask: Uint8Array, cols: number, rows: number, index: number): boolean {
-  const row = Math.floor(index / cols);
-  const col = index - row * cols;
-  for (let r = Math.max(0, row - 1); r <= Math.min(rows - 1, row + 1); r++) {
-    for (let c = Math.max(0, col - 1); c <= Math.min(cols - 1, col + 1); c++) {
-      if (mask[r * cols + c] === 1) return true;
-    }
-  }
-  return false;
 }
 
 /** Compute {@link RouteDiagnostics} for a found path (start..goal inclusive). */

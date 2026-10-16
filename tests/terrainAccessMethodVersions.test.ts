@@ -56,7 +56,7 @@ describe('Terrain Access method versions', () => {
 
 describe('the input digest binds method versions', () => {
   it('names scheme v3', () => {
-    expect(TERRAIN_ACCESS_INPUT_DIGEST_SCHEME).toBe('olv.simulation.terrain-access.input-digest.v3');
+    expect(TERRAIN_ACCESS_INPUT_DIGEST_SCHEME).toBe('olv.simulation.terrain-access.input-digest.v4');
   });
 
   it('a method version change alone changes the digest', async () => {

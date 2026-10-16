@@ -32,7 +32,7 @@ import { horizontalCellMetresXY } from '../../terrain/ground/horizontalScale';
 import { simulationInputBasis, type SimulationInputBasis } from '../simulationInputBasis';
 import type { DtmGrid } from '../../terrain/ground/cellConfidence';
 import {
-  TERRAIN_GRID_ORIENTATION, aboveGroundBindingProblem, type AboveGroundSurface,
+  TERRAIN_GRID_ORIENTATION, aboveGroundBasisOf, aboveGroundBindingProblem, type AboveGroundSurface,
 } from './aboveGroundSurface';
 import type { TerrainAccessGrid } from './terrainAccessTypes';
 
@@ -236,6 +236,7 @@ export function terrainDtmToAccessGrid(
     ok: true,
     grid: {
       z, valid, confidence, coverage, heightAboveGround, allowed,
+      aboveGroundBasis: options.dsm ? aboveGroundBasisOf(dtm, options.dsm) : null,
       cols: dtm.cols, rows: dtm.rows,
       cellMetresX: metres.x, cellMetresY: metres.y,
     },
