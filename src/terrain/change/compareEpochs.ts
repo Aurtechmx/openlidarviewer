@@ -167,8 +167,14 @@ function boundsXY(
  * epoch.
  */
 function sharedGrid(before: EpochCloud, after: EpochCloud): SharedGrid | null {
-  const a = boundsXY(before.positions, before.origin ?? ZERO);
-  const b = boundsXY(after.positions, after.origin ?? ZERO);
+  // Each buffer is read once, in world coordinates (local + origin), for both
+  // the bounds and the point spacing.
+  const beforeXyz = before.positions;
+  const afterXyz = after.positions;
+  const beforeOrigin = before.origin ?? ZERO;
+  const afterOrigin = after.origin ?? ZERO;
+  const a = boundsXY(beforeXyz, beforeOrigin);
+  const b = boundsXY(afterXyz, afterOrigin);
   if (!a || !b) return null;
   const minX = Math.min(a.minX, b.minX);
   const minY = Math.min(a.minY, b.minY);
@@ -194,8 +200,8 @@ function sharedGrid(before: EpochCloud, after: EpochCloud): SharedGrid | null {
   // still apply when they are coarser, and a coarser cell only lowers the
   // ~256-cell count.
   const sparser = Math.max(
-    positionsSpacing(before.positions, before.origin ?? ZERO),
-    positionsSpacing(after.positions, after.origin ?? ZERO),
+    positionsSpacing(beforeXyz, beforeOrigin),
+    positionsSpacing(afterXyz, afterOrigin),
   );
   const supportCell = Number.isFinite(sparser) ? CELL_SPACINGS * sparser : 0;
   const filterCellSizeM = Math.max(0.25 / metresPerUnit, extent / 256);
