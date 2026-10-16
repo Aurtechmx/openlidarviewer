@@ -17,6 +17,7 @@
  * `PCDLoader.parse` builds only data (no DOM), so this runs in the parse worker.
  */
 
+import { Color, SRGBColorSpace } from 'three';
 import { PCDLoader } from 'three/addons/loaders/PCDLoader.js';
 import { PointCloud } from '../model/PointCloud';
 import { LoadError } from './loadErrors';
@@ -554,14 +555,23 @@ export async function loadPcd(buffer: ArrayBuffer, name = 'cloud.pcd'): Promise<
   }
 
   // Colour — PCDLoader yields 0–1 floats; the viewer stores 0–255 bytes.
+  // PCDLoader stores each colour through `Color.setRGB(r, g, b, SRGBColorSpace)`,
+  // so with three.js colour management enabled the attribute holds LINEAR
+  // values. The file's bytes are sRGB, so the values are converted back to
+  // sRGB before scaling; scaling the linear values darkens every channel
+  // (packed (128, 64, 255) would read back as (55, 13, 255)).
   let colors: Uint8Array | undefined;
   const colorAttr = geometry.getAttribute('color');
   if (colorAttr) {
     colors = new Uint8Array(count * 3);
+    const c = new Color();
+    const srgb = { r: 0, g: 0, b: 0 };
     for (let i = 0; i < count; i++) {
-      colors[i * 3] = clampByte(colorAttr.getX(i) * 255);
-      colors[i * 3 + 1] = clampByte(colorAttr.getY(i) * 255);
-      colors[i * 3 + 2] = clampByte(colorAttr.getZ(i) * 255);
+      c.setRGB(colorAttr.getX(i), colorAttr.getY(i), colorAttr.getZ(i));
+      c.getRGB(srgb, SRGBColorSpace);
+      colors[i * 3] = clampByte(srgb.r * 255);
+      colors[i * 3 + 1] = clampByte(srgb.g * 255);
+      colors[i * 3 + 2] = clampByte(srgb.b * 255);
     }
   }
 

@@ -258,3 +258,47 @@ describe('loadPcd — a lying ascii POINTS count degrades cleanly', () => {
     expect(pc.positions[3] - pc.positions[0]).toBeCloseTo(3, 5);
   });
 });
+
+describe('loadPcd — packed rgb keeps the stored sRGB bytes', () => {
+  // PCL packs rgb as (r << 16) | (g << 8) | b. The stored bytes are the colour;
+  // three.js PCDLoader keeps them as linear floats, which must be converted
+  // back to sRGB before they are scaled to bytes.
+  const pack = (r: number, g: number, b: number): number => (r << 16) | (g << 8) | b;
+
+  test('ascii body: (128, 64, 255) reads back unchanged', async () => {
+    const text =
+      '# .PCD v0.7\nVERSION 0.7\nFIELDS x y z rgb\nSIZE 4 4 4 4\nTYPE F F F U\n' +
+      'COUNT 1 1 1 1\nWIDTH 1\nHEIGHT 1\nVIEWPOINT 0 0 0 1 0 0 0\nPOINTS 1\nDATA ascii\n' +
+      `1 2 3 ${pack(128, 64, 255)}\n`;
+    const bytes = new TextEncoder().encode(text);
+    const pc = await loadPcd(bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength));
+    expect([...pc.colors!]).toEqual([128, 64, 255]);
+  });
+
+  test('binary body: every byte value 0..255 reads back unchanged', async () => {
+    const n = 256;
+    const header =
+      '# .PCD v0.7\nVERSION 0.7\nFIELDS x y z rgb\nSIZE 4 4 4 4\nTYPE F F F U\n' +
+      `COUNT 1 1 1 1\nWIDTH ${n}\nHEIGHT 1\nVIEWPOINT 0 0 0 1 0 0 0\nPOINTS ${n}\nDATA binary\n`;
+    const headerBytes = new TextEncoder().encode(header);
+    const buf = new ArrayBuffer(headerBytes.length + n * 16);
+    new Uint8Array(buf).set(headerBytes, 0);
+    const view = new DataView(buf);
+    for (let i = 0; i < n; i++) {
+      const base = headerBytes.length + i * 16;
+      view.setFloat32(base, i, true);
+      view.setFloat32(base + 4, 0, true);
+      view.setFloat32(base + 8, 0, true);
+      view.setUint32(base + 12, pack(i, 255 - i, (i * 7) % 256), true);
+    }
+    const pc = await loadPcd(buf);
+    // Points are kept in order (all finite), so index i is the i-th record.
+    for (let i = 0; i < n; i++) {
+      expect([pc.colors![i * 3], pc.colors![i * 3 + 1], pc.colors![i * 3 + 2]]).toEqual([
+        i,
+        255 - i,
+        (i * 7) % 256,
+      ]);
+    }
+  });
+});
