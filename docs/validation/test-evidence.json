@@ -5,9 +5,9 @@
   "releaseChannel": "development",
   "releaseAuthoritative": false,
   "tag": null,
-  "commit": "7c5c35543b43af823769a5e7a4f5a8b5034bae99",
+  "commit": "523f9f3dd995ed11973f6764ac8d7ebf4a08b1ee",
   "repository": null,
-  "generatedAt": "2026-10-15T18:48:24.571Z",
+  "generatedAt": "2026-10-16T01:50:39.204Z",
   "nodeVersion": "v26.7.0",
   "npmVersion": "11.19.0",
   "platform": "darwin-arm64",
@@ -17,7 +17,7 @@
   "workflowSha": null,
   "gateExit": 0,
   "gateLog": "release/gate.log",
-  "gateLogSha256": "1c875ffd37e79f7e6e533873258b859a1e03f61024ae55495267617dba90b82b",
+  "gateLogSha256": "687698b2d06ff0cb36641ff4d815cbc43368606d8a1d206b42a3eb5b6a1e6e87",
   "stages": {
     "mutation": "not-executed"
   },
@@ -52,17 +52,17 @@
   },
   "buckets": {
     "unit": {
-      "passed": 14645,
+      "passed": 14726,
       "skipped": 43,
       "runs": 3
     },
     "export": {
-      "passed": 1576,
+      "passed": 1587,
       "skipped": 0,
       "runs": 1
     },
     "terrain": {
-      "passed": 3848,
+      "passed": 3933,
       "skipped": 1,
       "runs": 2
     },
@@ -78,14 +78,14 @@
     }
   },
   "total": {
-    "passed": 22809,
+    "passed": 22986,
     "skipped": 50
   },
   "bundle": {
-    "liveEntryKiB": 667,
+    "liveEntryKiB": 664,
     "ceilingKiB": 795
   },
-  "packageLockSha256": "fb5d6a54176630a41652dada4502f3fdceef027c587194c6bb7de722da475f51",
+  "packageLockSha256": "d910bbd14ff713043516b46d3926a86a99267dec56dab2b4dddce06d452c8ab7",
   "sbom": {
     "sha256": "ad13361410d18768d6194942f4c96d8260ca0e0d1dedbf1af2898978a9a022ee",
     "rootName": "openlidarviewer",
