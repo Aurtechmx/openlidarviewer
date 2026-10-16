@@ -917,10 +917,13 @@ A cell is differenced only where both DTMs hold a measured height, meaning
 ground returns fall in that cell in both epochs. Cells where either surface is
 interpolated, including the fill the DTM build extends past an epoch's own
 footprint, are left out, and the result states how many cells and what share
-of the cells with a height in both surfaces that was. Gaps between sparse
-ground returns are therefore not compared, even inside both footprints: the
-grid carries no flag that separates a bracketed interpolation from an
-extrapolation, so neither is used.
+of the cells with a height in both surfaces that was. The grid carries no
+flag that separates a bracketed interpolation from an extrapolation, so
+neither is used. So that cells between returns are not mostly fill, the shared
+grid's cell is at least twice the mean point spacing of the sparser epoch,
+estimated from all its points; a finer extent-based cell is kept only when the
+data are that dense. Where ground returns are much sparser than all returns,
+under dense vegetation, cells without a ground return are still left out.
 
 Epoch alignment starts at the unmoved pose when both epochs declare one CRS,
 pairs points only within three mean point spacings (estimated from the before

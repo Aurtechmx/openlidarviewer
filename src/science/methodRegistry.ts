@@ -420,8 +420,9 @@ export const METHOD_REGISTRY: Readonly<Record<string, MethodEntry>> = {
       '3-D RMS as σreg and fell back to 0.1 m when any term was missing; v1 used the fixed 0.1 m. ' +
       'v4 compares a cell only where both DTMs hold a measured height (ground returns in the ' +
       'cell) and reports how many cells were left out because either surface there is ' +
-      'interpolated or extrapolated; v3 and earlier also differenced filled cells, including ' +
-      'fills extrapolated past one epoch\'s footprint.',
+      'interpolated or extrapolated, on a shared grid whose cell is at least twice the mean ' +
+      'point spacing of the sparser epoch; v3 and earlier also differenced filled cells, ' +
+      'including fills extrapolated past one epoch\'s footprint, on a cell of extent/256.',
     citation: 'Anderson (2019), pubs.usgs.gov/publication/70202166 (LoD thresholding for gross change); Wheaton et al. (2010), doi:10.1002/esp.1886 (propagated minimum LoD)',
     category: 'change',
     implementation: ['src/terrain/change/changeDetection.ts', 'src/terrain/change/compareDtms.ts'],

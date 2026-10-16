@@ -108,10 +108,14 @@ describe('change detection leaves Withheld points out', () => {
     const epoch = { positions: cloud.positions, origin: cloud.sourceOrigin };
     const unflagged = { ...epoch, positions: Float32Array.from(cloud.positions) };
     const after = excludeWithheldEpoch(epoch, cloud.classificationFlags).cloud;
-    // Before the policy the two identical epochs differenced to no change.
-    const everyPoint = differenceAsc(unflagged, epoch);
-    const policy = differenceAsc(unflagged, after);
-    expect(policy).not.toBe(everyPoint);
+    // The after surface is built without the three Withheld points. The
+    // fixture's 3 m spacing sizes the shared grid at about 7 m (two cells), and
+    // on that grid they do not move either cell's median height, so the
+    // surface is compared through the ground returns its cells were built from.
+    const returns = (d: { after: { counts: Uint32Array } }): number => d.after.counts.reduce((a, b) => a + b, 0);
+    const everyPoint = buildSharedEpochDtms(unflagged, epoch)!;
+    const policy = buildSharedEpochDtms(unflagged, after)!;
+    expect(returns(policy)).toBeLessThan(returns(everyPoint));
   });
 
   it('names the counts in the compare panel', async () => {
@@ -190,6 +194,7 @@ describe('feature extraction leaves Withheld points out', () => {
 });
 
 // The difference raster carries NoData wherever either epoch's surface is
-// interpolated rather than measured (olv.change.dtm-difference@4).
-const ASC_HASH = '44704b2798f51f6c6e34d66e5b774a68c86682e184c9605b3100a29738b5ddb8';
+// interpolated rather than measured (olv.change.dtm-difference@4), on a cell
+// no finer than twice the sparser epoch's mean point spacing.
+const ASC_HASH = 'b008e7d92d7261daf677c9c724144fb56b2dfea48594cfd11e11b788e1f96e8c';
 const GEOJSON_HASH = 'bbcbfa03824957ac67597fc964f79570ab041eab9ef793d414179e47d3db47a4';

@@ -32,6 +32,9 @@
 
 import { icpRegister, applyIcp, type Vec3, type IcpResult } from './icpRegister';
 import { buildPointIndex, nearestPoint, nearestState } from './pointIndex';
+import { meanPointSpacing } from './pointSpacing';
+
+export { meanPointSpacing } from './pointSpacing';
 import { verticalReferenceKey } from '../../model/layerCompatibility';
 import type { EpochCloud } from './compareEpochs';
 
@@ -215,41 +218,6 @@ export const COMMON_FRAME_TRIM = 0.9;
 
 /** Target sample size relative to the source sample: a denser target gives a tighter spacing. */
 const TARGET_SAMPLE_FACTOR = 4;
-
-/**
- * Mean horizontal spacing of a point set: the square root of its occupied
- * footprint area per point. The footprint is counted on square bins two
- * spacings wide, starting from the bounding-box estimate and refined twice, so
- * a cloud that fills only part of its bounding box is not read as sparse.
- * NaN when the points have no horizontal extent.
- */
-export function meanPointSpacing(points: readonly Vec3[]): number {
-  const n = points.length;
-  if (n < 2) return Number.NaN;
-  let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
-  for (const p of points) {
-    if (p[0] < minX) minX = p[0];
-    if (p[0] > maxX) maxX = p[0];
-    if (p[1] < minY) minY = p[1];
-    if (p[1] > maxY) maxY = p[1];
-  }
-  const ex = maxX - minX;
-  const ey = maxY - minY;
-  if (!(ex > 0) && !(ey > 0)) return Number.NaN;
-  // A line of points: its length per point.
-  if (!(ex > 0) || !(ey > 0)) return Math.max(ex, ey) / (n - 1);
-  let spacing = Math.sqrt((ex * ey) / n);
-  for (let pass = 0; pass < 2; pass++) {
-    const bin = 2 * spacing;
-    const nx = Math.floor(ex / bin) + 1;
-    const occupied = new Set<number>();
-    for (const p of points) {
-      occupied.add(Math.floor((p[1] - minY) / bin) * nx + Math.floor((p[0] - minX) / bin));
-    }
-    spacing = Math.sqrt((occupied.size * bin * bin) / n);
-  }
-  return spacing;
-}
 
 /** Root-mean-square horizontal displacement of `pts` under a pose. */
 function rmsHorizontalMove(pts: readonly Vec3[], pose: Pick<IcpResult, 'yawRad' | 'translation'>): number {

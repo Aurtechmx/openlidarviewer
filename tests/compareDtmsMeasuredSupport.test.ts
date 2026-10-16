@@ -83,20 +83,31 @@ describe('epochs of different extent over one identical surface', () => {
     return { positions: new Float32Array(out), crs: 'EPSG:32612', verticalDatum: 'NAVD88', linearUnitToMetres: 1 };
   };
 
-  it('compares no cell beyond the smaller footprint and reports about zero change', () => {
+  it('compares every cell of the shared footprint, none beyond it, and reports about zero change', () => {
     const d = buildSharedEpochDtms(cloud(100), cloud(130))!;
+    // 1 m points: the shared cell is twice the mean spacing (about 2 m), so a
+    // cell holds several returns instead of most cells being fill between them.
+    expect(d.cellSizeM).toBeGreaterThan(1.9);
+    expect(d.cellSizeM).toBeLessThan(2.2);
     const cmp = compareDtms(d.before, d.after, { horizontalUnitToMetres: 1, horizontalUnitKnown: true, levelOfDetectionM: 0.1 });
     const W = cmp.result.width;
-    let beyond = 0;
+    let beyond = 0, inside = 0, insideCompared = 0;
     for (let r = 0; r < cmp.result.height; r++) {
       for (let c = 0; c < W; c++) {
-        const x = d.before.originH1 + (c + 0.5) * d.before.cellSizeM;
-        if (x > 101 && Number.isFinite(cmp.result.diff[r * W + c])) beyond++;
+        const x = d.before.originH1 + (c + 0.5) * d.cellSizeM;
+        const y = d.before.originH2 + (r + 0.5) * d.cellSizeM;
+        const compared = Number.isFinite(cmp.result.diff[r * W + c]);
+        if (x > 101) { if (compared) beyond++; continue; }
+        if (x <= 100 && y <= 100) { inside++; if (compared) insideCompared++; }
       }
     }
     expect(beyond).toBe(0);
-    // Before the fix 4,334 extrapolated cells were compared, for a raw net of 1,462 m³.
-    expect(Math.abs(cmp.result.stats.rawNetVolumeM3)).toBeLessThan(50);
-    expect(cmp.cellSupport.interpolatedExcluded).toBeGreaterThan(4000);
+    // Every cell centred in the shared footprint is compared (2,450 of 2,450);
+    // on the 0.5 m grid the extent rule gave, three cells in four were fill.
+    expect(insideCompared / inside).toBeGreaterThan(0.99);
+    // Before the measured-only rule 4,334 extrapolated cells were compared, for a raw net of 1,462 m³.
+    expect(Math.abs(cmp.result.stats.rawNetVolumeM3)).toBeLessThan(1);
+    expect(cmp.result.stats.meanAbsChangeM).toBeLessThan(0.01);
+    expect(cmp.cellSupport.interpolatedExcluded).toBeGreaterThan(0);
   });
 });

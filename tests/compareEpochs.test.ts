@@ -9,12 +9,13 @@ import { buildSharedEpochDtms, compareEpochClouds } from '../src/terrain/change/
 import { summarizeChange } from '../src/terrain/change/compareDtms';
 import { METRES_PER_DEGREE } from '../src/terrain/ground/horizontalScale';
 
-/** A flat-ish ground plane of points at height `z` over an `n×n` metre grid. */
-function plane(n: number, z: number, x0 = 0, y0 = 0): Float32Array {
+/** A flat-ish ground plane of points at height `z` over an `n×n` grid, `step` apart. */
+function plane(n: number, z: number, x0 = 0, y0 = 0, step = 1): Float32Array {
   const pts: number[] = [];
-  for (let i = 0; i <= n; i++) {
-    for (let j = 0; j <= n; j++) {
-      pts.push(x0 + i, y0 + j, z);
+  const k = Math.round(n / step);
+  for (let i = 0; i <= k; i++) {
+    for (let j = 0; j <= k; j++) {
+      pts.push(x0 + i * step, y0 + j * step, z);
     }
   }
   return new Float32Array(pts);
@@ -45,11 +46,13 @@ describe('buildSharedEpochDtms', () => {
     // 1e-4/256 = 3.90625e-7° → cols = floor(1e-4/2.24578e-6) + 1 =
     // floor(44.53) + 1 = 45 (hand-computed; the grid stays small enough
     // for the surface build to be test-fast).
-    const step = 1e-4 / 30;
+    // Points 1e-6° (about 0.11 m) apart, dense enough that the spacing rule
+    // (twice the mean spacing) stays under the 0.25 m floor.
+    const step = 1e-4 / 100;
     const geo = (z: number): Float32Array => {
       const pts: number[] = [];
-      for (let i = 0; i <= 30; i++)
-        for (let j = 0; j <= 30; j++) pts.push(i * step, j * step, z);
+      for (let i = 0; i <= 100; i++)
+        for (let j = 0; j <= 100; j++) pts.push(i * step, j * step, z);
       return new Float32Array(pts);
     };
     const dtms = buildSharedEpochDtms(
@@ -64,18 +67,34 @@ describe('buildSharedEpochDtms', () => {
   it('unit-aware cell floor: a US-feet site floors at 0.25 m worth of feet', () => {
     // A 30 ft site: resolution target 30/256 ≈ 0.1172 ft < the floor
     // 0.25/0.3048 ≈ 0.8202 ft — the floor wins, expressed in FEET.
+    // Points 0.25 ft apart, so twice the spacing stays under the floor.
     const dtms = buildSharedEpochDtms(
-      { positions: plane(30, 0), linearUnitToMetres: 0.3048 },
-      { positions: plane(30, 1), linearUnitToMetres: 0.3048 },
+      { positions: plane(30, 0, 0, 0, 0.25), linearUnitToMetres: 0.3048 },
+      { positions: plane(30, 1, 0, 0, 0.25), linearUnitToMetres: 0.3048 },
     );
     expect(dtms).not.toBeNull();
     expect(dtms!.cellSizeM).toBeCloseTo(0.25 / 0.3048, 9);
   });
 
   it('projected metres keep the historical 0.25 m floor (no unit info = factor 1)', () => {
-    const dtms = buildSharedEpochDtms({ positions: plane(30, 0) }, { positions: plane(30, 1) });
+    const dtms = buildSharedEpochDtms({ positions: plane(30, 0, 0, 0, 0.1) }, { positions: plane(30, 1, 0, 0, 0.1) });
     expect(dtms).not.toBeNull();
     expect(dtms!.cellSizeM).toBeCloseTo(0.25, 9);
+  });
+});
+
+describe('shared grid cell and point spacing', () => {
+  it('a 1 m point spacing gets a cell of about twice that, not the 0.25 m floor', () => {
+    const dtms = buildSharedEpochDtms({ positions: plane(30, 0) }, { positions: plane(30, 1, 0, 0, 0.5) });
+    // The sparser epoch (1 m) sets the cell.
+    expect(dtms!.cellSizeM).toBeGreaterThan(1.9);
+    expect(dtms!.cellSizeM).toBeLessThan(2.2);
+  });
+
+  it('a dense pair keeps the fine extent-based grid', () => {
+    const dtms = buildSharedEpochDtms({ positions: plane(30, 0, 0, 0, 0.1) }, { positions: plane(30, 1, 0, 0, 0.1) });
+    expect(dtms!.cellSizeM).toBeCloseTo(0.25, 9);
+    expect(dtms!.cols).toBe(121);
   });
 });
 
@@ -124,11 +143,13 @@ describe('compareEpochClouds', () => {
     // wrong by ~10 orders of magnitude. Worst case pre-fix: two epochs both
     // declaring the same geographic CRS + datum on the shared grid passed
     // every co-registration check and the bogus volume shipped unflagged.
-    const step = 1e-4 / 30;
+    // Points 1e-6° (about 0.11 m) apart, dense enough that the spacing rule
+    // (twice the mean spacing) stays under the 0.25 m floor.
+    const step = 1e-4 / 100;
     const geo = (z: number): Float32Array => {
       const pts: number[] = [];
-      for (let i = 0; i <= 30; i++)
-        for (let j = 0; j <= 30; j++) pts.push(i * step, j * step, z);
+      for (let i = 0; i <= 100; i++)
+        for (let j = 0; j <= 100; j++) pts.push(i * step, j * step, z);
       return new Float32Array(pts);
     };
     const cmp = compareEpochClouds(
