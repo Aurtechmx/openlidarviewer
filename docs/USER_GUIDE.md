@@ -8,7 +8,7 @@ This guide walks through opening a scan and finding your way around it. Then mea
 
 ## Open a scan
 
-Drag a file onto the window, or press Open scan and pick one. LAS, LAZ, E57, PLY, GLB and `.pnts` are identified from their own contents, so one of those opens even under an odd name. The rest go by their extension, so keep it right on OBJ, GLTF, PTX, PTS and the plain-text formats.
+Drag a file onto the window, or press Open scan and pick one. LAS, LAZ, E57, PLY, PCD, GLB and `.pnts` are identified from their own contents, so one of those opens even under an odd name. The rest go by their extension, so keep it right on OBJ, GLTF, PTX, PTS and the plain-text formats.
 
 You can open:
 
@@ -79,7 +79,7 @@ The camera pads add four camera presets (Top, Iso, Oblique and Planar; the keys 
 
 Keyboard and mouse. Press `?` any time for the full shortcut sheet. The ones worth knowing up front: `Cmd-K` (or `Ctrl-K`) opens a command palette that searches every tool and action, `Ctrl/Cmd-Z` undoes your last edit, right-clicking the scan opens a quick menu (focus here, frame, standard views), and holding `Space` while a tool is active lets you move the camera without putting the tool down. The full list is in [docs/navigation.md](navigation.md).
 
-To use the viewer with no connection, run Make available offline from the command palette or Help. It downloads the app files once (about 9 MB, the exact size is shown before it starts), and Remove offline copy deletes them.
+To use the viewer with no connection, run Make available offline from the command palette or Help. It downloads the app files once (the exact size is shown before it starts), and Remove offline copy deletes them.
 
 ---
 

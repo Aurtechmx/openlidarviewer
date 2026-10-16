@@ -83,14 +83,14 @@ same commit as the first result.
 | `ASPECT-RASTER` | GDAL 3.13.1 Horn aspect | `tests/aspectCrossCheck.test.ts` | 10,932 interior, slope above 2° | 0.0002° | 0.5° circular |
 | `HILLSHADE` | GDAL 3.13.1 Horn hillshade, az 315 / alt 45 / z 1 | `tests/hillshadeCrossCheck.test.ts` | 11,564 interior | 1.00 level (8-bit); 0.0000643 vs closed form | 1.0 on 0 to 255 |
 | `CONTOURS` | GDAL 3.13.1 `gdal_contour` | `tests/contourCrossCheck.test.ts` | 2,222 vertices | 2.9×10⁻⁵ m vs GDAL (2.0×10⁻⁷ vs closed form) | 0.05 m |
-| `DSM` | PDAL 2.10.2 `writers.gdal` max | `tests/groundFilterPdalAgreement.test.ts` | 7,500 (3 clouds) | under 4×10⁻⁶ m | 0.05 m |
-| `DTM` | PDAL 2.10.2 `writers.gdal` min | `tests/groundFilterPdalAgreement.test.ts` | 7,500 (3 clouds) | under 4×10⁻⁶ m | 0.05 m |
+| `DSM` | PDAL 2.10.2 `writers.gdal` max | `tests/groundFilterPdalAgreement.test.ts` | 7,500 (3 clouds) | under 4×10⁻⁶ m | 5×10⁻⁵ m |
+| `DTM` | PDAL 2.10.2 `writers.gdal` min | `tests/groundFilterPdalAgreement.test.ts` | 7,500 (3 clouds) | under 4×10⁻⁶ m | 5×10⁻⁵ m |
 | `CHM` | PDAL 2.10.2 `writers.gdal` max minus min | `tests/chmCrossCheck.test.ts` | 7,500 (3 clouds) | under 8×10⁻⁶ m | 0.1 m |
 | `TPI` | gdaldem 3.13.1 TPI (+ closed form) | `tests/tpiCrossCheck.test.ts` | 3,364 interior | under 9×10⁻⁷ | 1×10⁻⁵ |
 | `VRM` | SAGA 7.8.2 VRM (+ closed form, ≤1×10⁻⁹) | `tests/vrmCrossCheck.test.ts` | 3,136 interior | under 2×10⁻⁵ vs SAGA | 1×10⁻⁴ |
 | `E57-INGEST` | PDAL 2.10.2 `readers.e57` | `tests/e57PdalCrossDecode.test.ts` | 1,788,994 points × 9 dimensions | 0 (exact) | 1×10⁻⁶ m |
 | `MEAS-PROFILE` | OGR/SpatiaLite 5.1.0 chainage + R 4.4.1 `quantile(type = 7)` (+ closed form on the ramp) | `tests/profileCrossCheck.test.ts` | 751 stations (3 parameter sets) | 3.6×10⁻¹⁵ m (0 on the ramp) | 1×10⁻⁶ m |
-| `CRS-UTM-PROJECTION` | PROJ 9.8.1 `cs2cs` + GeographicLib 2.7 `GeoConvert` | `tests/geodesyOracleAgreement.test.ts` | 36 fixtures × 2 coordinates × 2 oracles | 4.531×10⁻⁴ m easting, 9.521×10⁻⁴ m northing | 1.5×10⁻³ m |
+| `CRS-UTM-PROJECTION` | PROJ 9.8.1 `cs2cs` + GeographicLib 2.7 `GeoConvert` | `tests/geodesyOracleAgreement.test.ts` | 36 fixtures × 2 coordinates × 2 oracles | 4.531×10⁻⁴ m easting, 9.521×10⁻⁴ m northing (v0.6.6 series; under 3×10⁻⁹ m with the series used from v0.7.0) | 1.5×10⁻³ m |
 | `HOLDOUT-RMSE` | base R 4.6.1 (bias, RMSE, max absolute residual) | `tests/statisticsRAgreement.test.ts` | 18 comparisons over 6 residual vectors | 4.4×10⁻¹⁶ m | 1×10⁻¹² m |
 | `NVA-VVA` | base R 4.6.1 (1.96 × pooled RMSE) | `tests/statisticsRAgreement.test.ts` | 6 comparisons over 6 residual vectors | 8.9×10⁻¹⁶ m | 1×10⁻¹² m |
 | `CHANGE-RASTER` | GRASS 8.5.0 `r.mapcalc` (+ closed form) | `tests/changeGrassAgreement.test.ts` | 3,007 comparable cells (8 epoch pairs) | 7×10⁻⁶ relative | 1×10⁻⁵ relative |
@@ -226,7 +226,7 @@ size, extent, and row order), so the two can be compared cell for cell.
    ```
 
 3. Read both grids in row order, align NODATA, and pass them to `crossCheck`
-   with the tolerance from the product's `ReferenceSlot` (0.05 m for DTM/DSM).
+   with the tolerance from the product's `ReferenceSlot` (5×10⁻⁵ m for DTM/DSM).
 
 ### Slope / aspect / hillshade (GDAL)
 

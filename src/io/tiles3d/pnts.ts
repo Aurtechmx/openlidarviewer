@@ -72,7 +72,17 @@ export interface PntsTile {
   readonly pointsLength: number;
   /** Center to add to the tile-local positions, or null. */
   readonly rtcCenter: readonly [number, number, number] | null;
-  /** Tile-local xyz, length `pointsLength * 3`. */
+  /**
+   * QUANTIZED_VOLUME_OFFSET of a POSITION_QUANTIZED tile, or null for a tile
+   * that stores float POSITION. Kept out of `positions` so a volume far from
+   * the origin is not rounded to Float32 spacing: a caller adds it in float64,
+   * together with `rtcCenter`, before placing the tile.
+   */
+  readonly quantizedVolumeOffset: readonly [number, number, number] | null;
+  /**
+   * Tile-local xyz, length `pointsLength * 3`. For a POSITION_QUANTIZED tile
+   * these are relative to `quantizedVolumeOffset`.
+   */
   readonly positions: Float32Array;
   /**
    * Interleaved sRGB rgb bytes, length `pointsLength * 3`, or null when the
@@ -791,7 +801,17 @@ export function parsePnts(buffer: ArrayBuffer, options: ParsePntsOptions = {}): 
     // reserving the memory before it is refused.
     const positions = new Float32Array(components);
     for (let i = 0; i < components; i++) positions[i] = view.getFloat32(start + i * 4, true);
-    return { version, pointsLength, rtcCenter, positions, colors, normals, batchIds, batchTable };
+    return {
+      version,
+      pointsLength,
+      rtcCenter,
+      quantizedVolumeOffset: null,
+      positions,
+      colors,
+      normals,
+      batchIds,
+      batchTable,
+    };
   }
 
   if (ft.POSITION_QUANTIZED !== undefined) {
@@ -818,12 +838,24 @@ export function parsePnts(buffer: ArrayBuffer, options: ParsePntsOptions = {}): 
     for (let i = 0; i < components; i++) {
       const axis = i % 3;
       const code = view.getUint16(start + i * 2, true);
-      // Float64 the whole way, narrowed once on the store. A quantised volume
-      // can sit far from the origin, so rounding the scaled code before the
-      // offset is added rounds twice and loses a step the format still carries.
-      positions[i] = (code * volumeScale[axis]) / QUANTIZED_FULL_SCALE + volumeOffset[axis];
+      // Only the in-volume part is stored. QUANTIZED_VOLUME_OFFSET is returned
+      // separately and added in float64 by the caller: a volume can sit far
+      // from the origin (4.7e6 m has a 0.5 m Float32 spacing), and adding it
+      // here would round every point to that spacing instead of the
+      // quantisation step the format carries.
+      positions[i] = (code * volumeScale[axis]) / QUANTIZED_FULL_SCALE;
     }
-    return { version, pointsLength, rtcCenter, positions, colors, normals, batchIds, batchTable };
+    return {
+      version,
+      pointsLength,
+      rtcCenter,
+      quantizedVolumeOffset: volumeOffset,
+      positions,
+      colors,
+      normals,
+      batchIds,
+      batchTable,
+    };
   }
 
   throw new LoadError('malformed-file', 'PNTS: feature table has neither POSITION nor POSITION_QUANTIZED.');

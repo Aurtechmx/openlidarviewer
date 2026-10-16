@@ -239,8 +239,9 @@ export function formatBearing(azimuthDeg: number): string {
  *  - `grid`: a projected CRS in a Z-up frame. The bearing is measured from the
  *    +Y axis, which is GRID north. True north differs by the meridian
  *    convergence (1.29 degrees for UTM 12N at -109, 40; 2.27 degrees at a zone
- *    edge at 49 N; at most 2.98 degrees at 84 N, by PROJ), which OLV does not
- *    apply.
+ *    edge at 49 N; at most 2.98 degrees at 84 N in a standard 6-degree zone,
+ *    by PROJ; the widened zones 32V and 31X, 33X, 35X and 37X reach about 6
+ *    degrees), which OLV does not apply.
  *  - `local`: no CRS, or a frame whose horizontal axes are not easting and
  *    northing (a Y-up scan measures from +Z). The angle is between scan axes.
  *  - `none`: a geographic CRS. Longitude and latitude degrees are not equal
@@ -332,14 +333,22 @@ export function formatVolumeRender(
 /** Format a volume in cubic metres for the active unit system. */
 export function formatVolume(cubicMetres: number, system: UnitSystem): string {
   if (!Number.isFinite(cubicMetres) || cubicMetres < 0) return '—';
+  // Below a cubic metre (or a cubic yard) the decimals follow the
+  // significant-figure policy the lengths use, so a small real volume never
+  // prints as zero. Cubic metres hold to a cubic kilometre: a switch at 1e6 m³
+  // printed 2,345,678 m³ as "0.002 km³", 15 % off at the precision shown.
   if (system === 'metric') {
-    if (cubicMetres < 1) return `${grouped(cubicMetres * 1000, 0)} dm³`;
-    if (cubicMetres < 1e6) return `${grouped(cubicMetres, 2)} m³`;
-    return `${grouped(cubicMetres / 1e9, 3)} km³`;
+    if (cubicMetres < 1) {
+      const dm3 = cubicMetres * 1000;
+      return `${grouped(dm3, displayDecimals(dm3, 0, 4))} dm³`;
+    }
+    if (cubicMetres < 1e9) return `${grouped(cubicMetres, 2)} m³`;
+    const km3 = cubicMetres / 1e9;
+    return `${grouped(km3, displayDecimals(km3, 3, 6))} km³`;
   }
   // Imperial: cubic feet, switching to cubic yards above a yard.
   const cubicFeet = cubicMetres * FEET_PER_METRE * FEET_PER_METRE * FEET_PER_METRE;
-  if (cubicFeet < 27) return `${grouped(cubicFeet, 1)} ft³`;
+  if (cubicFeet < 27) return `${grouped(cubicFeet, displayDecimals(cubicFeet, 1, 4))} ft³`;
   return `${grouped(cubicFeet / 27, 2)} yd³`;
 }
 

@@ -74,9 +74,15 @@ interface IntensityMap {
  * negative value to 0. A degenerate declaration (max ≤ min) carries no usable
  * range and falls through to the no-limits rule.
  *
- * With no declared limits the observed maximum decides: a unit-range channel
- * (observed max ≤ 1, common for float intensity) is scaled by 65535; a wider
- * range is taken as a raw value and only clamped.
+ * With no usable `intensityLimits`, an Integer or ScaledInteger intensity
+ * field is normalised over the range its prototype declares (its `minimum` and
+ * `maximum`, through the field's scale and offset), the same fallback the
+ * colour channels use. Without that, a signed field such as −2048..2047 would
+ * clamp every negative value to 0.
+ *
+ * A Float field declares no range, so the observed maximum decides: a
+ * unit-range channel (observed max ≤ 1) is scaled by 65535; a wider range is
+ * taken as a raw value and only rounded and clamped to 0–65535.
  */
 function intensityMapFor(scan: E57ScanData): IntensityMap {
   const col = scan.columns.intensity;
@@ -85,6 +91,24 @@ function intensityMapFor(scan: E57ScanData): IntensityMap {
   if (lim && lim.maximum > lim.minimum) {
     const scale = 65535 / (lim.maximum - lim.minimum);
     return { scale, bias: -lim.minimum * scale, rule: 'declared-limits', minimum: lim.minimum, maximum: lim.maximum };
+  }
+  const field = scan.fields.find((f) => f.name === 'intensity');
+  if (
+    field &&
+    (field.type === 'integer' || field.type === 'scaledInteger') &&
+    field.minimum !== undefined &&
+    field.maximum !== undefined
+  ) {
+    const fs = field.type === 'scaledInteger' ? (field.scale ?? 1) : 1;
+    const fo = field.type === 'scaledInteger' ? (field.offset ?? 0) : 0;
+    const a = field.minimum * fs + fo;
+    const b = field.maximum * fs + fo;
+    const minimum = Math.min(a, b);
+    const maximum = Math.max(a, b);
+    if (maximum > minimum) {
+      const scale = 65535 / (maximum - minimum);
+      return { scale, bias: -minimum * scale, rule: 'declared-limits', minimum, maximum };
+    }
   }
   // A value the file flags invalid (`isIntensityInvalid` ≠ 0) is not a
   // measurement, so it does not decide the observed range.

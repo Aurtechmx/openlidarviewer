@@ -74,8 +74,12 @@ and which a longitude-only formula gets wrong by a whole six degrees of grid.
 The two oracles agree with each other to 2.0e-9 m. That number is the reason
 the candidate's residual can be attributed: it is five orders of magnitude
 below the residual, so what OLV shows is OLV's own series truncation and not
-disagreement between the references. The residual reaches 4.5e-4 m in easting
-and 9.5e-4 m in northing, both on Svalbard fixtures, and takes both signs.
+disagreement between the references. With the truncated Snyder series of
+v0.6.6 the residual reached 4.5e-4 m in easting and 9.5e-4 m in northing, both
+on Svalbard fixtures, and took both signs. From v0.7.0 `latLonToUtm` evaluates
+the sixth-order Krüger series, and `tests/geodesyOracleAgreement.test.ts`
+measures a residual under 3e-9 m on the same fixtures; the recorded study has
+not been re-run against that revision.
 
 This is E4 evidence for coordinate conversion, which previously had none. It
 does not touch datum transformation or vertical reference, neither of which

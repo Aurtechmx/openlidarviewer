@@ -7,7 +7,7 @@ it without installing anything, open the live version at
 
 ## Opening a scan
 
-Open the app in a modern WebGL/WebGPU-capable browser (Chrome or Edge work well). Drag a point-cloud file anywhere onto the page, or click a built-in sample on the empty state. The format is detected automatically and parsing runs in the background.
+Open the app in a modern WebGL/WebGPU-capable browser (Chrome or Edge work well). Drag a point-cloud file anywhere onto the page, or press "Try a sample scan" on the empty state, which asks for approval and then streams a public dataset over the network. The format is detected automatically and parsing runs in the background.
 
 For LAS and LAZ files a short preload summary appears first: the format, the source point count, and how the file will be loaded. A status toast then tracks the load through its stages (reading, decoding, optimizing) and a very large file shows a live point counter and a progress bar. A Cancel control on the toast stops a load in progress; nothing is added to the scene if you cancel.
 
@@ -36,7 +36,7 @@ The View panel in the right rail controls how the cloud looks:
 The Rendering section of the View panel tunes how the cloud is drawn:
 
 - Eye Dome Lighting toggles screen-space depth shading. It darkens depth discontinuities so edges and 3D structure stand out, and the strength slider sets how pronounced the effect is. It is on by default on desktop WebGPU, and off on the WebGL 2 fallback and on phones, where it can still be switched on.
-- Point size mode switches between Adaptive (points scale with camera distance, clamped so far points stay visible and near ones do not bloat) and Fixed, a constant on-screen size. A cloud opens at the smallest size in Fixed mode (the most honest first view, with no distance-driven size gradient) and the point-size slider sets the base size for both modes. A size or mode you choose is remembered for the next session.
+- Point size mode switches between Adaptive (points scale with camera distance, clamped so far points stay visible and near ones do not bloat) and Fixed, a constant on-screen size. A cloud opens at the smallest size in Adaptive mode and the point-size slider sets the base size for both modes. A size or mode you choose is remembered for the next session.
 - Antialiasing toggles the smoothing of each point's round edge.
 
 ## Reference plane
@@ -79,7 +79,7 @@ Snapping is off until you turn it on. The snap button cycles off, point and geom
 
 While placing, undo removes the last point. Once placed, drag any point to move it, and a measurement can be renamed or deleted from the Measurements panel. Clear all empties the list. The units toggle switches every readout between metric and imperial. Export saves all measurements to a JSON session file, and Import loads one back. Measurements persist for the browser session.
 
-When the scan is in geographic coordinates (degrees), every measurement except a height is marked as not a distance, and the exports print or write "not available: geographic CRS (degrees are not distances)" in place of the figure. Heights, rises and box heights are still written. Nonzero values smaller than 0.0005 keep three significant digits in the exports, so a small segment does not export as 0. The bearing of a distance reads "grid" on a projected coordinate system with an EPSG code and "(local axes)" otherwise, and is not shown on a geographic one. The user guide describes each case in [USER_GUIDE.md](USER_GUIDE.md).
+When the scan is in geographic coordinates (degrees), every measurement except a height is marked as not a distance, and the exports print or write "not available: horizontal CRS units are not ground distances (geographic degrees, Web Mercator grid or geocentric frame)" in place of the figure. Heights, rises and box heights are still written. Nonzero values smaller than 0.0005 keep three significant digits in the exports, so a small segment does not export as 0. The bearing of a distance reads "grid" on a projected coordinate system with an EPSG code and "(local axes)" otherwise, and is not shown on a geographic one. The user guide describes each case in [USER_GUIDE.md](USER_GUIDE.md).
 
 Measurement is for visual inspection. See the note in [limitations.md](limitations.md).
 
@@ -113,7 +113,7 @@ Press `?` for the shortcut sheet: every action with its key, searchable, from th
 
 Save a snapshot, in the tool dock, saves the current view as a PNG; any placed measurements and annotations are burned into the image, so the snapshot works as inspection evidence. The Image export section of the Export tab adds Height map, Intensity, Class map, Normal map and View capture. The intensity, class and normal modes are disabled on a cloud without that channel, and the hover text says so. On a georeferenced scan, View capture downloads a top-down image with world file and projection sidecars, and its pixels with no drawn point are transparent. The quick Export buttons write the loaded cloud in real-world coordinates as a PLY or OBJ file, or as XYZ or CSV text; with a clip on they write only the points it keeps and add `-clip` to the file name. LAS and LAZ re-saves, with their coordinate system options, are in the Export tab's point cloud lane; see the [user guide](USER_GUIDE.md).
 
-Report PDF. Export → Report PDF builds a multi-page report from the live working state. Pick a template first: Survey Summary is a compact handover with a cover, inspection summary, dataset summary, compact provenance, measurements and technical notes. Technical Report adds the full provenance, the file's declared source metadata, annotations and visuals. Scan QA is a data-quality summary with an explicit statement of what the report does not establish. The metric or imperial setting of the Measurements panel applies to the tables. In the dataset summary, Height reads in source units with "(vertical unit not declared)" when the file declares no vertical unit, and "(declared vertical unit is invalid)" when the declared factor is zero, negative or not a number. It carries "(includes noise classes 7 and 18)" whenever the on-screen Scan report does. The Exported stamp prints UTC with the zone named. For measurements on a geographic coordinate system, the report prints "not available: geographic CRS (degrees are not distances)" in place of grades, angles, lengths, areas and volumes. The PDF engine loads only when you click the button, so the initial app payload stays unchanged for users who never need a report.
+Report PDF. Export → Report PDF builds a multi-page report from the live working state. Pick a template first: Survey Summary is a compact handover with a cover, inspection summary, dataset summary, compact provenance, measurements and technical notes. Technical Report adds the full provenance, the file's declared source metadata, annotations and visuals. Scan QA is a data-quality summary with an explicit statement of what the report does not establish. The metric or imperial setting of the Measurements panel applies to the tables. In the dataset summary, Height reads in source units with "(vertical unit not declared)" when the file declares no vertical unit, and "(declared vertical unit is invalid)" when the declared factor is zero, negative or not a number. It carries "(includes noise classes 7 and 18)" whenever the on-screen Scan report does. The Exported stamp prints UTC with the zone named. For measurements on a geographic coordinate system, the report prints "not available: horizontal CRS units are not ground distances (geographic degrees, Web Mercator grid or geocentric frame)" in place of grades, angles, lengths, areas and volumes. The PDF engine loads only when you click the button, so the initial app payload stays unchanged for users who never need a report.
 
 <!-- #region session-reference -->
 <!-- The region markers on this page let the docs site's "Embed & session
@@ -151,7 +151,6 @@ Append `?embed=1` to the URL to strip the chrome down to a bare canvas for use i
 | `?ui=minimal` | Hides the dock and panels without enabling the bridge |
 | `?measurements=1` | Surfaces the measurement tool layer in a bare view |
 | `?annotations=1` | Surfaces the annotation tool layer in a bare view |
-| `?autoload=sample:<id>` | Opens a built-in sample on startup (`survey` or `scan`) |
 
 ### postMessage bridge
 

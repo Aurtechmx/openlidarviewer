@@ -268,7 +268,7 @@ describe('the simulation input digest moves with every routing input', () => {
   it('is deterministic and versioned', () => {
     expect(terrainAccessSimulationInputDigest(base)).toBe(ref);
     expect(ref).toMatch(/^[0-9a-f]{64}$/);
-    expect(TERRAIN_ACCESS_INPUT_DIGEST_SCHEME).toMatch(/v4$/);
+    expect(TERRAIN_ACCESS_INPUT_DIGEST_SCHEME).toMatch(/v5$/);
   });
 
   it('is the run\'s analysisInputDigest, and presentation state does not move it', () => {

@@ -1,7 +1,7 @@
 import type { AnalysisModule, AnalysisResult, AnalysisRow } from '../ModuleApi';
 import type { PointCloud } from '../../model/PointCloud';
 import { sourcePositions } from '../../model/pointFrames';
-import { medianOf } from './orderStatistic';
+import { medianOf, sortedValueAt } from './orderStatistic';
 
 /**
  * Compute per-axis median and MAD (median absolute deviation) for the
@@ -39,6 +39,41 @@ function computeMedianAndMAD(positions: Float32Array, pointCount: number): {
   }
 
   return { median, mad };
+}
+
+/** The value at quantile `q` of the finite entries of `a` (lower order statistic). Reorders `a`. */
+function finiteQuantile(a: Float64Array, finite: number, q: number): number {
+  return sortedValueAt(a, Math.floor(q * (finite - 1)));
+}
+
+/**
+ * A MAD-equivalent scale per axis that is non-zero wherever the data allow
+ * one. MAD is 0 whenever more than half the values on an axis are identical
+ * (a quantised flat floor), and median ± 8·MAD then flags every point off the
+ * median. The fallbacks are the interquartile range and then the 5-95 %
+ * range, each converted to the MAD a normal sample with that range would
+ * have (MAD = IQR / 2; MAD = 0.6745 · (P95 − P5) / 3.29). 0 means even the
+ * 5-95 % range collapses: the axis has no spread to judge a stray against.
+ */
+function robustScales(positions: Float32Array, pointCount: number, mad: readonly number[]): [number, number, number] {
+  const out: [number, number, number] = [mad[0], mad[1], mad[2]];
+  let scratch: Float64Array | null = null;
+  for (let axis = 0; axis < 3; axis++) {
+    if (out[axis] > 0) continue;
+    scratch ??= new Float64Array(pointCount);
+    let finite = 0;
+    for (let i = 0; i < pointCount; i++) {
+      const v = positions[i * 3 + axis];
+      if (Number.isFinite(v)) scratch[finite++] = v;
+    }
+    if (finite < 2) continue;
+    const vals = scratch.subarray(0, finite);
+    const iqr = finiteQuantile(vals, finite, 0.75) - finiteQuantile(vals, finite, 0.25);
+    if (iqr > 0) { out[axis] = iqr / 2; continue; }
+    const wide = finiteQuantile(vals, finite, 0.95) - finiteQuantile(vals, finite, 0.05);
+    if (wide > 0) out[axis] = (0.6745 * wide) / 3.29;
+  }
+  return out;
 }
 
 function checkInvalidCoordinates(cloud: PointCloud): AnalysisRow {
@@ -319,15 +354,27 @@ function checkStrayOutliers(cloud: PointCloud): AnalysisRow {
   const pos = sourcePositions(cloud);
   const { median, mad } = computeMedianAndMAD(pos, n);
   const THRESHOLD = 8;
+  // MAD where it is non-zero; otherwise a wider robust range (see robustScales).
+  const scale = robustScales(pos, n, mad);
+  const flat = [0, 1, 2].filter((axis) => !(scale[axis] > 0));
+  if (flat.length > 0) {
+    // No spread on an axis means no stray can be told from the rest of the
+    // scan on it. Flagging every off-median point there (the old ±1e-9 band)
+    // reported a flat floor's own ramp as outliers.
+    const names = flat.map((axis) => 'XYZ'[axis]).join(', ');
+    return {
+      label: 'Stray Outliers',
+      value: `Not assessable: at least 90% of points share one ${names} value, so there is no robust spread to measure strays against`,
+      status: 'info',
+    };
+  }
 
   let outlierCount = 0;
   for (let i = 0; i < n; i++) {
     let isOutlier = false;
     for (let axis = 0; axis < 3; axis++) {
       const v = pos[i * 3 + axis];
-      const madAxis = mad[axis];
-      // If MAD is 0, use a small epsilon to avoid all points being "outliers"
-      const range = madAxis === 0 ? 1e-9 : THRESHOLD * madAxis;
+      const range = THRESHOLD * scale[axis];
       if (Math.abs(v - median[axis]) > range) {
         isOutlier = true;
         break;
@@ -339,7 +386,7 @@ function checkStrayOutliers(cloud: PointCloud): AnalysisRow {
   if (outlierCount > 0) {
     return {
       label: 'Stray Outliers',
-      value: `${outlierCount} outlier(s) beyond median ± 8·MAD`,
+      value: `${outlierCount} outlier(s) beyond median ± 8·MAD${mad.some((m) => !(m > 0)) ? ' (MAD from the interquantile range where it is 0)' : ''}`,
       status: 'warn',
     };
   }

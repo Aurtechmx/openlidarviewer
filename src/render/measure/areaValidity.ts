@@ -14,7 +14,8 @@
  * any arithmetic, so the verdict does not depend on the ring's offset.
  *
  * Non-planar rings. A ring whose vertices sit within `NON_PLANAR_RATIO` of the
- * plane (out-of-plane spread over in-plane extent) is judged on its plane
+ * plane (largest out-of-plane distance over the in-plane radius, the largest
+ * in-plane distance of a vertex from the ring's centroid) is judged on its plane
  * projection and reports a plane area, which is a lower bound on a draped
  * surface. A ring that deviates more than that is refused: a plane area would
  * not describe it.
@@ -23,7 +24,7 @@
 import type { Vec3 } from '../navMath';
 import { describeValidity, validatePolygon, type PolygonValidity, type Vec2Like } from './polygonHygiene';
 
-/** Out-of-plane spread over in-plane extent beyond which a ring is refused. */
+/** Largest out-of-plane distance over in-plane radius beyond which a ring is refused. */
 export const NON_PLANAR_RATIO = 0.25;
 
 export type AreaRingReason = Exclude<PolygonValidity, 'ok'> | 'non-planar';
@@ -163,8 +164,11 @@ export function areaRingVerdict(points: ReadonlyArray<Vec3>): AreaRingVerdict {
     const y = d[0] * w[0] + d[1] * w[1] + d[2] * w[2];
     const out = Math.abs(d[0] * normal[0] + d[1] * normal[1] + d[2] * normal[2]);
     if (out > maxOut) maxOut = out;
-    if (Math.abs(x) > extent) extent = Math.abs(x);
-    if (Math.abs(y) > extent) extent = Math.abs(y);
+    // The radius about the centroid, not a per-axis extent: the in-plane axes
+    // are seeded from a world axis, so a per-axis extent changed when the
+    // ring turned within its own plane.
+    const r = Math.hypot(x, y);
+    if (r > extent) extent = r;
     flat.push({ x, y });
   }
   const verdict = validatePolygon(flat);

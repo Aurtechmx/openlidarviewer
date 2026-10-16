@@ -12,6 +12,8 @@
  * Pure data — no DOM, no proj4 import (keeps this leaf trivially testable).
  */
 
+import { GEOGRAPHIC_EPSG_RANGES } from './geographicEpsgCodes';
+
 /** Curated non-parametric definitions for common named CRS. */
 const STATIC_DEFS: Record<number, string> = {
   // Geographic (lon/lat)
@@ -46,11 +48,31 @@ const STATIC_DEFS: Record<number, string> = {
     '+proj=krovak +lat_0=49.5 +lon_0=24.8333333333333 +alpha=30.2881397527778 +k=0.9999 +x_0=0 +y_0=0 +ellps=bessel +towgs84=570.8,85.7,462.8,4.998,1.587,5.261,3.56 +units=m +no_defs', // S-JTSK / Krovák East-North (Czechia). East-North → negated axes → negative easting/northing. The 7-parameter Bursa-Wolf datum shift agrees with authoritative PROJ to ~5 cm on the surveyed reference points (Zenodo 15421291); the naive 3-parameter shift was off by ~10 m.
 };
 
-/** EPSG codes that are geographic (lon/lat) rather than projected. */
+/**
+ * True when an EPSG code names a geographic (longitude/latitude) CRS, 2D or 3D,
+ * per the EPSG dataset table in {@link GEOGRAPHIC_EPSG_RANGES}. A fallback for
+ * when only a code is known: a resolved CRS's own kind (a WKT, GeoKeys, or the
+ * proj4 definition a reprojection used) takes precedence over this. Geocentric
+ * codes such as 4978, projected codes such as 4547 (CGCS2000 / 3-degree
+ * Gauss-Kruger), and compound codes such as 6349 return false.
+ */
 export function isGeographicEpsg(epsg: number): boolean {
-  if (epsg === 4978) return false; // geocentric (metres), not lat/lon
-  if (epsg === 7844 || epsg === 6668) return true; // GDA2020 / JGD2011 geographic
-  return epsg >= 4001 && epsg <= 4999; // classic geographic 2D block
+  if (!Number.isInteger(epsg)) return false;
+  const r = GEOGRAPHIC_EPSG_RANGES;
+  let lo = 0;
+  let hi = r.length / 2 - 1;
+  while (lo <= hi) {
+    const mid = (lo + hi) >> 1;
+    if (epsg < r[2 * mid]) hi = mid - 1;
+    else if (epsg > r[2 * mid + 1]) lo = mid + 1;
+    else return true;
+  }
+  return false;
+}
+
+/** True when a proj4 definition describes a longitude/latitude CRS. */
+export function isGeographicProj4(def: string | null): boolean {
+  return def != null && /(^|\s)\+proj=(longlat|latlong|lonlat|latlon)(\s|$)/.test(def);
 }
 
 /**
@@ -70,7 +92,8 @@ function utm(zone: number, opts: { south?: boolean; datum?: string }): string {
  *
  *   326zz → WGS84 / UTM zz N        327zz → WGS84 / UTM zz S
  *   269zz → NAD83 / UTM zz N        267zz → NAD27 / UTM zz N
- *   6330+zz-1 → NAD83(2011) / UTM zz N (6330–6349; 6339 is zone 10N)
+ *   6329+zz → NAD83(2011) / UTM zz N (6330–6348, zones 1N–19N; 6339 is
+ *             zone 10N; 6349 is the compound NAD83(2011) + NAVD88 height)
  *   258zz → ETRS89 / UTM zz N (258 = 25800)
  *   283zz → GDA94 / MGA zz S        78zz  → GDA2020 / MGA zz S (7846–7859)
  */
@@ -83,8 +106,9 @@ export function epsgToProj4(epsg: number): string | null {
   if (epsg >= 32701 && epsg <= 32760) return utm(epsg - 32700, { datum: 'WGS84', south: true });
   // NAD83 / UTM (zones 1–23 N).
   if (epsg >= 26901 && epsg <= 26923) return utm(epsg - 26900, { datum: 'NAD83' });
-  // NAD83(2011) / UTM (zones 1–20 N): 6330 is zone 1, so zone = epsg - 6329.
-  if (epsg >= 6330 && epsg <= 6349) return utm(epsg - 6329, { datum: 'NAD83' });
+  // NAD83(2011) / UTM (zones 1–19 N): 6330 is zone 1, so zone = epsg - 6329.
+  // 6349 is the compound CRS NAD83(2011) + NAVD88 height, not a UTM zone.
+  if (epsg >= 6330 && epsg <= 6348) return utm(epsg - 6329, { datum: 'NAD83' });
   // NAD27 / UTM (zones 1–22 N).
   if (epsg >= 26701 && epsg <= 26722) return utm(epsg - 26700, { datum: 'NAD27' });
   // ETRS89 / UTM (zones 28–38 N).
@@ -120,7 +144,9 @@ export function epsgDatumFamily(epsg: number): DatumFamily | null {
   if (epsg === 4326 || epsg === 4979 || epsg === 3857 || epsg === 3395 || epsg === 4978) return 'WGS84';
   // 6318 is NAD83(2011) geographic 2D. It has no proj4 definition here; it is
   // named so the longitude/latitude export can attach the NAD83 caveat to it.
-  if (epsg === 4269 || epsg === 6318 || epsg === 5070) return 'NAD83';
+  // 6349 is the compound NAD83(2011) + NAVD88 height, whose horizontal part is
+  // 6318; it has no proj4 definition here either.
+  if (epsg === 4269 || epsg === 6318 || epsg === 6349 || epsg === 5070) return 'NAD83';
   if (epsg === 4267) return 'NAD27';
   if (epsg === 4258 || epsg === 3035) return 'ETRS89';
   if (epsg === 4283 || epsg === 3577) return 'GDA94';
@@ -133,7 +159,7 @@ export function epsgDatumFamily(epsg: number): DatumFamily | null {
   if (epsg >= 32601 && epsg <= 32660) return 'WGS84';
   if (epsg >= 32701 && epsg <= 32760) return 'WGS84';
   if (epsg >= 26901 && epsg <= 26923) return 'NAD83';
-  if (epsg >= 6330 && epsg <= 6349) return 'NAD83';
+  if (epsg >= 6330 && epsg <= 6348) return 'NAD83';
   if (epsg >= 26701 && epsg <= 26722) return 'NAD27';
   if (epsg >= 25828 && epsg <= 25838) return 'ETRS89';
   if (epsg >= 28348 && epsg <= 28358) return 'GDA94';

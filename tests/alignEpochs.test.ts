@@ -395,6 +395,11 @@ describe('undeclared frames are labelled indicative', () => {
  * unit, withhold the metre figures rather than caption an unverified unit as m.
  */
 describe('unknown projected linear unit withholds the metre figures', () => {
+  // These epochs declare one CRS, so the solve starts at the identity pose and
+  // only pairs within three point spacings (about 2.8 units here) count. The
+  // shift is 0.5 units, a misregistration that pose supports; a 10-unit shift
+  // on this 20 x 8 scene is withheld as unsupported (see
+  // alignEpochsPartialOverlap.test.ts), which is not what these tests examine.
   const shiftedScatter = (dx: number): EpochCloud =>
     cloudFrom(scatter(200).map(([x, y, z]) => [x + dx, y, z] as P));
   const declared = (base: EpochCloud, over: Partial<EpochCloud> = {}): EpochCloud => ({
@@ -406,7 +411,7 @@ describe('unknown projected linear unit withholds the metre figures', () => {
 
   test('an applied fit reports yaw but withholds the shift and residual', () => {
     const before = declared(cloudFrom(scatter(200)));
-    const after = declared(shiftedScatter(10));
+    const after = declared(shiftedScatter(0.5));
     const r = alignEpochClouds(before, after, { horizontalUnitKnown: false });
     expect(r.alignment.applied).toBe(true);
     expect(r.alignment.horizontalUnitUnknown).toBe(true);
@@ -434,7 +439,7 @@ describe('unknown projected linear unit withholds the metre figures', () => {
   test('a known-unit projected fit still prints the metre shift and residual', () => {
     // The honest path is unchanged: omitting horizontalUnitKnown means known.
     const before = declared(cloudFrom(scatter(200)));
-    const after = declared(shiftedScatter(10));
+    const after = declared(shiftedScatter(0.5));
     const r = alignEpochClouds(before, after);
     expect(r.alignment.horizontalUnitUnknown).not.toBe(true);
     const s = summarizeAlignment(r.alignment);
@@ -453,7 +458,7 @@ describe('unknown projected linear unit withholds the metre figures', () => {
     const horizontalUnitKnown = isLinearUnitKnown(crsBearing) && isLinearUnitKnown(crsLess);
     expect(horizontalUnitKnown).toBe(false);
     const before = declared(cloudFrom(scatter(200)));
-    const after = declared(shiftedScatter(10));
+    const after = declared(shiftedScatter(0.5));
     const r = alignEpochClouds(before, after, { horizontalUnitKnown });
     expect(r.alignment.applied).toBe(true);
     expect(r.alignment.horizontalUnitUnknown).toBe(true);

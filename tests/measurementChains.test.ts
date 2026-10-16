@@ -260,13 +260,13 @@ describe('supportedDimensions — UI helper', () => {
 });
 
 describe('formatChainResult — display sugar', () => {
-  it('formats a length sum with 2 decimals + unit', () => {
+  it('formats a length sum at the panel significant figures + unit', () => {
     const r = aggregate(
       [distanceM([0, 0, 0], [3, 0, 0])],
       'sum',
       'length',
     );
-    expect(formatChainResult(r)).toBe('3.00 m');
+    expect(formatChainResult(r)).toBe('3.0000 m');
   });
 
   it('formats a grade with 1 decimal + %', () => {

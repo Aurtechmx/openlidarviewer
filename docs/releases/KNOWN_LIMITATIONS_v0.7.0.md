@@ -35,9 +35,9 @@ no flags channel, which reads as absent rather than as false zeros.
 ## Class names are exact only when the format is known
 
 A source that declares a point data record format gets the exact name. A
-streaming source declares none here, and the four codes whose meaning differs
-between the legacy and extended tables report both readings rather than one
-guess.
+streaming source declares none here, and the fourteen codes whose meaning
+differs between the legacy and extended tables (8 and 10 to 22) report both
+readings rather than one guess.
 
 ## Class edits are not stored in a session file
 
@@ -67,12 +67,11 @@ are not saved in a session file, so reopening the scan brings back the file's
 classes. Streaming COPC and EPT scans can be neither cleared nor
 auto-classified: both actions need a fully loaded scan, and Edit classes stays
 hidden on a streaming scan. Undo steps back over a clear, a restore and an
-auto-classify, but an auto-classify on a scan that carried no classes at all
-is not undoable. Restore earlier classes brings back the codes held before the
+auto-classify. Restore earlier classes brings back the codes held before the
 first clear or auto-classify, hand edits made before it included, so it can
 differ from the file's codes. The kept codes take one byte per point once the
 first clear or auto-classify runs, and the undo history drops its oldest steps
-past 128 MB per scan.
+past 128 MB per scan or past 50 steps; the newest step is always kept.
 
 Two outputs carry a cleared or derived marker inside the file: the header
 comment of the quick XYZ export and the PDF report. Both name the classifier's
@@ -97,16 +96,18 @@ named, and truncation is reported rather than hidden.
 ## The boundary share now measures the survey edge
 
 It seeded a distance field at every cell that was not measured, so on a grid
-thinned by a display stride nearly every measured cell sat beside a seed. Over
-one geometry it read 33 per cent at full decode and 100 per cent strided. It
+thinned by a display stride nearly every measured cell sat beside a seed. It
 seeds only from cells with no reachable data now, and distances travel through
-the surveyed region, so neither depends on how densely the surface was sampled.
+the surveyed region, so neither depends on how densely the surface was sampled:
+the test geometry reads about 33 per cent both at full decode and strided.
 
 ## An Area ring that is far from planar or touches itself reports no area
 
 An Area polygon is judged in its own best-fit plane. A ring whose vertices
-sit further from that plane than a quarter of the ring's half-extent (about
-14 degrees of tilt across the ring), or whose edges touch at a vertex or
+sit further from that plane than a quarter of the ring's radius (the largest
+distance of a vertex from the ring's centre within that plane, so the verdict
+does not change when the ring turns; about 14 degrees of tilt across the
+ring), or whose edges touch at a vertex or
 overlap, reports no area. The Measure panel, totals and every export omit the
 area figures and state the reason; the perimeter is kept. A ring that is only
 slightly off its plane, such as a roof facet picked with a little noise, still
@@ -294,7 +295,8 @@ with route diagnostics and the route drawn on the grid and on the scan. Cell
 readouts give elevation in the dataset's vertical datum and unit, or say it is
 unknown. Lengths, slopes and steps are in metres; a run refuses by name
 (`UNITS_UNRESOLVED`) when the horizontal scale or the vertical unit does not
-resolve. Other named refusals are `NO_DTM`, `INVALID_PROFILE`, `START_BLOCKED`,
+resolve. Other named refusals are `NO_DTM`, `INVALID_PROFILE`, `INVALID_WEIGHTS`
+(a cost weight that is negative or not a finite number), `START_BLOCKED`,
 `END_BLOCKED`, `NO_ROUTE`, `INSUFFICIENT_EVIDENCE`, `TOO_LARGE`,
 `OBSTRUCTION_EVIDENCE_UNAVAILABLE` (an above-ground obstruction limit is set
 and no aligned above-ground surface exists), `SURFACE_MISALIGNED` (the
@@ -326,6 +328,12 @@ either end cell and the move's own rise over its length, and its cross slope
 the larger of the two end cells' sideways Horn components. The figure is
 conservative: a cell-scale feature steeper than its neighbourhood gates the
 moves across it even where the smoothed gradient is gentle.
+
+The minimum terrain confidence blocks cells only under the `block` unknown
+policy, where the run record marks it `evaluated`. Under `penalize` it changes
+neither eligibility nor cost and only sets the reported share of route cells
+below it, so the run record, run card, diagnostics CSV and export README mark
+it `disclosed`.
 
 The default evidence-gap policy is exploratory. Under it, a cell whose slope
 or aspect used a substituted Horn neighbour (the grid's outer ring or beside a
@@ -375,17 +383,17 @@ gestures run end to end on all three engines, and in the iPhone-shaped WebKit
 project, as synthesized pointer events. Multi-touch on a real device is
 unverified. An iOS simulator check drives real Mobile Safari on a pinned
 simulator (iOS 26.5, iPhone 17e) and has passed end to end, including a
-two-finger pinch. It runs only when started by hand and is advisory until 20
+two-finger pinch. It runs when started by hand, and on a push that changes its
+own workflow or scripts, and is advisory until 20
 consecutive passes, counted by `scripts/ios-streak.mjs`.
 
 ## The two monoliths are still monoliths
 
-`src/main.ts` is 4,260 lines, seventy-two fewer since the Save view snapshot
+`src/main.ts` is 4,260 lines, after the Save view snapshot
 moved to its own lazy module, the Analyse panel's longitude and latitude
 wiring moved to the mapper module, the Planetary Computer CRS record moved to
 its own module and the view cube's wiring was condensed, and
-`src/render/Viewer.ts` is 5,946, two hundred and seventy-seven lines
-below its v0.6.9 count. Five getters collapsed to make room for a memory
+`src/render/Viewer.ts` is 5,946, 277 lines below its v0.6.9 count of 6,223. Five getters collapsed to make room for a memory
 accessor and a size-mode call, and the streamed draw cull then paid for its own
 wiring by moving the pass onto the streaming renderer and collapsing two more
 expressions. Making the loop request-driven then took another thirty-one out:
@@ -398,16 +406,17 @@ took twenty-one more. The measure click handling moved into the
 measurement controller, which took twenty-eight more. The draw precision bound's model-view accessor took one line and a shorter doc comment gave back two. A shrink-only lint
 fails the build when either passes its recorded baseline, so a raise is a hand
 edit to `docs/validation/monolith-size-baseline.json` and always shows in the
-diff. It caught an added line twice during this cycle, and a banked drop once.
-Fan-out is 97 for the shell, 74 for the renderer and 23 for the Analyse panel,
-across 1144 modules with no dependency cycles.
+diff.
+Fan-out is 97 for the shell, 74 for the renderer and 29 for the Analyse panel,
+across 1146 modules with no dependency cycles.
 
 ## The shell has little headroom
 
-`npm run check:bundle` on the live build reports the index chunk at 576 KiB
-of its 795 KiB ceiling and the Viewer chunk at 628 KiB of 716 KiB. The
-ceilings are unchanged. New work still goes behind a lazy seam rather than
-being paid for by a raise.
+`npm run check:bundle` on the live build reports the index chunk at 663 KiB
+of its 795 KiB ceiling and the Viewer chunk at 625 KiB of 716 KiB. Both
+ceilings were lowered in this release, the index from 812 KiB to 795 KiB and
+the Viewer from 740 KiB to 716 KiB. New work still goes behind a lazy seam
+rather than being paid for by a raise.
 
 ## An idle scene still draws four frames a second
 
@@ -426,7 +435,7 @@ project frame at their real separation, non-destructively, and each boundary
 recovers the world coordinate in the frame it names. One item remains a
 precision refinement rather than a correctness defect. The renderer forms each
 mesh's model-view matrix on the CPU in float64, so display precision does not
-depend on placement distance: the matrix the GPU receives stays within 4 µm of
+depend on placement distance: the matrix the GPU receives stays within 5 µm of
 the exact product at every offset tested, from 0 to 1,000 km, in each browser
 engine. The analysis paths that store placed coordinates, and the terrain
 gather, carry the placement in Float32. The mount-precision gate therefore still
@@ -442,8 +451,10 @@ equals the source's. Beyond that extent the scale and offset are still kept and
 an integer record can differ from the source's by a few steps: up to 2 steps at
 a 1 mm scale over 40 km. The export's provenance text records which case
 applied. A reprojected, voxel-reduced, streamed or non-LAS export is
-re-quantised at 1 mm (1e-7 degree on a geographic CRS) with the offset at the
-floor of the data minimum, and the provenance text gives the reason.
+re-quantised at 1 mm, or 0.001 of the source unit (1e-7 degree on a geographic
+CRS), with the offset at the floor of the data minimum, and the provenance text
+gives the reason. The scale widens on an axis whose extent would need more than
+2.0e9 steps.
 
 ## Release caveats on exports and reproduction
 
@@ -478,10 +489,14 @@ floor of the data minimum, and the provenance text gives the reason.
   a LAS 1.2 write of points carrying the LAS 1.4 overlap flag is refused until
   "Allow the overlap flag to be dropped" is ticked. Each opt-in allows only its
   own loss, and the refusal names every opt-in the write needs. A LAS 1.4 write
-  needs neither. Classes above 31 are refused or wrapped as before. A derived or cleared classification, or a source whose
-  point format is unknown, is not translated: when such a classification of a
-  legacy file is written as LAS 1.4, untouched legacy class 8 and 12 points are
-  written as the reserved codes 8 and 12, with no translation and no warning.
+  needs neither. Classes above 31 are refused or wrapped as before. When a
+  derived or cleared classification of a legacy file is written as LAS 1.4, a
+  point whose class 8 or 12 is unchanged from the producer's code (kept when
+  the first clear or auto-classify runs) is written as class 1 with the
+  key-point or overlap flag; a class 8 or 12 with no producer record behind it
+  is written unchanged, and the report lists it with a warning. A source whose
+  point format is unknown is not translated, and its codes are written
+  unchanged.
 - A LAS 1.2 write cannot keep every acquisition field. Scan angles are stored
   as whole degrees from -90 to 90 and there is no scanner channel, so a LAS 1.4
   file with an angle that rounds beyond 90 degrees or a nonzero channel is
@@ -578,9 +593,9 @@ integrity report, chain total and drawn labels withhold every figure but
 heights, as the Measure panel does. The per-measurement support grade does not
 travel with them: a measurement with an endpoint in empty space reads
 Unverified in the panel and is still published as a number. On a compound CRS
-whose height unit differs from its horizontal unit, the panel refuses 3D
-lengths, grades and tilted areas, while the exports and the PDF publish them
-computed with each axis in its own unit.
+whose height unit differs from its horizontal unit, the panel, the exports and
+the PDF all compute 3D lengths, grades and tilted areas with each axis in its
+own unit.
 
 ## The vertical unit is handled differently by different features
 
@@ -597,6 +612,15 @@ Scan Report and in metres in Measure. Only the lasso volume readout says so, wit
 height read in Measure carries no vertical-unit note of its own; it is flagged
 only when the horizontal unit is unknown. A valid declared vertical unit is used
 by every feature.
+
+## Imperial readouts are in international feet
+
+The imperial display converts through metres to the international foot
+(0.3048 m) and labels it "ft", including on a scan whose CRS unit is the US
+survey foot. The conversion is correct, but the figure is not the survey-foot
+coordinate difference: 5,000 US survey feet read as 5000.01 ft. There is no
+"ftUS" display unit; read the metric figure, or the source coordinates, when
+the survey-foot value itself is needed.
 
 ## Export digests that some surfaces cannot carry
 
@@ -673,15 +697,21 @@ file whose scans are all spherical-only opens no points.
 
 ## glTF and PLY files past the loader's limits are refused
 
-A glTF or GLB is refused when its node graph reaches the same node twice, or
-when opening it would emit more vertices than the loader's cap. A PLY is
+A glTF or GLB is refused when its node graph reaches the same node twice,
+when its node hierarchy is deeper than 256 levels, or when opening it would
+emit more vertices than the loader's cap. A PLY is
 refused when an element declares records but no properties, or when its
 header is longer than 64 KiB.
 
 ## E57 intensity is normalised; a missing channel is dropped
 
-E57 intensity is stored normalised to 0–65535 per scan; the source values are
-not retained, and it is not calibrated reflectance. Colour or intensity a file
+E57 intensity is stored on a 0–65535 scale per scan. A scan that declares
+`intensityLimits` is normalised over them. With no usable limits, an Integer or
+ScaledInteger intensity field is normalised over the minimum and maximum its
+prototype declares. A Float field with no limits is scaled by 65535 when its
+largest valid value is at most 1; otherwise its values are kept raw, rounded and
+clamped to 0–65535. The source values are not retained, and the result is not
+calibrated reflectance. Colour or intensity a file
 flags invalid is masked per point: the point keeps its position, the value is
 drawn in the neutral grey, left out of intensity ranges, the colour balance and
 voxel means, and written as an empty CSV field or `nan` in XYZ and ASC. PLY and
@@ -725,7 +755,7 @@ without a datum transformation, so the export depends on the scan's datum:
 - WGS 84 (EPSG:4326, 4979, WGS 84 / UTM and Web Mercator) is exported
   unchanged.
 - NAD83 (EPSG:4269, 6318, NAD83 / UTM 26901 to 26923, NAD83(2011) / UTM 6330
-  to 6349, and CONUS Albers 5070) is exported as if it were WGS 84, and every
+  to 6348, and CONUS Albers 5070) is exported as if it were WGS 84, and every
   file says the positions are approximate, about 1 to 2 m. NAD83(2011) and
   WGS 84 at epoch 2026.75 differ by 0.9 to 1.6 m across the conterminous
   United States (0.89 m at Miami, 1.61 m at Seattle).
@@ -733,7 +763,7 @@ without a datum transformation, so the export depends on the scan's datum:
   exported as if they were WGS 84, and every file names the datum and the size
   of the difference. Each datum is fixed to its plate at a reference epoch, so
   the difference grows every year. At epoch 2026.75 PROJ gives 0.93 m for
-  ETRS89 (RGF93 follows it), 0.40 m for GDA2020 and 1.96 m for GDA94. NZGD2000
+  ETRS89 (RGF93 follows it), 0.40 m for GDA2020 and 1.97 m for GDA94. NZGD2000
   needs the New Zealand deformation model, which PROJ does not have offline;
   the files state about 1 m.
 - NAD27 is refused. proj4 has no NAD27 grids and would apply no shift, which is
@@ -766,7 +796,9 @@ The map sheet's orientation arrow, the compass rose and the distance bearing in
 the Measurements panel are measured from the scan's +Y axis. On a projected CRS
 that is grid north, which differs from true north by the meridian convergence:
 1.29 degrees in UTM zone 12 at 109 W, 40 N, 2.27 degrees at a zone edge at
-49 N, and at most 2.98 degrees at 84 N. The arrow and the rose's top face read
+49 N, and at most 2.98 degrees at 84 N in a standard 6-degree zone. The
+widened zones 32V and 31X, 33X, 35X and 37X reach about 6 degrees (5.97
+degrees at 9 E, 84 N in zone 33). The arrow and the rose's top face read
 "Grid N", and the bearing reads, for example, "042° grid" on a projected CRS
 with an EPSG code. With no CRS, a local engineering CRS or a Y-up scan, the
 bearing reads "(local axes)", and the map sheet keeps its "local grid up / true
@@ -880,6 +912,30 @@ a fixed 0.1 m labelled "assumed, not measured". Two DTMs are differenced only
 when they share a grid to float64 representation; an offset grid is refused,
 not resampled. The difference raster (.asc) has no header field for the
 threshold, so the level of detection travels in the panel text, not the file.
+
+A cell is differenced only where both DTMs hold a measured height, meaning
+ground returns fall in that cell in both epochs. Cells where either surface is
+interpolated, including the fill the DTM build extends past an epoch's own
+footprint, are left out, and the result states how many cells and what share
+of the cells with a height in both surfaces that was. The grid carries no
+flag that separates a bracketed interpolation from an extrapolation, so
+neither is used. So that cells between returns are not mostly fill, the shared
+grid's cell is at least twice the mean point spacing of the sparser epoch,
+estimated from all its points; a finer extent-based cell is kept only when the
+data are that dense. Where ground returns are much sparser than all returns,
+under dense vegetation, cells without a ground return are still left out.
+
+Epoch alignment starts at the unmoved pose when both epochs declare one CRS,
+pairs points only within three mean point spacings (estimated from the before
+epoch's sample), and measures the overlap at that distance. It is withheld,
+and the epochs compared unshifted, when under half of the sampled after points
+have a partner, when the fit residual exceeds 0.75 spacings, or when the fit
+would move the after sample farther than the pairing distance. A real
+misregistration larger than about three point spacings is therefore not
+corrected; it is reported as withheld. Over flat ground the horizontal shift is
+not constrained by the surface, and the fit leaves it near zero rather than
+guessing. Epochs without a declared CRS still start from a centroid placement,
+under the same gates.
 
 ## The CRS override fingerprint samples a source, it does not hash it
 

@@ -230,8 +230,9 @@ describe('a successful run', () => {
   });
 
   it('TA-10: anisotropic grid — a geographic frame resolves unequal east/west vs. north/south cell metres, and route length reflects it', () => {
-    // A geographic (degree) grid at 60°N: cos(60°) = 0.5, so a 1° cell is half
-    // as wide east–west as it is tall north–south, in metres.
+    // A geographic (degree) grid at 60°N: on WGS84 a degree of longitude there
+    // is 55 799.979 m and a degree of latitude 111 412.240 m (standard series),
+    // so a 1° cell is about half as wide east–west as it is tall north–south.
     const dtm = dtmOf(Array.from({ length: 3 }, () => Array(3).fill(0)), { cellSizeM: 1 });
     const geo60N: HorizontalScale = { isGeographic: true, latitudeDeg: 60, unitToMetres: 1, resolved: true };
     // A pure east-west route (3 cells) vs. a pure north-south route (3 cells)
@@ -244,7 +245,8 @@ describe('a successful run', () => {
     expect(northSouth.ok).toBe(true);
     if (eastWest.ok && northSouth.ok) {
       expect(eastWest.diagnostics.horizontalLengthM).toBeLessThan(northSouth.diagnostics.horizontalLengthM);
-      expect(eastWest.diagnostics.horizontalLengthM).toBeCloseTo(northSouth.diagnostics.horizontalLengthM / 2, 3);
+      expect(eastWest.diagnostics.horizontalLengthM).toBeCloseTo(2 * 55_799.979, 2);
+      expect(northSouth.diagnostics.horizontalLengthM).toBeCloseTo(2 * 111_412.2402, 2);
     }
   });
 });

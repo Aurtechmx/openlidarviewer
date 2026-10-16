@@ -67,6 +67,11 @@ export interface IntervalGateParams {
    * range-only heuristic `i < range`, which FALSELY rejects e.g.
    * minZ 0.4 / maxZ 1.2 at interval 1 (range 0.8 < 1, yet the level 1.0
    * exists) — the audit's `intervalGate` finding.
+   *
+   * The bounds must be in the frame the contour levels are anchored to: when
+   * levels sit on multiples of the interval in WORLD elevation (a recentred
+   * grid with a known `levelOriginZ`), pass world bounds (local + origin),
+   * or the crossing test answers for levels that are never drawn.
    */
   readonly minZ?: number | null;
   readonly maxZ?: number | null;
@@ -151,4 +156,25 @@ export function gateIntervals(params: IntervalGateParams): IntervalGateResult {
   }
 
   return { options, recommendedM, warnings };
+}
+
+/**
+ * The interval gate in the frame the contour levels are anchored to.
+ * `contoursAt` puts levels on multiples of the interval in WORLD elevation
+ * when `levelOriginZ` is known, so the level-crossing rule must see world
+ * bounds (local + origin). With no (or a zero) origin, or no recorded gate
+ * inputs, this returns `localGate` unchanged; otherwise it re-runs
+ * {@link gateIntervals} on the shifted bounds. Relief and RMSE do not depend
+ * on the origin, so only the "yields no contours" rule can change.
+ */
+export function gateAtLevelOrigin(
+  localParams: IntervalGateParams | null | undefined,
+  localGate: IntervalGateResult,
+  levelOriginZ: number | null | undefined,
+): IntervalGateResult {
+  const oz = Number.isFinite(levelOriginZ) ? (levelOriginZ as number) : 0;
+  if (oz === 0 || !localParams) return localGate;
+  const shift = (z: number | null | undefined): number | null =>
+    z != null && Number.isFinite(z) ? z + oz : null;
+  return gateIntervals({ ...localParams, minZ: shift(localParams.minZ), maxZ: shift(localParams.maxZ) });
 }

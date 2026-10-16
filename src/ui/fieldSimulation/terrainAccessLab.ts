@@ -368,6 +368,19 @@ export function obstructionStatusText(status: unknown, unknownPolicy: unknown): 
   }
 }
 
+/**
+ * The minimum-confidence status the run record carries, in words: a hard
+ * block under the `block` unknown policy (`evaluated`), a reported share only
+ * under `penalize` (`disclosed`).
+ */
+export function minimumConfidenceStatusText(status: unknown, minimum: number): string {
+  switch (status) {
+    case 'evaluated': return `cells below ${minimum} blocked (block policy)`;
+    case 'disclosed': return `share of route cells below ${minimum} reported, not enforced (penalize policy)`;
+    default: return 'not recorded';
+  }
+}
+
 /** The derivative-support row: the route's share of cells whose slope used a synthesised neighbour. */
 export function derivativeSupportText(d: RouteDiagnostics, policy: unknown): string {
   if (policy === 'block') return 'cells with a synthesised neighbour blocked (conservative)';
@@ -419,6 +432,10 @@ export function renderTerrainAccessRunCard(outcome: TerrainAccessLabOutcome | nu
     row('P95 longitudinal grade', `${d.p95LongitudinalGrade.toFixed(3)} (tangent), ${tangentToDegrees(d.p95LongitudinalGrade)}`),
     row('Total cost', `${outcome.cost.toFixed(1)} (distance in metres, weighted by the cost terms)`),
     row('Route cells by evidence', evidenceSplitText(d)),
+    row(TERRAIN_ACCESS_CONSTRAINT_LABEL.minimumTerrainConfidence, minimumConfidenceStatusText(
+      (outcome.record.result.constraints as Record<string, unknown> | undefined)?.minimumTerrainConfidence,
+      d.profileMinimumTerrainConfidence,
+    )),
     row('Above-ground obstruction', obstructionStatusText(
       (outcome.record.result.constraints as Record<string, unknown> | undefined)?.aboveGroundObstruction,
       outcome.record.result.unknownObstructionPolicy,

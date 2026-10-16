@@ -96,6 +96,74 @@ describe('placement', () => {
   });
 });
 
+/** A one-array POSITION_QUANTIZED tile with an optional RTC_CENTER. */
+function makeQuantizedPnts(
+  codes: readonly (readonly [number, number, number])[],
+  volumeOffset: readonly number[],
+  volumeScale: readonly number[],
+  rtc?: readonly [number, number, number],
+): ArrayBuffer {
+  const ft: Record<string, unknown> = {
+    POINTS_LENGTH: codes.length,
+    POSITION_QUANTIZED: { byteOffset: 0 },
+    QUANTIZED_VOLUME_OFFSET: volumeOffset,
+    QUANTIZED_VOLUME_SCALE: volumeScale,
+  };
+  if (rtc) ft.RTC_CENTER = rtc;
+  let json = JSON.stringify(ft);
+  while (json.length % 8 !== 0) json += ' ';
+  const jsonBytes = new TextEncoder().encode(json);
+  let binBytes = codes.length * 6;
+  while (binBytes % 8 !== 0) binBytes++;
+  const total = 28 + jsonBytes.length + binBytes;
+  const buf = new ArrayBuffer(total);
+  const view = new DataView(buf);
+  view.setUint32(0, PNTS_MAGIC, true);
+  view.setUint32(4, 1, true);
+  view.setUint32(8, total, true);
+  view.setUint32(12, jsonBytes.length, true);
+  view.setUint32(16, binBytes, true);
+  new Uint8Array(buf, 28, jsonBytes.length).set(jsonBytes);
+  const binStart = 28 + jsonBytes.length;
+  let k = 0;
+  for (const p of codes) for (const c of p) view.setUint16(binStart + k++ * 2, c, true);
+  return buf;
+}
+
+describe('quantised positions far from the origin', () => {
+  // 100 m volume: one quantisation step is 100/65535 = 1.5 mm. Float32 spacing
+  // at 4.7e6 is 0.5 m, so the volume offset must not pass through Float32.
+  const offset = [4_700_000, 0, 0];
+  const scale = [100, 100, 100];
+  const code = 12345;
+  const exact = offset[0]! + (code * scale[0]!) / 65535;
+  const step = scale[0]! / 65535;
+
+  it('places the point within one quantisation step of the spec value', async () => {
+    const out = await decoder.decode(
+      makeQuantizedPnts([[code, 0, 0]], offset, scale),
+      meta({ renderOrigin: [4_700_000, 0, 0] }),
+    );
+    expect(Math.abs(out.positions[0]! + 4_700_000 - exact)).toBeLessThan(step);
+  });
+
+  it('adds RTC_CENTER and the volume offset together, in float64', async () => {
+    const out = await decoder.decode(
+      makeQuantizedPnts([[code, 0, 0]], [700_000, 0, 0], scale, [4_000_000, 0, 0]),
+      meta({ renderOrigin: [4_700_000, 0, 0] }),
+    );
+    expect(Math.abs(out.positions[0]! + 4_700_000 - exact)).toBeLessThan(step);
+  });
+
+  it('keeps a float POSITION tile with a far RTC_CENTER exact', async () => {
+    const out = await decoder.decode(
+      makePnts([[18.75, -3.5, 0.125]], [4_700_000, 5_300_000, 120]),
+      meta({ renderOrigin: [4_700_000, 5_300_000, 100] }),
+    );
+    expect([...out.positions.slice(0, 3)]).toEqual([18.75, -3.5, 20.125]);
+  });
+});
+
 describe('transient memory', () => {
   it('allocates no second XYZ array — positions are transformed in place', async () => {
     // parsePnts already owns a fresh Float32Array of the tile's positions.

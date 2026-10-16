@@ -386,3 +386,83 @@ describe('loadPly: authored normals', () => {
     expect((await loadPly(asciiPly(['x', 'y', 'z'], ['0 0 0']))).normals).toBeUndefined();
   });
 });
+
+describe('loadPly — colour narrowed by its declared property type', () => {
+  const enc = (s: string): ArrayBuffer => {
+    const b = new TextEncoder().encode(s);
+    return b.buffer.slice(b.byteOffset, b.byteOffset + b.byteLength);
+  };
+  const asciiPly = (type: string, rows: string[]): ArrayBuffer =>
+    enc(
+      `ply\nformat ascii 1.0\nelement vertex ${rows.length}\n` +
+        'property float x\nproperty float y\nproperty float z\n' +
+        `property ${type} red\nproperty ${type} green\nproperty ${type} blue\nend_header\n` +
+        rows.join('\n') +
+        '\n',
+    );
+
+  /** Binary little-endian PLY: float x/y/z then three colour values of `type`. */
+  function binaryPly(type: 'uchar' | 'ushort' | 'float', colours: number[][]): ArrayBuffer {
+    const head = enc(
+      `ply\nformat binary_little_endian 1.0\nelement vertex ${colours.length}\n` +
+        'property float x\nproperty float y\nproperty float z\n' +
+        `property ${type} red\nproperty ${type} green\nproperty ${type} blue\nend_header\n`,
+    );
+    const size = type === 'uchar' ? 1 : type === 'ushort' ? 2 : 4;
+    const stride = 12 + size * 3;
+    const out = new Uint8Array(head.byteLength + colours.length * stride);
+    out.set(new Uint8Array(head));
+    const v = new DataView(out.buffer, head.byteLength);
+    colours.forEach((c, i) => {
+      const at = i * stride;
+      v.setFloat32(at, i, true);
+      c.forEach((value, k) => {
+        const o = at + 12 + k * size;
+        if (type === 'uchar') v.setUint8(o, value);
+        else if (type === 'ushort') v.setUint16(o, value, true);
+        else v.setFloat32(o, value, true);
+      });
+    });
+    return out.buffer;
+  }
+
+  test('ascii uchar colour is copied as stored', async () => {
+    const pc = await loadPly(asciiPly('uchar', ['0 0 0 200 100 50']));
+    expect([...pc.colors!]).toEqual([200, 100, 50]);
+  });
+
+  test('ascii ushort colour keeps its top 8 bits', async () => {
+    const pc = await loadPly(asciiPly('ushort', ['0 0 0 65535 32768 1000', '1 1 1 0 256 512']));
+    expect([...pc.colors!]).toEqual([255, 128, 3, 0, 1, 2]);
+  });
+
+  test('ascii float colour in 0..1 is scaled to 0..255', async () => {
+    const pc = await loadPly(asciiPly('float', ['0 0 0 1.0 0.5 0.25']));
+    expect([...pc.colors!]).toEqual([255, 128, 64]);
+  });
+
+  test('binary uchar colour is copied as stored', async () => {
+    const pc = await loadPly(binaryPly('uchar', [[200, 100, 50]]));
+    expect([...pc.colors!]).toEqual([200, 100, 50]);
+  });
+
+  test('binary ushort colour keeps its top 8 bits', async () => {
+    const pc = await loadPly(binaryPly('ushort', [[65535, 32768, 1000], [0, 256, 512]]));
+    expect([...pc.colors!]).toEqual([255, 128, 3, 0, 1, 2]);
+  });
+
+  test('binary float colour in 0..1 is scaled to 0..255, out-of-range clamped', async () => {
+    const pc = await loadPly(binaryPly('float', [[1.0, 0.5, 0.25], [-0.5, 2, 0]]));
+    expect([...pc.colors!]).toEqual([255, 128, 64, 0, 255, 0]);
+  });
+
+  test('a wide colour in a layout that cannot be re-read is refused, not shown wrong', async () => {
+    const ply = enc(
+      'ply\nformat ascii 1.0\nelement vertex 1\n' +
+        'property float x\nproperty float y\nproperty float z\n' +
+        'property ushort red\nproperty ushort green\nproperty ushort blue\n' +
+        'property list uchar int extra\nend_header\n0 0 0 65535 32768 1000 0\n',
+    );
+    await expect(loadPly(ply)).rejects.toThrow(/colour declared as ushort/);
+  });
+});

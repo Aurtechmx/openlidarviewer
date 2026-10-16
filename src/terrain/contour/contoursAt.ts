@@ -75,6 +75,16 @@ export interface ContourSet {
    * it off the set (or off any artifact derived from it) gets the spacing of
    * the levels in front of it.
    *
+   * Thinned derived levels sit on multiples of this value in world elevation
+   * (local value + `levelOriginZ`), like unthinned ones. One exception: the
+   * top derived level is forced in so the summit contour survives. It is
+   * appended when the cap allows, making the last gap shorter than this value
+   * (1 to k − 1 requested intervals), and otherwise replaces the highest
+   * thinned level, making the last gap longer (k + 1 to 2k − 1). Every other
+   * gap equals this value, and the thinning warning states the actual top gap
+   * whenever it differs. An explicit level list is thinned to every k-th
+   * entry, with the same top-level rule.
+   *
    * An explicit {@link ContoursAtParams.levels} list is measured, not assumed:
    * uniformly spaced levels report that spacing, and an arbitrary list reports
    * `null`, because no single number describes it. Fewer than two levels is
@@ -253,6 +263,9 @@ export function contoursAt(dtm: DtmGrid, params: ContoursAtParams): ContourSet {
   // Resolve levels.
   const maxLevels = params.maxLevels ?? 200;
   let levelValues: number[];
+  // World elevation of local Z = 0; derived (and thinned) levels are anchored
+  // to multiples of their interval in world elevation.
+  const oz = Number.isFinite(params.levelOriginZ) ? (params.levelOriginZ as number) : 0;
   // True when the level list came from the caller, so its spacing has to be
   // measured rather than taken from `params.intervalM`.
   let levelsWereGiven = false;
@@ -278,7 +291,6 @@ export function contoursAt(dtm: DtmGrid, params: ContoursAtParams): ContourSet {
     // Compute levels as `first + k*interval` (not repeated `+=`) so float
     // error cannot accumulate and shift later levels off their interval.
     // Anchored in world elevation when the local origin is known.
-    const oz = Number.isFinite(params.levelOriginZ) ? (params.levelOriginZ as number) : 0;
     const first = Math.ceil((minZ + oz) / interval) * interval - oz;
     const count = Math.floor((maxZ - first) / interval + 1e-9) + 1;
     for (let k = 0; k < count; k++) levelValues.push(first + k * interval);
@@ -291,24 +303,51 @@ export function contoursAt(dtm: DtmGrid, params: ContoursAtParams): ContourSet {
     ? uniformSpacing(levelValues)
     : params.intervalM;
   if (levelValues.length > maxLevels) {
-    // THIN evenly rather than truncate from the top: the old slice kept only
-    // the LOWEST maxLevels levels, so an over-fine interval silently deleted
-    // every contour above the cut — summits vanished from the map with a
-    // warning that never said so. Keeping every k-th level preserves the full
-    // elevation range (the bottom level survives by construction; the top
-    // level is forced in) at an effective interval of k × the requested one.
+    // THIN rather than truncate from the top: the old slice kept only the
+    // LOWEST maxLevels levels, so an over-fine interval silently deleted every
+    // contour above the cut — summits vanished from the map with a warning
+    // that never said so. Thinning keeps one level in every k across the full
+    // elevation range, at an effective interval of k × the requested one, and
+    // forces the top level in so the summit contour survives.
     const n = levelValues.length;
     const k = Math.ceil(n / maxLevels);
-    const thinned: number[] = [];
-    for (let i = 0; i < n; i += k) thinned.push(levelValues[i]);
-    // Force the top level in so the summit contour survives the thinning.
-    // (ceil(n / k) ≤ maxLevels entries, so replacing — not appending — keeps
-    // the cap honest.)
-    thinned[thinned.length - 1] = levelValues[n - 1];
+    const top = levelValues[n - 1];
+    let thinned: number[] = [];
+    if (levelsWereGiven) {
+      // An arbitrary list has no elevation grid: keep every k-th entry.
+      for (let i = 0; i < n; i += k) thinned.push(levelValues[i]);
+    } else {
+      // A derived list keeps the multiples of k × interval in WORLD elevation
+      // (the same anchoring as the unthinned levels), so the thinned levels
+      // still fall on round elevations and index contours, which sit on
+      // multiples of indexEvery × k × interval, still exist.
+      const step = k * params.intervalM;
+      const firstT = Math.ceil((minZ + oz) / step) * step - oz;
+      const countT = Math.floor((maxZ - firstT) / step + 1e-9) + 1;
+      for (let j = 0; j < countT; j++) thinned.push(firstT + j * step);
+    }
+    // Force the top level in so the summit contour survives the thinning:
+    // appended while the cap allows, otherwise in place of the last kept level.
+    const last = thinned.at(-1);
+    const topIsKept = last !== undefined && Math.abs(last - top) <= Math.abs(top) * 1e-12 + 1e-9;
+    if (!topIsKept) {
+      if (thinned.length < maxLevels) thinned.push(top);
+      else thinned[thinned.length - 1] = top;
+    }
+    // A forced top level makes the highest gap irregular; say so rather than
+    // let the reported interval imply every gap is k × the requested one.
+    const topGap = !topIsKept && thinned.length >= 2 ? top - thinned[thinned.length - 2] : null;
+    const topGapNote = topGap === null
+      ? ''
+      : levelsWereGiven
+        ? '; the top level is kept as the summit contour, so the highest gap ' +
+          'differs from the others'
+        : `; the top level is kept as the summit contour, so the highest gap is ` +
+          `${Math.round(topGap / params.intervalM)}× the requested interval instead of ${k}×`;
     warnings.push(
       `level count ${n} exceeds cap ${maxLevels} — ${n} levels thinned to ` +
         `${thinned.length} (one level in every ${k} kept; the effective ` +
-        `interval is ${k}× the requested one)`,
+        `interval is ${k}× the requested one${topGapNote})`,
     );
     levelValues = thinned;
     effectiveIntervalM = levelsWereGiven

@@ -67,6 +67,13 @@ export interface FootprintGeoJsonOptions {
   readonly datumCaveat?: string | null;
 }
 
+/** Shoelace area of a closed ring; positive when counter-clockwise. */
+function signedClosedRingArea(ring: readonly number[][]): number {
+  let a = 0;
+  for (let i = 0; i + 1 < ring.length; i++) a += ring[i][0] * ring[i + 1][1] - ring[i + 1][0] * ring[i][1];
+  return a / 2;
+}
+
 /**
  * Build a GeoJSON FeatureCollection from footprints. A ring with fewer than
  * three vertices is skipped (not a polygon). Rings are closed on output (RFC
@@ -93,6 +100,8 @@ export function footprintsToGeoJson(
       // Close the ring per RFC 7946 §3.1.6.
       const first = coords[0], last = coords[coords.length - 1];
       if (first[0] !== last[0] || first[1] !== last[1]) coords.push([first[0], first[1]]);
+      // RFC 7946 §3.1.6: an exterior ring is counter-clockwise.
+      if (signedClosedRingArea(coords) < 0) coords.reverse();
       return {
         type: 'Feature',
         id: f.id ?? i,

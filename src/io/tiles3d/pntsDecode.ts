@@ -363,7 +363,13 @@ export class PntsChunkDecoder implements ChunkDecoder {
     });
     const n = tile.pointsLength;
     const [ox, oy, oz] = meta.renderOrigin;
-    const rtc = tile.rtcCenter ?? [0, 0, 0];
+    // RTC_CENTER and, for a POSITION_QUANTIZED tile, QUANTIZED_VOLUME_OFFSET
+    // are both translations added to the stored positions. They are summed in
+    // float64 here, never in the Float32 store, so a tile far from the origin
+    // keeps the precision its encoding carries.
+    const rtcBase = tile.rtcCenter ?? [0, 0, 0];
+    const volume = tile.quantizedVolumeOffset ?? [0, 0, 0];
+    const rtc = [rtcBase[0] + volume[0], rtcBase[1] + volume[1], rtcBase[2] + volume[2]] as const;
     // Transformed IN PLACE into the tile's own position array rather than a
     // second Float32Array of the same size. `parsePnts` allocated `positions`
     // fresh for this tile and nothing else aliases it, so the tile buffer is

@@ -14,7 +14,7 @@ function flat(h: number): DtmGrid {
   return {
     z: new Float32Array(n).fill(h),
     confidence: new Float32Array(n).fill(100),
-    coverage: new Uint8Array(n).fill(1),
+    coverage: new Uint8Array(n).fill(2),
     counts: new Uint32Array(n).fill(1),
     interpDistanceCells: new Float32Array(n),
     cols: 2,

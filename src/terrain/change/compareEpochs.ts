@@ -23,9 +23,10 @@ import { holdoutValidateDtm } from '../validate/holdoutRmse';
 import { makeTrainOnlyReclassifier } from '../validate/trainOnlyReclassify';
 // Tiny pure constant — the unit-aware cell floor must agree with the
 // metres-per-degree scale the rest of the terrain pipeline uses.
-import { METRES_PER_DEGREE } from '../ground/horizontalScale';
+import { METRES_PER_DEGREE, metresPerDegreeLatitude } from '../ground/horizontalScale';
 import type { DtmGrid } from '../ground/cellConfidence';
 import type { TerrainPoint } from '../TerrainContracts';
+import { positionsSpacing } from './pointSpacing';
 import { compareDtms, type CompareDtmsOptions, type EpochComparison } from './compareDtms';
 import { isWithheld } from '../../science/withheldPolicy';
 import { alignedClasses, isNoiseClass, noiseExcludedClause } from '../ground/classificationFilter';
@@ -85,6 +86,13 @@ interface SharedGrid {
   readonly cols: number;
   readonly rows: number;
   readonly cellSizeM: number;
+  /**
+   * Cell of the ground filter's own minimum-surface grid: the extent rule
+   * (~256 cells, 0.25 m floor), independent of the coarser support cell the
+   * DTMs are rasterised on, so the spacing rule changes which cells are
+   * compared, not which points are called ground.
+   */
+  readonly filterCellSizeM: number;
 }
 
 /** The two co-registered DTMs plus the grid they share. */
@@ -109,6 +117,9 @@ export interface SharedEpochDtmOptions {
 }
 
 const ZERO: readonly [number, number, number] = [0, 0, 0];
+
+/** Smallest shared change-grid cell, in mean point spacings of the sparser epoch. */
+export const CELL_SPACINGS = 2;
 
 /** Box an interleaved xyz buffer into WORLD-frame `TerrainPoint[]` (local + origin). */
 function boxPoints(positions: Float32Array, origin: readonly [number, number, number]): TerrainPoint[] {
@@ -151,11 +162,19 @@ function boundsXY(
  * A shared grid spanning both clouds in a COMMON WORLD frame. Each cloud is
  * recentred by its own origin, so the two are returned to world coordinates
  * (local + origin) before the grid is computed — gridding raw local coordinates
- * would difference mismatched locations. ~256 cells across the larger span.
+ * would difference mismatched locations. ~256 cells across the larger span,
+ * never finer than {@link CELL_SPACINGS} mean point spacings of the sparser
+ * epoch.
  */
 function sharedGrid(before: EpochCloud, after: EpochCloud): SharedGrid | null {
-  const a = boundsXY(before.positions, before.origin ?? ZERO);
-  const b = boundsXY(after.positions, after.origin ?? ZERO);
+  // Each buffer is read once, in world coordinates (local + origin), for both
+  // the bounds and the point spacing.
+  const beforeXyz = before.positions;
+  const afterXyz = after.positions;
+  const beforeOrigin = before.origin ?? ZERO;
+  const afterOrigin = after.origin ?? ZERO;
+  const a = boundsXY(beforeXyz, beforeOrigin);
+  const b = boundsXY(afterXyz, afterOrigin);
   if (!a || !b) return null;
   const minX = Math.min(a.minX, b.minX);
   const minY = Math.min(a.minY, b.minY);
@@ -174,13 +193,26 @@ function sharedGrid(before: EpochCloud, after: EpochCloud): SharedGrid | null {
     metresPerUnit = 1;
   }
   const extent = Math.max(maxX - minX, maxY - minY, 1 / metresPerUnit);
-  const cellSizeM = Math.max(0.25 / metresPerUnit, extent / 256);
+  // Not finer than the data support: a change cell is compared only where
+  // both epochs hold a measured height, so a cell finer than the sparser
+  // epoch's point spacing leaves most of the shared footprint as fill between
+  // returns and out of the comparison. The extent rule and the 0.25 m floor
+  // still apply when they are coarser, and a coarser cell only lowers the
+  // ~256-cell count.
+  const sparser = Math.max(
+    positionsSpacing(beforeXyz, beforeOrigin),
+    positionsSpacing(afterXyz, afterOrigin),
+  );
+  const supportCell = Number.isFinite(sparser) ? CELL_SPACINGS * sparser : 0;
+  const filterCellSizeM = Math.max(0.25 / metresPerUnit, extent / 256);
+  const cellSizeM = Math.max(filterCellSizeM, supportCell);
   return {
     originH1: minX,
     originH2: minY,
     cols: Math.max(1, Math.floor((maxX - minX) / cellSizeM) + 1),
     rows: Math.max(1, Math.floor((maxY - minY) / cellSizeM) + 1),
     cellSizeM,
+    filterCellSizeM,
   };
 }
 
@@ -190,12 +222,15 @@ function dtmOnGrid(cloud: EpochCloud, grid: SharedGrid, holdout = false): { dtm:
   // Match the analysis runner's unit-aware slope-growth run (deriveCoreParams):
   // the SMRF threshold multiplies a rise/run slope by a horizontal run, so that
   // run must share z's unit. A geographic frame's degree-valued cell would
-  // otherwise starve the growth term by ~1/111,320, pinning the threshold at
+  // otherwise starve the growth term by ~1/111,000, pinning the threshold at
   // its base and rejecting legitimate slope ground. cellSizeZUnits rescales the
   // horizontal cell into z's unit; for a projected frame whose axes share one
   // linear unit the ratio is 1 and the filter sees the plain cell size.
+  // Geographic: the meridional degree at the grid-centre latitude, the factor
+  // resolveGroundFilterParams uses. This grid is in the WORLD frame, so its
+  // centre Y is the world latitude.
   const horizToMetres = cloud.isGeographic
-    ? METRES_PER_DEGREE
+    ? metresPerDegreeLatitude(grid.originH2 + (grid.rows * grid.cellSizeM) / 2)
     : cloud.linearUnitToMetres && cloud.linearUnitToMetres > 0
       ? cloud.linearUnitToMetres
       : 1;
@@ -222,8 +257,8 @@ function dtmOnGrid(cloud: EpochCloud, grid: SharedGrid, holdout = false): { dtm:
   // frame's z is already metric, so zPerMetre is 1 there).
   const zPerMetre = 1 / vertToMetres;
   const smrfParams = {
-    cellSizeM: grid.cellSizeM,
-    cellSizeZUnits: grid.cellSizeM * (horizToMetres / vertToMetres),
+    cellSizeM: grid.filterCellSizeM,
+    cellSizeZUnits: grid.filterCellSizeM * (horizToMetres / vertToMetres),
     maxWindowCells: 8,
     slope: 0.2,
     elevationThresholdM: 0.5 * zPerMetre,

@@ -171,6 +171,11 @@ function staticLayerSupportsMode(cloud: PointCloud, mode: ColorMode): boolean {
  */
 const LOCAL_CRS_SENTINEL = '\u0000local';
 
+/** Two layers' project-frame world origins agree, to 1 µm. */
+function sameOrigin(a: number, b: number): boolean {
+  return Math.abs(a - b) <= 1e-6;
+}
+
 /**
  * The georeference CRS derived from a cloud's DECLARED metadata — the fallback
  * when no resolver is wired. EPSG when declared, else the display name, mirroring
@@ -649,13 +654,19 @@ export function buildExportAdapter(host: ExportAdapterHost): ExportSceneAdapter 
       let wkt: string | null = null;
       let crsKey: string | null = null;
       let any = false;
-      for (const { cloud } of visibleEntries()) {
+      for (const { cloud, placement } of visibleEntries()) {
         any = true;
         const o = cloud.sourceOrigin;
         if (!o) return null;
+        // localBoundsAabb() frames each layer at bounds + sourceToProject, in
+        // the project frame, whose world origin is sourceOrigin minus
+        // sourceToProject (the rule heightOrigin() uses). A mounted layer's own
+        // sourceOrigin would put the world file off by its placement.
+        const ox = o[0] - (placement?.sourceToProject[0] ?? 0);
+        const oy = o[1] - (placement?.sourceToProject[1] ?? 0);
         if (worldOrigin === null) {
-          worldOrigin = { x: o[0], y: o[1] };
-        } else if (worldOrigin.x !== o[0] || worldOrigin.y !== o[1]) {
+          worldOrigin = { x: ox, y: oy };
+        } else if (!sameOrigin(worldOrigin.x, ox) || !sameOrigin(worldOrigin.y, oy)) {
           return null; // conflicting frames — honestly not georeferenceable
         }
         // The RESOLVED CRS (CRS authority, override applied) when the host wires

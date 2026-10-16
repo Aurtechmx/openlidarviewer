@@ -17,8 +17,9 @@
  *   - SHA-256 of the confidence grid (explicit little-endian Float32);
  *   - the vertical unit factor the heights are converted with;
  *   - the resolved horizontal scale: geographic or not, the latitude the
- *     east–west cell length is derived at, the unit-to-metres factor, and
- *     whether it resolved;
+ *     cell lengths are derived at, the degree-to-metre model a geographic
+ *     frame is converted with (null for a projected one), the unit-to-metres
+ *     factor, and whether it resolved;
  *   - SHA-256 of the ROI mask, or null for none;
  *   - the above-ground surface identity: its geometry, frame, the digest of
  *     the terrain it is bound to, the points it rests on (sampled or not, the
@@ -32,6 +33,11 @@
  *     registry, and the model id/version, so a method version change alone
  *     moves the digest (v2 wrote the method ids only).
  *
+ * v5 adds the degree-to-metre model: v4 runs on a geographic frame converted
+ * degrees with 111 320 m per degree on the north-south axis, so the same
+ * inputs now give different lengths and grades and must not share the v4
+ * identity.
+ *
  * Presentation state (camera, theme, scene axis, world origin, labels) and the
  * run's id and timestamp are not inputs and are not read. Unset numbers are
  * written as null. The scheme string
@@ -42,6 +48,7 @@
 
 import { sha256Hex } from '../../terrain/export/sha256';
 import { dtmProductDigest } from '../../science/dtmProductDigest';
+import { GEOGRAPHIC_DEGREE_MODEL } from '../../terrain/ground/horizontalScale';
 import { methodRef } from '../../science/methodRegistry';
 import { TERRAIN_ACCESS_METHODS, TERRAIN_ACCESS_MODEL } from './terrainAccessRunner';
 import type { AboveGroundSurface, HorizontalScale } from './dtmTerrainAccessGrid';
@@ -50,7 +57,7 @@ import type { EvidenceGapPolicy } from './terrainAccessTypes';
 import type { DtmGrid } from '../../terrain/ground/cellConfidence';
 
 /** Names this digest and its encoding version. Recorded beside the digest in the run record. */
-export const TERRAIN_ACCESS_INPUT_DIGEST_SCHEME = 'olv.simulation.terrain-access.input-digest.v4';
+export const TERRAIN_ACCESS_INPUT_DIGEST_SCHEME = 'olv.simulation.terrain-access.input-digest.v5';
 
 /** Everything the digest reads. */
 export interface TerrainAccessDigestInput {
@@ -112,6 +119,7 @@ export function terrainAccessSimulationInputDigest(input: TerrainAccessDigestInp
     horizontalScale: {
       isGeographic: scale.isGeographic,
       latitudeDeg: scale.latitudeDeg ?? null,
+      degreeModel: scale.isGeographic ? GEOGRAPHIC_DEGREE_MODEL : null,
       unitToMetres: scale.unitToMetres,
       resolved: scale.resolved,
     },

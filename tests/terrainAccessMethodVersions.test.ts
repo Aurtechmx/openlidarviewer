@@ -35,6 +35,7 @@ const digestInput = { dtm: flatDtm(), scale, dsm: null, roi: null, evidenceGapPo
 
 afterEach(() => {
   vi.doUnmock('../src/science/methodRegistry');
+  vi.doUnmock('../src/terrain/ground/horizontalScale');
   vi.resetModules();
 });
 
@@ -55,8 +56,8 @@ describe('Terrain Access method versions', () => {
 });
 
 describe('the input digest binds method versions', () => {
-  it('names scheme v3', () => {
-    expect(TERRAIN_ACCESS_INPUT_DIGEST_SCHEME).toBe('olv.simulation.terrain-access.input-digest.v4');
+  it('names scheme v5', () => {
+    expect(TERRAIN_ACCESS_INPUT_DIGEST_SCHEME).toBe('olv.simulation.terrain-access.input-digest.v5');
   });
 
   it('a method version change alone changes the digest', async () => {
@@ -75,5 +76,19 @@ describe('the input digest binds method versions', () => {
     const mod = await import('../src/simulation/terrainAccess/terrainAccessInputDigest');
     const after = mod.terrainAccessSimulationInputDigest(digestInput);
     expect(after).not.toBe(before);
+  });
+
+  it('a geographic run binds the degree-to-metre model; a projected run does not read it', async () => {
+    const geo = { ...digestInput, scale: { isGeographic: true, latitudeDeg: 45, unitToMetres: 1, resolved: true } };
+    const geoBefore = terrainAccessSimulationInputDigest(geo);
+    const projectedBefore = terrainAccessSimulationInputDigest(digestInput);
+    vi.resetModules();
+    vi.doMock('../src/terrain/ground/horizontalScale', async (importOriginal) => ({
+      ...(await importOriginal<typeof import('../src/terrain/ground/horizontalScale')>()),
+      GEOGRAPHIC_DEGREE_MODEL: 'another-model',
+    }));
+    const mod = await import('../src/simulation/terrainAccess/terrainAccessInputDigest');
+    expect(mod.terrainAccessSimulationInputDigest(geo)).not.toBe(geoBefore);
+    expect(mod.terrainAccessSimulationInputDigest(digestInput)).toBe(projectedBefore);
   });
 });

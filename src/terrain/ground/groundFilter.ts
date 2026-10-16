@@ -171,7 +171,7 @@ export interface GroundFilterParams {
    * a horizontal run (`slope · b · cellSize`) and compares the product against
    * Δz, so the run must share z's unit: in a geographic frame the horizontal
    * cell is in DEGREES while z is metric, and the raw degree value starves the
-   * growth term by ~1/111,320 — the threshold never rises above its base and
+   * growth term by ~1/111,000 — the threshold never rises above its base and
    * legitimate slope ground is rejected. Defaults to `cellSizeM` (projected
    * frames, where the horizontal and vertical units agree).
    */

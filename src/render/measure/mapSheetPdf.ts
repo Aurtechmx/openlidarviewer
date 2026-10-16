@@ -770,8 +770,9 @@ function drawMap(
     // GRID north: the sheet is drawn in the source CRS, so page-up is the
     // grid's +Y axis. For a projected CRS true north differs from it by the
     // meridian convergence (1.29 degrees for UTM 12N at -109, 40; 2.27 degrees
-    // at a zone edge at 49 N, at most 2.98 degrees at 84 N, by PROJ), which
-    // this sheet does not compute, so the
+    // at a zone edge at 49 N, at most 2.98 degrees at 84 N in a standard
+    // 6-degree zone, by PROJ; the widened zones 32V and 31X, 33X, 35X and 37X
+    // reach about 6 degrees), which this sheet does not compute, so the
     // arrow says "Grid N" rather than claiming true north.
     const nx = frame.x + frame.w - 22;
     const ny = frame.y + frame.h - 30;

@@ -867,6 +867,11 @@ export class MeasureController {
     return this._originUp !== null;
   }
 
+  /** The scene's datum along up (`elevationDatumOffset` of its render origin), or null when the clouds share none. */
+  get elevationDatum(): number | null {
+    return this._originUp;
+  }
+
   /**
    * Inject the scan CRS's linear-unit → metres factor — the SAME seam the
    * terrain/space paths read (`crsService.current().linearUnitToMetres`).
@@ -1144,11 +1149,15 @@ export class MeasureController {
 
   private _summaryOf(m: Measurement): MeasurementSummary {
     const f = this._unitToMetres;
+    // The row, its breakdown and the overlay obey one refusal: a frame whose
+    // axes are not ground distances (degrees) prints the reason, not a number.
+    const refusal = this._upConflict && upAxisRefusesKind(m.kind) ? UP_AXIS_CONFLICT : frameRefusalText(m.kind, this._geographicCrs, this._verticalRefused);
+    const metricsOk = refusal === null && !this._upConflict;
     return {
       id: m.id,
       kind: m.kind,
       name: m.name,
-      value: this._headlineText(m),
+      value: refusal ?? this._headlineText(m),
       ...(this._unitUnverified() || (m.kind === 'height' && this._heightUnverified()) ? { unitUnverified: true } : {}),
       profileChart: m.profileChart
         ? scaleProfileSamples(m.profileChart, f, this._originUp, this._effVertical())
@@ -1173,11 +1182,11 @@ export class MeasureController {
       // headline uses: horizontal quantities by `f`, the rise by the up-axis
       // factor. No geometry is recomputed here.
       lineMetrics:
-        m.kind === 'distance' && m.points.length >= 2 && !this._upConflict
+        m.kind === 'distance' && m.points.length >= 2 && metricsOk
           ? lineBreakdown(m.points[0], m.points[1], this._worldUp, f, this._effVertical())
           : undefined,
       areaMetrics:
-        m.kind === 'area' && m.points.length >= 3 && areaRingVerdictCached(m.points).ok && !this._upConflict
+        m.kind === 'area' && m.points.length >= 3 && areaRingVerdictCached(m.points).ok && metricsOk
           ? areaBreakdown(m.points, this._worldUp, f, this._effVertical())
           : undefined,
       volumeResidentOnly: m.volumeResidentOnly,

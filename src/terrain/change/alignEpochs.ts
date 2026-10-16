@@ -18,12 +18,23 @@
  * gate is refused and the clouds are left untouched, so alignment never invents
  * a shift it cannot stand behind.
  *
- * Pure: no DOM, no three.js, no I/O. ICP nearest-neighbour search is O(n·m), so
- * the clouds are strided down to a bounded sample before the fit runs.
+ * Two epochs that declare one CRS are already in a common frame, so the solve
+ * starts at the identity pose. Correspondences farther apart than a few mean
+ * point spacings (estimated from the before sample) are rejected in every
+ * iteration, and the overlap is measured at that same distance. A fit is
+ * withheld when the overlap is low, when its residual exceeds a spacing-scaled
+ * limit, or when it moved the after cloud farther than that correspondence
+ * distance, which no pair formed at the starting pose could support.
+ *
+ * Pure: no DOM, no three.js, no I/O. The clouds are strided down to a bounded
+ * sample before the fit runs.
  */
 
 import { icpRegister, applyIcp, type Vec3, type IcpResult } from './icpRegister';
 import { buildPointIndex, nearestPoint, nearestState } from './pointIndex';
+import { meanPointSpacing } from './pointSpacing';
+
+export { meanPointSpacing } from './pointSpacing';
 import { verticalReferenceKey } from '../../model/layerCompatibility';
 import type { EpochCloud } from './compareEpochs';
 
@@ -42,12 +53,12 @@ export interface AlignEpochOptions {
   /** ICP iteration cap. Default 25. */
   readonly maxIterations?: number;
   /**
-   * Keep only the best-residual `trimFraction` of correspondences in the fit
-   * (trimmed ICP with a robust median warm start — see {@link icpRegister}).
-   * Default undefined = 1 (use every point, unchanged). Set below 1 (e.g. 0.8)
-   * when the two epochs only partially overlap or carry gross outliers
-   * (vegetation, moving objects, a construction blob) that would otherwise drag
-   * the registration off the stable ground both surveys share.
+   * Keep only the best-residual `trimFraction` of the correspondences inside
+   * the correspondence distance (trimmed ICP — see {@link icpRegister}).
+   * Default {@link COMMON_FRAME_TRIM} when both epochs declare one CRS, and 1
+   * (every gated pair) otherwise. Set lower when the two epochs carry gross
+   * outliers (vegetation, moving objects, a construction blob) that would
+   * otherwise drag the registration off the stable ground both surveys share.
    */
   readonly trimFraction?: number;
   /**
@@ -120,8 +131,20 @@ export interface EpochAlignment {
   readonly appliedTransformResidualM: number;
   /** Solved planar rotation about the vertical axis, in degrees. */
   readonly yawDeg: number;
-  /** Solved translation (metres) mapping `after` onto `before`. */
+  /**
+   * Solved translation (metres) mapping `after` onto `before`: the transform's
+   * own term, with the yaw about the WORLD origin. At projected coordinates a
+   * fraction of a degree of yaw makes it hundreds of metres or more while no
+   * point moves that far, so it is not a shift to show; see `centroidShiftM`.
+   */
   readonly translation: Vec3;
+  /**
+   * How far the reported transform moves an after point lying at the before
+   * sample's centroid (metres; z is the vertical term of `translation`). This
+   * is the shift the summary and the registration record state, beside the
+   * yaw. Absent only on outcomes with no fit.
+   */
+  readonly centroidShiftM?: Vec3;
   /** Points actually used per cloud in the fit. */
   readonly sampleCount: number;
   /**
@@ -170,10 +193,53 @@ export interface EpochAlignment {
   readonly overlapFraction: number;
   /** The fit ran but its overlap was too low to trust, so it was withheld. */
   readonly lowOverlap?: boolean;
+  /**
+   * The fit moved the after cloud (RMS horizontal displacement of the sampled
+   * points) farther than the correspondence distance, so no pair formed at the
+   * starting pose supports it. Withheld. Set only on the common-CRS path,
+   * where the solve starts at the identity pose.
+   */
+  readonly unsupportedMove?: boolean;
+  /**
+   * Mean horizontal point spacing of the before sample (metres), estimated
+   * from the occupied footprint. The correspondence distance, the overlap
+   * distance and the residual limit are multiples of it. NaN when it could
+   * not be estimated (a degenerate footprint), in which case no gate ran.
+   */
+  readonly pointSpacingM?: number;
+  /** Correspondence and overlap distance used by the solve (metres). */
+  readonly correspondenceDistanceM?: number;
+  /** The solve started at the identity pose (both epochs declare one CRS). */
+  readonly identityStart?: boolean;
 }
 
 /** Below this inlier fraction the fit is untrustworthy and is not applied. */
 export const LOW_OVERLAP_FRACTION = 0.5;
+
+/** Correspondence and overlap distance, in mean point spacings. */
+export const CORRESPONDENCE_SPACINGS = 3;
+
+/** Largest accepted fit residual, in mean point spacings. */
+export const RESIDUAL_SPACINGS = 0.75;
+
+/** Neighbour radius of the target normals for the plane metric, in mean point spacings. */
+export const NORMAL_SPACINGS = 2;
+
+/** Default trim on the common-CRS path: the best 90 % of the gated pairs. */
+export const COMMON_FRAME_TRIM = 0.9;
+
+/** Target sample size relative to the source sample: a denser target gives a tighter spacing. */
+const TARGET_SAMPLE_FACTOR = 4;
+
+/** Root-mean-square horizontal displacement of `pts` under a pose. */
+function rmsHorizontalMove(pts: readonly Vec3[], pose: Pick<IcpResult, 'yawRad' | 'translation'>): number {
+  let sum = 0;
+  for (const p of pts) {
+    const q = applyIcp(pose, p);
+    sum += (q[0] - p[0]) ** 2 + (q[1] - p[1]) ** 2;
+  }
+  return pts.length > 0 ? Math.sqrt(sum / pts.length) : 0;
+}
 
 const NO_ALIGNMENT: EpochAlignment = {
   attempted: false,
@@ -306,14 +372,18 @@ function residualAtPose(
   target: readonly Vec3[],
   pose: Pick<IcpResult, 'yawRad' | 'translation'>,
   trimFraction: number | undefined,
+  gate = Infinity,
 ): number {
   const index = buildPointIndex(target);
-  const d2 = new Float64Array(source.length);
+  const d2All = new Float64Array(source.length);
   for (let i = 0; i < source.length; i++) {
     const p = applyIcp(pose, source[i]);
     nearestPoint(index, p[0], p[1], p[2]);
-    d2[i] = nearestState.d2;
+    d2All[i] = nearestState.d2;
   }
+  // Only the pairs inside the correspondence distance, as the solver scores.
+  const d2 = Number.isFinite(gate) ? d2All.filter((v) => v <= gate * gate) : d2All;
+  if (d2.length === 0) return Infinity;
   const trim = trimFraction !== undefined && trimFraction > 0 && trimFraction < 1 ? trimFraction : 1;
   const sorted = trim < 1 ? d2.slice().sort() : d2;
   const keep = Math.max(1, Math.min(sorted.length, Math.round(sorted.length * trim)));
@@ -376,7 +446,9 @@ export function alignEpochClouds(
       ? (c.verticalUnitToMetres as number) : h;
     return v / h;
   };
-  const beforeSample = sampleWorld(before.positions, before.origin ?? ZERO, maxSamples, zScaleOf(before));
+  // The before epoch is the fixed target; a denser sample of it gives every
+  // after point a closer partner and so a tighter spacing to gate against.
+  const beforeSample = sampleWorld(before.positions, before.origin ?? ZERO, maxSamples * TARGET_SAMPLE_FACTOR, zScaleOf(before));
   const afterSample = sampleWorld(after.positions, after.origin ?? ZERO, maxSamples, zScaleOf(after));
 
   if (beforeSample.length < 3 || afterSample.length < 3) {
@@ -395,20 +467,82 @@ export function alignEpochClouds(
   const metresPerUnit =
     before.linearUnitToMetres && before.linearUnitToMetres > 0 ? before.linearUnitToMetres : 1;
 
+  // Two epochs that declare one CRS already share a frame: start at the
+  // identity pose. A centroid or median warm start measures the difference in
+  // the two footprints, and on epochs of different extent it shifted a
+  // perfectly registered pair by a large fraction of that difference.
+  // Undeclared local scans keep the warm start: their frames may differ
+  // arbitrarily, and the gates below still bound what is applied.
+  const identityStart = Boolean(before.crs && after.crs);
+  const trimFraction = options.trimFraction ?? (identityStart ? COMMON_FRAME_TRIM : undefined);
+  // Spacing in source units, from the target sample the solve pairs against.
+  const spacing = meanPointSpacing(beforeSample);
+  const gate = spacing > 0 ? CORRESPONDENCE_SPACINGS * spacing : Infinity;
+  const spacingLimit = spacing > 0 ? RESIDUAL_SPACINGS * spacing : Infinity;
+  const callerLimit = options.maxResidualM != null ? options.maxResidualM / metresPerUnit : Infinity;
+  const residualLimit = Math.min(spacingLimit, callerLimit);
+
   const fit = icpRegister(afterSample, beforeSample, {
     maxIterations: options.maxIterations,
-    maxResidual:
-      options.maxResidualM != null ? options.maxResidualM / metresPerUnit : undefined,
-    trimFraction: options.trimFraction,
+    maxResidual: Number.isFinite(residualLimit) ? residualLimit : undefined,
+    trimFraction,
+    initialPose: identityStart ? 'identity' : 'warm',
+    maxCorrespondenceDistance: Number.isFinite(gate) ? gate : undefined,
+    metric: 'plane',
+    normalRadius: NORMAL_SPACINGS * spacing,
   });
   const sampleCount = Math.min(beforeSample.length, afterSample.length);
   const yawDeg = (fit.yawRad * 180) / Math.PI;
   const solverResidualM = fit.rmsResidual * metresPerUnit;
+  // Overlap at the correspondence distance the solve used, never at the
+  // looser residual limit.
+  const overlapFraction = fit.overlapFraction ?? fit.inlierFraction;
+  const gateFacts = {
+    pointSpacingM: spacing * metresPerUnit,
+    correspondenceDistanceM: gate * metresPerUnit,
+    identityStart,
+  };
   // Residual at the identity pose: what the comparison sees when nothing is applied.
   const unappliedResidualM = (): number =>
-    fit.degenerate ? Infinity : residualAtPose(afterSample, beforeSample, IDENTITY_POSE, options.trimFraction) * metresPerUnit;
+    fit.degenerate ? Infinity : residualAtPose(afterSample, beforeSample, IDENTITY_POSE, trimFraction, gate) * metresPerUnit;
   /** A source-unit translation reported in metres (the applied one stays in source units). */
   const toMetres = (t: Vec3): Vec3 => [t[0] * metresPerUnit, t[1] * metresPerUnit, t[2] * metresPerUnit];
+  // The before sample's centroid, where the reported shift is measured.
+  let cx = 0, cy = 0;
+  for (const p of beforeSample) { cx += p[0]; cy += p[1]; }
+  const centre: Vec3 = [cx / beforeSample.length, cy / beforeSample.length, 0];
+  /** Displacement (metres) of an after point at the centroid under `pose`. */
+  const shiftAtCentre = (pose: Pick<IcpResult, 'yawRad' | 'translation'>): Vec3 => {
+    const q = applyIcp(pose, centre);
+    return [(q[0] - centre[0]) * metresPerUnit, (q[1] - centre[1]) * metresPerUnit, pose.translation[2] * metresPerUnit];
+  };
+
+  // Low overlap: too few sampled points have a partner within the
+  // correspondence distance. Checked first: a residual over a small overlap
+  // describes a subset, so the overlap is the governing fact.
+  if (!fit.degenerate && overlapFraction < LOW_OVERLAP_FRACTION) {
+    return {
+      after,
+      alignment: {
+        attempted: true,
+        applied: false,
+        appliedDof: 'none',
+        refused: false,
+        degenerate: false,
+        solverResidualM,
+        appliedTransformResidualM: unappliedResidualM(),
+        yawDeg,
+        translation: toMetres(fit.translation),
+        centroidShiftM: shiftAtCentre(fit),
+        sampleCount,
+        overlapFraction,
+        lowOverlap: true,
+        frameUnverified,
+        horizontalUnitUnknown,
+        ...gateFacts,
+      },
+    };
+  }
 
   if (fit.degenerate || fit.refused) {
     return {
@@ -423,20 +557,21 @@ export function alignEpochClouds(
         appliedTransformResidualM: unappliedResidualM(),
         yawDeg,
         translation: toMetres(fit.translation),
+        centroidShiftM: shiftAtCentre(fit),
         sampleCount,
-        overlapFraction: fit.inlierFraction,
+        overlapFraction,
         frameUnverified,
         horizontalUnitUnknown,
+        ...gateFacts,
       },
     };
   }
 
-  // Low overlap: the fit converged with a small residual, but only a minority
-  // of points registered — the classic subset lock. Applying it would inject a
-  // horizontal shift/yaw from a fraction of the scene and smear real vertical
-  // change across slopes. Withhold the transform (compare as-is) rather than
-  // report a partial fit as a trustworthy alignment.
-  if (fit.inlierFraction < LOW_OVERLAP_FRACTION) {
+  // Unsupported move: starting from the identity pose, every pair the solve
+  // could form lay within the correspondence distance. A result that moves the
+  // after cloud farther than that was reached by walking, not supported by the
+  // data at the start, and is withheld.
+  if (identityStart && Number.isFinite(gate) && rmsHorizontalMove(afterSample, fit) > gate) {
     return {
       after,
       alignment: {
@@ -449,11 +584,13 @@ export function alignEpochClouds(
         appliedTransformResidualM: unappliedResidualM(),
         yawDeg,
         translation: toMetres(fit.translation),
+        centroidShiftM: shiftAtCentre(fit),
         sampleCount,
-        overlapFraction: fit.inlierFraction,
-        lowOverlap: true,
+        overlapFraction,
+        unsupportedMove: true,
         frameUnverified,
         horizontalUnitUnknown,
+        ...gateFacts,
       },
     };
   }
@@ -506,16 +643,19 @@ export function alignEpochClouds(
           afterSample,
           beforeSample,
           horizontalOnly ? applied : { yawRad: fit.yawRad, translation: fit.translation },
-          options.trimFraction,
+          trimFraction,
+          gate,
         ) * metresPerUnit,
       yawDeg,
       // Reported in metres; `applied.translation` (source units) is what
       // actually moved the points.
       translation: toMetres(applied.translation),
+      centroidShiftM: shiftAtCentre(applied),
       sampleCount,
-      overlapFraction: fit.inlierFraction,
+      overlapFraction,
       frameUnverified,
       horizontalUnitUnknown,
+      ...gateFacts,
     },
   };
 }
@@ -543,8 +683,9 @@ export function summarizeAlignment(a: EpochAlignment): string {
     const unitNote =
       'the horizontal linear unit is unknown, so the shift and residual have no confirmed ' +
       'metre scale and are withheld; set the CRS linear unit (or reproject to a metre/foot CRS) to report them.';
-    return a.refused
-      ? `Alignment: refused — the solver fit residual exceeds the limit, so the clouds are compared as-is. Note: ${unitNote}`
+    if (a.refused) return `Alignment: refused — the solver fit residual exceeds the limit, so the clouds are compared as-is. Note: ${unitNote}`;
+    return !a.applied
+      ? `Alignment: withheld — the fit is not supported by the overlap or the correspondence distance, so the clouds are compared as-is. Note: ${unitNote}`
       : `Aligned the after cloud horizontally (${a.yawDeg.toFixed(2)}° yaw over ${a.sampleCount} sampled points); vertical change preserved. Note: ${unitNote}`;
   }
   if (a.refused) {
@@ -553,10 +694,16 @@ export function summarizeAlignment(a: EpochAlignment): string {
   if (a.lowOverlap) {
     return `Alignment: withheld — only ${(a.overlapFraction * 100).toFixed(0)}% of the sampled points registered (below ${(LOW_OVERLAP_FRACTION * 100).toFixed(0)}%), so the fit locked onto a subset; comparing as-is rather than shifting on a partial overlap.`;
   }
-  const shift = Math.hypot(a.translation[0], a.translation[1]);
+  if (a.unsupportedMove) {
+    return `Alignment: withheld — the fit moved the after cloud farther than the ${CORRESPONDENCE_SPACINGS}-point-spacing correspondence distance, so the data at the starting pose do not support it; comparing as-is.`;
+  }
+  // The shift at the before sample's centroid: the transform's translation is
+  // about the world origin and is not a distance any point moved.
+  const moved = a.centroidShiftM ?? a.translation;
+  const shift = Math.hypot(moved[0], moved[1]);
   const applied = a.appliedDof === 'yaw+xyz' ? 'yaw + x/y/z' : 'yaw + x/y, z kept';
   const base =
-    `Aligned the after cloud (${applied}: ${shift.toFixed(2)} m shift, ${a.yawDeg.toFixed(2)}° yaw; ` +
+    `Aligned the after cloud (${applied}: ${shift.toFixed(2)} m shift at the before sample's centroid, ${a.yawDeg.toFixed(2)}° yaw; ` +
     `${(a.overlapFraction * 100).toFixed(0)}% overlap over ${a.sampleCount} sampled points). ` +
     `Residual at the applied pose ${a.appliedTransformResidualM.toFixed(2)} m; solver fit residual ` +
     `(yaw + x/y/z, not what was applied) ${a.solverResidualM.toFixed(2)} m. Both are fit statistics, ` +

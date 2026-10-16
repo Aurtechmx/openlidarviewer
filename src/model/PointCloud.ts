@@ -52,7 +52,8 @@ export interface SourceMetadata {
 /**
  * How one E57 scan's intensity reached the 0–65535 store at load:
  *  - `declared-limits`: (v − minimum) / (maximum − minimum) · 65535, from the
- *    scan's declared `intensityLimits`;
+ *    scan's declared `intensityLimits`, or, when those are absent, from the
+ *    declared minimum and maximum of an Integer or ScaledInteger intensity field;
  *  - `observed-unit-range`: v · 65535, because no usable limits were declared
  *    and the largest valid value (`maximum`) was at most 1;
  *  - `raw`: rounded and clamped only.

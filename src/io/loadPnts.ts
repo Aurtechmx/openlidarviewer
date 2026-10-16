@@ -50,7 +50,13 @@ export async function loadPnts(buffer: ArrayBuffer, name = 'cloud.pnts'): Promis
   // Stage in float64 and apply RTC_CENTER here, so the recentring below sees
   // the tile's real coordinates rather than its local ones. An absent centre is
   // the zero offset; the decoder has already refused a malformed one.
-  const [cx, cy, cz] = tile.rtcCenter ?? [0, 0, 0];
+  // A POSITION_QUANTIZED tile's volume offset is added here too, in float64,
+  // so a volume far from the origin keeps its quantisation step.
+  const [rx, ry, rz] = tile.rtcCenter ?? [0, 0, 0];
+  const [qx, qy, qz] = tile.quantizedVolumeOffset ?? [0, 0, 0];
+  const cx = rx + qx;
+  const cy = ry + qy;
+  const cz = rz + qz;
   // Destructured rather than read as `tile.positions`: the position-access gate
   // counts direct `.positions` reads and is shrink-only, and neither a decoded
   // tile's array nor a sanitation result is the `PointCloud` buffer that gate

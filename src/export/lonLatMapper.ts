@@ -114,7 +114,7 @@ function nad83Note(epsg: number): string | null {
  * have moved from WGS 84. Each is fixed to a plate at a reference epoch while
  * WGS 84 follows ITRF, so the difference grows every year. Sizes are PROJ
  * time-dependent pipelines to ITRF2014 at epoch 2026.75: ETRS89 0.93 m at
- * (10 E, 50 N), GDA2020 0.40 m and GDA94 1.96 m at (145 E, 37 S). RGF93 v2b
+ * (10 E, 50 N), GDA2020 0.40 m and GDA94 1.97 m at (145 E, 37 S). RGF93 v2b
  * is aligned to ETRS89. NZGD2000 needs the New Zealand deformation model,
  * which PROJ does not have offline; New Zealand moves several centimetres a
  * year, about 1 m since 2000.

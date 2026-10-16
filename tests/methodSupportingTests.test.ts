@@ -100,6 +100,8 @@ const SUPPORTING_TESTS: Readonly<Record<string, readonly string[]>> = {
   'olv.registration.icp-planar': ['tests/registrationModel.test.ts', 'tests/planarIcpReexport.test.ts'],
   'olv.registration.epoch-horizontal-icp': [
     'tests/alignEpochs.test.ts',
+    'tests/alignEpochsPartialOverlap.test.ts',
+    'tests/alignEpochsCentroidShift.test.ts',
     'tests/registrationArtifact.test.ts',
   ],
   'olv.volume.stockpile': [
@@ -117,6 +119,7 @@ const SUPPORTING_TESTS: Readonly<Record<string, readonly string[]>> = {
   'olv.change.dtm-difference': [
     'tests/changeDetection.test.ts',
     'tests/compareDtms.test.ts',
+    'tests/compareDtmsMeasuredSupport.test.ts',
     'tests/changeGrassAgreement.test.ts',
   ],
   'olv.change.dtm-difference.raw-net': [

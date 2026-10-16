@@ -447,14 +447,13 @@ const RING_SEARCH_MAX = 8;
  * grid whose covered cells hold a finite `surf` value (NaN elsewhere). Cells
  * are addressed by integer (ix, iy); d is the Euclidean distance between cell
  * centres in cell units and every weight is w = 1/d². Estimator
- * (olv.volume.stockpile-area-grid v5), with r(g) the Chebyshev distance from
+ * (olv.volume.stockpile-area-grid v4), with r(g) the Chebyshev distance from
  * gap g to the nearest covered cell (exact, by multi-source 8-connected BFS):
  *
  *   • r(g) ≤ RING_SEARCH_MAX (near a covered cell — almost every gap in a
  *     real scan): S(g) = every covered cell at Chebyshev distance r(g) or
  *     r(g)+1 from g, i.e. the nearest square ring holding any covered cell
- *     plus one more, so a single neighbour never decides a cell alone. This
- *     is exactly the v4 estimator.
+ *     plus one more, so a single neighbour never decides a cell alone.
  *   • r(g) > RING_SEARCH_MAX (deep inside a large void): S(g) = along each of
  *     the 8 grid directions (±x, ±y, both diagonals) the first covered cell
  *     met walking outward from g, plus the BFS-nearest covered cell when it
@@ -467,8 +466,8 @@ const RING_SEARCH_MAX = 8;
  * Every term is an observed surface; the caller fills only cells inside the
  * convex extent of the covered centres (no extrapolation) and never zero-fills.
  * Cost O(nx·ny): one BFS, eight linear sweeps that carry "the last covered
- * cell seen", and a constant-bounded ring sum. The v4 search widened rings
- * for every gap, O(K·R²) for a void of K cells and radius R.
+ * cell seen", and a constant-bounded ring sum. Widening rings for every gap
+ * would cost O(K·R²) for a void of K cells and radius R.
  */
 function idwFill(surf: Float64Array, nx: number, ny: number): Float64Array {
   const n = nx * ny;

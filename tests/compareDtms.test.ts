@@ -24,7 +24,7 @@ function grid(
       coverage[i] = 0;
     } else {
       z[i] = h;
-      coverage[i] = 1;
+      coverage[i] = 2; // measured (one return)
     }
   }
   return {

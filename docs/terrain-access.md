@@ -64,6 +64,14 @@ from direction-dependent edge limits (longitudinal grade, cross slope, step
 height). A cell can be fine to stand on yet unreachable from one heading and
 reachable from another.
 
+The minimum terrain confidence is a hard block only under the profile's
+`block` unknown policy, and the run record marks it `evaluated` there. Under
+`penalize` a cell below the minimum stays eligible and costs the same as it
+would with any other minimum (the support term is
+`weight * (1 - confidence / 100)` whatever the minimum is), so the minimum
+only sets the reported share of route cells below it; the run record, run
+card, diagnostics CSV and export README mark it `disclosed`, not `evaluated`.
+
 The longitudinal grade of a move from cell A to neighbour B is the largest
 of three rise/run tangents: the Horn gradient at A projected on the heading,
 the Horn gradient at B projected on the heading, and the edge's own
@@ -91,7 +99,9 @@ the two cell centres. A* search, the traversability map and the why-not
 inspector apply this one edge rule. Every eligible
 edge carries a declared, bounded soft cost, `distance * (1 + sum of weight *
 utilization)`, that rises linearly with how much of a limit a move actually
-uses.
+uses. Every weight must be a finite number of 0 or more, so no edge costs
+less than its length and the A* heuristic stays admissible; a run or preview
+with any other weight is refused with `INVALID_WEIGHTS`.
 
 ## Evidence gaps and the obstruction surface
 
@@ -124,7 +134,10 @@ points the surface rests on (sampled or not, points read and in the scan,
 noise left out, Withheld treatment) are recorded with it. The run record, run card and diagnostics CSV state
 the policy and these statuses, and the export README repeats the statuses. The policy and the surface
 binding, with its point basis, are part of the run's input digest
-(`olv.simulation.terrain-access.input-digest.v4`).
+(`olv.simulation.terrain-access.input-digest.v5`). On a geographic frame the
+digest also names the degree-to-metre model (`wgs84-degree-series`: the WGS84
+meridional and parallel degree lengths at the grid latitude), so a run under
+the earlier 111,320 m conversion does not share an identity with a current one.
 
 ## Search
 
@@ -138,7 +151,10 @@ same grid, profile and endpoints always produce the same route.
 A found route's `RouteDiagnostics` (`routeDiagnostics.ts`) report the worst
 conditions actually crossed, rather than a single opaque cost number:
 maximum and p95 grade and cross-slope (per-edge, as defined above, with the
-p95 weighted by edge length), maximum local step, minimum terrain
+p95 weighted by edge length: the smallest value whose edges cover at least
+95% of the route length, with compensated sums and a 1e-12 relative tolerance
+so an exact boundary such as 95 of 100 equal diagonal edges returns the 95th
+value), maximum local step, minimum terrain
 confidence, and which cost term dominated, each term summed as edge length
 times its weighted utilization so it is the share of the route cost it
 adds.
@@ -147,13 +163,17 @@ The traversability map (`buildTraversabilityMap`) classifies every readable
 cell into a declared bucket (blocked, unknown, or low/moderate/high cost)
 for the Lab's grid and 3D overlay. The why-not inspector (`whyNotEligible`)
 answers, for any single cell, exactly which declared limit blocks it, or
-that no in-bounds neighbour offers a viable move. It never returns a vague
+that no in-bounds neighbour offers a viable move. When every move out of a
+cell exceeds an edge limit, it names the move that misses by the smallest
+excess relative to its own limit, so a step in metres and a grade or cross
+slope in tangents are compared on one scale. It never returns a vague
 "not reachable".
 
 ## Refusals
 
 A run refuses by name rather than guessing: `NO_DTM`, `UNITS_UNRESOLVED`,
-`INVALID_PROFILE`, `START_BLOCKED`, `END_BLOCKED`, `NO_ROUTE`,
+`INVALID_PROFILE`, `INVALID_WEIGHTS` (a cost weight that is negative or not a
+finite number), `START_BLOCKED`, `END_BLOCKED`, `NO_ROUTE`,
 `INSUFFICIENT_EVIDENCE`, `TOO_LARGE`, `OBSTRUCTION_EVIDENCE_UNAVAILABLE` (the
 profile sets an above-ground obstruction limit and no aligned above-ground
 surface exists), `SURFACE_MISALIGNED` (the above-ground surface does not cover

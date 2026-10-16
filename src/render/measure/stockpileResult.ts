@@ -17,6 +17,7 @@
  */
 import type { VolumeRecord, VolumeWithheldCounts } from './types';
 import { reducedSampleClause } from './types';
+import { capConfidenceByCoverage } from './measureDerivations';
 import { noiseExcludedClause } from '../../terrain/ground/classificationFilter';
 
 /** Shape version of a lasso result built here. Bump when its fields change meaning. */
@@ -81,6 +82,9 @@ export function withStockpileGrid(
   if (grid.supportFraction !== undefined) enriched.coverageFraction = grid.supportFraction;
   if (grid.interpolatedFraction !== undefined) enriched.interpolatedFraction = grid.interpolatedFraction;
   if (grid.excludedFraction !== undefined) enriched.excludedFraction = grid.excludedFraction;
+  // The confidence tier answers to the shares the record now reports: the
+  // same coverage caps the point-sample record had, re-applied to the grid's.
+  enriched.confidence = capConfidenceByCoverage(enriched.confidence, enriched);
   if (grid.interpolatedFraction !== undefined && grid.interpolatedFraction > 0.25) enriched.confidence = 'low';
   if (grid.authority === 'withheld') {
     delete enriched.fill;

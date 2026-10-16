@@ -113,3 +113,26 @@ describe('E57 schema — malformed pose translation no longer silently misplaces
     expect(read(xml).scans[0].pose?.translation).toEqual([100.5, -200, 3]);
   });
 });
+
+describe('E57 schema — absent Integer bounds take the ASTM E2807 int64 defaults', () => {
+  test('an Integer field with no minimum/maximum is refused, not packed in 0 bits', () => {
+    // Defaulting both to 0 packed the field in 0 bits and decoded every value
+    // as 0. The spec defaults are -2^63 and 2^63-1, a range this reader cannot
+    // decode exactly, so the file is refused with a message.
+    const xml = docWithField('<intensity type="Integer"/>');
+    expect(() => read(xml)).toThrow(/declares no minimum or maximum/);
+  });
+
+  test('a ScaledInteger field missing only its maximum is refused', () => {
+    const xml = docWithField('<cartesianX type="ScaledInteger" minimum="0" scale="0.001"/>');
+    expect(() => read(xml)).toThrow(/declares no maximum/);
+  });
+
+  test('declared bounds still size the field', () => {
+    const doc = read(docWithField('<intensity type="Integer" minimum="-1024" maximum="1023"/>'));
+    const f = doc.scans[0]!.prototype.find((p) => p.name === 'intensity')!;
+    expect(f.minimum).toBe(-1024);
+    expect(f.maximum).toBe(1023);
+    expect(f.bitWidth).toBe(11);
+  });
+});

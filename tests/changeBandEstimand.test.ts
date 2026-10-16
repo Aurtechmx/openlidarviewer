@@ -26,7 +26,7 @@ function flat(height: number): DtmGrid {
     z: Float32Array.from({ length: COLS * ROWS }, () => height),
     // Every cell measured: dtmToChangeGrid reads `coverage` to decide which
     // heights are real, so a fixture without it compares nothing.
-    coverage: Uint8Array.from({ length: COLS * ROWS }, () => 1),
+    coverage: Uint8Array.from({ length: COLS * ROWS }, () => 2),
     cols: COLS,
     rows: ROWS,
     cellSizeM: 1,

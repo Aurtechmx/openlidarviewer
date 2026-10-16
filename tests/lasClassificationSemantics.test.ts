@@ -99,6 +99,15 @@ describe('the legacy table keeps its own meanings', () => {
     expect(classificationName(10, 1)).toBe('Reserved for ASPRS Definition');
     expect(classificationName(11, 1)).toBe('Reserved for ASPRS Definition');
   });
+
+  it('allocates legacy codes 10 and 11 as reserved (LAS 1.4 R15 Table 9)', () => {
+    for (const pdrf of [0, 1, 2, 3, 4, 5]) {
+      expect(classAllocation(10, pdrf)).toBe('reserved');
+      expect(classAllocation(11, pdrf)).toBe('reserved');
+      expect(classAllocation(9, pdrf)).toBe('defined');
+      expect(classAllocation(12, pdrf)).toBe('defined');
+    }
+  });
 });
 
 describe('overlap reads beside the base class, not instead of it', () => {

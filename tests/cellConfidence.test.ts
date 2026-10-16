@@ -105,13 +105,17 @@ describe('buildDtmGrid', () => {
       filledCellCount: 8,
       warnings: [],
     });
-    const metric = buildDtmGrid(mk(DEG * 111_320), {
-      crs: 'EPSG:32610', interpolation: 'geodesic',
-    });
+    // At the equator a WGS84 degree of latitude is 110 574.27 m and a degree
+    // of longitude 111 319.46 m (the standard series), so the metric twin is
+    // the geodesic fill run on those two cell lengths directly.
     const geographic = buildDtmGrid(mk(DEG), {
       crs: 'EPSG:4326', isGeographic: true, latitudeDeg: 0, interpolation: 'geodesic',
     });
-    expect(geographic.z[4]).toBeCloseTo(metric.z[4], 4);
+    const metric = geodesicFill(mk(DEG).z, Uint8Array.from([1, 1, 1, 1, 0, 1, 1, 1, 1]), 3, 3, {
+      cellMetresX: DEG * 111_319.458,
+      cellMetresY: DEG * 110_574.2727,
+    });
+    expect(geographic.z[4]).toBeCloseTo(metric[4], 4);
   });
 
   it('applies cos(latitude) to the geodesic step away from the equator', () => {
@@ -134,11 +138,12 @@ describe('buildDtmGrid', () => {
       crs: 'EPSG:4326', isGeographic: true, latitudeDeg: LAT, interpolation: 'geodesic',
     });
 
-    // What the stage must have handed the fill: the N–S cell in metres, and the
-    // E–W cell shrunk by cos(60°) = 0.5.
-    const nsMetres = DEG * 111_320;
+    // What the stage must have handed the fill: the WGS84 degree of latitude
+    // at 60° (111 412.24 m) for N–S and the degree of longitude at 60°
+    // (55 799.98 m, about half of it) for E–W, from the standard series.
+    const nsMetres = DEG * 111_412.2402;
     const expected = geodesicFill(raster.z, Uint8Array.from([1, 1, 1, 1, 0, 1, 1, 1, 1]), 3, 3, {
-      cellMetresX: nsMetres * Math.cos((LAT * Math.PI) / 180),
+      cellMetresX: DEG * 55_799.979,
       cellMetresY: nsMetres,
     });
     expect(grid.z[4]).toBeCloseTo(expected[4], 6);

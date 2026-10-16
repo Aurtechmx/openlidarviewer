@@ -70,8 +70,9 @@ import {
 import { getTerrainRasterEngine } from '../engine/TerrainRasterEngine';
 import {
   horizontalCellMetresXY,
-  cosLatitude,
   METRES_PER_DEGREE,
+  metresPerDegreeLatitude,
+  metresPerDegreeLongitude,
 } from '../ground/horizontalScale';
 import { alignedClasses, excludeNonGroundClasses, isNoiseClass, NOISE_CLASSES } from '../ground/classificationFilter';
 import { holdoutValidateDtm } from '../validate/holdoutRmse';
@@ -90,10 +91,15 @@ import {
   tallyCellStatus,
   type CellStatusTally,
 } from '../quality/dtmCellStatus';
-import { evaluateDtmQuality, type DtmQualityReport } from '../quality/dtmQualityGate';
+import { evaluateDtmQuality, type DtmQualityInput, type DtmQualityReport } from '../quality/dtmQualityGate';
 import { recommendGrid, type GridRecommendation } from '../quality/recommendGrid';
 import type { ConfidenceOrderingResult, ValidationReport } from '../validate/ValidationReport';
-import { gateIntervals, type IntervalGateResult } from './intervalGate';
+import {
+  gateAtLevelOrigin,
+  gateIntervals,
+  type IntervalGateParams,
+  type IntervalGateResult,
+} from './intervalGate';
 import { contoursAt, type ContourSet } from './contoursAt';
 import { stitchContourSet, type StitchedLevel } from './stitchContours';
 import { styleLevels, type ContourStyleResult } from './contourStyle';
@@ -145,7 +151,8 @@ export interface TerrainCoreParams {
    * geographic frame — the WORLD latitude (render-recentred local Y plus the
    * cloud's world origin), never the recentred local Y itself (which is ≈ 0,
    * silently degrading cos φ to 1). A degree of longitude spans
-   * `METRES_PER_DEGREE·cos φ` metres, so slope/aspect/hillshade and per-cell
+   * about `cos φ` times a degree of latitude (both from the WGS84 series in
+   * horizontalScale.ts), so slope/aspect/hillshade and per-cell
    * densities scale the E–W axis by cos φ — at 60° latitude an uncorrected
    * estimate overstates the E–W run ~2×. Null / omitted keeps the isotropic
    * (cos φ = 1) estimate; ignored entirely for projected frames.
@@ -479,8 +486,15 @@ export interface TerrainCore {
    */
   readonly complexity: TerrainComplexitySummary | null;
   /** Interval gate (options + recommendation). Interval-independent: it is a
-   *  function of cell size, relief and the measured RMSE only. */
+   *  function of cell size, relief and the measured RMSE only. Judged on the
+   *  grid's LOCAL elevation bounds; {@link contoursFromCore} re-runs it on
+   *  world bounds when a `levelOriginZ` anchors the levels elsewhere. */
   readonly gate: IntervalGateResult;
+  /** The inputs {@link gate} (local bounds; null when flat) and {@link quality}
+   *  were computed from, so the interval stage can re-gate on world bounds and
+   *  re-judge quality without redoing validation. Absent ⇒ the core's own. */
+  readonly gateParams?: IntervalGateParams | null;
+  readonly qualityInput?: DtmQualityInput;
   /** ASPRS vertical accuracy derived from the validation pass. */
   readonly accuracy: VerticalAccuracy;
   readonly elevationRangeM: number;
@@ -777,24 +791,24 @@ function gridGeometryInMetres(
   const latKnown = typeof lat === 'number' && Number.isFinite(lat);
   const horizResolved = geographic ? latKnown : (params.horizontalScaleKnown ?? horizOk);
   const horizToM = geographic ? METRES_PER_DEGREE : (horizOk ? horiz : 1);
-  // A geographic frame's east-west extent shrinks by cos(latitude), the same
-  // correction the density figure in this file already applies. Without it a
-  // site at 60 degrees north reported twice its true width.
-  const ewScale =
-    geographic && typeof lat === 'number' && Number.isFinite(lat)
-      ? Math.max(Math.cos((lat * Math.PI) / 180), 1e-6)
-      : 1;
+  // A geographic frame converts each axis with its own WGS84 degree length at
+  // the grid latitude: the parallel degree (≈ cos φ × the meridional one) for
+  // the east-west width, the meridional degree for the north-south depth.
+  // Without the E–W correction a site at 60 degrees north reported twice its
+  // true width. Unknown latitude keeps the isotropic mean on both axes.
+  const ewToM = geographic ? metresPerDegreeLongitude(lat) : horizToM;
+  const nsToM = geographic ? metresPerDegreeLatitude(lat) : horizToM;
   const vert = params.verticalUnitToMetres;
   const vertOk = typeof vert === 'number' && Number.isFinite(vert) && vert > 0;
   // A geographic frame's z is already metric by convention (the other unit
   // resolutions in this file fall back to 1 there); a projected frame's vertical
   // falls back to its horizontal scale. Falling back to METRES_PER_DEGREE here
-  // multiplied a geographic relief by 111,320.
+  // multiplied a geographic relief by ~111,000.
   const vertToM = vertOk ? vert : (geographic ? 1 : horizToM);
   return {
     pointCount,
-    widthM: dtm.cols * dtm.cellSizeM * horizToM * ewScale,
-    depthM: dtm.rows * dtm.cellSizeM * horizToM,
+    widthM: dtm.cols * dtm.cellSizeM * ewToM,
+    depthM: dtm.rows * dtm.cellSizeM * nsToM,
     reliefM: elevationRangeSourceUnits * vertToM,
     unitResolved: horizResolved,
   };
@@ -852,11 +866,12 @@ export function resolveGroundFilterParams(
   // epoch alignment applies to ICP's metre-denominated gate. When both axes
   // share one linear unit the ratio is exactly 1 and the filter sees the
   // plain cell size; a geographic frame's degree-valued cell would otherwise
-  // starve the growth term by ~1/111,320, pinning the threshold at its base
+  // starve the growth term by ~1/111,000, pinning the threshold at its base
   // and rejecting legitimate slope ground.
   let horizToMetres: number;
   if (params.isGeographic) {
-    horizToMetres = METRES_PER_DEGREE;
+    // The meridional degree at the grid latitude (the mean when unknown).
+    horizToMetres = metresPerDegreeLatitude(params.latitudeDeg);
   } else if (params.horizontalUnitToMetres && params.horizontalUnitToMetres > 0) {
     horizToMetres = params.horizontalUnitToMetres;
   } else {
@@ -1280,8 +1295,8 @@ export function computeTerrainCore(
   // cell size, relief and the measured RMSE only — NOT of the chosen interval
   // — so it is part of the cacheable core. (The interval CHOICE happens in the
   // contour stage.)
-  const gate = elevationRangeM > 0
-    ? gateIntervals({
+  const gateParams: IntervalGateParams | null = elevationRangeM > 0
+    ? {
         cellSizeM: params.cellSizeM,
         elevationRangeM,
         // UNIT CONSISTENCY: candidate intervals and the elevation range/bounds
@@ -1294,8 +1309,9 @@ export function computeTerrainCore(
         // interval rule (a 1-unit interval on a 0.4–1.2-unit surface crosses 1.0).
         minZ: Number.isFinite(minZ) ? minZ : null,
         maxZ: Number.isFinite(maxZ) ? maxZ : null,
-      })
-    : EMPTY_GATE;
+      }
+    : null;
+  const gate = gateParams ? gateIntervals(gateParams) : EMPTY_GATE;
 
   // 5b) DTM cell status, the quality gate (ready / previewOnly / blocked).
   // The gate decides whether the UI may offer the terrain-product (contour/DEM) export at all.
@@ -1309,7 +1325,7 @@ export function computeTerrainCore(
   const rmseMetres = verticalScaleResolved && Number.isFinite(validation.rmse)
     ? validation.rmse
     : Number.NaN;
-  const quality = evaluateDtmQuality({
+  const qualityInput: DtmQualityInput = {
     tally: cellStatusTally,
     meanCellConfidence: dtm.meanConfidence,
     holdoutRmseM: rmseMetres,
@@ -1321,20 +1337,24 @@ export function computeTerrainCore(
     crs,
     verticalDatum,
     recommendedIntervalM: gate.recommendedM,
-  });
+  };
+  const quality = evaluateDtmQuality(qualityInput);
 
   // Composite 0–100 terrain quality score + the per-cell metric rollup it
   // draws on (density, completeness, edge risk). Complements the verdict.
   // Effective metres per horizontal unit: metres-per-degree for a geographic
   // frame, else the projected unit scale (1 for metres, ~0.3048 for feet). Feeds
   // the density (pts/m²) through the cell AREA, which cellMetrics computes as
-  // this scale SQUARED — so for a geographic frame we fold the cos φ
-  // anisotropy in as √(cos φ): area = (cell·M·cos φ)·(cell·M) = (cell·M·√cos φ)²
-  // exactly. Without it a 60°-latitude scan reports ~half the true pts/m² and
-  // an unfairly failing USGS QL. cos φ = 1 (no-op) when latitude is unknown.
+  // this scale SQUARED — so for a geographic frame the two axes' degree
+  // lengths are folded in as their geometric mean:
+  // area = (cell·Mlon)·(cell·Mlat) = (cell·√(Mlon·Mlat))² exactly. Without it a
+  // 60°-latitude scan reports ~half the true pts/m² and an unfairly failing
+  // USGS QL. Both fall back to the isotropic mean when latitude is unknown.
   let horizUnitToMetres: number;
   if (params.isGeographic) {
-    horizUnitToMetres = METRES_PER_DEGREE * Math.sqrt(cosLatitude(params.latitudeDeg));
+    horizUnitToMetres = Math.sqrt(
+      metresPerDegreeLongitude(params.latitudeDeg) * metresPerDegreeLatitude(params.latitudeDeg),
+    );
   } else if (params.horizontalUnitToMetres && params.horizontalUnitToMetres > 0) {
     horizUnitToMetres = params.horizontalUnitToMetres;
   } else {
@@ -1542,6 +1562,8 @@ export function computeTerrainCore(
     cellStatusTally,
     complexity,
     gate,
+    gateParams,
+    qualityInput,
     accuracy,
     elevationRangeM,
     minZ: Number.isFinite(minZ) ? minZ : Number.NaN,
@@ -1589,7 +1611,11 @@ function coreResultFields(
     confidenceOrdering: core.confidenceOrdering,
     confidenceCalibrationApplied: core.confidenceCalibrationApplied,
     confidenceToleranceM: core.confidenceToleranceM,
-    quality: core.quality,
+    // The quality verdict reads the recommended interval, so it follows the
+    // gate this result reports (re-evaluated when that is the world-bounds one).
+    quality: gate === core.gate || !core.qualityInput
+      ? core.quality
+      : evaluateDtmQuality({ ...core.qualityInput, recommendedIntervalM: gate.recommendedM }),
     qualityScore: core.qualityScore,
     cellMetrics: core.cellMetrics,
     surface: core.surface,
@@ -1617,7 +1643,10 @@ export function contoursFromCore(
   core: TerrainCore,
   intervalParams: IntervalContourParams = {},
 ): AnalyseContoursResult {
-  const { crs, verticalDatum, verticalUnitToMetres, cellSizeM, dtm, gate, minZ, maxZ } = core;
+  const { crs, verticalDatum, verticalUnitToMetres, cellSizeM, dtm, minZ, maxZ } = core;
+  // Re-gate on world bounds (minZ + oz, maxZ + oz): the levels `contoursAt`
+  // draws are anchored to world elevation through `levelOriginZ`.
+  const gate = gateAtLevelOrigin(core.gateParams, core.gate, intervalParams.levelOriginZ);
   // The contour shape style for this run. Default 'smooth' reproduces the
   // historical Chaikin ×2 default exactly, so the live on-screen contours are
   // byte-identical. `shapeStyle` wins; otherwise the legacy `smooth:false`
@@ -1723,9 +1752,17 @@ export function contoursFromCore(
   // contours into one blob; scaling by the cell keeps the join unit-free.
   let stitched = stitchContourSet(contours, cellSizeM);
 
+  // Index contours are chosen on WORLD elevation (local value + levelOriginZ),
+  // the same frame `contoursAt` anchors the levels to, so index lines, their
+  // labels, the exported contour_type and every weight derived from `isIndex`
+  // fall on round world elevations rather than round local ones.
   const style = styleLevels(
     contours.levels.map((l) => l.value),
-    { intervalM: emittedIntervalM, indexEvery: intervalParams.indexEvery ?? 5 },
+    {
+      intervalM: emittedIntervalM,
+      indexEvery: intervalParams.indexEvery ?? 5,
+      originZ: intervalParams.levelOriginZ,
+    },
   );
 
   // Beauty: apply the chosen shape style to the raw stitched runs. Every style

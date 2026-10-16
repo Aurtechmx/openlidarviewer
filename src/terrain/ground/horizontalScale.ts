@@ -7,8 +7,61 @@
  * metres or they read as near-vertical. Projected data passes through.
  */
 
-/** Mean metres per degree of latitude (WGS84 mean; longitude varies by cos φ). */
-export const METRES_PER_DEGREE = 111_320;
+/**
+ * Mean length of one degree of latitude on the WGS84 ellipsoid: the meridian
+ * quadrant (10 001 965.729 m) divided by 90, ≈ 111 132.95 m.
+ *
+ * Used only where no latitude is available (cell-size floors, isotropic
+ * fallbacks). Where the grid latitude is known, convert each axis with
+ * {@link metresPerDegreeLatitude} and {@link metresPerDegreeLongitude}: the
+ * true meridional degree runs from 110 574 m at the equator to 111 694 m at
+ * the poles, and a degree of longitude is 111 319 m only at the equator.
+ * (The previous value, 111 320 m, was the equatorial degree of LONGITUDE.)
+ */
+export const METRES_PER_DEGREE = 10_001_965.729 / 90;
+
+/**
+ * Names the degree-to-metre model this module applies to a geographic frame:
+ * the WGS84 meridional and parallel degree series below, at the grid
+ * latitude. Recorded in identities that depend on the conversion (the Terrain
+ * Access input digest) so a change of model changes the identity. Change it
+ * together with the series.
+ */
+export const GEOGRAPHIC_DEGREE_MODEL = 'wgs84-degree-series';
+
+/**
+ * Metres per degree of LATITUDE (north–south) on the WGS84 ellipsoid at
+ * geodetic latitude φ, from the standard series
+ * `111132.92 − 559.82 cos 2φ + 1.175 cos 4φ − 0.0023 cos 6φ`
+ * (≈ 110 574 m at the equator, 111 694 m at the poles). A null or non-finite
+ * latitude returns the mean {@link METRES_PER_DEGREE}.
+ */
+export function metresPerDegreeLatitude(latitudeDeg: number | null | undefined): number {
+  if (latitudeDeg == null || !Number.isFinite(latitudeDeg)) return METRES_PER_DEGREE;
+  const phi = (Math.max(-90, Math.min(90, latitudeDeg)) * Math.PI) / 180;
+  return (
+    111_132.92 -
+    559.82 * Math.cos(2 * phi) +
+    1.175 * Math.cos(4 * phi) -
+    0.0023 * Math.cos(6 * phi)
+  );
+}
+
+/**
+ * Metres per degree of LONGITUDE (east–west) on the WGS84 ellipsoid at
+ * geodetic latitude φ, from the standard series
+ * `111412.84 cos φ − 93.5 cos 3φ + 0.118 cos 5φ`
+ * (≈ 111 319 m at the equator). φ is clamped to ±89° like {@link cosLatitude}
+ * so the scale never collapses to zero. A null or non-finite latitude returns
+ * the mean {@link METRES_PER_DEGREE}, the isotropic fallback (no E–W
+ * correction) the per-axis helpers have always used when φ is unknown.
+ */
+export function metresPerDegreeLongitude(latitudeDeg: number | null | undefined): number {
+  if (latitudeDeg == null || !Number.isFinite(latitudeDeg)) return METRES_PER_DEGREE;
+  const lat = Math.max(-MAX_ABS_LATITUDE_DEG, Math.min(MAX_ABS_LATITUDE_DEG, latitudeDeg));
+  const phi = (lat * Math.PI) / 180;
+  return 111_412.84 * Math.cos(phi) - 93.5 * Math.cos(3 * phi) + 0.118 * Math.cos(5 * phi);
+}
 
 /**
  * Latitude clamp for the cos φ east–west scale. Beyond ~±89° a degree of
@@ -60,8 +113,10 @@ export interface CellMetresXY {
 
 /**
  * Per-axis cell size in metres. A geographic (lat/lon) raster has square cells
- * in DEGREES but NOT in metres: 1° of latitude is ~{@link METRES_PER_DEGREE} m
- * everywhere, but 1° of longitude is that × `cos(latitude)`. Feeding one scalar
+ * in DEGREES but NOT in metres: 1° of latitude is
+ * {@link metresPerDegreeLatitude} (110 574 to 111 694 m on WGS84), and 1° of
+ * longitude is {@link metresPerDegreeLongitude}, roughly that × `cos(latitude)`.
+ * Feeding one scalar
  * to a slope estimator therefore overstates the east–west run by `1/cos φ` and
  * skews slope/aspect off the equator. This returns both axes so the estimator
  * can scale dz/dx and dz/dy independently.
@@ -70,8 +125,8 @@ export interface CellMetresXY {
  *
  * @param latitudeDeg Representative latitude of the grid (e.g. its centre), in
  *   degrees. Only consulted for geographic frames. Null/undefined/non-finite
- *   means "unknown" — the E–W axis then keeps the isotropic (cos φ = 1)
- *   estimate rather than inventing a latitude.
+ *   means "unknown" — both axes then use the mean {@link METRES_PER_DEGREE}
+ *   (isotropic, no E–W correction) rather than inventing a latitude.
  */
 export function horizontalCellMetresXY(
   cellSizeM: number,
@@ -80,11 +135,14 @@ export function horizontalCellMetresXY(
   horizontalUnitToMetres = 1,
 ): CellMetresXY {
   if (isGeographic) {
-    const y = cellSizeM * METRES_PER_DEGREE;
-    // Shared cos φ rule ({@link cosLatitude}): clamped at ±89° so the E–W
-    // scale never collapses to 0, and non-finite latitudes fall back to 1
-    // (isotropic) instead of poisoning every derivative with NaN.
-    return { x: y * cosLatitude(latitudeDeg), y };
+    // Ellipsoidal degree lengths at the grid latitude: the meridional degree
+    // for N–S, the parallel degree for E–W (clamped at ±89° so it never
+    // collapses to 0). A non-finite latitude falls back to the isotropic mean
+    // instead of poisoning every derivative with NaN.
+    return {
+      x: cellSizeM * metresPerDegreeLongitude(latitudeDeg),
+      y: cellSizeM * metresPerDegreeLatitude(latitudeDeg),
+    };
   }
   const scale =
     Number.isFinite(horizontalUnitToMetres) && horizontalUnitToMetres > 0

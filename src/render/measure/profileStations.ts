@@ -193,7 +193,12 @@ export interface SlopeSummary {
   readonly maxGradePercent: number;
   /** Steepest downhill grade encountered, percentage. NaN if no grades. */
   readonly minGradePercent: number;
-  /** Mean grade across all segments, percentage. NaN if no grades. */
+  /**
+   * Run-weighted average grade over the covered segments: total rise over
+   * total run, percentage. Segments of unequal length weigh by their run, so a
+   * short steep last segment does not count as much as a long flat one. NaN if
+   * no grades.
+   */
   readonly avgGradePercent: number;
 }
 
@@ -252,7 +257,7 @@ export function slopeGradesPerSegment(input: SlopeGradesInput): SlopeGrade[] {
   return grades;
 }
 
-/** Min / max / average across a slope-grade list. */
+/** Min / max / run-weighted average across a slope-grade list. */
 export function summariseSlopes(grades: ReadonlyArray<SlopeGrade>): SlopeSummary {
   if (grades.length === 0) {
     return {
@@ -263,13 +268,15 @@ export function summariseSlopes(grades: ReadonlyArray<SlopeGrade>): SlopeSummary
   }
   let max = Number.NEGATIVE_INFINITY;
   let min = Number.POSITIVE_INFINITY;
-  let sum = 0;
+  let riseSum = 0;
+  let runSum = 0;
   let count = 0;
   for (const g of grades) {
     if (!Number.isFinite(g.gradePercent)) continue;
     if (g.gradePercent > max) max = g.gradePercent;
     if (g.gradePercent < min) min = g.gradePercent;
-    sum += g.gradePercent;
+    riseSum += g.rise;
+    runSum += g.run;
     count++;
   }
   if (count === 0) {
@@ -282,7 +289,7 @@ export function summariseSlopes(grades: ReadonlyArray<SlopeGrade>): SlopeSummary
   return {
     maxGradePercent: max,
     minGradePercent: min,
-    avgGradePercent: sum / count,
+    avgGradePercent: runSum > 0 ? (riseSum / runSum) * 100 : Number.NaN,
   };
 }
 

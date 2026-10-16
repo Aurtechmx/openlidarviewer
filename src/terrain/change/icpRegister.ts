@@ -28,6 +28,7 @@
  */
 
 import { NeumaierSum } from '../../process/numerics';
+import { symEig3 } from '../../math/symEig3';
 import { buildPointIndex, nearestPoint, nearestState } from './pointIndex';
 
 /** A point as [x, y, z]. World up is +Z (the yaw axis). */
@@ -63,6 +64,39 @@ export interface IcpOptions {
    * iteration. Clamped to [0.05, 1].
    */
   readonly trimFraction?: number;
+  /**
+   * Where the solve starts. `'warm'` (default) places the source over the
+   * target first: centroids without trimming, per-axis medians with trimming.
+   * `'identity'` starts at the unmoved pose, for two clouds already in one
+   * coordinate frame: a centre-of-mass warm start then measures the
+   * difference in the two FOOTPRINTS, not a misregistration, and on epochs of
+   * different extent it moves the source by a large fraction of that
+   * difference before the first correspondence is formed.
+   */
+  readonly initialPose?: 'warm' | 'identity';
+  /**
+   * Correspondences farther apart than this (cloud units) are rejected in every
+   * iteration before the trim, which then keeps the best `trimFraction` of
+   * what remains. A source point outside the target's footprint has no true
+   * partner; without this bound it pairs with the nearest edge point and
+   * drags the solve toward the target. The same distance measures
+   * `overlapFraction`. Default Infinity: no rejection, the classic solve.
+   */
+  readonly maxCorrespondenceDistance?: number;
+  /**
+   * Error metric of each iteration's solve. `'point'` (default) is the classic
+   * point-to-point least squares. `'plane'` minimises the distance of each
+   * source point to the tangent plane at its partner (Chen & Medioni 1992),
+   * with target normals from a local plane fit within `normalRadius`. Two
+   * samplings of one surface never share points, so point-to-point pairs pull
+   * toward wherever the target happens to be sampled and stall within about a
+   * point spacing of the answer; the plane metric measures the offset from the
+   * surface itself. A direction the surface does not constrain (horizontal
+   * shift over flat ground) is damped toward no motion rather than guessed.
+   */
+  readonly metric?: 'point' | 'plane';
+  /** Neighbour radius (cloud units) for the target normals of the plane metric. */
+  readonly normalRadius?: number;
 }
 
 export interface IcpResult {
@@ -100,6 +134,12 @@ export interface IcpResult {
    * a reader rather than hidden inside the fit.
    */
   readonly trimFraction: number;
+  /**
+   * Fraction of source points with a target point within
+   * `maxCorrespondenceDistance` at the final pose. Present only when that
+   * option is finite; it is the overlap the solve actually used.
+   */
+  readonly overlapFraction?: number;
 }
 
 /** Apply a solved ICP transform to a point: R(yaw)·p + t. */
@@ -139,6 +179,93 @@ function medianPoint(pts: readonly Vec3[]): Vec3 {
 }
 
 /**
+ * Unit normal per target point from a plane fit to its neighbours within
+ * `radius` (smallest-eigenvalue vector of their covariance). NaN where fewer
+ * than five neighbours support a fit.
+ */
+function targetNormals(target: readonly Vec3[], radius: number): Float64Array {
+  const n = target.length;
+  const out = new Float64Array(3 * n).fill(Number.NaN);
+  if (!(radius > 0) || n < 5) return out;
+  let minX = Infinity, minY = Infinity, minZ = Infinity;
+  for (const p of target) {
+    if (p[0] < minX) minX = p[0];
+    if (p[1] < minY) minY = p[1];
+    if (p[2] < minZ) minZ = p[2];
+  }
+  const key = (ix: number, iy: number, iz: number): string => `${ix},${iy},${iz}`;
+  const cells = new Map<string, number[]>();
+  const cellOf = (p: Vec3): [number, number, number] => [
+    Math.floor((p[0] - minX) / radius),
+    Math.floor((p[1] - minY) / radius),
+    Math.floor((p[2] - minZ) / radius),
+  ];
+  for (let i = 0; i < n; i++) {
+    const [ix, iy, iz] = cellOf(target[i]);
+    const k = key(ix, iy, iz);
+    const list = cells.get(k);
+    if (list) list.push(i);
+    else cells.set(k, [i]);
+  }
+  const r2 = radius * radius;
+  for (let i = 0; i < n; i++) {
+    const p = target[i];
+    const [ix, iy, iz] = cellOf(p);
+    let cnt = 0, sx = 0, sy = 0, sz = 0, sxx = 0, sxy = 0, sxz = 0, syy = 0, syz = 0, szz = 0;
+    for (let dx = -1; dx <= 1; dx++) for (let dy = -1; dy <= 1; dy++) for (let dz = -1; dz <= 1; dz++) {
+      const list = cells.get(key(ix + dx, iy + dy, iz + dz));
+      if (!list) continue;
+      for (const j of list) {
+        const q = target[j];
+        const ux = q[0] - p[0], uy = q[1] - p[1], uz = q[2] - p[2];
+        if (ux * ux + uy * uy + uz * uz > r2) continue;
+        cnt++; sx += ux; sy += uy; sz += uz;
+        sxx += ux * ux; sxy += ux * uy; sxz += ux * uz; syy += uy * uy; syz += uy * uz; szz += uz * uz;
+      }
+    }
+    if (cnt < 5) continue;
+    const mx = sx / cnt, my = sy / cnt, mz = sz / cnt;
+    const e = symEig3(
+      sxx / cnt - mx * mx, sxy / cnt - mx * my, sxz / cnt - mx * mz,
+      syy / cnt - my * my, syz / cnt - my * mz, szz / cnt - mz * mz,
+    );
+    const v = e.vectors[2];
+    out[3 * i] = v[0];
+    out[3 * i + 1] = v[1];
+    out[3 * i + 2] = v[2];
+  }
+  return out;
+}
+
+/**
+ * Solve the 4×4 system A·x = b in place by Gaussian elimination with partial
+ * pivoting. Returns null when a pivot vanishes.
+ */
+function solve4(a: number[][], b: number[]): number[] | null {
+  const m = a.map((row, i) => [...row, b[i]]);
+  for (let c = 0; c < 4; c++) {
+    let piv = c;
+    for (let r = c + 1; r < 4; r++) if (Math.abs(m[r][c]) > Math.abs(m[piv][c])) piv = r;
+    if (!(Math.abs(m[piv][c]) > 0)) return null;
+    [m[c], m[piv]] = [m[piv], m[c]];
+    for (let r = c + 1; r < 4; r++) {
+      const f = m[r][c] / m[c][c];
+      for (let k = c; k < 5; k++) m[r][k] -= f * m[c][k];
+    }
+  }
+  const x = [0, 0, 0, 0];
+  for (let r = 3; r >= 0; r--) {
+    let v = m[r][4];
+    for (let k = r + 1; k < 4; k++) v -= m[r][k] * x[k];
+    x[r] = v / m[r][r];
+  }
+  return x;
+}
+
+/** Levenberg damping of the plane solve, relative to its largest diagonal term. */
+const PLANE_DAMPING = 1e-6;
+
+/**
  * Align `source` onto `target` with a planar rigid ICP. The transform maps a
  * source point to target space; see {@link applyIcp}.
  */
@@ -153,6 +280,9 @@ export function icpRegister(
   const rawTrim = options.trimFraction ?? 1;
   const trimFraction = Math.max(0.05, Math.min(1, Number.isFinite(rawTrim) ? rawTrim : 1));
   const trimming = trimFraction < 1;
+  const rawGate = options.maxCorrespondenceDistance;
+  const gated = rawGate !== undefined && Number.isFinite(rawGate) && rawGate >= 0;
+  const gateD2 = gated ? (rawGate as number) * (rawGate as number) : Infinity;
 
   if (source.length < 3 || target.length < 3) {
     return {
@@ -175,8 +305,9 @@ export function icpRegister(
   // the trim is about to reject outliers, and a centroid warm start computed
   // over those very outliers would seed the trim onto them (the collapse this
   // guards against) — the median is unmoved by a minority of outliers, so the
-  // trim selects real inliers from the first iteration.
-  {
+  // trim selects real inliers from the first iteration. An identity start
+  // skips this: the clouds already share a frame.
+  if (options.initialPose !== 'identity') {
     const cs = trimming ? medianPoint(source) : centroid(source);
     const ct = trimming ? medianPoint(target) : centroid(target);
     t = [ct[0] - cs[0], ct[1] - cs[1], ct[2] - cs[2]];
@@ -190,6 +321,8 @@ export function icpRegister(
   // The target is fixed for the whole fit: index it once. The per-iteration
   // buffers are allocated once too and rewritten each pass.
   const index = buildPointIndex(target);
+  const plane = options.metric === 'plane';
+  const normals = plane ? targetNormals(target, options.normalRadius ?? Number.NaN) : null;
   const n = source.length;
   const mx = new Float64Array(n), my = new Float64Array(n), mz = new Float64Array(n);
   const corr = new Int32Array(n);
@@ -219,9 +352,12 @@ export function icpRegister(
     //    trimming that is all of them, in index order; with trimming, the
     //    best-residual `trimFraction`, so the outliers (largest residuals)
     //    cannot drag the least-squares. Ties break by index for determinism.
-    for (let i = 0; i < n; i++) order[i] = i;
-    if (trimming) order.sort((a, b) => (d2s[a] - d2s[b]) || (a - b));
-    const keep = keepCount(n);
+    //    A correspondence gate first drops every pair beyond it.
+    let candidates = 0;
+    for (let i = 0; i < n; i++) if (d2s[i] <= gateD2) order[candidates++] = i;
+    if (candidates < 3) break;
+    if (trimming) order.subarray(0, candidates).sort((a, b) => (d2s[a] - d2s[b]) || (a - b));
+    const keep = keepCount(candidates);
 
     // RMS over the KEPT set — the objective being minimised (see rmsResidual).
     // Compensated: the residual sum drives the convergence test, so drift here
@@ -253,14 +389,49 @@ export function icpRegister(
       sxy += dmx * cy - dmy * cx;
       cxy += dmx * cx + dmy * cy;
     }
-    const dYaw = Math.atan2(sxy, cxy);
-    // Apply the incremental rotation about `cm`, then close centroids.
-    const cYaw = Math.cos(dYaw), sYaw = Math.sin(dYaw);
+    let dYaw = Math.atan2(sxy, cxy);
     // Rotated centroid of `moved` about cm == cm (rotation is about its own
     // centroid), so the translation that maps it onto `cc` is simply cc − cm.
-    const dtx = cc[0] - cm[0];
-    const dty = cc[1] - cm[1];
-    const dtz = cc[2] - cm[2];
+    let dtx = cc[0] - cm[0];
+    let dty = cc[1] - cm[1];
+    let dtz = cc[2] - cm[2];
+    let step = Infinity;
+    if (normals) {
+      // Point-to-plane: linearise m' = R(θ)(m − cm) + cm + d about θ = 0 and
+      // minimise Σ ((m' − q)·n)² over (θ, dx, dy, dz).
+      const A = [[0, 0, 0, 0], [0, 0, 0, 0], [0, 0, 0, 0], [0, 0, 0, 0]];
+      const b = [0, 0, 0, 0];
+      let used = 0;
+      for (let k = 0; k < keep; k++) {
+        const i = order[k];
+        const j = corr[i];
+        const nx = normals[3 * j], ny = normals[3 * j + 1], nz = normals[3 * j + 2];
+        if (!Number.isFinite(nx)) continue;
+        const q = target[j];
+        const r = (mx[i] - q[0]) * nx + (my[i] - q[1]) * ny + (mz[i] - q[2]) * nz;
+        const row = [-(my[i] - cm[1]) * nx + (mx[i] - cm[0]) * ny, nx, ny, nz];
+        for (let u = 0; u < 4; u++) {
+          b[u] -= row[u] * r;
+          for (let v = 0; v < 4; v++) A[u][v] += row[u] * row[v];
+        }
+        used++;
+      }
+      const damp = PLANE_DAMPING * Math.max(A[0][0], A[1][1], A[2][2], A[3][3]);
+      for (let u = 0; u < 4; u++) A[u][u] += damp;
+      const x = used >= 4 ? solve4(A, b) : null;
+      if (x && x.every(Number.isFinite)) {
+        [dYaw, dtx, dty, dtz] = x;
+        // Largest displacement this increment gives a kept point.
+        let reach = 0;
+        for (let k = 0; k < keep; k++) {
+          const i = order[k];
+          reach = Math.max(reach, Math.hypot(mx[i] - cm[0], my[i] - cm[1]));
+        }
+        step = Math.hypot(dtx, dty, dtz) + Math.abs(dYaw) * reach;
+      }
+    }
+    // Apply the incremental rotation about `cm`, then translate.
+    const cYaw = Math.cos(dYaw), sYaw = Math.sin(dYaw);
 
     // 3. Compose the increment (rotate about cm, then translate) into (yaw, t).
     //    New map: p → R(dYaw)·(R(yaw)·p + t − cm) + cm + d
@@ -272,7 +443,9 @@ export function icpRegister(
     yaw += dYaw;
     t = [newTx, newTy, newTz];
 
-    if (Math.abs(prevRms - rms) < tolerance) { converged = true; iter++; break; }
+    // The plane metric converges on the size of its step: nearest-neighbour
+    // distances between two samplings plateau while the pose still moves.
+    if (normals ? step < tolerance : Math.abs(prevRms - rms) < tolerance) { converged = true; iter++; break; }
     prevRms = rms;
   }
 
@@ -283,6 +456,7 @@ export function icpRegister(
   // or over the best-`trimFraction` (the inliers) when trimming — never diluted
   // by outliers the solve deliberately excluded.
   let inliers = 0;
+  let within = 0;
   const maxD2 = maxResidual * maxResidual;
   moveSource();
   const finalD2 = d2s;
@@ -291,11 +465,24 @@ export function icpRegister(
     const d2 = nearestState.d2;
     finalD2[i] = d2;
     if (d2 <= maxD2) inliers++;
+    if (d2 <= gateD2) within++;
   }
   const inlierFraction = inliers / n;
 
   let finalRms: number;
-  if (trimming) {
+  if (gated) {
+    // The objective the gated solve minimised: the kept share of the pairs
+    // inside the gate. No pair inside it leaves nothing to score.
+    const inside = finalD2.filter((d2) => d2 <= gateD2).sort();
+    if (inside.length === 0) {
+      finalRms = Infinity;
+    } else {
+      const keep = trimming ? Math.max(1, Math.min(inside.length, Math.ceil(trimFraction * inside.length))) : inside.length;
+      const s = new NeumaierSum();
+      for (let i = 0; i < keep; i++) s.add(inside[i]);
+      finalRms = Math.sqrt(s.total / keep);
+    }
+  } else if (trimming) {
     const sorted = finalD2.slice().sort();
     const keep = keepCount(sorted.length);
     const s = new NeumaierSum();
@@ -322,5 +509,6 @@ export function icpRegister(
     degenerate: false,
     inlierFraction,
     trimFraction,
+    ...(gated ? { overlapFraction: within / n } : {}),
   };
 }

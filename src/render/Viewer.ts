@@ -3652,7 +3652,7 @@ export class Viewer {
         options: {
           sourceReduced: out.anySourceReduced, densityUnitKnown, vert,
           streamingContributed: out.streamingContributed, walkSampled: out.budget.downsample,
-          streamingCoverage: this._streamingCoverage(),
+          streamingCoverage: this._streamingCoverage(), up: [this._worldUp.x, this._worldUp.y, this._worldUp.z], elevationDatum: this._measure.elevationDatum,
         },
       },
       selectedCount: out.selectedCount,

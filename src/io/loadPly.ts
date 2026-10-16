@@ -339,6 +339,159 @@ function readBinaryDoubleVertices(
   return out;
 }
 
+/** True for a PLY scalar type that is one byte wide (copied as stored). */
+function isByteType(type: string): boolean {
+  return type === 'uchar' || type === 'uint8' || type === 'char' || type === 'int8';
+}
+
+/** True for a PLY floating-point scalar type. */
+function isFloatType(type: string): boolean {
+  return type === 'float' || type === 'float32' || isDoubleType(type);
+}
+
+/**
+ * Narrow one stored colour value to an 8-bit display byte from its declared
+ * PLY type: an integer channel keeps its top 8 bits (a 16-bit 65535 is 255,
+ * 32768 is 128), a float or double channel is read as 0..1 and scaled.
+ * Negative and out-of-range values clamp to 0..255.
+ */
+function colourByte(value: number, type: string): number {
+  let v: number;
+  if (isFloatType(type)) v = Math.round(value * 255);
+  else {
+    const bits = (fixedPropertySize(type) ?? 1) * 8;
+    v = Math.floor(value / 2 ** (bits - 8));
+  }
+  if (!(v > 0)) return 0;
+  return v > 255 ? 255 : v;
+}
+
+/**
+ * Read the raw values of chosen vertex properties, in float64, from an ASCII
+ * or binary PLY body. Returns `null` when the layout rules out a safe re-read
+ * (vertex element not declared first, a `list` property, a short body).
+ */
+function readVertexColumns(
+  rawBuffer: ArrayBuffer,
+  parseBuffer: ArrayBuffer,
+  header: PlyHeaderData | undefined,
+  expectedCount: number,
+  bodyOffset: number | null,
+  columns: readonly number[],
+): Float64Array[] | null {
+  if (header === undefined) return null;
+  const vertex = header.elements?.[0];
+  if (vertex?.name !== 'vertex' || vertex?.count !== expectedCount) return null;
+  const props = vertex.properties;
+  if (props.some((p) => p.type === 'list')) return null;
+  const out = columns.map(() => new Float64Array(expectedCount));
+
+  if (header.format === 'ascii') {
+    if (typeof header.headerLength !== 'number' || header.headerLength <= 0) return null;
+    const body = new TextDecoder().decode(rawBuffer).slice(header.headerLength);
+    const slot = new Int32Array(props.length).fill(-1);
+    columns.forEach((c, k) => (slot[c] = k));
+    const n = body.length;
+    let pos = 0;
+    for (let i = 0; i < expectedCount; i++) {
+      for (let f = 0; f < props.length; f++) {
+        while (pos < n && isAsciiSpace(body.charCodeAt(pos))) pos++;
+        const start = pos;
+        while (pos < n && !isAsciiSpace(body.charCodeAt(pos))) pos++;
+        if (start === pos) return null;
+        const k = slot[f];
+        if (k >= 0) out[k][i] = Number(body.slice(start, pos));
+      }
+    }
+    return out;
+  }
+
+  const littleEndian = header.format === 'binary_little_endian';
+  if (!littleEndian && header.format !== 'binary_big_endian') return null;
+  if (bodyOffset === null || bodyOffset <= 0) return null;
+  const offsets: number[] = new Array(props.length);
+  let stride = 0;
+  for (let i = 0; i < props.length; i++) {
+    const size = fixedPropertySize(props[i].type);
+    if (size === null) return null;
+    offsets[i] = stride;
+    stride += size;
+  }
+  const bodyBytes = expectedCount * stride;
+  if (bodyOffset + bodyBytes > parseBuffer.byteLength) return null;
+  const view = new DataView(parseBuffer, bodyOffset, bodyBytes);
+  const read = (at: number, type: string): number => {
+    switch (type) {
+      case 'char':
+      case 'int8':
+        return view.getInt8(at);
+      case 'uchar':
+      case 'uint8':
+        return view.getUint8(at);
+      case 'short':
+      case 'int16':
+        return view.getInt16(at, littleEndian);
+      case 'ushort':
+      case 'uint16':
+        return view.getUint16(at, littleEndian);
+      case 'int':
+      case 'int32':
+        return view.getInt32(at, littleEndian);
+      case 'uint':
+      case 'uint32':
+        return view.getUint32(at, littleEndian);
+      case 'float':
+      case 'float32':
+        return view.getFloat32(at, littleEndian);
+      default:
+        return view.getFloat64(at, littleEndian);
+    }
+  };
+  for (let i = 0; i < expectedCount; i++) {
+    const record = i * stride;
+    columns.forEach((c, k) => {
+      out[k][i] = read(record + offsets[c], props[c].type);
+    });
+  }
+  return out;
+}
+
+/**
+ * The 8-bit colours of a PLY whose red/green/blue are not declared as bytes.
+ *
+ * loaders.gl casts the colour values into a Uint8Array whatever their declared
+ * type, so a 16-bit 65535 wraps to 255 and 32768 to 0, and a float 0.5 becomes
+ * 0. The raw values are re-read from the body and narrowed by their declared
+ * type instead. Returns `undefined` when the colours are bytes (the loader's
+ * values are then exact) or the file declares no red/green/blue.
+ */
+function wideColours(
+  rawBuffer: ArrayBuffer,
+  parseBuffer: ArrayBuffer,
+  header: PlyHeaderData | undefined,
+  pointCount: number,
+  bodyOffset: number | null,
+): Uint8Array | undefined {
+  const props = header?.elements?.find((e) => e.name === 'vertex')?.properties;
+  if (!props) return undefined;
+  const idx = ['red', 'green', 'blue'].map((nm) => props.findIndex((p) => p.name === nm));
+  if (idx.some((i) => i < 0)) return undefined;
+  const types = idx.map((i) => props[i].type);
+  if (types.every(isByteType)) return undefined;
+  const raw = readVertexColumns(rawBuffer, parseBuffer, header, pointCount, bodyOffset, idx);
+  if (raw === null) {
+    throw new LoadError(
+      'unsupported-format',
+      `PLY colour declared as ${types.join('/')} cannot be read in this file layout; only uchar colour is supported here.`,
+    );
+  }
+  const out = new Uint8Array(pointCount * 3);
+  for (let i = 0; i < pointCount; i++) {
+    for (let c = 0; c < 3; c++) out[i * 3 + c] = colourByte(raw[c][i], types[c]);
+  }
+  return out;
+}
+
 /**
  * Load a `.ply` point cloud into a `PointCloud`.
  *
@@ -371,9 +524,13 @@ export async function loadPly(buffer: ArrayBuffer, name = 'cloud.ply'): Promise<
   // COLOR_0 is optional. PLY commonly stores rgb (size 3) or rgba (size 4);
   // keep only the three colour channels regardless. Built before sanitation so
   // the colours are filtered by the same index set as the positions.
-  let colors: Uint8Array | undefined;
+  // A colour declared wider than a byte is re-read and narrowed by its type;
+  // see `wideColours`.
+  let colors = attributes.COLOR_0
+    ? wideColours(buffer, input.buffer, header, pointCount, input.bodyOffset)
+    : undefined;
   const colorAttr = attributes.COLOR_0;
-  if (colorAttr) {
+  if (colorAttr && colors === undefined) {
     const componentsPerVertex = colorAttr.size ?? 3;
     const src = colorAttr.value;
     colors = new Uint8Array(pointCount * 3);

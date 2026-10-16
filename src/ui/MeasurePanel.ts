@@ -733,7 +733,7 @@ export class MeasurePanel {
     }
     const opLabel = OPERATION_LABEL[result.operation];
     const dimLabel = DIMENSION_LABEL[result.dimension];
-    const formatted = formatChainResult(result);
+    const formatted = formatChainResult(result, this._cb.getUnitSystem ? this._cb.getUnitSystem() : 'metric');
     // Caveat: when the operation skipped some rows because they don't
     // contribute to the chosen dimension, surface the gap.
     const coverage =

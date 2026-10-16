@@ -219,10 +219,12 @@ export function formatStation(chainageM: number, system: DisplayUnits): string {
   if (!Number.isFinite(chainageM)) return '—';
   if (system === 'unverified') return formatUnitUnverified(chainageM);
   if (system === 'metric') return formatStationing(chainageM);
-  const ft = Math.abs(chainageM) * FEET_PER_METRE;
-  const sign = chainageM < 0 ? '-' : '';
-  const sta = Math.floor(ft / 100);
-  const rem = ft - sta * 100;
+  // Round to the printed hundredth before splitting, as the metric form does,
+  // so 199.996 ft reads 2+00.00 and never 1+100.00.
+  const hundredths = Math.round(Math.abs(chainageM) * FEET_PER_METRE * 100);
+  const sign = chainageM < 0 && hundredths > 0 ? '-' : '';
+  const sta = Math.floor(hundredths / 10_000);
+  const rem = (hundredths - sta * 10_000) / 100;
   return `${sign}${sta}+${rem.toFixed(2).padStart(5, '0')}`;
 }
 

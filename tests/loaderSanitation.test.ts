@@ -255,11 +255,12 @@ describe('loadPly — non-finite vertices', () => {
     const pc = await loadPly(
       asciiPly(
         ['x', 'y', 'z', 'red', 'green', 'blue'],
-        ['10 10 10 1 1 1', 'nan 11 11 2 2 2', '12 12 12 3 3 3'],
+        // The helper declares every property float, so colour is read as 0..1.
+        ['10 10 10 0.2 0.2 0.2', 'nan 11 11 0.4 0.4 0.4', '12 12 12 0.6 0.6 0.6'],
       ),
     );
     expect(pc.pointCount).toBe(2);
-    expect(Array.from(pc.colors!)).toEqual([1, 1, 1, 3, 3, 3]);
+    expect(Array.from(pc.colors!)).toEqual([51, 51, 51, 153, 153, 153]);
     expect(pc.metadata?.loadWarnings?.[0]).toContain('1 of 3');
   });
 

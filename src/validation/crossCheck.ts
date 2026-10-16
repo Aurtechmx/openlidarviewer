@@ -244,8 +244,9 @@ export interface ReferenceSlot {
  * `status` to `supplied` and register its study manifest.
  */
 export const REFERENCE_SLOTS: readonly ReferenceSlot[] = [
-  { claimId: 'DTM', referenceTool: 'PDAL', toleranceAbs: 0.05, unit: 'm', status: 'supplied' },
-  { claimId: 'DSM', referenceTool: 'PDAL', toleranceAbs: 0.05, unit: 'm', status: 'supplied' },
+  // The DTM and DSM gates registered in their protocols and studies are 5e-5 m.
+  { claimId: 'DTM', referenceTool: 'PDAL', toleranceAbs: 5e-5, unit: 'm', status: 'supplied' },
+  { claimId: 'DSM', referenceTool: 'PDAL', toleranceAbs: 5e-5, unit: 'm', status: 'supplied' },
   { claimId: 'CHM', referenceTool: 'PDAL', toleranceAbs: 0.10, unit: 'm', status: 'supplied' },
   { claimId: 'SLOPE-RASTER', referenceTool: 'GDAL', toleranceAbs: 0.5, unit: '°', status: 'supplied' },
   // Aspect is a BEARING, so its tolerance is read as a circular separation
@@ -305,8 +306,9 @@ export const REFERENCE_SLOTS: readonly ReferenceSlot[] = [
   // projection arithmetic. The tolerance is a physical budget rather than an
   // observed number: a grid coordinate a reader treats as exact must agree well
   // inside the millimetre survey practice rounds to. The two references agree
-  // with each other to 2e-9 m, six orders under the gate, so what remains is the
-  // candidate's own series truncation, and it takes both signs.
+  // with each other to 2e-9 m, six orders under the gate. The study recorded the
+  // v0.6.6 Snyder series (up to 9.521e-4 m); the Krüger series used since
+  // v0.7.0 measures under 3e-9 m on the same fixtures.
   { claimId: 'CRS-UTM-PROJECTION', referenceTool: 'PROJ+GeographicLib', toleranceAbs: 0.0015, unit: 'm', status: 'supplied' },
 ] as const;
 
