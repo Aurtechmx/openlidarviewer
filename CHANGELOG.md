@@ -59,6 +59,7 @@ The format is based on Keep a Changelog and the project follows Semantic Version
 
 ### Fixed
 
+- Opening a second scan hides the "Project ready" card of the scan opened before it. When another message took the top-centre lane while the new scan settled, the card stayed on screen naming the earlier scan.
 - Terrain Access reads above-ground obstruction from the top return per cell without ASPRS noise (classes 7 and 18), so a single bird or noise return no longer blocks a cell; the full-cloud DSM and its products are unchanged.
 - When the obstruction surface was built from a sample of the scan, the obstruction limit reads `estimated`, with the sentence "Above-ground obstruction is estimated from a sample of N of M points; thin returns such as posts or wires can be missed." in the run card, diagnostics CSV, README and run record.
 - Route cells with no above-ground return (exploratory policy) make the obstruction limit read `estimated`, with the sentence "Above-ground obstruction could not be checked on K of R route cells: the surface has no above-ground evidence there, so those cells are not known to be clear."
