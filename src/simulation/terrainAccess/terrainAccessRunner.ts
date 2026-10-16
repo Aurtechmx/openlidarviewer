@@ -177,7 +177,10 @@ export type DerivativeRouteSupport = Pick<RouteDiagnostics,
  * reads `estimated` when any route cell's VRM window holds such a cell. Step
  * height is a raw height difference between two cells and is never estimated.
  * An evaluated obstruction limit reads `estimated` when the surface basis is
- * a sample, or when `obstructionUnevaluatedRouteCells` is above zero.
+ * a sample, or when `obstructionUnevaluatedRouteCells` is above zero. The
+ * minimum terrain confidence reads `evaluated` under the `block` unknown
+ * policy, where a cell below it is blocked, and `disclosed` under `penalize`,
+ * where it only sets the reported share of route cells below it.
  */
 export function terrainAccessConstraintStatus(
   profile: TerrainAccessProfile,
@@ -193,7 +196,10 @@ export function terrainAccessConstraintStatus(
     longitudinalGrade: slopeStatus,
     crossSlope: slopeStatus,
     stepHeight: 'evaluated',
-    minimumTerrainConfidence: 'evaluated',
+    // Only the 'block' policy turns the minimum into a hard block; under
+    // 'penalize' it changes neither eligibility nor cost and only sets the
+    // reported share of route cells below it.
+    minimumTerrainConfidence: profile.unknownPolicy === 'block' ? 'evaluated' : 'disclosed',
     vehicleWidth: 'evaluated',
     ruggedness: profile.maxRuggedness == null ? 'disabled' : ruggednessStatus,
     vehicleLength: profile.vehicleLength == null ? 'disabled' : 'recorded-not-enforced',
@@ -446,7 +452,8 @@ function modelLimitations(
       `The route crosses cells below the profile's minimum terrain confidence under the '${profile.unknownPolicy}' policy: `
       + `${(below * 100).toFixed(0)}% of route cells are below `
       + `the declared minimum terrain confidence (${profile.minimumTerrainConfidence}). Those cells were `
-      + 'not excluded, only cost-penalized.',
+      + 'not excluded: the minimum is reported here, not enforced, and the cost\'s support term rises '
+      + 'as terrain confidence falls whatever the minimum is.',
     );
   }
 

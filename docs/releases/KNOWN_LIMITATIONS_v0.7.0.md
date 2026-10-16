@@ -327,6 +327,12 @@ the larger of the two end cells' sideways Horn components. The figure is
 conservative: a cell-scale feature steeper than its neighbourhood gates the
 moves across it even where the smoothed gradient is gentle.
 
+The minimum terrain confidence blocks cells only under the `block` unknown
+policy, where the run record marks it `evaluated`. Under `penalize` it changes
+neither eligibility nor cost and only sets the reported share of route cells
+below it, so the run record, run card, diagnostics CSV and export README mark
+it `disclosed`.
+
 The default evidence-gap policy is exploratory. Under it, a cell whose slope
 or aspect used a substituted Horn neighbour (the grid's outer ring or beside a
 NoData void) is allowed, and so is a cell with no above-ground return when the

@@ -60,6 +60,7 @@ The format is based on Keep a Changelog and the project follows Semantic Version
 ### Fixed
 
 - Terrain Access reports the p95 longitudinal grade and cross slope at an exact length boundary correctly. With 100 equal diagonal edges valued 1 to 100 the p95 read 96; it now reads 95, the smallest value whose edges cover 95% of the route length.
+- Terrain Access no longer reports the minimum terrain confidence as evaluated under the penalize unknown policy, where it blocks no cell and adds no cost. The run record, run card, diagnostics CSV and export README now mark it disclosed; under the block policy it stays evaluated.
 - The Terrain Access run card no longer shows an estimated obstruction limit as "Above-ground evidence unavailable". Each status the run record carries has its own wording, and the obstruction row reads estimated, with the note below it, when the surface is a sample or route cells have no return.
 - A Terrain Access route with no added cost reads "Cost is distance alone under the configured weights." It no longer says every move was fully supported, which contradicted routes whose slope used substituted neighbours.
 - The post-load suggestion ("Terrain scan ready", "Object scan ready", "Interior scan ready") hides when the user switches to another task instead of staying over that task until its timer ends.

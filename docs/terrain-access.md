@@ -64,6 +64,14 @@ from direction-dependent edge limits (longitudinal grade, cross slope, step
 height). A cell can be fine to stand on yet unreachable from one heading and
 reachable from another.
 
+The minimum terrain confidence is a hard block only under the profile's
+`block` unknown policy, and the run record marks it `evaluated` there. Under
+`penalize` a cell below the minimum stays eligible and costs the same as it
+would with any other minimum (the support term is
+`weight * (1 - confidence / 100)` whatever the minimum is), so the minimum
+only sets the reported share of route cells below it; the run record, run
+card, diagnostics CSV and export README mark it `disclosed`, not `evaluated`.
+
 The longitudinal grade of a move from cell A to neighbour B is the largest
 of three rise/run tangents: the Horn gradient at A projected on the heading,
 the Horn gradient at B projected on the heading, and the edge's own
