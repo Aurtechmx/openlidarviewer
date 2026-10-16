@@ -138,7 +138,7 @@ These change figures that earlier builds reported. Each one has a regression tes
 - The intensity colour ramp defaults to the 2nd to 98th percentile of the loaded sample, so a few saturated returns no longer wash it out. The colorbar says which window and sample it uses.
 - The georeferenced orthographic PNG has transparent no-data, so it overlays other layers in a GIS. Pixels with no drawn point have alpha 0 and every other pixel is opaque.
 - The quick PLY, OBJ, XYZ and CSV export buttons honour an active clip box, keep the same points as Export, and add `-clip` to the file name.
-- A remembered CRS override also records a content fingerprint of its source, so two files that agree on name, point count, extent and position but differ in content are not treated as the same source.
+- A remembered CRS override also records a content fingerprint of its source, so two files that agree on name, point count, extent and position but differ in the sampled bytes are not treated as the same source. The fingerprint hashes at most the first 64 KiB of each sampled part, so a difference further in is not detected.
 - Session work kept because its scan was not open is restored when that scan is opened later in the same page.
 
 ## Evidence

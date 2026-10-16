@@ -877,15 +877,17 @@ threshold, so the level of detection travels in the panel text, not the file.
 
 A remembered CRS override records a content fingerprint of its source so that
 two files agreeing on name, point count, extent and position are still told
-apart. The fingerprint is taken at open and covers only part of the source:
-the first and last 64 KiB of a local or fetched file (with its size), the COPC
+apart. The fingerprint is taken at open from a few parts of the source: the
+first and last 64 KiB of a local or fetched file (with its size), the COPC
 header and VLRs with the root hierarchy page, or the EPT manifest with the root
-hierarchy document. An edit confined to the unsampled interior of a file keeps
-the same fingerprint, so the override still applies to the edited file.
-Fingerprints taken different ways are not compared. Where Web Crypto is
-unavailable, as in an insecure context, or a read fails, no fingerprint is
-taken and the override matches on name, point count, extent and position
-alone, as do records saved without one.
+hierarchy document. Of each part it hashes at most the first 64 KiB, and it
+records each part's full length. Two sources whose parts have the same lengths
+and differ only after the first 64 KiB of a part, or only in the unsampled
+interior of a file, get the same fingerprint, so the override still applies to
+the edited source. Fingerprints taken different ways are not compared. Where
+Web Crypto is unavailable, as in an insecure context, or a read fails, no
+fingerprint is taken and the override matches on name, point count, extent and
+position alone, as do records saved without one.
 
 ## Orthographic PNG transparency marks pixels with no drawn point
 
