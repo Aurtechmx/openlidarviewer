@@ -1,6 +1,6 @@
 import { test, expect, type Page } from '@playwright/test';
 import { mkdirSync } from 'node:fs';
-import { openToolPage } from './helpers';
+import { openToolPage, waitForCameraSettled } from './helpers';
 import { dropBytes, geomFixtures, towerLas, towerPoints } from './geomFixtures';
 
 /**
@@ -38,7 +38,11 @@ async function openTower(page: Page, size = { width: 1100, height: 700 }): Promi
   await expect(page.locator('.olv-empty')).toBeHidden({ timeout: 30_000 });
   await page.waitForFunction(() => !!(window as unknown as { __OLV_TEST_API__?: unknown }).__OLV_TEST_API__);
   await page.waitForFunction(() => document.querySelector('.olv-canvas') !== null);
-  await page.waitForTimeout(2500);
+  // The specs record this pose and return to it before reading pixels; the
+  // probe points are chosen for the framed view, so the opening glide must have
+  // finished. A fixed wait recorded a mid-glide pose on a loaded machine, from
+  // which the roof probe lands on ground behind the clipped column.
+  await waitForCameraSettled(page);
 }
 
 /** A PNG of the canvas alone, so a pixel read is the scene and nothing painted over it. */
