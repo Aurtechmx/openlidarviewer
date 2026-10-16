@@ -35,9 +35,9 @@ no flags channel, which reads as absent rather than as false zeros.
 ## Class names are exact only when the format is known
 
 A source that declares a point data record format gets the exact name. A
-streaming source declares none here, and the four codes whose meaning differs
-between the legacy and extended tables report both readings rather than one
-guess.
+streaming source declares none here, and the fourteen codes whose meaning
+differs between the legacy and extended tables (8 and 10 to 22) report both
+readings rather than one guess.
 
 ## Class edits are not stored in a session file
 
@@ -67,12 +67,11 @@ are not saved in a session file, so reopening the scan brings back the file's
 classes. Streaming COPC and EPT scans can be neither cleared nor
 auto-classified: both actions need a fully loaded scan, and Edit classes stays
 hidden on a streaming scan. Undo steps back over a clear, a restore and an
-auto-classify, but an auto-classify on a scan that carried no classes at all
-is not undoable. Restore earlier classes brings back the codes held before the
+auto-classify. Restore earlier classes brings back the codes held before the
 first clear or auto-classify, hand edits made before it included, so it can
 differ from the file's codes. The kept codes take one byte per point once the
 first clear or auto-classify runs, and the undo history drops its oldest steps
-past 128 MB per scan.
+past 128 MB per scan or past 50 steps; the newest step is always kept.
 
 Two outputs carry a cleared or derived marker inside the file: the header
 comment of the quick XYZ export and the PDF report. Both name the classifier's
@@ -97,10 +96,10 @@ named, and truncation is reported rather than hidden.
 ## The boundary share now measures the survey edge
 
 It seeded a distance field at every cell that was not measured, so on a grid
-thinned by a display stride nearly every measured cell sat beside a seed. Over
-one geometry it read 33 per cent at full decode and 100 per cent strided. It
+thinned by a display stride nearly every measured cell sat beside a seed. It
 seeds only from cells with no reachable data now, and distances travel through
-the surveyed region, so neither depends on how densely the surface was sampled.
+the surveyed region, so neither depends on how densely the surface was sampled:
+the test geometry reads about 33 per cent both at full decode and strided.
 
 ## An Area ring that is far from planar or touches itself reports no area
 
@@ -384,17 +383,17 @@ gestures run end to end on all three engines, and in the iPhone-shaped WebKit
 project, as synthesized pointer events. Multi-touch on a real device is
 unverified. An iOS simulator check drives real Mobile Safari on a pinned
 simulator (iOS 26.5, iPhone 17e) and has passed end to end, including a
-two-finger pinch. It runs only when started by hand and is advisory until 20
+two-finger pinch. It runs when started by hand, and on a push that changes its
+own workflow or scripts, and is advisory until 20
 consecutive passes, counted by `scripts/ios-streak.mjs`.
 
 ## The two monoliths are still monoliths
 
-`src/main.ts` is 4,260 lines, seventy-two fewer since the Save view snapshot
+`src/main.ts` is 4,260 lines, after the Save view snapshot
 moved to its own lazy module, the Analyse panel's longitude and latitude
 wiring moved to the mapper module, the Planetary Computer CRS record moved to
 its own module and the view cube's wiring was condensed, and
-`src/render/Viewer.ts` is 5,946, two hundred and seventy-seven lines
-below its v0.6.9 count. Five getters collapsed to make room for a memory
+`src/render/Viewer.ts` is 5,946, 277 lines below its v0.6.9 count of 6,223. Five getters collapsed to make room for a memory
 accessor and a size-mode call, and the streamed draw cull then paid for its own
 wiring by moving the pass onto the streaming renderer and collapsing two more
 expressions. Making the loop request-driven then took another thirty-one out:
@@ -407,16 +406,17 @@ took twenty-one more. The measure click handling moved into the
 measurement controller, which took twenty-eight more. The draw precision bound's model-view accessor took one line and a shorter doc comment gave back two. A shrink-only lint
 fails the build when either passes its recorded baseline, so a raise is a hand
 edit to `docs/validation/monolith-size-baseline.json` and always shows in the
-diff. It caught an added line twice during this cycle, and a banked drop once.
-Fan-out is 97 for the shell, 74 for the renderer and 23 for the Analyse panel,
-across 1144 modules with no dependency cycles.
+diff.
+Fan-out is 97 for the shell, 74 for the renderer and 29 for the Analyse panel,
+across 1145 modules with no dependency cycles.
 
 ## The shell has little headroom
 
-`npm run check:bundle` on the live build reports the index chunk at 576 KiB
-of its 795 KiB ceiling and the Viewer chunk at 628 KiB of 716 KiB. The
-ceilings are unchanged. New work still goes behind a lazy seam rather than
-being paid for by a raise.
+`npm run check:bundle` on the live build reports the index chunk at 663 KiB
+of its 795 KiB ceiling and the Viewer chunk at 625 KiB of 716 KiB. Both
+ceilings were lowered in this release, the index from 812 KiB to 795 KiB and
+the Viewer from 740 KiB to 716 KiB. New work still goes behind a lazy seam
+rather than being paid for by a raise.
 
 ## An idle scene still draws four frames a second
 
@@ -435,7 +435,7 @@ project frame at their real separation, non-destructively, and each boundary
 recovers the world coordinate in the frame it names. One item remains a
 precision refinement rather than a correctness defect. The renderer forms each
 mesh's model-view matrix on the CPU in float64, so display precision does not
-depend on placement distance: the matrix the GPU receives stays within 4 µm of
+depend on placement distance: the matrix the GPU receives stays within 5 µm of
 the exact product at every offset tested, from 0 to 1,000 km, in each browser
 engine. The analysis paths that store placed coordinates, and the terrain
 gather, carry the placement in Float32. The mount-precision gate therefore still
@@ -451,8 +451,10 @@ equals the source's. Beyond that extent the scale and offset are still kept and
 an integer record can differ from the source's by a few steps: up to 2 steps at
 a 1 mm scale over 40 km. The export's provenance text records which case
 applied. A reprojected, voxel-reduced, streamed or non-LAS export is
-re-quantised at 1 mm (1e-7 degree on a geographic CRS) with the offset at the
-floor of the data minimum, and the provenance text gives the reason.
+re-quantised at 1 mm, or 0.001 of the source unit (1e-7 degree on a geographic
+CRS), with the offset at the floor of the data minimum, and the provenance text
+gives the reason. The scale widens on an axis whose extent would need more than
+2.0e9 steps.
 
 ## Release caveats on exports and reproduction
 
@@ -487,10 +489,14 @@ floor of the data minimum, and the provenance text gives the reason.
   a LAS 1.2 write of points carrying the LAS 1.4 overlap flag is refused until
   "Allow the overlap flag to be dropped" is ticked. Each opt-in allows only its
   own loss, and the refusal names every opt-in the write needs. A LAS 1.4 write
-  needs neither. Classes above 31 are refused or wrapped as before. A derived or cleared classification, or a source whose
-  point format is unknown, is not translated: when such a classification of a
-  legacy file is written as LAS 1.4, untouched legacy class 8 and 12 points are
-  written as the reserved codes 8 and 12, with no translation and no warning.
+  needs neither. Classes above 31 are refused or wrapped as before. When a
+  derived or cleared classification of a legacy file is written as LAS 1.4, a
+  point whose class 8 or 12 is unchanged from the producer's code (kept when
+  the first clear or auto-classify runs) is written as class 1 with the
+  key-point or overlap flag; a class 8 or 12 with no producer record behind it
+  is written unchanged, and the report lists it with a warning. A source whose
+  point format is unknown is not translated, and its codes are written
+  unchanged.
 - A LAS 1.2 write cannot keep every acquisition field. Scan angles are stored
   as whole degrees from -90 to 90 and there is no scanner channel, so a LAS 1.4
   file with an angle that rounds beyond 90 degrees or a nonzero channel is
@@ -691,8 +697,9 @@ file whose scans are all spherical-only opens no points.
 
 ## glTF and PLY files past the loader's limits are refused
 
-A glTF or GLB is refused when its node graph reaches the same node twice, or
-when opening it would emit more vertices than the loader's cap. A PLY is
+A glTF or GLB is refused when its node graph reaches the same node twice,
+when its node hierarchy is deeper than 256 levels, or when opening it would
+emit more vertices than the loader's cap. A PLY is
 refused when an element declares records but no properties, or when its
 header is longer than 64 KiB.
 
@@ -756,7 +763,7 @@ without a datum transformation, so the export depends on the scan's datum:
   exported as if they were WGS 84, and every file names the datum and the size
   of the difference. Each datum is fixed to its plate at a reference epoch, so
   the difference grows every year. At epoch 2026.75 PROJ gives 0.93 m for
-  ETRS89 (RGF93 follows it), 0.40 m for GDA2020 and 1.96 m for GDA94. NZGD2000
+  ETRS89 (RGF93 follows it), 0.40 m for GDA2020 and 1.97 m for GDA94. NZGD2000
   needs the New Zealand deformation model, which PROJ does not have offline;
   the files state about 1 m.
 - NAD27 is refused. proj4 has no NAD27 grids and would apply no shift, which is
@@ -789,7 +796,9 @@ The map sheet's orientation arrow, the compass rose and the distance bearing in
 the Measurements panel are measured from the scan's +Y axis. On a projected CRS
 that is grid north, which differs from true north by the meridian convergence:
 1.29 degrees in UTM zone 12 at 109 W, 40 N, 2.27 degrees at a zone edge at
-49 N, and at most 2.98 degrees at 84 N. The arrow and the rose's top face read
+49 N, and at most 2.98 degrees at 84 N in a standard 6-degree zone. The
+widened zones 32V and 31X, 33X, 35X and 37X reach about 6 degrees (5.97
+degrees at 9 E, 84 N in zone 33). The arrow and the rose's top face read
 "Grid N", and the bearing reads, for example, "042° grid" on a projected CRS
 with an EPSG code. With no CRS, a local engineering CRS or a Y-up scan, the
 bearing reads "(local axes)", and the map sheet keeps its "local grid up / true

@@ -239,8 +239,9 @@ export function formatBearing(azimuthDeg: number): string {
  *  - `grid`: a projected CRS in a Z-up frame. The bearing is measured from the
  *    +Y axis, which is GRID north. True north differs by the meridian
  *    convergence (1.29 degrees for UTM 12N at -109, 40; 2.27 degrees at a zone
- *    edge at 49 N; at most 2.98 degrees at 84 N, by PROJ), which OLV does not
- *    apply.
+ *    edge at 49 N; at most 2.98 degrees at 84 N in a standard 6-degree zone,
+ *    by PROJ; the widened zones 32V and 31X, 33X, 35X and 37X reach about 6
+ *    degrees), which OLV does not apply.
  *  - `local`: no CRS, or a frame whose horizontal axes are not easting and
  *    northing (a Y-up scan measures from +Z). The angle is between scan axes.
  *  - `none`: a geographic CRS. Longitude and latitude degrees are not equal
