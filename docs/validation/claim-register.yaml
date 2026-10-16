@@ -343,8 +343,8 @@ claims:
   # ── Coordinate reference frame ──────────────────────────────────────────────
   - claimId: CRS-UTM-PROJECTION
     product: UTM projection of a geodetic coordinate
-    algorithm: Transverse Mercator series with UTM zone selection, including the Norway and Svalbard exception zones
-    algorithmVersion: v0.6.6
+    algorithm: Transverse Mercator by the sixth-order Krüger series (Karney 2011) with UTM zone selection, including the Norway and Svalbard exception zones
+    algorithmVersion: v0.7.0
     claim: "A WGS-84 latitude and longitude converted to a WGS-84 UTM zone, hemisphere, easting and northing."
     currentEvidence: E4_CROSS_IMPLEMENTATION_VALIDATED
     requiredEvidence: E4_CROSS_IMPLEMENTATION_VALIDATED
@@ -360,7 +360,7 @@ claims:
     softwareStatus: shipping
     evidenceLevel: E4_CROSS_IMPLEMENTATION_VALIDATED
     externalValidationStatus: partial
-    approvedClaim: "Zone and hemisphere matched GeographicLib 2.7 on all 36 fixtures, including the widened Norway zone 32V and the Svalbard zones 31X, 33X, 35X and 37X. Easting and northing agreed with both PROJ 9.8.1 and GeographicLib 2.7 under 1 mm, the largest differences being 4.531e-4 m in easting and 9.521e-4 m in northing, inside the registered 1.5 mm tolerance. The two oracles agree with each other to 2.0e-9 m, so the residual belongs to the candidate and not to the references."
+    approvedClaim: "Zone and hemisphere matched GeographicLib 2.7 on all 36 fixtures, including the widened Norway zone 32V and the Svalbard zones 31X, 33X, 35X and 37X. Easting and northing agreed with both PROJ 9.8.1 and GeographicLib 2.7, the largest differences being 1.6e-9 m in easting and 2.8e-9 m in northing, inside the registered 1.5 mm tolerance. The two oracles agree with each other to 2.0e-9 m, so the candidate now agrees with them to the references' own mutual agreement. The study record was taken on the v0.6.6 Snyder series (4.531e-4 m and 9.521e-4 m); the v0.7.0 figures come from the same 36 fixtures and committed reference output in tests/geodesyOracleAgreement.test.ts."
     prohibitedClaim: ["survey-grade coordinate transformation", "validated datum transformation", "validated vertical reference", "validated ECEF conversion"]
     scope:
       supported:
