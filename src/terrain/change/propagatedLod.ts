@@ -12,8 +12,7 @@
  * ground re-classified from the training points only), which includes the
  * epoch's own bias. It is not checkpoint accuracy and not a DEM-cell
  * uncertainty. The 95 % level holds only if the errors are normal, independent
- * and unbiased.  * Uniform form: each σz is ONE number for the whole surface (that epoch's
- * hold-out RMSEz), not a per-cell field.
+ * and unbiased.
  *
  * σreg is the VERTICAL co-registration uncertainty. It is accepted only from an
  * independent assessment: vertical differences measured over stable reference
