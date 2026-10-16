@@ -23,7 +23,7 @@
 
 import type { InspectionSession } from './session';
 import { frameAnchorLayerId, frameLayer, shiftAnnotation, shiftMeasurement, type SessionLayerRecord, type SessionProjectFrame } from './sessionFrame';
-import { fingerprintKey } from '../model/layerIdentity';
+import { fingerprintKey } from '../model/layerFingerprintKey';
 import { sourceLocalOwnership, type WorkOwnership } from '../model/workOwnership';
 import type { Measurement } from '../render/measure/types';
 import type { Annotation } from '../render/annotate/types';
