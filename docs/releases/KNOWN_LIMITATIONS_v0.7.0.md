@@ -295,9 +295,14 @@ readouts give elevation in the dataset's vertical datum and unit, or say it is
 unknown. Lengths, slopes and steps are in metres; a run refuses by name
 (`UNITS_UNRESOLVED`) when the horizontal scale or the vertical unit does not
 resolve. Other named refusals are `NO_DTM`, `INVALID_PROFILE`, `START_BLOCKED`,
-`END_BLOCKED`, `NO_ROUTE`, `INSUFFICIENT_EVIDENCE` and `TOO_LARGE`, and the Lab
-refuses a preview or run whose terrain may have changed since the profile was
-applied.
+`END_BLOCKED`, `NO_ROUTE`, `INSUFFICIENT_EVIDENCE`, `TOO_LARGE`,
+`OBSTRUCTION_EVIDENCE_UNAVAILABLE` (an above-ground obstruction limit is set
+and no aligned above-ground surface exists), `SURFACE_MISALIGNED` (the
+above-ground surface does not cover the same cells as the terrain),
+`SURFACE_STALE` (the above-ground surface was built with a different terrain
+surface) and `INVALID_ROI` (a region-of-interest mask that does not fit the
+grid), and the Lab refuses a preview or run whose terrain may have changed
+since the profile was applied.
 
 The cell readout states a real elevation with its resolved unit, or
 "unknown" rather than the DTM's grid-local `z` printed bare, using the same
@@ -321,6 +326,17 @@ either end cell and the move's own rise over its length, and its cross slope
 the larger of the two end cells' sideways Horn components. The figure is
 conservative: a cell-scale feature steeper than its neighbourhood gates the
 moves across it even where the smoothed gradient is gentle.
+
+The default evidence-gap policy is exploratory. Under it, a cell whose slope
+or aspect used a substituted Horn neighbour (the grid's outer ring or beside a
+NoData void) is allowed, and so is a cell with no above-ground return when the
+obstruction limit is evaluated: such a cell passes the obstruction limit
+because nothing was measured above it, not because it was shown to be clear.
+Cross-slope, longitudinal grade and an evaluated ruggedness limit are then
+marked `estimated`, not `evaluated`, when any route cell used a substituted
+neighbour, and the run card, run record and diagnostics CSV report the route
+share of those cells and the policy applied. The conservative policy blocks
+both kinds of cell instead, which can leave no route on a small or patchy grid.
 
 Vehicle length is recorded in the profile and the diagnostics but not
 enforced: eligibility uses width-only clearance, not full swept-body
@@ -856,3 +872,39 @@ a fixed 0.1 m labelled "assumed, not measured". Two DTMs are differenced only
 when they share a grid to float64 representation; an offset grid is refused,
 not resampled. The difference raster (.asc) has no header field for the
 threshold, so the level of detection travels in the panel text, not the file.
+
+## The CRS override fingerprint samples a source, it does not hash it
+
+A remembered CRS override records a content fingerprint of its source so that
+two files agreeing on name, point count, extent and position are still told
+apart. The fingerprint is taken at open and covers only part of the source:
+the first and last 64 KiB of a local or fetched file (with its size), the COPC
+header and VLRs with the root hierarchy page, or the EPT manifest with the root
+hierarchy document. An edit confined to the unsampled interior of a file keeps
+the same fingerprint, so the override still applies to the edited file.
+Fingerprints taken different ways are not compared. Where Web Crypto is
+unavailable, as in an insecure context, or a read fails, no fingerprint is
+taken and the override matches on name, point count, extent and position
+alone, as do records saved without one.
+
+## Orthographic PNG transparency marks pixels with no drawn point
+
+The georeferenced orthographic PNG makes a pixel transparent when no drawn
+point covers it, not when the survey has no data there. Gaps between the points
+of a sparse or thinned cloud are therefore transparent even inside the scanned
+area, and a larger point size closes them. A pixel counts as covered at 50 %
+coverage or more; below that it is transparent, so the thin antialiased edge of
+a point can be dropped. To find coverage the export renders the view twice,
+once on a black and once on a white background, and both frames are drawn on
+the live canvas, so the view flashes black and white while the export runs.
+
+## Held session work is restored only within the same page
+
+Session work kept because its scan was not open at import is held in memory.
+It is placed when the matching scan is opened later in the same page; reloading
+or closing the page loses the held copy, although a session saved before that
+writes it back. Work that names a scan still not open, or a source that is open
+twice and so cannot be matched to one scan, stays held. In a session with no
+project frame, work marked as placed in a project frame is reported as not
+restored. Opening a streamed COPC or EPT scan does not trigger the restore;
+only a static scan open does.

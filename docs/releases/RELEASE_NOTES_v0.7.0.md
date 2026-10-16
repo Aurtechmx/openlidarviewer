@@ -18,7 +18,7 @@ A LAS export that would change a class number's meaning, drop the overlap flag, 
 
 Terrain Flow Pulse routes flow over a terrain surface with single-direction routing and flow accumulation, and reports an inventory of depressions. When the terrain run behind it is blocked or a preview, a banner says to read the result as illustration only.
 
-Terrain Access screens a terrain surface for traversability and finds a least-cost route in the Field Simulation Lab. It names the one or two cost terms that add most to the route and shows the p95 longitudinal grade, the total cost and the measured, interpolated and low-confidence share of route cells.
+Terrain Access screens a terrain surface for traversability and finds a least-cost route in the Field Simulation Lab. It names the one or two cost terms that add most to the route and shows the p95 longitudinal grade, the total cost and the measured, interpolated and low-confidence share of route cells. The above-ground obstruction limit is evaluated from the terrain run's own DSM, bound to that run's DTM, and a surface built with a different terrain is refused. An evidence-gap policy in the profile decides cells whose slope used a substituted neighbour at the grid edge or beside a void and, under the obstruction limit, cells with no above-ground return: exploratory, the default, allows them and reports their share of the route, and conservative blocks them. Under exploratory, a slope or ruggedness limit that used a substituted neighbour on the route is reported as estimated rather than evaluated.
 
 Both maps are drawn north-up, with colour ramps, hatching for blocked cells and markers for cells without enough evidence.
 
@@ -132,14 +132,18 @@ These change figures that earlier builds reported. Each one has a regression tes
 - Exports that write longitude and latitude refuse NAD27 and other datums that need a grid shift, and Reproject refuses a transformation into or out of NAD27.
 - The map sheet and compass read grid north, and a bearing is labelled as grid, as local axes, or is not shown.
 - The hold-out RMSE says when its confidence interval is unavailable and why, instead of showing an interval with equal ends.
-- PNG exports are fully opaque in every browser engine. PDF reports continue long text on the next page, and report and Scan Report figures state UTC.
+- PNG exports are fully opaque in every browser engine, except the georeferenced orthographic PNG (PNG + .pgw + .prj), whose no-data pixels are transparent and which carries an `olv:nodata` text chunk saying so. PDF reports continue long text on the next page, and report and Scan Report figures state UTC.
 - Terrain Access converts US survey foot elevations to metres for slope, step height and cost, where it read them as metres before.
 - The class palette has higher contrast against the dark canvas and wider separation between classes. Ground and Ignored Ground, which were nearly the same colour, are now clearly different. The colourblind palette is updated to match.
 - The intensity colour ramp defaults to the 2nd to 98th percentile of the loaded sample, so a few saturated returns no longer wash it out. The colorbar says which window and sample it uses.
+- The georeferenced orthographic PNG has transparent no-data, so it overlays other layers in a GIS. Pixels with no drawn point have alpha 0 and every other pixel is opaque.
+- The quick PLY, OBJ, XYZ and CSV export buttons honour an active clip box, keep the same points as Export, and add `-clip` to the file name.
+- A remembered CRS override also records a content fingerprint of its source, so two files that agree on name, point count, extent and position but differ in content are not treated as the same source.
+- Session work kept because its scan was not open is restored when that scan is opened later in the same page.
 
 ## Evidence
 
-The register holds 38 claims, 17 of them at E4 and none at E5. No existing claim changed evidence level. Terrain Flow Pulse (TERRAIN-FLOW-PULSE, E3), its depression inventory (TERRAIN-FLOW-DEPRESSION-INVENTORY, E2), Terrain Access (TERRAIN-ACCESS, E3, internal oracle) and the VVA-style 95th percentile (VVA-P95, E3), split from NVA-VVA, are new claims. The dependency set moved: three.js and two loaders.gl loaders advanced, with `@loaders.gl/core` held at 4.4.x because every 4.5.1 loader declares a peer dependency on it. `VALIDATION_REPORT_v0.7.0.md` states what was and was not tested.
+The register holds 38 claims, 17 of them at E4 and none at E5. No existing claim changed evidence level. Terrain Flow Pulse (TERRAIN-FLOW-PULSE, E3), its depression inventory (TERRAIN-FLOW-DEPRESSION-INVENTORY, E2), Terrain Access (TERRAIN-ACCESS, E3, internal oracle) and the VVA-style 95th percentile (VVA-P95, E3), split from NVA-VVA, are new claims. The dependency set moved: three.js and two loaders.gl loaders advanced, with `@loaders.gl/core` held at 4.4.x because every 4.5.1 loader declares a peer dependency on it. `VALIDATION_REPORT_v0.7.0.md` states what was and was not tested. The release workflow marks a release ready only when the CI workflow has passed at the tagged commit.
 
 ## Scientific limits and caveats
 
