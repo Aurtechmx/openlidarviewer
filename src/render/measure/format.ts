@@ -332,14 +332,22 @@ export function formatVolumeRender(
 /** Format a volume in cubic metres for the active unit system. */
 export function formatVolume(cubicMetres: number, system: UnitSystem): string {
   if (!Number.isFinite(cubicMetres) || cubicMetres < 0) return '—';
+  // Below a cubic metre (or a cubic yard) the decimals follow the
+  // significant-figure policy the lengths use, so a small real volume never
+  // prints as zero. Cubic metres hold to a cubic kilometre: a switch at 1e6 m³
+  // printed 2,345,678 m³ as "0.002 km³", 15 % off at the precision shown.
   if (system === 'metric') {
-    if (cubicMetres < 1) return `${grouped(cubicMetres * 1000, 0)} dm³`;
-    if (cubicMetres < 1e6) return `${grouped(cubicMetres, 2)} m³`;
-    return `${grouped(cubicMetres / 1e9, 3)} km³`;
+    if (cubicMetres < 1) {
+      const dm3 = cubicMetres * 1000;
+      return `${grouped(dm3, displayDecimals(dm3, 0, 4))} dm³`;
+    }
+    if (cubicMetres < 1e9) return `${grouped(cubicMetres, 2)} m³`;
+    const km3 = cubicMetres / 1e9;
+    return `${grouped(km3, displayDecimals(km3, 3, 6))} km³`;
   }
   // Imperial: cubic feet, switching to cubic yards above a yard.
   const cubicFeet = cubicMetres * FEET_PER_METRE * FEET_PER_METRE * FEET_PER_METRE;
-  if (cubicFeet < 27) return `${grouped(cubicFeet, 1)} ft³`;
+  if (cubicFeet < 27) return `${grouped(cubicFeet, displayDecimals(cubicFeet, 1, 4))} ft³`;
   return `${grouped(cubicFeet / 27, 2)} yd³`;
 }
 
