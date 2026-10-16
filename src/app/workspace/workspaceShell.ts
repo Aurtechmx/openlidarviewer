@@ -155,6 +155,8 @@ export function mountWorkspaceShell(d: WorkspaceShellDeps): WorkspaceShell {
         a.setAttribute('aria-pressed', String(on));
       }
       router?.sync();
+      // A suggestion made for the previous task no longer applies once the user moves on.
+      appToast().dismissSuggestion();
       mobileSheet?.select(sheetTabForMode(m));
       refreshDataHome();
       d.onModeChange();

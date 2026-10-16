@@ -163,6 +163,10 @@ describe('a sampled obstruction basis reads estimated, in every output', () => {
     if (!r.ok) throw new Error(r.reason);
     expect((r.record.result.constraints as Record<string, string>).aboveGroundObstruction).toBe('evaluated');
     expect((r.record.result.constraintEstimates as Record<string, string>).aboveGroundObstruction).toBeUndefined();
+    const card = (lab.renderTerrainAccessRunCard(r) as unknown as RecordingEl).textContent;
+    expect(card).toMatch(/Above-ground obstruction\s*evaluated against the above-ground surface/);
+    expect(card).not.toContain('Above-ground evidence unavailable');
+    expect(card).not.toMatch(/Above-ground obstruction\s*estimated/);
   });
 
   for (const policy of ['exploratory', 'conservative'] as const) {
@@ -175,7 +179,11 @@ describe('a sampled obstruction basis reads estimated, in every output', () => {
       expect(r.limitations).toContain(sentence);
       const card = (lab.renderTerrainAccessRunCard(r) as unknown as RecordingEl).textContent;
       expect(card).toContain(sentence);
-      expect(card).toMatch(/Above-ground obstruction\s*estimated/);
+      expect(card).toMatch(/Above-ground obstruction\s*estimated against the above-ground surface/);
+      // One status only: never "unavailable" or "evaluated" beside the estimate.
+      expect(card).not.toContain('Above-ground evidence unavailable');
+      expect(card).not.toContain('evaluated against the above-ground surface');
+      expect(card.match(/Above-ground obstruction\s*estimated/g)).toHaveLength(1);
       const zip = buildTerrainAccessPackage(r, { basename: 'd' });
       const csv = textOf(zip, 'd-diagnostics.csv');
       expect(csv).toContain('constraint.aboveGroundObstruction,estimated\n');
@@ -248,6 +256,11 @@ describe('route cells with no above-ground return make the limit estimated', () 
     expect(note).toBe(`Above-ground obstruction could not be checked on 2 of ${r.diagnostics.cellCount} route cells: `
       + 'the surface has no above-ground evidence there, so those cells are not known to be clear.');
     expect(r.limitations.filter((l) => l === note)).toHaveLength(1);
+    const card = (lab.renderTerrainAccessRunCard(r) as unknown as RecordingEl).textContent;
+    expect(card).toContain(note);
+    expect(card).toMatch(/Above-ground obstruction\s*estimated against the above-ground surface/);
+    expect(card).not.toContain('Above-ground evidence unavailable');
+    expect(card).not.toContain('fully supported');
   });
 
   it('conservative: those cells are blocked, so a found route reads evaluated', () => {
@@ -305,5 +318,26 @@ describe('conservative ruggedness blocks cells whose VRM window holds a substitu
     const r = runTerrainAccess(dtm, scale, rugged('exploratory'), at(1, 3), at(4, 3), TERRAIN_ACCESS_DEFAULTS, identity);
     if (!r.ok) throw new Error(r.reason);
     expect((r.record.result.constraints as Record<string, string>).ruggedness).toBe('estimated');
+  });
+});
+
+describe('the obstruction row names exactly one status', () => {
+  it('each status the runner writes has its own wording', () => {
+    const unavailable = 'Above-ground evidence unavailable; this constraint cannot be evaluated.';
+    const texts = {
+      evaluated: lab.obstructionStatusText('evaluated', 'allow'),
+      estimated: lab.obstructionStatusText('estimated', 'allow'),
+      disabled: lab.obstructionStatusText('disabled', 'allow'),
+      unavailable: lab.obstructionStatusText('unavailable', 'allow'),
+    };
+    expect(texts.evaluated).toMatch(/^evaluated /);
+    expect(texts.estimated).toMatch(/^estimated /);
+    expect(texts.disabled).toBe('off in this profile');
+    expect(texts.unavailable).toBe(unavailable);
+    for (const [status, text] of Object.entries(texts)) {
+      if (status !== 'unavailable') expect(text).not.toContain(unavailable);
+    }
+    expect(lab.obstructionStatusText('estimated', 'block')).toContain('blocked (conservative)');
+    expect(lab.obstructionStatusText(undefined, 'allow')).toBe('not recorded');
   });
 });

@@ -350,14 +350,22 @@ export function evidenceSplitText(d: RouteDiagnostics): string {
   return `${pct(d.fractionMeasured)} measured, ${pct(d.fractionInterpolated)} interpolated; ${below}`;
 }
 
-/** The above-ground obstruction status the run record carries, in words. */
-function obstructionStatusText(status: unknown, unknownPolicy: unknown): string {
-  if (status === 'evaluated') {
-    if (unknownPolicy === 'block') return 'evaluated against the above-ground surface; cells with no return blocked (conservative)';
-    return 'evaluated against the above-ground surface; cells with no return allowed and disclosed (exploratory)';
+/**
+ * The above-ground obstruction status the run record carries, in words. Every
+ * status the runner writes has its own wording; "unavailable" is kept for a
+ * run with no above-ground surface, never for one that used it under an estimate.
+ */
+export function obstructionStatusText(status: unknown, unknownPolicy: unknown): string {
+  const noReturn = unknownPolicy === 'block'
+    ? 'cells with no return blocked (conservative)'
+    : 'cells with no return allowed and disclosed (exploratory)';
+  switch (status) {
+    case 'evaluated': return `evaluated against the above-ground surface; ${noReturn}`;
+    case 'estimated': return `estimated against the above-ground surface (see the note below); ${noReturn}`;
+    case 'disabled': return 'off in this profile';
+    case 'unavailable': return ABOVE_GROUND_UNAVAILABLE;
+    default: return 'not recorded';
   }
-  if (status === 'disabled') return 'off in this profile';
-  return ABOVE_GROUND_UNAVAILABLE;
 }
 
 /** The derivative-support row: the route's share of cells whose slope used a synthesised neighbour. */
@@ -374,7 +382,8 @@ export function derivativeSupportText(d: RouteDiagnostics, policy: unknown): str
 function estimatedConstraintNodes(constraints: unknown, estimates: unknown): HTMLElement[] {
   if (!constraints || typeof constraints !== 'object') return [];
   const rows = Object.entries(constraints as Record<string, unknown>)
-    .filter(([, status]) => status === 'estimated')
+    // The obstruction limit has its own row above, which already says estimated.
+    .filter(([key, status]) => status === 'estimated' && key !== 'aboveGroundObstruction')
     .map(([key]) => row(TERRAIN_ACCESS_CONSTRAINT_LABEL[key] ?? key, 'estimated'));
   const sentences = estimates && typeof estimates === 'object' ? Object.values(estimates as Record<string, unknown>) : [];
   return [

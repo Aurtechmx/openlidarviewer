@@ -200,10 +200,10 @@ for (const size of [{ width: 1280, height: 800 }, { width: 1024, height: 768 }])
       });
       await expect(page.locator('.olv-mp-row')).toHaveCount(1, { timeout: 5_000 });
 
-      // The legend, the scan-ready toast and the navigation card are all up
-      // now; none of them may sit over a control.
+      // The legend and the navigation card are up now; none of them may sit
+      // over a control. The scan-ready suggestion left when Measure opened.
       await expect(page.locator('.olv-colorbar')).toBeAttached();
-      await expect(page.locator('.olv-lasso-toast.olv-visible')).toBeVisible();
+      await expect(page.locator('.olv-lasso-toast.olv-visible .olv-lasso-toast-action')).toHaveCount(0);
       await expect(page.locator('.olv-navbar')).toBeVisible();
       await page.waitForTimeout(500); // let the toast's move settle before hit-testing
       // The active-tool pill is seated before it is revealed; wait for the

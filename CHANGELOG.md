@@ -59,6 +59,9 @@ The format is based on Keep a Changelog and the project follows Semantic Version
 
 ### Fixed
 
+- The Terrain Access run card no longer shows an estimated obstruction limit as "Above-ground evidence unavailable". Each status the run record carries has its own wording, and the obstruction row reads estimated, with the note below it, when the surface is a sample or route cells have no return.
+- A Terrain Access route with no added cost reads "Cost is distance alone under the configured weights." It no longer says every move was fully supported, which contradicted routes whose slope used substituted neighbours.
+- The post-load suggestion ("Terrain scan ready", "Object scan ready", "Interior scan ready") hides when the user switches to another task instead of staying over that task until its timer ends.
 - Opening a second scan hides the "Project ready" card of the scan opened before it. When another message took the top-centre lane while the new scan settled, the card stayed on screen naming the earlier scan.
 - Terrain Access reads above-ground obstruction from the top return per cell without ASPRS noise (classes 7 and 18), so a single bird or noise return no longer blocks a cell; the full-cloud DSM and its products are unchanged.
 - When the obstruction surface was built from a sample of the scan, the obstruction limit reads `estimated`, with the sentence "Above-ground obstruction is estimated from a sample of N of M points; thin returns such as posts or wires can be missed." in the run card, diagnostics CSV, README and run record.

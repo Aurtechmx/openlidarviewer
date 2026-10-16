@@ -110,13 +110,13 @@ for (const viewport of [{ width: 390, height: 844 }, { width: 844, height: 390 }
       await openScan(page);
       const toast = page.locator('.olv-lasso-toast.olv-visible');
       await bringPhoneToastForward(page);
-      for (const id of ['data', 'output']) {
+      await expect(toast.locator('.olv-lasso-toast-action')).toBeVisible();
+      // Opening another mode's sheet tab starts another task, so the
+      // suggestion leaves rather than sitting over the sheet. Output first:
+      // the scan opens in Data, whose tab does not change the mode.
+      for (const id of ['output', 'data']) {
         await tab(page, id).click();
-        const t = (await toast.boundingBox())!;
-        const body = (await page.locator('.olv-msheet-body').boundingBox())!;
-        const overlap = t.y < body.y + body.height && t.y + t.height > body.y
-          && t.x < body.x + body.width && t.x + t.width > body.x;
-        expect(overlap, `toast ${JSON.stringify(t)} body ${JSON.stringify(body)}`).toBe(false);
+        await expect(toast).toHaveCount(0);
       }
     });
 

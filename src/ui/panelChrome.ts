@@ -349,6 +349,11 @@ export interface ToastHost {
    * action needs reading and reaching.
    */
   readonly show: (message: string, action?: ToastAction) => void;
+  /**
+   * Hide the toast now if it is offering an action (a suggestion such as
+   * "Terrain scan ready"); a plain message is left to its timer.
+   */
+  readonly dismissSuggestion: () => void;
 }
 
 /**
@@ -398,9 +403,19 @@ function liftAboveNavbar(root: HTMLElement): void {
 export function createToastHost(host: () => HTMLElement = () => document.body): ToastHost {
   let root: HTMLElement | null = null;
   let timer: ReturnType<typeof setTimeout> | null = null;
+  let offersAction = false;
   return {
+    dismissSuggestion() {
+      if (!offersAction || root === null || !root.classList.contains('olv-visible')) return;
+      if (timer !== null) clearTimeout(timer);
+      timer = null;
+      offersAction = false;
+      root.classList.remove('olv-visible');
+      appTransientLane().release(root);
+    },
     show(message, action) {
       if (timer !== null) clearTimeout(timer);
+      offersAction = !!action;
       if (root === null) {
         root = el('div', { className: 'olv-lasso-toast' });
         // The toast is the only feedback channel for several flows (tool
