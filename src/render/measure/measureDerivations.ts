@@ -26,12 +26,34 @@ const MEDIUM_CONFIDENCE_COVERAGE = 0.8;
 export const NO_USABLE_COVERAGE_REASON =
   'No usable coverage: no measured points fall inside this footprint. Redraw the footprint over scanned ground, or include more of the scan.';
 
-/** Smallest observed share of the footprint the result reports, or undefined when it reports none. */
-function observedCoverage(result: VolumeResult): number | undefined {
+/** The footprint shares a confidence tier is capped by. */
+export interface CoverageShares {
+  readonly coverageFraction?: number;
+  readonly excludedFraction?: number;
+}
+
+/** Smallest observed share of the footprint reported, or undefined when none is. */
+function observedCoverage(shares: CoverageShares): number | undefined {
   const parts: number[] = [];
-  if (result.coverageFraction !== undefined && Number.isFinite(result.coverageFraction)) parts.push(result.coverageFraction);
-  if (result.excludedFraction !== undefined && Number.isFinite(result.excludedFraction)) parts.push(1 - result.excludedFraction);
+  if (shares.coverageFraction !== undefined && Number.isFinite(shares.coverageFraction)) parts.push(shares.coverageFraction);
+  if (shares.excludedFraction !== undefined && Number.isFinite(shares.excludedFraction)) parts.push(1 - shares.excludedFraction);
   return parts.length > 0 ? Math.min(...parts) : undefined;
+}
+
+/**
+ * Cap a confidence tier by the observed share of the footprint: below 50 %
+ * it is low, below 80 % at most medium. Only ever lowers the tier. Every
+ * record whose coverage shares are set or replaced reads this one rule.
+ */
+export function capConfidenceByCoverage(
+  confidence: 'high' | 'medium' | 'low',
+  shares: CoverageShares,
+): 'high' | 'medium' | 'low' {
+  const coverage = observedCoverage(shares);
+  if (coverage === undefined) return confidence;
+  if (coverage < LOW_CONFIDENCE_COVERAGE) return 'low';
+  if (coverage < MEDIUM_CONFIDENCE_COVERAGE && confidence === 'high') return 'medium';
+  return confidence;
 }
 
 /**
@@ -67,11 +89,7 @@ export function deriveVolumeRecord(
   else if (inPoly >= MEDIUM_CONFIDENCE_POINTS) confidence = 'medium';
   else confidence = 'low';
   // Confidence labels sufficiency of observations, not accuracy.
-  const coverage = observedCoverage(result);
-  if (coverage !== undefined) {
-    if (coverage < LOW_CONFIDENCE_COVERAGE) confidence = 'low';
-    else if (coverage < MEDIUM_CONFIDENCE_COVERAGE && confidence === 'high') confidence = 'medium';
-  }
+  confidence = capConfidenceByCoverage(confidence, result);
   const record: VolumeRecord = {
     fill: result.fill,
     cut: result.cut,
