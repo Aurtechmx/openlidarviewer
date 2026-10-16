@@ -22,7 +22,8 @@ import type { TerrainCore } from './analyseContours';
  * band 5); a version-1 core lacks it and would export that band as NoData.
  * 3: the core carries inputSha256, the digest of the points it read.
  * 4: the surface carries the obstruction grid and the basis it rests on.
- * 5: the core carries gateParams (the interval gate's inputs), and a
+ * 5: the core carries gateParams and qualityInput (the interval gate's and
+ *    the quality verdict's inputs), and a
  *    geographic core converts degrees to metres with the WGS84 meridional and
  *    parallel degree lengths at the grid latitude instead of 111 320 m.
  */

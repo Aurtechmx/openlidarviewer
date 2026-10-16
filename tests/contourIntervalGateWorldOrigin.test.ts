@@ -66,4 +66,30 @@ describe('interval gate vs world-anchored levels', () => {
     expect(gateAtLevelOrigin(local, localGate, 0)).toBe(localGate);
     expect(gateAtLevelOrigin(null, localGate, 337)).toBe(localGate);
   });
+
+  it('the quality verdict follows the world-bounds gate when the recommendation flips', () => {
+    // Local 0.1..0.4 holds no multiple of any candidate (0.5 is the finest), so
+    // the local gate recommends nothing and the surface reads "no reliable
+    // interval". At origin 337.2 the world span 337.3..337.6 holds 337.5.
+    const NO_INTERVAL = /No contour interval is reliable/;
+    const c = computeTerrainCore(plane(0.1, 0.4), core);
+    expect(c.gate.recommendedM).toBeNull();
+    expect(c.quality.reasons.join(' ')).toMatch(NO_INTERVAL);
+    const world = contoursFromCore(c, { levelOriginZ: 337.2 });
+    expect(world.gate.recommendedM).toBe(0.5);
+    expect(world.quality.reasons.join(' ')).not.toMatch(NO_INTERVAL);
+    expect(c.quality.readiness).toBe('blocked');
+    expect(world.quality.readiness).not.toBe('blocked');
+
+    // The reverse: local 0.4..0.6 holds 0.5, world 337.6..337.8 holds none.
+    const r = computeTerrainCore(plane(0.4, 0.6), core);
+    expect(r.gate.recommendedM).toBe(0.5);
+    const rw = contoursFromCore(r, { levelOriginZ: 337.2 });
+    expect(rw.gate.recommendedM).toBeNull();
+    expect(rw.quality.readiness).toBe('blocked');
+    expect(rw.quality.reasons.join(' ')).toMatch(NO_INTERVAL);
+
+    // Without an origin the core's own verdict is reused as is.
+    expect(contoursFromCore(c, {}).quality).toBe(c.quality);
+  });
 });

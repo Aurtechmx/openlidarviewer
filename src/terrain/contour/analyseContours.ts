@@ -91,7 +91,7 @@ import {
   tallyCellStatus,
   type CellStatusTally,
 } from '../quality/dtmCellStatus';
-import { evaluateDtmQuality, type DtmQualityReport } from '../quality/dtmQualityGate';
+import { evaluateDtmQuality, type DtmQualityInput, type DtmQualityReport } from '../quality/dtmQualityGate';
 import { recommendGrid, type GridRecommendation } from '../quality/recommendGrid';
 import type { ConfidenceOrderingResult, ValidationReport } from '../validate/ValidationReport';
 import {
@@ -490,13 +490,11 @@ export interface TerrainCore {
    *  grid's LOCAL elevation bounds; {@link contoursFromCore} re-runs it on
    *  world bounds when a `levelOriginZ` anchors the levels elsewhere. */
   readonly gate: IntervalGateResult;
-  /**
-   * The exact inputs {@link gate} was computed from (local bounds), or null
-   * when the surface has no elevation range. Kept so the interval stage can
-   * re-gate on world bounds without redoing validation. Optional: a core
-   * restored from an older persisted payload lacks it and keeps {@link gate}.
-   */
+  /** The inputs {@link gate} (local bounds; null when flat) and {@link quality}
+   *  were computed from, so the interval stage can re-gate on world bounds and
+   *  re-judge quality without redoing validation. Absent ⇒ the core's own. */
   readonly gateParams?: IntervalGateParams | null;
+  readonly qualityInput?: DtmQualityInput;
   /** ASPRS vertical accuracy derived from the validation pass. */
   readonly accuracy: VerticalAccuracy;
   readonly elevationRangeM: number;
@@ -1327,7 +1325,7 @@ export function computeTerrainCore(
   const rmseMetres = verticalScaleResolved && Number.isFinite(validation.rmse)
     ? validation.rmse
     : Number.NaN;
-  const quality = evaluateDtmQuality({
+  const qualityInput: DtmQualityInput = {
     tally: cellStatusTally,
     meanCellConfidence: dtm.meanConfidence,
     holdoutRmseM: rmseMetres,
@@ -1339,7 +1337,8 @@ export function computeTerrainCore(
     crs,
     verticalDatum,
     recommendedIntervalM: gate.recommendedM,
-  });
+  };
+  const quality = evaluateDtmQuality(qualityInput);
 
   // Composite 0–100 terrain quality score + the per-cell metric rollup it
   // draws on (density, completeness, edge risk). Complements the verdict.
@@ -1564,6 +1563,7 @@ export function computeTerrainCore(
     complexity,
     gate,
     gateParams,
+    qualityInput,
     accuracy,
     elevationRangeM,
     minZ: Number.isFinite(minZ) ? minZ : Number.NaN,
@@ -1611,7 +1611,11 @@ function coreResultFields(
     confidenceOrdering: core.confidenceOrdering,
     confidenceCalibrationApplied: core.confidenceCalibrationApplied,
     confidenceToleranceM: core.confidenceToleranceM,
-    quality: core.quality,
+    // The quality verdict reads the recommended interval, so it follows the
+    // gate this result reports (re-evaluated when that is the world-bounds one).
+    quality: gate === core.gate || !core.qualityInput
+      ? core.quality
+      : evaluateDtmQuality({ ...core.qualityInput, recommendedIntervalM: gate.recommendedM }),
     qualityScore: core.qualityScore,
     cellMetrics: core.cellMetrics,
     surface: core.surface,
@@ -1640,10 +1644,8 @@ export function contoursFromCore(
   intervalParams: IntervalContourParams = {},
 ): AnalyseContoursResult {
   const { crs, verticalDatum, verticalUnitToMetres, cellSizeM, dtm, minZ, maxZ } = core;
-  // The interval gate's "yields no contours" rule must test the same levels
-  // `contoursAt` will draw. Those are anchored to WORLD elevation through
-  // `levelOriginZ`, while the core gated on the local bounds, so re-gate on
-  // world bounds (minZ + oz, maxZ + oz) whenever the origin is not zero.
+  // Re-gate on world bounds (minZ + oz, maxZ + oz): the levels `contoursAt`
+  // draws are anchored to world elevation through `levelOriginZ`.
   const gate = gateAtLevelOrigin(core.gateParams, core.gate, intervalParams.levelOriginZ);
   // The contour shape style for this run. Default 'smooth' reproduces the
   // historical Chaikin ×2 default exactly, so the live on-screen contours are
