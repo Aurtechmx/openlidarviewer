@@ -96,7 +96,9 @@ uses.
 ## Evidence gaps and the obstruction surface
 
 The above-ground obstruction limit is evaluated from the terrain run's own
-DSM, kept on the DTM grid. The Lab receives it as an above-ground surface bound
+DSM, kept on the DTM grid. The obstruction surface takes the top return per
+cell without ASPRS noise (classes 7 and 18); Withheld points are left out by
+the gather. The full-cloud DSM and its products keep every return. The Lab receives it as an above-ground surface bound
 to that run's DTM by the DTM product digest; a surface built with a different
 terrain surface is refused with `SURFACE_STALE`, and one whose origin, array
 lengths, row orientation, horizontal CRS or vertical unit differ from the
@@ -111,9 +113,18 @@ default, allows them and reports their share of the route. Under exploratory,
 cross-slope and longitudinal grade are marked `estimated` rather than
 `evaluated` when any route cell's window left the grid or touched NoData, and
 an evaluated ruggedness limit is marked `estimated` when any route cell's VRM
-window holds such a cell. The run record, run card and diagnostics CSV state
+window holds such a cell. Under conservative, a ruggedness limit also blocks
+any cell whose 3×3 ruggedness window holds such a cell, so ruggedness is never
+`estimated` under conservative. The obstruction limit is marked `estimated`
+under either policy when its surface was built from a sample of the scan, and
+when any route cell has no above-ground return; the run states "Above-ground
+obstruction could not be checked on K of R route cells: the surface has no
+above-ground evidence there, so those cells are not known to be clear." The
+points the surface rests on (sampled or not, points read and in the scan,
+noise left out, Withheld treatment) are recorded with it. The run record, run card and diagnostics CSV state
 the policy and these statuses, and the export README repeats the statuses. The policy and the surface
-binding are part of the run's input digest.
+binding, with its point basis, are part of the run's input digest
+(`olv.simulation.terrain-access.input-digest.v4`).
 
 ## Search
 

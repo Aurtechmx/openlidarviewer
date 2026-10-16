@@ -334,9 +334,17 @@ obstruction limit is evaluated: such a cell passes the obstruction limit
 because nothing was measured above it, not because it was shown to be clear.
 Cross-slope, longitudinal grade and an evaluated ruggedness limit are then
 marked `estimated`, not `evaluated`, when any route cell used a substituted
-neighbour, and the run card, run record and diagnostics CSV report the route
-share of those cells and the policy applied. The conservative policy blocks
-both kinds of cell instead, which can leave no route on a small or patchy grid.
+neighbour, and the obstruction limit is marked `estimated` when any route
+cell has no above-ground return. The run card, run record and diagnostics CSV
+report the route share of those cells and the policy applied. The conservative
+policy blocks both kinds of cell instead, and with a ruggedness limit also any
+cell whose ruggedness window holds a substituted-neighbour cell, which can
+leave no route on a small or patchy grid.
+
+The obstruction surface leaves out ASPRS noise (classes 7 and 18). When the
+terrain run read a sample of the scan rather than every point, the obstruction
+limit is marked `estimated` under either policy: thin returns such as posts or
+wires can be missing from the sample.
 
 Vehicle length is recorded in the profile and the diagnostics but not
 enforced: eligibility uses width-only clearance, not full swept-body
