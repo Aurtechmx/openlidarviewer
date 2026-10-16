@@ -1339,9 +1339,13 @@ export async function buildProfilePdf(input: ProfilePdfInput): Promise<Uint8Arra
     // drawn flatter than the run and the ratio is a compression. It is said as
     // one, with its consequence, and never under the word exaggeration.
     const vexText = verticalScaleStatement(vex);
-    const scaleLine =
-      `Horizontal 1:${Math.round(hScale)}   ·   Vertical 1:${Math.round(vScale)}   ·   ` +
-      `${vexText}   |   PRINT AT 100% ON ${SHEET_SIZE}`;
+    // With no known ground unit a 1:N ratio would read source units as
+    // metres, so the sheet says so, as the map sheet does; the exaggeration
+    // is a ratio of the two and stays.
+    const ratios = system === 'unverified'
+      ? 'Horizontal and vertical scale: units unknown'
+      : `Horizontal 1:${Math.round(hScale)}   ·   Vertical 1:${Math.round(vScale)}`;
+    const scaleLine = `${ratios}   ·   ${vexText}   |   PRINT AT 100% ON ${SHEET_SIZE}`;
     put(page, scaleLine, M, scaleLineY, T_SCALE, f.bold, INK);
     const axisTitle =
       system === 'unverified' ? 'Chainage (unit unverified)' : system === 'metric' ? 'Chainage (station km+m)' : 'Chainage (100 ft stations)';

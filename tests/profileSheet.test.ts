@@ -300,6 +300,35 @@ describe('profile sheet: vertical exaggeration', () => {
   });
 });
 
+describe('profile sheet: scale line with an unknown ground unit', () => {
+  it('states no 1:N ratio, keeps the exaggeration, and clears the axis title', async () => {
+    const { bold, regular } = await fonts();
+    const bytes = await buildProfilePdf({
+      name: 'Unverified',
+      samples: rollingSection(),
+      generatedAt: FIXED_DATE,
+      unitSystem: 'unverified',
+    });
+    const drawn = sheetPage(bytes).drawn;
+    const line = drawn.find((d) => d.text.startsWith('Horizontal'));
+    expect(line).toBeDefined();
+    expect(line!.text).not.toMatch(/1:\d/);
+    expect(line!.text).toContain('units unknown');
+    expect(line!.text).toMatch(/Vertical exaggeration [\d.]+:1/);
+    // The axis title shares the line, right-aligned; the two must not meet.
+    const title = drawn.find((d) => d.text === 'Chainage (unit unverified)');
+    expect(title).toBeDefined();
+    const right = line!.x + (line!.base === 'Helvetica-Bold' ? bold : regular).widthOfTextAtSize(line!.text, line!.size);
+    expect(right).toBeLessThan(title!.x);
+  });
+
+  it('a metric sheet still states both ratios', async () => {
+    const bytes = await buildProfilePdf({ name: 'Metric', samples: rollingSection(), generatedAt: FIXED_DATE });
+    const line = sheetPage(bytes).drawn.find((d) => d.text.startsWith('Horizontal'));
+    expect(line!.text).toMatch(/^Horizontal 1:\d+ .*Vertical 1:\d+/);
+  });
+});
+
 describe('profile sheet: no overprinting in the notes table', () => {
   it('keeps every cell inside its own ruled column', async () => {
     const { regular, bold } = await fonts();
