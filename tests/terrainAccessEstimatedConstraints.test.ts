@@ -106,6 +106,9 @@ describe('reproduction: one-cell-wide corridor', () => {
     const card = (lab.renderTerrainAccessRunCard(r) as unknown as RecordingEl).textContent;
     expect(card).toContain(sentence);
     expect(card).toMatch(/Cross slope\s*estimated/);
+    // Zero added cost says nothing about support: the corridor's cells are not fully supported.
+    expect(card).not.toContain('fully supported');
+    expect(card).toContain('Cost is distance alone under the configured weights.');
     const zip = buildTerrainAccessPackage(r, { basename: 'd' });
     const csv = textOf(zip, 'd-diagnostics.csv');
     expect(csv).toContain('constraint.crossSlope,estimated\n');

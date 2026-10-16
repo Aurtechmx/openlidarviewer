@@ -72,12 +72,8 @@ for (const vp of VIEWPORTS) {
       await openScan(page, theme, vp.phone);
       const tag = `${vp.name}-${vp.width}x${vp.height}-${theme}`;
       const toggle = page.locator(SWITCH);
-      if ((await toggle.count()) === 0) {
-        // Before the switch existed: record the panel for comparison only.
-        await shot(page, `before-${tag}.png`);
-        test.skip(true, 'no detail switch on this build');
-        return;
-      }
+      // The switch ships in every build; its absence is a failure, not a skip.
+      await expect(toggle).toHaveCount(1);
 
       const basic = toggle.getByRole('button', { name: 'Basic' });
       const advanced = toggle.getByRole('button', { name: 'Advanced' });

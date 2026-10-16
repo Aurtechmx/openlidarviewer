@@ -46,7 +46,9 @@ export const COST_TERM_LABEL: Readonly<Record<CostContributor['term'], string>> 
  */
 export function costDriversSentence(contributors: readonly CostContributor[]): string {
   const nonZero = contributors.filter((c) => c.total > 0);
-  if (nonZero.length === 0) return 'Cost is distance alone: every move was flat and fully supported.';
+  // Cost terms describe the configured penalties, not how well the terrain is
+  // supported; support is stated by the evidence rows and the estimated limits.
+  if (nonZero.length === 0) return 'Cost is distance alone under the configured weights.';
   const names = nonZero.slice(0, 2).map((c) => COST_TERM_LABEL[c.term]);
   return `Cost driven mostly by: ${names.join(', then ')}.`;
 }

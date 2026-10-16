@@ -66,6 +66,19 @@ describe('createToastHost', () => {
     expect(root.children.some((c) => c.tagName === 'button')).toBe(false);
   });
 
+  it('dismissSuggestion hides a toast offering an action and leaves a plain message alone', () => {
+    const body = new FakeEl('body');
+    const toast = createToastHost(() => body as unknown as HTMLElement);
+    toast.show('Terrain scan ready', { label: 'Analyse terrain', onClick: vi.fn() });
+    const root = body.children[0];
+    expect(root.classList.contains('olv-visible')).toBe(true);
+    toast.dismissSuggestion();
+    expect(root.classList.contains('olv-visible')).toBe(false);
+    toast.show('Saved.');
+    toast.dismissSuggestion();
+    expect(root.classList.contains('olv-visible')).toBe(true);
+  });
+
   it('dismisses after 6 s for a message and 8 s when an action is present', () => {
     vi.useFakeTimers();
     try {

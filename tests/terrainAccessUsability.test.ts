@@ -79,7 +79,7 @@ describe('run card', () => {
 
   it('a route with no extra cost says the cost is distance alone', () => {
     expect(explain.costDriversSentence([{ term: 'support', total: 0 }])).toBe(
-      'Cost is distance alone: every move was flat and fully supported.',
+      'Cost is distance alone under the configured weights.',
     );
     expect(explain.costDriversSentence([
       { term: 'cross-slope', total: 2 }, { term: 'step', total: 1 }, { term: 'support', total: 0 },
