@@ -25,9 +25,9 @@ reproduce the reported figures from a clean clone. The authoritative gate is
 ## Dependency set
 
 `docs/project/DEPENDENCIES.md` records the dependency audit and follows the
-lockfile. The runtime set moved in this release: three.js and two loaders.gl
-loaders advanced, with `@loaders.gl/core` held at 4.4.x because every 4.5.1
-loader declares a peer dependency on `@loaders.gl/core` ~4.4.0.
+lockfile. The runtime set moved in this release: three.js advanced to 0.186,
+and `@loaders.gl/core`, `gltf`, `obj`, `ply` and `las` moved together to 4.5.2,
+because every 4.5.2 package requires `@loaders.gl/core` ~4.5.0.
 
 ## Evidence identity
 

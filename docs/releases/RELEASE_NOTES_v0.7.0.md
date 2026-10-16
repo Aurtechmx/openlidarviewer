@@ -80,7 +80,7 @@ Converted XYZ, ASC and LAS files record the software and version, the source fil
 
 ### E57
 
-- The E57 reader refuses an XML section larger than 64 MB or nested deeper than 256 levels with a clear error.
+- The E57 reader refuses an XML section larger than 64 MiB or nested deeper than 256 levels with a clear error.
 - Colour and intensity that the file flags invalid are masked per point. The point keeps its position; the flagged value is drawn grey, left out of ranges, colour balance and voxel means, and exported as an empty field or `nan`. PLY, OBJ and LAS omit the attribute for the whole file when any exported point is flagged, and the file says so.
 - Intensity with declared limits is normalised over the declared range, so a signed range keeps its negative values. Colour is normalised per channel by its declared limits, so 16-bit colour is no longer clipped to 255.
 - A scan whose pose rotation is malformed or degenerate is skipped instead of placed with the identity rotation. Channels dropped because some merged scans lack them are named.
@@ -143,7 +143,7 @@ These change figures that earlier builds reported. Each one has a regression tes
 
 ## Evidence
 
-The register holds 38 claims, 17 of them at E4 and none at E5. No existing claim changed evidence level. Terrain Flow Pulse (TERRAIN-FLOW-PULSE, E3), its depression inventory (TERRAIN-FLOW-DEPRESSION-INVENTORY, E2), Terrain Access (TERRAIN-ACCESS, E3, internal oracle) and the VVA-style 95th percentile (VVA-P95, E3), split from NVA-VVA, are new claims. The dependency set moved: three.js and two loaders.gl loaders advanced, with `@loaders.gl/core` held at 4.4.x because every 4.5.1 loader declares a peer dependency on it. `VALIDATION_REPORT_v0.7.0.md` states what was and was not tested. The release workflow marks a release ready only when the CI workflow has passed at the tagged commit.
+The register holds 38 claims, 17 of them at E4 and none at E5. No existing claim changed evidence level. Terrain Flow Pulse (TERRAIN-FLOW-PULSE, E3), its depression inventory (TERRAIN-FLOW-DEPRESSION-INVENTORY, E2), Terrain Access (TERRAIN-ACCESS, E3, internal oracle) and the VVA-style 95th percentile (VVA-P95, E3), split from NVA-VVA, are new claims. The dependency set moved: three.js advanced to 0.186, and the loaders.gl packages `core`, `gltf`, `obj`, `ply` and `las` moved together to 4.5.2, because every 4.5.2 package requires `@loaders.gl/core` ~4.5.0. `VALIDATION_REPORT_v0.7.0.md` states what was and was not tested. The release workflow marks a release ready only when the CI workflow has passed at the tagged commit.
 
 ## Scientific limits and caveats
 
