@@ -533,7 +533,6 @@ export async function attachStaticCloud(
 ): Promise<void> {
   const viewer = deps.getViewer();
   await viewer.ready;
-  if (source.sourceDigest) result.cloud.sourceDigest = (await source.sourceDigest) ?? null;
 
   // NB: static layers are ADDITIVE — dropping/opening a second scan keeps the
   // first as a separate layer (the LAYERS panel lists each with its own ✕ to
@@ -545,9 +544,12 @@ export async function attachStaticCloud(
   // remain exclusive and still call clearOpenStaticLayers below.)
 
   deps.dropZone.setProgress(formatProgress({ stage: 'uploading' }));
-  // PAINT YIELD. `await viewer.ready` above is the last await in this
-  // function, so everything from here to the progress teardown runs in ONE
-  // task: the "Preparing display" and "Rendering" lines were written and
+  // The content fingerprint was hashed while the file decoded. It is awaited
+  // after the "Preparing display" line is written, so a slow digest never
+  // holds the decode's last line on screen ahead of the attach.
+  if (source.sourceDigest) result.cloud.sourceDigest = (await source.sourceDigest) ?? null;
+  // PAINT YIELD. Without it, everything from here to the progress teardown
+  // runs in ONE task: the "Preparing display" and "Rendering" lines were written and
   // cleared without the browser ever painting them, and the user watched the
   // last decode line freeze through the whole GPU attach. `setTimeout`, not
   // `requestAnimationFrame`, which resumes inside the same frame's rendering
