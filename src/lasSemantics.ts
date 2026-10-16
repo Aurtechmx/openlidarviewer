@@ -89,7 +89,10 @@ export type ClassAllocation = 'defined' | 'reserved' | 'user-definable';
 
 export function classAllocation(code: number, pdrf: number): ClassAllocation {
   if (!isExtendedPdrf(pdrf)) {
-    return code in LEGACY_CLASS_NAMES ? 'defined' : 'reserved';
+    // Codes 10 and 11 are listed in the legacy table only as "Reserved for
+    // ASPRS Definition" (LAS 1.4 R15 Table 9), so they are reserved, not defined.
+    const legacy = LEGACY_CLASS_NAMES[code];
+    return legacy !== undefined && !legacy.startsWith('Reserved') ? 'defined' : 'reserved';
   }
   if (code >= FIRST_USER_DEFINABLE_CLASS) return 'user-definable';
   const name = EXTENDED_CLASS_NAMES[code];

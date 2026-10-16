@@ -46,9 +46,7 @@ const LEGACY_CODE_TO_FLAG: Readonly<Record<number, { flag: number; name: string;
 /** What a code means under one table, or null when the table reserves it. */
 function meaning(code: number, pdrf: number): string | null {
   if (classAllocation(code, pdrf) !== 'defined') return null;
-  const name = classificationName(code, pdrf);
-  // The legacy table lists codes 10 and 11 by the name "Reserved for ASPRS Definition".
-  return name.startsWith('Reserved') ? null : name;
+  return classificationName(code, pdrf);
 }
 
 /** The codes 0 to 31 whose meaning differs between the two tables. */
