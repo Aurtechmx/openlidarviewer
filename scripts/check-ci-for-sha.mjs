@@ -6,7 +6,9 @@
  * WebKit, Windows and the other blocking legs run in the CI workflow, whose
  * `ci-green` job is the single required check. A release is ready only when
  * that CI workflow passed for the exact commit being released, so this script
- * asks the GitHub API for the CI runs at that commit and decides:
+ * asks the GitHub API for the push-event CI runs at that commit (the branch
+ * push and the tag push; pull-request and manually dispatched runs are not
+ * counted) and decides:
  *
  *   ready    a completed CI run at the SHA whose `ci-green` job and every job
  *            `ci-green` needs concluded `success`
@@ -28,9 +30,13 @@
  * A missing run is polled for the grace period only (the tag push starts CI
  * and the release workflow together, so CI may not be listed yet); a pending
  * run is polled until the timeout. Either one still unresolved then fails.
+ * A failed `gh api` call inside the loop is retried after a short wait, up to
+ * MAX_API_ATTEMPTS consecutive failures, so one transient network or
+ * rate-limit error does not decide the release.
  *
- * The decision logic is pure (parseCiJobs, requiredJobNames, evaluateCiRuns) so
- * tests/checkCiForSha.test.ts covers it without the network.
+ * The decision logic is pure (parseCiJobs, requiredJobNames, evaluateCiRuns,
+ * runsQuery) and the polling loop (pollCi) takes its API call, clock and sleep
+ * as arguments, so tests/checkCiForSha.test.ts covers both without the network.
  */
 
 import { readFileSync } from 'node:fs';
@@ -40,6 +46,12 @@ import { dirname, resolve } from 'node:path';
 import { isCliEntry } from './lib/isCliEntry.mjs';
 
 const AGGREGATE_JOB = 'ci-green';
+
+/** Consecutive failed API calls the polling loop tolerates before it gives up. */
+export const MAX_API_ATTEMPTS = 3;
+
+/** Wait before retrying a failed API call, in milliseconds. */
+export const API_RETRY_DELAY_MS = 10_000;
 
 /**
  * Read the top-level jobs of a workflow file: id, optional display `name`, and
@@ -142,8 +154,21 @@ function ghApi(path) {
   return JSON.parse(out);
 }
 
+/**
+ * The API path listing a workflow's push-event runs at one commit. Only push
+ * runs count: a pull-request run at the same head SHA tested a merge with the
+ * base branch, not this commit, and a manual dispatch may run a different
+ * workflow file than the one at the commit.
+ * @param {string} repo
+ * @param {string} workflow
+ * @param {string} sha
+ */
+export function runsQuery(repo, workflow, sha) {
+  return `repos/${repo}/actions/workflows/${workflow}/runs?head_sha=${sha}&event=push&per_page=100`;
+}
+
 function fetchState(repo, workflow, sha, required) {
-  const runs = ghApi(`repos/${repo}/actions/workflows/${workflow}/runs?head_sha=${sha}&per_page=100`).workflow_runs ?? [];
+  const runs = ghApi(runsQuery(repo, workflow, sha)).workflow_runs ?? [];
   const jobsByRun = new Map();
   for (const run of runs) {
     if (run.status !== 'completed') continue;
@@ -166,25 +191,80 @@ async function main(argv) {
   const required = requiredJobNames(parseCiJobs(readFileSync(resolve(root, '.github/workflows', workflow), 'utf8')));
   console.log(`Required CI jobs at ${sha}: ${required.join(', ')}`);
 
-  const started = Date.now();
+  return pollCi({
+    sha,
+    timeoutMs,
+    intervalMs,
+    missingGraceMs,
+    fetchState: () => fetchState(repo, workflow, sha, required),
+  });
+}
+
+/**
+ * Poll the CI state until it is ready, failed, or out of time, and return the
+ * exit code (0 only for ready). A throwing `fetchState` (a failed `gh api`
+ * call) is retried after `retryDelayMs`; after `maxAttempts` consecutive
+ * failures the last error is reported and the result is 1.
+ * @param {{
+ *   sha: string,
+ *   timeoutMs: number,
+ *   intervalMs: number,
+ *   missingGraceMs: number,
+ *   fetchState: () => { state: string, detail: string } | Promise<{ state: string, detail: string }>,
+ *   maxAttempts?: number,
+ *   retryDelayMs?: number,
+ *   now?: () => number,
+ *   sleep?: (ms: number) => Promise<void>,
+ *   log?: (line: string) => void,
+ *   error?: (line: string) => void,
+ * }} opts
+ * @returns {Promise<number>}
+ */
+export async function pollCi(opts) {
+  const {
+    sha, timeoutMs, intervalMs, missingGraceMs, fetchState: fetch,
+    maxAttempts = MAX_API_ATTEMPTS,
+    retryDelayMs = API_RETRY_DELAY_MS,
+    now = Date.now,
+    sleep = (ms) => new Promise((r) => setTimeout(r, ms)),
+    log = (line) => console.log(line),
+    error = (line) => console.error(line),
+  } = opts;
+  const started = now();
   const deadline = started + timeoutMs;
+  let failures = 0;
   for (;;) {
-    const { state, detail } = fetchState(repo, workflow, sha, required);
-    console.log(`${new Date().toISOString()} ${state}: ${detail}`);
+    let result;
+    try {
+      result = await fetch();
+      failures = 0;
+    } catch (err) {
+      failures++;
+      const message = err instanceof Error ? err.message : String(err);
+      if (failures >= maxAttempts) {
+        error(`::error::GitHub API call failed ${failures} times in a row for ${sha}: ${message}`);
+        return 1;
+      }
+      log(`${new Date(now()).toISOString()} API call failed (attempt ${failures} of ${maxAttempts}), retrying: ${message}`);
+      await sleep(retryDelayMs);
+      continue;
+    }
+    const { state, detail } = result;
+    log(`${new Date(now()).toISOString()} ${state}: ${detail}`);
     if (state === 'ready') return 0;
     if (state === 'failed') {
-      console.error(`::error::CI did not pass for ${sha}: ${detail}`);
+      error(`::error::CI did not pass for ${sha}: ${detail}`);
       return 1;
     }
-    if (state === 'missing' && Date.now() - started >= missingGraceMs) {
-      console.error(`::error::no CI run exists for ${sha} after ${missingGraceMs / 60_000} min`);
+    if (state === 'missing' && now() - started >= missingGraceMs) {
+      error(`::error::no CI run exists for ${sha} after ${missingGraceMs / 60_000} min`);
       return 1;
     }
-    if (Date.now() + intervalMs > deadline) {
-      console.error(`::error::CI for ${sha} is ${state} after waiting ${timeoutMs / 60_000} min: ${detail}`);
+    if (now() + intervalMs > deadline) {
+      error(`::error::CI for ${sha} is ${state} after waiting ${timeoutMs / 60_000} min: ${detail}`);
       return 1;
     }
-    await new Promise((r) => setTimeout(r, intervalMs));
+    await sleep(intervalMs);
   }
 }
 

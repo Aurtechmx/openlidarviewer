@@ -17,7 +17,9 @@ on:
     tags:
       - 'v*'
   # Manual runs are dry runs: every job up to release-ready executes, and the
-  # publish job stays skipped unless the ref IS a version tag. A branch cannot
+  # publish job stays skipped unless the ref IS a version tag. release-ready
+  # also needs ci-at-tag, so a dry run reads as ready only when a push-event CI
+  # run at that commit passed; a branch commit with no such run stays not ready. A branch cannot
   # be published by dispatching with the right inputs, because there are no
   # inputs to dispatch.
   workflow_dispatch:
@@ -248,8 +250,8 @@ jobs:
   # The gate above installs Chromium only and runs the deterministic project.
   # Firefox, WebKit, Windows and the other blocking legs run in the CI
   # workflow, which the same tag push starts; its `ci-green` job is the
-  # required check. This job reads the CI runs for the exact tagged commit
-  # through the GitHub API and passes only when a completed run there has
+  # required check. This job reads the push-event CI runs for the exact tagged
+  # commit through the GitHub API and passes only when a completed run there has
   # `ci-green` and every job it needs at `success`. A missing run (after a
   # short grace), a run still pending after the wait, or a cancelled, skipped
   # or failed required job fails it. It starts after validate, so the wait
