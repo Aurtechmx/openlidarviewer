@@ -319,15 +319,25 @@ export const METHOD_REGISTRY: Readonly<Record<string, MethodEntry>> = {
   },
   'olv.registration.epoch-horizontal-icp': {
     id: 'olv.registration.epoch-horizontal-icp',
-    version: 1,
+    version: 2,
     name: 'Repeat-epoch horizontal alignment (yaw + XY, Z locked)',
     summary:
       'The transform applied to align repeat epochs: the yaw and translation from ' +
       'the planar ICP solver, with the vertical component constrained to zero so a ' +
       'real elevation change between epochs is preserved rather than absorbed into ' +
       'the fit. Describes the applied product; the generic solver it wraps is ' +
-      'olv.registration.icp-planar.',
-    citation: 'Besl & McKay (1992), doi:10.1109/34.121791; Umeyama (1991) planar LS',
+      'olv.registration.icp-planar. v2: epochs that declare one CRS start at the ' +
+      'identity pose (no centroid or median warm start); each iteration minimises ' +
+      'point-to-plane distances (target normals from a plane fit within 2 mean point ' +
+      'spacings) over the pairs within 3 mean point spacings, estimated from the ' +
+      'before sample, keeping the best 90 %; the overlap is measured at that same ' +
+      'distance; the fit is withheld when the overlap is under 50 %, when its residual ' +
+      'exceeds 0.75 spacings (or the caller limit, whichever is smaller), or when it ' +
+      'moves the after sample by more than the correspondence distance (RMS). v1 ' +
+      'started from the centroid, paired every point point-to-point, and measured ' +
+      'the overlap at the caller residual limit, so epochs of different extent were ' +
+      'shifted by a share of the footprint difference.',
+    citation: 'Besl & McKay (1992), doi:10.1109/34.121791; Chen & Medioni (1992), doi:10.1016/0262-8856(92)90066-C (point-to-plane); Umeyama (1991) planar LS',
     category: 'registration',
     implementation: ['src/terrain/change/alignEpochs.ts', 'src/terrain/change/icpRegister.ts'],
   },

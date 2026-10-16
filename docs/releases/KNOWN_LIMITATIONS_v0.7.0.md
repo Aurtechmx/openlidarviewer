@@ -922,6 +922,18 @@ ground returns are therefore not compared, even inside both footprints: the
 grid carries no flag that separates a bracketed interpolation from an
 extrapolation, so neither is used.
 
+Epoch alignment starts at the unmoved pose when both epochs declare one CRS,
+pairs points only within three mean point spacings (estimated from the before
+epoch's sample), and measures the overlap at that distance. It is withheld,
+and the epochs compared unshifted, when under half of the sampled after points
+have a partner, when the fit residual exceeds 0.75 spacings, or when the fit
+would move the after sample farther than the pairing distance. A real
+misregistration larger than about three point spacings is therefore not
+corrected; it is reported as withheld. Over flat ground the horizontal shift is
+not constrained by the surface, and the fit leaves it near zero rather than
+guessing. Epochs without a declared CRS still start from a centroid placement,
+under the same gates.
+
 ## The CRS override fingerprint samples a source, it does not hash it
 
 A remembered CRS override records a content fingerprint of its source so that

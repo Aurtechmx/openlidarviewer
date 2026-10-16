@@ -978,8 +978,8 @@ claims:
     supportingDatasets: [synthetic epoch pairs]
     units: [metres]
     crsDatum: "Refuses cross-datum / unknown-datum quantitative comparison."
-    assumptions: ["applied permissively today — refusal-by-default gates are Phase 9"]
-    failureModes: ["low overlap", "stride sampling spatial bias", "geographic-frame ICP"]
+    assumptions: ["applied permissively today — refusal-by-default gates are Phase 9", "epochs that declare one CRS are solved from the unmoved pose with point-to-plane pairs within three mean point spacings of the before sample; the overlap is measured at that distance, and a fit with overlap under 50 %, a residual over 0.75 spacings or a move beyond the pairing distance is withheld"]
+    failureModes: ["low overlap", "stride sampling spatial bias", "geographic-frame ICP", "a real misregistration larger than about three point spacings is withheld, not corrected", "horizontal shift over flat ground is unconstrained and left near zero"]
     exportAllowed: true
     userLabel: "Yaw + horizontal translation (vertical signal preserved)"
     softwareStatus: shipping
