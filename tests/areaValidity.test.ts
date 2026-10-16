@@ -184,3 +184,48 @@ describe('imported records', () => {
     expect(r.value).toBe(4);
   });
 });
+
+describe('planarity verdict under a rigid rotation', () => {
+  type V = [number, number, number];
+  /** Rotate about an arbitrary unit axis by `deg` (Rodrigues). */
+  const rot = (p: V, axis: V, deg: number): V => {
+    const a = (deg * Math.PI) / 180;
+    const c = Math.cos(a);
+    const s = Math.sin(a);
+    const [kx, ky, kz] = axis;
+    const d = kx * p[0] + ky * p[1] + kz * p[2];
+    const x = [ky * p[2] - kz * p[1], kz * p[0] - kx * p[2], kx * p[1] - ky * p[0]];
+    return [0, 1, 2].map((i) => p[i] * c + x[i] * s + axis[i] * d * (1 - c)) as V;
+  };
+  const skew = (h: number): V[] => [[-1, -1, +h], [+1, -1, -h], [+1, +1, +h], [-1, +1, -h]];
+  const tilt: V = [Math.SQRT1_2, 0, Math.SQRT1_2];
+
+  it('a skew square gives one verdict and one ratio whatever its turn in its own plane', () => {
+    for (const h of [0.3, 0.4]) {
+      const base = areaRingVerdict(skew(h));
+      for (const deg of [0, 15, 30, 45, 60, 90, 137]) {
+        const turned = areaRingVerdict(skew(h).map((p) => rot(p, [0, 0, 1], deg)));
+        expect(turned.ok, `h=${h} at ${deg} deg`).toBe(base.ok);
+        if (turned.ok && base.ok) expect(turned.planarityRatio).toBeCloseTo(base.planarityRatio, 9);
+      }
+    }
+  });
+
+  it('the ratio is the largest out-of-plane distance over the in-plane radius', () => {
+    // Radius sqrt(2), spread 0.3: 0.212, accepted; spread 0.4: 0.283, refused.
+    const ok = areaRingVerdict(skew(0.3));
+    expect(ok.ok).toBe(true);
+    if (ok.ok) expect(ok.planarityRatio).toBeCloseTo(0.3 / Math.SQRT2, 9);
+    expect(areaRingVerdict(skew(0.4)).ok).toBe(false);
+  });
+
+  it('a tilted, offset copy of the ring keeps the verdict', () => {
+    for (const h of [0.3, 0.4]) {
+      const base = areaRingVerdict(skew(h));
+      const moved = skew(h).map((p) => rot(rot(p, [0, 0, 1], 33), tilt, 50)).map((p): V => [p[0] + 5e5, p[1] + 4e6, p[2] + 1200]);
+      const v = areaRingVerdict(moved);
+      expect(v.ok).toBe(base.ok);
+      if (v.ok && base.ok) expect(v.planarityRatio).toBeCloseTo(base.planarityRatio, 6);
+    }
+  });
+});
