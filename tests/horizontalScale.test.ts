@@ -13,6 +13,8 @@ import {
   horizontalCellMetresXY,
   cosLatitude,
   METRES_PER_DEGREE,
+  metresPerDegreeLatitude,
+  metresPerDegreeLongitude,
 } from '../src/terrain/ground/horizontalScale';
 
 describe('horizontalCellMetres', () => {
@@ -69,22 +71,32 @@ describe('horizontalCellMetresXY', () => {
     expect(ft.y).toBeCloseTo(3.048, 6);
   });
 
-  it('geographic: Y uses metres-per-degree, X shrinks by cos(latitude)', () => {
+  it('geographic: Y uses the WGS84 meridional degree, X the parallel degree, at the grid latitude', () => {
+    // Hand-evaluated standard series (metres per degree):
+    //   lat: 111132.92 − 559.82 cos 2φ + 1.175 cos 4φ − 0.0023 cos 6φ
+    //   lon: 111412.84 cos φ − 93.5 cos 3φ + 0.118 cos 5φ
+    // φ = 0:  lat 110 574.2727, lon 111 319.458
+    // φ = 60: lat 111 412.2402, lon  55 799.979
     const atEq = horizontalCellMetresXY(0.001, true, 0);
-    expect(atEq.y).toBeCloseTo(0.001 * METRES_PER_DEGREE, 6);
-    expect(atEq.x).toBeCloseTo(atEq.y, 6); // cos 0 = 1
+    expect(atEq.y).toBeCloseTo(110.5742727, 6);
+    expect(atEq.x).toBeCloseTo(111.319458, 6);
 
     const at60 = horizontalCellMetresXY(0.001, true, 60);
-    expect(at60.y).toBeCloseTo(0.001 * METRES_PER_DEGREE, 6);
-    expect(at60.x).toBeCloseTo(at60.y * 0.5, 4); // cos 60° = 0.5 → east–west run halves
+    expect(at60.y).toBeCloseTo(111.4122402, 6);
+    expect(at60.x).toBeCloseTo(55.799979, 6);
+    // East–west run is about half the north–south one at 60°.
+    expect(at60.x / at60.y).toBeCloseTo(0.5, 2);
   });
 
-  it('clamps a degenerate (≥90°) latitude to a POSITIVE X (cos-89° floor)', () => {
-    // The shared cosLatitude clamp: a pole-crossing latitude keeps the E–W
-    // scale finite and non-zero instead of dividing derivatives by ~0.
+  it('clamps a degenerate (≥90°) latitude to a POSITIVE X (89° floor)', () => {
+    // The longitude series is clamped at ±89° like cosLatitude: a pole-crossing
+    // latitude keeps the E–W scale finite and non-zero instead of dividing
+    // derivatives by ~0.
     const polar = horizontalCellMetresXY(0.001, true, 95);
     expect(polar.x).toBeGreaterThan(0);
-    expect(polar.x).toBeCloseTo(polar.y * Math.cos((89 * Math.PI) / 180), 9);
+    expect(polar.x).toBeCloseTo(0.001 * metresPerDegreeLongitude(89), 9);
+    // N–S is the polar meridional degree, ≈ 111 694 m.
+    expect(polar.y).toBeCloseTo(111.6939173, 6);
   });
 
   it('an UNKNOWN latitude (null) keeps the isotropic estimate, never NaN', () => {
@@ -95,5 +107,32 @@ describe('horizontalCellMetresXY', () => {
     const nan = horizontalCellMetresXY(0.001, true, Number.NaN);
     expect(nan.x).toBeCloseTo(nan.y, 9);
     expect(Number.isFinite(nan.x)).toBe(true);
+  });
+});
+
+describe('WGS84 degree lengths', () => {
+  it('the mean degree of latitude is the meridian quadrant over 90 (111 132.95 m)', () => {
+    expect(METRES_PER_DEGREE).toBeCloseTo(10_001_965.729 / 90, 9);
+    expect(METRES_PER_DEGREE).toBeCloseTo(111_132.953, 2);
+  });
+
+  it('the meridional degree runs 110 574 m (equator) to 111 694 m (poles)', () => {
+    expect(metresPerDegreeLatitude(0)).toBeCloseTo(110_574.27, 1);
+    expect(metresPerDegreeLatitude(90)).toBeCloseTo(111_693.92, 1);
+    expect(metresPerDegreeLatitude(-90)).toBeCloseTo(111_693.92, 1);
+    expect(metresPerDegreeLatitude(45)).toBeCloseTo(111_131.745, 2);
+  });
+
+  it('the parallel degree is 111 319.46 m at the equator and ≈ cos φ × that elsewhere', () => {
+    expect(metresPerDegreeLongitude(0)).toBeCloseTo(111_319.458, 2);
+    expect(metresPerDegreeLongitude(45)).toBeCloseTo(78_846.81, 1);
+    expect(metresPerDegreeLongitude(-45)).toBeCloseTo(metresPerDegreeLongitude(45), 9);
+  });
+
+  it('an unknown latitude returns the mean degree on both axes', () => {
+    for (const lat of [null, undefined, Number.NaN]) {
+      expect(metresPerDegreeLatitude(lat)).toBe(METRES_PER_DEGREE);
+      expect(metresPerDegreeLongitude(lat)).toBe(METRES_PER_DEGREE);
+    }
   });
 });

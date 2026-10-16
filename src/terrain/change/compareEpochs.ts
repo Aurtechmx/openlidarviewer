@@ -23,7 +23,7 @@ import { holdoutValidateDtm } from '../validate/holdoutRmse';
 import { makeTrainOnlyReclassifier } from '../validate/trainOnlyReclassify';
 // Tiny pure constant — the unit-aware cell floor must agree with the
 // metres-per-degree scale the rest of the terrain pipeline uses.
-import { METRES_PER_DEGREE } from '../ground/horizontalScale';
+import { METRES_PER_DEGREE, metresPerDegreeLatitude } from '../ground/horizontalScale';
 import type { DtmGrid } from '../ground/cellConfidence';
 import type { TerrainPoint } from '../TerrainContracts';
 import { compareDtms, type CompareDtmsOptions, type EpochComparison } from './compareDtms';
@@ -190,12 +190,15 @@ function dtmOnGrid(cloud: EpochCloud, grid: SharedGrid, holdout = false): { dtm:
   // Match the analysis runner's unit-aware slope-growth run (deriveCoreParams):
   // the SMRF threshold multiplies a rise/run slope by a horizontal run, so that
   // run must share z's unit. A geographic frame's degree-valued cell would
-  // otherwise starve the growth term by ~1/111,320, pinning the threshold at
+  // otherwise starve the growth term by ~1/111,000, pinning the threshold at
   // its base and rejecting legitimate slope ground. cellSizeZUnits rescales the
   // horizontal cell into z's unit; for a projected frame whose axes share one
   // linear unit the ratio is 1 and the filter sees the plain cell size.
+  // Geographic: the meridional degree at the grid-centre latitude, the factor
+  // resolveGroundFilterParams uses. This grid is in the WORLD frame, so its
+  // centre Y is the world latitude.
   const horizToMetres = cloud.isGeographic
-    ? METRES_PER_DEGREE
+    ? metresPerDegreeLatitude(grid.originH2 + (grid.rows * grid.cellSizeM) / 2)
     : cloud.linearUnitToMetres && cloud.linearUnitToMetres > 0
       ? cloud.linearUnitToMetres
       : 1;

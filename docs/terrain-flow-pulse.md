@@ -110,8 +110,9 @@ cell drains to whichever neighbour offers the strictly greatest drop per
 metre of physical distance, with ties broken by that fixed order rather than
 by array layout. The diagonal distance is computed as
 `hypot(dx * cellMetresX, dy * cellMetresY)`, never as `sqrt(2) * cellSize`,
-so an anisotropic grid, including a geographic frame where the east-west
-cell length scales by the cosine of latitude, ranks a diagonal against a
+so an anisotropic grid, including a geographic frame where each axis uses
+the WGS84 degree length at the grid latitude (the east-west one is about the
+cosine of latitude times the north-south one), ranks a diagonal against a
 cardinal neighbour by real geometry.
 
 A cell with no downslope neighbour is a sink, a flat or an outlet, and raw

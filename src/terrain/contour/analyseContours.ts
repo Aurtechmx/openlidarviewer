@@ -70,8 +70,9 @@ import {
 import { getTerrainRasterEngine } from '../engine/TerrainRasterEngine';
 import {
   horizontalCellMetresXY,
-  cosLatitude,
   METRES_PER_DEGREE,
+  metresPerDegreeLatitude,
+  metresPerDegreeLongitude,
 } from '../ground/horizontalScale';
 import { alignedClasses, excludeNonGroundClasses, isNoiseClass, NOISE_CLASSES } from '../ground/classificationFilter';
 import { holdoutValidateDtm } from '../validate/holdoutRmse';
@@ -150,7 +151,8 @@ export interface TerrainCoreParams {
    * geographic frame — the WORLD latitude (render-recentred local Y plus the
    * cloud's world origin), never the recentred local Y itself (which is ≈ 0,
    * silently degrading cos φ to 1). A degree of longitude spans
-   * `METRES_PER_DEGREE·cos φ` metres, so slope/aspect/hillshade and per-cell
+   * about `cos φ` times a degree of latitude (both from the WGS84 series in
+   * horizontalScale.ts), so slope/aspect/hillshade and per-cell
    * densities scale the E–W axis by cos φ — at 60° latitude an uncorrected
    * estimate overstates the E–W run ~2×. Null / omitted keeps the isotropic
    * (cos φ = 1) estimate; ignored entirely for projected frames.
@@ -791,24 +793,24 @@ function gridGeometryInMetres(
   const latKnown = typeof lat === 'number' && Number.isFinite(lat);
   const horizResolved = geographic ? latKnown : (params.horizontalScaleKnown ?? horizOk);
   const horizToM = geographic ? METRES_PER_DEGREE : (horizOk ? horiz : 1);
-  // A geographic frame's east-west extent shrinks by cos(latitude), the same
-  // correction the density figure in this file already applies. Without it a
-  // site at 60 degrees north reported twice its true width.
-  const ewScale =
-    geographic && typeof lat === 'number' && Number.isFinite(lat)
-      ? Math.max(Math.cos((lat * Math.PI) / 180), 1e-6)
-      : 1;
+  // A geographic frame converts each axis with its own WGS84 degree length at
+  // the grid latitude: the parallel degree (≈ cos φ × the meridional one) for
+  // the east-west width, the meridional degree for the north-south depth.
+  // Without the E–W correction a site at 60 degrees north reported twice its
+  // true width. Unknown latitude keeps the isotropic mean on both axes.
+  const ewToM = geographic ? metresPerDegreeLongitude(lat) : horizToM;
+  const nsToM = geographic ? metresPerDegreeLatitude(lat) : horizToM;
   const vert = params.verticalUnitToMetres;
   const vertOk = typeof vert === 'number' && Number.isFinite(vert) && vert > 0;
   // A geographic frame's z is already metric by convention (the other unit
   // resolutions in this file fall back to 1 there); a projected frame's vertical
   // falls back to its horizontal scale. Falling back to METRES_PER_DEGREE here
-  // multiplied a geographic relief by 111,320.
+  // multiplied a geographic relief by ~111,000.
   const vertToM = vertOk ? vert : (geographic ? 1 : horizToM);
   return {
     pointCount,
-    widthM: dtm.cols * dtm.cellSizeM * horizToM * ewScale,
-    depthM: dtm.rows * dtm.cellSizeM * horizToM,
+    widthM: dtm.cols * dtm.cellSizeM * ewToM,
+    depthM: dtm.rows * dtm.cellSizeM * nsToM,
     reliefM: elevationRangeSourceUnits * vertToM,
     unitResolved: horizResolved,
   };
@@ -866,11 +868,12 @@ export function resolveGroundFilterParams(
   // epoch alignment applies to ICP's metre-denominated gate. When both axes
   // share one linear unit the ratio is exactly 1 and the filter sees the
   // plain cell size; a geographic frame's degree-valued cell would otherwise
-  // starve the growth term by ~1/111,320, pinning the threshold at its base
+  // starve the growth term by ~1/111,000, pinning the threshold at its base
   // and rejecting legitimate slope ground.
   let horizToMetres: number;
   if (params.isGeographic) {
-    horizToMetres = METRES_PER_DEGREE;
+    // The meridional degree at the grid latitude (the mean when unknown).
+    horizToMetres = metresPerDegreeLatitude(params.latitudeDeg);
   } else if (params.horizontalUnitToMetres && params.horizontalUnitToMetres > 0) {
     horizToMetres = params.horizontalUnitToMetres;
   } else {
@@ -1343,13 +1346,16 @@ export function computeTerrainCore(
   // Effective metres per horizontal unit: metres-per-degree for a geographic
   // frame, else the projected unit scale (1 for metres, ~0.3048 for feet). Feeds
   // the density (pts/m²) through the cell AREA, which cellMetrics computes as
-  // this scale SQUARED — so for a geographic frame we fold the cos φ
-  // anisotropy in as √(cos φ): area = (cell·M·cos φ)·(cell·M) = (cell·M·√cos φ)²
-  // exactly. Without it a 60°-latitude scan reports ~half the true pts/m² and
-  // an unfairly failing USGS QL. cos φ = 1 (no-op) when latitude is unknown.
+  // this scale SQUARED — so for a geographic frame the two axes' degree
+  // lengths are folded in as their geometric mean:
+  // area = (cell·Mlon)·(cell·Mlat) = (cell·√(Mlon·Mlat))² exactly. Without it a
+  // 60°-latitude scan reports ~half the true pts/m² and an unfairly failing
+  // USGS QL. Both fall back to the isotropic mean when latitude is unknown.
   let horizUnitToMetres: number;
   if (params.isGeographic) {
-    horizUnitToMetres = METRES_PER_DEGREE * Math.sqrt(cosLatitude(params.latitudeDeg));
+    horizUnitToMetres = Math.sqrt(
+      metresPerDegreeLongitude(params.latitudeDeg) * metresPerDegreeLatitude(params.latitudeDeg),
+    );
   } else if (params.horizontalUnitToMetres && params.horizontalUnitToMetres > 0) {
     horizUnitToMetres = params.horizontalUnitToMetres;
   } else {

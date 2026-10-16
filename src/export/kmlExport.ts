@@ -37,6 +37,7 @@ import {
 } from './measurementExport';
 import { verticalReferenceKey } from '../model/layerCompatibility';
 import type { LocalToLonLatSourceZ } from './lonLatMapper';
+import { metresPerDegreeLatitude, metresPerDegreeLongitude } from '../terrain/ground/horizontalScale';
 import {
   ScanFootprintError,
   type FootprintRing,
@@ -469,7 +470,12 @@ function viewpointPlacemark(v: KmlViewpoint, input: KmlExportInput): string {
   // Degrees are not metres; combine the planar great-circle estimate with the
   // altitude delta and a 1 m floor. A viewpoint hint, not a survey value —
   // consistent with the not-survey-grade caveat.
-  const range = Math.max(Math.abs(dAlt), Math.hypot(dLon, dLat) * 111_320, 1);
+  const lat = anchor[1];
+  const range = Math.max(
+    Math.abs(dAlt),
+    Math.hypot(dLon * metresPerDegreeLongitude(lat), dLat * metresPerDegreeLatitude(lat)),
+    1,
+  );
   return [
     '<Placemark>',
     `<name>${esc(v.name)}</name>`,

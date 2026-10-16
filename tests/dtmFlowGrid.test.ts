@@ -85,14 +85,16 @@ describe('cell size becomes two metric lengths', () => {
     expect(grid.cellMetresY).toBeCloseTo(2, 10);
   });
 
-  it('shortens the east–west axis by cos latitude in a geographic frame', () => {
+  it('shortens the east–west axis by about cos latitude in a geographic frame', () => {
     // The case a single scalar cell size gets wrong: a degree of longitude is
-    // shorter than a degree of latitude everywhere but the equator.
+    // shorter than a degree of latitude everywhere but the equator. On WGS84
+    // at 60° they are 55 799.979 m and 111 412.240 m (standard series).
     const { grid } = dtmToFlowGrid(demOf([[1, 2]]), {
       isGeographic: true, latitudeDeg: 60, unitToMetres: 1, resolved: true,
     });
     expect(grid.cellMetresX).toBeLessThan(grid.cellMetresY);
-    expect(grid.cellMetresX / grid.cellMetresY).toBeCloseTo(Math.cos(60 * Math.PI / 180), 6);
+    expect(grid.cellMetresX / grid.cellMetresY).toBeCloseTo(55_799.979 / 111_412.2402, 6);
+    expect(grid.cellMetresX / grid.cellMetresY).toBeCloseTo(0.5, 2);
   });
 });
 
