@@ -61,6 +61,8 @@ function reasonClause(reason: NodeBlockReason, profile: TerrainAccessProfile, on
     case 'low-confidence': return `${be} below terrain confidence ${profile.minimumTerrainConfidence}`;
     case 'ruggedness': return `${one ? 'exceeds' : 'exceed'} the ruggedness limit ${profile.maxRuggedness}`;
     case 'obstruction': return `${one ? 'carries' : 'carry'} an above-ground obstruction`;
+    case 'obstruction-unknown': return `${one ? 'has' : 'have'} no above-ground return to check the obstruction limit against`;
+    case 'derivative-support': return `${one ? 'has a slope' : 'have slopes'} computed with a synthesised neighbour`;
     case 'vehicle-width':
       return `${be} too close to unsupported terrain or the survey edge for the ${profile.vehicleWidth} m vehicle width`;
   }
@@ -90,3 +92,91 @@ export function topBlockReasonSentence(eligibility: NodeEligibility, profile: Te
   const noun = one ? 'cell' : 'cells';
   return `${countText(topCount)} ${noun} ${reasonClause(top, profile, one)}.`;
 }
+
+/** The slope-derived limits whose status can be `estimated`. */
+export type DerivativeEstimatedConstraint = 'longitudinalGrade' | 'crossSlope' | 'ruggedness';
+
+/** Route cells behind one `estimated` status, from `RouteDiagnostics`. */
+export interface DerivativeEstimateCounts {
+  readonly routeCells: number;
+  readonly boundaryRouteCells: number;
+  readonly holeRouteCells: number;
+}
+
+const ESTIMATE_SUBJECT: Readonly<Record<DerivativeEstimatedConstraint, string>> = Object.freeze({
+  longitudinalGrade: 'Longitudinal grade',
+  crossSlope: 'Cross-slope',
+  ruggedness: 'Ruggedness',
+});
+
+const cellsText = (n: number, kind: 'route' | 'grid'): string => `${countText(n)} ${kind} ${n === 1 ? 'cell' : 'cells'}`;
+
+/**
+ * The one sentence that states a limit was estimated rather than evaluated.
+ * The run card, the limitations, the diagnostics CSV, the README and the run
+ * record all carry this exact string, so the wording cannot drift between them.
+ */
+export function derivativeEstimateStatement(
+  constraint: DerivativeEstimatedConstraint,
+  counts: DerivativeEstimateCounts,
+): string {
+  const head = `${ESTIMATE_SUBJECT[constraint]} estimated from substituted neighbours on ${cellsText(counts.routeCells, 'route')}`;
+  if (constraint === 'ruggedness') return `${head} (its window holds a cell whose slope used a substituted neighbour).`;
+  return `${head} (${countText(counts.boundaryRouteCells)} at the outer boundary, `
+    + `${countText(counts.holeRouteCells)} beside interior NoData holes).`;
+}
+
+/** What makes an above-ground obstruction limit an estimate, from the run's surface basis and route. */
+export interface ObstructionEstimateCounts {
+  /** The surface's points when they are a sample of the scan; null when they are not. */
+  readonly sample: { readonly pointsRead: number | null; readonly sourcePoints: number | null } | null;
+  /** Route cells with no above-ground return, out of `routeCells`. */
+  readonly unevaluatedRouteCells: number;
+  readonly routeCells: number;
+}
+
+/**
+ * The obstruction counterpart of {@link derivativeEstimateStatement}: one
+ * string for the run card, limitations, CSV, README and run record. Empty
+ * when nothing makes the limit an estimate.
+ */
+export function obstructionEstimateStatement(counts: ObstructionEstimateCounts): string {
+  const parts: string[] = [];
+  const { sample } = counts;
+  if (sample) {
+    const of = sample.pointsRead != null && sample.sourcePoints != null && sample.sourcePoints > sample.pointsRead
+      ? `${countText(sample.pointsRead)} of ${countText(sample.sourcePoints)} points` : 'the points';
+    parts.push(`Above-ground obstruction is estimated from a sample of ${of}; thin returns such as posts or wires can be missed.`);
+  }
+  if (counts.unevaluatedRouteCells > 0) {
+    parts.push(`Above-ground obstruction could not be checked on ${countText(counts.unevaluatedRouteCells)} of `
+      + `${countText(counts.routeCells)} route cells: the surface has no above-ground evidence there, so those cells `
+      + 'are not known to be clear.');
+  }
+  return parts.join(' ');
+}
+
+/** The preview's grid-wide form of {@link derivativeEstimateStatement}, under the exploratory policy. */
+export function derivativeEstimateGridStatement(cells: number, boundary: number, hole: number): string {
+  return `Longitudinal grade and cross-slope estimated from substituted neighbours on ${cellsText(cells, 'grid')} `
+    + `(${countText(boundary)} at the outer boundary, ${countText(hole)} beside interior NoData holes). `
+    + 'The exploratory evidence policy allows these cells; a route over them reports those limits as estimated.';
+}
+
+/** The why-not inspector's clause for one cell whose slope used a substituted neighbour. */
+export function derivativeEstimateCellClause(boundary: boolean): string {
+  return `grade and cross-slope here are estimated from substituted neighbours (${boundary ? 'outer boundary' : 'interior NoData hole'})`;
+}
+
+/** Reader names for the keys of a run record's `result.constraints`, shared by the run card and the README. */
+export const TERRAIN_ACCESS_CONSTRAINT_LABEL: Readonly<Record<string, string>> = Object.freeze({
+  longitudinalGrade: 'Longitudinal grade',
+  crossSlope: 'Cross slope',
+  stepHeight: 'Step height',
+  minimumTerrainConfidence: 'Minimum confidence',
+  vehicleWidth: 'Vehicle width',
+  ruggedness: 'Ruggedness',
+  vehicleLength: 'Vehicle length',
+  aboveGroundObstruction: 'Above-ground obstruction',
+  derivativeSupport: 'Slope from a synthesised neighbour',
+});

@@ -18,6 +18,7 @@ import { parseCopcMetadata } from './copcHeader';
 import { readLasCrsLocation, resolveLasCrs } from '../crs';
 import { parseHierarchyPage } from './copcHierarchy';
 import type { HierarchyPage } from './copcHierarchy';
+import { fingerprintParts } from '../sourceFingerprint';
 import type {
   CopcMetadata,
   OctreeCube,
@@ -46,6 +47,11 @@ export class CopcSource {
   private readonly _rootPage: HierarchyPage;
   /** Total file size, for refusing hierarchy ranges that point past EOF. */
   private readonly _size: number;
+  /**
+   * Content fingerprint of the head slice and root hierarchy page this open
+   * read (`olvsrc1-copc:`), or null when Web Crypto is unavailable.
+   */
+  readonly sourceDigest: string | null;
 
   private constructor(
     range: RangeSource,
@@ -53,12 +59,14 @@ export class CopcSource {
     cube: OctreeCube,
     rootPage: HierarchyPage,
     size: number,
+    sourceDigest: string | null,
   ) {
     this._range = range;
     this._metadata = metadata;
     this._cube = cube;
     this._rootPage = rootPage;
     this._size = size;
+    this.sourceDigest = sourceDigest;
   }
 
   /**
@@ -131,8 +139,11 @@ export class CopcSource {
       );
     }
     const rootPage = parseHierarchyPage(rootBuffer, cube, metadata.info.spacing);
+    // Fingerprint the bytes already read: the head (header, VLRs) and the root
+    // hierarchy page, which lists every node's offset, size and point count.
+    const sourceDigest = await fingerprintParts('copc', size, [new Uint8Array(head), new Uint8Array(rootBuffer)]);
 
-    return new CopcSource(range, metadata, cube, rootPage, size);
+    return new CopcSource(range, metadata, cube, rootPage, size, sourceDigest);
   }
 
   /** The parsed COPC metadata — LAS header facts and the `info` VLR. */

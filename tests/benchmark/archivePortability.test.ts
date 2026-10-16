@@ -14,7 +14,9 @@
  */
 import { describe, it, expect } from 'vitest';
 // @ts-expect-error — plain .mjs tooling module, no type declarations
-import { bareSpecifier, markdownTargets, linkCandidates, importSpecifiers, scriptFileTargets, documentedScripts, manifestInventoryPaths, classifyMarkdownReferences, rootDocumentReferences, readsPackageFromNodeModules } from '../../scripts/verify-archive-portability.mjs';
+import { bareSpecifier, markdownTargets, linkCandidates, importSpecifiers, scriptFileTargets, documentedScripts, manifestInventoryPaths, classifyMarkdownReferences, rootDocumentReferences, readsPackageFromNodeModules, archiveSource, skipResult } from '../../scripts/verify-archive-portability.mjs';
+// @ts-expect-error: plain .mjs tooling module, no type declarations
+import { ranOutcome } from '../../scripts/publication-battery.mjs';
 
 describe('bareSpecifier', () => {
   it('names the package for bare and scoped specifiers', () => {
@@ -217,5 +219,34 @@ describe('readsPackageFromNodeModules', () => {
   it('needs both halves of a scoped name, not either one', () => {
     expect(readsPackageFromNodeModules(['node_modules/@fontsource-variable/roboto'], '@fontsource-variable/inter')).toBe(false);
     expect(readsPackageFromNodeModules(['node_modules/other-scope/inter'], '@fontsource-variable/inter')).toBe(false);
+  });
+});
+
+describe('archiveSource', () => {
+  it('uses --archive first, then OLV_ARCHIVE_DIR', () => {
+    expect(archiveSource({ explicit: '/x', envDir: '/y', repoPresent: false })).toEqual({ mode: 'explicit', dir: '/x' });
+    expect(archiveSource({ explicit: undefined, envDir: '/y', repoPresent: true })).toEqual({ mode: 'explicit', dir: '/y' });
+  });
+
+  it('builds from the repository when one is present', () => {
+    expect(archiveSource({ explicit: undefined, envDir: undefined, repoPresent: true }).mode).toBe('build');
+  });
+
+  it('skips a Git-free extraction run without an archive, naming how to run it', () => {
+    const r = archiveSource({ explicit: undefined, envDir: undefined, repoPresent: false });
+    expect(r.mode).toBe('skip');
+    expect(r.reason).toMatch(/^skipped: repository-only check/);
+    expect(r.reason).toMatch(/--archive <extracted-dir>/);
+  });
+});
+
+describe('skipResult', () => {
+  it('is read by the publication battery as a skip with the same reason, not a pass', () => {
+    const { reason } = archiveSource({ explicit: undefined, envDir: undefined, repoPresent: false });
+    const result = skipResult(reason, 12, new Date('2026-01-01T00:00:00Z'));
+    expect(result.skipped).toBe(true);
+    expect(result.generatedAt).toBe('2026-01-01T00:00:00.000Z');
+    expect(result.totals).toMatchObject({ checks: 0, passed: 0, skipped: 12 });
+    expect(ranOutcome(0, result)).toEqual({ status: 'skipped', note: reason });
   });
 });

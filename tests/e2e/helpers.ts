@@ -74,6 +74,44 @@ export async function openClassesPage(page: Page): Promise<void> {
  * shows/collapses doesn't need to ripple through each of them.
  */
 /**
+ * The Back that leaves a mode's task page. While the header location bar
+ * shows a Back to the parent (the root carries `olv-has-header-back`), the
+ * rail's task header shows only the title, so this is the header's Back; on a
+ * phone, or while a workspace's own close holds the header Back, it is the
+ * rail's. One selector picks by the same class the stylesheet reads, so it
+ * matches exactly one control in every state.
+ */
+export function taskBack(page: Page, mode: string): Locator {
+  return page.locator(
+    `html.olv-has-header-back .olv-topbar > .olv-loc > .olv-loc-back, html:not(.olv-has-header-back) #olv-ws-mode-${mode} > .olv-ws-task > .olv-ws-back`,
+  );
+}
+
+/**
+ * Wait until the location bar has repainted for the current route. It repaints
+ * once per animation frame, so after a navigation or a workspace opening the
+ * header Back (and which of the two Backs shows) can be one frame behind.
+ */
+export async function settleLocation(page: Page): Promise<void> {
+  await page.evaluate(() => new Promise<void>((done) => requestAnimationFrame(() => requestAnimationFrame(() => done()))));
+}
+
+/** Click a mode's task Back once the location bar has caught up. */
+export async function clickTaskBack(page: Page, mode: string): Promise<void> {
+  await settleLocation(page);
+  await taskBack(page, mode).click();
+}
+
+/** Go Back until the mode shows its home. */
+export async function backToModeHome(page: Page, mode: string): Promise<void> {
+  await settleLocation(page);
+  while (await taskBack(page, mode).isVisible()) {
+    await taskBack(page, mode).click();
+    await settleLocation(page);
+  }
+}
+
+/**
  * Open a scene tool's page in the Tools mode through its launcher row. The
  * Tools home shows only the launcher; each tool's panel is a page of its own.
  */
@@ -81,8 +119,7 @@ export async function openToolPage(page: Page, title: 'Measure' | 'Annotate' | '
   await showWorkspaceMode(page, 'work');
   const heading = page.locator('#olv-ws-mode-work .olv-ws-task-title');
   if ((await heading.isVisible()) && (await heading.textContent()) === title) return;
-  const back = page.locator('#olv-ws-mode-work .olv-ws-back');
-  if (await back.isVisible()) await back.click();
+  await backToModeHome(page, 'work');
   await page.locator('.olv-tool-launcher .olv-tl-row', { hasText: title }).click();
 }
 
@@ -124,8 +161,7 @@ export async function openAnalysePage(
   const heading = page.locator('#olv-ws-mode-analyse .olv-ws-task-title');
   const want = { terrain: 'Terrain', contours: 'Contours', objects: 'Objects & Space', features: 'Feature candidates', range: 'Range frames' }[target];
   if ((await heading.isVisible()) && (await heading.textContent()) === want) return;
-  const back = page.locator('#olv-ws-mode-analyse .olv-ws-back');
-  while (await back.isVisible()) await back.click();
+  await backToModeHome(page, 'analyse');
   const row = target === 'contours' ? 'terrain' : target;
   await page.locator(`.olv-ah-row[data-analysis="${row}"] .olv-ah-open`).click({ timeout: 20_000 });
   if (target === 'contours') await page.locator('.olv-at-link').click();
@@ -330,6 +366,57 @@ export async function dropTerrainAccessUtmLas(page: Page): Promise<void> {
   const dataTransfer = await page.evaluateHandle((b) => {
     const dt = new DataTransfer();
     dt.items.add(new File([new Uint8Array(b)], 'terrain-access-utm.las'));
+    return dt;
+  }, [...bytes]);
+  await page.dispatchEvent('body', 'drop', { dataTransfer });
+}
+
+/** Where the raised box of {@link dropTerrainAccessBoxLas} sits, in the scan CRS. */
+export const TERRAIN_ACCESS_BOX = Object.freeze({
+  originX: 500_000, originY: 4_100_000, sizeM: 12,
+  xMin: 4.5, xMax: 7.5, yMin: 1.5, yMax: 10.5, heightM: 3,
+});
+
+/**
+ * Drop a LAS (UTM zone 13N, metres) of a 12 m square of ground at 0.125 m
+ * spacing, a gentle 1 cm/m east-rising plane classified ground (ASPRS 2), with
+ * a raised box: a second return 3 m above the ground, classified building
+ * (ASPRS 6), over x 4.5..7.5 m and y 1.5..10.5 m. The ground under the box is
+ * still measured, so the DTM stays continuous and only the DSM carries the
+ * box; the strips below y 1.5 m and above y 10.5 m leave a way round. The
+ * spacing is half the 0.25 m cell the terrain run picks for this extent, so
+ * every cell holds returns.
+ */
+export async function dropTerrainAccessBoxLas(page: Page): Promise<void> {
+  (globalThis as Record<string, unknown>).__BUILD_IDENTITY__ ??= {
+    version: '0.0.0-test', commit: 'unknown', dirty: false, builtAt: '1970-01-01T00:00:00.000Z',
+  };
+  const { writeLas } = await import('../../src/convert/writeLas');
+  const b = TERRAIN_ACCESS_BOX;
+  const step = 0.125;
+  const n = Math.round(b.sizeM / step);
+  const xs: number[] = [];
+  const ys: number[] = [];
+  const zs: number[] = [];
+  const cls: number[] = [];
+  for (let i = 0; i < n; i++) {
+    for (let j = 0; j < n; j++) {
+      const px = (i + 0.5) * step;
+      const py = (j + 0.5) * step;
+      const ground = 200 + 0.01 * px;
+      xs.push(b.originX + px); ys.push(b.originY + py); zs.push(ground); cls.push(2);
+      if (px >= b.xMin && px <= b.xMax && py >= b.yMin && py <= b.yMax) {
+        xs.push(b.originX + px); ys.push(b.originY + py); zs.push(ground + b.heightM); cls.push(6);
+      }
+    }
+  }
+  const bytes = writeLas({
+    count: xs.length, x: Float64Array.from(xs), y: Float64Array.from(ys), z: Float64Array.from(zs),
+    classification: Uint8Array.from(cls),
+  }, { epsg: 32613, isGeographic: false, linearUnitCode: 9001 });
+  const dataTransfer = await page.evaluateHandle((data) => {
+    const dt = new DataTransfer();
+    dt.items.add(new File([new Uint8Array(data)], 'terrain-access-box-utm.las'));
     return dt;
   }, [...bytes]);
   await page.dispatchEvent('body', 'drop', { dataTransfer });

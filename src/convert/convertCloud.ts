@@ -439,6 +439,7 @@ export function convertCloud(
       const semantics = planClassSemantics({
         sourcePdrf: cloud.metadata?.pointFormat,
         provenance: cloud.classificationProvenance,
+        producerClassification: cloud.originalClassification,
         classification: g.classification,
         classificationFlags: g.classificationFlags,
         count: g.count,
@@ -486,6 +487,7 @@ export function convertCloud(
       const semantics = planClassSemantics({
         sourcePdrf: cloud.metadata?.pointFormat,
         provenance: cloud.classificationProvenance,
+        producerClassification: cloud.originalClassification,
         classification: g.classification,
         classificationFlags: g.classificationFlags,
         count: g.count,

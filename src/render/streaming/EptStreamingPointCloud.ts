@@ -48,6 +48,8 @@ import type {
 import type { EptDataType, EptKey, EptMetadata } from '../../io/ept/eptTypes';
 import { eptStringToKey } from '../../io/ept/eptTypes';
 import { eptHierarchyUrl, eptTileUrl } from '../../io/ept/eptUrls';
+import { fingerprintParts } from '../../io/sourceFingerprint';
+import { canonicalJson } from '../../canonicalHash';
 import { decodeEptBinaryTile } from '../../io/ept/eptBinaryDecode';
 import { EptOctree } from './EptOctree';
 import { nextStreamingScanId } from './streamingScanId';
@@ -118,6 +120,11 @@ export class EptStreamingPointCloud implements StreamingSource {
 
   readonly octree: EptOctree;
   readonly metadata: EptMetadata;
+  /**
+   * Content fingerprint of the manifest and root hierarchy document this open
+   * read (`olvsrc1-ept:`), or null when either was unavailable.
+   */
+  sourceDigest: string | null = null;
   /** Dataset base URL — every tile + hierarchy URL builds from this. */
   readonly baseUrl: string;
   /**
@@ -175,8 +182,13 @@ export class EptStreamingPointCloud implements StreamingSource {
     search = '',
   ): Promise<EptStreamingPointCloud> {
     const renderOrigin = pickRenderOriginFromCube(metadata.bounds.cubic as Box6);
-    const fetcher = (key: EptKey, s?: AbortSignal): Promise<string> =>
-      transport.fetchText(eptHierarchyUrl(baseUrl, key, search), s);
+    // The root hierarchy document is kept for the source fingerprint.
+    let rootHierarchy: string | null = null;
+    const fetcher = async (key: EptKey, s?: AbortSignal): Promise<string> => {
+      const text = await transport.fetchText(eptHierarchyUrl(baseUrl, key, search), s);
+      if (key.d === 0 && rootHierarchy === null) rootHierarchy = text;
+      return text;
+    };
     const octree = new EptOctree(metadata, fetcher);
     // Load only enough hierarchy to render coarse geometry, then attach — a
     // multi-billion-point EPT links to thousands of sub-files, and waiting for
@@ -199,6 +211,12 @@ export class EptStreamingPointCloud implements StreamingSource {
     const cloud = new EptStreamingPointCloud(
       metadata, baseUrl, name, renderOrigin, octree, transport, search,
     );
+    if (rootHierarchy !== null) {
+      const enc = new TextEncoder();
+      const manifest = enc.encode(canonicalJson(metadata));
+      const root = enc.encode(rootHierarchy);
+      cloud.sourceDigest = await fingerprintParts('ept', manifest.byteLength + root.byteLength, [manifest, root]);
+    }
     if (!octree.fullyLoaded) {
       // Fire-and-forget: the coarse cloud already renders, so a failed or
       // aborted deepening just leaves the scheduler fewer deep nodes to choose.

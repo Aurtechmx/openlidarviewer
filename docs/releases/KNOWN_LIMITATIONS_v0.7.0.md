@@ -50,12 +50,15 @@ recovery journal does not keep class edits either, and a streaming scan cannot
 be reclassified, so Save session gives no warning there. Storing an edit log
 keyed to the source file's SHA-256 is planned for v0.7.1.
 
-## A Safari chunk failure online can still reload the page
+## A Safari chunk failure does not reload the page by itself
 
 When a lazy part of the app fails to load while the browser reports a
-connection, the page reloads only if the server no longer has the file. Safari
-names no file in that error, so on a connection that reports online but has no
-uplink, Safari still reloads the page once, as before.
+connection, the page reloads on its own only when the server confirms the file
+is gone. Safari names no file in that error, so the cause cannot be checked and
+the page is kept: a notice offers Retry, and a reload is offered only after a
+failed retry or a second failure, through a dialog that says what reloading
+would discard. A Safari tab left open across a new deploy therefore needs that
+explicit reload to load the new version.
 
 ## Clear classifications holds for one session on a loaded scan
 
@@ -292,9 +295,14 @@ readouts give elevation in the dataset's vertical datum and unit, or say it is
 unknown. Lengths, slopes and steps are in metres; a run refuses by name
 (`UNITS_UNRESOLVED`) when the horizontal scale or the vertical unit does not
 resolve. Other named refusals are `NO_DTM`, `INVALID_PROFILE`, `START_BLOCKED`,
-`END_BLOCKED`, `NO_ROUTE`, `INSUFFICIENT_EVIDENCE` and `TOO_LARGE`, and the Lab
-refuses a preview or run whose terrain may have changed since the profile was
-applied.
+`END_BLOCKED`, `NO_ROUTE`, `INSUFFICIENT_EVIDENCE`, `TOO_LARGE`,
+`OBSTRUCTION_EVIDENCE_UNAVAILABLE` (an above-ground obstruction limit is set
+and no aligned above-ground surface exists), `SURFACE_MISALIGNED` (the
+above-ground surface does not cover the same cells as the terrain),
+`SURFACE_STALE` (the above-ground surface was built with a different terrain
+surface) and `INVALID_ROI` (a region-of-interest mask that does not fit the
+grid), and the Lab refuses a preview or run whose terrain may have changed
+since the profile was applied.
 
 The cell readout states a real elevation with its resolved unit, or
 "unknown" rather than the DTM's grid-local `z` printed bare, using the same
@@ -318,6 +326,25 @@ either end cell and the move's own rise over its length, and its cross slope
 the larger of the two end cells' sideways Horn components. The figure is
 conservative: a cell-scale feature steeper than its neighbourhood gates the
 moves across it even where the smoothed gradient is gentle.
+
+The default evidence-gap policy is exploratory. Under it, a cell whose slope
+or aspect used a substituted Horn neighbour (the grid's outer ring or beside a
+NoData void) is allowed, and so is a cell with no above-ground return when the
+obstruction limit is evaluated: such a cell passes the obstruction limit
+because nothing was measured above it, not because it was shown to be clear.
+Cross-slope, longitudinal grade and an evaluated ruggedness limit are then
+marked `estimated`, not `evaluated`, when any route cell used a substituted
+neighbour, and the obstruction limit is marked `estimated` when any route
+cell has no above-ground return. The run card, run record and diagnostics CSV
+report the route share of those cells and the policy applied. The conservative
+policy blocks both kinds of cell instead, and with a ruggedness limit also any
+cell whose ruggedness window holds a substituted-neighbour cell, which can
+leave no route on a small or patchy grid.
+
+The obstruction surface leaves out ASPRS noise (classes 7 and 18). When the
+terrain run read a sample of the scan rather than every point, the obstruction
+limit is marked `estimated` under either policy: thin returns such as posts or
+wires can be missing from the sample.
 
 Vehicle length is recorded in the profile and the diagnostics but not
 enforced: eligibility uses width-only clearance, not full swept-body
@@ -353,10 +380,11 @@ consecutive passes, counted by `scripts/ios-streak.mjs`.
 
 ## The two monoliths are still monoliths
 
-`src/main.ts` is 4,280 lines, fifty-two fewer since the Save view snapshot
+`src/main.ts` is 4,260 lines, seventy-two fewer since the Save view snapshot
 moved to its own lazy module, the Analyse panel's longitude and latitude
-wiring moved to the mapper module and the view cube's wiring was condensed, and
-`src/render/Viewer.ts` is 5,953, two hundred and seventy lines
+wiring moved to the mapper module, the Planetary Computer CRS record moved to
+its own module and the view cube's wiring was condensed, and
+`src/render/Viewer.ts` is 5,946, two hundred and seventy-seven lines
 below its v0.6.9 count. Five getters collapsed to make room for a memory
 accessor and a size-mode call, and the streamed draw cull then paid for its own
 wiring by moving the pass onto the streaming renderer and collapsing two more
@@ -372,7 +400,7 @@ fails the build when either passes its recorded baseline, so a raise is a hand
 edit to `docs/validation/monolith-size-baseline.json` and always shows in the
 diff. It caught an added line twice during this cycle, and a banked drop once.
 Fan-out is 97 for the shell, 74 for the renderer and 23 for the Analyse panel,
-across 1139 modules with no dependency cycles.
+across 1144 modules with no dependency cycles.
 
 ## The shell has little headroom
 
@@ -840,17 +868,11 @@ hold-out RMSEz over the whole surface: a point-vs-surface residual with the
 ground re-classified from the training points only, and it includes the
 epoch's own bias. It is not checkpoint accuracy and not a per-cell DEM
 uncertainty. The 95 % level holds only if the errors are normal, independent
-and unbiased. σreg is the alignment's 3-D RMS residual, a proxy (fit misfit;
-not shown to bound vertical registration error; alignment does not solve z).
-The vertical registration error is not measured on its own. When no alignment is applied or a hold-out cannot run,
-the threshold falls back to a fixed 0.1 m and the result labels it "assumed,
-not measured". The difference raster (.asc) has no header field for the
-(Wheaton et al. 2010, uniform form). Each σz is that epoch's hold-out RMSEz over
-the whole surface, not a per-cell field. σreg must be the vertical registration
-error measured on stable reference areas; the app has no stable-area assessment
-yet, so σreg is unavailable. The alignment's residuals (at the applied pose, and
-the solver's own fit) are reported but are fit statistics and are not used as
-σreg. With σreg missing and both σz measured, the threshold is
+and unbiased. σreg must be the vertical registration error measured on stable
+reference areas; the app has no stable-area assessment yet, so σreg is
+unavailable. The alignment's residuals (at the applied pose, and the solver's
+own fit) are reported but are fit statistics and are not used as σreg. With
+σreg missing and both σz measured, the threshold is
 max(1.96·√(σz_before² + σz_after²), 0.1 m) and is labelled "incomplete — lower
 bound"; significance counts and detectable volumes carry the same label, and the
 raw net volume is unthresholded. Only when no term is known does it fall back to
@@ -858,3 +880,41 @@ a fixed 0.1 m labelled "assumed, not measured". Two DTMs are differenced only
 when they share a grid to float64 representation; an offset grid is refused,
 not resampled. The difference raster (.asc) has no header field for the
 threshold, so the level of detection travels in the panel text, not the file.
+
+## The CRS override fingerprint samples a source, it does not hash it
+
+A remembered CRS override records a content fingerprint of its source so that
+two files agreeing on name, point count, extent and position are still told
+apart. The fingerprint is taken at open from a few parts of the source: the
+first and last 64 KiB of a local or fetched file (with its size), the COPC
+header and VLRs with the root hierarchy page, or the EPT manifest with the root
+hierarchy document. Of each part it hashes at most the first 64 KiB, and it
+records each part's full length. Two sources whose parts have the same lengths
+and differ only after the first 64 KiB of a part, or only in the unsampled
+interior of a file, get the same fingerprint, so the override still applies to
+the edited source. Fingerprints taken different ways are not compared. Where
+Web Crypto is unavailable, as in an insecure context, or a read fails, no
+fingerprint is taken and the override matches on name, point count, extent and
+position alone, as do records saved without one.
+
+## Orthographic PNG transparency marks pixels with no drawn point
+
+The georeferenced orthographic PNG makes a pixel transparent when no drawn
+point covers it, not when the survey has no data there. Gaps between the points
+of a sparse or thinned cloud are therefore transparent even inside the scanned
+area, and a larger point size closes them. A pixel counts as covered at 50 %
+coverage or more; below that it is transparent, so the thin antialiased edge of
+a point can be dropped. To find coverage the export renders the view twice,
+once on a black and once on a white background, and both frames are drawn on
+the live canvas, so the view flashes black and white while the export runs.
+
+## Held session work is restored only within the same page
+
+Session work kept because its scan was not open at import is held in memory.
+It is placed when the matching scan is opened later in the same page; reloading
+or closing the page loses the held copy, although a session saved before that
+writes it back. Work that names a scan still not open, or a source that is open
+twice and so cannot be matched to one scan, stays held. In a session with no
+project frame, work marked as placed in a project frame is reported as not
+restored. Opening a streamed COPC or EPT scan does not trigger the restore;
+only a static scan open does.

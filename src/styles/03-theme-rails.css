@@ -209,6 +209,7 @@ body.olv-theme-field,
 body.olv-theme-high-contrast {
   --state-measured: var(--rating-excellent);
   --state-preview: var(--rating-moderate);
+  --caution: var(--rating-moderate);
   --state-review: var(--rating-weak);
   --state-blocked: var(--rating-blocked);
   --state-derived: var(--accent);

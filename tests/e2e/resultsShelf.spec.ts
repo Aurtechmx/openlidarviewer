@@ -7,7 +7,7 @@
  */
 import { test, expect, type Page } from '@playwright/test';
 import { fileURLToPath } from 'node:url';
-import { dropDenseGridPly, openAnalysePanel, placeTestDistance, showWorkspaceMode, closeScanFromDock } from './helpers';
+import { dropDenseGridPly, openAnalysePanel, placeTestDistance, showWorkspaceMode, closeScanFromDock, clickTaskBack } from './helpers';
 
 const MULTICHUNK = fileURLToPath(new URL('../fixtures/multichunk.laz', import.meta.url));
 
@@ -138,7 +138,7 @@ test.describe('results shelf', () => {
     await openAnalysePanel(page);
     await page.locator('.olv-analyse-run').click();
     await expect(page.locator('.olv-fit-verdict-text')).toBeVisible({ timeout: 30_000 });
-    await page.locator('#olv-ws-mode-analyse .olv-ws-back').click();
+    await clickTaskBack(page, 'analyse');
     await page.locator('.olv-ah-row[data-analysis="flow-pulse"] .olv-ah-open').click();
     const labPage = page.locator('.olv-analyse-page[data-page="flow-pulse"]');
     await expect(labPage).toBeVisible({ timeout: 20_000 });

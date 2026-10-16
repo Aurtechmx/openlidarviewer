@@ -22,9 +22,8 @@
 // for the masquerade rule, not a citation of any record.
 
 import { describe, it, expect } from 'vitest';
-import { readFileSync, mkdtempSync, mkdirSync, copyFileSync, writeFileSync } from 'node:fs';
+import { readFileSync, mkdirSync, copyFileSync, writeFileSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
-import { tmpdir } from 'node:os';
 import { resolve, dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -33,6 +32,7 @@ import { fileURLToPath } from 'node:url';
 import { collectTerrainFieldProblems, parseRegisterIds } from '../scripts/lint-terrain-field-ids.mjs';
 // @ts-expect-error - plain .mjs script, no types
 import { serialOrder, mustPrecede } from '../scripts/lib/gates.mjs';
+import { useTempDirs } from './helpers/tempDirs';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const LINT = resolve(ROOT, 'scripts/lint-terrain-field-ids.mjs');
@@ -55,8 +55,10 @@ const run = (
 ): Result => collectTerrainFieldProblems(m, crops, ids) as Result;
 
 /** A scaffold the real CLI can be pointed at: it resolves paths from its own location. */
+const tempDir = useTempDirs();
+
 function scaffold(manifestDoc: unknown, crops: Record<string, unknown>): string {
-  const dir = mkdtempSync(join(tmpdir(), 'olv-field-ids-'));
+  const dir = tempDir('olv-field-ids-');
   mkdirSync(join(dir, 'scripts/lib'), { recursive: true });
   mkdirSync(join(dir, 'validation/terrain-field/datasets'), { recursive: true });
   mkdirSync(join(dir, 'validation/terrain-field/crops'), { recursive: true });

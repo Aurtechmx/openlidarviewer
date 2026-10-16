@@ -33,6 +33,7 @@ import { terrainExportDigests, type TerrainExportDigests } from '../export/terra
 import { sourceInterpretationOf, type SourceInterpretationRecord } from '../science/sourceInterpretation';
 import { showBusyScan, clearBusyScan, createBusyScan, createBusyScanController, type BusyScanController } from './busyScan';
 import type { AnalyseContoursResult } from '../terrain/contour/analyseContours';
+import { aboveGroundSurfaceFromAnalysis, type AboveGroundSurface } from '../simulation/terrainAccess/aboveGroundSurface';
 import type { SensitivityMemberGrid, runDemSensitivity as RunDemSensitivity } from '../terrain/export/demSensitivity';
 import { SurfaceTiles } from './analyseSurfaceTiles';
 // TYPE-ONLY: `SceneOverlayHost` names only `THREE.Object3D`-shaped methods, so
@@ -1253,6 +1254,8 @@ export class AnalysePanel {
     readonly dtm: AnalyseContoursResult['dtm'];
     readonly scale: { readonly isGeographic: boolean; readonly latitudeDeg: number | null; readonly unitToMetres: number; readonly resolved: boolean };
     readonly verticalScaleResolved: boolean;
+    /** The same run's noise-free DSM as an above-ground surface bound to its DTM, or null when the run kept none. */
+    readonly dsm: AboveGroundSurface | null;
     readonly worldOriginX: number | null;
     readonly worldOriginY: number | null;
     readonly worldOriginZ: number | null;
@@ -1287,6 +1290,7 @@ export class AnalysePanel {
         resolved: result.horizontalScaleResolved && (!isGeographic || latitudeKnown),
       },
       verticalScaleResolved: result.verticalScaleResolved,
+      dsm: aboveGroundSurfaceFromAnalysis(dtm, result.surface?.obstructionGrid ?? result.surface?.dsmGrid, result.surface?.obstructionBasis),
       // Same load-time recentring origin the DEM package and Flow Pulse's
       // result grid already read, for the elevation readout's real z and the
       // export package's real corner.

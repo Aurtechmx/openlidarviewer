@@ -12,7 +12,7 @@
  * Screenshots go to `OLV_SHOT_DIR` when it is set.
  */
 import { test, expect, type Page, type Locator } from '@playwright/test';
-import { dropDenseGridPly, placeProfile, showWorkspaceMode } from './helpers';
+import { dropDenseGridPly, placeProfile, showWorkspaceMode, clickTaskBack } from './helpers';
 
 const SHOT_DIR = process.env.OLV_SHOT_DIR;
 
@@ -99,7 +99,7 @@ test.describe('session log', () => {
     // Opened again, its Back returns to Data too.
     await openFromPalette(page, 'actions');
     await expect(logPage).toBeVisible();
-    await page.locator('#olv-ws-mode-data .olv-ws-back').click();
+    await clickTaskBack(page, 'data');
     await expect(logPage).toBeHidden();
   });
 

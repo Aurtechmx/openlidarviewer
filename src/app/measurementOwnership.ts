@@ -221,17 +221,22 @@ export function relabelWorkLayer(items: readonly RelabelableWork[], from: string
 
 /**
  * Hand the identity of a reloaded layer to its replacement and move any work
- * stamped with the replacement's own id onto the kept one. False when the
- * identity service refuses (no identity, or not the same source).
+ * stamped with the replacement's own id onto the kept one. `rows` (the Layers
+ * panel) moves the replacement into the original's group and records the kept
+ * stable id on its row. False when the identity service refuses (no identity,
+ * or not the same source).
  */
 export function handOverLayerWork(
   identity: { handOver(from: string, to: string): { readonly kept: string; readonly released: string } | null },
   stores: { readonly measure: { getMeasurements(): RelabelableWork[] }; readonly annotate: { getAnnotations(): RelabelableWork[] } } | null | undefined,
   fromViewerId: string,
   toViewerId: string,
+  rows?: { handOverLayer(from: string, to: string, stableId: string | null): void } | null,
 ): boolean {
   const ids = identity.handOver(fromViewerId, toViewerId);
   if (!ids) return false;
+  // The Layers panel keys groups and cached stable ids by viewer id.
+  rows?.handOverLayer(fromViewerId, toViewerId, ids.kept);
   if (stores && ids.released !== ids.kept) {
     relabelWorkLayer(stores.measure.getMeasurements(), ids.released, ids.kept);
     relabelWorkLayer(stores.annotate.getAnnotations(), ids.released, ids.kept);

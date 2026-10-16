@@ -125,8 +125,8 @@
 .olv-cl-unavailable,
 .olv-workbench-basis {
   font-size: var(--text-xs); line-height: 1.45; color: var(--text-dim);
-  background: color-mix(in srgb, var(--warn) 9%, transparent);
-  border-left: 2px solid var(--warn);
+  background: color-mix(in srgb, var(--caution) 9%, transparent);
+  border-left: 2px solid var(--caution);
   border-radius: 2px;
   padding: var(--space-sm) var(--space-md);
   margin-bottom: var(--space-md);

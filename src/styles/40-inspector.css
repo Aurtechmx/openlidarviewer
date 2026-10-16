@@ -509,21 +509,30 @@
   font-variant: small-caps;
   letter-spacing: 0.02em;
 }
-.olv-chip {
+/* `.olv-bc-pill` (converter, Export, Clip, Compare) is the same button under
+   an older name, kept for its selectors; it takes the chip's rules here, with
+   `is-active` / `is-disabled` as its state classes. */
+.olv-chip,
+.olv-bc-pill {
   font-size: var(--text-xs); color: var(--text-dim);
   background: rgba(255, 255, 255, 0.04);
   border: 0.5px solid var(--hairline);
   border-radius: var(--radius-sm); padding: var(--space-xs) var(--space-md);
 }
-.olv-chip:hover { color: var(--text); }
-.olv-chip-active {
+.olv-chip:hover,
+.olv-bc-pill:hover { color: var(--text); }
+.olv-bc-pill { font-family: inherit; cursor: pointer; }
+.olv-chip-active,
+.olv-bc-pill.is-active {
   color: var(--accent); background: var(--accent-soft);
   border-color: var(--ui-accent-a0p4);
 }
-.olv-chip-disabled {
+.olv-chip-disabled,
+.olv-bc-pill.is-disabled {
   opacity: 0.45; cursor: not-allowed; color: var(--text-faint);
 }
-.olv-chip-disabled:hover { color: var(--text-faint); }
+.olv-chip-disabled:hover,
+.olv-bc-pill.is-disabled:hover { color: var(--text-faint); }
 /* Workflow rail (v0.4.5): "Custom" is a STATE chip, not an action — muted
    until the user's knobs deviate from every preset, then it lights via the
    shared .olv-chip-active vocabulary. */

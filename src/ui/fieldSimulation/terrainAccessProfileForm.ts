@@ -42,6 +42,7 @@ export interface TerrainAccessProfileFormValues {
   readonly unknownPolicy: 'block' | 'penalize';
   readonly obstacleHeightEnabled: boolean;
   readonly obstacleHeightThresholdM: string;
+  readonly evidenceGapPolicy: 'conservative' | 'exploratory';
 }
 
 /** Blank form: every required field empty, no field pre-filled with a number
@@ -60,6 +61,8 @@ export const EMPTY_TERRAIN_ACCESS_PROFILE_FORM: TerrainAccessProfileFormValues =
   unknownPolicy: 'block',
   obstacleHeightEnabled: false,
   obstacleHeightThresholdM: '',
+  // Allow and disclose: the run card and the record state which was used.
+  evidenceGapPolicy: 'exploratory',
 });
 
 /** One field's problem — either "not a usable number" or a cross-field reason
@@ -136,6 +139,7 @@ export function parseTerrainAccessProfileForm(values: TerrainAccessProfileFormVa
     minimumTerrainConfidence: minimumTerrainConfidence as number,
     unknownPolicy: values.unknownPolicy,
     obstacleHeightThreshold,
+    evidenceGapPolicy: values.evidenceGapPolicy,
   };
 
   const crossFieldProblems: readonly ProfileProblem[] = validateProfile(profile);
@@ -164,6 +168,7 @@ const FIELD_LABELS: Readonly<Record<string, string>> = {
   obstacleHeightThresholdM: 'Obstacle height threshold',
   obstacleHeightThreshold: 'Obstacle height threshold',
   unknownPolicy: 'Weak-evidence policy',
+  evidenceGapPolicy: 'Evidence-gap policy',
 };
 
 /** A problem as the form shows it: "Vehicle width is required". Unknown keys fall back to the key. */

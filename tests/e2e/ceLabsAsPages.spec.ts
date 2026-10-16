@@ -8,7 +8,7 @@
  * page, showing the kept run. Deterministic project.
  */
 import { test, expect, type Locator, type Page } from '@playwright/test';
-import { dropDenseGridPly, dropTinyPtx, openAnalysePage, showWorkspaceMode } from './helpers';
+import { dropDenseGridPly, dropTinyPtx, openAnalysePage, showWorkspaceMode, clickTaskBack } from './helpers';
 
 const DESKTOP = { width: 1440, height: 900 };
 
@@ -65,7 +65,7 @@ test.describe('labs are Analyse pages', () => {
       await expect(page.locator('#olv-ws-mode-analyse .olv-ws-task-title')).toHaveText(name);
       await expectSceneLive(page);
       await expect(labPage(page, id)).toBeVisible();
-      await page.locator('#olv-ws-mode-analyse > .olv-ws-task .olv-ws-back').click();
+      await clickTaskBack(page, 'analyse');
       await expect(bar(page)).toHaveAttribute('data-path', 'Analyse › Terrain');
       await expect(labPage(page, id)).toBeHidden();
     }

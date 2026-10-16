@@ -28,6 +28,8 @@ export interface TestSeamDeps {
   refreshReclassify: () => void;
   /** The export frame and resolved CRS code of the active scan. */
   activeGeo?: () => { name: string | null; origin: readonly number[]; epsg: number | null };
+  /** The Output panel's "Reload at higher density" for the layer with this viewer id. */
+  reloadLayer?: (id: string, budget: number) => Promise<void>;
 }
 
 export function mountTestSeam(deps: TestSeamDeps): void {
@@ -155,6 +157,13 @@ export function mountTestSeam(deps: TestSeamDeps): void {
     // visible controls are e2e-drivable without running the full classifier.
     showReclassify: () => deps.showReclassify(),
     refreshReclassify: () => deps.refreshReclassify(),
+    // The density reload of the layer opened under this file name, past its
+    // confirm dialog, so a small unreduced file can run the hand-over.
+    reloadLayerByName: (name: string, budget: number): Promise<void> => {
+      const id = v.clouds().find((c) => v.getCloud(c)?.name === name);
+      if (!id || !deps.reloadLayer) return Promise.reject(new Error(`reloadLayerByName: no layer "${name}"`));
+      return deps.reloadLayer(id, budget);
+    },
     // EPT laszip decode-worker round-trip — the one path no other e2e
     // exercises end-to-end in a real browser: the lazy worker-client chunk
     // load, `new Worker(new URL(...))` URL resolution (the seam the live

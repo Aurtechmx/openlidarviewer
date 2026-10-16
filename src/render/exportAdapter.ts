@@ -130,6 +130,8 @@ export interface ExportAdapterHost {
     widthPx: number;
     heightPx: number;
     extent: { minX: number; minY: number; maxX: number; maxY: number };
+    /** True when no-data pixels carry alpha 0 (see `render/export/orthoNoData.ts`). */
+    noDataTransparent?: boolean;
   } | null>;
   renderFigure(options: { widthPx?: number; heightPx?: number }): Promise<{
     blob: Blob;
@@ -684,6 +686,7 @@ export function buildExportAdapter(host: ExportAdapterHost): ExportSceneAdapter 
       widthPx: number;
       heightPx: number;
       extent: { minX: number; minY: number; maxX: number; maxY: number };
+      noDataTransparent?: boolean;
     } | null> {
       const aabb = this.localBoundsAabb();
       if (!aabb) return null;

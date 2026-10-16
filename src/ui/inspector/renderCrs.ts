@@ -94,6 +94,13 @@ export function renderCrs(
         text: 'CRS override active. Coordinate conversion uses your selection.',
       }),
     );
+  } else if (c.source === 'catalog-tile') {
+    body.append(
+      el('div', {
+        className: 'olv-crs-warning-soft',
+        text: 'CRS taken from the catalogue entry; the file declares none. Pick another if it is wrong.',
+      }),
+    );
   }
 
   // ── Override picker ────────────────────────────────────────────────────

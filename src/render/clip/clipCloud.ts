@@ -113,9 +113,9 @@ export function clipCloud(
     // either sidecar off a clipped cloud today.
   });
   if (prov === 'cleared' || prov === 'derived') {
-    // No `before` codes, so the subset keeps no second original: Restore is
-    // for the live cloud, not an export copy.
-    subset.setClassificationState(prov, cloud.derivedMethod);
+    // The subset of the producer codes travels as its original, so an export
+    // of the subset reads the producer codes a gap fill kept as the source's.
+    subset.setClassificationState(prov, cloud.derivedMethod, filterChannel(cloud.originalClassification, keep, n));
     // Order matters: the state starts current, which is right for a new derive
     // and wrong for a copy. A subset of stale codes is stale.
     if (cloud.derivedClassificationFrameInvalid) {

@@ -283,6 +283,16 @@ export class NavController {
     this._canvas = canvas;
     this._controls = controls;
     this._cb = callbacks;
+    // OrbitControls releases capture for the last pointer up without a check.
+    // An Android pinch can end that pointer before the release (lifted or
+    // cancelled first), and the release then throws NotFoundError out of the
+    // listener. A release for a pointer that is already gone is a no-op.
+    const release = canvas.releasePointerCapture?.bind(canvas);
+    if (release) {
+      canvas.releasePointerCapture = (id: number): void => {
+        try { release(id); } catch { /* pointer already ended */ }
+      };
+    }
 
     this._onKeyDown = (e) => this._handleKeyDown(e);
     this._onKeyUp = (e) => this._handleKeyUp(e);

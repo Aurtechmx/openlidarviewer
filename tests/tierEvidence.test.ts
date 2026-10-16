@@ -1,6 +1,5 @@
 import { execFileSync } from 'node:child_process';
-import { mkdtempSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -8,6 +7,7 @@ import { describe, expect, it } from 'vitest';
 
 import { DEV_FLAG_DEFAULTS } from '../src/perf/devFlags';
 import { TIER_ORDER } from '../src/render/continuity/continuityTier';
+import { useTempDirs } from './helpers/tempDirs';
 
 // `fileURLToPath`, not `.pathname`: the latter yields `/C:/...` on Windows,
 // which no filesystem call accepts. The repo has a lint for exactly this.
@@ -15,6 +15,7 @@ const SCRIPT = fileURLToPath(new URL('../scripts/lint-tier-evidence.mjs', import
 const REAL_FLAGS = new URL('../src/perf/devFlags.ts', import.meta.url);
 const REAL_RECORDS = fileURLToPath(new URL('../validation/renderer-benchmark', import.meta.url));
 const original = readFileSync(REAL_FLAGS, 'utf8');
+const tempDir = useTempDirs();
 
 /**
  * Run the lint against copies.
@@ -26,7 +27,7 @@ const original = readFileSync(REAL_FLAGS, 'utf8');
 function run(tier?: string, records = REAL_RECORDS): { code: number; out: string } {
   const args = [SCRIPT];
   if (tier !== undefined) {
-    const dir = mkdtempSync(join(tmpdir(), 'olv-tier-'));
+    const dir = tempDir('olv-tier-');
     const flags = join(dir, 'devFlags.ts');
     writeFileSync(flags, original.replace("continuityTier: 'source',", tier));
     args.push(flags, records);
@@ -83,7 +84,7 @@ describe('the lint refuses a rung nothing measured', () => {
 
 describe('what counts as evidence', () => {
   it('accepts a rung a record measured', () => {
-    const dir = mkdtempSync(join(tmpdir(), 'olv-rec-'));
+    const dir = tempDir('olv-rec-');
     mkdirSync(join(dir, 'records'));
     writeFileSync(join(dir, 'records', 'run.json'), JSON.stringify({
       cases: [{ continuity: { mode: 'sizing' } }],
@@ -96,7 +97,7 @@ describe('what counts as evidence', () => {
   it('does not count a record it cannot read', () => {
     // A malformed record is the benchmark verifier's to report. Counting it
     // here would let a broken file authorise a default.
-    const dir = mkdtempSync(join(tmpdir(), 'olv-rec-'));
+    const dir = tempDir('olv-rec-');
     mkdirSync(join(dir, 'records'));
     writeFileSync(join(dir, 'records', 'run.json'), '{ not json');
     const { code } = run("continuityTier: 'sizing',", join(dir, 'records'));

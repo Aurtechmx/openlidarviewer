@@ -64,6 +64,13 @@ export interface ClassSemanticsInput {
   /** Where the class buffer came from; only 'source' carries the producer's codes. */
   readonly provenance: string | undefined;
   readonly classification: Uint8Array | undefined;
+  /**
+   * The producer's codes, aligned with `classification`, when a whole-scan
+   * replace (Fill unclassified, derive, clear) moved the buffer away from the
+   * source. A point whose code still equals its producer code is the
+   * producer's and is read under the source table; any other point is not.
+   */
+  readonly producerClassification?: Uint8Array;
   readonly classificationFlags: Uint8Array | undefined;
   readonly count: number;
   readonly target: ClassTarget;
@@ -135,40 +142,70 @@ function changeFinding(code: number, points: number, target: ClassTarget): Class
  * Plan the class and flag buffers for a write to `target`.
  *
  * Source codes are interpreted only when the source format is known and the
- * buffer is the producer's. For anything else (a derived or edited class, a
- * non-LAS source) no table is assumed: an upgrade translates nothing, and a
- * legacy write reports only the codes the extended table defines, which a
- * legacy reader cannot name whatever the source meant by them.
+ * code is the producer's: the whole buffer while it is the source's, or each
+ * point whose code still equals `producerClassification` after a whole-scan
+ * replace (the classes "Fill unclassified" keeps). For anything else (a
+ * derived or edited class, a non-LAS source) no table is assumed: an upgrade
+ * translates nothing, and a legacy write reports only the codes the extended
+ * table defines, which a legacy reader cannot name whatever the source meant.
+ * One exception: on an upgrade from a legacy source, a differing code with no
+ * producer record is reported, since the viewer never assigns one.
  */
 export function planClassSemantics(input: ClassSemanticsInput): ClassSemanticsPlan {
   const { classification, classificationFlags, count, target } = input;
   const unchanged: ClassSemanticsPlan = { classification, classificationFlags, translations: [], changes: [], events: [] };
   if (!classification || count === 0) return unchanged;
-
-  const known = input.sourcePdrf !== undefined && input.provenance === 'source';
-  const sourceExtended = known && isExtendedPdrf(input.sourcePdrf as number);
-  const sourceLegacy = known && !sourceExtended;
-  if (target === 'extended' && !sourceLegacy) return unchanged;
-  if (target === 'legacy' && sourceLegacy) return unchanged;
-
-  const perCode = tally(classification, count);
-  const translations: ClassFinding[] = [];
-  const changes: ClassFinding[] = [];
-
-  for (const code of DIFFERING_CLASS_CODES) {
-    const points = perCode[code];
-    if (points === 0) continue;
-    if (target === 'extended') {
-      if (LEGACY_CODE_TO_FLAG[code]) translations.push(upgradeFinding(code, points));
-      // A legacy-reserved code the extended table now names.
-      else if (meaning(code, EXTENDED_PDRF) !== null) changes.push(changeFinding(code, points, target));
-    } else if (sourceExtended || meaning(code, EXTENDED_PDRF) !== null) {
-      // Known extended source: every differing code. Unknown source: only the
-      // codes the extended table defines.
-      changes.push(changeFinding(code, points, target));
-    }
+  if (input.sourcePdrf === undefined) {
+    return target === 'extended' ? unchanged : planUnknown(classification, classificationFlags, count);
   }
 
+  const sourceExtended = isExtendedPdrf(input.sourcePdrf);
+  const whole = input.provenance === 'source';
+  const producer = !whole && (input.producerClassification?.length ?? 0) >= count ? input.producerClassification : undefined;
+  // A point is the producer's when the buffer is, or when its code is unchanged from the producer's.
+  const isProducer = (i: number): boolean => whole || (producer !== undefined && producer[i] === classification[i]);
+  const known = new Uint32Array(256);
+  const other = new Uint32Array(256);
+  for (let i = 0; i < count; i++) (isProducer(i) ? known : other)[classification[i]]++;
+
+  const translations: ClassFinding[] = [];
+  const changes: ClassFinding[] = [];
+  for (const code of DIFFERING_CLASS_CODES) {
+    const k = known[code];
+    const o = other[code];
+    if (target === 'extended') {
+      if (sourceExtended) continue;
+      if (k > 0 && LEGACY_CODE_TO_FLAG[code]) translations.push(upgradeFinding(code, k));
+      // A legacy-reserved code the extended table now names, or a code with no producer record.
+      const reported = (LEGACY_CODE_TO_FLAG[code] ? 0 : k) + (whole ? 0 : o);
+      if (reported > 0) changes.push(changeFinding(code, reported, target));
+    } else {
+      // Known extended producer codes: every differing code. Everything else:
+      // only the codes the extended table defines.
+      const reported = (sourceExtended ? k : 0) + (meaning(code, EXTENDED_PDRF) !== null ? o : 0);
+      if (reported > 0) changes.push(changeFinding(code, reported, target));
+    }
+  }
+  return finish(classification, classificationFlags, count, translations, changes, isProducer);
+}
+
+/** A legacy write of codes from an unknown source: report only the codes the extended table defines. */
+function planUnknown(classification: Uint8Array, classificationFlags: Uint8Array | undefined, count: number): ClassSemanticsPlan {
+  const perCode = tally(classification, count);
+  const changes = DIFFERING_CLASS_CODES
+    .filter((code) => perCode[code] > 0 && meaning(code, EXTENDED_PDRF) !== null)
+    .map((code) => changeFinding(code, perCode[code], 'legacy'));
+  return finish(classification, classificationFlags, count, [], changes, () => false);
+}
+
+function finish(
+  classification: Uint8Array,
+  classificationFlags: Uint8Array | undefined,
+  count: number,
+  translations: readonly ClassFinding[],
+  changes: readonly ClassFinding[],
+  isProducer: (i: number) => boolean,
+): ClassSemanticsPlan {
   let cls = classification;
   let flags = classificationFlags;
   if (translations.length > 0) {
@@ -177,7 +214,7 @@ export function planClassSemantics(input: ClassSemanticsInput): ClassSemanticsPl
     if (classificationFlags) flags.set(classificationFlags.subarray(0, count));
     for (let i = 0; i < count; i++) {
       const t = LEGACY_CODE_TO_FLAG[cls[i]];
-      if (!t) continue;
+      if (!t || !isProducer(i)) continue;
       cls[i] = UNCLASSIFIED;
       flags[i] |= t.flag;
     }

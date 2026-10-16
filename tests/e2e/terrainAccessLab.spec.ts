@@ -1,8 +1,8 @@
 import { test, expect, type Page } from '@playwright/test';
 import { readFileSync } from 'node:fs';
 import {
-  dropDenseGridPly, dropTerrainAccessUtmLas, firePaletteAction,
-  openAnalysePanel as openAnalyse,
+  TERRAIN_ACCESS_BOX, dropDenseGridPly, dropTerrainAccessBoxLas, dropTerrainAccessUtmLas, firePaletteAction,
+  openAnalysePanel as openAnalyse, clickTaskBack,
 } from './helpers';
 
 /**
@@ -213,12 +213,87 @@ test('profile, start/goal by keyboard and click, run, route shown, why-not, expo
   // persisted-overlay behaviour): reopening the Lab shows the toggle already
   // pressed, because it is the SAME persisted overlay still attached to the
   // scan, not a fresh one reset to off.
-  await page.locator('#olv-ws-mode-analyse > .olv-ws-task .olv-ws-back').click();
+  await clickTaskBack(page, 'analyse');
   await expect(page.locator('.olv-analyse-page[data-page="terrain-access"]')).toBeHidden();
   await openTerrainAccess(page);
   // A prior preview is not remembered across opens (only the overlay is),
   // so the Lab reopens on the blank profile form.
   await expect(page.locator('.olv-analyse-page[data-page="terrain-access"] .olv-ta-form')).toBeVisible();
+});
+
+test('obstruction limit from the same terrain run: enabled, and the route goes round a raised box', async ({ page }) => {
+  test.slow();
+  await page.goto('/?test=1');
+  // UTM ground plus a 3 m building-class box (see dropTerrainAccessBoxLas).
+  await dropTerrainAccessBoxLas(page);
+  await expect(page.locator('.olv-empty')).toBeHidden({ timeout: 20_000 });
+  await expect(page.locator('.olv-dock .olv-tool', { hasText: /^Analyse$/ })).toBeEnabled({ timeout: 20_000 });
+  await openAnalyse(page);
+  await page.locator('.olv-analyse-run').click();
+  await expect(page.locator('.olv-analyse-readiness .olv-analyse-ready:not(.is-skeleton)')).toHaveCount(3, {
+    timeout: 20_000,
+  });
+
+  await openTerrainAccess(page);
+  const labPage = page.locator('.olv-analyse-page[data-page="terrain-access"]');
+  await labPage.locator('input[type=text]').nth(0).fill('Illustrative box test');
+  await labPage.locator('input[type=text]').nth(1).fill('80');
+  await labPage.locator('input[type=text]').nth(2).fill('80');
+  await labPage.locator('input[type=text]').nth(3).fill('50');
+  await labPage.locator('input[type=text]').nth(4).fill('0');
+  await labPage.locator('input[type=text]').nth(5).fill('0');
+
+  // The terrain run kept its DSM, so the obstruction control is on offer.
+  await labPage.locator('.olv-ta-advanced > summary').click();
+  const toggle = labPage.locator('.olv-ta-obstacle-toggle');
+  await expect(toggle).toBeEnabled();
+  await toggle.check();
+  const threshold = labPage.getByLabel(/Obstacle height threshold/);
+  await expect(threshold).toBeEnabled();
+  await threshold.fill('1');
+  await labPage.locator('.olv-ta-form-submit').click();
+
+  const grid = labPage.locator('.olv-ta-grid-canvas');
+  await expect(grid).toBeVisible({ timeout: 10_000 });
+  const box = await grid.boundingBox();
+  if (!box) throw new Error('grid canvas has no box');
+
+  // The box centre is blocked for its above-ground return.
+  await labPage.locator('.olv-ta-segmented-btn', { hasText: 'Inspect a cell' }).click();
+  await grid.click({ position: { x: box.width / 2, y: box.height / 2 } });
+  await expect(labPage.locator('.olv-ta-inspector')).toContainText('above-ground return evidence exceeds', { timeout: 5_000 });
+
+  // Start west of the box, goal east of it, both on the middle row.
+  await labPage.locator('.olv-ta-segmented-btn', { hasText: 'Set start' }).click();
+  await grid.click({ position: { x: box.width * 0.1, y: box.height / 2 } });
+  await labPage.locator('.olv-ta-segmented-btn', { hasText: 'Set goal' }).click();
+  await grid.click({ position: { x: box.width * 0.9, y: box.height / 2 } });
+  await labPage.locator('.olv-ta-run').click();
+  const card = labPage.locator('.olv-ta-run-card');
+  await expect(card).toContainText('evaluated against the above-ground surface; cells with no return allowed and disclosed (exploratory)', {
+    timeout: 10_000,
+  });
+  await expect(card).toContainText(/Slope from a synthesised neighbour\s*\d+% of route cells, allowed and disclosed \(exploratory\)/);
+  // A straight crossing would be about 9.6 m; going round the box is longer.
+  const lengthText = await card.locator('.olv-story-row', { hasText: 'Horizontal length' }).innerText();
+  const lengthM = Number(/([\d.]+) m/.exec(lengthText)?.[1]);
+  expect(lengthM).toBeGreaterThan(12);
+
+  // No route cell centre falls inside the box.
+  const downloadPromise = page.waitForEvent('download');
+  await labPage.locator('.olv-ta-export').click();
+  const downloadPath = await (await downloadPromise).path();
+  if (!downloadPath) throw new Error('no download path');
+  const zipBytes = readFileSync(downloadPath);
+  const route = JSON.parse(extractZipEntryText(zipBytes, findZipEntryName(zipBytes, 'route.geojson'))) as {
+    features: { geometry: { type: string; coordinates: [number, number][] } }[];
+  };
+  const coords = route.features.find((f) => f.geometry.type === 'LineString')?.geometry.coordinates ?? [];
+  expect(coords.length).toBeGreaterThan(2);
+  const b = TERRAIN_ACCESS_BOX;
+  const inside = coords.filter(([x, y]) => x > b.originX + b.xMin && x < b.originX + b.xMax
+    && y > b.originY + b.yMin && y < b.originY + b.yMax);
+  expect(inside).toEqual([]);
 });
 
 /** Find a ZIP entry's exact stored name by a suffix, from the local file headers. */

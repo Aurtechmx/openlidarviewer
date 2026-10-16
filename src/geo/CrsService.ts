@@ -159,6 +159,8 @@ export function datasetIdentity(cloud: {
   readonly renderOrigin?: readonly number[];
   /** A content digest of the source, when the caller already holds one. */
   readonly sourceDigest?: string | null;
+  /** The catalogue item a stream was opened from, when it was picked from one. */
+  readonly catalogItem?: CatalogItemIdentity | null;
 } | null | undefined): DatasetIdentity | undefined {
   if (!cloud) return undefined;
   const pointCount = cloud.sourceDeclaredPointCount
@@ -192,13 +194,21 @@ export function datasetIdentity(cloud: {
     if (m.every(Number.isFinite)) min = [m[0], m[1], m[2]];
   }
   const digest = cloud.sourceDigest ?? undefined;
-  if (pointCount === undefined && !extent && !digest) return undefined;
+  const item = cloud.catalogItem ?? undefined;
+  if (pointCount === undefined && !extent && !digest && !item) return undefined;
   return {
     ...(pointCount !== undefined ? { pointCount } : {}),
     ...(extent ? { extent } : {}),
     ...(min ? { min } : {}),
     ...(digest ? { digest } : {}),
+    ...(item ? { catalogItem: { id: item.id, bbox: [item.bbox[0], item.bbox[1], item.bbox[2], item.bbox[3]] as const } } : {}),
   };
+}
+
+/** A catalogue item a source was opened from: its id and WGS84 bbox. */
+export interface CatalogItemIdentity {
+  readonly id: string;
+  readonly bbox: readonly [number, number, number, number];
 }
 
 /** The facts a dataset is identified by. See {@link datasetIdentity}. */
@@ -207,8 +217,30 @@ export interface DatasetIdentity {
   readonly extent?: readonly [number, number, number];
   /** Absolute bounds minimum in the source frame, rounded to 1 mm. */
   readonly min?: readonly [number, number, number];
-  /** Content digest of the source, when available. */
+  /**
+   * Content fingerprint of the source, when available. Names its scheme
+   * (`olvsrc1-file:...`, see `io/sourceFingerprint.ts`); two digests are
+   * compared only when their schemes match.
+   */
   readonly digest?: string;
+  /** The catalogue item the source was opened from, when it was picked from one. */
+  readonly catalogItem?: CatalogItemIdentity;
+}
+
+/** The scheme a digest names (the part before ':'), or '' when it names none. */
+function digestScheme(d: string): string {
+  const i = d.indexOf(':');
+  return i < 0 ? '' : d.slice(0, i);
+}
+
+/** Two digests taken the same way, so that comparing them means something. */
+function comparableDigests(a: string | undefined, b: string | undefined): boolean {
+  return !!a && !!b && digestScheme(a) === digestScheme(b);
+}
+
+function sameBbox(a: readonly number[], b: readonly number[]): boolean {
+  // The stored side comes from localStorage, so its shape is not trusted.
+  return Array.isArray(a) && Array.isArray(b) && a.length === b.length && a.every((v, i) => Math.abs(v - b[i]) <= 1e-9);
 }
 
 /** Version of the identity a new override records. 2 = includes `min`. */
@@ -223,11 +255,16 @@ export const OVERRIDE_IDENTITY_VERSION = 2;
  * - `candidate`: nothing positively disagrees on name, declaration, count or
  *   spans, but the position differs or a fact is missing (including every
  *   legacy record). Offered as a suggestion, never applied silently.
+ * - `catalogue`: a catalogue record (see {@link isCatalogueRecord}) for the
+ *   item the source was opened from, and the source declares no CRS of its
+ *   own. Applied as catalogue metadata, not as user-confirmed.
  * - `different`: a positive disagreement on declaration, count, spans or
- *   digest. Neither applied nor suggested.
+ *   digest, or a catalogue record for a source that declares its own CRS (the
+ *   file's declaration wins). Neither applied nor suggested.
  */
 export type OverrideMatch =
   | { readonly kind: 'verified' }
+  | { readonly kind: 'catalogue' }
   | { readonly kind: 'candidate'; readonly reason: OverrideSuggestionReason }
   | { readonly kind: 'different' };
 
@@ -244,6 +281,17 @@ export interface OverrideSuggestion {
 }
 
 /**
+ * Whether a stored record was written for a catalogue pick rather than chosen
+ * by the user. A pick is recorded before the file is opened, so it never
+ * observed a declaration; records written before `catalogue` existed are
+ * recognised by exactly that shape.
+ */
+export function isCatalogueRecord(override: CrsOverride): boolean {
+  if (typeof override.catalogue === 'string') return true;
+  return !!override.identity?.catalogItem && override.detectedEpsgObserved !== true;
+}
+
+/**
  * Classify a stored override against the dataset being opened. Pure.
  */
 export function classifyOverrideMatch(
@@ -251,6 +299,11 @@ export function classifyOverrideMatch(
   detected: CrsInfo | undefined,
   loaded: DatasetIdentity | undefined,
 ): OverrideMatch {
+  // A catalogue record is metadata about the item, not a correction the user
+  // made: it never replaces a CRS the source declares itself, whether the two
+  // EPSGs agree (nothing to add) or not (the file wins).
+  const catalogue = isCatalogueRecord(override);
+  if (catalogue && detected) return { kind: 'different' };
   const observed = override.detectedEpsgObserved === true;
   // Declaration: a record that observed it must agree exactly (including "both
   // declared nothing"); a legacy record disagrees only when both sides state one.
@@ -261,12 +314,25 @@ export function classifyOverrideMatch(
       && override.detectedEpsg !== detected.epsg);
   if (declarationDiffers) return { kind: 'different' };
   const stored = override.identity;
-  if (stored?.digest && loaded?.digest && stored.digest !== loaded.digest) return { kind: 'different' };
+  const digestsComparable = comparableDigests(stored?.digest, loaded?.digest);
+  if (digestsComparable && stored?.digest !== loaded?.digest) return { kind: 'different' };
   if (!sameDataset(stored, loaded)) return { kind: 'different' };
+
+  // A record made for a catalogue item (a Planetary Computer pick, written
+  // before the file was opened, so it holds no declaration or position) belongs
+  // to a source opened from that item. Another item is a different source; a
+  // source not opened from the catalogue cannot be confirmed either way.
+  const item = stored?.catalogItem;
+  if (item && override.identityVersion === OVERRIDE_IDENTITY_VERSION) {
+    const other = loaded?.catalogItem;
+    if (!other) return { kind: 'candidate', reason: 'identity-missing' };
+    if (other.id !== item.id || !sameBbox(other.bbox, item.bbox)) return { kind: 'different' };
+    return catalogue ? { kind: 'catalogue' } : { kind: 'verified' };
+  }
 
   const legacy = override.identityVersion !== OVERRIDE_IDENTITY_VERSION || !observed;
   if (legacy) return { kind: 'candidate', reason: 'legacy' };
-  if (stored?.digest && loaded?.digest) return { kind: 'verified' };
+  if (digestsComparable) return { kind: 'verified' };
   // Position and spans are required on both sides. The point count is compared
   // whenever both sides state it (above) but is not required: a stream may not
   // know its total yet, and the count is translation-invariant anyway.
@@ -473,6 +539,9 @@ export class CrsService {
     const match = override ? classifyOverrideMatch(override, input.detected, input.identity) : undefined;
     if (override && match?.kind === 'verified') {
       return { resolved: this._resolveDatum(this._fromOverride(override, input.detected)), suggestion: null };
+    }
+    if (override && match?.kind === 'catalogue') {
+      return { resolved: this._resolveDatum(this._fromCatalogue(override, input.detected)), suggestion: null };
     }
     const resolved = this._resolveDatum(resolvedFromCrsInfo(input.detected, input.source) ?? unknownCrs());
     // Nothing to offer when the remembered choice is what the file already says.
@@ -740,6 +809,21 @@ export class CrsService {
       verticalDatum: detected?.verticalDatum,
       verticalUnitToMetres: detected?.verticalUnitToMetres,
       ...(detected?.verticalLinearUnit !== undefined ? { verticalLinearUnit: detected.verticalLinearUnit } : {}),
+    };
+  }
+
+  /**
+   * A catalogue record applied to a source that declares no CRS: the
+   * catalogue's EPSG, labelled as the catalogue's assertion and NOT confirmed
+   * by the user. An EPSG without WKT is medium confidence, as for a file.
+   */
+  private _fromCatalogue(override: CrsOverride, detected: CrsInfo | undefined): ResolvedCrs {
+    return {
+      ...this._fromOverride(override, detected),
+      source: 'catalog-tile',
+      assertedBy: typeof override.catalogue === 'string' ? override.catalogue : 'catalogue',
+      confidence: 'medium',
+      userConfirmed: false,
     };
   }
 

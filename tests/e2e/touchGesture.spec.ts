@@ -181,7 +181,7 @@ async function readPose(page: Page): Promise<string> {
   return pose;
 }
 
-test.describe('mobile touch model — twist + pinch + pan decomposition', () => {
+test.describe('mobile touch model — twist + pinch + pan decomposition', { tag: '@touch' }, () => {
   test('a single-finger double-tap focuses the camera on a point (dblclick does not fire on touch)', async ({
     page,
   }) => {
@@ -383,7 +383,7 @@ async function oneFingerDrag(page: Page, from: { x: number; y: number }, to: { x
   );
 }
 
-test.describe('touch moves the scene the way the fingers move (Z-up survey)', () => {
+test.describe('touch moves the scene the way the fingers move (Z-up survey)', { tag: '@touch' }, () => {
   test('a one-finger drag up carries the ground under the finger up', async ({ page, browserName }) => {
     // Desktop Firefox does not start OrbitControls' drag from a synthetic touch
     // pointer. The mouse and finger share one orbit path, which
@@ -455,6 +455,11 @@ async function openRenderingSection(page: import('@playwright/test').Page): Prom
     // showing; selecting a tab opens the body.
     await viewTab.click();
     await expect(viewTab).toHaveAttribute('aria-selected', 'true');
+  } else if (await page.locator('.olv-right-rail.olv-right-collapsed').count()) {
+    // A large touch screen in portrait (an iPad) opens a scan with the right
+    // rail collapsed off the edge; its tab slides it in, as a user would.
+    await page.locator('.olv-right-rail-tab').click();
+    await expect(page.locator('.olv-right-rail')).not.toHaveClass(/olv-right-collapsed/);
   }
   await expect(renderingDetails.locator('summary')).toBeVisible({ timeout: 10_000 });
 

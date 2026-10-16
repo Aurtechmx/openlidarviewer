@@ -14,27 +14,51 @@ import { isBenignPageError } from './pageErrors';
  *   - the Pan pad mounts next to the mode triangle with a stable label and
  *     aria-pressed reflecting the active mode;
  *   - Digit4 selects pan, G toggles pan ⇄ orbit;
- *   - a primary drag in pan mode moves the camera (share-link pose oracle,
- *     same idiom as touchGesture.spec.ts) without page errors;
+ *   - a primary drag in pan mode moves the camera without page errors. The
+ *     camera is read through the `?test=1` seam's getCameraPose(), which
+ *     works the same on every engine; the share-link clipboard read it
+ *     replaced resolved empty where clipboard-read is not granted, so two
+ *     empty strings were compared;
  *   - middle-mouse drag pans in orbit mode WITHOUT changing the mode;
  *   - a mode switch mid-drag cancels safely;
  *   - `?handPan=off` hides the pad and disables the bindings.
  */
 
-async function loadSample(page: Page, url = '/'): Promise<void> {
+async function loadSample(page: Page, url = '/?test=1'): Promise<void> {
   await page.goto(url);
   await dropTinyPly(page);
   await expect(page.locator('.olv-empty')).toBeHidden({ timeout: 20_000 });
   await page.waitForTimeout(800);
 }
 
-/** The share-link pose is the camera oracle — it changes iff the camera did. */
-async function readPose(page: Page): Promise<string> {
-  await page.locator('.olv-tool', { hasText: 'Copy view link' }).click();
-  await page.waitForTimeout(200);
-  return page.evaluate(() =>
-    navigator.clipboard.readText().catch(() => window.location.hash),
-  );
+type Vec3 = [number, number, number];
+interface Pose { position: Vec3; target: Vec3 }
+
+/**
+ * The camera pose, read from the viewer through the `?test=1` seam. It fails
+ * the test unless both vectors are three finite numbers, so a comparison can
+ * never pass on a pose that was not read.
+ */
+async function readPose(page: Page): Promise<Pose> {
+  await page.waitForFunction(() => !!(window as unknown as { __OLV_TEST_API__?: unknown }).__OLV_TEST_API__);
+  const pose = await page.evaluate(() => {
+    const a = (window as unknown as { __OLV_TEST_API__: { getCameraPose(): unknown } }).__OLV_TEST_API__;
+    return a.getCameraPose();
+  });
+  const vec = (v: unknown): v is Vec3 =>
+    Array.isArray(v) && v.length === 3 && v.every((c) => typeof c === 'number' && Number.isFinite(c));
+  const p = pose as Partial<Pose> | null;
+  expect(p !== null && vec(p.position) && vec(p.target), `camera pose read: ${JSON.stringify(pose)}`).toBe(true);
+  return p as Pose;
+}
+
+/** The largest coordinate change between two poses, position and target both. */
+function poseDelta(a: Pose, b: Pose): number {
+  let d = 0;
+  for (let i = 0; i < 3; i++) {
+    d = Math.max(d, Math.abs(a.position[i] - b.position[i]), Math.abs(a.target[i] - b.target[i]));
+  }
+  return d;
 }
 
 async function canvasCenter(page: Page): Promise<{ x: number; y: number }> {
@@ -78,21 +102,7 @@ test.describe('hand tool — pan mode surfaces', () => {
     await expect(pan).toHaveAttribute('aria-pressed', 'true');
   });
 
-  test('a primary drag in pan mode moves the camera without errors', async ({
-    page,
-    browserName,
-  }) => {
-    // CAPABILITY GAP — clipboard read. `readPose` reads the copied share link,
-    // and on Playwright's WebKit `navigator.clipboard.readText()` resolves to
-    // an empty string instead of the copied text (the engine exposes no
-    // clipboard-read permission to grant). Both reads come back "", so the
-    // pose comparison below would be comparing the harness with itself.
-    // Chromium and Firefox keep the coverage, and the pan geometry itself is
-    // pinned engine-independently by tests/panMath.test.ts.
-    test.skip(
-      browserName === 'webkit',
-      'WebKit (Playwright) supports no clipboard-read permission, so the share-link pose oracle cannot be read',
-    );
+  test('a primary drag in pan mode moves the camera without errors', async ({ page }) => {
     await loadSample(page);
     let pageError: Error | null = null;
     page.on('pageerror', (e) => { if (!isBenignPageError(e.message)) pageError = e; });
@@ -110,21 +120,11 @@ test.describe('hand tool — pan mode surfaces', () => {
     await page.waitForTimeout(400);
 
     const after = await readPose(page);
-    expect(after).not.toEqual(before);
+    expect(poseDelta(before, after)).toBeGreaterThan(1e-6);
     expect(pageError).toBeNull();
   });
 
-  test('middle-mouse drag pans in orbit mode and the mode is untouched', async ({
-    page,
-    browserName,
-  }) => {
-    // CAPABILITY GAP — clipboard read, same as the primary-drag test above:
-    // WebKit's `readText()` resolves empty, so the share-link pose oracle
-    // cannot see whether the camera moved.
-    test.skip(
-      browserName === 'webkit',
-      'WebKit (Playwright) supports no clipboard-read permission, so the share-link pose oracle cannot be read',
-    );
+  test('middle-mouse drag pans in orbit mode and the mode is untouched', async ({ page }) => {
     await loadSample(page);
     const orbit = page.locator('.olv-mode-orbit');
     await expect(orbit).toHaveAttribute('aria-pressed', 'true');
@@ -140,7 +140,7 @@ test.describe('hand tool — pan mode surfaces', () => {
     await page.waitForTimeout(400);
 
     const after = await readPose(page);
-    expect(after).not.toEqual(before);
+    expect(poseDelta(before, after)).toBeGreaterThan(1e-6);
     // Temporary grab: the prior behavior (orbit mode) is restored — it was
     // never left.
     await expect(orbit).toHaveAttribute('aria-pressed', 'true');

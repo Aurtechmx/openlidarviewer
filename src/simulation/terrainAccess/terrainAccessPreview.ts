@@ -22,9 +22,13 @@
  * Pure: no DOM, no three.js, no I/O.
  */
 
-import { buildTraversabilityMap, type NodeEligibility, type TerrainAccessFeatures, type TraversabilityMapCell } from './traversabilityCost';
+import {
+  buildTraversabilityMap, DERIVATIVE_CAUSE_BOUNDARY, DERIVATIVE_CAUSE_HOLE,
+  type NodeEligibility, type TerrainAccessFeatures, type TraversabilityMapCell,
+} from './traversabilityCost';
+import { derivativeEstimateGridStatement } from './terrainAccessExplain';
 import { prepareTerrainAccessRun, type TerrainAccessPrepareParams } from './terrainAccessPrepare';
-import type { TerrainAccessGrid, TerrainAccessProfile } from './terrainAccessTypes';
+import { resolveEvidenceGapPolicy, type TerrainAccessGrid, type TerrainAccessProfile } from './terrainAccessTypes';
 import { basisLimitations, type SimulationInputBasis } from '../simulationInputBasis';
 import type { HorizontalScale } from './dtmTerrainAccessGrid';
 import type { TerrainAccessRefusal, TerrainAccessRefusalCode } from './terrainAccessRunner';
@@ -47,7 +51,7 @@ export interface TerrainAccessPreview {
 export type TerrainAccessPreviewRefusalCode = Extract<
   TerrainAccessRefusalCode,
   | 'NO_DTM' | 'UNITS_UNRESOLVED' | 'INVALID_PROFILE' | 'TOO_LARGE' | 'INSUFFICIENT_EVIDENCE'
-  | 'OBSTRUCTION_EVIDENCE_UNAVAILABLE' | 'SURFACE_MISALIGNED' | 'INVALID_ROI'
+  | 'OBSTRUCTION_EVIDENCE_UNAVAILABLE' | 'SURFACE_MISALIGNED' | 'SURFACE_STALE' | 'INVALID_ROI'
 >;
 
 export function prepareTerrainAccessPreview(
@@ -69,6 +73,32 @@ export function prepareTerrainAccessPreview(
     eligibility,
     map,
     basis,
-    limitations: [...basisLimitations(basis, 'terrain-access'), ...gridWarnings],
+    limitations: [
+      ...basisLimitations(basis, 'terrain-access'),
+      ...gridWarnings,
+      ...previewEstimateLimitations(grid, features, profile),
+    ],
   };
+}
+
+/**
+ * Under the exploratory policy, the grid cells whose grade and cross slope
+ * will be estimates (slope from a substituted neighbour), by cause, in the
+ * words a run's `estimated` status uses. Under conservative they are blocked
+ * and the eligibility map already shows it.
+ */
+function previewEstimateLimitations(
+  grid: TerrainAccessGrid,
+  features: TerrainAccessFeatures,
+  profile: TerrainAccessProfile,
+): string[] {
+  if (resolveEvidenceGapPolicy(profile) !== 'exploratory') return [];
+  let boundary = 0;
+  let hole = 0;
+  for (let i = 0; i < features.derivativeSupportCause.length; i++) {
+    if (grid.valid[i] === 0) continue;
+    if (features.derivativeSupportCause[i] === DERIVATIVE_CAUSE_BOUNDARY) boundary++;
+    else if (features.derivativeSupportCause[i] === DERIVATIVE_CAUSE_HOLE) hole++;
+  }
+  return boundary + hole === 0 ? [] : [derivativeEstimateGridStatement(boundary + hole, boundary, hole)];
 }

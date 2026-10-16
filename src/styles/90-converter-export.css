@@ -89,16 +89,8 @@
 .olv-bc-file-del { background: none; border: none; color: var(--text-faint); cursor: pointer; font-size: var(--text-xs); padding: var(--space-xs); border-radius: var(--radius-xs); }
 .olv-bc-file-del:hover { color: var(--rating-weak); }
 
-/* Pill groups — similarity = same shape/size; active state contrasts. */
+/* Pill groups: each `.olv-bc-pill` is drawn as a `.olv-chip` (40-inspector.css). */
 .olv-bc-pills { display: flex; flex-wrap: wrap; gap: var(--space-sm); }
-.olv-bc-pill {
-  font: inherit; font-size: var(--text-sm); cursor: pointer;
-  padding: var(--space-sm) var(--space-xl); border-radius: var(--radius-pill);
-  border: 0.5px solid var(--hairline); background: transparent; color: var(--text-dim);
-}
-.olv-bc-pill:hover:not(.is-disabled):not(.is-active) { border-color: var(--accent); color: var(--text); }
-.olv-bc-pill.is-active { background: var(--accent-soft); border-color: var(--accent); color: var(--text); font-weight: 600; }
-.olv-bc-pill.is-disabled { opacity: 0.4; cursor: not-allowed; }
 
 .olv-bc-crs-extra { display: flex; flex-direction: column; gap: var(--space-md); margin-top: var(--space-md); }
 .olv-bc-field { display: flex; flex-direction: column; gap: var(--space-xs); }

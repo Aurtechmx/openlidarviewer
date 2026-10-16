@@ -115,6 +115,18 @@ through `overrides` rather than waiting on the packages that depend on them:
 | brace-expansion (under minimatch 3) | 1.1.15 | 1.1.21 | CVE-2026-13149, exponential-time expansion; GHSA-mh99-v99m-4gvg, unbounded expansion |
 | brace-expansion (under minimatch 10) | 5.0.8 | 5.0.12 | GHSA-mh99-v99m-4gvg, unbounded expansion; resolved inside the existing range, no override needed |
 
+Three further development-tree advisories were closed inside the existing
+version ranges, with a lockfile refresh and no override. All three sit under
+development tooling only (`vitepress` for the documentation site, and `ajv`
+under `@stryker-mutator/core` and `vite-plugin-javascript-obfuscator`), and none
+reaches the deploy archive:
+
+| Package | Was | Now | Advisory |
+|---|---|---|---|
+| vue, @vue/server-renderer (under vitepress) | 3.5.39 | 3.5.44 | cross-site scripting through a missing CR in the attribute-name blacklist |
+| source-map-js (under @vue/compiler-core) | 1.2.1 | 1.2.2 | event-loop denial of service through indexed source-map section offsets |
+| fast-uri (under ajv) | 3.1.7 | 3.1.8 | inconsistent host case normalization through percent-encoded octets |
+
 One further override is not an advisory. `rolldown` is pinned to 1.2.3, the
 bundler Vite builds with. Vite accepts any 1.2.x, and 1.2.7 emits an entry chunk
 14 KiB larger from identical source, which exceeds the 812 KiB ceiling in
@@ -169,5 +181,5 @@ be re-validated against one variable.
 nvm use          # 22.18.0, from .nvmrc
 npm ci
 npm audit --omit=dev --audit-level=high   # production set: expect 0
-npm audit                                 # full dev tree: expect the advisory above
+npm audit                                 # full dev tree: expect 0
 ```

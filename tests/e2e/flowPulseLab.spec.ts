@@ -1,5 +1,5 @@
 import { test, expect, type Page } from '@playwright/test';
-import { dropDenseGridPly, firePaletteAction, openAnalysePanel as openAnalyse, closeScanFromDock } from './helpers';
+import { dropDenseGridPly, firePaletteAction, openAnalysePanel as openAnalyse, closeScanFromDock, clickTaskBack } from './helpers';
 
 /**
  * Flow Pulse (Field Simulation Lab) — run, switch conditioning, click-to-pulse
@@ -164,7 +164,7 @@ test('run, conditioning, click-to-pulse, catchment, keyboard path, and the overl
   // SAME persisted overlay is still attached to the scan, not a fresh one
   // reset to off. (Before the fix this always came back "false": the lab
   // disposed the overlay unconditionally on close.)
-  await page.locator('#olv-ws-mode-analyse > .olv-ws-task .olv-ws-back').click();
+  await clickTaskBack(page, 'analyse');
   await expect(page.locator('.olv-analyse-page[data-page="flow-pulse"]')).toBeHidden();
   await openFlowPulse(page);
   await expect(page.locator('.olv-analyse-page[data-page="flow-pulse"] .olv-story-card')).toContainText('D8 flow routing over the analysed DTM');
@@ -173,7 +173,7 @@ test('run, conditioning, click-to-pulse, catchment, keyboard path, and the overl
   // Turning it off is the visible way out, and it stays off across a close/reopen.
   await page.locator('.olv-flow-overlay-toggle').click();
   await expect(page.locator('.olv-flow-overlay-toggle')).toHaveAttribute('aria-pressed', 'false');
-  await page.locator('#olv-ws-mode-analyse > .olv-ws-task .olv-ws-back').click();
+  await clickTaskBack(page, 'analyse');
   await expect(page.locator('.olv-analyse-page[data-page="flow-pulse"]')).toBeHidden();
   await openFlowPulse(page);
   await expect(page.locator('.olv-flow-overlay-toggle')).toHaveAttribute('aria-pressed', 'false');
@@ -198,7 +198,7 @@ test('closing the scan tears down the persisted overlay without reopening the La
   await expect(overlayToggle).toBeVisible();
   await overlayToggle.click();
   await expect(overlayToggle).toHaveAttribute('aria-pressed', 'true');
-  await page.locator('#olv-ws-mode-analyse > .olv-ws-task .olv-ws-back').click();
+  await clickTaskBack(page, 'analyse');
   await expect(page.locator('.olv-analyse-page[data-page="flow-pulse"]')).toBeHidden();
 
   // Close the scan — no Lab reopen in between. Before the fix, nothing

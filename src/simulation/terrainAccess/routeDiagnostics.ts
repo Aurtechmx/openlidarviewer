@@ -18,13 +18,21 @@
  *     run. A measured cell is not exempt: few returns can make a measured cell
  *     weak. The display thresholds in `cellConfidence.ts` play no part.
  *
- * No edge-risk figure is reported: that needs the DTM's `interpDistanceCells`
- * or a support mask, which this module's grid does not carry.
+ *   - DERIVATIVE SUPPORT (`fractionDerivativeSynthesised`): the share of route
+ *     cells whose slope and aspect used a synthesised neighbour, split by
+ *     cause (outer boundary or interior NoData hole), and the route cells
+ *     whose 3×3 ruggedness window holds such a cell.
+ *
+ * No edge-risk figure is reported: that needs the DTM's `interpDistanceCells`,
+ * which this module's grid does not carry.
  *
  * Pure data: no DOM, no three.js, no I/O. Deterministic.
  */
 
-import { edgeGeometry, utilization, type CostWeights, type TerrainAccessFeatures } from './traversabilityCost';
+import {
+  DERIVATIVE_CAUSE_BOUNDARY, DERIVATIVE_CAUSE_HOLE, edgeGeometry, utilization, windowHoldsFlagged,
+  type CostWeights, type TerrainAccessFeatures,
+} from './traversabilityCost';
 import type { TerrainAccessGrid } from './terrainAccessTypes';
 
 const MEASURED = 2;
@@ -90,6 +98,26 @@ export interface RouteDiagnostics {
   readonly fractionBelowProfileConfidence: number | null;
   /** The profile's `minimumTerrainConfidence` the share above was computed against. */
   readonly profileMinimumTerrainConfidence: number;
+  /**
+   * Route cells whose slope and aspect used a synthesised neighbour
+   * (`TerrainAccessFeatures.derivativeSynthesised`): the grid's outer ring,
+   * or a cell beside a void. Zero under the conservative evidence policy,
+   * which blocks them.
+   */
+  readonly derivativeSynthesisedRouteCells: number;
+  /** {@link derivativeSynthesisedRouteCells} over all route cells. Null only for an empty path. */
+  readonly fractionDerivativeSynthesised: number | null;
+  /** Of {@link derivativeSynthesisedRouteCells}, those at the outer boundary (grid edge or NoData reaching it). */
+  readonly derivativeSynthesisedBoundaryRouteCells: number;
+  /** Of {@link derivativeSynthesisedRouteCells}, those beside an interior NoData hole only. */
+  readonly derivativeSynthesisedHoleRouteCells: number;
+  /**
+   * Route cells whose 3×3 ruggedness (VRM) window holds a cell flagged in
+   * `derivativeSynthesised`, itself included: their VRM reads at least one
+   * slope computed with a substituted neighbour. Zero under the conservative
+   * evidence policy while a ruggedness limit is set, which blocks them.
+   */
+  readonly ruggednessSynthesisedRouteCells: number;
   /** Ordered, largest contributor first. */
   readonly dominantCostContributors: readonly CostContributor[];
 }
@@ -115,6 +143,9 @@ export function computeRouteDiagnostics(
       maxEdgeStepM: 0, maxLocalReliefM: 0, maxVrm: 0, minTerrainConfidence: Number.NaN,
       fractionMeasured: null, fractionInterpolated: null, fractionBelowProfileConfidence: null,
       profileMinimumTerrainConfidence: profile.minimumTerrainConfidence,
+      derivativeSynthesisedRouteCells: 0, fractionDerivativeSynthesised: null,
+      derivativeSynthesisedBoundaryRouteCells: 0, derivativeSynthesisedHoleRouteCells: 0,
+      ruggednessSynthesisedRouteCells: 0,
       dominantCostContributors: [],
     };
   }
@@ -176,9 +207,18 @@ export function computeRouteDiagnostics(
   let measured = 0;
   let interpolated = 0;
   let belowProfile = 0;
+  let synthesised = 0;
+  let synthesisedBoundary = 0;
+  let synthesisedHole = 0;
+  let ruggednessSynthesised = 0;
   const coverage = grid.coverage;
   for (const i of path) {
     if (grid.confidence[i] < profile.minimumTerrainConfidence) belowProfile++;
+    if (features.derivativeSynthesised[i] === 1) synthesised++;
+    const cause = features.derivativeSupportCause[i];
+    if (cause === DERIVATIVE_CAUSE_BOUNDARY) synthesisedBoundary++;
+    else if (cause === DERIVATIVE_CAUSE_HOLE) synthesisedHole++;
+    if (windowHoldsFlagged(features.derivativeSynthesised, grid.cols, grid.rows, i)) ruggednessSynthesised++;
     if (!coverage) continue;
     if (coverage[i] === MEASURED) measured++;
     else if (coverage[i] === INTERPOLATED) interpolated++;
@@ -206,6 +246,11 @@ export function computeRouteDiagnostics(
     fractionInterpolated: coverageKnown ? interpolated / path.length : null,
     fractionBelowProfileConfidence: belowProfile / path.length,
     profileMinimumTerrainConfidence: profile.minimumTerrainConfidence,
+    derivativeSynthesisedRouteCells: synthesised,
+    fractionDerivativeSynthesised: synthesised / path.length,
+    derivativeSynthesisedBoundaryRouteCells: synthesisedBoundary,
+    derivativeSynthesisedHoleRouteCells: synthesisedHole,
+    ruggednessSynthesisedRouteCells: ruggednessSynthesised,
     dominantCostContributors: contributors,
   };
 }

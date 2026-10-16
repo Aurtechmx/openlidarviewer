@@ -203,6 +203,12 @@ export interface StreamingSource {
    * on the GPU is always known.
    */
   readonly sourcePointCount: number | null;
+  /**
+   * Versioned content fingerprint taken at open from the bytes the open read
+   * (`io/sourceFingerprint`), or null/absent when the source has none. Feeds
+   * the CRS override identity.
+   */
+  readonly sourceDigest?: string | null;
   /** Points currently uploaded to the GPU. */
   readonly residentPointCount: number;
 

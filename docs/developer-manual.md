@@ -292,6 +292,7 @@ See [`architecture.md`](architecture.md) for the full map.
 | `npm run test:watch` | Vitest in watch mode. |
 | `npm run test:e2e` | Playwright end-to-end tests (run `npx playwright install --with-deps chromium` first). |
 | `npm run test:smoke:widths` | The startup smoke spec at five viewport widths: 320, 375, 767, 768, 1440. One build and one preview server serve all five. |
+| `npm run test:e2e:devices` | Opt-in, not run in CI: the phone, tablet and device-agnostic specs under iPhone SE, iPhone 15 Pro Max, iPad Pro 11 and Pixel 7 emulation (`playwright.devices.config.ts`). Cases pinned to a desktop viewport carry the `@desktop-only` tag and are excluded. Emulation is not a device: a pass speaks to layout and touch, not to the renderer on real hardware. |
 
 A `?debug=1` URL parameter logs a per-stage load-timing breakdown (read, decode, downsample, GPU upload, total) to the browser console. It is useful when profiling the load pipeline and is off in normal use.
 
@@ -346,6 +347,11 @@ blocking a merge.
 
 Pre-merge checklist for any PR into `main`: all review threads resolved,
 `ci-green` passing, branch rebased on the latest `main`.
+
+The release workflow (`.github/workflows/release.yml`) does not repeat the
+Firefox, WebKit and Windows legs. Its `ci-at-tag` job checks through the GitHub
+API that a CI run at the tagged commit completed with `ci-green` and every job
+it needs at `success`, and `release-ready` depends on that job.
 
 ---
 

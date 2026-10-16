@@ -31,7 +31,7 @@
  * Pure data: no DOM, no three.js, no I/O. Deterministic.
  */
 
-import { hornSlopeAspect } from '../../terrain/ground/terrainDerivatives';
+import { hornSlopeAspect, synthesisedNeighbourMask } from '../../terrain/ground/terrainDerivatives';
 import { computeVRM } from '../../terrain/complexity/vectorRuggedness';
 import { computeLocalStep, edgeStep } from './localStep';
 import { classifyObstruction, type ObstructionState } from './obstacleEvidence';
@@ -39,6 +39,7 @@ import { diagonalSweepClear, dilateBlocked } from './footprintClearance';
 import { directionalSlope, gradientField, headingUnit, type GradientField } from './directionalGrade';
 import {
   TERRAIN_ACCESS_NEIGHBOURS,
+  resolveEvidenceGapPolicy,
   type BlockReason,
   type EdgeBlockReason,
   type NodeBlockReason,
@@ -61,6 +62,73 @@ export interface TerrainAccessFeatures {
   /** The §12.4 local-step diagnostic (3×3 footprint), metres. */
   readonly localStep: Float32Array;
   readonly obstruction: readonly ObstructionState[];
+  /**
+   * 1 where the cell's Horn window used a synthesised neighbour (the grid's
+   * outer ring, or a void beside it), so its slope and aspect are an
+   * estimate; 0 where all nine values were read from the grid, and at an
+   * invalid cell. Computed on the same masked heights the slope is, by
+   * `synthesisedNeighbourMask` (`terrainDerivatives.ts`).
+   */
+  readonly derivativeSynthesised: Uint8Array;
+  /**
+   * Why {@link derivativeSynthesised} flagged a cell: 0 where it did not,
+   * {@link DERIVATIVE_CAUSE_BOUNDARY} where the window leaves the grid or
+   * touches NoData connected to the grid edge (the survey's outer boundary),
+   * {@link DERIVATIVE_CAUSE_HOLE} where it touches only interior NoData holes.
+   */
+  readonly derivativeSupportCause: Uint8Array;
+}
+
+/** {@link TerrainAccessFeatures.derivativeSupportCause}: window extrapolated at the outer boundary. */
+export const DERIVATIVE_CAUSE_BOUNDARY = 1;
+/** {@link TerrainAccessFeatures.derivativeSupportCause}: centre substituted beside an interior NoData hole. */
+export const DERIVATIVE_CAUSE_HOLE = 2;
+
+/**
+ * Split a synthesised-neighbour `mask` by cause. NoData reachable from the
+ * grid edge through NoData (8-connected) is the survey's outer boundary; any
+ * other NoData is an interior hole. A flagged cell whose window leaves the
+ * grid or touches boundary NoData is {@link DERIVATIVE_CAUSE_BOUNDARY}, even
+ * when it also touches a hole; otherwise {@link DERIVATIVE_CAUSE_HOLE}.
+ */
+export function derivativeSupportCause(z: Float32Array, mask: Uint8Array, cols: number, rows: number): Uint8Array {
+  const n = cols * rows;
+  const cause = new Uint8Array(n);
+  const outer = new Uint8Array(n);
+  const stack: number[] = [];
+  for (let i = 0; i < n; i++) {
+    const row = Math.floor(i / cols);
+    const col = i - row * cols;
+    const edge = row === 0 || col === 0 || row === rows - 1 || col === cols - 1;
+    if (edge && !Number.isFinite(z[i])) { outer[i] = 1; stack.push(i); }
+  }
+  while (stack.length > 0) {
+    const i = stack.pop() as number;
+    const row = Math.floor(i / cols);
+    const col = i - row * cols;
+    for (let dr = -1; dr <= 1; dr++) {
+      for (let dc = -1; dc <= 1; dc++) {
+        const r = row + dr;
+        const c = col + dc;
+        if (r < 0 || c < 0 || r >= rows || c >= cols) continue;
+        const j = r * cols + c;
+        if (outer[j] === 0 && !Number.isFinite(z[j])) { outer[j] = 1; stack.push(j); }
+      }
+    }
+  }
+  for (let i = 0; i < n; i++) {
+    if (mask[i] === 0) continue;
+    const row = Math.floor(i / cols);
+    const col = i - row * cols;
+    let boundary = row === 0 || col === 0 || row === rows - 1 || col === cols - 1;
+    for (let dr = -1; dr <= 1 && !boundary; dr++) {
+      for (let dc = -1; dc <= 1; dc++) {
+        if (outer[(row + dr) * cols + col + dc] === 1) { boundary = true; break; }
+      }
+    }
+    cause[i] = boundary ? DERIVATIVE_CAUSE_BOUNDARY : DERIVATIVE_CAUSE_HOLE;
+  }
+  return cause;
 }
 
 /** Build every terrain feature the cost model reads, once, from the grid. */
@@ -85,7 +153,12 @@ export function prepareTerrainAccessFeatures(
   });
   const localStep = computeLocalStep(grid, (LOCAL_WINDOW_CELLS - 1) / 2);
   const obstruction = classifyObstruction(grid, profile.obstacleHeightThreshold);
-  return { slope, aspect, gradient, vrm: vrmResult.vrm, localStep, obstruction };
+  const derivativeSynthesised = synthesisedNeighbourMask(maskedZ, grid.cols, grid.rows);
+  const supportCause = derivativeSupportCause(maskedZ, derivativeSynthesised, grid.cols, grid.rows);
+  return {
+    slope, aspect, gradient, vrm: vrmResult.vrm, localStep, obstruction, derivativeSynthesised,
+    derivativeSupportCause: supportCause,
+  };
 }
 
 /** Per-cell node eligibility: blocked flag + the reason, before width clearance. */
@@ -94,15 +167,34 @@ export interface NodeEligibility {
   readonly reason: readonly (NodeBlockReason | null)[];
 }
 
+/** True when the 3×3 window around `index` (clipped to the grid) holds a flagged cell. */
+export function windowHoldsFlagged(mask: Uint8Array, cols: number, rows: number, index: number): boolean {
+  const row = Math.floor(index / cols);
+  const col = index - row * cols;
+  for (let r = Math.max(0, row - 1); r <= Math.min(rows - 1, row + 1); r++) {
+    for (let c = Math.max(0, col - 1); c <= Math.min(cols - 1, col + 1); c++) {
+      if (mask[r * cols + c] === 1) return true;
+    }
+  }
+  return false;
+}
+
 /**
  * Direction-independent eligibility: NoData, ROI, support, ruggedness,
- * obstruction. Does not yet account for vehicle width — see
- * {@link applyWidthClearance}.
+ * obstruction, then, under the conservative evidence policy, a cell with no
+ * above-ground return while an obstruction limit is evaluated, a cell whose
+ * slope used a synthesised neighbour, and, while a ruggedness limit is
+ * evaluated, a cell whose 3×3 VRM window holds such a cell (its VRM reads
+ * that slope). So a route found under conservative reads every limit it
+ * applies from fully supported values. Does not yet account for vehicle
+ * width — see {@link applyWidthClearance}.
  */
 export function nodeEligibility(grid: TerrainAccessGrid, features: TerrainAccessFeatures, profile: TerrainAccessProfile): NodeEligibility {
   const n = grid.cols * grid.rows;
   const blocked = new Uint8Array(n);
   const reason: (NodeBlockReason | null)[] = new Array(n).fill(null);
+  const conservative = resolveEvidenceGapPolicy(profile) === 'conservative';
+  const obstructionEvaluated = profile.obstacleHeightThreshold != null && grid.heightAboveGround != null;
 
   for (let i = 0; i < n; i++) {
     if (grid.valid[i] === 0) { blocked[i] = 1; reason[i] = 'no-data'; continue; }
@@ -114,7 +206,15 @@ export function nodeEligibility(grid: TerrainAccessGrid, features: TerrainAccess
       const v = features.vrm[i];
       if (Number.isFinite(v) && v > profile.maxRuggedness) { blocked[i] = 1; reason[i] = 'ruggedness'; continue; }
     }
-    if (features.obstruction[i] === 'obstructed') { blocked[i] = 1; reason[i] = 'obstruction'; }
+    if (features.obstruction[i] === 'obstructed') { blocked[i] = 1; reason[i] = 'obstruction'; continue; }
+    if (!conservative) continue;
+    if (obstructionEvaluated && features.obstruction[i] === 'not-evaluated') {
+      blocked[i] = 1; reason[i] = 'obstruction-unknown'; continue;
+    }
+    if (features.derivativeSynthesised[i] === 1
+      || (profile.maxRuggedness != null && windowHoldsFlagged(features.derivativeSynthesised, grid.cols, grid.rows, i))) {
+      blocked[i] = 1; reason[i] = 'derivative-support';
+    }
   }
   return { blocked, reason };
 }
@@ -411,7 +511,9 @@ export interface WhyNotResult {
   readonly reasons: readonly WhyNotReason[];
 }
 
-const UNKNOWN_REASONS: ReadonlySet<NodeBlockReason> = new Set(['no-data', 'low-confidence']);
+const UNKNOWN_REASONS: ReadonlySet<NodeBlockReason> = new Set([
+  'no-data', 'low-confidence', 'obstruction-unknown', 'derivative-support',
+]);
 
 const tangentToDeg = (t: number): string => ((Math.atan(t) * 180) / Math.PI).toFixed(1);
 
@@ -473,6 +575,15 @@ function nodeDetail(
     case 'ruggedness':
       return `ruggedness ${features.vrm[index].toFixed(3)} > limit ${(profile.maxRuggedness ?? 0).toFixed(3)}`;
     case 'obstruction': return 'above-ground return evidence exceeds the declared threshold';
+    case 'obstruction-unknown':
+      return 'no above-ground return here, so the obstruction limit cannot be checked; the conservative evidence policy blocks it';
+    case 'derivative-support':
+      if (features.derivativeSynthesised[index] !== 1) {
+        return 'ruggedness here reads a neighbour whose slope used a synthesised neighbour (grid edge or void); '
+          + 'with a ruggedness limit set, the conservative evidence policy blocks it';
+      }
+      return 'slope and aspect here were computed with at least one synthesised neighbour (grid edge or void); '
+        + 'the conservative evidence policy blocks it';
     case 'vehicle-width':
       return 'the declared vehicle width does not fit between this cell and the nearest unsupported cell or survey edge';
   }

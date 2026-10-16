@@ -11,7 +11,7 @@
  * Deterministic project; the dense-grid PLY yields an exploratory contour set.
  */
 import { test, expect, type Page } from '@playwright/test';
-import { dropDenseGridPly, dropTerrainAccessUtmLas, showWorkspaceMode, terrainResultDigest } from './helpers';
+import { dropDenseGridPly, dropTerrainAccessUtmLas, showWorkspaceMode, taskBack, clickTaskBack, terrainResultDigest } from './helpers';
 
 const ANALYSE = '#olv-ws-mode-analyse';
 
@@ -25,7 +25,7 @@ async function loadScan(page: Page): Promise<void> {
 
 const row = (page: Page, id: string) => page.locator(`.olv-ah-row[data-analysis="${id}"]`);
 const title = (page: Page) => page.locator(`${ANALYSE} .olv-ws-task-title`);
-const back = (page: Page) => page.locator(`${ANALYSE} .olv-ws-back`);
+const back = (page: Page) => taskBack(page, 'analyse');
 
 async function runTerrain(page: Page): Promise<void> {
   await page.locator('.olv-analyse-run').click();
@@ -69,10 +69,10 @@ test.describe('Analyse home and pages', () => {
     await expect(page.locator('.olv-analyse-contour-deliverable')).not.toHaveClass(/olv-hidden/);
     await expect(page.locator('.olv-cs-export-btn', { hasText: /^GeoJSON$/ })).toBeVisible();
 
-    await back(page).click();
+    await clickTaskBack(page, 'analyse');
     await expect(title(page)).toHaveText('Terrain');
     await expect(back(page)).toHaveText('← Analyse');
-    await back(page).click();
+    await clickTaskBack(page, 'analyse');
     await expect(page.locator(`${ANALYSE} .olv-analyse-home`)).toBeVisible();
     await expect(page.locator(`${ANALYSE} .olv-ws-task`)).toBeHidden();
     // The run is reflected on the home: the labs are no longer blocked on it.
@@ -104,8 +104,8 @@ test.describe('Analyse home and pages', () => {
     const before = await resultDigest(page, 'c');
     expect(before.tagged).toBe(0);
 
-    await back(page).click(); // Terrain
-    await back(page).click(); // home
+    await clickTaskBack(page, 'analyse'); // Terrain
+    await clickTaskBack(page, 'analyse'); // home
     await row(page, 'terrain').locator('.olv-ah-open').click();
     await page.locator('.olv-at-link').click();
     await showWorkspaceMode(page, 'data');
@@ -114,8 +114,8 @@ test.describe('Analyse home and pages', () => {
     await page.mouse.move(1, 1);
     await page.locator('#olv-ws-mode-analyse .olv-mode-continue').click();
     await expect(title(page)).toHaveText('Contours');
-    await back(page).click();
-    await back(page).click();
+    await clickTaskBack(page, 'analyse');
+    await clickTaskBack(page, 'analyse');
 
     const after = await resultDigest(page, 'c');
     expect(after.digest).toBe(before.digest);
@@ -137,7 +137,7 @@ test.describe('Analyse home and pages', () => {
     const header = page.locator(`${ANALYSE} .olv-analyse-page[data-page="terrain"] .olv-at-verdict`);
     await expect(header.locator('.olv-ah-badge')).toHaveText('Blocked');
     await expect(header.locator('.olv-at-reason')).toHaveText(/Not usable/);
-    await back(page).click();
+    await clickTaskBack(page, 'analyse');
     await expect(row(page, 'terrain').locator('.olv-ah-badge')).toHaveText('Blocked');
     await expect(row(page, 'terrain').locator('.olv-ah-reason')).toHaveText(/Not usable/);
     // Rows that read the DTM are capped by the same run, and their fix is Terrain.
@@ -161,8 +161,8 @@ test.describe('Analyse home and pages', () => {
     await create.click(); // 3
     await expect(title(page)).toHaveText('Contours');
 
-    await back(page).click();
-    await back(page).click();
+    await clickTaskBack(page, 'analyse');
+    await clickTaskBack(page, 'analyse');
     await showWorkspaceMode(page, 'data');
     await page.locator('.olv-ws-tab[data-mode="analyse"]').click(); // 1
     await row(page, 'contours').locator('.olv-ah-open').click(); // 2

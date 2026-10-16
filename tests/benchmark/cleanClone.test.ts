@@ -11,11 +11,14 @@
  * that never says no cannot catch anything.
  */
 import { describe, it, expect } from 'vitest';
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { tmpdir } from 'node:os';
 
 // @ts-expect-error — plain .mjs tooling module, no type declarations
 import { REQUIRED_PATHS, missingFrom, satisfiedByPrefix } from '../../scripts/verify-clean-clone.mjs';
 // @ts-expect-error — plain .mjs tooling module, no type declarations
-import { SUITES, suitesForTier, omittedByTier, batteryFailed, counts, renderBattery } from '../../scripts/publication-battery.mjs';
+import { SUITES, suitesForTier, omittedByTier, batteryFailed, counts, renderBattery, ranOutcome, readRunResult } from '../../scripts/publication-battery.mjs';
 
 describe('missingFrom', () => {
   it('names the wanted paths a tree does not carry', () => {
@@ -75,6 +78,36 @@ describe('the battery registry', () => {
       expect(typeof s.requires, s.id).toBe('function');
       expect(s.requires({}), s.id).toBeTruthy();
     }
+  });
+
+  it('leaves the archive portability skip decision to its script and reads it from the result file', () => {
+    const s = SUITES.find((x: { id: string }) => x.id === 'archive-portability');
+    expect(s.requires).toBeUndefined();
+    expect(s.resultFile).toBe('release/archive-portability.json');
+  });
+
+  it('records a zero exit whose result says skipped as skipped, with its reason', () => {
+    const reason = 'skipped: repository-only check. Run with --archive <dir>.';
+    expect(ranOutcome(0, { skipped: true, reason })).toEqual({ status: 'skipped', note: reason });
+    expect(ranOutcome(0, { skipped: true })).toEqual({ status: 'skipped', note: 'the suite reported itself skipped' });
+    expect(ranOutcome(0, { skipped: false })).toEqual({ status: 'passed', note: null });
+    expect(ranOutcome(0, null)).toEqual({ status: 'passed', note: null });
+    expect(ranOutcome(2, { skipped: true, reason })).toEqual({ status: 'failed', note: 'exit 2' });
+  });
+
+  it('fails the battery when a required suite reported itself skipped', () => {
+    const o = { id: 'archive-portability', ...ranOutcome(0, { skipped: true, reason: 'x' }) };
+    expect(batteryFailed([o])).toBe(true);
+  });
+
+  it('ignores a result file left over from an earlier run', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'olv-battery-'));
+    const path = join(dir, 'r.json');
+    writeFileSync(path, JSON.stringify({ generatedAt: new Date(1_000_000).toISOString(), skipped: true }));
+    expect(readRunResult(path, 1_000_000)?.skipped).toBe(true);
+    expect(readRunResult(path, 1_000_000 + 60_000)).toBeNull();
+    expect(readRunResult(join(dir, 'absent.json'), 0)).toBeNull();
+    rmSync(dir, { recursive: true, force: true });
   });
 
   it('runs every registered suite in the verify tier', () => {

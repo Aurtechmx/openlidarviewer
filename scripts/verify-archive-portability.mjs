@@ -23,7 +23,15 @@
  * Usage:
  *   npm run benchmark:archive-portability
  *   node scripts/verify-archive-portability.mjs --archive <dir> --json <path>
+ *   OLV_ARCHIVE_DIR=<dir> npm run benchmark:archive-portability
  *   node scripts/verify-archive-portability.mjs --keep     # leave the extract
+ *
+ * With no repository and no archive directory (a Git-free source extraction
+ * run without an argument) there is nothing to build an archive from, so the
+ * run reports "skipped", writes a result with `skipped: true` and no checks,
+ * and exits 0. A skip is never recorded as a pass: the publication battery
+ * reads `skipped: true` from that result and records the suite as skipped with
+ * this script's reason, so the decision is made here and nowhere else.
  *
  * Exit code is 0 when no check reports an `error` finding. `warn` findings are
  * reported and do not fail. Machine-readable result is written to
@@ -38,14 +46,16 @@ import { createHash } from 'node:crypto';
 import { resolve, dirname, join, relative, posix } from 'node:path';
 import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
-import { requireBinaryOnPath } from './lib/binaryOnPath.mjs';
+import { binaryOnPath, requireBinaryOnPath } from './lib/binaryOnPath.mjs';
 import { isCliEntry } from './lib/isCliEntry.mjs';
 
 // Spawned programs are resolved to an absolute path by reading PATH, so the
 // path that runs is a value this script can name rather than whatever the OS
 // picks up. See scripts/lib/binaryOnPath.mjs.
-const GIT = requireBinaryOnPath('git');
-const TAR = requireBinaryOnPath('tar');
+// git is optional: a Git-free source extraction may run on a host without it,
+// and that case is reported as skipped rather than crashing on import.
+const GIT = binaryOnPath('git');
+const tarBinary = () => requireBinaryOnPath('tar');
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const REPO = resolve(HERE, '..');
@@ -254,6 +264,7 @@ function listFiles(root, base = root) {
 }
 
 const hasRepo = (() => {
+  if (GIT === null) return false;
   try {
     execFileSync(GIT, ['rev-parse', '--is-inside-work-tree'], { cwd: REPO, stdio: 'pipe' });
     return true;
@@ -263,6 +274,39 @@ const hasRepo = (() => {
 })();
 
 const git = (args, opts = {}) => execFileSync(GIT, args, { cwd: REPO, encoding: 'utf8', maxBuffer: 1 << 28, ...opts });
+
+/** What the run is checked against, given the arguments and the environment. */
+export function archiveSource({ explicit, envDir, repoPresent }) {
+  if (explicit) return { mode: 'explicit', dir: explicit };
+  if (envDir) return { mode: 'explicit', dir: envDir };
+  if (repoPresent) return { mode: 'build' };
+  return {
+    mode: 'skip',
+    reason:
+      'skipped: repository-only check. This tree has no Git repository to build the source archive from. ' +
+      'Run with --archive <extracted-dir> (or OLV_ARCHIVE_DIR=<extracted-dir>) pointing at a copy of the ' +
+      'source archive extracted outside this directory.',
+  };
+}
+
+/**
+ * The result written when the run is skipped. `skipped: true` and `reason` are
+ * what the publication battery reads to record the suite as skipped.
+ * @param {string} reason
+ * @param {number} checkCount
+ */
+export function skipResult(reason, checkCount, now = new Date()) {
+  return {
+    suite: 'archive-portability',
+    generatedAt: now.toISOString(),
+    skipped: true,
+    reason,
+    repositoryPresent: false,
+    nodeVersion: process.version,
+    totals: { checks: 0, passed: 0, failed: 0, skipped: checkCount, errors: 0, warnings: 0 },
+    results: [],
+  };
+}
 
 /**
  * Produce the directory the checks run against, and refuse anything that could
@@ -274,14 +318,10 @@ function resolveArchive(explicit, keep) {
   if (explicit) {
     dir = resolve(explicit);
   } else {
-    if (!hasRepo) {
-      console.error('✗ no repository and no --archive: nothing to extract. Pass --archive <extracted-dir>.');
-      process.exit(2);
-    }
     const tmp = mkdtempSync(join(tmpdir(), 'olv-archive-'));
     const tar = git(['archive', '--format=tar', '--prefix=archive/', 'HEAD'], { encoding: 'buffer' });
     writeFileSync(join(tmp, 'src.tar'), tar);
-    execFileSync(TAR, ['-xf', join(tmp, 'src.tar'), '-C', tmp]);
+    execFileSync(tarBinary(), ['-xf', join(tmp, 'src.tar'), '-C', tmp]);
     rmSync(join(tmp, 'src.tar'));
     dir = join(tmp, 'archive');
     built = true;
@@ -838,8 +878,15 @@ function main() {
   };
   const keep = argv.includes('--keep');
   const only = arg('--only');
-  const { dir: A, built } = resolveArchive(arg('--archive'), keep);
   const jsonPath = resolve(arg('--json') ?? join(REPO, 'release/archive-portability.json'));
+  const source = archiveSource({ explicit: arg('--archive'), envDir: process.env.OLV_ARCHIVE_DIR, repoPresent: hasRepo });
+  if (source.mode === 'skip') {
+    console.log(`Archive portability: ${source.reason}`);
+    mkdirSync(dirname(jsonPath), { recursive: true });
+    writeFileSync(jsonPath, `${JSON.stringify(skipResult(source.reason, checks.length), null, 2)}\n`);
+    process.exit(0);
+  }
+  const { dir: A, built } = resolveArchive(source.dir, keep);
 
   console.log(`Archive portability — checking ${A}`);
   console.log(`  repository present: ${hasRepo ? 'yes' : 'no'}\n`);

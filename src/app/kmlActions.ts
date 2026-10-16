@@ -199,6 +199,37 @@ function inSceneFrame(a: Annotation, d: readonly [number, number, number] | null
 }
 
 /**
+ * A measurement the active scan owns, in the scene frame `toLonLat` undoes, by
+ * the annotation rule above. Points picked through `pickLayers` are scene-frame
+ * whatever the owner says, as the measurement file export reads them.
+ */
+function measurementInSceneFrame(m: Measurement, d: readonly [number, number, number] | null): Measurement {
+  if (!d || m.owner?.frame !== 'source-local' || (m.pickLayers?.length ?? 0) > 0) return m;
+  return { ...m, points: m.points.map((p): Vec3 => [p[0] + d[0], p[1] + d[1], p[2] + d[2]]) };
+}
+
+/** The one-open-scan rule, read at the button and again at the click. */
+const ONE_SCAN = 'Site KML needs one open scan.';
+
+/**
+ * Why the site file would have nothing placed in it, or null when it has
+ * content. Content is what the file places: a measurement or an annotation the
+ * active scan owns, a saved view, or the scan outline. Withheld work only adds
+ * a note that it was withheld, so it does not count.
+ */
+function siteContentRefusal(deps: KmlActionDeps): string | null {
+  if (deps.scanExtent() !== null || deps.viewpoints().length > 0) return null;
+  const view = deps.measurementOwnership ? deps.measurementOwnership() : { layers: [], activeViewerId: null };
+  const measurements = deps.measurements();
+  const annotations = deps.annotations();
+  if (measurementsOwnedByActive(measurements, view).own.length > 0) return null;
+  if (annotationsOwnedByActive(annotations, view).own.length > 0) return null;
+  return measurements.length + annotations.length > 0
+    ? 'Nothing on this scan to place: its measurements and annotations belong to scans that are not active, and it has no measured extent yet.'
+    : 'The scan has no measured extent to place yet.';
+}
+
+/**
  * Whether the SITE KML can be written, with the reason when it cannot.
  * Resolves origin/CRS for static AND streaming, because a georeferenced streaming scan
  * can place KML too.
@@ -207,14 +238,9 @@ export function siteKmlStatus(deps: KmlActionDeps): KmlActionStatus {
   if (!deps.hasViewer()) return { ready: false, reason: 'Open a scan first.' };
   const geo = deps.geo();
   if (geo.name === null) return { ready: false, reason: 'KML needs a loaded, georeferenced scan.' };
-  if ((deps.layerCount?.() ?? 1) > 1) return { ready: false, reason: 'Site KML needs one open scan.' };
-  // The scan outline is always a placemark, so the site file has content with
-  // no feature placed; only a scan with neither an outline nor a feature has
-  // nothing to write.
-  const features = deps.measurements().length + deps.annotations().length;
-  if (features === 0 && deps.scanExtent() === null) {
-    return { ready: false, reason: 'The scan has no measured extent to place yet.' };
-  }
+  if ((deps.layerCount?.() ?? 1) > 1) return { ready: false, reason: ONE_SCAN };
+  const empty = siteContentRefusal(deps);
+  if (empty) return { ready: false, reason: empty };
   const resolved = deps.crsCurrent();
   if (!crsIsKnown(resolved)) {
     return {
@@ -258,6 +284,13 @@ export async function exportSiteKml(deps: KmlActionDeps): Promise<void> {
     deps.setError(axisRefusal);
     return;
   }
+  // The scan count and the content are re-checked for the same reason: a scan
+  // opened, or work moved off this scan, after the button enabled.
+  const refusal = (deps.layerCount?.() ?? 1) > 1 ? ONE_SCAN : siteContentRefusal(deps);
+  if (refusal) {
+    deps.setError(`KML export stopped. ${refusal}`);
+    return;
+  }
   // Every input is read BEFORE the serialiser import. The origin and CRS above
   // were already captured pre-await while the features, up vector and unit scale
   // were read after it, so a placement made (or a scan opened) during the import
@@ -276,7 +309,7 @@ export async function exportSiteKml(deps: KmlActionDeps): Promise<void> {
   // note added or a vertex dragged during the import would otherwise reach it.
   const input: KmlExportInput = {
     annotations: notes.own.map((a) => inSceneFrame(structuredClone(a), d)),
-    measurements: owned.own.map((m) => structuredClone(m)),
+    measurements: owned.own.map((m) => measurementInSceneFrame(structuredClone(m), d)),
     withheldMeasurements: owned.withheld,
     withheldAnnotations: notes.withheld,
     // Saved views become <LookAt> placemarks in the same LOCAL render frame as

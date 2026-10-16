@@ -62,6 +62,7 @@ function alignedSurface(dtm: DtmGrid, z: number[], over: Partial<AboveGroundSurf
       crs: dtm.crs, horizontalEpsg: dtm.horizontalEpsg ?? null,
       verticalUnitToMetres: dtm.verticalUnitToMetres ?? null, orientation: 'rows-north-from-origin',
     },
+    terrainDigest: dtmProductDigest(dtm),
     ...over,
   };
 }
@@ -71,7 +72,7 @@ function labInput(dtm: DtmGrid, over: Partial<TerrainAccessLabInput> = {}): Terr
 }
 
 describe('above-ground obstruction is never accepted without aligned evidence', () => {
-  it('the production panel input supplies no above-ground evidence, so a run asking for the limit is refused', () => {
+  it('a panel result that kept no DSM grid supplies no above-ground evidence, so a run asking for the limit is refused', () => {
     const dtm = dtmOf([[0, 0, 0]]);
     const fakeResult = {
       dtm, horizontalScaleResolved: true, verticalScaleResolved: true,
@@ -115,10 +116,13 @@ describe('above-ground obstruction is never accepted without aligned evidence', 
     expect(without.ok).toBe(true);
     if (!without.ok) return;
     expect(without.record.schemaVersion).toBe(2);
+    // A 1×3 grid is all outer ring: every slope used a substituted neighbour,
+    // so the slope-derived limits are estimated under the default exploratory policy.
     expect(without.record.result.constraints).toEqual({
-      longitudinalGrade: 'evaluated', crossSlope: 'evaluated', stepHeight: 'evaluated',
+      longitudinalGrade: 'estimated', crossSlope: 'estimated', stepHeight: 'evaluated',
       minimumTerrainConfidence: 'evaluated', vehicleWidth: 'evaluated',
       ruggedness: 'disabled', vehicleLength: 'recorded-not-enforced', aboveGroundObstruction: 'unavailable',
+      derivativeSupport: 'disclosed',
     });
     const zip = buildTerrainAccessPackage(without, { basename: 'c' });
     expect(jsonOf<{ result: { constraints: Record<string, string> } }>(zip, 'c-simulation-run.json')
@@ -141,6 +145,7 @@ describe('above-ground obstruction is never accepted without aligned evidence', 
     expect(r.ok).toBe(true);
     if (!r.ok) return;
     expect(r.record.result.obstructionUnevaluatedRouteCells).toBe(1);
+    expect(r.record.result.constraints).toMatchObject({ aboveGroundObstruction: 'estimated' });
     expect(r.limitations.join(' ')).toMatch(/1 of 3 route cells.*no above-ground evidence/);
   });
 });
@@ -238,7 +243,7 @@ describe('an above-ground surface is subtracted only when it is aligned', () => 
 
 describe('the simulation input digest moves with every routing input', () => {
   const a = dtmOf([[0, 1, 0]]);
-  const base = { dtm: a, scale, dsm: null, roi: null };
+  const base = { dtm: a, scale, dsm: null, roi: null, evidenceGapPolicy: 'exploratory' as const };
   const ref = terrainAccessSimulationInputDigest(base);
 
   it('the surface digest stays blind to confidence and vertical factor, as documented', () => {
@@ -263,7 +268,7 @@ describe('the simulation input digest moves with every routing input', () => {
   it('is deterministic and versioned', () => {
     expect(terrainAccessSimulationInputDigest(base)).toBe(ref);
     expect(ref).toMatch(/^[0-9a-f]{64}$/);
-    expect(TERRAIN_ACCESS_INPUT_DIGEST_SCHEME).toMatch(/v1$/);
+    expect(TERRAIN_ACCESS_INPUT_DIGEST_SCHEME).toMatch(/v4$/);
   });
 
   it('is the run\'s analysisInputDigest, and presentation state does not move it', () => {
@@ -276,7 +281,7 @@ describe('the simulation input digest moves with every routing input', () => {
     }), profile, 0, 2);
     expect(one.ok && two.ok).toBe(true);
     if (!one.ok || !two.ok) return;
-    expect(one.record.source.analysisInputDigest).toBe(terrainAccessSimulationInputDigest({ dtm: flat, scale, dsm: null, roi: null }));
+    expect(one.record.source.analysisInputDigest).toBe(terrainAccessSimulationInputDigest({ dtm: flat, scale, dsm: null, roi: null, evidenceGapPolicy: 'exploratory' }));
     expect(one.record.source.analysisInputDigestScheme).toBe(TERRAIN_ACCESS_INPUT_DIGEST_SCHEME);
     expect(one.record.source.surfaceDigest).toBe(dtmProductDigest(flat));
     expect(two.record.source.analysisInputDigest).toBe(one.record.source.analysisInputDigest);

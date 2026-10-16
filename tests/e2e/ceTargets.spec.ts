@@ -45,7 +45,7 @@ async function openScan(page: Page): Promise<void> {
   await expect(page.locator('.olv-empty')).toBeHidden({ timeout: 20_000 });
 }
 
-test.describe('targets at desktop size', () => {
+test.describe('targets at desktop size', { tag: '@desktop-only' }, () => {
   test.use({ viewport: { width: 1440, height: 900 } });
 
   test('empty state Open scan', async ({ page }) => {
@@ -81,7 +81,7 @@ test.describe('targets at desktop size', () => {
   });
 });
 
-test.describe('targets on a touch phone', () => {
+test.describe('targets on a touch phone', { tag: '@touch' }, () => {
   test.use({ viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true });
 
   test('empty state Open scan', async ({ page }) => {

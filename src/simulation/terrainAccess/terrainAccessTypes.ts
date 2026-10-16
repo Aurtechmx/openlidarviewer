@@ -31,6 +31,8 @@
  * Pure data: no DOM, no three.js, no I/O. Deterministic.
  */
 
+import type { SurfaceSampleBasis } from '../../terrain/surface/buildDsm';
+
 /** A cell's elevation, validity and evidence, on a fixed-size grid. */
 export interface TerrainAccessGrid {
   /** Elevation per cell, metres, row-major. Not read where `valid[i] === 0`. */
@@ -58,6 +60,8 @@ export interface TerrainAccessGrid {
    * would read as "confirmed clear" instead of "not evaluated".
    */
   readonly heightAboveGround: Float32Array | null;
+  /** Which points the above-ground surface rests on; absent or null without one. */
+  readonly aboveGroundBasis?: SurfaceSampleBasis | null;
   /**
    * Optional ROI mask — 1 = inside the declared region, 0 = outside. Null
    * means no ROI was declared, so every cell with an elevation is in scope.
@@ -127,6 +131,24 @@ export interface TerrainAccessProfile {
   readonly unknownPolicy: 'block' | 'penalize';
   /** Metres, or null to leave above-ground obstruction unconstrained/unevaluated. */
   readonly obstacleHeightThreshold: number | null;
+  /**
+   * What a cell whose evidence has a gap is: blocked (`'conservative'`) or
+   * allowed and disclosed (`'exploratory'`). Two gaps are governed: a slope
+   * and aspect computed with a synthesised neighbour (the grid's outer ring,
+   * or beside a void), and, when an obstruction limit is evaluated, a cell
+   * with no above-ground return. Absent reads as `'exploratory'`, the
+   * behaviour before this field existed; the run record always states the
+   * resolved value (see {@link resolveEvidenceGapPolicy}).
+   */
+  readonly evidenceGapPolicy?: EvidenceGapPolicy;
+}
+
+/** How a cell with an evidence gap is treated; see {@link TerrainAccessProfile.evidenceGapPolicy}. */
+export type EvidenceGapPolicy = 'conservative' | 'exploratory';
+
+/** The policy a run applies: the profile's own, or `'exploratory'` when it states none. */
+export function resolveEvidenceGapPolicy(profile: Pick<TerrainAccessProfile, 'evidenceGapPolicy'>): EvidenceGapPolicy {
+  return profile.evidenceGapPolicy ?? 'exploratory';
 }
 
 /** One field of {@link TerrainAccessProfile} failing validation. */
@@ -175,6 +197,13 @@ export function validateProfile(profile: TerrainAccessProfile): readonly Profile
     problems.push({ field: 'unknownPolicy', reason: `must be 'block' or 'penalize'; got ${String(profile.unknownPolicy)}` });
   }
   if (profile.obstacleHeightThreshold != null) positive('obstacleHeightThreshold', profile.obstacleHeightThreshold);
+  if (profile.evidenceGapPolicy !== undefined
+    && profile.evidenceGapPolicy !== 'conservative' && profile.evidenceGapPolicy !== 'exploratory') {
+    problems.push({
+      field: 'evidenceGapPolicy',
+      reason: `must be 'conservative' or 'exploratory'; got ${String(profile.evidenceGapPolicy)}`,
+    });
+  }
 
   return problems;
 }
@@ -205,6 +234,10 @@ export type NodeBlockReason =
   | 'low-confidence'
   | 'ruggedness'
   | 'obstruction'
+  /** Conservative policy: an obstruction limit is evaluated and this cell has no above-ground return. */
+  | 'obstruction-unknown'
+  /** Conservative policy: this cell's slope and aspect used a synthesised neighbour. */
+  | 'derivative-support'
   /** Not itself one of the declared limits: the cell is close enough to a
    * limit-blocked cell that the declared vehicle width cannot clear it. */
   | 'vehicle-width';

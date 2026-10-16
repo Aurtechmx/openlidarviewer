@@ -150,6 +150,9 @@ export function createLocationBar(d: LocationBarDeps): LocationBar {
   /** Set while this module (or a Back control) is taking the user back. */
   let returning = false;
 
+  /** Root class while the header bar shows a Back to the page's parent. */
+  const HEADER_ROUTE_BACK = 'olv-has-header-back';
+
   // ── rendering ─────────────────────────────────────────────────────────────
   function buildBar(): { nav: HTMLElement; back: HTMLButtonElement; list: HTMLElement } {
     const back = el('button', { className: 'olv-loc-back', type: 'button', tip: 'Go back one level. Escape does the same.' }) as HTMLButtonElement;
@@ -232,6 +235,9 @@ export function createLocationBar(d: LocationBarDeps): LocationBar {
     lastKey = key;
     paint(top, crumbs, route, ws, scan && !mobile);
     paint(phone, crumbs, route, ws, scan && mobile);
+    // A header Back to the parent names the place the rail's task Back does, so
+    // the stylesheet hides the rail's (wayfinding.css). The phone has no header bar.
+    doc.documentElement?.classList?.toggle(HEADER_ROUTE_BACK, scan && !mobile && backTarget(route, registry, ws)?.kind === 'route');
     for (const inst of Object.keys(WORKSPACE_DOM)) closeControl(inst);
     const path = crumbs[crumbs.length - 1]?.path ?? '';
     if (path !== lastPath) {
@@ -479,6 +485,7 @@ export function createLocationBar(d: LocationBarDeps): LocationBar {
       win?.removeEventListener('keydown', onEscapeBubble);
       top.nav.remove();
       phone.nav.remove();
+      doc.documentElement?.classList?.remove(HEADER_ROUTE_BACK);
     },
   };
 }

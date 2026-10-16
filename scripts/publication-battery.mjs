@@ -27,7 +27,7 @@
  * `tests/benchmark/cleanClone.test.ts`.
  */
 import { spawnSync } from 'node:child_process';
-import { mkdirSync, writeFileSync } from 'node:fs';
+import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { requireBinaryOnPath } from './lib/binaryOnPath.mjs';
@@ -48,6 +48,12 @@ const REPO_ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
  * `requires` is a predicate over the environment. It returns null when the
  * suite can run, or the reason it cannot. A reason string is what turns into a
  * `skipped` row; there is no way to skip without one.
+ *
+ * `resultFile` names the JSON a suite's script writes. A script that decides
+ * for itself that it cannot run here exits 0 and writes `skipped: true` with a
+ * `reason` there; the battery reads that file after the run and records the
+ * suite as skipped with that reason, never as passed. The script is then the
+ * only place the decision is made.
  */
 export const SUITES = Object.freeze([
   {
@@ -98,6 +104,10 @@ export const SUITES = Object.freeze([
     tiers: ['quick', 'verify'],
     required: true,
     claim: 'an extracted release archive resolves every link, import and documented script with no repository around it',
+    // A Git-free source extraction has no repository to build the archive
+    // from. The script then writes `skipped: true` with the way to run it,
+    // and the battery records the suite as skipped, never as a pass.
+    resultFile: 'release/archive-portability.json',
   },
   {
     id: 'clean-clone',
@@ -183,6 +193,38 @@ export function batteryFailed(outcomes, suites = SUITES) {
   return outcomes.some(
     (o) => o.status === 'failed' || (o.status === 'skipped' && required.get(o.id) === true),
   );
+}
+
+/**
+ * The outcome of a suite that ran, from its exit code and, for a suite with a
+ * `resultFile`, the result that file held after the run (null when it was
+ * missing, unreadable or older than the run). A zero exit with a result that
+ * says `skipped: true` is a skip with the result's reason, not a pass.
+ * @param {number} code
+ * @param {{ skipped?: boolean, reason?: string } | null} result
+ * @returns {{ status: 'passed' | 'failed' | 'skipped', note: string | null }}
+ */
+export function ranOutcome(code, result) {
+  if (code !== 0) return { status: 'failed', note: `exit ${code}` };
+  if (result && result.skipped === true) {
+    return { status: 'skipped', note: typeof result.reason === 'string' && result.reason ? result.reason : 'the suite reported itself skipped' };
+  }
+  return { status: 'passed', note: null };
+}
+
+/**
+ * Read a suite's result file, or null when it is absent, unreadable, or was
+ * written before `sinceMs` (left over from an earlier run).
+ */
+export function readRunResult(path, sinceMs) {
+  try {
+    const result = JSON.parse(readFileSync(path, 'utf8'));
+    const at = Date.parse(result?.generatedAt ?? '');
+    if (!Number.isFinite(at) || at < sinceMs - 1000) return null;
+    return result;
+  } catch {
+    return null;
+  }
 }
 
 export function counts(outcomes) {
@@ -281,13 +323,10 @@ async function main() {
       continue;
     }
     process.stdout.write(`\n═══ ${suite.id} — npm run ${suite.script}\n`);
+    const startedMs = Date.now();
     const { code, seconds } = runScript(suite.script, REPO_ROOT);
-    outcomes.push({
-      ...base,
-      status: code === 0 ? 'passed' : 'failed',
-      seconds,
-      note: code === 0 ? null : `exit ${code}`,
-    });
+    const result = suite.resultFile ? readRunResult(join(REPO_ROOT, suite.resultFile), startedMs) : null;
+    outcomes.push({ ...base, ...ranOutcome(code, result), seconds });
     if (code !== 0 && stopOnFailure) halted = true;
   }
 

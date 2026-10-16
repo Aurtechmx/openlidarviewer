@@ -292,6 +292,8 @@ export interface ExportSceneAdapter {
     widthPx: number;
     heightPx: number;
     extent: { minX: number; minY: number; maxX: number; maxY: number };
+    /** True when no-data pixels carry alpha 0 (see `render/export/orthoNoData.ts`). */
+    noDataTransparent?: boolean;
   } | null>;
   /**
    * TRUE offscreen re-render of the LIVE perspective view at an explicit

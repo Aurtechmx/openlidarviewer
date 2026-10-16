@@ -96,3 +96,12 @@ Assertions before publishing:
 ## 6. Tag + push
 
 - [ ] Commit, tag `v<X.Y.Z>`, push branch + tag, publish the release notes.
+
+The tag push starts both the CI workflow and the release workflow at the same
+commit. The release workflow's gate installs Chromium only, so its `ci-at-tag`
+job (`scripts/check-ci-for-sha.mjs`) reads the CI runs for the tagged commit
+through the GitHub API and waits for them. `release-ready` needs it: a CI run
+that is missing after 15 minutes, still pending after 120 minutes, or has
+`ci-green` or any job `ci-green` needs cancelled, skipped or failed keeps the
+release not ready, and the draft release is not created. Publishing the draft
+stays a manual step.

@@ -19,7 +19,8 @@
  * of a cell), array lengths, row orientation, horizontal CRS and vertical unit
  * before anything is subtracted, and the surface must state its frame to be
  * checked at all. Anything else is a typed `SURFACE_MISALIGNED` refusal — never
- * a resample and never a guess.
+ * a resample and never a guess. A surface that aligns but was built with a
+ * different terrain surface (see `aboveGroundSurface.ts`) is `SURFACE_STALE`.
  *
  * ── AN ROI MASK IS CHECKED, NOT WIDENED ─────────────────────────────────────
  * A declared region of interest that does not fit the grid (wrong length, or
@@ -30,7 +31,9 @@
 import { horizontalCellMetresXY } from '../../terrain/ground/horizontalScale';
 import { simulationInputBasis, type SimulationInputBasis } from '../simulationInputBasis';
 import type { DtmGrid } from '../../terrain/ground/cellConfidence';
-import type { SurfaceGrid } from '../../terrain/surface/buildDsm';
+import {
+  TERRAIN_GRID_ORIENTATION, aboveGroundBasisOf, aboveGroundBindingProblem, type AboveGroundSurface,
+} from './aboveGroundSurface';
 import type { TerrainAccessGrid } from './terrainAccessTypes';
 
 /** `CellCoverage` values, named so the comparison below reads as intent. */
@@ -63,26 +66,11 @@ export interface DtmTerrainAccessGrid {
 /** Why the inputs could not be combined into one grid. */
 export interface DtmTerrainAccessGridRefusal {
   readonly ok: false;
-  readonly code: 'SURFACE_MISALIGNED' | 'INVALID_ROI';
+  readonly code: 'SURFACE_MISALIGNED' | 'SURFACE_STALE' | 'INVALID_ROI';
   readonly reason: string;
 }
 
-/** The only row orientation `buildDtmGrid` produces: row 0 at `originH2`, rows running north. */
-export const TERRAIN_GRID_ORIENTATION = 'rows-north-from-origin' as const;
-
-/** The frame an above-ground surface was built in, stated so alignment can be checked. */
-export interface AboveGroundFrame {
-  readonly crs: string | null;
-  readonly horizontalEpsg: number | null;
-  /** Metres per surface Z unit. Must equal the terrain's own factor. */
-  readonly verticalUnitToMetres: number | null;
-  readonly orientation: typeof TERRAIN_GRID_ORIENTATION;
-}
-
-/** An above-ground surface (DSM) with the frame it was built in. */
-export interface AboveGroundSurface extends SurfaceGrid {
-  readonly frame: AboveGroundFrame;
-}
+export { TERRAIN_GRID_ORIENTATION, type AboveGroundFrame, type AboveGroundSurface } from './aboveGroundSurface';
 
 /** Largest origin or cell-size difference, as a fraction of a cell, still read as the same grid. */
 export const ALIGNMENT_TOLERANCE = 1e-6;
@@ -215,6 +203,14 @@ export function terrainDtmToAccessGrid(
           + 'Nothing is subtracted from a surface that does not cover the same cells.',
       };
     }
+    const unbound = aboveGroundBindingProblem(dtm, dsm);
+    if (unbound) {
+      return {
+        ok: false, code: 'SURFACE_STALE',
+        reason: `The supplied above-ground surface does not belong to this terrain run: ${unbound}. `
+          + 'Re-run terrain analysis so the surface and the terrain come from the same run.',
+      };
+    }
     const hag = new Float32Array(n);
     for (let i = 0; i < n; i++) {
       if (valid[i] === 0 || dsm.coverage[i] === 0) { hag[i] = Number.NaN; continue; }
@@ -240,6 +236,7 @@ export function terrainDtmToAccessGrid(
     ok: true,
     grid: {
       z, valid, confidence, coverage, heightAboveGround, allowed,
+      aboveGroundBasis: options.dsm ? aboveGroundBasisOf(dtm, options.dsm) : null,
       cols: dtm.cols, rows: dtm.rows,
       cellMetresX: metres.x, cellMetresY: metres.y,
     },

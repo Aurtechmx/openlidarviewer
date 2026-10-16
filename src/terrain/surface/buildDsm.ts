@@ -14,6 +14,7 @@ import type { TerrainPoint } from '../TerrainContracts';
 import type { VerticalAxis } from '../ground/groundFilter';
 import { axisGetters } from '../ground/axisGetters';
 import { quantileSorted } from '../quantile';
+import type { TerrainCoverageMode } from '../TerrainContracts';
 
 /** A plain elevation surface raster (no confidence — that's the DTM's job). */
 export interface SurfaceGrid {
@@ -40,9 +41,35 @@ export interface BuildDsmParams {
   readonly grid: DsmGridSpec;
   /** Vertical axis of the source frame. Default `'z'`. */
   readonly verticalAxis?: VerticalAxis;
+  /**
+   * Per-point ASPRS classes, index-aligned with the points, and the classes
+   * to leave out. Both absent (or a misaligned channel) reads every point.
+   */
+  readonly classification?: ArrayLike<number>;
+  readonly excludeClasses?: readonly number[];
 }
 
-/** Rasterise the highest return per cell from every point. */
+/**
+ * Which points a surface was built from: the terrain run's own gather, which
+ * may be a sample of the scan. `sampled` is true when the gather read fewer
+ * points than the scan holds (Withheld points left out by policy do not
+ * count as unread), or when the terrain coverage is not 'full'.
+ */
+export interface SurfaceSampleBasis {
+  readonly sampled: boolean;
+  /** The terrain coverage mode of the run that built the surface. */
+  readonly coverage: TerrainCoverageMode;
+  /** Points the surface pass read, before any class was left out. Null when not known. */
+  readonly pointsRead: number | null;
+  /** Points in the scan the gather drew them from. Null when not known. */
+  readonly sourcePoints: number | null;
+  /** Returns left out as ASPRS noise (classes 7 and 18). */
+  readonly noiseExcluded: number;
+  /** Whether the gather left Withheld points out (`DtmGrid.withheldExcluded`). */
+  readonly withheldExcluded: boolean | null;
+}
+
+/** Rasterise the highest return per cell from every point (less any excluded class). */
 export function buildDsm(points: ReadonlyArray<TerrainPoint>, params: BuildDsmParams): SurfaceGrid {
   const { originH1, originH2, cols, rows, cellSizeM } = params.grid;
   const vertical = params.verticalAxis ?? 'z';
@@ -56,8 +83,12 @@ export function buildDsm(points: ReadonlyArray<TerrainPoint>, params: BuildDsmPa
     throw new RangeError(`buildDsm: cellSizeM must be a finite positive length; got ${cellSizeM}`);
   }
   const cell = cellSizeM;
+  const cls = params.classification?.length === points.length ? params.classification : undefined;
+  const skip = cls && params.excludeClasses?.length ? new Set(params.excludeClasses) : null;
 
-  for (const p of points) {
+  for (let pi = 0; pi < points.length; pi++) {
+    if (skip && skip.has(cls![pi])) continue;
+    const p = points[pi];
     const h1 = getH1(p);
     const h2 = getH2(p);
     const v = getV(p);

@@ -47,6 +47,7 @@ import {
 import { methodRef, methodTag } from '../science/methodRegistry';
 import { BUILD_IDENTITY, buildIdentityProvenance, type BuildIdentity } from '../build/buildIdentity';
 import type { TerrainAccessResult } from '../simulation/terrainAccess/terrainAccessRunner';
+import { TERRAIN_ACCESS_CONSTRAINT_LABEL } from '../simulation/terrainAccess/terrainAccessExplain';
 
 /** No CRS is known for the raster/GeoJSON; every coordinate is local grid metres. */
 export interface TerrainAccessPackageOptions {
@@ -126,6 +127,17 @@ export function buildTerrainAccessConfig(result: TerrainAccessResult): Record<st
   };
 }
 
+/** A record field that is a string-valued object, as [key, value] pairs; empty otherwise. */
+function recordEntries(value: unknown): [string, string][] {
+  if (!value || typeof value !== 'object') return [];
+  return Object.entries(value as Record<string, unknown>).map(([k, v]) => [k, String(v)]);
+}
+
+/** RFC 4180 quoting for a CSV field that may hold commas or quotes. */
+function csvQuote(text: string): string {
+  return `"${text.replaceAll('"', '""')}"`;
+}
+
 function diagnosticsCsv(result: TerrainAccessResult): string {
   const d = result.diagnostics;
   const rows: [string, string][] = [
@@ -146,6 +158,15 @@ function diagnosticsCsv(result: TerrainAccessResult): string {
     ['fractionInterpolated', d.fractionInterpolated == null ? '' : String(d.fractionInterpolated)],
     ['fractionBelowProfileConfidence', d.fractionBelowProfileConfidence == null ? '' : String(d.fractionBelowProfileConfidence)],
     ['profileMinimumTerrainConfidence', String(d.profileMinimumTerrainConfidence)],
+    ['derivativeSynthesisedRouteCells', String(d.derivativeSynthesisedRouteCells)],
+    ['fractionDerivativeSynthesised', d.fractionDerivativeSynthesised == null ? '' : String(d.fractionDerivativeSynthesised)],
+    ['derivativeSynthesisedBoundaryRouteCells', String(d.derivativeSynthesisedBoundaryRouteCells)],
+    ['derivativeSynthesisedHoleRouteCells', String(d.derivativeSynthesisedHoleRouteCells)],
+    ['ruggednessSynthesisedRouteCells', String(d.ruggednessSynthesisedRouteCells)],
+    ['evidenceGapPolicy', String(result.record.result.evidenceGapPolicy ?? '')],
+    ...recordEntries(result.record.result.constraints).map(([k, v]): [string, string] => [`constraint.${k}`, v]),
+    ...recordEntries(result.record.result.constraintEstimates)
+      .map(([k, v]): [string, string] => [`constraintEstimate.${k}`, csvQuote(v)]),
     ['cost', String(result.cost)],
     ['exploredCells', String(result.explored)],
     ['resultDigest', String(result.record.result.resultDigest)],
@@ -250,13 +271,8 @@ function rasterCellLine(cell: number, frame: TerrainAccessCoordinateFrame): stri
 /** One README line per declared constraint and whether the run applied it. */
 function constraintLines(constraints: unknown): string[] {
   if (!constraints || typeof constraints !== 'object') return ['  not recorded'];
-  const label: Record<string, string> = {
-    longitudinalGrade: 'Longitudinal grade', crossSlope: 'Cross slope', stepHeight: 'Step height',
-    minimumTerrainConfidence: 'Minimum confidence', vehicleWidth: 'Vehicle width', ruggedness: 'Ruggedness',
-    vehicleLength: 'Vehicle length', aboveGroundObstruction: 'Above-ground obstruction',
-  };
   return Object.entries(constraints as Record<string, unknown>)
-    .map(([k, v]) => `  ${label[k] ?? k}   ${String(v)}`);
+    .map(([k, v]) => `  ${TERRAIN_ACCESS_CONSTRAINT_LABEL[k] ?? k}   ${String(v)}`);
 }
 
 /** The reproduction steps and honest limitations a reader needs, per §22/§23. */
@@ -335,11 +351,12 @@ function buildTerrainAccessReadme(result: TerrainAccessResult, opts: {
     `  Terrain relief within the footprint window   ${d.maxLocalReliefM.toFixed(3)} m`,
     `  Min terrain confidence ${Number.isFinite(d.minTerrainConfidence) ? d.minTerrainConfidence.toFixed(0) : 'n/a'}`,
     `  Below profile minimum confidence (${d.profileMinimumTerrainConfidence})   ${d.fractionBelowProfileConfidence == null ? 'n/a' : `${(d.fractionBelowProfileConfidence * 100).toFixed(0)}% of route cells`}`,
+    `  Slope from a synthesised neighbour   ${d.fractionDerivativeSynthesised == null ? 'n/a' : `${d.derivativeSynthesisedRouteCells} route cells (${(d.fractionDerivativeSynthesised * 100).toFixed(0)}%)`}, evidence-gap policy ${String(r.result.evidenceGapPolicy ?? 'not recorded')}`,
     `  Cost                   ${result.cost}`,
     `  Result digest          ${r.result.resultDigest}`,
     `  Run record digest      ${r.digest}`,
     '',
-    'Constraints (evaluated, disabled, unavailable, or recorded but not enforced)',
+    'Constraints (evaluated, estimated, disabled, unavailable, disclosed, or recorded but not enforced)',
     ...constraintLines(r.result.constraints),
     '',
     'Limitations',

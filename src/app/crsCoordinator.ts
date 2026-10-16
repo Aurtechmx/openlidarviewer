@@ -11,7 +11,7 @@
 // the `activeId` selection — are read through getters so the coordinator always
 // sees current values without a top-level `viewer.*` dereference in main.ts.
 import type { Viewer } from '../render/Viewer';
-import { datasetIdentity } from '../geo/CrsService';
+import { datasetIdentity, type OverrideSuggestion } from '../geo/CrsService';
 import type { CrsInfo } from '../io/crs';
 import { type CrsSource } from '../geo/CoordinateTypes';
 import type { CrsService } from '../geo/CrsService';
@@ -58,6 +58,20 @@ export interface CrsCoordinatorDeps {
    * belonging to this file, so it was not applied.
    */
   notify?: (message: string, action: { readonly label: string; readonly onClick: () => void }) => void;
+  /**
+   * The persistent surface for the same suggestion (the Inspector's Coordinate
+   * system notice). Called with the pending suggestion after every resolve, and
+   * with null once it is applied, dismissed, or the scan closes.
+   */
+  showSuggestion?: (suggestion: OverrideSuggestion | null, actions: CrsSuggestionActions) => void;
+}
+
+/** What the persistent suggestion surface can do with the pending suggestion. */
+export interface CrsSuggestionActions {
+  /** Apply it to the active scan through the override path. No-op once stale. */
+  readonly apply: () => void;
+  /** Drop it without applying. */
+  readonly dismiss: () => void;
 }
 
 export interface CrsCoordinator {
@@ -83,6 +97,8 @@ export interface CrsCoordinator {
     readonly declaredPointCount?: number;
     readonly pointCount?: number;
     readonly bounds?: () => { readonly min: readonly number[]; readonly max: readonly number[] };
+    /** Content fingerprint taken at open. */
+    readonly sourceDigest?: string | null;
   }): void;
   /** Refresh the Inspector's CRS section after a streaming-cloud open. */
   refreshCrsForStreamingCloud(cloud: {
@@ -94,6 +110,9 @@ export interface CrsCoordinator {
     readonly sourcePointCount?: number | null;
     dataBounds?(): readonly number[] | null | undefined;
     localBounds?(): readonly number[] | null | undefined;
+    /** Content fingerprint taken at open, and the catalogue item it was picked from. */
+    readonly sourceDigest?: string | null;
+    readonly catalogItem?: { readonly id: string; readonly bbox: readonly [number, number, number, number] } | null;
   }): void;
   /** Handle a user CRS override picked from the Inspector. */
   handleCrsOverride(override: {
@@ -133,12 +152,36 @@ export function createCrsCoordinator(deps: CrsCoordinatorDeps): CrsCoordinator {
   /** Suggestions already offered, so re-resolving the same scan does not repeat the toast. */
   const offered = new Set<string>();
 
+  /** Apply `s` only while it is still the pending suggestion for the active scan. */
+  function applySuggestion(s: OverrideSuggestion): void {
+    const now = crsService.overrideSuggestion();
+    if (!now || now.datasetKey !== s.datasetKey || now.epsg !== s.epsg || now.kind !== s.kind) return;
+    handleCrsOverride({ epsg: s.epsg, kind: s.kind });
+  }
+
+  /** Push the pending suggestion (or none) to the persistent surface. */
+  function publishSuggestion(): void {
+    if (!deps.showSuggestion) return;
+    const s = crsService.overrideSuggestion();
+    deps.showSuggestion(s, {
+      apply: () => { if (s) applySuggestion(s); },
+      dismiss: () => {
+        const now = crsService.overrideSuggestion();
+        if (s && now && now.datasetKey === s.datasetKey && now.epsg === s.epsg && now.kind === s.kind) {
+          crsService.dismissOverrideSuggestion();
+        }
+        publishSuggestion();
+      },
+    });
+  }
+
   /**
    * Offer a remembered-but-unverified override for the active scan. Applying it
    * goes through `crsService.acceptOverrideSuggestion`, which records this
    * source's identity, then refreshes like any other override.
    */
   function offerSuggestion(identity: ReturnType<typeof datasetIdentity>): void {
+    publishSuggestion();
     const s = crsService.overrideSuggestion();
     if (!s || !deps.notify) return;
     const token = `${s.datasetKey}|${s.kind}|${s.epsg}|${JSON.stringify(identity ?? null)}`;
@@ -149,12 +192,8 @@ export function createCrsCoordinator(deps: CrsCoordinatorDeps): CrsCoordinator {
       `A CRS (${label}) was remembered for a file with this name. It was not applied because this file could not be confirmed as the same source. Apply it to this file?`,
       {
         label: 'Apply',
-        onClick: () => {
-          // Only while the same suggestion is still pending for the active scan.
-          const now = crsService.overrideSuggestion();
-          if (!now || now.datasetKey !== s.datasetKey || now.epsg !== s.epsg || now.kind !== s.kind) return;
-          handleCrsOverride({ epsg: s.epsg, kind: s.kind });
-        },
+        // Only while the same suggestion is still pending for the active scan.
+        onClick: () => applySuggestion(s),
       },
     );
   }
@@ -259,6 +298,9 @@ export function createCrsCoordinator(deps: CrsCoordinatorDeps): CrsCoordinator {
     }
     const source: CrsSource = sc ? crsSourceForKind(sc.kind) : 'las-vlr';
     crsService.setOverride({ override, detected, source });
+    // setOverride drops any pending suggestion; the refresh below re-publishes
+    // only when it resolves another. Clear the notice now in case it does not.
+    publishSuggestion();
     // Count a real override (projected / geographic / local); the 'detected'
     // command just clears, so it is not a chosen CRS to record.
     if (override.kind !== 'detected') {
@@ -285,6 +327,7 @@ export function createCrsCoordinator(deps: CrsCoordinatorDeps): CrsCoordinator {
 
   function clearDatasetKey(): void {
     currentCrsDatasetKey = undefined;
+    deps.showSuggestion?.(null, { apply: () => {}, dismiss: () => {} });
   }
 
   return {

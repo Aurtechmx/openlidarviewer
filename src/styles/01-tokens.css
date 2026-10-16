@@ -137,6 +137,10 @@
    * and word carry the state; these only reinforce it. */
   --state-measured: var(--rating-excellent);
   --state-preview: var(--rating-moderate);
+  /* One hue for "caution" in the left panels (class captions, review and
+   * preview verdicts, needs-review badges). The preview state's hue, so a
+   * caution and a PREVIEW read alike, and distinct from the "okay" rating. */
+  --caution: var(--rating-moderate);
   --state-review: var(--rating-weak);
   --state-blocked: var(--rating-blocked);
   /* Withheld has its own hue: a value held back is not a closed gate. */

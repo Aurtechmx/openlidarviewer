@@ -32,6 +32,7 @@ import { RETIRED_SCAN_OWNER } from './measurementOwnership';
 import { describeLoadError } from '../io/loadErrors';
 import { increment as recordUsage } from '../diagnostics/usageCounters';
 import { remoteCopcName, remoteEptName } from './remoteSourceNaming';
+import { catalogueItemFor } from './pcCatalogueCrs';
 
 import type { RangeSource } from '../io/range/RangeSource';
 import { sanitizeUrlForDisplay } from '../io/range/RangeSource';
@@ -314,6 +315,8 @@ export function activateCommittedStreamingCloud(
       readonly sourcePointCount?: number | null;
       dataBounds?(): readonly number[] | null | undefined;
       localBounds?(): readonly number[] | null | undefined;
+      readonly sourceDigest?: string | null;
+      readonly catalogItem?: { readonly id: string; readonly bbox: readonly [number, number, number, number] } | null;
     });
   } catch (err) {
     if (deps.debug) console.warn('[crs] refreshCrsForStreamingCloud threw', err);
@@ -636,6 +639,9 @@ export async function openStreamingCopc(
 
   const cloud = await StreamingPointCloud.open(range, displayName, signal);
   if (signal.aborted) throw new LoadCancelledError();
+  // A stream opened from a catalogue pick carries the item, so the pick's
+  // catalogue EPSG applies to this stream and no other (app/pcCatalogueCrs.ts).
+  if (range.kind() === 'http-range') cloud.catalogItem = catalogueItemFor(range.id()) ?? null;
   if (cloud.octree.capNotice) deps.showToast(cloud.octree.capNotice);
 
   let copcDecoder = deps.getCopcDecoder();

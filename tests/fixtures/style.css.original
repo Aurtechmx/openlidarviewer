@@ -137,6 +137,10 @@
    * and word carry the state; these only reinforce it. */
   --state-measured: var(--rating-excellent);
   --state-preview: var(--rating-moderate);
+  /* One hue for "caution" in the left panels (class captions, review and
+   * preview verdicts, needs-review badges). The preview state's hue, so a
+   * caution and a PREVIEW read alike, and distinct from the "okay" rating. */
+  --caution: var(--rating-moderate);
   --state-review: var(--rating-weak);
   --state-blocked: var(--rating-blocked);
   /* Withheld has its own hue: a value held back is not a closed gate. */
@@ -811,6 +815,7 @@ body.olv-theme-field,
 body.olv-theme-high-contrast {
   --state-measured: var(--rating-excellent);
   --state-preview: var(--rating-moderate);
+  --caution: var(--rating-moderate);
   --state-review: var(--rating-weak);
   --state-blocked: var(--rating-blocked);
   --state-derived: var(--accent);
@@ -2027,21 +2032,30 @@ button:disabled { cursor: not-allowed; }
   font-variant: small-caps;
   letter-spacing: 0.02em;
 }
-.olv-chip {
+/* `.olv-bc-pill` (converter, Export, Clip, Compare) is the same button under
+   an older name, kept for its selectors; it takes the chip's rules here, with
+   `is-active` / `is-disabled` as its state classes. */
+.olv-chip,
+.olv-bc-pill {
   font-size: var(--text-xs); color: var(--text-dim);
   background: rgba(255, 255, 255, 0.04);
   border: 0.5px solid var(--hairline);
   border-radius: var(--radius-sm); padding: var(--space-xs) var(--space-md);
 }
-.olv-chip:hover { color: var(--text); }
-.olv-chip-active {
+.olv-chip:hover,
+.olv-bc-pill:hover { color: var(--text); }
+.olv-bc-pill { font-family: inherit; cursor: pointer; }
+.olv-chip-active,
+.olv-bc-pill.is-active {
   color: var(--accent); background: var(--accent-soft);
   border-color: var(--ui-accent-a0p4);
 }
-.olv-chip-disabled {
+.olv-chip-disabled,
+.olv-bc-pill.is-disabled {
   opacity: 0.45; cursor: not-allowed; color: var(--text-faint);
 }
-.olv-chip-disabled:hover { color: var(--text-faint); }
+.olv-chip-disabled:hover,
+.olv-bc-pill.is-disabled:hover { color: var(--text-faint); }
 /* Workflow rail (v0.4.5): "Custom" is a STATE chip, not an action — muted
    until the user's knobs deviate from every preset, then it lights via the
    shared .olv-chip-active vocabulary. */
@@ -2892,18 +2906,19 @@ body:has(.olv-right-rail.olv-right-collapsed) .olv-navbar { --olv-nb-r: 0px; }
 /* ───────────────────────────────────────────────────────────────────────────
    Micro-interactions — tactile feedback, eased states, entrance motion
    ─────────────────────────────────────────────────────────────────────────── */
-.olv-tool, .olv-chip, .olv-sample, .olv-github, .olv-layer-x {
+.olv-tool, .olv-chip, .olv-bc-pill, .olv-sample, .olv-github, .olv-layer-x {
   transition: color var(--dur-fast) var(--ease-standard), border-color var(--dur-fast) var(--ease-standard),
     background var(--dur-fast) var(--ease-standard), transform 90ms var(--ease-standard);
 }
 .olv-tool:active:not(:disabled),
 .olv-chip:active,
+.olv-bc-pill:active:not(.is-disabled),
 .olv-sample:active,
 .olv-layer-x:active { transform: var(--btn-press); }
 .olv-chip-active { transition: color var(--dur-fast) var(--ease-standard), background var(--dur-fast) var(--ease-standard), border-color var(--dur-fast) var(--ease-standard); }
 
 /* Keyboard focus — visible, on-brand, never on mouse click */
-.olv-tool:focus-visible, .olv-chip:focus-visible, .olv-mode:focus-visible,
+.olv-tool:focus-visible, .olv-chip:focus-visible, .olv-bc-pill:focus-visible, .olv-mode:focus-visible,
 .olv-sample:focus-visible, .olv-github:focus-visible, .olv-layer-x:focus-visible,
 .olv-slider:focus-visible {
   outline: 2px solid var(--accent); outline-offset: 2px;
@@ -3052,6 +3067,9 @@ body:has(.olv-right-rail.olv-right-collapsed) .olv-navbar { --olv-nb-r: 0px; }
  * warnings get a coloured left rail so they read as advice, not as
  * decoration. */
 .olv-crs { display: flex; flex-direction: column; gap: var(--space-md); }
+.olv-crs-wrap { display: flex; flex-direction: column; gap: var(--space-md); }
+.olv-crs-suggestion { display: flex; flex-direction: column; gap: var(--space-sm); }
+.olv-crs-suggestion-actions { display: flex; gap: var(--space-sm); }
 .olv-crs-summary { display: flex; flex-direction: column; gap: var(--space-2xs); }
 .olv-crs-name { font-size: var(--text-sm); color: var(--text); font-weight: 500; }
 .olv-crs-epsg {
@@ -3867,7 +3885,7 @@ body:has(.olv-colorbar.olv-colorbar-floating) .olv-project-card {
   .olv-pc-countdown, .olv-measure-dot-pending, .olv-measure-snap-ring {
     animation: none;
   }
-  .olv-tool, .olv-chip, .olv-sample, .olv-github, .olv-layer-x,
+  .olv-tool, .olv-chip, .olv-bc-pill, .olv-sample, .olv-github, .olv-layer-x,
   .olv-mode, .olv-nav-prompt, .olv-project-card, .olv-export-btn,
   .olv-view-name, .olv-view-save, .olv-advanced-summary,
   .olv-advanced-summary::before,
@@ -5579,7 +5597,7 @@ body:has(.olv-colorbar.olv-colorbar-floating) .olv-project-card {
 }
 .olv-ah-badge.is-ready { background: var(--good-bg, rgba(52, 168, 83, 0.18)); color: var(--good, #6ee7a0); }
 .olv-ah-badge.is-review,
-.olv-ah-badge.is-needs { background: var(--warn-bg, rgba(230, 180, 40, 0.18)); color: var(--warn, #e9d16b); }
+.olv-ah-badge.is-needs { background: color-mix(in srgb, var(--caution) 18%, transparent); color: var(--caution); }
 .olv-ah-badge.is-blocked { background: var(--bad-bg, rgba(224, 64, 72, 0.18)); color: var(--bad, #f08a92); }
 .olv-ah-badge.is-present { background: var(--accent-soft); color: var(--text); }
 .olv-ah-row.is-child { margin-left: var(--space-xl); }
@@ -6631,8 +6649,8 @@ body:has(.olv-colorbar.olv-colorbar-floating) .olv-project-card {
 .olv-cl-unavailable,
 .olv-workbench-basis {
   font-size: var(--text-xs); line-height: 1.45; color: var(--text-dim);
-  background: color-mix(in srgb, var(--warn) 9%, transparent);
-  border-left: 2px solid var(--warn);
+  background: color-mix(in srgb, var(--caution) 9%, transparent);
+  border-left: 2px solid var(--caution);
   border-radius: 2px;
   padding: var(--space-sm) var(--space-md);
   margin-bottom: var(--space-md);
@@ -8720,7 +8738,7 @@ body.olv-cvd .olv-di-confidence-chip[data-band="red"]     { background: #d55e00;
 }
 .olv-fit-verdict.is-ready { --fit-rule: var(--rating-excellent); }
 .olv-fit-verdict.is-okay { --fit-rule: var(--rating-good); }
-.olv-fit-verdict.is-review { --fit-rule: var(--warn); }
+.olv-fit-verdict.is-review { --fit-rule: var(--caution); }
 .olv-fit-verdict-text { flex: 1 1 auto; min-width: 0; }
 .olv-fit-badge {
   flex: 0 0 auto; font-size: var(--text-2xs); font-weight: 600; letter-spacing: 0.02em;
@@ -8916,16 +8934,8 @@ body.olv-cvd .olv-di-confidence-chip[data-band="red"]     { background: #d55e00;
 .olv-bc-file-del { background: none; border: none; color: var(--text-faint); cursor: pointer; font-size: var(--text-xs); padding: var(--space-xs); border-radius: var(--radius-xs); }
 .olv-bc-file-del:hover { color: var(--rating-weak); }
 
-/* Pill groups — similarity = same shape/size; active state contrasts. */
+/* Pill groups: each `.olv-bc-pill` is drawn as a `.olv-chip` (40-inspector.css). */
 .olv-bc-pills { display: flex; flex-wrap: wrap; gap: var(--space-sm); }
-.olv-bc-pill {
-  font: inherit; font-size: var(--text-sm); cursor: pointer;
-  padding: var(--space-sm) var(--space-xl); border-radius: var(--radius-pill);
-  border: 0.5px solid var(--hairline); background: transparent; color: var(--text-dim);
-}
-.olv-bc-pill:hover:not(.is-disabled):not(.is-active) { border-color: var(--accent); color: var(--text); }
-.olv-bc-pill.is-active { background: var(--accent-soft); border-color: var(--accent); color: var(--text); font-weight: 600; }
-.olv-bc-pill.is-disabled { opacity: 0.4; cursor: not-allowed; }
 
 .olv-bc-crs-extra { display: flex; flex-direction: column; gap: var(--space-md); margin-top: var(--space-md); }
 .olv-bc-field { display: flex; flex-direction: column; gap: var(--space-xs); }
@@ -9231,8 +9241,8 @@ details[open] > :is(.olv-why-summary, .olv-fit-caveats-summary, .olv-analyse-wor
 .olv-analyse-assess-use { font-size: var(--text-xs); color: var(--text-faint); margin-top: 3px; }
 .olv-analyse-assess-caution { font-size: var(--text-xs); color: var(--text-faint); margin-top: var(--space-2xs); }
 .olv-analyse-assessment.is-good .olv-analyse-assess-verdict { color: var(--rating-excellent); }
-.olv-analyse-assessment.is-preview .olv-analyse-assess-verdict { color: var(--rating-moderate); }
-.olv-analyse-assessment.is-preview .olv-analyse-assess-caution { color: var(--rating-moderate); }
+.olv-analyse-assessment.is-preview .olv-analyse-assess-verdict { color: var(--caution); }
+.olv-analyse-assessment.is-preview .olv-analyse-assess-caution { color: var(--caution); }
 .olv-analyse-assessment.is-limited .olv-analyse-assess-verdict { color: var(--rating-weak); }
 .olv-analyse-assessment.is-limited .olv-analyse-assess-caution { color: var(--rating-weak); }
 /* Blocked — a distinct, accessible violet so it never reads as "just a worse
@@ -9253,7 +9263,7 @@ details[open] > :is(.olv-why-summary, .olv-fit-caveats-summary, .olv-analyse-wor
 .olv-analyse-assess-export-verdict { font-size: var(--text-sm); font-weight: 600; }
 .olv-analyse-assess-export-reason { font-size: var(--text-xs); color: var(--text-dim); overflow-wrap: anywhere; }
 .olv-analyse-assess-export.is-good .olv-analyse-assess-export-verdict { color: var(--rating-excellent); }
-.olv-analyse-assess-export.is-preview .olv-analyse-assess-export-verdict { color: var(--rating-moderate); }
+.olv-analyse-assess-export.is-preview .olv-analyse-assess-export-verdict { color: var(--caution); }
 .olv-analyse-assess-export.is-blocked .olv-analyse-assess-export-verdict { color: var(--rating-blocked); }
 
 /* Derived complexity (v0.5.4) — one compact line under the assessment: the
@@ -9340,7 +9350,7 @@ details[open] > :is(.olv-why-summary, .olv-fit-caveats-summary, .olv-analyse-wor
 .olv-analyse-workflow-label { font-size: var(--text-xs); color: var(--text-dim); }
 .olv-analyse-workflow-note { font-size: var(--text-2xs); color: var(--text-faint); overflow-wrap: anywhere; }
 .olv-analyse-workflow-row.is-good .olv-analyse-workflow-glyph { color: var(--rating-excellent); }
-.olv-analyse-workflow-row.is-caution .olv-analyse-workflow-glyph { color: var(--rating-good); }
+.olv-analyse-workflow-row.is-caution .olv-analyse-workflow-glyph { color: var(--caution); }
 .olv-analyse-workflow-row.is-blocked .olv-analyse-workflow-glyph { color: var(--rating-blocked); }
 .olv-analyse-workflow-row.is-blocked .olv-analyse-workflow-label { color: var(--text-faint); }
 
@@ -9427,7 +9437,7 @@ details[open] > :is(.olv-why-summary, .olv-fit-caveats-summary, .olv-analyse-wor
 .olv-analyse-product.is-ready .olv-analyse-product-glyph,
 .olv-analyse-product.is-ready .olv-analyse-product-status { color: var(--rating-excellent); }
 .olv-analyse-product.is-preview .olv-analyse-product-glyph,
-.olv-analyse-product.is-preview .olv-analyse-product-status { color: var(--rating-good); }
+.olv-analyse-product.is-preview .olv-analyse-product-status { color: var(--caution); }
 .olv-analyse-product.is-blocked .olv-analyse-product-glyph,
 .olv-analyse-product.is-blocked .olv-analyse-product-status { color: var(--rating-blocked); }
 .olv-analyse-product.is-blocked .olv-analyse-product-label { color: var(--text-faint); }
@@ -9445,7 +9455,7 @@ details[open] > :is(.olv-why-summary, .olv-fit-caveats-summary, .olv-analyse-wor
    shown only when the verdict is short of fully-good. */
 .olv-analyse-why { margin-top: var(--space-sm); }
 /* The cause line keeps its caution hue: it names what holds the verdict back. */
-.olv-analyse-why-summary { color: var(--rating-moderate); }
+.olv-analyse-why-summary { color: var(--caution); }
 /* v0.4.6 (design audit 2.1): cause/fix sub-eyebrow → sentence-case sans. */
 .olv-analyse-why-subhead {
   font-family: var(--font); font-size: var(--text-2xs); font-weight: 600;
@@ -12714,6 +12724,9 @@ body.olv-cvd .olv-layerhealth-report-line[data-status="warn"] { color: #e69f00; 
   }
   .olv-colorbar-close { display: inline-flex; align-items: center; justify-content: center; }
   .olv-lasso-toast-action, .olv-toast-cancel { min-height: 44px; min-width: 44px; }
+  /* The recommended-view chip that follows the Project card. */
+  .olv-rvc-apply, .olv-rvc-dismiss { min-height: 44px; min-width: 44px; }
+  .olv-rvc-dismiss { display: inline-flex; align-items: center; justify-content: center; }
 }
 
 /* Phone: the colour legend starts as its one-line head (ColorbarOverlay.ts);
@@ -12829,6 +12842,14 @@ body.olv-cvd .olv-layerhealth-report-line[data-status="warn"] { color: #e69f00; 
   .olv-clip-num { min-height: 44px; }
 }
 
+
+/* Portrait tablets narrower than 820 px (an iPad mini is 768 px): with every
+   header control at 44 px the right cluster is 589 px wide and the GitHub
+   link sat past the right edge. It goes here; the Credits page in the same
+   header links the source. 820 px and wider keep all three links. */
+@media (pointer: coarse) and (hover: none) and (min-width: 768px) and (max-width: 819px) and (min-height: 600px) {
+  .olv-github-source { display: none; }
+}
 /* Active-tool pill: the pointer tool that owns the clicks, its Finish and
    Cancel, and persistent display state as a quieter chip. Bottom-centre, just
    above the navigation widget (app/activeToolStatus.ts measures it). */

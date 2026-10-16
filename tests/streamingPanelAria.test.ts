@@ -119,7 +119,7 @@ describe('StreamingPanel — colour-mode chips expose aria-pressed (INTAKE-F4)',
     const { panel: p, root } = await panel();
     p.setColorModes(WITH_COLOUR, 'rgb');
     const chips = root.chips();
-    const rgbChip = chips.find((c) => c.ownText === 'Color')!;
+    const rgbChip = chips.find((c) => c.ownText === 'Colour')!;
     const heightChip = chips.find((c) => c.ownText === 'Height')!;
     expect(rgbChip.attrs['aria-pressed']).toBe('true');
     expect(heightChip.attrs['aria-pressed']).toBe('false');
@@ -135,7 +135,7 @@ describe('StreamingPanel — colour-mode chips expose aria-pressed (INTAKE-F4)',
     p.setColorModes(WITH_COLOUR, 'rgb');
     const heightChip = r.chips().find((c) => c.ownText === 'Height')!;
     heightChip.click();
-    const rgbChip = r.chips().find((c) => c.ownText === 'Color')!;
+    const rgbChip = r.chips().find((c) => c.ownText === 'Colour')!;
     expect(heightChip.attrs['aria-pressed']).toBe('true');
     expect(rgbChip.attrs['aria-pressed']).toBe('false');
     void root;

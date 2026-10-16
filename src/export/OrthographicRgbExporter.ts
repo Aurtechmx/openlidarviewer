@@ -25,6 +25,7 @@ import type {
 } from './types';
 import type { ColorMode } from '../render/colorModes';
 import { runStudioExport } from './BaseExportMode';
+import { encodePngTextChunks } from './pngTextChunks';
 
 
 /**
@@ -88,6 +89,13 @@ export function shouldExportGeoreferencedOrtho(
   return geo.wkt != null && geo.wkt.trim().length > 0;
 }
 
+/**
+ * How the georeferenced ortho PNG encodes no-data (see
+ * `render/export/orthoNoData.ts`); carried in the result metadata and in an
+ * `olv:nodata` PNG text chunk.
+ */
+export const NODATA_TRANSPARENT_NOTE = 'no-data pixels are transparent (alpha 0); data pixels are opaque (alpha 255)';
+
 export const orthographicRgbExporter: ExportFactory = {
   mode: 'orthographic-rgb',
   label: 'Orthographic RGB',
@@ -119,13 +127,25 @@ export const orthographicRgbExporter: ExportFactory = {
       // A null framed render (device hiccup, degenerate footprint) falls
       // through to the plain view capture rather than failing the export.
       if (framed) {
+        // No-data pixels are alpha 0 when the render composed a coverage mask;
+        // the PNG itself says so in a text chunk, beside the result metadata.
+        const transparent = framed.noDataTransparent === true;
+        const blob = transparent
+          ? new Blob([encodePngTextChunks(new Uint8Array(await framed.blob.arrayBuffer()), [
+            { keyword: 'olv:nodata', text: NODATA_TRANSPARENT_NOTE },
+          ]) as BlobPart], { type: 'image/png' })
+          : framed.blob;
         return {
-          blob: framed.blob,
+          blob,
           mode: 'orthographic-rgb',
           width: framed.widthPx,
           height: framed.heightPx,
           mimeType: 'image/png',
-          metadata: { framing: 'top-down orthographic', georeferenced: 'yes' },
+          metadata: {
+            framing: 'top-down orthographic',
+            georeferenced: 'yes',
+            noData: transparent ? NODATA_TRANSPARENT_NOTE : 'no-data pixels show the scene background (opaque)',
+          },
           worldFile: {
             extent: framed.extent,
             widthPx: framed.widthPx,

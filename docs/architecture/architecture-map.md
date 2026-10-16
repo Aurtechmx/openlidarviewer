@@ -24,15 +24,15 @@ from the tree and fails when a cell drifts.
 | Layer | Path | Size | Role |
 |---|---|---:|---|
 | Core numerics | `src/process`, `src/numeric.ts`, `src/units` | ~3.3k | Compensated sums, Welford, unit types. No dependencies. |
-| Model | `src/model` | ~3.9k | `PointCloud`, layer model. Plain data. |
-| Geo | `src/geo` | ~5.7k | CRS math, `ProjectSpatialFrame`, transforms. |
+| Model | `src/model` | ~4.0k | `PointCloud`, layer model. Plain data. |
+| Geo | `src/geo` | ~5.8k | CRS math, `ProjectSpatialFrame`, transforms. |
 | Science domain | `src/terrain`, `src/validation`, `src/analysis`, `src/science` | ~51k | Ground filtering, DTM, contours, derivatives, hold-out RMSE, evidence model. UI-free by lint. |
 | I/O | `src/io` | ~41k | Format loaders (LAS/LAZ/PLY/PCD/PTX/E57/…), COPC + EPT streaming sources, range transports, session. |
 | Render | `src/render` | ~82k | three.js/WebGPU scene, streaming scheduler, measurement tools, colour modes. |
 | Export / report | `src/export`, `src/report`, `src/convert` | ~19k | Studio exporters, PDF/report builders, batch conversion. |
-| Application services | `src/app` | ~30k | Composition root and the services that own shared state. |
+| Application services | `src/app` | ~31k | Composition root and the services that own shared state. |
 | UI | `src/ui` | ~44k | Panels, Inspector, Studio surfaces, onboarding. |
-| Shell | `src/main.ts` | 4,280 | Wiring. A monolith under decomposition. |
+| Shell | `src/main.ts` | 4,260 | Wiring. A monolith under decomposition. |
 
 ## Composition root
 
@@ -102,7 +102,7 @@ Recorded so the next pass does not re-derive them:
   `applyPolygonReclassify`) is ALREADY extracted and tested. What remains on the
   Viewer is a thin GPU-upload wrapper.
 
-`src/main.ts` (4,280): the largest blocks, which are the extraction
+`src/main.ts` (4,260): the largest blocks, which are the extraction
 candidates:
 
 `buildActionRegistry` is a thin assembler in `src/app/actionDefinitions.ts` over
@@ -269,7 +269,7 @@ in `main.ts`, which reaches the module through `loadTestSeamMount()` in
 and the chunk
 (`npm run check:no-test-seam`). `main.ts` went from 4,426 to 4,348 lines.
 
-`src/render/Viewer.ts` (5,953): the constructor and a handful of large
+`src/render/Viewer.ts` (5,946): the constructor and a handful of large
 methods dominate:
 
 Done: the renderer, scene, cameras and EDL pipeline are built by

@@ -22,7 +22,7 @@ import { takeReloadBudget } from './fullFileActions';
 import { sourcePositions } from '../model/pointFrames';
 import { isSessionFile } from '../io/sessionFile';
 import { scanFactsFromStatic } from './sessionScanFacts';
-import { takePendingSessionRestore } from './pendingSessionRestore';
+import { heldSessionWork, takePendingSessionRestore } from './pendingSessionRestore';
 export { clearPendingSessionRestore, heldSessionWork } from './pendingSessionRestore';
 import { rememberCloudFile } from '../io/sourceFiles';
 import { detectCopc } from '../io/copc/copcDetect';
@@ -33,6 +33,7 @@ import { describeLoadError, LoadError } from '../io/loadErrors';
 import { LoadCancelledError } from '../io/loadFile';
 import type { ReplaceOutcome, ReplaceRequest } from './discardGuard';
 import { HEADER_PEEK_BYTES, openLocalHeavyLas, describeHeavyRefusal } from './openLocalHeavyLas';
+import { fileSourceFingerprint } from '../io/sourceFingerprint';
 import type { OpenStreamingDeps } from './openStreaming';
 import { availableModes } from '../render/colorModes';
 import { recommendColorMode } from '../render/colorModeRecommend';
@@ -105,6 +106,11 @@ export interface OpenScanDeps {
   getViewer: () => Viewer;
   /** Route an `.olvsession` to the session loader (the shell's `importSession`). */
   importSession: (file: File, opts?: { reapply?: boolean }) => Promise<unknown>;
+  /**
+   * Restore session work an earlier import held for a scan that was not open,
+   * when it belongs to the layer with this viewer id (just opened).
+   */
+  restoreHeldWork?: (viewerId: string) => Promise<unknown>;
   /** True while a load is in flight — the one-load-at-a-time guard. */
   isLoading: () => boolean;
   /** Claim / release the load flag. Claimed synchronously; released in `finally`. */
@@ -302,6 +308,9 @@ export async function openScan(file: File, deps: OpenScanDeps): Promise<void> {
       await deps.openLocalCopc(file, controller.signal);
       return;
     }
+    // The CRS identity's content fingerprint: this head plus one tail slice,
+    // hashed while the file decodes. Never a whole-file read.
+    const sourceDigest = fileSourceFingerprint(file, headSlice);
     // A large uncompressed LAS whose whole-file load would exceed the memory
     // ceiling is built into an out-of-core OPFS tile store and streamed, rather
     // than materialised as one ArrayBuffer. The bridge reads only the header
@@ -340,6 +349,7 @@ export async function openScan(file: File, deps: OpenScanDeps): Promise<void> {
       debug: deps.debug,
       streaming: deps.getStreamingDeps(),
       stableLayerId: (id) => deps.layerIdentity.stableIdFor(id),
+      sourceDigest,
     }, { head: headSlice });
     if (heavy.status === 'attached') {
       deps.dropZone.setCancelHandler(null);
@@ -411,7 +421,7 @@ export async function openScan(file: File, deps: OpenScanDeps): Promise<void> {
         head: headSlice,
       },
     );
-    await attachStaticCloud(result, { file, signal: controller.signal, preview }, deps);
+    await attachStaticCloud(result, { file, signal: controller.signal, preview, sourceDigest }, deps);
   } catch (err) {
     deps.dropZone.setCancelHandler(null);
     if (preview) takeDownPreview(deps, preview);
@@ -500,6 +510,8 @@ export interface AttachedCloudSource {
    * second time.
    */
   readonly preview?: PreviewCloudHandle | null;
+  /** The source's content fingerprint, stamped on the cloud before its CRS resolves. */
+  readonly sourceDigest?: Promise<string | null>;
 }
 
 /**
@@ -532,9 +544,12 @@ export async function attachStaticCloud(
   // remain exclusive and still call clearOpenStaticLayers below.)
 
   deps.dropZone.setProgress(formatProgress({ stage: 'uploading' }));
-  // PAINT YIELD. `await viewer.ready` above is the last await in this
-  // function, so everything from here to the progress teardown runs in ONE
-  // task: the "Preparing display" and "Rendering" lines were written and
+  // The content fingerprint was hashed while the file decoded. It is awaited
+  // after the "Preparing display" line is written, so a slow digest never
+  // holds the decode's last line on screen ahead of the attach.
+  if (source.sourceDigest) result.cloud.sourceDigest = (await source.sourceDigest) ?? null;
+  // PAINT YIELD. Without it, everything from here to the progress teardown
+  // runs in ONE task: the "Preparing display" and "Rendering" lines were written and
   // cleared without the browser ever painting them, and the user watched the
   // last decode line freeze through the whole GPU attach. `setTimeout`, not
   // `requestAnimationFrame`, which resumes inside the same frame's rendering
@@ -796,6 +811,10 @@ export async function attachStaticCloud(
       deps.refreshAnnotationPanel();
     });
   }
+
+  // Work an earlier import held because its scan was not open is placed on
+  // this scan when it maps to it. A waiting session is applied whole instead.
+  if (!pendingSession && heldSessionWork()) void deps.restoreHeldWork?.(id);
 
   // The render-quality controls reflect the viewer's state — EDL defaults
   // depend on the GPU backend, known only once `viewer.ready` resolved.
