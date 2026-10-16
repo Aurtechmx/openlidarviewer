@@ -189,5 +189,7 @@ describe('feature extraction leaves Withheld points out', () => {
   });
 });
 
-const ASC_HASH = '4399cf394aabb89c35b9f06b3395248f14bed55663fd2851894a4293b3d13710';
+// The difference raster carries NoData wherever either epoch's surface is
+// interpolated rather than measured (olv.change.dtm-difference@4).
+const ASC_HASH = '44704b2798f51f6c6e34d66e5b774a68c86682e184c9605b3100a29738b5ddb8';
 const GEOJSON_HASH = 'bbcbfa03824957ac67597fc964f79570ab041eab9ef793d414179e47d3db47a4';

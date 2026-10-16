@@ -117,6 +117,7 @@ const SUPPORTING_TESTS: Readonly<Record<string, readonly string[]>> = {
   'olv.change.dtm-difference': [
     'tests/changeDetection.test.ts',
     'tests/compareDtms.test.ts',
+    'tests/compareDtmsMeasuredSupport.test.ts',
     'tests/changeGrassAgreement.test.ts',
   ],
   'olv.change.dtm-difference.raw-net': [

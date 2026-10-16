@@ -23,7 +23,7 @@ const ROWS = 10;
 function flat(height: number): DtmGrid {
   return {
     z: Float32Array.from({ length: COLS * ROWS }, () => height),
-    coverage: Uint8Array.from({ length: COLS * ROWS }, () => 1),
+    coverage: Uint8Array.from({ length: COLS * ROWS }, () => 2),
     cols: COLS,
     rows: ROWS,
     cellSizeM: 1,

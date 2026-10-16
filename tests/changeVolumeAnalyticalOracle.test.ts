@@ -404,7 +404,7 @@ describe('Fixture J — the closed form survives the compareDtms bridge', () => 
     return {
       z: new Float32Array(n).fill(height),
       confidence: new Float32Array(n).fill(100),
-      coverage: new Uint8Array(n).fill(1),
+      coverage: new Uint8Array(n).fill(2),
       counts: new Uint32Array(n).fill(1),
       interpDistanceCells: new Float32Array(n),
       cols,

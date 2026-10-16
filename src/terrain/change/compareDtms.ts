@@ -32,18 +32,60 @@ import {
 
 export { propagatedLevelOfDetection } from './propagatedLod';
 
+/** DtmGrid coverage code of a cell holding ground returns (measured). */
+const MEASURED = 2;
+
 /**
  * Adapt a {@link DtmGrid} to the bare {@link ChangeGrid} the change core
- * consumes: heights row-major, with empty cells (coverage 0) carried as NaN so
- * they read as incomparable — never as a real 0 m height.
+ * consumes: heights row-major, with every cell that is not MEASURED (coverage
+ * 2) carried as NaN so it reads as incomparable — never as a real 0 m height.
+ *
+ * Interpolated cells (coverage 1) are left out too. The DTM build fills a void
+ * from the nearest measured cells, including cells beyond the epoch's own
+ * footprint, and the grid carries no flag that tells a bracketed interpolation
+ * from an extrapolation. Differencing such a cell against a measured cell of
+ * the other epoch reports the fill as terrain change: two identical surfaces
+ * whose footprints differ by 30 % read as 1,462 m³ of net change that way.
+ * {@link changeCellSupport} counts what this leaves out.
  */
 export function dtmToChangeGrid(dtm: DtmGrid): ChangeGrid {
   const n = dtm.cols * dtm.rows;
   const values = new Float32Array(n);
   for (let i = 0; i < n; i++) {
-    values[i] = dtm.coverage[i] > 0 ? dtm.z[i] : Number.NaN;
+    values[i] = dtm.coverage[i] === MEASURED ? dtm.z[i] : Number.NaN;
   }
   return { width: dtm.cols, height: dtm.rows, cellSizeM: dtm.cellSizeM, values };
+}
+
+/** Which cells of a two-epoch comparison had measured support in both epochs. */
+export interface ChangeCellSupport {
+  /** Cells measured in both epochs: the only cells compared. */
+  readonly measuredInBoth: number;
+  /** Cells where both epochs carry a height but at least one is interpolated. */
+  readonly interpolatedExcluded: number;
+  /**
+   * `interpolatedExcluded` over every cell where both epochs carry a height
+   * (measured or interpolated); 0 when there is none.
+   */
+  readonly interpolatedExcludedFraction: number;
+}
+
+/** Count the cells {@link dtmToChangeGrid} leaves out of a comparison. */
+export function changeCellSupport(a: DtmGrid, b: DtmGrid): ChangeCellSupport {
+  const n = Math.min(a.cols * a.rows, b.cols * b.rows);
+  let both = 0;
+  let excluded = 0;
+  for (let i = 0; i < n; i++) {
+    if (!(a.coverage[i] > 0 && b.coverage[i] > 0)) continue;
+    if (a.coverage[i] === MEASURED && b.coverage[i] === MEASURED) both++;
+    else excluded++;
+  }
+  const withHeight = both + excluded;
+  return {
+    measuredInBoth: both,
+    interpolatedExcluded: excluded,
+    interpolatedExcludedFraction: withHeight > 0 ? excluded / withHeight : 0,
+  };
 }
 
 /** Options for {@link compareDtms} — the change-core options plus frame honesty. */
@@ -141,6 +183,11 @@ export interface EpochComparison {
    * result is withheld the way a proven frame clash is.
    */
   readonly gridMisaligned: boolean;
+  /**
+   * Cells compared versus cells left out because at least one epoch's height
+   * there is interpolated or extrapolated rather than measured.
+   */
+  readonly cellSupport: ChangeCellSupport;
 }
 
 /** Ulps of float64 tolerated in a grid-definition comparison. */
@@ -326,7 +373,8 @@ export function compareDtms(
   const coregistered = result.aligned && notes.length - geographicNoteCount === 0;
   const gridMisaligned = !result.aligned || originsOffset;
   const levelOfDetectionM = Math.max(0, lod.valueM);
-  return { result, coregistered, coregistrationNotes: notes, levelOfDetectionM, levelOfDetection: lod, volumesComputable, frameIncompatible, horizontalUnitUnknown, gridMisaligned };
+  const cellSupport = changeCellSupport(a, b);
+  return { result, coregistered, coregistrationNotes: notes, levelOfDetectionM, levelOfDetection: lod, volumesComputable, frameIncompatible, horizontalUnitUnknown, gridMisaligned, cellSupport };
 }
 
 /**
@@ -359,6 +407,22 @@ export interface ChangeSummaryContext {
 const COREGISTRATION_CHECKLIST =
   'Needs for a measured result: shared CRS · shared vertical datum · ' +
   'matching units · common ground control.';
+
+/**
+ * The compared-cells disclosure: only cells measured in both epochs are
+ * differenced, and the share left out because one epoch's surface there is
+ * interpolated or extrapolated is stated with every result. Null when nothing
+ * was left out.
+ */
+export function cellSupportLine(support: ChangeCellSupport | undefined): string | null {
+  if (!support || support.interpolatedExcluded === 0) return null;
+  return (
+    `Compared only cells measured in both epochs. ${support.interpolatedExcluded} cells ` +
+    `(${(support.interpolatedExcludedFraction * 100).toFixed(0)}% of the cells where both surfaces ` +
+    'carry a height) were left out because at least one surface there is interpolated or ' +
+    'extrapolated, not measured.'
+  );
+}
 
 export function summarizeChange(comparison: EpochComparison, ctx: ChangeSummaryContext = {}): string[] {
   const { result, coregistered, coregistrationNotes } = comparison;
@@ -424,6 +488,8 @@ export function summarizeChange(comparison: EpochComparison, ctx: ChangeSummaryC
         'cut/fill volume or elevation difference exists to report. The two footprints ' +
         'do not overlap on the shared grid.',
     );
+    const support = cellSupportLine(comparison.cellSupport);
+    if (support) lines.push(support);
     for (const w of result.warnings) lines.push(`• ${w}`);
     for (const note of coregistrationNotes) lines.push(`• ${note}`);
     return lines;
@@ -544,6 +610,8 @@ export function summarizeChange(comparison: EpochComparison, ctx: ChangeSummaryC
     `Largest gain ${s.maxGainM.toFixed(2)} m, largest loss ${s.maxLossM.toFixed(2)} m; ` +
       `mean |Δ| ${s.meanAbsChangeM.toFixed(2)} m over ${s.comparable} comparable cells.`,
   );
+  const support = cellSupportLine(comparison.cellSupport);
+  if (support) lines.push(support);
   if (comparison.volumesComputable === false) {
     lines.push(...describeLevelOfDetection(comparison.levelOfDetection));
   }

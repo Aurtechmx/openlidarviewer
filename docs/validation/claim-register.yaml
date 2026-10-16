@@ -1006,8 +1006,8 @@ claims:
     supportingStudies: [CHANGE-RASTER-GRASS-MAPCALC-EIGHT-PAIRS]
     units: [metres]
     crsDatum: "Blocks cross-datum / unknown-datum comparison."
-    assumptions: ["single global LoD today — per-cell LoD95 is Phase 10", "cells treated independently"]
-    failureModes: ["registration error", "interpolation-status blending", "spatial covariance ignored"]
+    assumptions: ["single global LoD today — per-cell LoD95 is Phase 10", "cells treated independently", "a cell is compared only where both DTMs hold a measured height; cells interpolated or extrapolated in either epoch are left out and their count and share reported"]
+    failureModes: ["registration error", "sparse ground returns leave cells between them uncompared", "spatial covariance ignored"]
     exportAllowed: true
     userLabel: "Change raster (single-LoD, exploratory uncertainty)"
     softwareStatus: shipping

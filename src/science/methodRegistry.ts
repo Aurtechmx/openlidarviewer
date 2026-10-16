@@ -396,7 +396,7 @@ export const METHOD_REGISTRY: Readonly<Record<string, MethodEntry>> = {
   // and should be preferred for new net-volume figures.
   'olv.change.dtm-difference': {
     id: 'olv.change.dtm-difference',
-    version: 3,
+    version: 4,
     name: 'DTM-of-difference cut/fill (thresholded gain/loss/net)',
     summary:
       'Per-cell two-epoch elevation difference, classified against a Level-of-Detection ' +
@@ -407,14 +407,18 @@ export const METHOD_REGISTRY: Readonly<Record<string, MethodEntry>> = {
       'max(1.96·√(Σ known σ²), 0.1 m), labelled incomplete (a lower bound), and counts and ' +
       'detectable volumes say so; with no term known it is the assumed 0.1 m; and the grids must ' +
       'share origin and cell size to a few float64 ulps (capped at 1e-6 cell). v2 used the alignment ' +
-      '3-D RMS as σreg and fell back to 0.1 m when any term was missing; v1 used the fixed 0.1 m.',
+      '3-D RMS as σreg and fell back to 0.1 m when any term was missing; v1 used the fixed 0.1 m. ' +
+      'v4 compares a cell only where both DTMs hold a measured height (ground returns in the ' +
+      'cell) and reports how many cells were left out because either surface there is ' +
+      'interpolated or extrapolated; v3 and earlier also differenced filled cells, including ' +
+      'fills extrapolated past one epoch\'s footprint.',
     citation: 'Anderson (2019), pubs.usgs.gov/publication/70202166 (LoD thresholding for gross change); Wheaton et al. (2010), doi:10.1002/esp.1886 (propagated minimum LoD)',
     category: 'change',
     implementation: ['src/terrain/change/changeDetection.ts', 'src/terrain/change/compareDtms.ts'],
   },
   'olv.change.dtm-difference.raw-net': {
     id: 'olv.change.dtm-difference.raw-net',
-    version: 3,
+    version: 4,
     name: 'DTM-of-difference cut/fill (raw net + thresholded gross)',
     summary:
       'Same per-cell two-epoch difference as olv.change.dtm-difference, but reports the ' +
@@ -427,7 +431,9 @@ export const METHOD_REGISTRY: Readonly<Record<string, MethodEntry>> = {
       '√(σz_before² + σz_after²) when both are measured; v1 used the fixed 0.1 m. v3 applies the ' +
       'olv.change.dtm-difference@3 threshold rule (no fit residual as σreg; incomplete threshold ' +
       'never below the known terms; band σ = LoD/1.96 when incomplete) and grid-identity check; ' +
-      'the raw net is unthresholded and unaffected.',
+      'the raw net is unthresholded and unaffected. v4 sums only cells measured in both ' +
+      'epochs (the olv.change.dtm-difference v4 cell rule); v3 also summed interpolated and ' +
+      'extrapolated cells.',
     citation: 'Anderson (2019), pubs.usgs.gov/publication/70202166 (thresholded gross vs raw net); Wheaton et al. (2010), doi:10.1002/esp.1886 (propagated minimum LoD)',
     category: 'change',
     implementation: ['src/terrain/change/changeDetection.ts', 'src/terrain/change/compareDtms.ts'],

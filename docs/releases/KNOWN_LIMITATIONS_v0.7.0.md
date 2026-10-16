@@ -913,6 +913,15 @@ when they share a grid to float64 representation; an offset grid is refused,
 not resampled. The difference raster (.asc) has no header field for the
 threshold, so the level of detection travels in the panel text, not the file.
 
+A cell is differenced only where both DTMs hold a measured height, meaning
+ground returns fall in that cell in both epochs. Cells where either surface is
+interpolated, including the fill the DTM build extends past an epoch's own
+footprint, are left out, and the result states how many cells and what share
+of the cells with a height in both surfaces that was. Gaps between sparse
+ground returns are therefore not compared, even inside both footprints: the
+grid carries no flag that separates a bracketed interpolation from an
+extrapolation, so neither is used.
+
 ## The CRS override fingerprint samples a source, it does not hash it
 
 A remembered CRS override records a content fingerprint of its source so that
