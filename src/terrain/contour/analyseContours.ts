@@ -93,7 +93,12 @@ import {
 import { evaluateDtmQuality, type DtmQualityReport } from '../quality/dtmQualityGate';
 import { recommendGrid, type GridRecommendation } from '../quality/recommendGrid';
 import type { ConfidenceOrderingResult, ValidationReport } from '../validate/ValidationReport';
-import { gateIntervals, type IntervalGateResult } from './intervalGate';
+import {
+  gateAtLevelOrigin,
+  gateIntervals,
+  type IntervalGateParams,
+  type IntervalGateResult,
+} from './intervalGate';
 import { contoursAt, type ContourSet } from './contoursAt';
 import { stitchContourSet, type StitchedLevel } from './stitchContours';
 import { styleLevels, type ContourStyleResult } from './contourStyle';
@@ -479,8 +484,17 @@ export interface TerrainCore {
    */
   readonly complexity: TerrainComplexitySummary | null;
   /** Interval gate (options + recommendation). Interval-independent: it is a
-   *  function of cell size, relief and the measured RMSE only. */
+   *  function of cell size, relief and the measured RMSE only. Judged on the
+   *  grid's LOCAL elevation bounds; {@link contoursFromCore} re-runs it on
+   *  world bounds when a `levelOriginZ` anchors the levels elsewhere. */
   readonly gate: IntervalGateResult;
+  /**
+   * The exact inputs {@link gate} was computed from (local bounds), or null
+   * when the surface has no elevation range. Kept so the interval stage can
+   * re-gate on world bounds without redoing validation. Optional: a core
+   * restored from an older persisted payload lacks it and keeps {@link gate}.
+   */
+  readonly gateParams?: IntervalGateParams | null;
   /** ASPRS vertical accuracy derived from the validation pass. */
   readonly accuracy: VerticalAccuracy;
   readonly elevationRangeM: number;
@@ -1280,8 +1294,8 @@ export function computeTerrainCore(
   // cell size, relief and the measured RMSE only — NOT of the chosen interval
   // — so it is part of the cacheable core. (The interval CHOICE happens in the
   // contour stage.)
-  const gate = elevationRangeM > 0
-    ? gateIntervals({
+  const gateParams: IntervalGateParams | null = elevationRangeM > 0
+    ? {
         cellSizeM: params.cellSizeM,
         elevationRangeM,
         // UNIT CONSISTENCY: candidate intervals and the elevation range/bounds
@@ -1294,8 +1308,9 @@ export function computeTerrainCore(
         // interval rule (a 1-unit interval on a 0.4–1.2-unit surface crosses 1.0).
         minZ: Number.isFinite(minZ) ? minZ : null,
         maxZ: Number.isFinite(maxZ) ? maxZ : null,
-      })
-    : EMPTY_GATE;
+      }
+    : null;
+  const gate = gateParams ? gateIntervals(gateParams) : EMPTY_GATE;
 
   // 5b) DTM cell status, the quality gate (ready / previewOnly / blocked).
   // The gate decides whether the UI may offer the terrain-product (contour/DEM) export at all.
@@ -1542,6 +1557,7 @@ export function computeTerrainCore(
     cellStatusTally,
     complexity,
     gate,
+    gateParams,
     accuracy,
     elevationRangeM,
     minZ: Number.isFinite(minZ) ? minZ : Number.NaN,
@@ -1617,7 +1633,12 @@ export function contoursFromCore(
   core: TerrainCore,
   intervalParams: IntervalContourParams = {},
 ): AnalyseContoursResult {
-  const { crs, verticalDatum, verticalUnitToMetres, cellSizeM, dtm, gate, minZ, maxZ } = core;
+  const { crs, verticalDatum, verticalUnitToMetres, cellSizeM, dtm, minZ, maxZ } = core;
+  // The interval gate's "yields no contours" rule must test the same levels
+  // `contoursAt` will draw. Those are anchored to WORLD elevation through
+  // `levelOriginZ`, while the core gated on the local bounds, so re-gate on
+  // world bounds (minZ + oz, maxZ + oz) whenever the origin is not zero.
+  const gate = gateAtLevelOrigin(core.gateParams, core.gate, intervalParams.levelOriginZ);
   // The contour shape style for this run. Default 'smooth' reproduces the
   // historical Chaikin ×2 default exactly, so the live on-screen contours are
   // byte-identical. `shapeStyle` wins; otherwise the legacy `smooth:false`
