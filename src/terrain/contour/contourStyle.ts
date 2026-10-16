@@ -39,13 +39,22 @@ export interface ContourStyleParams {
   readonly baseWeight?: number;
   /** Relative weight for index contours. Default 2. */
   readonly indexWeight?: number;
+  /**
+   * World elevation of the local Z = 0 plane the level values are expressed
+   * in (the same `levelOriginZ` `contoursAt` anchors its levels to). Index
+   * classification runs on the WORLD elevation `value + originZ`, so index
+   * contours land on round world elevations. Omitted / non-finite = 0.
+   */
+  readonly originZ?: number | null;
 }
 
 /**
  * Assign index/intermediate styling to a sorted level list. A level is
- * an index contour when `round(value / interval)` is a multiple of
- * `indexEvery` — anchored to elevation 0 so index lines fall on round
- * elevations (…, 0, 5, 10 m for a 1 m interval, indexEvery 5).
+ * an index contour when `round(world / interval)` is a multiple of
+ * `indexEvery`, where `world = value + originZ` — anchored to world
+ * elevation 0 so index lines fall on round elevations (…, 0, 5, 10 m for a
+ * 1 m interval, indexEvery 5) even when the values are in a recentred local
+ * frame. The returned `value`s stay in the caller's frame.
  */
 export function styleLevels(
   values: ReadonlyArray<number>,
@@ -57,6 +66,7 @@ export function styleLevels(
   const indexEvery = Math.max(1, Math.floor(params.indexEvery ?? 5));
   const baseWeight = params.baseWeight ?? 1;
   const indexWeight = params.indexWeight ?? 2;
+  const originZ = Number.isFinite(params.originZ) ? (params.originZ as number) : 0;
 
   // Consistency check: adjacent diffs should equal the interval. The caller is
   // expected to pass the EMITTED interval, so a thinned level list is measured
@@ -78,8 +88,9 @@ export function styleLevels(
   }
 
   const levels: StyledLevel[] = sorted.map((value) => {
-    const k = Math.round(value / intervalM);
-    const aligned = Math.abs(value / intervalM - k) <= 1e-6;
+    const world = value + originZ;
+    const k = Math.round(world / intervalM);
+    const aligned = Math.abs(world / intervalM - k) <= 1e-6;
     const isIndex = aligned && k % indexEvery === 0;
     return {
       value,

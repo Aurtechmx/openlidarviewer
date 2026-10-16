@@ -1723,9 +1723,17 @@ export function contoursFromCore(
   // contours into one blob; scaling by the cell keeps the join unit-free.
   let stitched = stitchContourSet(contours, cellSizeM);
 
+  // Index contours are chosen on WORLD elevation (local value + levelOriginZ),
+  // the same frame `contoursAt` anchors the levels to, so index lines, their
+  // labels, the exported contour_type and every weight derived from `isIndex`
+  // fall on round world elevations rather than round local ones.
   const style = styleLevels(
     contours.levels.map((l) => l.value),
-    { intervalM: emittedIntervalM, indexEvery: intervalParams.indexEvery ?? 5 },
+    {
+      intervalM: emittedIntervalM,
+      indexEvery: intervalParams.indexEvery ?? 5,
+      originZ: intervalParams.levelOriginZ,
+    },
   );
 
   // Beauty: apply the chosen shape style to the raw stitched runs. Every style
