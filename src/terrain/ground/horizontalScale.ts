@@ -21,6 +21,15 @@
 export const METRES_PER_DEGREE = 10_001_965.729 / 90;
 
 /**
+ * Names the degree-to-metre model this module applies to a geographic frame:
+ * the WGS84 meridional and parallel degree series below, at the grid
+ * latitude. Recorded in identities that depend on the conversion (the Terrain
+ * Access input digest) so a change of model changes the identity. Change it
+ * together with the series.
+ */
+export const GEOGRAPHIC_DEGREE_MODEL = 'wgs84-degree-series';
+
+/**
  * Metres per degree of LATITUDE (north–south) on the WGS84 ellipsoid at
  * geodetic latitude φ, from the standard series
  * `111132.92 − 559.82 cos 2φ + 1.175 cos 4φ − 0.0023 cos 6φ`

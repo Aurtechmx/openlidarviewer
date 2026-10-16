@@ -134,7 +134,10 @@ points the surface rests on (sampled or not, points read and in the scan,
 noise left out, Withheld treatment) are recorded with it. The run record, run card and diagnostics CSV state
 the policy and these statuses, and the export README repeats the statuses. The policy and the surface
 binding, with its point basis, are part of the run's input digest
-(`olv.simulation.terrain-access.input-digest.v4`).
+(`olv.simulation.terrain-access.input-digest.v5`). On a geographic frame the
+digest also names the degree-to-metre model (`wgs84-degree-series`: the WGS84
+meridional and parallel degree lengths at the grid latitude), so a run under
+the earlier 111,320 m conversion does not share an identity with a current one.
 
 ## Search
 
