@@ -93,7 +93,7 @@ Game-like navigation lets a scan be explored like a 3D environment.
 | C / Ctrl | Move down |
 | Esc | Release the cursor |
 | R | Reset / re-frame the view |
-| F | Focus on the point under the cursor |
+| F | Focus on the point at the centre of the view |
 | 1 / 2 / 3 / 4 | Orbit / Walk / Fly / Pan mode |
 | G | Toggle the Pan (hand) tool |
 | Middle-drag | Pan the view in any mode |
@@ -112,7 +112,7 @@ Rendering is tuned so a point cloud reads as a 3D surface, not a flat wash of do
 - Soft splat rendering: Classic round points, Soft splats, or Inspection mode with density-aware radius
 - Adaptive or fixed point sizing, round antialiased points, and a Detail control that shows an honest `shown / total` count
 - Height, intensity, classification, RGB, and surface-normal colour modes, picked automatically per file
-- Percentile-clipped height mode with a 5/95 default and a Turbo perceptual palette
+- Percentile-clipped height mode with a 5/95 default and the Viridis palette by default; Turbo and the other palettes are selectable
 - HDR sky presets: Studio Dark, Blueprint, Survey Light, Terrain, Black
 </details>
 
@@ -120,7 +120,7 @@ Rendering is tuned so a point cloud reads as a 3D surface, not a flat wash of do
 <summary><b>Visuals Studio</b></summary>
 
 - A unified Inspector section with three chip rails (Colour Mode, RGB Preset, Sky / EDL) that re-style the scan without leaving the panel
-- RGB appearance presets (Photoreal, Drone RGB, Mobile LiDAR, Infrastructure), each tuning gamma, contrast, saturation, and exposure
+- RGB appearance presets (Natural, Photoreal, Drone RGB, Mobile LiDAR, Survey, High Contrast), each tuning gamma, contrast, saturation, and exposure
 - White balance (temperature + tint) with an Auto-balance assist, gated to streaming COPC where it can sample residency
 - Patch view at the inspector cursor: a KNN-based tangent-plane projection of the point's neighbourhood with a photometric witness panel
 </details>
@@ -128,7 +128,7 @@ Rendering is tuned so a point cloud reads as a 3D surface, not a flat wash of do
 <details>
 <summary><b>Measurement & analysis</b></summary>
 
-Open the Measure tool, pick a kind from the toolbar, and place points directly on the scan. Seven tools are available.
+Open the Measure tool, pick a kind from the toolbar, and place points directly on the scan. Nine tools are available.
 
 | Tool | What it measures |
 |---|---|
@@ -139,9 +139,11 @@ Open the Measure tool, pick a kind from the toolbar, and place points directly o
 | Angle | The angle at a vertex between two arms |
 | Slope | Rise, run, slope angle, and grade percentage between a pair of points |
 | Profile | Cross-section between a pair of points: 3D length, horizontal distance, vertical drop, and grade |
+| Box | An axis-aligned box from two opposite corners: width, depth, height, and volume |
+| Volume | Cut and fill against a base level, from a polygon or a 3D lasso |
 
 - Every measurement is editable: drag a point, undo the last point while placing, rename, or clear. Placed measurements list in a compact panel and persist for the session. One toggle switches all readouts between metric and imperial. The set exports to a JSON session file and re-imports later
-- Cross-section profile renders a height-vs-distance chart strip under the row, resizable from a default 140 px out to 360 px so the curve reads at deliverable size
+- Cross-section profile renders a height-vs-distance chart strip under the row, 280 px tall by default and resizable from 160 px to 640 px so the curve reads at deliverable size
 - Volume (cut / fill) against a polygon or 3D lasso, with NaN / degenerate / self-intersection guards and a streaming-resident caveat when nodes are still loading
 - Classification editor: paint a class id over a lassoed selection and write the result back to LAS
 - Density heatmap overlay for coverage QA, box clipping / slicing for interactive cross-cuts, and measurement chains that combine placed measurements as sum / difference / ratio
@@ -158,9 +160,9 @@ Measurement is meant for visual inspection and research, not survey-grade use. O
 
 OpenLiDARViewer ships a terrain analysis stack under `src/terrain/`. Shared type contracts (`TerrainContracts.ts`) give every stage one honesty envelope: a coverage mode (`full` / `resident-only` / `sampled`), the source and analyzed point counts, a 0-100 confidence value, and ordered warnings, so an analyser never implies full-cloud certainty when only resident streaming nodes were walked.
 
-The lightest surface is the Dataset Intelligence card in the Inspector: header-derived, informational, and it does not perform ground classification. The main capability is the confidence-aware DTM and contour pipeline (`src/terrain/contour/`, `ground/`, `surface/`) surfaced through the Analyse panel: ground classification, a gridded DTM with per-cell confidence and hold-out RMSE validation, a 0-100 heuristic terrain readiness index (workflow-readiness weights, not an external accuracy calibration), surface models (DSM, canopy height, slope, multi-directional hillshade), a single top-level Terrain Assessment verdict, evidence-graded contour export (GeoJSON / SVG / DXF), a printable map sheet, and a georeferenced DEM package (ASCII Grid + GeoTIFF). Ground classification is a heuristic: its output is derived, not survey-grade. A DTM quality gate governs whether terrain-product export is enabled, and per-cell confidence is calibrated against measured hold-out error, not asserted. Treat terrain products and DEM exports as export-ready only when the Terrain Assessment reads Good, and as preview otherwise.
+The lightest surface is the Dataset Intelligence card in the Inspector: header-derived, informational, and it does not perform ground classification. The main capability is the confidence-aware DTM and contour pipeline (`src/terrain/contour/`, `ground/`, `surface/`) surfaced through the Analyse panel: ground classification, a gridded DTM with per-cell confidence and hold-out RMSE validation, a 0-100 heuristic terrain readiness index (workflow-readiness weights, not an external accuracy calibration), surface models (DSM, canopy height, slope, multi-directional hillshade), a single top-level Terrain Assessment verdict, evidence-graded contour export (GeoJSON / SVG / DXF), a printable map sheet, and a georeferenced DEM package (ASCII Grid + GeoTIFF). Ground classification is a heuristic: its output is derived, not survey-grade. A DTM quality gate governs whether terrain-product export is enabled, and per-cell confidence is stated in two parts: measured cells carry an empirical reliability at a stated tolerance, and interpolated cells carry a model-based support score that is not calibrated. Treat terrain products and DEM exports as export-ready only when the Terrain Assessment reads Good, and as preview otherwise.
 
-Contour Studio is the post-analysis step that turns an analysed scan into a contour deliverable, kept out of the Analyse panel so map-making doesn't crowd the terrain work. You pick a purpose: one of the four named ones (Engineering Plan, Survey Review, Terrain Research, Presentation Map) or Custom. A purpose only bundles presentation defaults and can never raise a claim. Analytical contours are the exact isolines of the grid, while cartographic contours are generalised for legibility, reference the analytical geometry's hash, and are never labelled exact. Every export routes through one evidence gate that can only downgrade (validated, exploratory, or blocked): a blocked product returns a diagnostic instead of a polished file, an exploratory one is watermarked, and the permit decision is stamped into each artifact's provenance. Exports cover contour vectors (GeoJSON, DXF, SVG), a map-sheet PDF, a DEM raster package, a terrain intelligence report, and a complete ZIP with a SHA256SUMS manifest. Validation is internal hold-out only: nothing is survey-grade, and no output asserts certification.
+Contour Studio is the post-analysis step that turns an analysed scan into a contour deliverable, kept out of the Analyse panel so map-making doesn't crowd the terrain work. You pick a purpose: one of the four named ones (Engineering Plan, Survey Review, Terrain Research, Presentation Map) or Custom. A purpose only bundles presentation defaults and can never raise a claim. Analytical contours are the exact isolines of the grid, while cartographic contours are generalised for legibility, reference the analytical geometry's hash, and are never labelled exact. Every export routes through one evidence gate that can only downgrade (validated, exploratory, or blocked): a blocked product returns a diagnostic instead of a polished file, an exploratory one is watermarked, and the permit decision is stamped into each artifact's provenance. Exports cover contour vectors (GeoJSON, DXF, SVG), a map-sheet PDF, a DEM raster package, a terrain intelligence report, and a complete ZIP with a SHA256SUMS manifest. Accuracy figures are internal hold-out only; the algorithm cross-checks against independent tools are listed in the claim register. Nothing is survey-grade, and no output asserts certification.
 
 See [`docs/terrain-intelligence.md`](docs/terrain-intelligence.md), [`docs/validation/terrain-validation-matrix.md`](docs/validation/terrain-validation-matrix.md), and [`docs/contour-studio.md`](docs/contour-studio.md).
 </details>
@@ -217,7 +219,7 @@ For large datasets, stream COPC (`.copc.laz`) or EPT (`ept.json`), which load pr
 <details>
 <summary><b>Format matrix and compatibility notes</b></summary>
 
-That covers iPhone and mobile scan exports (PLY, OBJ, GLB/GLTF; `USDZ` needs conversion first), terrestrial laser-scanner data in E57 (the ASTM E2807 format; a subset, read-tested against Trimble exports, with no conformance to that standard claimed) plus PTX and PTS, georeferenced drone LiDAR in LAS/LAZ, and PCD in all three encodings (ASCII, binary, binary-compressed). Large COPC and EPT datasets stream progressively, locally or over HTTP range requests from a URL, with bounded memory and no full-file load.
+That covers iPhone and mobile scan exports (PLY, OBJ, GLB/GLTF; `USDZ` needs conversion first), terrestrial laser-scanner data in E57 (the ASTM E2807 format; a subset, cross-decoded against PDAL on one CloudCompare re-export as recorded in the claim register under E57-INGEST, with no conformance to that standard claimed) plus PTX and PTS, georeferenced drone LiDAR in LAS/LAZ, and PCD in all three encodings (ASCII, binary, binary-compressed). Large COPC and EPT datasets stream progressively, locally or over HTTP range requests from a URL, with bounded memory and no full-file load.
 
 Format support depends on the device (browser memory, GPU capacity) and on the data: its size, how it was preprocessed, and how complete OLV's reader for that format is. The per-format detail, including scanner and app compatibility, is the format matrix in [`docs/supported-formats.md`](docs/supported-formats.md).
 </details>
@@ -256,7 +258,7 @@ npm install
 npm run dev
 ```
 
-Open the local URL it prints, then drop a scan onto the page or click a built-in sample. To build for static hosting (GitHub Pages, Netlify, or any CDN, since it is just files):
+Open the local URL it prints, then drop a scan onto the page, or press "Try a sample scan", which asks for approval and then streams a public dataset over the network. To build for static hosting (GitHub Pages, Netlify, or any CDN, since it is just files):
 
 ```bash
 npm run build
@@ -298,11 +300,11 @@ Each assumes a single drag-and-drop or URL open, with everything happening local
 <details>
 <summary><b>How it works</b></summary>
 
-1. You load a dataset by dropping a file, or by clicking a built-in sample.
+1. You load a dataset by dropping a file, or with "Try a sample scan", which asks for approval and then streams a public dataset over the network.
 2. The format is detected from the file's magic bytes first, then its extension.
 3. The file is parsed off the main thread, inside a Web Worker.
 4. Point positions and attributes are decoded. Large georeferenced coordinates are recentered in double precision before the float32 downcast.
-5. Clouds above the point budget are voxel-downsampled, and the Detail control shows the honest `shown / total` count.
+5. Clouds above the point budget are stride-decoded or voxel-downsampled, and the Detail control shows the honest `shown / total` count.
 6. The cloud renders through a WebGPU or WebGL 2 pipeline built on three.js; Eye Dome Lighting adds screen-space depth shading as a post-processing pass.
 7. Color modes map height, intensity, classification, RGB, or surface-normal direction onto the points, sized adaptively with distance.
 8. You explore with Orbit, Walk, or Fly navigation.
@@ -366,7 +368,7 @@ Most local files are bounded by browser memory and the GPU. A very large uncompr
 For anything else too large, stream it as COPC or EPT, or convert it with PDAL or Entwine. Streaming loads only the set the camera needs.
 
 Which formats are supported?
-For static loads, LAS / LAZ, PLY, XYZ / CSV, E57 and glTF / GLB; for streaming: COPC, EPT, a 3D Tiles PNTS tileset, and a very large uncompressed LAS or chunked LAZ indexed out of core. See [Formats & requirements](#formats--requirements).
+For static loads, LAS / LAZ, PLY, OBJ, PCD, PTX, PTS, XYZ / CSV, E57 and glTF / GLB; for streaming: COPC, EPT, a 3D Tiles PNTS tileset, and a very large uncompressed LAS or chunked LAZ indexed out of core. See [Formats & requirements](#formats--requirements).
 
 Is it survey-grade?
 No. Measurements and quality grades describe the data you loaded; they are not a survey-grade certification. Validate against ground control where accuracy matters.
