@@ -9,11 +9,18 @@
  * from the catalogue with the same item ({@link catalogueItemFor}), and the CRS
  * service applies the record only to a stream carrying that item. A same-named
  * stream not opened from the catalogue is offered it as a suggestion.
+ *
+ * The record is catalogue metadata, not a user choice: it applies only to a
+ * stream that declares no CRS of its own, and resolves labelled as the
+ * catalogue's ({@link PC_CATALOGUE_LABEL}), not as confirmed by the user.
  */
 import { keyForDataset, type CrsOverride } from '../geo/CrsOverrideStore';
 import { DEFAULT_CRS_OVERRIDE_PORT, OVERRIDE_IDENTITY_VERSION, type CatalogItemIdentity, type CrsOverridePort } from '../geo/CrsService';
 import type { PcStacItem } from '../io/catalog/planetaryComputer';
 import { remoteCopcName } from './remoteSourceNaming';
+
+/** Names the Planetary Computer catalogue wherever a CRS it supplied is shown. */
+export const PC_CATALOGUE_LABEL = 'Planetary Computer STAC';
 
 /** Items picked this session, by asset URL without query or fragment. */
 const picks = new Map<string, CatalogItemIdentity>();
@@ -42,6 +49,7 @@ export function catalogueOverrideFor(item: PcStacItem): {
       kind: 'projected',
       identity: { catalogItem: { id: item.id, bbox: [w, s, e, n] } },
       identityVersion: OVERRIDE_IDENTITY_VERSION,
+      catalogue: PC_CATALOGUE_LABEL,
     },
   };
 }

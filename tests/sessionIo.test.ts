@@ -725,6 +725,26 @@ describe('importSession — persisted user CRS override round-trip (FIX 2)', () 
     expect(detected).toBeDefined();
     expect(detected?.epsg).toBe(32614);
   });
+
+  // A CRS a catalogue entry supplied is catalogue metadata, not the user's choice.
+  const catalogueCrs = (over: Partial<ResolvedCrs> = {}): ResolvedCrs =>
+    baseCrs({ epsg: 26913, name: 'NAD83 / UTM zone 13N', source: 'catalog-tile', assertedBy: 'Planetary Computer STAC', confidence: 'medium', userConfirmed: false, ...over });
+
+  it('Test 9 — a catalogue-sourced session CRS that differs from the file is refused like any other', async () => {
+    const { deps, calls } = makeDeps({ streaming: loaded({ epsg: 6342 }) });
+    await importSession(asFile(sessionJson({ crs: catalogueCrs(), scanSummary: strongSummary() })), {}, deps);
+    expect(calls.setCrsOverride).not.toHaveBeenCalled();
+    expect(calls.loadMeasurements).not.toHaveBeenCalled();
+    expect(noConflict(calls)).toBe(false);
+  });
+
+  it('Test 10 — a catalogue-sourced session CRS is not restored as a user override', async () => {
+    const { deps, calls } = makeDeps({ streaming: loaded() });
+    await importSession(asFile(sessionJson({ crs: catalogueCrs(), scanSummary: strongSummary() })), {}, deps);
+    expect(calls.loadMeasurements).toHaveBeenCalled();
+    expect(calls.setCrsOverride).not.toHaveBeenCalled();
+    expect(noConflict(calls)).toBe(true);
+  });
 });
 
 describe('importSession — a committed restore survives a disclosure that cannot load', () => {

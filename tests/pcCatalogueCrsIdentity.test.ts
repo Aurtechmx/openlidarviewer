@@ -74,7 +74,7 @@ describe('catalogueItemFor', () => {
 });
 
 describe('the catalogue EPSG applies to the picked item only', () => {
-  it('a stream opened from the pick verifies and applies', () => {
+  it('a stream opened from the pick, declaring no CRS, takes the catalogue EPSG', () => {
     const port = memoryPort();
     recordCatalogueCrs(ITEM, port);
     const svc = new CrsService(port);
@@ -83,7 +83,8 @@ describe('the catalogue EPSG applies to the picked item only', () => {
       identity: datasetIdentity(stream({ id: ITEM.id, bbox: ITEM.bbox })),
     });
     expect(r.epsg).toBe(26913);
-    expect(r.userConfirmed).toBe(true);
+    expect(r.source).toBe('catalog-tile');
+    expect(r.userConfirmed).toBe(false);
     expect(svc.overrideSuggestion()).toBeNull();
   });
 

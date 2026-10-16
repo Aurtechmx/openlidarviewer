@@ -509,8 +509,11 @@ export async function importSession(
     // WKT/unit as trusted state. `detected` is the ACTIVE scan's own declared CRS
     // — the streaming source's `crs()` when streaming, so compound/vertical
     // metadata reconstruction is not lost to `undefined`.
+    // A catalogue-asserted CRS is not the user's choice, so it is never restored
+    // as a user override; the catalogue record resolves it again on open.
     if (
       session.crs &&
+      session.crs.source !== 'catalog-tile' &&
       (session.crs.kind === 'local' ||
         ((session.crs.kind === 'projected' || session.crs.kind === 'geographic') &&
           session.crs.epsg != null))

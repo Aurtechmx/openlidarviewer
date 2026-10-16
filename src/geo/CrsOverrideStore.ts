@@ -103,6 +103,13 @@ export interface CrsOverride {
    * (`identity.min`). Absent = legacy, which can only ever be a suggestion.
    */
   readonly identityVersion?: number;
+  /**
+   * The catalogue that stated this EPSG (e.g. "Planetary Computer STAC"). Set
+   * only on a record written for a catalogue pick, never on a user's choice: it
+   * resolves as catalogue metadata, not as a user override, and only for a
+   * source that declares no CRS of its own.
+   */
+  readonly catalogue?: string;
 }
 
 interface StoredEnvelope {

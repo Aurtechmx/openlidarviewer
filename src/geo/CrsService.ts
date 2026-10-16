@@ -255,11 +255,16 @@ export const OVERRIDE_IDENTITY_VERSION = 2;
  * - `candidate`: nothing positively disagrees on name, declaration, count or
  *   spans, but the position differs or a fact is missing (including every
  *   legacy record). Offered as a suggestion, never applied silently.
+ * - `catalogue`: a catalogue record (see {@link isCatalogueRecord}) for the
+ *   item the source was opened from, and the source declares no CRS of its
+ *   own. Applied as catalogue metadata, not as user-confirmed.
  * - `different`: a positive disagreement on declaration, count, spans or
- *   digest. Neither applied nor suggested.
+ *   digest, or a catalogue record for a source that declares its own CRS (the
+ *   file's declaration wins). Neither applied nor suggested.
  */
 export type OverrideMatch =
   | { readonly kind: 'verified' }
+  | { readonly kind: 'catalogue' }
   | { readonly kind: 'candidate'; readonly reason: OverrideSuggestionReason }
   | { readonly kind: 'different' };
 
@@ -276,6 +281,17 @@ export interface OverrideSuggestion {
 }
 
 /**
+ * Whether a stored record was written for a catalogue pick rather than chosen
+ * by the user. A pick is recorded before the file is opened, so it never
+ * observed a declaration; records written before `catalogue` existed are
+ * recognised by exactly that shape.
+ */
+export function isCatalogueRecord(override: CrsOverride): boolean {
+  if (typeof override.catalogue === 'string') return true;
+  return !!override.identity?.catalogItem && override.detectedEpsgObserved !== true;
+}
+
+/**
  * Classify a stored override against the dataset being opened. Pure.
  */
 export function classifyOverrideMatch(
@@ -283,6 +299,11 @@ export function classifyOverrideMatch(
   detected: CrsInfo | undefined,
   loaded: DatasetIdentity | undefined,
 ): OverrideMatch {
+  // A catalogue record is metadata about the item, not a correction the user
+  // made: it never replaces a CRS the source declares itself, whether the two
+  // EPSGs agree (nothing to add) or not (the file wins).
+  const catalogue = isCatalogueRecord(override);
+  if (catalogue && detected) return { kind: 'different' };
   const observed = override.detectedEpsgObserved === true;
   // Declaration: a record that observed it must agree exactly (including "both
   // declared nothing"); a legacy record disagrees only when both sides state one.
@@ -305,7 +326,8 @@ export function classifyOverrideMatch(
   if (item && override.identityVersion === OVERRIDE_IDENTITY_VERSION) {
     const other = loaded?.catalogItem;
     if (!other) return { kind: 'candidate', reason: 'identity-missing' };
-    return other.id === item.id && sameBbox(other.bbox, item.bbox) ? { kind: 'verified' } : { kind: 'different' };
+    if (other.id !== item.id || !sameBbox(other.bbox, item.bbox)) return { kind: 'different' };
+    return catalogue ? { kind: 'catalogue' } : { kind: 'verified' };
   }
 
   const legacy = override.identityVersion !== OVERRIDE_IDENTITY_VERSION || !observed;
@@ -517,6 +539,9 @@ export class CrsService {
     const match = override ? classifyOverrideMatch(override, input.detected, input.identity) : undefined;
     if (override && match?.kind === 'verified') {
       return { resolved: this._resolveDatum(this._fromOverride(override, input.detected)), suggestion: null };
+    }
+    if (override && match?.kind === 'catalogue') {
+      return { resolved: this._resolveDatum(this._fromCatalogue(override, input.detected)), suggestion: null };
     }
     const resolved = this._resolveDatum(resolvedFromCrsInfo(input.detected, input.source) ?? unknownCrs());
     // Nothing to offer when the remembered choice is what the file already says.
@@ -784,6 +809,21 @@ export class CrsService {
       verticalDatum: detected?.verticalDatum,
       verticalUnitToMetres: detected?.verticalUnitToMetres,
       ...(detected?.verticalLinearUnit !== undefined ? { verticalLinearUnit: detected.verticalLinearUnit } : {}),
+    };
+  }
+
+  /**
+   * A catalogue record applied to a source that declares no CRS: the
+   * catalogue's EPSG, labelled as the catalogue's assertion and NOT confirmed
+   * by the user. An EPSG without WKT is medium confidence, as for a file.
+   */
+  private _fromCatalogue(override: CrsOverride, detected: CrsInfo | undefined): ResolvedCrs {
+    return {
+      ...this._fromOverride(override, detected),
+      source: 'catalog-tile',
+      assertedBy: typeof override.catalogue === 'string' ? override.catalogue : 'catalogue',
+      confidence: 'medium',
+      userConfirmed: false,
     };
   }
 
