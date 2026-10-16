@@ -131,8 +131,20 @@ export interface EpochAlignment {
   readonly appliedTransformResidualM: number;
   /** Solved planar rotation about the vertical axis, in degrees. */
   readonly yawDeg: number;
-  /** Solved translation (metres) mapping `after` onto `before`. */
+  /**
+   * Solved translation (metres) mapping `after` onto `before`: the transform's
+   * own term, with the yaw about the WORLD origin. At projected coordinates a
+   * fraction of a degree of yaw makes it hundreds of metres or more while no
+   * point moves that far, so it is not a shift to show; see `centroidShiftM`.
+   */
   readonly translation: Vec3;
+  /**
+   * How far the reported transform moves an after point lying at the before
+   * sample's centroid (metres; z is the vertical term of `translation`). This
+   * is the shift the summary and the registration record state, beside the
+   * yaw. Absent only on outcomes with no fit.
+   */
+  readonly centroidShiftM?: Vec3;
   /** Points actually used per cloud in the fit. */
   readonly sampleCount: number;
   /**
@@ -495,6 +507,15 @@ export function alignEpochClouds(
     fit.degenerate ? Infinity : residualAtPose(afterSample, beforeSample, IDENTITY_POSE, trimFraction, gate) * metresPerUnit;
   /** A source-unit translation reported in metres (the applied one stays in source units). */
   const toMetres = (t: Vec3): Vec3 => [t[0] * metresPerUnit, t[1] * metresPerUnit, t[2] * metresPerUnit];
+  // The before sample's centroid, where the reported shift is measured.
+  let cx = 0, cy = 0;
+  for (const p of beforeSample) { cx += p[0]; cy += p[1]; }
+  const centre: Vec3 = [cx / beforeSample.length, cy / beforeSample.length, 0];
+  /** Displacement (metres) of an after point at the centroid under `pose`. */
+  const shiftAtCentre = (pose: Pick<IcpResult, 'yawRad' | 'translation'>): Vec3 => {
+    const q = applyIcp(pose, centre);
+    return [(q[0] - centre[0]) * metresPerUnit, (q[1] - centre[1]) * metresPerUnit, pose.translation[2] * metresPerUnit];
+  };
 
   // Low overlap: too few sampled points have a partner within the
   // correspondence distance. Checked first: a residual over a small overlap
@@ -512,6 +533,7 @@ export function alignEpochClouds(
         appliedTransformResidualM: unappliedResidualM(),
         yawDeg,
         translation: toMetres(fit.translation),
+        centroidShiftM: shiftAtCentre(fit),
         sampleCount,
         overlapFraction,
         lowOverlap: true,
@@ -535,6 +557,7 @@ export function alignEpochClouds(
         appliedTransformResidualM: unappliedResidualM(),
         yawDeg,
         translation: toMetres(fit.translation),
+        centroidShiftM: shiftAtCentre(fit),
         sampleCount,
         overlapFraction,
         frameUnverified,
@@ -561,6 +584,7 @@ export function alignEpochClouds(
         appliedTransformResidualM: unappliedResidualM(),
         yawDeg,
         translation: toMetres(fit.translation),
+        centroidShiftM: shiftAtCentre(fit),
         sampleCount,
         overlapFraction,
         unsupportedMove: true,
@@ -626,6 +650,7 @@ export function alignEpochClouds(
       // Reported in metres; `applied.translation` (source units) is what
       // actually moved the points.
       translation: toMetres(applied.translation),
+      centroidShiftM: shiftAtCentre(applied),
       sampleCount,
       overlapFraction,
       frameUnverified,
@@ -672,10 +697,13 @@ export function summarizeAlignment(a: EpochAlignment): string {
   if (a.unsupportedMove) {
     return `Alignment: withheld — the fit moved the after cloud farther than the ${CORRESPONDENCE_SPACINGS}-point-spacing correspondence distance, so the data at the starting pose do not support it; comparing as-is.`;
   }
-  const shift = Math.hypot(a.translation[0], a.translation[1]);
+  // The shift at the before sample's centroid: the transform's translation is
+  // about the world origin and is not a distance any point moved.
+  const moved = a.centroidShiftM ?? a.translation;
+  const shift = Math.hypot(moved[0], moved[1]);
   const applied = a.appliedDof === 'yaw+xyz' ? 'yaw + x/y/z' : 'yaw + x/y, z kept';
   const base =
-    `Aligned the after cloud (${applied}: ${shift.toFixed(2)} m shift, ${a.yawDeg.toFixed(2)}° yaw; ` +
+    `Aligned the after cloud (${applied}: ${shift.toFixed(2)} m shift at the before sample's centroid, ${a.yawDeg.toFixed(2)}° yaw; ` +
     `${(a.overlapFraction * 100).toFixed(0)}% overlap over ${a.sampleCount} sampled points). ` +
     `Residual at the applied pose ${a.appliedTransformResidualM.toFixed(2)} m; solver fit residual ` +
     `(yaw + x/y/z, not what was applied) ${a.solverResidualM.toFixed(2)} m. Both are fit statistics, ` +

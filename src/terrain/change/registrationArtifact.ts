@@ -55,8 +55,14 @@ export interface RegistrationArtifact {
   readonly appliedTransformResidualM: number;
   /** Solved yaw about vertical, in degrees. */
   readonly yawDeg: number;
-  /** Solved translation (metres) mapping source onto target. */
+  /** Solved translation (metres) mapping source onto target, yaw about the world origin. */
   readonly translation: Vec3;
+  /**
+   * Displacement (metres) of a source point at the target sample's centroid:
+   * the shift to state. The translation alone is not, because the yaw turns
+   * about the world origin. Absent when no fit ran.
+   */
+  readonly centroidShiftM?: Vec3;
   /** Fraction of the scenes that overlapped, 0..1. */
   readonly overlapFraction: number;
   /** Epoch-millisecond stamp of when this record was built (staleness marker). */
@@ -80,6 +86,7 @@ export function buildRegistrationArtifact(
     appliedTransformResidualM: alignment.appliedTransformResidualM,
     yawDeg: alignment.yawDeg,
     translation: alignment.translation,
+    ...(alignment.centroidShiftM ? { centroidShiftM: alignment.centroidShiftM } : {}),
     overlapFraction: alignment.overlapFraction,
     generatedAt,
   };
@@ -95,6 +102,7 @@ export function summarizeRegistration(a: RegistrationArtifact): string {
   if (a.applied) {
     return (
       `Registration: applied (${a.appliedDof}) — ` +
+      (a.centroidShiftM ? `shift ${Math.hypot(a.centroidShiftM[0], a.centroidShiftM[1]).toFixed(3)} m at the centroid, ${a.yawDeg.toFixed(3)}° yaw, ` : '') +
       `residual at applied pose ${a.appliedTransformResidualM.toFixed(3)} m, ` +
       `solver fit residual ${a.solverResidualM.toFixed(3)} m, overlap ${Math.round(a.overlapFraction * 100)}% · ${m}`
     );

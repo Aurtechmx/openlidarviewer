@@ -101,6 +101,7 @@ const SUPPORTING_TESTS: Readonly<Record<string, readonly string[]>> = {
   'olv.registration.epoch-horizontal-icp': [
     'tests/alignEpochs.test.ts',
     'tests/alignEpochsPartialOverlap.test.ts',
+    'tests/alignEpochsCentroidShift.test.ts',
     'tests/registrationArtifact.test.ts',
   ],
   'olv.volume.stockpile': [
