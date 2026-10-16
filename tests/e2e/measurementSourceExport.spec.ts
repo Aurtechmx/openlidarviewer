@@ -246,7 +246,8 @@ test('a session saved and reopened with two scans keeps each point on the scan i
   await expect(page.locator('.olv-layer')).toHaveCount(1, { timeout: 20_000 });
   await dropBytes(page, fx.geomB, 'geom-b.las');
   await expect(page.locator('.olv-layer')).toHaveCount(2, { timeout: 20_000 });
-  await expect(page.locator('.olv-project-card')).toContainText('geom-b.las');
+  await expect.poll(() => page.evaluate(() =>
+    (window as unknown as { __OLV_TEST_API__: { activeScan(): { activeName: string | null } } }).__OLV_TEST_API__.activeScan().activeName)).toBe('geom-b.las');
   await dropBytes(page, new TextEncoder().encode(sessionText), 'geom-b.olvsession');
   await expect(page.locator('.olv-mp-row')).toHaveCount(1, { timeout: 10_000 });
 

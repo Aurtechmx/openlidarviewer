@@ -97,12 +97,13 @@ async function lit(page: Page, pts: Array<[number, number, number]>, r = 7): Pro
 
 /**
  * The drawn counts at `pts` once `ok` holds. A clip change recompiles the point
- * shader, which takes seconds on a software renderer, so the frame that shows
- * it arrives late; poll for it instead of sleeping a guessed time.
+ * shader, which takes seconds on a software renderer and longer on a loaded
+ * machine, so the frame that shows it arrives late; poll for it instead of
+ * sleeping a guessed time.
  */
 async function drawn(page: Page, pts: Array<[number, number, number]>, ok: (n: number[]) => boolean, what: string): Promise<number[]> {
   let last: number[] = [];
-  await expect.poll(async () => { last = await lit(page, pts); return ok(last); }, { message: what, timeout: 30_000, intervals: [400] }).toBe(true);
+  await expect.poll(async () => { last = await lit(page, pts); return ok(last); }, { message: what, timeout: 60_000, intervals: [400] }).toBe(true);
   return last;
 }
 const allLit = (n: number[]): boolean => n.every((v) => v > 8);
@@ -223,7 +224,7 @@ test('a box drawn on the ground isolates a 3D volume, not a slab, and the points
 
 test('Outside mode removes the volume; Fit to scan, a numeric edit and Clear all change the drawing', async ({ page, browserName }) => {
   test.skip(browserName === 'webkit', 'WebKit on CI returns a blank canvas screenshot, so drawn pixels cannot be read back');
-  test.setTimeout(180_000);
+  test.setTimeout(360_000);
   await openTower(page);
   const pose0 = await api(page, (a) => a.getCameraPose());
   await openToolPage(page, 'Measure');

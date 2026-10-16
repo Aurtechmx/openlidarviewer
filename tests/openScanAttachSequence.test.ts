@@ -402,6 +402,20 @@ describe('the top-centre lane after a load', () => {
     expect(h.deps.showProjectCard).toHaveBeenCalledTimes(1);
   });
 
+  it('hides the card left by the previous scan before this scan attaches', async () => {
+    const h = harness();
+    const order: string[] = [];
+    h.deps.hideProjectCard = vi.fn(() => { order.push('hide'); });
+    h.deps.dropZone = { ...h.deps.dropZone, finish: vi.fn(async () => false) };
+    h.deps.showProjectCard = vi.fn(() => { order.push('show'); });
+
+    await openScan(fakeFile(), h.deps);
+    await Promise.resolve();
+
+    expect(h.deps.hideProjectCard).toHaveBeenCalledTimes(1);
+    expect(order).toEqual(['hide']);
+  });
+
   it('drops the card when a newer load took the toast over during the settle', async () => {
     const h = harness();
     h.deps.dropZone = { ...h.deps.dropZone, finish: vi.fn(async () => false) };
