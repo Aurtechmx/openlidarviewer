@@ -79,6 +79,7 @@ import { reprojectGlobal } from './reproject';
 import type { TransformProvenance } from './transformProvenance';
 import {
   isGeographicEpsg,
+  isGeographicProj4,
   epsgLabel,
   epsgToProj4,
   epsgDatumFamily,
@@ -364,7 +365,13 @@ export function convertCloud(
     }
   }
 
-  const geo = outEpsg != null ? isGeographicEpsg(outEpsg) : false;
+  // Geographic (degrees) or not decides the GeoKey that carries the code, the
+  // default LAS scale and the ASCII decimals. It comes from the RESOLVED CRS:
+  // the source's own kind while the file stays in the source CRS (keep, a
+  // skipped reproject, or an assign of the same code), the proj4 definition a
+  // reprojection used, and the EPSG table only for a code known by number.
+  const sourceIsGeographic = sourceCrs != null ? spatialContextFrom(sourceCrs).isGeographic : null;
+  const geo = outputIsGeographic(mode, reprojectApplied, outEpsg, sourceEpsg, sourceIsGeographic);
   const filename = `${safeEntryName(baseName(cloud.name), 'converted')}${opts.displaySample ? DISPLAY_SAMPLE_SUFFIX : ''}.${spec.ext}`;
 
   let bytes: Uint8Array;
@@ -587,6 +594,21 @@ export function convertCloud(
     },
   };
   }
+}
+
+/** Whether the written coordinates are longitude/latitude degrees. */
+function outputIsGeographic(
+  mode: string,
+  reprojectApplied: boolean,
+  outEpsg: number | null,
+  sourceEpsg: number | null,
+  sourceIsGeographic: boolean | null,
+): boolean {
+  const inSourceCrs = mode === 'keep' || (mode === 'reproject' && !reprojectApplied) || (outEpsg != null && outEpsg === sourceEpsg);
+  if (inSourceCrs && sourceIsGeographic != null) return sourceIsGeographic;
+  if (outEpsg == null) return false;
+  const def = epsgToProj4(outEpsg);
+  return def != null ? isGeographicProj4(def) : isGeographicEpsg(outEpsg);
 }
 
 /** Source-file digest and CRS origin for this export's provenance, resolved off the main thread. */

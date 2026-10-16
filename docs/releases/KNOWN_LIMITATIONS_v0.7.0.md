@@ -748,7 +748,7 @@ without a datum transformation, so the export depends on the scan's datum:
 - WGS 84 (EPSG:4326, 4979, WGS 84 / UTM and Web Mercator) is exported
   unchanged.
 - NAD83 (EPSG:4269, 6318, NAD83 / UTM 26901 to 26923, NAD83(2011) / UTM 6330
-  to 6349, and CONUS Albers 5070) is exported as if it were WGS 84, and every
+  to 6348, and CONUS Albers 5070) is exported as if it were WGS 84, and every
   file says the positions are approximate, about 1 to 2 m. NAD83(2011) and
   WGS 84 at epoch 2026.75 differ by 0.9 to 1.6 m across the conterminous
   United States (0.89 m at Miami, 1.61 m at Seattle).
