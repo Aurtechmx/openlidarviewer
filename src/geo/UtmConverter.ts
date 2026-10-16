@@ -18,14 +18,16 @@
  * converter and should plug in a datum-aware converter behind the same
  * `CoordinateConverter` interface.
  *
- * Formulas: Snyder, "Map Projections — A Working Manual", USGS
- * Professional Paper 1395 (1987), § Transverse Mercator (TM).
- * Numerical constants match the OGP/EPSG-7.9 catalogue values.
+ * Formulas: the Krüger series to sixth order in the third flattening,
+ * C. F. F. Karney, "Transverse Mercator with an accuracy of a few
+ * nanometers", J. Geodesy 85 (2011) 475-485, the method PROJ's utm and
+ * etmerc use. The truncated Snyder series it replaces drifted with distance
+ * from the central meridian (3.0 m at 27 E, 79.6 N in zone 33).
  *
- * Validation: the unit tests pin known good values from the NOAA
- * NGS coordinate-conversion tool for half a dozen well-known
- * locations (Tucson AZ, San Francisco CA, Denver CO, NYC, Anchorage AK,
- * Honolulu HI).
+ * Validation: tests/utmKrugerAccuracy.test.ts compares both directions with
+ * proj4's utm over the whole accepted easting range (100 000 to 900 000 m)
+ * and the UTM latitudes, to under 1 mm; the unit tests also pin values from
+ * the NOAA NGS coordinate-conversion tool for half a dozen locations.
  *
  * Pure of three.js, pdf-lib, DOM. Runs unchanged in Node tests.
  */
@@ -59,8 +61,6 @@ const A = 6378137.0;
 const INV_F = 298.257223563;
 /** WGS84 first eccentricity squared: e² = 1 - (1 - 1/f)². */
 const E2 = 1 - Math.pow(1 - 1 / INV_F, 2);
-/** Second eccentricity squared: e'² = e² / (1 - e²). */
-const EP2 = E2 / (1 - E2);
 /** UTM scale factor at the central meridian. */
 const K0 = 0.9996;
 /** UTM false easting at the central meridian, metres. */
@@ -168,6 +168,68 @@ function isWgs84LatLon(crs: ResolvedCrs): boolean {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Krüger series (Karney 2011, sixth order in the third flattening n)
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** WGS84 first eccentricity. */
+const E = Math.sqrt(E2);
+/** Third flattening n = f / (2 - f). */
+const N3 = (1 / INV_F) / (2 - 1 / INV_F);
+/** Rectifying radius A = a / (1 + n) * (1 + n²/4 + n⁴/64 + n⁶/256). */
+const RECT_A = (A / (1 + N3)) * (1 + N3 ** 2 / 4 + N3 ** 4 / 64 + N3 ** 6 / 256);
+
+/** Forward series coefficients α1..α6 (Karney 2011, eq. 35). */
+const ALPHA: readonly number[] = (() => {
+  const n = N3;
+  return [
+    n / 2 - (2 * n ** 2) / 3 + (5 * n ** 3) / 16 + (41 * n ** 4) / 180 - (127 * n ** 5) / 288 + (7891 * n ** 6) / 37800,
+    (13 * n ** 2) / 48 - (3 * n ** 3) / 5 + (557 * n ** 4) / 1440 + (281 * n ** 5) / 630 - (1983433 * n ** 6) / 1935360,
+    (61 * n ** 3) / 240 - (103 * n ** 4) / 140 + (15061 * n ** 5) / 26880 + (167603 * n ** 6) / 181440,
+    (49561 * n ** 4) / 161280 - (179 * n ** 5) / 168 + (6601661 * n ** 6) / 7257600,
+    (34729 * n ** 5) / 80640 - (3418889 * n ** 6) / 1995840,
+    (212378941 * n ** 6) / 319334400,
+  ];
+})();
+
+/** Inverse series coefficients β1..β6 (Karney 2011, eq. 36). */
+const BETA: readonly number[] = (() => {
+  const n = N3;
+  return [
+    n / 2 - (2 * n ** 2) / 3 + (37 * n ** 3) / 96 - n ** 4 / 360 - (81 * n ** 5) / 512 + (96199 * n ** 6) / 604800,
+    n ** 2 / 48 + n ** 3 / 15 - (437 * n ** 4) / 1440 + (46 * n ** 5) / 105 - (1118711 * n ** 6) / 3870720,
+    (17 * n ** 3) / 480 - (37 * n ** 4) / 840 - (209 * n ** 5) / 4480 + (5569 * n ** 6) / 90720,
+    (4397 * n ** 4) / 161280 - (11 * n ** 5) / 504 - (830251 * n ** 6) / 7257600,
+    (4583 * n ** 5) / 161280 - (108847 * n ** 6) / 3991680,
+    (20648693 * n ** 6) / 638668800,
+  ];
+})();
+
+/** Central meridian of a UTM zone, radians. */
+function centralMeridianRad(zone: number): number {
+  return (((zone - 1) * 6 - 180 + 3) * Math.PI) / 180;
+}
+
+/** tan of the conformal latitude for tan φ = tau (Karney 2011, eq. 7). */
+function conformalTan(tau: number): number {
+  const sigma = Math.sinh(E * Math.atanh((E * tau) / Math.hypot(1, tau)));
+  return tau * Math.hypot(1, sigma) - sigma * Math.hypot(1, tau);
+}
+
+/** Invert {@link conformalTan} by Newton's method (Karney 2011, eqs. 19-21). */
+function geodeticTan(tauPrime: number): number {
+  let tau = tauPrime;
+  for (let i = 0; i < 6; i++) {
+    const tp = conformalTan(tau);
+    const dTau =
+      ((tauPrime - tp) / Math.hypot(1, tp)) *
+      ((1 + (1 - E2) * tau * tau) / ((1 - E2) * Math.hypot(1, tau)));
+    tau += dTau;
+    if (Math.abs(dTau) < 1e-14 * Math.max(1, Math.abs(tau))) break;
+  }
+  return tau;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Forward — geographic (lat/lon) → UTM (easting/northing)
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -184,44 +246,22 @@ function geographicToUtm(
   zone: number,
   hemisphere: 'N' | 'S',
 ): { easting: number; northing: number } {
-  const latRad = (lat * Math.PI) / 180;
-  const lonRad = (lon * Math.PI) / 180;
-  const lon0 = ((zone - 1) * 6 - 180 + 3) * Math.PI / 180; // central meridian
-
-  const sinLat = Math.sin(latRad);
-  const cosLat = Math.cos(latRad);
-  const tanLat = Math.tan(latRad);
-  const N = A / Math.sqrt(1 - E2 * sinLat * sinLat);
-  const T = tanLat * tanLat;
-  const C = EP2 * cosLat * cosLat;
-  const Aterm = cosLat * (lonRad - lon0);
-
-  // Meridional arc length — Snyder 8-3.
-  const M = A * (
-    (1 - E2 / 4 - 3 * E2 * E2 / 64 - 5 * E2 * E2 * E2 / 256) * latRad -
-    (3 * E2 / 8 + 3 * E2 * E2 / 32 + 45 * E2 * E2 * E2 / 1024) * Math.sin(2 * latRad) +
-    (15 * E2 * E2 / 256 + 45 * E2 * E2 * E2 / 1024) * Math.sin(4 * latRad) -
-    (35 * E2 * E2 * E2 / 3072) * Math.sin(6 * latRad)
-  );
-
-  const easting =
-    K0 * N * (
-      Aterm +
-      (1 - T + C) * Math.pow(Aterm, 3) / 6 +
-      (5 - 18 * T + T * T + 72 * C - 58 * EP2) * Math.pow(Aterm, 5) / 120
-    ) + FALSE_EASTING;
-
-  const northing =
-    K0 * (
-      M +
-      N * tanLat * (
-        Math.pow(Aterm, 2) / 2 +
-        (5 - T + 9 * C + 4 * C * C) * Math.pow(Aterm, 4) / 24 +
-        (61 - 58 * T + T * T + 600 * C - 330 * EP2) * Math.pow(Aterm, 6) / 720
-      )
-    ) + (hemisphere === 'S' ? FALSE_NORTHING_SOUTH : 0);
-
-  return { easting, northing };
+  const phi = (lat * Math.PI) / 180;
+  const lambda = (lon * Math.PI) / 180 - centralMeridianRad(zone);
+  const tauPrime = conformalTan(Math.tan(phi));
+  const xiPrime = Math.atan2(tauPrime, Math.cos(lambda));
+  const etaPrime = Math.asinh(Math.sin(lambda) / Math.hypot(tauPrime, Math.cos(lambda)));
+  let xi = xiPrime;
+  let eta = etaPrime;
+  for (let j = 1; j <= 6; j++) {
+    const a = ALPHA[j - 1];
+    xi += a * Math.sin(2 * j * xiPrime) * Math.cosh(2 * j * etaPrime);
+    eta += a * Math.cos(2 * j * xiPrime) * Math.sinh(2 * j * etaPrime);
+  }
+  return {
+    easting: K0 * RECT_A * eta + FALSE_EASTING,
+    northing: K0 * RECT_A * xi + (hemisphere === 'S' ? FALSE_NORTHING_SOUTH : 0),
+  };
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -235,51 +275,23 @@ function utmToGeographic(
   zone: number,
   hemisphere: 'N' | 'S',
 ): { lat: number; lon: number } {
-  const x = easting - FALSE_EASTING;
-  const y = hemisphere === 'S' ? northing - FALSE_NORTHING_SOUTH : northing;
-
-  const M = y / K0;
-  const mu =
-    M / (A * (1 - E2 / 4 - 3 * E2 * E2 / 64 - 5 * E2 * E2 * E2 / 256));
-
-  // Snyder 3-24
-  const e1 = (1 - Math.sqrt(1 - E2)) / (1 + Math.sqrt(1 - E2));
-  const phi1Rad =
-    mu +
-    (3 * e1 / 2 - 27 * e1 * e1 * e1 / 32) * Math.sin(2 * mu) +
-    (21 * e1 * e1 / 16 - 55 * e1 * e1 * e1 * e1 / 32) * Math.sin(4 * mu) +
-    (151 * e1 * e1 * e1 / 96) * Math.sin(6 * mu);
-
-  const sinPhi1 = Math.sin(phi1Rad);
-  const cosPhi1 = Math.cos(phi1Rad);
-  const tanPhi1 = Math.tan(phi1Rad);
-
-  const N1 = A / Math.sqrt(1 - E2 * sinPhi1 * sinPhi1);
-  const T1 = tanPhi1 * tanPhi1;
-  const C1 = EP2 * cosPhi1 * cosPhi1;
-  const R1 = (A * (1 - E2)) / Math.pow(1 - E2 * sinPhi1 * sinPhi1, 1.5);
-  const D = x / (N1 * K0);
-
-  const latRad =
-    phi1Rad - (N1 * tanPhi1 / R1) * (
-      Math.pow(D, 2) / 2 -
-      (5 + 3 * T1 + 10 * C1 - 4 * C1 * C1 - 9 * EP2) * Math.pow(D, 4) / 24 +
-      (61 + 90 * T1 + 298 * C1 + 45 * T1 * T1 - 252 * EP2 - 3 * C1 * C1) *
-        Math.pow(D, 6) / 720
-    );
-
-  const lonRad =
-    ((zone - 1) * 6 - 180 + 3) * Math.PI / 180 +
-    (
-      D -
-      (1 + 2 * T1 + C1) * Math.pow(D, 3) / 6 +
-      (5 - 2 * C1 + 28 * T1 - 3 * C1 * C1 + 8 * EP2 + 24 * T1 * T1) *
-        Math.pow(D, 5) / 120
-    ) / cosPhi1;
-
+  const xi = (hemisphere === 'S' ? northing - FALSE_NORTHING_SOUTH : northing) / (K0 * RECT_A);
+  const eta = (easting - FALSE_EASTING) / (K0 * RECT_A);
+  let xiPrime = xi;
+  let etaPrime = eta;
+  for (let j = 1; j <= 6; j++) {
+    const b = BETA[j - 1];
+    xiPrime -= b * Math.sin(2 * j * xi) * Math.cosh(2 * j * eta);
+    etaPrime -= b * Math.cos(2 * j * xi) * Math.sinh(2 * j * eta);
+  }
+  const sinhEta = Math.sinh(etaPrime);
+  const cosXi = Math.cos(xiPrime);
+  const tauPrime = Math.sin(xiPrime) / Math.hypot(sinhEta, cosXi);
+  const lambda = Math.atan2(sinhEta, cosXi);
+  const phi = Math.atan(geodeticTan(tauPrime));
   return {
-    lat: (latRad * 180) / Math.PI,
-    lon: (lonRad * 180) / Math.PI,
+    lat: (phi * 180) / Math.PI,
+    lon: ((centralMeridianRad(zone) + lambda) * 180) / Math.PI,
   };
 }
 

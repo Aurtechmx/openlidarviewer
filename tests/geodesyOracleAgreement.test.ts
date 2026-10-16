@@ -137,8 +137,13 @@ describe('the measured residual, pinned to what it actually is', () => {
   // units slip, or a different ellipsoid moves this test while every fixture
   // still sits inside the gate. They are not a second, tighter gate: they are
   // what the current implementation does, recorded.
-  const MEASURED_MAX_EASTING_M = 4.531e-4;
-  const MEASURED_MAX_NORTHING_M = 9.521e-4;
+  // The converter evaluates the sixth-order Krüger series (Karney 2011), so its
+  // residual sits at the oracles' own mutual agreement (about 2e-9 m). The
+  // truncated Snyder series it replaced measured 4.531e-4 m in easting and
+  // 9.521e-4 m in northing on this matrix (study
+  // CRS-UTM-PROJ-GEOGRAPHICLIB-THIRTYSIX-FIXTURES, candidate v0.6.6).
+  const MEASURED_MAX_EASTING_M = 1e-8;
+  const MEASURED_MAX_NORTHING_M = 1e-8;
 
   const residuals = () => {
     let maxE = 0;
@@ -160,23 +165,20 @@ describe('the measured residual, pinned to what it actually is', () => {
     const { maxE, maxN } = residuals();
     expect(maxE).toBeLessThanOrEqual(MEASURED_MAX_EASTING_M);
     expect(maxN).toBeLessThanOrEqual(MEASURED_MAX_NORTHING_M);
-    // Worth stating: both maxima land on Svalbard fixtures, at the far edge of
-    // the projection's useful latitude, which is where a truncated series is
-    // expected to be worst.
   });
 
-  it('has not silently improved either, which would mean the harness stopped measuring', () => {
-    // A residual that collapses to zero is far more likely to be a comparison
-    // that no longer compares than a projection that became exact.
+  it('is not exactly zero, which would mean the harness stopped measuring', () => {
+    // A residual that collapses to exactly zero on every fixture is far more
+    // likely to be a comparison that no longer compares than a projection that
+    // matches two other implementations to the last bit.
     const { maxE, maxN } = residuals();
-    expect(maxE).toBeGreaterThan(MEASURED_MAX_EASTING_M / 10);
-    expect(maxN).toBeGreaterThan(MEASURED_MAX_NORTHING_M / 10);
+    expect(maxE + maxN).toBeGreaterThan(0);
   });
 
   it('takes both signs, so there is no systematic bias to report', () => {
-    // Measured before it was described. An earlier reading of this as a
-    // one-signed Krüger offset was wrong: the northing residual runs from
-    // about -8.4e-4 m to +9.5e-4 m, which is truncation, not bias.
+    // Measured before it was described: the northing residual runs from about
+    // -1.9e-9 m to +2.8e-9 m, the size of the nine-decimal rounding in the
+    // references, not an offset in one direction.
     const { minSignedN, maxSignedN } = residuals();
     expect(minSignedN).toBeLessThan(0);
     expect(maxSignedN).toBeGreaterThan(0);
