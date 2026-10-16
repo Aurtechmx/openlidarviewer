@@ -75,6 +75,14 @@ export interface ContourSet {
    * it off the set (or off any artifact derived from it) gets the spacing of
    * the levels in front of it.
    *
+   * One exception after thinning: the top derived level is forced in so the
+   * summit contour survives, and it REPLACES the last every-k-th level. Every
+   * gap but the last equals this value; the last gap (between the two highest
+   * emitted levels) is the requested interval times an integer between k and
+   * 2k − 1, so it equals this value only when the top level already falls on
+   * the thinned sequence. The thinning warning states the actual top gap
+   * whenever it differs.
+   *
    * An explicit {@link ContoursAtParams.levels} list is measured, not assumed:
    * uniformly spaced levels report that spacing, and an arbitrary list reports
    * `null`, because no single number describes it. Fewer than two levels is
@@ -305,10 +313,24 @@ export function contoursAt(dtm: DtmGrid, params: ContoursAtParams): ContourSet {
     // (ceil(n / k) ≤ maxLevels entries, so replacing — not appending — keeps
     // the cap honest.)
     thinned[thinned.length - 1] = levelValues[n - 1];
+    // The replacement makes the top gap irregular unless the top level was
+    // already on the every-k-th sequence; say so rather than let the reported
+    // interval imply every gap is k × the requested one.
+    const lastKept = Math.floor((n - 1) / k) * k;
+    const topGapSteps = thinned.length >= 2 && lastKept !== n - 1
+      ? (n - 1) - (thinned.length - 2) * k
+      : null;
+    const topGapNote = topGapSteps === null
+      ? ''
+      : levelsWereGiven
+        ? '; the top level is kept as the summit contour, so the highest gap ' +
+          'differs from the others'
+        : `; the top level is kept as the summit contour, so the highest gap is ` +
+          `${topGapSteps}× the requested interval instead of ${k}×`;
     warnings.push(
       `level count ${n} exceeds cap ${maxLevels} — ${n} levels thinned to ` +
         `${thinned.length} (one level in every ${k} kept; the effective ` +
-        `interval is ${k}× the requested one)`,
+        `interval is ${k}× the requested one${topGapNote})`,
     );
     levelValues = thinned;
     effectiveIntervalM = levelsWereGiven
