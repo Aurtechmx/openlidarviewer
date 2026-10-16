@@ -138,7 +138,10 @@ same grid, profile and endpoints always produce the same route.
 A found route's `RouteDiagnostics` (`routeDiagnostics.ts`) report the worst
 conditions actually crossed, rather than a single opaque cost number:
 maximum and p95 grade and cross-slope (per-edge, as defined above, with the
-p95 weighted by edge length), maximum local step, minimum terrain
+p95 weighted by edge length: the smallest value whose edges cover at least
+95% of the route length, with compensated sums and a 1e-12 relative tolerance
+so an exact boundary such as 95 of 100 equal diagonal edges returns the 95th
+value), maximum local step, minimum terrain
 confidence, and which cost term dominated, each term summed as edge length
 times its weighted utilization so it is the share of the route cost it
 adds.

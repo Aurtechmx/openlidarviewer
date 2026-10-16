@@ -256,26 +256,46 @@ export function computeRouteDiagnostics(
 }
 
 /**
+ * Relative tolerance on the coverage test in {@link weightedQuantile}. Edge
+ * lengths such as √2 or 0.1 are not exact in binary, so a running sum that
+ * covers exactly `q` of the total can land one ulp short of `q · total`.
+ * Values whose coverage falls within this fraction of the total are taken as
+ * reaching it.
+ */
+const QUANTILE_RELATIVE_TOLERANCE = 1e-12;
+
+/**
  * Length-weighted quantile: the smallest value v such that edges with value
  * at most v cover at least fraction `q` of the total weight. Lower-value
  * step function (no interpolation), so the result is always an observed
- * edge value. 0 for an empty input.
+ * edge value. 0 for an empty input. Sums are compensated (Neumaier) and the
+ * coverage test allows {@link QUANTILE_RELATIVE_TOLERANCE} of the total, so
+ * an exact boundary (95 of 100 equal √2 edges at q = 0.95) returns the
+ * boundary value rather than the next one.
  */
 export function weightedQuantile(values: readonly number[], weightsIn: readonly number[], q: number): number {
   const idx: number[] = [];
   let total = 0;
+  let totalComp = 0;
   for (let k = 0; k < values.length; k++) {
     if (!Number.isFinite(values[k]) || !(weightsIn[k] > 0)) continue;
     idx.push(k);
-    total += weightsIn[k];
+    const t = total + weightsIn[k];
+    totalComp += Math.abs(total) >= weightsIn[k] ? (total - t) + weightsIn[k] : (weightsIn[k] - t) + total;
+    total = t;
   }
   if (idx.length === 0) return 0;
+  total += totalComp;
   idx.sort((a, b) => values[a] - values[b] || a - b);
-  const target = q * total;
+  const threshold = q * total - QUANTILE_RELATIVE_TOLERANCE * total;
   let acc = 0;
+  let accComp = 0;
   for (const k of idx) {
-    acc += weightsIn[k];
-    if (acc >= target) return values[k];
+    const w = weightsIn[k];
+    const t = acc + w;
+    accComp += Math.abs(acc) >= w ? (acc - t) + w : (w - t) + acc;
+    acc = t;
+    if (acc + accComp >= threshold) return values[k];
   }
   return values[idx[idx.length - 1]];
 }
