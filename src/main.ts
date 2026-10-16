@@ -3573,7 +3573,7 @@ const openScanDeps: OpenScanDeps = {
   getStreamingDeps: () => openStreamingDeps,
   applyShareState,
   bareMode,
-  showProjectCard,
+  showProjectCard, hideProjectCard: () => projectCard.hide(),
   revealAnalysePanel,
   showInstantAnswer,
   refreshClassLegend,

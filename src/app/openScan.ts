@@ -212,6 +212,8 @@ export interface OpenScanDeps {
   readonly bareMode: boolean;
   /** Show the post-load project summary card. */
   showProjectCard: (cloud: PointCloud, originalPointCount: number) => void;
+  /** Hide the project summary card, which describes the scan opened before this one. */
+  hideProjectCard?: () => void;
   /** Reveal the Analyse panel for the loaded scan. */
   revealAnalysePanel: (name: string) => void;
   /** Surface the instant analysis-on-drop entry point. */
@@ -543,6 +545,8 @@ export async function attachStaticCloud(
   // routes through removeCloud() and frees the same buffers. (Streaming opens
   // remain exclusive and still call clearOpenStaticLayers below.)
 
+  // The card describes the scan opened before this one; this scan raises its own.
+  deps.hideProjectCard?.();
   deps.dropZone.setProgress(formatProgress({ stage: 'uploading' }));
   // The content fingerprint was hashed while the file decoded. It is awaited
   // after the "Preparing display" line is written, so a slow digest never
