@@ -270,11 +270,16 @@ describe('stockpileAreaGridToastLine', () => {
   const base = { z: 0, uncertainty: 0.05 };
   test('a measured line names the state, the support and the method', () => {
     const pts = Float32Array.from(prism(3, 0.5, 0.5));
-    const line = stockpileAreaGridToastLine(presentStockpileAreaGrid(RECT, pts, base, complete));
+    const line = stockpileAreaGridToastLine(presentStockpileAreaGrid(RECT, pts, base, complete, { elevationDatum: 0 }));
     expect(line).toMatch(/^Stockpile: 600 m³ · MEASURED · 100% footprint support · 0% interpolated · area-weighted grid/);
     expect(line).toMatch(/incomplete model/);
     expect(line).toMatch(/base 0\.00 m \(lowest ground, ±0\.05 m, not in the term\)/);
     expect(line).not.toMatch(/1σ|model band/);
+  });
+  test('with no datum the base is named a local height, not an elevation', () => {
+    const pts = Float32Array.from(prism(3, 0.5, 0.5));
+    const line = stockpileAreaGridToastLine(presentStockpileAreaGrid(RECT, pts, base, complete));
+    expect(line).toMatch(/base 0\.00 m local height \(lowest ground, ±0\.05 m, not in the term\)/);
   });
   test('a preview figure never appears without PREVIEW and its reason', () => {
     const pts = Float32Array.from(prism(3, 0.5, 0.5));

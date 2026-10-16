@@ -867,6 +867,11 @@ export class MeasureController {
     return this._originUp !== null;
   }
 
+  /** The scene's datum along up (`elevationDatumOffset` of its render origin), or null when the clouds share none. */
+  get elevationDatum(): number | null {
+    return this._originUp;
+  }
+
   /**
    * Inject the scan CRS's linear-unit → metres factor — the SAME seam the
    * terrain/space paths read (`crsService.current().linearUnitToMetres`).

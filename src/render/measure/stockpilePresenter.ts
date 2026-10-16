@@ -16,7 +16,7 @@
 
 import { stockpileVolume, type StockpileVolumeResult, type StockpileConfidence } from './stockpileVolume';
 import { stockpileAreaGrid, type StockpileAreaGridResult } from './stockpileAreaGrid';
-import { INTERPOLATED_WITHHOLD, interpolationVerdict } from './volume';
+import { INTERPOLATED_WITHHOLD, horizontalBasis, interpolationVerdict } from './volume';
 import type { Vec3 } from '../navMath';
 import { streamingIsComplete, type StreamingCoverage } from './profileSectionSnapshot';
 import { buildStockpileResult, stockpileResultHeadline } from './stockpileResult';
@@ -211,8 +211,14 @@ export interface StockpileAreaGridView {
   readonly excludedFraction: number;
   /** Per-cell surface spread term, m³; the only term the incomplete model carries. */
   readonly surfaceTermM3: number;
-  /** Base plane elevation (m) and its heuristic spread (m), not in the band. */
+  /**
+   * Base plane height (m) and its heuristic spread (m), not in the band. An
+   * elevation when {@link baseIsElevation}; otherwise a height in the scene's
+   * recentred local frame, which is not an elevation.
+   */
   readonly baseZM: number;
+  /** True when {@link baseZM} has the scan's datum added back and reads as an elevation. */
+  readonly baseIsElevation: boolean;
   readonly baseUncertaintyM: number;
   readonly unitVerified: boolean;
 }
@@ -250,21 +256,42 @@ export function presentStockpileAreaGrid(
   positions: Float32Array,
   base: { readonly z: number; readonly uncertainty: number },
   scope: StockpileScope,
-  options: StockpilePresentOptions & { readonly unitVerified?: boolean } = {},
+  options: StockpilePresentOptions & {
+    readonly unitVerified?: boolean;
+    /** World up; defaults to +Z. The plan is the plane normal to it and the height is along it. */
+    readonly up?: Vec3;
+    /**
+     * The up-axis component of the scene's render origin (`elevationDatumOffset`),
+     * added back so the base reads as an elevation. Null or omitted: no single
+     * datum, and the base is labelled a local height.
+     */
+    readonly elevationDatum?: number | null;
+  } = {},
 ): StockpileAreaGridView {
   const lin = options.lin ?? 1;
   const vert = options.vert ?? lin;
   const vol = lin * lin * vert;
+  // Plan and height in the frame of the scan's up axis, as the point-sample
+  // estimator reads them; on a Y-up scan (x, y) is not the plan.
+  const { u, east, north, zAligned } = horizontalBasis(options.up ?? [0, 0, 1]);
+  const plan = (x: number, y: number, z: number): { x: number; y: number; z: number } =>
+    zAligned
+      ? { x, y, z }
+      : {
+        x: x * east[0] + y * east[1] + z * east[2],
+        y: x * north[0] + y * north[1] + z * north[2],
+        z: x * u[0] + y * u[1] + z * u[2],
+      };
   const points: { x: number; y: number; z: number }[] = [];
   const n = positions.length / 3;
   for (let i = 0; i < n; i++) {
-    const z = positions[i * 3 + 2];
-    if (!Number.isFinite(z)) continue;
-    points.push({ x: positions[i * 3], y: positions[i * 3 + 1], z });
+    const x = positions[i * 3], y = positions[i * 3 + 1], z = positions[i * 3 + 2];
+    if (!Number.isFinite(x) || !Number.isFinite(y) || !Number.isFinite(z)) continue;
+    points.push(plan(x, y, z));
   }
   const grid = stockpileAreaGrid({
     points,
-    polygon: polygon.map((p) => ({ x: p[0], y: p[1] })),
+    polygon: polygon.map((p) => plan(p[0], p[1], p[2])),
     base: { kind: 'constant', zM: base.z },
     interpolateGaps: true,
     maxInterpolatedFraction: INTERPOLATED_WITHHOLD,
@@ -278,6 +305,7 @@ export function presentStockpileAreaGrid(
   const extentCoverage: StockpileAreaGridResult['coverage'] =
     reached >= 0.9 ? 'measured' : reached >= 0.6 ? 'preview' : 'refused';
   let { authority, reason } = stockpileAuthority(extentCoverage, scope);
+  const datum = options.elevationDatum != null && Number.isFinite(options.elevationDatum) ? options.elevationDatum : null;
   if (interp.verdict === 'withheld') {
     authority = 'withheld';
     reason = interp.reason ?? 'too much of the footprint interpolated';
@@ -298,7 +326,8 @@ export function presentStockpileAreaGrid(
     interpolatedFraction: grid.interpolatedFraction,
     excludedFraction: grid.excludedFraction,
     surfaceTermM3: grid.surfaceTermM3 * vol,
-    baseZM: base.z * vert,
+    baseZM: (base.z + (datum ?? 0)) * vert,
+    baseIsElevation: datum != null,
     baseUncertaintyM: base.uncertainty * vert,
     unitVerified: options.unitVerified ?? true,
   };
@@ -319,7 +348,8 @@ export function stockpileAreaGridToastLine(v: StockpileAreaGridView): string {
     line =
       `Stockpile: ${int(v.volumeM3)} m³ · ${state} · ${support} · area-weighted grid` +
       ` · surface term ± ${int(v.surfaceTermM3)} m³ (incomplete model)` +
-      ` · base ${v.baseZM.toFixed(2)} m (lowest ground, ±${v.baseUncertaintyM.toFixed(2)} m, not in the term)`;
+      ` · base ${v.baseZM.toFixed(2)} m${v.baseIsElevation ? '' : ' local height'}` +
+      ` (lowest ground, ±${v.baseUncertaintyM.toFixed(2)} m, not in the term)`;
   }
   return v.unitVerified ? line : `${line} · units unverified (assumes metres)`;
 }
@@ -342,6 +372,14 @@ export interface StockpileToastOptions {
   readonly streamingCoverage?: StreamingCoverage | null;
   /** True when the lasso walk strode the points. */
   readonly walkSampled?: boolean;
+  /** World up the lasso was measured along; defaults to +Z. */
+  readonly up?: Vec3;
+  /**
+   * The up-axis component of the scene's render origin, so the printed base
+   * is an elevation. Null or omitted when the scene has no single datum: the
+   * base is then labelled a local height.
+   */
+  readonly elevationDatum?: number | null;
 }
 
 /** What the lasso-save path needs from the grid alongside the toast text. */
@@ -371,7 +409,7 @@ function computeStockpileGridForLasso(
   lin?: number,
   options: StockpileToastOptions = {},
 ): StockpileGridForLasso {
-  const { sourceReduced, densityUnitKnown, vert, streamingContributed, walkSampled } = options;
+  const { sourceReduced, densityUnitKnown, vert, streamingContributed, walkSampled, up, elevationDatum } = options;
   // A streaming source authorises a measured figure only when its resident
   // node count reaches its known node count. An unknown count (null) is not
   // evidence of coverage, so it reads as incomplete.
@@ -388,6 +426,7 @@ function computeStockpileGridForLasso(
     linearUnitToMetres: lin,
     verticalUnitToMetres: vert,
     densityUnitKnown,
+    ...(up ? { up } : {}),
   });
   if (stock.validity !== 'ok') return empty;
   const view = presentStockpileAreaGrid(
@@ -399,7 +438,7 @@ function computeStockpileGridForLasso(
       sampled: Boolean(sourceReduced) || Boolean(walkSampled),
       streaming: Boolean(streamingContributed),
     },
-    { lin, vert, unitVerified: densityUnitKnown ?? true },
+    { lin, vert, unitVerified: densityUnitKnown ?? true, ...(up ? { up } : {}), elevationDatum },
   );
   if (view.authority !== 'withheld' && view.volumeM3 <= 0) return empty;
   return { suffix: ` · ${stockpileAreaGridToastLine(view)}`, view };
