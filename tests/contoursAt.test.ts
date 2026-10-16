@@ -184,32 +184,44 @@ describe('contoursAt', () => {
     expect(set.warnings.join(' ')).toMatch(/2× the requested/);
   });
 
-  it('thinning: every gap but the top one equals the reported interval, and the warning states the top gap', () => {
+  it('thinning: kept levels sit on multiples of k × interval, the summit is appended, and the warning states the top gap', () => {
     // Cell values 0.5…209.5 at a 1-unit interval: 209 levels (1…209) against a
-    // cap of 100, so k = 3 and 70 levels are kept. Every 3rd level from 1 is
-    // kept up to 205, then the top level 209 replaces 208 so the summit
-    // survives: the last gap is 4 units, not 3.
+    // cap of 100, so k = 3. The kept levels are the multiples of 3 (3…207, 69
+    // levels), and the top level 209 is appended so the summit survives: the
+    // last gap is 2 units, not 3.
     const set = contoursAt(grid((x) => x + 0.5, 210, 3), { intervalM: 1, maxLevels: 100 });
     const v = set.levels.map((l) => l.value);
     expect(set.intervalM).toBe(3);
     expect(v).toHaveLength(70);
-    expect(v[0]).toBe(1);
+    expect(v[0]).toBe(3);
+    expect(v.at(-2)).toBe(207);
     expect(v.at(-1)).toBe(209);
+    for (const x of v.slice(0, -1)) expect(x % 3).toBe(0);
     const gaps = v.slice(1).map((x, i) => x - v[i]);
     for (const d of gaps.slice(0, -1)) expect(d).toBeCloseTo(3, 9);
-    expect(gaps.at(-1)).toBeCloseTo(4, 9);
-    expect(set.warnings.join(' ')).toMatch(/highest gap is 4× the requested interval instead of 3×/);
+    expect(gaps.at(-1)).toBeCloseTo(2, 9);
+    expect(set.warnings.join(' ')).toMatch(/highest gap is 2× the requested interval instead of 3×/);
   });
 
-  it('thinning: no top-gap note when the top level already falls on the thinned sequence', () => {
-    // Levels 1…208 (208 levels), cap 100 → k = 3; index 207 (value 208) is
-    // already a kept level, so every gap is 3 units.
-    const set = contoursAt(grid((x) => x + 0.5, 209, 3), { intervalM: 1, maxLevels: 100 });
+  it('thinning: no top-gap note when the top level is already a multiple of k × interval', () => {
+    // Levels 1…210 (210 levels), cap 100 → k = 3; 210 is a multiple of 3, so
+    // every gap is 3 units.
+    const set = contoursAt(grid((x) => x + 0.5, 211, 3), { intervalM: 1, maxLevels: 100 });
     const v = set.levels.map((l) => l.value);
-    expect(v.at(-1)).toBe(208);
+    expect(v.at(-1)).toBe(210);
     const gaps = v.slice(1).map((x, i) => x - v[i]);
     for (const d of gaps) expect(d).toBeCloseTo(3, 9);
     expect(set.warnings.join(' ')).not.toMatch(/highest gap/);
+  });
+
+  it('thinning anchors to world elevation: with origin 337 the kept levels are world multiples of k × interval', () => {
+    const oz = 337;
+    const set = contoursAt(grid((x) => x + 0.5, 210, 3), { intervalM: 1, maxLevels: 100, levelOriginZ: oz });
+    const world = set.levels.map((l) => Math.round((l.value + oz) * 1e6) / 1e6);
+    // World span 337.5…546.5; multiples of 3 from 339 to 546, top 546 kept.
+    expect(world[0]).toBe(339);
+    expect(world.at(-1)).toBe(546);
+    for (const w of world) expect(w % 3).toBe(0);
   });
 
   it('returns no levels for an all-gap grid', () => {

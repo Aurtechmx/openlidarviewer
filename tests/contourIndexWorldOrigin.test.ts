@@ -100,3 +100,25 @@ describe('analyseContours: index contours and exported features follow world ele
     for (const l of r.labels) expect(indexValues.has(l.value)).toBe(true);
   });
 });
+
+describe('index contours survive level thinning at any origin', () => {
+  /** Local z = 5·x over x ∈ [0, 50]: 0 → 250 local units, over the 200-level cap at a 1-unit interval. */
+  function steep(): TerrainPoint[] {
+    const pts: TerrainPoint[] = [];
+    for (let x = 0; x <= 50; x += 0.5) for (let y = 0; y <= 20; y += 0.5) pts.push({ x, y, z: 5 * x });
+    return pts;
+  }
+
+  it.each([0, 337, 337.4])('origin %s: thinned levels are world multiples of 2 and index lines fall on multiples of 10', (oz) => {
+    const r = analyseContours(steep(), { ...base, levelOriginZ: oz });
+    // ~250 levels at 1 unit against a cap of 200 → one in every 2 kept.
+    expect(r.intervalM).toBe(2);
+    expect(r.contours.warnings.join(' ')).toMatch(/thinned/);
+    const world = r.style.levels.map((l) => worldOf(l.value, oz));
+    // Every level but a forced summit is on the world grid of 2.
+    for (const w of world.slice(0, -1)) expect(w % 2).toBe(0);
+    const idx = r.style.levels.filter((l) => l.isIndex).map((l) => worldOf(l.value, oz));
+    expect(idx.length).toBeGreaterThan(10);
+    for (const w of idx) expect(w % 10).toBe(0);
+  });
+});
