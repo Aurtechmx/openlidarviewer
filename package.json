@@ -214,8 +214,8 @@
   },
   "devDependencies": {
     "@axe-core/playwright": "4.13.0",
-    "@loaders.gl/las": "^4.5.2",
-    "@playwright/test": "^1.63.0",
+    "@loaders.gl/las": "^4.5.4",
+    "@playwright/test": "^1.64.0",
     "@stryker-mutator/core": "^10.0.0",
     "@stryker-mutator/vitest-runner": "^10.0.0",
     "@types/proj4": "^2.19.0",
@@ -223,7 +223,7 @@
     "@vitest/coverage-v8": "^5.0.1",
     "rollup-plugin-visualizer": "^7.1.1",
     "typescript": "~7.0.2",
-    "vite": "^8.3.1",
+    "vite": "^8.3.4",
     "vite-plugin-javascript-obfuscator": "^3.1.0",
     "vitepress": "1.6.4",
     "vitest": "^5.0.0"
