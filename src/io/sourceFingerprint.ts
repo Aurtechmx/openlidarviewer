@@ -19,6 +19,8 @@
  *     hierarchy page, plus the file size.
  *   - `ept`: the canonical manifest plus the root hierarchy document.
  *
+ * Each part hashes at most its first {@link FINGERPRINT_PART_MAX_BYTES}.
+ *
  * Fails soft: where Web Crypto is unavailable (an insecure context) or a read
  * fails, the fingerprint is null and the identity falls back to its metadata
  * facts.
@@ -41,10 +43,22 @@ function toHex(buffer: ArrayBuffer): string {
 }
 
 /**
+ * Most bytes hashed from any one part. A part's size is declared by the source
+ * (a COPC root hierarchy page, an EPT root document), so an unbounded part
+ * would let a hostile file make the hash copy as much as it likes. Only the
+ * first this-many bytes of a longer part are hashed; its full length is still
+ * in the scheme line, so two parts that differ in length still fingerprint
+ * apart.
+ */
+export const FINGERPRINT_PART_MAX_BYTES = 64 * 1024;
+
+/**
  * Fingerprint an ordered list of byte parts. The hashed stream starts with a
  * line naming the scheme, the total source size and each part's length, so the
  * same bytes split differently, or the same bytes from a source of another
- * size, fingerprint apart.
+ * size, fingerprint apart. Each part contributes at most
+ * {@link FINGERPRINT_PART_MAX_BYTES}. Null, never a throw, when hashing or the
+ * buffer it needs fails.
  */
 export async function fingerprintParts(
   kind: SourceFingerprintKind,
@@ -54,16 +68,16 @@ export async function fingerprintParts(
   const subtle = globalThis.crypto?.subtle;
   if (!subtle) return null;
   const scheme = `olvsrc${SOURCE_FINGERPRINT_VERSION}-${kind}`;
-  const head = new TextEncoder().encode(`${scheme}|${totalBytes}|${parts.map((p) => p.byteLength).join(',')}\n`);
-  const total = head.byteLength + parts.reduce((n, p) => n + p.byteLength, 0);
-  const buffer = new Uint8Array(total);
-  buffer.set(head, 0);
-  let offset = head.byteLength;
-  for (const p of parts) {
-    buffer.set(p, offset);
-    offset += p.byteLength;
-  }
   try {
+    const head = new TextEncoder().encode(`${scheme}|${totalBytes}|${parts.map((p) => p.byteLength).join(',')}\n`);
+    const hashed = parts.map((p) => (p.byteLength > FINGERPRINT_PART_MAX_BYTES ? p.subarray(0, FINGERPRINT_PART_MAX_BYTES) : p));
+    const buffer = new Uint8Array(head.byteLength + hashed.reduce((n, p) => n + p.byteLength, 0));
+    buffer.set(head, 0);
+    let offset = head.byteLength;
+    for (const p of hashed) {
+      buffer.set(p, offset);
+      offset += p.byteLength;
+    }
     return `${scheme}:${toHex(await subtle.digest('SHA-256', buffer))}`;
   } catch {
     return null;

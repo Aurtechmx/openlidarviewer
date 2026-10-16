@@ -20,6 +20,7 @@ import { CrsService, classifyOverrideMatch, datasetIdentity, OVERRIDE_IDENTITY_V
 import type { CrsOverride } from '../src/geo/CrsOverrideStore';
 import {
   FILE_FINGERPRINT_WINDOW_BYTES,
+  FINGERPRINT_PART_MAX_BYTES,
   fileSourceFingerprint,
   fingerprintParts,
 } from '../src/io/sourceFingerprint';
@@ -122,6 +123,18 @@ describe('fingerprintParts', () => {
     expect(ab).toMatch(/^olvsrc1-copc:/);
     expect(ept).toMatch(/^olvsrc1-ept:/);
     expect(ab).not.toBe(a_b);
+  });
+
+  it('hashes at most the first window of an oversized part, and still keys its length', async () => {
+    const big = new Uint8Array(FINGERPRINT_PART_MAX_BYTES * 4);
+    const sameHead = big.slice();
+    sameHead[sameHead.length - 1] = 7;
+    const shorter = big.subarray(0, FINGERPRINT_PART_MAX_BYTES * 2);
+    const head = new Uint8Array([1, 2, 3]);
+    const a = await fingerprintParts('copc', 10, [head, big]);
+    expect(a).toMatch(/^olvsrc1-copc:/);
+    expect(await fingerprintParts('copc', 10, [head, sameHead])).toBe(a);
+    expect(await fingerprintParts('copc', 10, [head, shorter])).not.toBe(a);
   });
 });
 
