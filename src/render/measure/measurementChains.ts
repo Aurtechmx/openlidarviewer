@@ -39,7 +39,8 @@
  */
 
 import { areaRingVerdict } from './areaValidity';
-import type { Measurement, MeasurementKind } from './types';
+import type { Measurement, MeasurementKind, UnitSystem } from './types';
+import { displayDecimals, formatArea, formatLength, formatVolume } from './format';
 import { GEOGRAPHIC_NOT_AVAILABLE, VERTICAL_NOT_AVAILABLE } from './types';
 import {
   angleAtVertex,
@@ -410,16 +411,37 @@ export function supportedDimensions(
  * Compact one-line summary for a chain result, ready to drop into a
  * panel chip. Returns `'—'` when the operation produced NaN (empty
  * min/max).
+ *
+ * Lengths, areas and volumes go through the panel's own formatters, so a
+ * total reads in the active unit system at the same significant figures as
+ * the rows it sums (a 3 mm total is "0.3000 cm", not "0.00 m"). A figure in
+ * source units keeps the same significant-figure policy without converting.
  */
-export function formatChainResult(result: ChainResult): string {
+export function formatChainResult(result: ChainResult, system: UnitSystem = 'metric'): string {
   if (result.refusal) return result.refusal;
   if (result.operation === 'count') {
     return `${result.value} of ${result.totalCount}`;
   }
   if (!Number.isFinite(result.value)) return '—';
-  // 2 decimal places for most dimensions; angles and grades get 1
-  // decimal because their meaningful precision is coarser.
-  const decimals =
-    result.dimension === 'angle' || result.dimension === 'grade' ? 1 : 2;
-  return `${result.value.toFixed(decimals)} ${result.unit}`.trim();
+  // Angles and grades read at 1 decimal, as the panel prints them.
+  if (result.dimension === 'angle' || result.dimension === 'grade') {
+    return `${result.value.toFixed(1)} ${result.unit}`.trim();
+  }
+  const sign = result.value < 0 ? '-' : '';
+  const abs = Math.abs(result.value);
+  let text: string;
+  switch (result.unit) {
+    case 'm':
+      text = formatLength(abs, system);
+      break;
+    case 'm²':
+      text = formatArea(abs, system);
+      break;
+    case 'm³':
+      text = formatVolume(abs, system);
+      break;
+    default:
+      text = `${abs.toFixed(displayDecimals(abs, 2, 4))} ${result.unit}`.trim();
+  }
+  return `${sign}${text}`;
 }
