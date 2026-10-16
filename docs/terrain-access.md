@@ -93,6 +93,28 @@ edge carries a declared, bounded soft cost, `distance * (1 + sum of weight *
 utilization)`, that rises linearly with how much of a limit a move actually
 uses.
 
+## Evidence gaps and the obstruction surface
+
+The above-ground obstruction limit is evaluated from the terrain run's own
+DSM, kept on the DTM grid. The Lab receives it as an above-ground surface bound
+to that run's DTM by the DTM product digest; a surface built with a different
+terrain surface is refused with `SURFACE_STALE`, and one whose origin, array
+lengths, row orientation, horizontal CRS or vertical unit differ from the
+terrain's is refused with `SURFACE_MISALIGNED`. Without such a surface the
+"Constrain above-ground obstruction" control is disabled.
+
+The profile's evidence-gap policy decides two kinds of cell: a cell whose
+slope and aspect used a synthesised Horn neighbour (the grid's outer ring or
+beside a NoData void), and, while the obstruction limit is evaluated, a cell
+with no above-ground return. `conservative` blocks them. `exploratory`, the
+default, allows them and reports their share of the route. Under exploratory,
+cross-slope and longitudinal grade are marked `estimated` rather than
+`evaluated` when any route cell's window left the grid or touched NoData, and
+an evaluated ruggedness limit is marked `estimated` when any route cell's VRM
+window holds such a cell. The run record, run card and diagnostics CSV state
+the policy and these statuses, and the export README repeats the statuses. The policy and the surface
+binding are part of the run's input digest.
+
 ## Search
 
 `aStarTerrain.ts` runs a deterministic 8-connected A* with a written-down,
@@ -121,7 +143,12 @@ that no in-bounds neighbour offers a viable move. It never returns a vague
 
 A run refuses by name rather than guessing: `NO_DTM`, `UNITS_UNRESOLVED`,
 `INVALID_PROFILE`, `START_BLOCKED`, `END_BLOCKED`, `NO_ROUTE`,
-`INSUFFICIENT_EVIDENCE`, `TOO_LARGE`.
+`INSUFFICIENT_EVIDENCE`, `TOO_LARGE`, `OBSTRUCTION_EVIDENCE_UNAVAILABLE` (the
+profile sets an above-ground obstruction limit and no aligned above-ground
+surface exists), `SURFACE_MISALIGNED` (the above-ground surface does not cover
+the same cells as the terrain), `SURFACE_STALE` (the above-ground surface was
+built with a different terrain surface) and `INVALID_ROI` (a region-of-interest
+mask of the wrong length or with values other than 0 and 1).
 
 The Lab also refuses a stale preview or run (`STALE_INPUT`) the moment the
 terrain behind it may have changed since the profile was applied. That is a
