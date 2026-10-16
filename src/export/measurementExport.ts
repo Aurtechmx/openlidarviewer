@@ -422,13 +422,18 @@ function distinctLonLat(positions: readonly number[][]): number {
 
 /** Shoelace area of a lon/lat ring, in square degrees (unsigned). */
 function lonLatRingArea(ring: readonly number[][]): number {
+  return Math.abs(signedLonLatRingArea(ring));
+}
+
+/** Shoelace area of an open ring in lon/lat; positive when counter-clockwise. */
+function signedLonLatRingArea(ring: readonly number[][]): number {
   let a = 0;
   for (let i = 0; i < ring.length; i++) {
     const [x1, y1] = ring[i];
     const [x2, y2] = ring[(i + 1) % ring.length];
     a += x1 * y2 - x2 * y1;
   }
-  return Math.abs(a) / 2;
+  return a / 2;
 }
 
 /**
@@ -471,8 +476,12 @@ function geometryFor(
   const withheld = collapsedGeometryReason(g.type, positions);
   if (withheld) return { geometry: null, withheld, elevations };
   if (g.type === 'LineString') return { geometry: { type: 'LineString', coordinates: positions }, withheld: null, elevations };
-  const ring = positions.concat([positions[0]]); // close the ring (RFC 7946)
-  return { geometry: { type: 'Polygon', coordinates: [ring] }, withheld: null, elevations };
+  // RFC 7946 §3.1.6: an exterior ring is counter-clockwise. A ring picked
+  // clockwise is reversed, with its elevations kept in the same order.
+  const cw = signedLonLatRingArea(positions) < 0;
+  const ccw = cw ? positions.slice().reverse() : positions;
+  const ring = ccw.concat([ccw[0]]); // close the ring (RFC 7946)
+  return { geometry: { type: 'Polygon', coordinates: [ring] }, withheld: null, elevations: cw ? elevations.slice().reverse() : elevations };
 }
 
 /** The `area_withheld` property for a record whose ring establishes no area. */
