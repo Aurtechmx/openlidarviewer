@@ -68,6 +68,17 @@ The format is based on Keep a Changelog and the project follows Semantic Version
 - 3D Tiles point tiles with POSITION_QUANTIZED keep their quantisation step when the quantised volume is far from the origin. The volume offset was rounded to Float32 spacing (0.5 m at 4.7e6 m).
 - An E57 Integer or ScaledInteger prototype field with no minimum or maximum is refused with a message. Such a field was packed in 0 bits and every value decoded as 0.
 - E57 Integer and ScaledInteger intensity with no intensityLimits is normalised over the range the prototype field declares. A signed range no longer clamps every negative value to 0.
+- On a geographic CRS the Measurements panel row and its run, rise, grade and area breakdown print the same refusal as the overlay and the exports instead of degree differences labelled as metres. Heights are still shown.
+- Cut and fill volumes stay in cubic metres up to a cubic kilometre (2,345,678 m³ no longer reads 0.002 km³), and a volume below a cubic decimetre is shown with significant figures instead of 0 dm³.
+- The lasso stockpile toast prints its base as an elevation, with the scan's recentred origin added back. When the loaded clouds share no datum it is labelled a local height.
+- On a Y-up scan the lasso stockpile record keeps its area-weighted grid figure, authority, cross-check and PREVIEW label. The grid now integrates in the plane normal to the scan's up axis.
+- A lasso stockpile record whose footprint coverage is below 80 % is no longer graded high: the coverage caps are applied again after the record takes the grid's coverage shares.
+- Area ring planarity is judged against the ring's in-plane radius, so a ring gives the same verdict however it is turned within its plane.
+- The PDF report's profile slope Avg is total rise over total run across the covered segments, not the unweighted mean of segment grades.
+- A profile sheet whose ground unit is unknown states "units unknown" instead of horizontal and vertical 1:N scales, and keeps the vertical exaggeration.
+- Chain totals use the panel's unit system and significant figures: a 3 mm total no longer reads 0.00 m, and imperial mode no longer prints metres.
+- Imperial stations round to the hundredth before the 100 ft split, so 199.996 ft reads 2+00.00 instead of 1+100.00.
+- The PDF report converts cubic metres to cubic yards with the exact yard (1 / 0.9144³) instead of 1.30795.
 - The Terrain Access run card no longer shows an estimated obstruction limit as "Above-ground evidence unavailable". Each status the run record carries has its own wording, and the obstruction row reads estimated, with the note below it, when the surface is a sample or route cells have no return.
 - A Terrain Access route with no added cost reads "Cost is distance alone under the configured weights." It no longer says every move was fully supported, which contradicted routes whose slope used substituted neighbours.
 - The post-load suggestion ("Terrain scan ready", "Object scan ready", "Interior scan ready") hides when the user switches to another task instead of staying over that task until its timer ends.
