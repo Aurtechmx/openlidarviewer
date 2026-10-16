@@ -248,6 +248,8 @@ function attrFloatStrict(node: XmlNode, attr: string, absentDefault: number): nu
 
 /** {@link attrFloatStrict} for integer-valued schema bounds (minimum / maximum). */
 function attrIntStrict(node: XmlNode, attr: string, absentDefault: number): number {
+  const raw = node.attrs[attr];
+  if (raw === undefined || raw === '') return absentDefault;
   const v = attrFloatStrict(node, attr, absentDefault);
   if (!Number.isSafeInteger(v)) {
     throw new Error(
@@ -272,6 +274,32 @@ function numTextStrict(node: XmlNode | undefined, label: string, fallback = 0): 
   return v;
 }
 
+/**
+ * ASTM E2807 defaults for an Integer / ScaledInteger `minimum` and `maximum`
+ * left out of the prototype: the full int64 range. Defaulting them to 0 would
+ * pack the field in 0 bits and decode every value as 0.
+ */
+const E57_INT64_MIN = -(2 ** 63);
+const E57_INT64_MAX = 2 ** 63 - 1;
+
+/**
+ * Read an Integer / ScaledInteger field's bounds, with the spec defaults for an
+ * absent attribute. A field whose resulting range is wider than this decoder
+ * reads exactly (the safe-integer limit) is refused with a message naming the
+ * missing bound, rather than decoded into wrong values.
+ */
+function readIntBounds(node: XmlNode): { min: number; max: number; bitWidth: number } {
+  const min = attrIntStrict(node, 'minimum', E57_INT64_MIN);
+  const max = attrIntStrict(node, 'maximum', E57_INT64_MAX);
+  const absent = ['minimum', 'maximum'].filter((a) => node.attrs[a] === undefined || node.attrs[a] === '');
+  if (absent.length > 0 && !Number.isSafeInteger(max - min)) {
+    throw new Error(
+      `E57: integer field "${node.name}" declares no ${absent.join(' or ')}, so it spans the full 64-bit range; such fields are not supported.`,
+    );
+  }
+  return { min, max, bitWidth: bitWidthFor(min, max) };
+}
+
 /** Interpret one prototype field node. */
 function readField(node: XmlNode): E57Field {
   const type = node.attrs.type;
@@ -283,25 +311,23 @@ function readField(node: XmlNode): E57Field {
     };
   }
   if (type === 'Integer') {
-    const min = attrIntStrict(node, 'minimum', 0);
-    const max = attrIntStrict(node, 'maximum', 0);
+    const { min, max, bitWidth } = readIntBounds(node);
     return {
       name: node.name,
       type: 'integer',
       minimum: min,
       maximum: max,
-      bitWidth: bitWidthFor(min, max),
+      bitWidth,
     };
   }
   if (type === 'ScaledInteger') {
-    const min = attrIntStrict(node, 'minimum', 0);
-    const max = attrIntStrict(node, 'maximum', 0);
+    const { min, max, bitWidth } = readIntBounds(node);
     return {
       name: node.name,
       type: 'scaledInteger',
       minimum: min,
       maximum: max,
-      bitWidth: bitWidthFor(min, max),
+      bitWidth,
       scale: attrFloatStrict(node, 'scale', 1),
       offset: attrFloatStrict(node, 'offset', 0),
     };
