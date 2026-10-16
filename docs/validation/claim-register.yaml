@@ -12,7 +12,7 @@
 #     MEAS-AREA against GDAL/OGR OGR_GEOM_AREA on a planar-polygon fixture. Three
 #     are surface-gridding cross-implementations against PDAL 2.10.2
 #     writers.gdal on seeded synthetic clouds: DSM (max return) and DTM (min
-#     return), each agreeing over 7500 cells within a 0.05 m registered
+#     return), each agreeing over 7500 cells within a 5e-5 m registered
 #     tolerance, and CHM (clamped max minus min) agreeing over 7500 cells within
 #     a 0.1 m registered tolerance. Two are terrain descriptors compared three
 #     ways (an independent tool AND the closed form) on a controlled analytic
@@ -52,11 +52,16 @@
 #     validation has been run). Synthetic known-truth fixtures alone remain E3,
 #     not accuracy.
 #   - externalValidationStatus is `pending` wherever external data is required
-#     and unavailable. Seventeen independent reference slots are supplied (six
-#     GDAL, four PDAL, one SAGA, one OGR/SpatiaLite with R, one GeographicLib
-#     with PROJ, two GRASS, and two against R); all remaining
-#     independent-reference slots are pending. Never infer it from density /
-#     format / metadata.
+#     and unavailable. Seventeen study manifests under
+#     validation/cross-implementation/studies/ record an independent reference
+#     that agreed (six GDAL, four PDAL, one SAGA, one OGR/SpatiaLite with R, one
+#     GeographicLib with PROJ, two GRASS, and two against R), one per E4 claim.
+#     The runtime view, REFERENCE_SLOTS in src/validation/crossCheck.ts, holds
+#     sixteen slots: thirteen read `supplied`; CHANGE-RASTER and CHANGE-VOLUME
+#     read `pending` there although their GRASS references are committed and
+#     their studies agree (their protocol freeze is adopted-with-result, see
+#     those entries); GROUND-FILTER is `pending`; HOLDOUT-RMSE and NVA-VVA have
+#     no slot. Never infer it from density / format / metadata.
 #   - prohibitedClaim lists statements the current evidence does NOT support.
 #   - scope states, in the shape the study manifests use, what the evidence
 #     covers (scope.supported, dataset + parameter-set pairs) and what it does
@@ -137,7 +142,7 @@ schemaVersion: 1
 # 0.6.6 changes the EVIDENCE STATE of two claims without changing any algorithm:
 # DSM and DTM are promoted E3->E4 by committed PDAL 2.10.2 writers.gdal
 # cross-implementation references over three seeded synthetic clouds each,
-# agreeing over 7500 cells within a 0.05 m tolerance registered before the
+# agreeing over 7500 cells within a 5e-5 m tolerance registered before the
 # references were generated (recorded in DSM-PDAL-WRITERS-GDAL-CELL-CENTRED and
 # DTM-PDAL-WRITERS-GDAL-CELL-CENTRED). The agreement covers the cell gridding:
 # the reference radius is below half a cell, so it does not exercise a divergent
@@ -197,7 +202,7 @@ claims:
     currentEvidence: E4_CROSS_IMPLEMENTATION_VALIDATED
     requiredEvidence: E5_EXTERNALLY_VALIDATED
     supportingTests: [tests/measure*.test.ts, tests/measurementAnalyticalFixtures.test.ts, tests/measureAreaCrossCheck.test.ts]
-    supportingDatasets: [8 planar polygons (OLV-DS-030-AREA-POLYGONS) with a GDAL/OGR OGR_GEOM_AREA reference]
+    supportingDatasets: [10 planar polygons (OLV-DS-030-AREA-POLYGONS) with a GDAL/OGR OGR_GEOM_AREA reference]
     supportingStudies: [MEAS-AREA-OGR-PLANAR]
     units: [square-metres, source-units]
     crsDatum: "Refuses area on a geographic-degree grid."
@@ -208,7 +213,7 @@ claims:
     softwareStatus: shipping
     evidenceLevel: E4_CROSS_IMPLEMENTATION_VALIDATED
     externalValidationStatus: partial
-    approvedClaim: "Planimetric polygon area agreed with GDAL/OGR OGR_GEOM_AREA and with the closed-form area on the committed planar-polygon fixture, to machine precision (maximum difference 0 m² over 8 polygons), within the preregistered 1e-6 m² tolerance. Visual-inspection grade against a real feature."
+    approvedClaim: "Planimetric polygon area agreed with GDAL/OGR OGR_GEOM_AREA and with the closed-form area on the committed planar-polygon fixture, to machine precision (maximum difference 3.3e-11 m² over 10 polygons), within the preregistered 1e-6 m² tolerance. Visual-inspection grade against a real feature."
     prohibitedClaim: ["survey-grade area", "geodetic area"]
     scope:
       supported: []
@@ -457,6 +462,7 @@ claims:
         - "Field-validated (surveyed-ground) precision and recall. External reference-label agreement against OpenGF expert labels and ASPRS producer class-2 ground HAS been measured on real airborne scenes, with its weak regimes intact (mountain F1 near 0.5, dense-canopy precision near 0.34, building roofs read as ground) — but it was measured on the DERIVED-CLASSIFICATION heuristic (`src/render/class/deriveClassification`), which shares no code with this filter and carries no claim of its own, so it is not evidence about this claim in either direction. Reference labels are also a classifier's output rather than survey checkpoints, so field accuracy stays unmeasured and E5 unreached."
         - "Steep sparse terrain, dense low vegetation and complex roofs, the cases the fixtures do not contain."
         - "The name SMRF unqualified. A subset of the stages is implemented and the output metadata says which."
+        - "Agreement with PDAL filters.smrf. The study GROUND-FILTER-PDAL-SMRF-FIVE-SCENES is partial: the two planar scenes agree on every return, but pooled agreement over 55151 returns is 0.822 against the registered 0.99 gate (rolling 0.607, ridge 0.773, low-blunder 0.740)."
 
   - claimId: DTM
     product: DTM (bare-earth grid)
@@ -474,11 +480,11 @@ claims:
     assumptions: ["interpolation model as configured", "coverage-gated"]
     failureModes: ["large voids", "steep breaklines", "vegetation leakage from ground filter"]
     exportAllowed: true
-    userLabel: "Cross-implementation validated DTM (min-return gridding)"
+    userLabel: "Cross-implementation validated DTM (min-return gridding only; the live DTM uses median)"
     softwareStatus: shipping
     evidenceLevel: E4_CROSS_IMPLEMENTATION_VALIDATED
     externalValidationStatus: partial
-    approvedClaim: "DTM min-return gridding agreed with PDAL writers.gdal on three seeded bare-earth clouds, over 7500 cells within the 0.05 m registered tolerance (max difference under 4e-6 m). Still validated against analytic surfaces on covered cells."
+    approvedClaim: "DTM min-return gridding agreed with PDAL writers.gdal on three seeded bare-earth clouds, over 7500 cells within the 5e-5 m registered tolerance (max difference under 4e-6 m). Still validated against analytic surfaces on covered cells."
     prohibitedClaim: ["field-validated DTM accuracy", "independent checkpoint accuracy", "ground-classification accuracy", "full point-cloud-to-DTM pipeline validated", "real-terrain void interpolation validated"]
     scope:
       supported:
@@ -495,6 +501,7 @@ claims:
         - "Independent checkpoint accuracy, which needs checkpoints this project does not have."
         - "Large voids and steep breaklines. Interpolation across them is not exercised by the supporting clouds."
         - "Vegetation leakage inherited from the ground filter."
+        - "Median aggregation, which the live DTM uses (LIVE_DTM_AGGREGATION). The PDAL study covers min-return gridding only."
 
   - claimId: DSM
     product: DSM (top surface)
@@ -515,7 +522,7 @@ claims:
     softwareStatus: shipping
     evidenceLevel: E4_CROSS_IMPLEMENTATION_VALIDATED
     externalValidationStatus: partial
-    approvedClaim: "DSM max-return gridding agreed with PDAL writers.gdal on three seeded structure clouds, over 7500 cells within the 0.05 m registered tolerance (max difference under 4e-6 m). Still equals the top surface on synthetic scenes."
+    approvedClaim: "DSM max-return gridding agreed with PDAL writers.gdal on three seeded structure clouds, over 7500 cells within the 5e-5 m registered tolerance (max difference under 4e-6 m). Still equals the top surface on synthetic scenes."
     prohibitedClaim: ["field-validated DSM accuracy", "full point-cloud-to-DSM pipeline validated"]
     scope:
       supported:
@@ -732,10 +739,10 @@ claims:
 
   - claimId: TPI
     product: TPI terrain descriptor
-    algorithm: Topographic position index (centre minus mean of the 8 Moore neighbours)
+    algorithm: Topographic position index (centre minus mean of a Euclidean disc of neighbours; the E4 evidence covers radius root 2, the 3x3 Moore neighbourhood)
     methodId: olv.terrain.tpi
     algorithmVersion: v0.4.x
-    claim: "Relative-position index over a 3x3 Moore neighbourhood."
+    claim: "Relative-position index. The E4 evidence covers the 3x3 configuration (discrete radius root 2); the shipped terrain-complexity TPI uses a disc of 2 to 10 cells, aimed at about 10 m, which that evidence does not cover."
     currentEvidence: E4_CROSS_IMPLEMENTATION_VALIDATED
     requiredEvidence: E4_CROSS_IMPLEMENTATION_VALIDATED
     supportingTests: [tests/terrainComplexity.test.ts, tests/terrainDescriptorSyntheticTruth.test.ts, tests/tpiCrossCheck.test.ts]
@@ -743,10 +750,10 @@ claims:
     supportingStudies: [TPI-GDALDEM-ANALYTIC]
     units: [dimensionless]
     crsDatum: metric
-    assumptions: ["3x3 Moore neighbourhood (discrete radius root 2)"]
+    assumptions: ["the cross-check ran the 3x3 Moore neighbourhood (discrete radius root 2)", "the shipped terrain-complexity summary picks a radius of 2 to 10 cells (pickTpiRadiusCells, aimed at about 10 m)"]
     failureModes: ["scale sensitivity", "edge effects"]
     exportAllowed: true
-    userLabel: "Cross-implementation validated TPI"
+    userLabel: "Cross-implementation validated TPI (3x3 configuration only)"
     softwareStatus: shipping
     evidenceLevel: E4_CROSS_IMPLEMENTATION_VALIDATED
     externalValidationStatus: partial
@@ -759,7 +766,7 @@ claims:
       unsupported:
         - "The one-cell border, where the documented gdaldem command omits -compute_edges."
         - "High absolute elevations. gdaldem accumulates the neighbourhood mean in float32, whose spacing scales with |z|; the fixture is re-centred so |z| stays small and that float32 error is far below the tolerance. On a high-elevation grid the reference, not OLV, loses precision (OLV is the more precise side)."
-        - "Neighbourhood sizes other than 3x3, since the index is scale-sensitive."
+        - "Neighbourhood sizes other than 3x3, since the index is scale-sensitive. This includes the TPI the app ships: the terrain-complexity summary uses a Euclidean disc of 2 to 10 cells (pickTpiRadiusCells, aimed at about 10 m), which the E4 evidence does not cover."
         - "Agreement with gdaldem is not accuracy against ground truth."
 
   - claimId: VRM
@@ -928,7 +935,7 @@ claims:
         - "Any USGS or ASPRS quality-level compliance determination, which needs independent checkpoints and the full standard."
         - "The published thresholds themselves, which are quoted from a named and versioned source; the tests check the transcription and the comparison, not the specification."
         - "Nominal pulse spacing and the rest of the specification's collection requirements, which are not checked at all."
-        - "Real terrain, since the internal RMSE it compares is itself an internal diagnostic."
+        - "Real terrain. The comparison reads the observed ground-return density only; RMSEz is a separate hold-out diagnostic and never selects a floor."
 
   - claimId: CONFIDENCE-OVERLAY
     product: Confidence overlay
@@ -1018,7 +1025,7 @@ claims:
         - "Registration error, which propagates into every cell and is not quantified here."
         - "Non-metre CRS units and non-square cells. Only one-metre metre-CRS grids were compared."
         - "Agreement with GRASS on synthetic epoch pairs is not accuracy against surveyed field change."
-        - "Anything a preregistration would carry. The protocol freeze is adopted-with-result: it landed in the same commit as the first result, and the witness commit is named so a reader can check the fixture matrix, the level of detection and the tolerance basis predate the GRASS run."
+        - "Anything a preregistration would carry. The protocol freeze is adopted-with-result: it landed in the same commit as the first result, and the witness commit is named so a reader can check the fixture matrix, the level of detection and the tolerance basis predate the GRASS run. The runtime reference slot for this claim (REFERENCE_SLOTS in src/validation/crossCheck.ts) reads pending for the same reason: no protocol for it was frozen in a commit earlier than its result."
     scopeNote: "CHANGE-RASTER-GRASS-MAPCALC-EIGHT-PAIRS compares detectChange against GRASS 8.5.0 r.mapcalc over eight synthetic epoch pairs under PROTO-CHANGE-GRASS-MAPCALC. Both sides select the same 3007 comparable cells, including the pair with holes in one epoch, and the largest relative difference is 7e-6 against a 1e-5 gate derived from the candidate's Float32Array storage rather than from the observed residual. requiredEvidence stays at E5 because no surveyed change is involved: the pairs are constructed, and co-registration error is absent by construction."
 
   - claimId: CHANGE-VOLUME
@@ -1055,7 +1062,7 @@ claims:
         - "Cross-implementation of the raw (unthresholded) net volume. The GRASS r.univar oracle validated the thresholded gross gain and loss; the raw net over all comparable cells is checked against the closed-form analytical oracle only, so it does not carry the E4 the thresholded gross earned (olv.change.dtm-difference.raw-net)."
         - "Non-metre CRS units and non-square cells. Only one-metre metre-CRS grids were compared."
         - "Agreement with GRASS on synthetic epoch pairs is not accuracy against a surveyed volume."
-        - "Anything a preregistration would carry. The protocol freeze is adopted-with-result: it landed in the same commit as the first result, and the witness commit is named so a reader can check the fixture matrix, the level of detection and the tolerance basis predate the GRASS run."
+        - "Anything a preregistration would carry. The protocol freeze is adopted-with-result: it landed in the same commit as the first result, and the witness commit is named so a reader can check the fixture matrix, the level of detection and the tolerance basis predate the GRASS run. The runtime reference slot for this claim (REFERENCE_SLOTS in src/validation/crossCheck.ts) reads pending for the same reason: no protocol for it was frozen in a commit earlier than its result."
     scopeNote: "CHANGE-VOLUME-GRASS-MAPCALC-EIGHT-PAIRS compares the gain and loss volumes against GRASS 8.5.0 r.univar and against the closed-form volume each of the eight pairs was built from, under PROTO-CHANGE-GRASS-MAPCALC. Truth is scored first and implementation agreement second. GRASS reproduces every closed-form volume to within 1e-6 m3, so the 7e-6 relative residual is the candidate's alone and sits inside the registered 1e-5. requiredEvidence stays at E5 because the oracle enters at the grid pair, so nothing here bounds the DTM build underneath it or the accuracy of any surveyed volume."
 
   - claimId: UNCERTAINTY-BAND
