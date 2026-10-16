@@ -542,11 +542,13 @@ export function whyNotEligible(
     const j = (row + dy) * grid.cols + col + dx;
     const evalr = evaluateEdge(grid, features, profile, index, j, dx, dy);
     if (!evalr.blocked) { anyViable = true; break; }
+    // Step is in metres and grade/cross slope are tangents, so each excess is
+    // taken relative to its own limit before they are compared.
     const margin =
-      evalr.reason === 'step-height' ? evalr.stepM - profile.maxStepHeight
-      : evalr.reason === 'longitudinal-grade' ? evalr.longitudinalGrade - profile.maxLongitudinalGrade
-      : evalr.crossSlope - profile.maxCrossSlope;
-    if (margin < closestMargin) {
+      evalr.reason === 'step-height' ? relativeExcess(evalr.stepM, profile.maxStepHeight)
+      : evalr.reason === 'longitudinal-grade' ? relativeExcess(evalr.longitudinalGrade, profile.maxLongitudinalGrade)
+      : relativeExcess(evalr.crossSlope, profile.maxCrossSlope);
+    if (closestMiss == null || margin < closestMargin) {
       closestMargin = margin;
       closestMiss = { reason: evalr.reason as EdgeBlockReason, detail: edgeDetail(evalr, profile) };
     }
@@ -558,6 +560,13 @@ export function whyNotEligible(
     category: 'blocked',
     reasons: closestMiss ? [closestMiss] : [{ reason: 'no-data', detail: 'no eligible neighbour can be reached without crossing unsupported terrain' }],
   };
+}
+
+/** How far `value` exceeds `limit`, as a fraction of the limit; a zero limit
+ * (a step height of 0 m is a valid declaration) makes any excess infinite. */
+function relativeExcess(value: number, limit: number): number {
+  if (limit > 0) return (value - limit) / limit;
+  return value > limit ? Number.POSITIVE_INFINITY : 0;
 }
 
 function nodeDetail(

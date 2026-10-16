@@ -158,7 +158,10 @@ The traversability map (`buildTraversabilityMap`) classifies every readable
 cell into a declared bucket (blocked, unknown, or low/moderate/high cost)
 for the Lab's grid and 3D overlay. The why-not inspector (`whyNotEligible`)
 answers, for any single cell, exactly which declared limit blocks it, or
-that no in-bounds neighbour offers a viable move. It never returns a vague
+that no in-bounds neighbour offers a viable move. When every move out of a
+cell exceeds an edge limit, it names the move that misses by the smallest
+excess relative to its own limit, so a step in metres and a grade or cross
+slope in tangents are compared on one scale. It never returns a vague
 "not reachable".
 
 ## Refusals
