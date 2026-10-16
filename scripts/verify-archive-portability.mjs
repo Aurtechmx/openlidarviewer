@@ -29,8 +29,9 @@
  * With no repository and no archive directory (a Git-free source extraction
  * run without an argument) there is nothing to build an archive from, so the
  * run reports "skipped", writes a result with `skipped: true` and no checks,
- * and exits 0. A skip is never recorded as a pass; the publication battery
- * marks the suite skipped through its own `requires` predicate.
+ * and exits 0. A skip is never recorded as a pass: the publication battery
+ * reads `skipped: true` from that result and records the suite as skipped with
+ * this script's reason, so the decision is made here and nowhere else.
  *
  * Exit code is 0 when no check reports an `error` finding. `warn` findings are
  * reported and do not fail. Machine-readable result is written to
@@ -285,6 +286,25 @@ export function archiveSource({ explicit, envDir, repoPresent }) {
       'skipped: repository-only check. This tree has no Git repository to build the source archive from. ' +
       'Run with --archive <extracted-dir> (or OLV_ARCHIVE_DIR=<extracted-dir>) pointing at a copy of the ' +
       'source archive extracted outside this directory.',
+  };
+}
+
+/**
+ * The result written when the run is skipped. `skipped: true` and `reason` are
+ * what the publication battery reads to record the suite as skipped.
+ * @param {string} reason
+ * @param {number} checkCount
+ */
+export function skipResult(reason, checkCount, now = new Date()) {
+  return {
+    suite: 'archive-portability',
+    generatedAt: now.toISOString(),
+    skipped: true,
+    reason,
+    repositoryPresent: false,
+    nodeVersion: process.version,
+    totals: { checks: 0, passed: 0, failed: 0, skipped: checkCount, errors: 0, warnings: 0 },
+    results: [],
   };
 }
 
@@ -863,16 +883,7 @@ function main() {
   if (source.mode === 'skip') {
     console.log(`Archive portability: ${source.reason}`);
     mkdirSync(dirname(jsonPath), { recursive: true });
-    writeFileSync(jsonPath, `${JSON.stringify({
-      suite: 'archive-portability',
-      generatedAt: new Date().toISOString(),
-      skipped: true,
-      reason: source.reason,
-      repositoryPresent: false,
-      nodeVersion: process.version,
-      totals: { checks: 0, passed: 0, failed: 0, skipped: checks.length, errors: 0, warnings: 0 },
-      results: [],
-    }, null, 2)}\n`);
+    writeFileSync(jsonPath, `${JSON.stringify(skipResult(source.reason, checks.length), null, 2)}\n`);
     process.exit(0);
   }
   const { dir: A, built } = resolveArchive(source.dir, keep);

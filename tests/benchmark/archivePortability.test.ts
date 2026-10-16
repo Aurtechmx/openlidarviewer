@@ -14,7 +14,9 @@
  */
 import { describe, it, expect } from 'vitest';
 // @ts-expect-error — plain .mjs tooling module, no type declarations
-import { bareSpecifier, markdownTargets, linkCandidates, importSpecifiers, scriptFileTargets, documentedScripts, manifestInventoryPaths, classifyMarkdownReferences, rootDocumentReferences, readsPackageFromNodeModules, archiveSource } from '../../scripts/verify-archive-portability.mjs';
+import { bareSpecifier, markdownTargets, linkCandidates, importSpecifiers, scriptFileTargets, documentedScripts, manifestInventoryPaths, classifyMarkdownReferences, rootDocumentReferences, readsPackageFromNodeModules, archiveSource, skipResult } from '../../scripts/verify-archive-portability.mjs';
+// @ts-expect-error: plain .mjs tooling module, no type declarations
+import { ranOutcome } from '../../scripts/publication-battery.mjs';
 
 describe('bareSpecifier', () => {
   it('names the package for bare and scoped specifiers', () => {
@@ -235,5 +237,16 @@ describe('archiveSource', () => {
     expect(r.mode).toBe('skip');
     expect(r.reason).toMatch(/^skipped: repository-only check/);
     expect(r.reason).toMatch(/--archive <extracted-dir>/);
+  });
+});
+
+describe('skipResult', () => {
+  it('is read by the publication battery as a skip with the same reason, not a pass', () => {
+    const { reason } = archiveSource({ explicit: undefined, envDir: undefined, repoPresent: false });
+    const result = skipResult(reason, 12, new Date('2026-01-01T00:00:00Z'));
+    expect(result.skipped).toBe(true);
+    expect(result.generatedAt).toBe('2026-01-01T00:00:00.000Z');
+    expect(result.totals).toMatchObject({ checks: 0, passed: 0, skipped: 12 });
+    expect(ranOutcome(0, result)).toEqual({ status: 'skipped', note: reason });
   });
 });
