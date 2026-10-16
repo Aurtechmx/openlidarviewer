@@ -117,7 +117,10 @@ function jacobiEigen3(a: number[][]): number[][] {
     let p = 0, q = 1, max = Math.abs(m[0][1]);
     if (Math.abs(m[0][2]) > max) { max = Math.abs(m[0][2]); p = 0; q = 2; }
     if (Math.abs(m[1][2]) > max) { max = Math.abs(m[1][2]); p = 1; q = 2; }
-    if (max < 1e-12) break;
+    // Relative to the matrix's own scale, as in symEig3: an absolute floor
+    // skipped the rotation entirely for a small object's covariance.
+    const scale = Math.abs(m[0][0]) + Math.abs(m[1][1]) + Math.abs(m[2][2]);
+    if (max === 0 || max <= 1e-15 * scale) break;
     const phi = 0.5 * Math.atan2(2 * m[p][q], m[q][q] - m[p][p]);
     const c = Math.cos(phi), s = Math.sin(phi);
     for (let k = 0; k < 3; k++) {

@@ -31,12 +31,19 @@ export function symEig3(axx: number, axy: number, axz: number, ayy: number, ayz:
     [0, 1, 0],
     [0, 0, 1],
   ];
+  // Iteration cap: Jacobi converges quadratically, so this is never reached by
+  // a finite matrix; it only bounds the loop on non-finite input.
   for (let iter = 0; iter < 64; iter++) {
     // Largest off-diagonal magnitude.
     let p = 0, q = 1, max = Math.abs(m[0][1]);
     if (Math.abs(m[0][2]) > max) { max = Math.abs(m[0][2]); p = 0; q = 2; }
     if (Math.abs(m[1][2]) > max) { max = Math.abs(m[1][2]); p = 1; q = 2; }
-    if (max < 1e-14) break;
+    // Converged when the off-diagonal is negligible against the matrix's own
+    // scale. An absolute floor stopped before the first rotation on any matrix
+    // whose entries are near it: a covariance with eigenvalues ~1e-14 came back
+    // unrotated, its smallest eigenvalue 84 % high.
+    const scale = Math.abs(m[0][0]) + Math.abs(m[1][1]) + Math.abs(m[2][2]);
+    if (max === 0 || max <= 1e-15 * scale) break;
     const phi = 0.5 * Math.atan2(2 * m[p][q], m[q][q] - m[p][p]);
     const c = Math.cos(phi), s = Math.sin(phi);
     for (let k = 0; k < 3; k++) {
