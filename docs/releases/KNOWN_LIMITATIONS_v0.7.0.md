@@ -105,8 +105,10 @@ the surveyed region, so neither depends on how densely the surface was sampled.
 ## An Area ring that is far from planar or touches itself reports no area
 
 An Area polygon is judged in its own best-fit plane. A ring whose vertices
-sit further from that plane than a quarter of the ring's half-extent (about
-14 degrees of tilt across the ring), or whose edges touch at a vertex or
+sit further from that plane than a quarter of the ring's radius (the largest
+distance of a vertex from the ring's centre within that plane, so the verdict
+does not change when the ring turns; about 14 degrees of tilt across the
+ring), or whose edges touch at a vertex or
 overlap, reports no area. The Measure panel, totals and every export omit the
 area figures and state the reason; the perimeter is kept. A ring that is only
 slightly off its plane, such as a roof facet picked with a little noise, still
@@ -585,9 +587,9 @@ integrity report, chain total and drawn labels withhold every figure but
 heights, as the Measure panel does. The per-measurement support grade does not
 travel with them: a measurement with an endpoint in empty space reads
 Unverified in the panel and is still published as a number. On a compound CRS
-whose height unit differs from its horizontal unit, the panel refuses 3D
-lengths, grades and tilted areas, while the exports and the PDF publish them
-computed with each axis in its own unit.
+whose height unit differs from its horizontal unit, the panel, the exports and
+the PDF all compute 3D lengths, grades and tilted areas with each axis in its
+own unit.
 
 ## The vertical unit is handled differently by different features
 
@@ -604,6 +606,15 @@ Scan Report and in metres in Measure. Only the lasso volume readout says so, wit
 height read in Measure carries no vertical-unit note of its own; it is flagged
 only when the horizontal unit is unknown. A valid declared vertical unit is used
 by every feature.
+
+## Imperial readouts are in international feet
+
+The imperial display converts through metres to the international foot
+(0.3048 m) and labels it "ft", including on a scan whose CRS unit is the US
+survey foot. The conversion is correct, but the figure is not the survey-foot
+coordinate difference: 5,000 US survey feet read as 5000.01 ft. There is no
+"ftUS" display unit; read the metric figure, or the source coordinates, when
+the survey-foot value itself is needed.
 
 ## Export digests that some surfaces cannot carry
 

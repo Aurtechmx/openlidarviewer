@@ -402,7 +402,7 @@ claims:
     product: Stockpile volume
     algorithm: Area-weighted grid integration (polygon-clipped cell areas, median cell surface, gaps interpolated inside the covered extent) over a lowest-ground base plane
     methodId: olv.volume.stockpile-area-grid
-    algorithmVersion: v0.6.9
+    algorithmVersion: v0.7.0
     claim: "Stockpile volume above a reference base, over the observed and interpolated footprint area."
     currentEvidence: E3_SYNTHETICALLY_VALIDATED
     requiredEvidence: E5_EXTERNALLY_VALIDATED
@@ -417,7 +417,7 @@ claims:
     softwareStatus: shipping
     evidenceLevel: E3_SYNTHETICALLY_VALIDATED
     externalValidationStatus: pending
-    approvedClaim: "Exploratory volume preview over the supported footprint area; spatial correlation and base uncertainty unquantified."
+    approvedClaim: "Exploratory volume preview over the observed and interpolated footprint area; spatial correlation and base uncertainty unquantified."
     prohibitedClaim: ["survey-grade stockpile volume", "validated uncertainty interval"]
     scope:
       supported:
