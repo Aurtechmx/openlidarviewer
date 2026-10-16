@@ -388,6 +388,26 @@ export const DEFAULT_COST_WEIGHTS: CostWeights = Object.freeze({
   support: 1,
 });
 
+/** The names of the {@link CostWeights} terms, in declaration order. */
+export const COST_WEIGHT_TERMS: readonly (keyof CostWeights)[] = Object.freeze([
+  'longitudinal', 'cross', 'ruggedness', 'step', 'support',
+]);
+
+/**
+ * The weight terms that are not a finite number ≥ 0, each with its value;
+ * empty when the weights are usable. A negative or non-finite weight would
+ * let an edge cost fall below its planimetric length (or become NaN), so the
+ * A* heuristic would no longer be admissible.
+ */
+export function invalidCostWeights(weights: CostWeights): readonly string[] {
+  const out: string[] = [];
+  for (const term of COST_WEIGHT_TERMS) {
+    const v = (weights as unknown as Record<string, unknown>)[term];
+    if (!(typeof v === 'number' && Number.isFinite(v) && v >= 0)) out.push(`${term} = ${String(v)}`);
+  }
+  return out;
+}
+
 /** Monotonic utilization: 0 at no use, 1 at (or past) the declared limit.
  * Exported so `routeDiagnostics.ts` reports the same ratio the cost model
  * itself used, rather than a second, silently-divergent computation. */

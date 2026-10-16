@@ -68,6 +68,8 @@ export type TerrainAccessRefusalCode =
   | 'NO_DTM'
   | 'UNITS_UNRESOLVED'
   | 'INVALID_PROFILE'
+  /** A declared cost weight is negative or not a finite number. */
+  | 'INVALID_WEIGHTS'
   | 'START_BLOCKED'
   | 'END_BLOCKED'
   | 'NO_ROUTE'

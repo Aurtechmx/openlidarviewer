@@ -2,7 +2,7 @@
  * terrainAccessPrepare.ts — the up-front preparation `runTerrainAccess` and
  * `prepareTerrainAccessPreview` both need before they diverge: refuse for
  * every precondition a route search or a traversability-map preview shares
- * (no DTM, an unresolved scale, an invalid profile, a grid too large, no
+ * (no DTM, an unresolved scale, an invalid profile or cost weights, a grid too large, no
  * measured cell, no eligible cell), then hand back the grid/features/
  * eligibility a caller can build either a search or a map from.
  *
@@ -19,6 +19,7 @@ import {
 import {
   DEFAULT_COST_WEIGHTS,
   applyWidthClearance,
+  invalidCostWeights,
   nodeEligibility,
   prepareTerrainAccessFeatures,
   type CostWeights,
@@ -111,6 +112,16 @@ export function prepareTerrainAccessRun(
     };
   }
 
+  const weights = params.weights ?? DEFAULT_COST_WEIGHTS;
+  const badWeights = invalidCostWeights(weights);
+  if (badWeights.length > 0) {
+    return {
+      ok: false, code: 'INVALID_WEIGHTS',
+      reason: `The cost weights are not usable: ${badWeights.join(', ')}. `
+        + 'Every weight must be a finite number of 0 or more.',
+    };
+  }
+
   const cells = dtm.cols * dtm.rows;
   if (cells > params.maxCells) {
     return {
@@ -176,8 +187,6 @@ export function prepareTerrainAccessRun(
         + 'Relax the profile\'s limits, or analyse terrain with better support.',
     };
   }
-
-  const weights = params.weights ?? DEFAULT_COST_WEIGHTS;
 
   return { ok: true, grid, features, eligibility, basis, gridWarnings, weights };
 }

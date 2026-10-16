@@ -294,7 +294,8 @@ with route diagnostics and the route drawn on the grid and on the scan. Cell
 readouts give elevation in the dataset's vertical datum and unit, or say it is
 unknown. Lengths, slopes and steps are in metres; a run refuses by name
 (`UNITS_UNRESOLVED`) when the horizontal scale or the vertical unit does not
-resolve. Other named refusals are `NO_DTM`, `INVALID_PROFILE`, `START_BLOCKED`,
+resolve. Other named refusals are `NO_DTM`, `INVALID_PROFILE`, `INVALID_WEIGHTS`
+(a cost weight that is negative or not a finite number), `START_BLOCKED`,
 `END_BLOCKED`, `NO_ROUTE`, `INSUFFICIENT_EVIDENCE`, `TOO_LARGE`,
 `OBSTRUCTION_EVIDENCE_UNAVAILABLE` (an above-ground obstruction limit is set
 and no aligned above-ground surface exists), `SURFACE_MISALIGNED` (the

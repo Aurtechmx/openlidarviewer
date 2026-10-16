@@ -99,7 +99,9 @@ the two cell centres. A* search, the traversability map and the why-not
 inspector apply this one edge rule. Every eligible
 edge carries a declared, bounded soft cost, `distance * (1 + sum of weight *
 utilization)`, that rises linearly with how much of a limit a move actually
-uses.
+uses. Every weight must be a finite number of 0 or more, so no edge costs
+less than its length and the A* heuristic stays admissible; a run or preview
+with any other weight is refused with `INVALID_WEIGHTS`.
 
 ## Evidence gaps and the obstruction surface
 
@@ -167,7 +169,8 @@ slope in tangents are compared on one scale. It never returns a vague
 ## Refusals
 
 A run refuses by name rather than guessing: `NO_DTM`, `UNITS_UNRESOLVED`,
-`INVALID_PROFILE`, `START_BLOCKED`, `END_BLOCKED`, `NO_ROUTE`,
+`INVALID_PROFILE`, `INVALID_WEIGHTS` (a cost weight that is negative or not a
+finite number), `START_BLOCKED`, `END_BLOCKED`, `NO_ROUTE`,
 `INSUFFICIENT_EVIDENCE`, `TOO_LARGE`, `OBSTRUCTION_EVIDENCE_UNAVAILABLE` (the
 profile sets an above-ground obstruction limit and no aligned above-ground
 surface exists), `SURFACE_MISALIGNED` (the above-ground surface does not cover
