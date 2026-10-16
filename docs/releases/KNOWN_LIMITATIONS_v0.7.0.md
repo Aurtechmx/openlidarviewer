@@ -687,8 +687,13 @@ header is longer than 64 KiB.
 
 ## E57 intensity is normalised; a missing channel is dropped
 
-E57 intensity is stored normalised to 0–65535 per scan; the source values are
-not retained, and it is not calibrated reflectance. Colour or intensity a file
+E57 intensity is stored on a 0–65535 scale per scan. A scan that declares
+`intensityLimits` is normalised over them. With no usable limits, an Integer or
+ScaledInteger intensity field is normalised over the minimum and maximum its
+prototype declares. A Float field with no limits is scaled by 65535 when its
+largest valid value is at most 1; otherwise its values are kept raw, rounded and
+clamped to 0–65535. The source values are not retained, and the result is not
+calibrated reflectance. Colour or intensity a file
 flags invalid is masked per point: the point keeps its position, the value is
 drawn in the neutral grey, left out of intensity ranges, the colour balance and
 voxel means, and written as an empty CSV field or `nan` in XYZ and ASC. PLY and

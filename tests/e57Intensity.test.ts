@@ -163,3 +163,68 @@ describe('loadE57 — unit-range float intensity (the binarization bug)', () => 
     expect(Math.max(...written)).toBeGreaterThan(1);
   });
 });
+
+describe('loadE57 — integer intensity without intensityLimits', () => {
+  /** A scan whose prototype declares the intensity field, with no intensityLimits. */
+  function fieldScan(values: number[], field: E57ScanData['fields'][number]): E57ScanData {
+    return { ...scan(values.length, values, null), fields: [field] };
+  }
+
+  it('normalises over the Integer field declared range: negatives are not clamped to 0', async () => {
+    mockedParse.mockReturnValue(
+      parseResult([
+        fieldScan([-2048, -1000, 0, 2047], {
+          name: 'intensity',
+          type: 'integer',
+          minimum: -2048,
+          maximum: 2047,
+          bitWidth: 12,
+        }),
+      ]),
+    );
+    const cloud = await loadE57(new ArrayBuffer(0), 'signed-field.e57', { plan: READ_EVERY_RECORD });
+    expect([...cloud.intensity!]).toEqual([0, 16772, 32776, 65535]);
+    expect(cloud.metadata?.intensityNormalisation?.scans[0]).toMatchObject({
+      rule: 'declared-limits',
+      minimum: -2048,
+      maximum: 2047,
+    });
+  });
+
+  it('normalises an unsigned Integer field 0..4095 onto 0..65535', async () => {
+    mockedParse.mockReturnValue(
+      parseResult([
+        fieldScan([0, 4095], { name: 'intensity', type: 'integer', minimum: 0, maximum: 4095, bitWidth: 12 }),
+      ]),
+    );
+    const cloud = await loadE57(new ArrayBuffer(0), 'u12.e57', { plan: READ_EVERY_RECORD });
+    expect([...cloud.intensity!]).toEqual([0, 65535]);
+  });
+
+  it('uses a ScaledInteger field range through its scale and offset', async () => {
+    // Raw 0..1000 at scale 0.001: values 0..1.
+    mockedParse.mockReturnValue(
+      parseResult([
+        fieldScan([0, 0.5, 1], {
+          name: 'intensity',
+          type: 'scaledInteger',
+          minimum: 0,
+          maximum: 1000,
+          bitWidth: 10,
+          scale: 0.001,
+          offset: 0,
+        }),
+      ]),
+    );
+    const cloud = await loadE57(new ArrayBuffer(0), 'scaled.e57', { plan: READ_EVERY_RECORD });
+    expect([...cloud.intensity!]).toEqual([0, 32768, 65535]);
+  });
+
+  it('keeps a Float field with values above 1 raw (rounded and clamped)', async () => {
+    mockedParse.mockReturnValue(
+      parseResult([fieldScan([12, 300], { name: 'intensity', type: 'float', floatBytes: 4 })]),
+    );
+    const cloud = await loadE57(new ArrayBuffer(0), 'float-raw.e57', { plan: READ_EVERY_RECORD });
+    expect([...cloud.intensity!]).toEqual([12, 300]);
+  });
+});
