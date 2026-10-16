@@ -45,6 +45,23 @@ describe('lint:sbom', () => {
     expect(problems.some((p) => /no copyright and licence-text entry for "three /.test(p))).toBe(true);
   });
 
+  it('fails when the lockfile ships a transitive package the SBOM does not list', () => {
+    const lock = JSON.parse(realRead('package-lock.json')!);
+    lock.packages['node_modules/three/node_modules/left-pad'] = { version: '1.3.0' };
+    lock.packages['node_modules/some-dev-tool'] = { version: '2.0.0', dev: true };
+    const read = (p: string): string | null => (p === 'package-lock.json' ? JSON.stringify(lock) : realRead(p));
+    const problems = problemsFor(read);
+    expect(problems).toContain('sbom.json does not list production package left-pad@1.3.0 from package-lock.json.');
+    expect(problems.some((p) => p.includes('some-dev-tool'))).toBe(false);
+  });
+
+  it('fails when the SBOM lists a package the lockfile no longer installs for production', () => {
+    const problems = problemsFor(withSbom((s) => {
+      (s.components as Array<Record<string, unknown>>).push({ type: 'library', name: 'gone', version: '0.0.1' });
+    }));
+    expect(problems).toContain('sbom.json lists gone@0.0.1, which package-lock.json does not install for production.');
+  });
+
   it('accepts scoped packages stored as group + name', () => {
     // Regression: CycloneDX writes "@loaders.gl/core" as group "@loaders.gl",
     // name "core". Keying on `name` alone failed every scoped dependency.

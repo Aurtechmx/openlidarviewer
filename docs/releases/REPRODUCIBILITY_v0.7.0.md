@@ -4,6 +4,17 @@
 
 Develops from v0.6.9, commit `c164e907f50ff49da7233385d92285c53dfb3b8d`.
 
+## Validation baseline
+
+The frozen validation snapshot under `validation/snapshot/` is the 0.6.2
+validation baseline, carried forward, so its `snapshot.json` names candidate
+version 0.6.2 and its copied `CITATION.cff` the 0.6.2 release date. 0.6.3
+through 0.7.0 added features and evidence but did not re-run the cross-platform
+portability workflow or a defect audit, so the snapshot's defect registry,
+portability record and build identity are the 0.6.2 ones. Its checks still hold
+on its own bytes (`npm run validation:snapshot:verify`); it is a baseline this
+release inherits, not a 0.7.0 run.
+
 ## Toolchain
 
 The toolchain is pinned by `.nvmrc`, `package.json` `engines` and

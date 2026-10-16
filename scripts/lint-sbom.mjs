@@ -211,6 +211,33 @@ export function collectSbomProblems(read) {
     }
   }
 
+  // 8. The whole production set, not only the direct dependencies. Every
+  //    lockfile package that is not dev-only is shipped, so it must appear in
+  //    the SBOM at its locked version (nested components included), and the
+  //    SBOM must list nothing the lockfile does not install. A transitive
+  //    change to the lockfile with an unregenerated SBOM fails here.
+  if (components) {
+    const locked = new Set();
+    for (const [key, entry] of Object.entries(lock.packages ?? {})) {
+      const at = key.lastIndexOf('node_modules/');
+      if (at === -1 || entry?.dev || !entry?.version) continue;
+      locked.add(`${key.slice(at + 'node_modules/'.length)}@${entry.version}`);
+    }
+    const listed = new Set();
+    const walk = (c) => {
+      if (!c || !c.name) return;
+      listed.add(`${c.group ? `${c.group}/${c.name}` : c.name}@${c.version}`);
+      for (const child of c.components ?? []) walk(child);
+    };
+    for (const c of components) walk(c);
+    for (const id of locked) {
+      if (!listed.has(id)) problems.push(`sbom.json does not list production package ${id} from package-lock.json.`);
+    }
+    for (const id of listed) {
+      if (!locked.has(id)) problems.push(`sbom.json lists ${id}, which package-lock.json does not install for production.`);
+    }
+  }
+
   return { problems, componentCount: components ? components.length : 0, version };
 }
 
@@ -227,7 +254,7 @@ if (isMain()) {
   if (problems.length === 0) {
     console.log(
       `lint:sbom OK — root openlidarviewer@${version}, ${componentCount} components, every direct ` +
-        `production dependency at its locked version, and every bundled component attributed in ` +
+        `production dependency at its locked version, the full production set matching the lockfile, and every bundled component attributed in ` +
         `THIRD_PARTY_NOTICES.md (identity + consistency checks, not full schema validation).`,
     );
     process.exit(0);
