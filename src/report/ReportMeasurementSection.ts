@@ -109,7 +109,8 @@ function formatVolume(cubicMetres: number, system: UnitSystem, verified = true):
   if (!Number.isFinite(cubicMetres)) return '—';
   if (!verified) return `${cubicMetres.toFixed(displayDecimals(cubicMetres, 2, 4))} ${SOURCE_UNIT}³`;
   if (system === 'imperial') {
-    const cuYd = cubicMetres * 1.30795;
+    // Exact: one yard is 0.9144 m, so a cubic metre is 1 / 0.9144³ yd³.
+    const cuYd = (cubicMetres * FT_PER_M ** 3) / 27;
     return `${cuYd.toFixed(displayDecimals(cuYd, 2, 4))} yd³`;
   }
   return `${cubicMetres.toFixed(displayDecimals(cubicMetres, 2, 4))} m³`;
