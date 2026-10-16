@@ -208,3 +208,35 @@ describe('loadPnts: authored normals', () => {
     expect(bad.normals).toBeUndefined();
   });
 });
+
+describe('loadPnts: quantised positions far from the origin', () => {
+  it('keeps the point within one quantisation step', async () => {
+    const ft = {
+      POINTS_LENGTH: 1,
+      POSITION_QUANTIZED: { byteOffset: 0 },
+      QUANTIZED_VOLUME_OFFSET: [4_700_000, 5_300_000, 0],
+      QUANTIZED_VOLUME_SCALE: [100, 100, 100],
+    };
+    let json = JSON.stringify(ft);
+    while (json.length % 8 !== 0) json += ' ';
+    const jsonBytes = new TextEncoder().encode(json);
+    const binBytes = 8;
+    const total = 28 + jsonBytes.length + binBytes;
+    const buf = new ArrayBuffer(total);
+    const view = new DataView(buf);
+    view.setUint32(0, PNTS_MAGIC, true);
+    view.setUint32(4, 1, true);
+    view.setUint32(8, total, true);
+    view.setUint32(12, jsonBytes.length, true);
+    view.setUint32(16, binBytes, true);
+    new Uint8Array(buf, 28, jsonBytes.length).set(jsonBytes);
+    const codes = [12345, 54947, 0];
+    codes.forEach((c, i) => view.setUint16(28 + jsonBytes.length + i * 2, c, true));
+
+    const cloud = await loadPnts(buf);
+    const [x, y] = pointAt(cloud, 0);
+    const step = 100 / 65535;
+    expect(Math.abs(x - (4_700_000 + (12345 * 100) / 65535))).toBeLessThan(step);
+    expect(Math.abs(y - (5_300_000 + (54947 * 100) / 65535))).toBeLessThan(step);
+  });
+});

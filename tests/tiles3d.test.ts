@@ -193,7 +193,7 @@ describe('parsePnts quantised positions', () => {
     expect([...t.positions]).toEqual([0, 32768, 65535, 65535, 0, 1]);
   });
 
-  it('applies a per-axis scale and offset', () => {
+  it('applies a per-axis scale and returns the offset separately', () => {
     const t = parsePnts(
       makePositionPnts({
         quantized: [[0, 65535, 32768]],
@@ -201,25 +201,26 @@ describe('parsePnts quantised positions', () => {
         volumeScale: [65535, 131070, 65535],
       }),
     );
-    // 0/full + 10; 65535 * 2 full-scale steps + 20; half of full scale + 30.
-    expect([...t.positions]).toEqual([10, 131090, 32798]);
+    // 0/full; 65535 * 2 full-scale steps; half of full scale. The volume offset
+    // is not folded into the Float32 positions.
+    expect([...t.positions]).toEqual([0, 131070, 32768]);
+    expect(t.quantizedVolumeOffset).toEqual([10, 20, 30]);
   });
 
-  it('keeps the scaled code in Float64 until the volume offset is added', () => {
-    // A 1 km volume sitting 1000 km from the origin. Each code below is a value
-    // whose float32-rounded intermediate lands on the other side of a float32
-    // step once the offset is added, so narrowing before the addition rounds
-    // twice and moves the point.
-    const t = parsePnts(
-      makePositionPnts({
-        quantized: [[49909, 54947, 63016]],
-        volumeOffset: [1_000_000, 1_000_000, 1_000_000],
-        volumeScale: [100, 100, 100],
-      }),
-    );
-    expect([...t.positions]).toEqual([1000076.1875, 1000083.8125, 1000096.1875]);
-    // What the same tile would decode to if the intermediate were narrowed:
-    expect([...t.positions]).not.toEqual([1000076.125, 1000083.875, 1000096.125]);
+  it('keeps a volume far from the origin within one quantisation step', () => {
+    // A 100 m volume 4700 km from the origin: one step is 100/65535 = 1.5 mm,
+    // while Float32 spacing at 4.7e6 is 0.5 m. Folding the offset into the
+    // Float32 store would decode 4700019.0 for an exact 4700018.8373.
+    const offset = [4_700_000, 1_000_000, 0];
+    const scale = [100, 100, 100];
+    const codes = [12345, 49909, 63016];
+    const t = parsePnts(makePositionPnts({ quantized: [codes], volumeOffset: offset, volumeScale: scale }));
+    const step = 100 / 65535;
+    for (let a = 0; a < 3; a++) {
+      const exact = offset[a]! + (codes[a]! * scale[a]!) / 65535;
+      const world = t.positions[a]! + t.quantizedVolumeOffset![a]!;
+      expect(Math.abs(world - exact)).toBeLessThan(step);
+    }
   });
 
   it('prefers POSITION when a tile carries both encodings', () => {
@@ -233,6 +234,7 @@ describe('parsePnts quantised positions', () => {
       }),
     );
     expect([...t.positions]).toEqual([1, 2, 3]);
+    expect(t.quantizedVolumeOffset).toBeNull();
   });
 
   it('refuses a quantised array with no volume to interpret it', () => {
@@ -637,6 +639,7 @@ describe('parsePnts batch ids', () => {
       'normals',
       'pointsLength',
       'positions',
+      'quantizedVolumeOffset',
       'rtcCenter',
       'version',
     ]);

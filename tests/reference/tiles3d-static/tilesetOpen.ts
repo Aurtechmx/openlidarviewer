@@ -260,7 +260,11 @@ export async function fetchTileContent(
     throw signal.reason ?? new DOMException('3D Tiles tile read aborted', 'AbortError');
   }
   const tile = parsePnts(bytes);
-  const [cx, cy, cz] = tile.rtcCenter ?? [0, 0, 0];
+  const [rx, ry, rz] = tile.rtcCenter ?? [0, 0, 0];
+  const [qx, qy, qz] = tile.quantizedVolumeOffset ?? [0, 0, 0];
+  const cx = rx + qx;
+  const cy = ry + qy;
+  const cz = rz + qz;
   const { positions: local } = tile;
   const matrix = content.selected.placed.transform;
   const out = new Float64Array(local.length);
