@@ -95,7 +95,7 @@ describe('the streaming reader inherits them', () => {
     // merged reader removes the other place this was enforced.
     expect(() => {
       const t = parseTileset(doc(chain(DEFAULT_TILESET_MAX_DEPTH + 8)));
-      return new TilesetStreamingSource('id', 'n', 'https://h/d/tileset.json', transport(), t);
+      return new TilesetStreamingSource('id', 'n', 'https://h.example/d/tileset.json', transport(), t);
     }).toThrow(/refusing/);
   });
 

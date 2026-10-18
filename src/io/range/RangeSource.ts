@@ -164,54 +164,116 @@ export function validateRemoteCopcUrl(
   return { ok: true, url: raw };
 }
 
+/** Conventional private-network name suffixes; a name is blocked when it ends with one or equals one without its dot. */
+const BLOCKED_NAME_SUFFIXES = [
+  '.localhost',
+  '.local',
+  '.localdomain',
+  '.internal',
+  '.lan',
+  '.home.arpa',
+  '.intranet',
+  '.corp',
+  '.private',
+] as const;
+
+/** True for an IPv4 address in a loopback, private, shared, link-local, reserved or multicast range. */
+function isBlockedIpv4(a: number, b: number, c: number): boolean {
+  if (a === 0 || a === 10 || a === 127) return true; // this-network, RFC 1918, loopback
+  if (a === 169 && b === 254) return true; // link-local (cloud metadata lives here)
+  if (a === 172 && b >= 16 && b <= 31) return true; // RFC 1918
+  if (a === 192 && b === 168) return true; // RFC 1918
+  if (a === 100 && b >= 64 && b <= 127) return true; // CGNAT 100.64/10
+  if (a === 192 && b === 0 && c === 0) return true; // 192.0.0.0/24 IETF protocol assignments
+  if (a === 198 && (b === 18 || b === 19)) return true; // 198.18.0.0/15 benchmarking
+  if (a >= 224) return true; // 224.0.0.0/4 multicast, 240.0.0.0/4 reserved, 255.255.255.255 broadcast
+  return false;
+}
+
+/**
+ * Expand an IPv6 literal (no brackets) into its eight 16-bit groups, or null
+ * when it does not parse. A trailing dotted quad (`::ffff:127.0.0.1`) is folded
+ * into two groups, a zone id is ignored.
+ */
+function parseIpv6(literal: string): number[] | null {
+  let s = literal;
+  const zone = s.indexOf('%');
+  if (zone >= 0) s = s.slice(0, zone);
+  const quad = /(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/.exec(s);
+  if (quad) {
+    const o = quad.slice(1, 5).map(Number);
+    if (o.some((n) => n > 255)) return null;
+    s = `${s.slice(0, quad.index)}${((o[0] << 8) | o[1]).toString(16)}:${((o[2] << 8) | o[3]).toString(16)}`;
+  }
+  const halves = s.split('::');
+  if (halves.length > 2) return null;
+  const groups = (part: string): number[] =>
+    part === '' ? [] : part.split(':').map((g) => (/^[0-9a-f]{1,4}$/.test(g) ? Number.parseInt(g, 16) : Number.NaN));
+  const head = groups(halves[0]);
+  const tail = halves.length === 2 ? groups(halves[1]) : [];
+  const fill = 8 - head.length - tail.length;
+  if (halves.length === 1 ? fill !== 0 : fill < 1) return null;
+  const all = [...head, ...new Array<number>(halves.length === 2 ? fill : 0).fill(0), ...tail];
+  return all.length === 8 && all.every((g) => Number.isInteger(g)) ? all : null;
+}
+
+/**
+ * True for an IPv6 literal that is, or embeds, an address a remote-data URL
+ * must never target. Unparseable literals are refused.
+ */
+function isBlockedIpv6(literal: string): boolean {
+  const g = parseIpv6(literal);
+  if (!g) return true;
+  const embedded = (hi: number, lo: number): boolean => isBlockedIpv4(hi >> 8, hi & 0xff, lo >> 8);
+  // ::/96 (unspecified, loopback and the deprecated IPv4-compatible form that
+  // embeds an IPv4 address in the low 32 bits): refused whole.
+  if (g.slice(0, 6).every((x) => x === 0)) return true;
+  // ::ffff:0:0/96 IPv4-mapped, and ::ffff:0:0:0/96 IPv4-translated (SIIT):
+  // judged by the IPv4 address they carry.
+  if (g.slice(0, 5).every((x) => x === 0) && g[5] === 0xffff) return embedded(g[6], g[7]);
+  if (g.slice(0, 4).every((x) => x === 0) && g[4] === 0xffff && g[5] === 0) return embedded(g[6], g[7]);
+  if (g[0] === 0x64 && g[1] === 0xff9b) return true; // 64:ff9b::/96 and 64:ff9b:1::/48 NAT64
+  if (g[0] === 0x2002) return true; // 2002::/16 6to4 (embeds an IPv4 address)
+  if (g[0] === 0x2001 && g[1] === 0) return true; // 2001::/32 Teredo (embeds an IPv4 address)
+  if ((g[0] & 0xffc0) === 0xfe80) return true; // fe80::/10 link-local
+  if ((g[0] & 0xffc0) === 0xfec0) return true; // fec0::/10 deprecated site-local
+  if ((g[0] & 0xfe00) === 0xfc00) return true; // fc00::/7 unique-local
+  if ((g[0] & 0xff00) === 0xff00) return true; // ff00::/8 multicast
+  if (g[0] === 0x100 && g[1] === 0 && g[2] === 0 && g[3] === 0) return true; // 100::/64 discard-only
+  return false;
+}
+
 /**
  * True for hostnames that resolve to the local machine or a private /
  * internal network range, which a remote-data URL must never target.
- * Covers IPv4 (loopback, RFC 1918, link-local, CGNAT, unspecified),
- * IPv6 (loopback, unspecified, link-local fe80::/10, unique-local
- * fc00::/7), and the conventional internal name suffixes. This is a
- * best-effort literal check — it does not resolve DNS — which is the
- * correct guard for a browser-side app where the fetch happens from the
- * user's own machine.
+ *
+ * Covers IPv4 (this-network, loopback, RFC 1918, link-local, CGNAT, the
+ * 192.0.0.0/24 and 198.18.0.0/15 special ranges, multicast and reserved space
+ * to 255.255.255.255); IPv6 (`::/96`, loopback, mapped and translated forms
+ * judged by the IPv4 address they carry, NAT64, 6to4, Teredo, link-local,
+ * site-local, unique-local, multicast, discard-only); bare single-label names
+ * such as `intranet` or `router`, which only resolve on a local search domain;
+ * and the conventional private-network suffixes.
+ *
+ * This is a literal check on the text of the host. It does not resolve DNS,
+ * so a public-looking name whose A record points at a private address (for
+ * example `127.0.0.1.nip.io`) cannot be refused here; a browser-side app
+ * cannot see the resolved address before the request is made. The check closes
+ * the literal and naming routes, not DNS rebinding.
  */
 export function isBlockedHost(hostname: string): boolean {
   // Strip brackets AND any trailing dot(s): a root-anchored FQDN like
   // "localhost." or "svc.internal." resolves to the same host but would slip
   // past the equality / endsWith checks below.
   const h = hostname.toLowerCase().replace(/^\[/, '').replace(/\]$/, '').replace(/\.+$/, '');
-  if (h === '' || h === 'localhost') return true;
-  if (h.endsWith('.localhost') || h.endsWith('.local') || h.endsWith('.internal')) return true;
-  // IPv6 loopback / unspecified / link-local / unique-local.
-  if (h === '::1' || h === '::') return true;
-  if (/^fe[89ab][0-9a-f]:/i.test(h)) return true; // fe80::/10
-  if (/^f[cd][0-9a-f]{2}:/i.test(h)) return true; // fc00::/7
-  // IPv4-mapped IPv6 (::ffff:127.0.0.1 and its canonical hex form
-  // ::ffff:7f00:1). The URL parser rewrites the dotted form to hex, so both
-  // must map back to the embedded IPv4 and re-run the private/loopback checks —
-  // otherwise [::ffff:127.0.0.1] slips past the dotted-quad regex below.
-  const mapped = /^::ffff:(.+)$/i.exec(h);
-  if (mapped) {
-    const tail = mapped[1];
-    const hex = /^([0-9a-f]{1,4}):([0-9a-f]{1,4})$/i.exec(tail);
-    if (hex) {
-      const hi = Number.parseInt(hex[1], 16);
-      const lo = Number.parseInt(hex[2], 16);
-      return isBlockedHost(`${hi >> 8}.${hi & 0xff}.${lo >> 8}.${lo & 0xff}`);
-    }
-    return isBlockedHost(tail); // already-dotted mapped form
-  }
-  // IPv4 literals.
+  if (h === '') return true;
+  if (h.includes(':')) return isBlockedIpv6(h);
   const m = /^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/.exec(h);
-  if (m) {
-    const a = Number(m[1]);
-    const b = Number(m[2]);
-    if (a === 0 || a === 10 || a === 127) return true;
-    if (a === 169 && b === 254) return true; // link-local
-    if (a === 172 && b >= 16 && b <= 31) return true; // RFC 1918
-    if (a === 192 && b === 168) return true; // RFC 1918
-    if (a === 100 && b >= 64 && b <= 127) return true; // CGNAT 100.64/10
-  }
-  return false;
+  if (m) return isBlockedIpv4(Number(m[1]), Number(m[2]), Number(m[3]));
+  // A name with no dot is a single label (`localhost`, `intranet`, `router`):
+  // it resolves through the local search domain, never from the public DNS.
+  if (!h.includes('.')) return true;
+  return BLOCKED_NAME_SUFFIXES.some((suffix) => h.endsWith(suffix) || h === suffix.slice(1));
 }
 
 /**

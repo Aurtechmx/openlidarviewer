@@ -54,7 +54,7 @@ function transport(): TilesetTransport & { readonly asked: string[] } {
 }
 
 const source = (t = transport()) =>
-  new TilesetStreamingSource('id', 'A tileset', 'https://host/data/tileset.json', t, TREE);
+  new TilesetStreamingSource('id', 'A tileset', 'https://host.example/data/tileset.json', t, TREE);
 
 describe('what the source refuses to invent', () => {
   it('reports no source point count, because a tileset states none', () => {
@@ -96,7 +96,7 @@ describe('addressing a tile', () => {
     const s = source(t);
     const node = s.octree.nodes().find((n) => n.record.id === 'sub/a.pnts')!;
     await s.readNodeChunk(node.record);
-    expect(t.asked).toEqual(['https://host/data/sub/a.pnts']);
+    expect(t.asked).toEqual(['https://host.example/data/sub/a.pnts']);
   });
 
   it('hands the decoder the tile transform', () => {
@@ -187,7 +187,7 @@ describe('a geocentric tileset gets a local frame', () => {
     // The regression this guards: the source computed a frame and handed
     // tilesetNodes nothing, so a geocentric tileset stayed in ECEF.
     const s = new TilesetStreamingSource(
-      'id', 'n', 'https://h/d/tileset.json', transport(), geocentric,
+      'id', 'n', 'https://h.example/d/tileset.json', transport(), geocentric,
     );
     const meta = s.decodeMeta(s.octree.nodes()[0].record);
     if (!('format' in meta)) throw new Error('expected point-tile metadata');
@@ -205,7 +205,7 @@ describe('a geocentric tileset gets a local frame', () => {
 
   it('leaves the tileset unrotated when no frame is declared', () => {
     const t = transport();
-    const s = new TilesetStreamingSource('id', 'n', 'https://h/d/tileset.json', t, TREE);
+    const s = new TilesetStreamingSource('id', 'n', 'https://h.example/d/tileset.json', t, TREE);
     const m = s.decodeMeta(s.octree.nodes()[0].record);
     expect('format' in m && m.format).toBe('pnts');
   });

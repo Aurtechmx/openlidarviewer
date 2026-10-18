@@ -274,7 +274,7 @@ function source(): TilesetStreamingSource {
   return new TilesetStreamingSource(
     'id',
     'A tileset',
-    'https://host/data/tileset.json',
+    'https://host.example/data/tileset.json',
     transport(),
     TREE,
   );

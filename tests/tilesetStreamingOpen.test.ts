@@ -142,7 +142,7 @@ describe('the open path', () => {
   it('attaches a streaming cloud rather than a merged static one', async () => {
     const t = deps();
     await withTransport(DOC, () =>
-      openRemoteTileset('https://host/d/tileset.json', undefined, t.d as never),
+      openRemoteTileset('https://host.example/d/tileset.json', undefined, t.d as never),
     );
     expect(
       t.attached,
@@ -154,7 +154,7 @@ describe('the open path', () => {
   it('retires the static layers only after the attach has committed', async () => {
     const t = deps();
     await withTransport(DOC, () =>
-      openRemoteTileset('https://host/d/tileset.json', undefined, t.d as never),
+      openRemoteTileset('https://host.example/d/tileset.json', undefined, t.d as never),
     );
     const attach = t.order.indexOf('attach');
     const clear = t.order.indexOf('clearStatic');
@@ -169,7 +169,7 @@ describe('the open path', () => {
   it('publishes provenance only after the commit', async () => {
     const t = deps();
     await withTransport(DOC, () =>
-      openRemoteTileset('https://host/d/tileset.json', undefined, t.d as never),
+      openRemoteTileset('https://host.example/d/tileset.json', undefined, t.d as never),
     );
     expect(t.order.indexOf('provenance')).toBeGreaterThan(t.order.indexOf('attach'));
   });
@@ -177,7 +177,7 @@ describe('the open path', () => {
   it('offers only the colour modes a point tile can fill', async () => {
     const t = deps();
     await withTransport(DOC, () =>
-      openRemoteTileset('https://host/d/tileset.json', undefined, t.d as never),
+      openRemoteTileset('https://host.example/d/tileset.json', undefined, t.d as never),
     );
     const modes = (t.d.streamingPanel.setColorModes.mock.calls[0] ?? [])[0] as string[];
     expect(modes).not.toContain('intensity');
@@ -189,7 +189,7 @@ describe('the open path', () => {
     // the COPC's Scan Report on screen: its format, its extent, its point count.
     const t = deps();
     await withTransport(DOC, () =>
-      openRemoteTileset('https://host/d/tileset.json', undefined, t.d as never),
+      openRemoteTileset('https://host.example/d/tileset.json', undefined, t.d as never),
     );
     expect(t.reported).toHaveLength(1);
     expect(t.reported[0].kind).toBe('3dtiles');
@@ -199,7 +199,7 @@ describe('the open path', () => {
   it('reports the point total as absent rather than as a number', async () => {
     const t = deps();
     await withTransport(DOC, () =>
-      openRemoteTileset('https://host/d/tileset.json', undefined, t.d as never),
+      openRemoteTileset('https://host.example/d/tileset.json', undefined, t.d as never),
     );
     // A tileset states no total and its per-tile figures are decode-admission
     // estimates. Anything but null here is a figure nothing measured.
@@ -209,7 +209,7 @@ describe('the open path', () => {
   it('sets the report only after the attach has committed', async () => {
     const t = deps();
     await withTransport(DOC, () =>
-      openRemoteTileset('https://host/d/tileset.json', undefined, t.d as never),
+      openRemoteTileset('https://host.example/d/tileset.json', undefined, t.d as never),
     );
     expect(t.order.indexOf('report')).toBeGreaterThan(t.order.indexOf('attach'));
   });
@@ -222,7 +222,7 @@ describe('the open path', () => {
     });
     const t = deps(empty);
     await withTransport(empty, () =>
-      openRemoteTileset('https://host/d/tileset.json', undefined, t.d as never),
+      openRemoteTileset('https://host.example/d/tileset.json', undefined, t.d as never),
     );
     expect(t.attached).not.toHaveBeenCalled();
     expect(t.d.dropZone.setError).toHaveBeenCalled();
@@ -237,7 +237,7 @@ describe('the open path', () => {
 async function opened(doc = DOC) {
   const t = deps(doc);
   await withTransport(doc, () =>
-    openRemoteTileset('https://host/d/tileset.json', undefined, t.d as never),
+    openRemoteTileset('https://host.example/d/tileset.json', undefined, t.d as never),
   );
   return t;
 }
@@ -369,7 +369,7 @@ describe('controls a tileset cannot support are not presented', () => {
 
 describe('the scan name', () => {
   it('comes from the document, not the whole URL', () => {
-    expect(tilesetDisplayName('https://host/data/city/tileset.json')).toBe('tileset.json');
+    expect(tilesetDisplayName('https://host.example/data/city/tileset.json')).toBe('tileset.json');
   });
 
   it('falls back to the input when it is not a URL', () => {
@@ -384,7 +384,7 @@ describe('a refusal reaches the user', () => {
   async function shownFor(doc: string): Promise<string> {
     const t = deps(doc);
     await withTransport(doc, () =>
-      openRemoteTileset('https://host/d/tileset.json', undefined, t.d as never),
+      openRemoteTileset('https://host.example/d/tileset.json', undefined, t.d as never),
     );
     const calls = t.d.dropZone.setError.mock.calls;
     return calls.length ? String(calls[0][0]) : '';
