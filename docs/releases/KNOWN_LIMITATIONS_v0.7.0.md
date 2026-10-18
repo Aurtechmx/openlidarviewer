@@ -395,7 +395,7 @@ consecutive passes, counted by `scripts/ios-streak.mjs`.
 moved to its own lazy module, the Analyse panel's longitude and latitude
 wiring moved to the mapper module, the Planetary Computer CRS record moved to
 its own module and the view cube's wiring was condensed, and
-`src/render/Viewer.ts` is 5,946, 277 lines below its v0.6.9 count of 6,223. Five getters collapsed to make room for a memory
+`src/render/Viewer.ts` is 5,936, 287 lines below its v0.6.9 count of 6,223. Five getters collapsed to make room for a memory
 accessor and a size-mode call, and the streamed draw cull then paid for its own
 wiring by moving the pass onto the streaming renderer and collapsing two more
 expressions. Making the loop request-driven then took another thirty-one out:
@@ -405,12 +405,12 @@ there. The frame gained a decision while the file lost lines. The two-finger
 pinch and pan now share one screen-space shift, which took another
 thirty-six out. The figure view context moved into the export adapter, which
 took twenty-one more. The measure click handling moved into the
-measurement controller, which took twenty-eight more. The draw precision bound's model-view accessor took one line and a shorter doc comment gave back two. A shrink-only lint
+measurement controller, which took twenty-eight more. The draw precision bound's model-view accessor took one line and a shorter doc comment gave back two. The terrain gather's up-axis rule moved to its own module, which took ten more. A shrink-only lint
 fails the build when either passes its recorded baseline, so a raise is a hand
 edit to `docs/validation/monolith-size-baseline.json` and always shows in the
 diff.
-Fan-out is 97 for the shell, 74 for the renderer and 29 for the Analyse panel,
-across 1151 modules with no dependency cycles.
+Fan-out is 97 for the shell, 73 for the renderer and 29 for the Analyse panel,
+across 1152 modules with no dependency cycles.
 
 ## The shell has little headroom
 
@@ -539,6 +539,16 @@ gives the reason. The scale widens on an axis whose extent would need more than
   export with the rotation, then assign the CRS to that file. A PLY or OBJ
   under a CRS is assumed to store easting, northing and height in X, Y and
   Z; OLV cannot tell from a PLY or OBJ file that its axes are otherwise.
+- Terrain analysis, and the DTM, contours, map sheet and terrain exports
+  built from it, take the up axis from metadata by the same rule. A PLY or
+  OBJ under a CRS (the file's, or one assigned in the app) is analysed as
+  stored and is never rotated because of its shape. A glTF or GLB under a CRS
+  is not analysed, and the Analyse panel says how to reconcile its axes. Only
+  a PLY, OBJ or glTF model with no CRS, or one set to Local, has its up axis
+  detected from the point layout; the panel states the detected axis and,
+  for Y-up, that the points were rotated to Z-up as (x, -z, y). A detected
+  Y-up model is not analysed together with Z-up layers. The detected axis is
+  shown in the panel only and is not recorded in the exported provenance.
 - The reproduction pack's metrics reproduce exactly under the Node version
   pinned in `.nvmrc`. Another Node or V8 version can change the last digits.
 
