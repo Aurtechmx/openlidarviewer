@@ -21,6 +21,10 @@ import { upAxisOf, elevationOptsFor } from '../src/render/projectElevationScale'
 import { colorForMode } from '../src/render/colorModes';
 import { buildColorLegend } from '../src/render/colorLegend';
 import type { PointCloud } from '../src/model/PointCloud';
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
+import { Viewer } from '../src/render/Viewer';
+import { ELEVATION_FILTER_AXIS_CLEARED, reexpressElevationFilter } from '../src/app/elevationFilterAxis';
 
 function port(): CrsOverridePort {
   const store = new Map<string, unknown>();
@@ -102,5 +106,56 @@ describe('display up axis follows the resolved layer frame', () => {
     expect(cloudUpAxisMoved([cloud, undefined])).toBe(true);
     expect(cloudUpAxisIndex(cloud)).toBe(2);
     expect(cloudUpAxisMoved([cloud])).toBe(false);
+  });
+});
+
+describe('the elevation filter after a layer\'s axis moves', () => {
+  /** The Inspector's filter control as main.ts drives it: a changed extent resets it and clears the window. */
+  function control(window: [number, number] | null, extent: { min: number; max: number }) {
+    const state = { window, extent, applied: [] as Array<readonly [number, number] | undefined>, notes: [] as string[] };
+    const deps = {
+      active: () => state.window,
+      extent: () => state.extent,
+      seedExtent: (e: { min: number; max: number } | null) => {
+        if (e && (e.min !== extent.min || e.max !== extent.max)) state.window = null;
+      },
+      apply: (r: readonly [number, number] | undefined) => state.applied.push(r),
+      notify: (m: string) => state.notes.push(m),
+    };
+    return { state, deps };
+  }
+
+  it('each layer converts the window along its resolved axis', async () => {
+    const cloud = await strip();
+    const crs = new CrsService(port());
+    crs.resolveForScan({ name: cloud.name, detected: undefined, source: 'las-vlr', identity: datasetIdentity(cloud) });
+    install(crs, cloud);
+    const elevLayerOf = (Viewer.prototype as unknown as { _elevLayerOf(c: PointCloud): { axis: number; originAlongAxis: number } })._elevLayerOf;
+    expect(elevLayerOf.call({}, cloud)).toEqual({ axis: 1, originAlongAxis: cloud.origin[1] });
+    crs.setOverride({ override: { kind: 'projected', epsg: 32613 }, detected: undefined, source: 'las-vlr' });
+    expect(elevLayerOf.call({}, cloud)).toEqual({ axis: 2, originAlongAxis: cloud.origin[2] });
+  });
+
+  it('a window whose extent moved is cleared with the reason, never applied along the old axis', () => {
+    const { state, deps } = control([4000050, 4000100], { min: 4000000, max: 4000200 });
+    state.extent = { min: 100, max: 110 };
+    reexpressElevationFilter(deps);
+    expect(state.window).toBeNull();
+    expect(state.notes).toEqual([ELEVATION_FILTER_AXIS_CLEARED]);
+    expect(state.applied).toEqual([]);
+  });
+
+  it('a window that still describes the scene is re-applied at once along the new axes', () => {
+    const { state, deps } = control([102, 108], { min: 100, max: 110 });
+    reexpressElevationFilter(deps);
+    expect(state.notes).toEqual([]);
+    expect(state.applied).toEqual([[102, 108]]);
+  });
+
+  it('main.ts re-expresses the filter when a CRS change moves an axis', () => {
+    const main = readFileSync(resolve(__dirname, '../src/main.ts'), 'utf8');
+    expect(main).toMatch(/onUpAxisMoved: \(\) => reexpressElevationFilter\(\{ active: \(\) => activeElevFilter, extent: \(\) => viewer\.elevationExtent\(\), seedExtent: \(e\) => inspector\.setElevationExtent\(e\), apply: \(r\) => viewer\.setElevationFilter\(r\)/);
+    const mount = readFileSync(resolve(__dirname, '../src/app/measurePanelMount.ts'), 'utf8');
+    expect(mount).toMatch(/if \(cloudUpAxisMoved\(src\.clouds\(\)\.map\(src\.cloud\)\)\) \{\s*v\.refreshProjectSharedElevation\(true\);\s*src\.onUpAxisMoved\?\.\(\);/);
   });
 });

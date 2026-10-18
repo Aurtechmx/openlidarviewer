@@ -142,7 +142,7 @@ import type { DebugOverlay, StreamingDebugStats } from './ui/DebugOverlay';
 import type { ColorbarOverlay } from './ui/ColorbarOverlay';
 import { estimateDecodedBytes, estimateGpuBytes } from './render/streaming/streamingBudget';
 import { streamingHasGpsTime } from './render/streaming/StreamingSource';
-import { activeSpatialUpAxis } from './app/layerUpFrames';
+import { activeSpatialUpAxis, reexpressElevationFilter } from './app/layerUpFrames';
 // The PLY/OBJ/XYZ/CSV encoders load on first export (`loadExporters`).
 // Only the tiny file-router predicate is eager; the (large) serializer/parser
 // is dynamically imported in exportSession/importSession so it stays off the
@@ -1627,7 +1627,7 @@ const refreshMeasurePanel = (): void => { measureMount.refresh(); refreshToolLau
 // verdicts (measureLayerUnits). Deferred behind viewerLoaded: `viewer` is null
 // until the lazy chunk resolves, and subscribe fires synchronously.
 void viewerLoaded.then(() => {
-  const measureUnits = measureMount.bindUnitFrames({ activeId: () => scans.activeId, clouds: () => viewer.clouds(), cloud: (id) => viewer.getCloud(id), stableIdFor: runtime.layerIdentity.stableIdFor }); scans.onActiveChange(() => viewer.alignUpToLayer(scans.activeId)); // navigation up follows the active layer
+  const measureUnits = measureMount.bindUnitFrames({ activeId: () => scans.activeId, clouds: () => viewer.clouds(), cloud: (id) => viewer.getCloud(id), stableIdFor: runtime.layerIdentity.stableIdFor, onUpAxisMoved: () => reexpressElevationFilter({ active: () => activeElevFilter, extent: () => viewer.elevationExtent(), seedExtent: (e) => inspector.setElevationExtent(e), apply: (r) => viewer.setElevationFilter(r), notify: (m) => appToast().show(m) }) }); scans.onActiveChange(() => viewer.alignUpToLayer(scans.activeId)); // navigation up follows the active layer
   crsService.subscribe(() => {
     // One context for the active scan: measure scale, trust grade, geographic
     // refusal and the colorbar unit all read it.

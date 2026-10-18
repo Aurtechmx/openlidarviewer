@@ -19,7 +19,7 @@
  * Part of the v0.6 decomposition (see `docs/architecture/architecture-map.md`).
  */
 
-import { sessionUpAxisNote } from './sessionUpAxisNote';
+import { heldCutAxes, sessionUpAxisNote } from './sessionUpAxisNote';
 import type { LayerUpFrame } from '../geo/frame/layerUpFrame';
 import type { Viewer } from '../render/Viewer';
 import type { WorkplaneSettings } from '../model/workplaneSettings';
@@ -614,7 +614,9 @@ export async function importSession(
         upAxis: session.upAxis,
         projectOrigin: heldFrame ? heldFrame.projectOrigin : [session.origin[0], session.origin[1], session.origin[2]],
         layers: heldFrame ? heldFrame.layers.filter((l) => named.has(l.layerId)) : ownershipModule.framelessHeldRecords(work, named),
-        measurements: held.measurements,
+        // Held work moves between frame records before it is placed; its
+        // stored heights move only along the axis they were cut along.
+        measurements: heldCutAxes(held.measurements, session.upFrame, session.layerId ?? null),
         annotations: held.annotations,
       });
     } else {

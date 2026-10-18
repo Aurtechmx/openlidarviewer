@@ -410,7 +410,7 @@ fails the build when either passes its recorded baseline, so a raise is a hand
 edit to `docs/validation/monolith-size-baseline.json` and always shows in the
 diff.
 Fan-out is 97 for the shell, 73 for the renderer and 29 for the Analyse panel,
-across 1156 modules with no dependency cycles.
+across 1157 modules with no dependency cycles.
 
 ## The shell has little headroom
 
@@ -564,7 +564,9 @@ gives the reason. The scale widens on an axis whose extent would need more than
   that was cut along another axis; when the layer's points are not there to
   re-cut it, the chart or cut and fill is withheld with the reason until they
   are. The session file keeps the format's up axis for matching and records
-  the resolved axis beside it.
+  the resolved axis beside it. A CRS change that moves a layer's axis clears an
+  active elevation filter whose window no longer matches the scene's heights,
+  and says so.
 - The reproduction pack's metrics reproduce exactly under the Node version
   pinned in `.nvmrc`. Another Node or V8 version can change the last digits.
 

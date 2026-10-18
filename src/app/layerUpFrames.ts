@@ -99,3 +99,6 @@ export function withholdUnresolvedUp<M extends { readonly id: string }>(
     withheld: owned.withheld ? `${owned.withheld} ${sentence}` : sentence,
   };
 }
+
+/** Re-express the elevation filter after a CRS change moved a layer's axis (`elevationFilterAxis.ts`). */
+export { reexpressElevationFilter } from './elevationFilterAxis';

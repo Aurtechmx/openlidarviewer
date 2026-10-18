@@ -107,7 +107,10 @@ export interface MeasurePanelMount {
    * Call once the viewer exists; drive the result from the CRS subscription.
    * Also binds navigation up to the same per-layer frame (`app/layerUpFrames.ts`).
    */
-  bindUnitFrames(src: Omit<LayerUnitSource, 'crs' | 'realignUp'>): MeasureUnitFrames;
+  bindUnitFrames(src: Omit<LayerUnitSource, 'crs' | 'realignUp'> & {
+    /** A CRS change moved a layer's resolved up axis: colours were rebuilt; re-express the elevation filter. */
+    readonly onUpAxisMoved?: () => void;
+  }): MeasureUnitFrames;
 }
 
 /**
@@ -442,7 +445,10 @@ export function createMeasurePanelMount(deps: MeasurePanelMountDeps): MeasurePan
         crs: deps.crsService,
         realignUp: () => {
           v.alignUpToLayer(src.activeId());
-          if (cloudUpAxisMoved(src.clouds().map(src.cloud))) v.refreshProjectSharedElevation(true);
+          if (cloudUpAxisMoved(src.clouds().map(src.cloud))) {
+            v.refreshProjectSharedElevation(true);
+            src.onUpAxisMoved?.();
+          }
         },
       });
     },

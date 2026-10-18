@@ -16,7 +16,8 @@ import { PointCloud } from '../src/model/PointCloud';
 import { CrsService, datasetIdentity, type CrsOverridePort } from '../src/geo/CrsService';
 import { bindMeasureUnitFrames } from '../src/app/measureLayerUnits';
 import { layerUpFrameOf } from '../src/app/layerUpFrames';
-import { sessionUpAxisNote } from '../src/app/sessionUpAxisNote';
+import { heldCutAxes, sessionUpAxisNote } from '../src/app/sessionUpAxisNote';
+import { shiftMeasurement } from '../src/io/sessionFrame';
 import { geoContextForCloud } from '../src/app/reportExport';
 import { exportMeasurementsFile, type MeasurementExportActionDeps } from '../src/app/measurementExportActions';
 import * as serializers from '../src/export/measurementExport';
@@ -219,5 +220,48 @@ describe('an older session that recorded the format axis', () => {
     expect(live.ok).toBe(false);
     expect(sessionUpAxisNote({ recorded: undefined, formatAxis: 'y', live, recut: { recut: 0, withheld: 0 } }))
       .toMatch(/^ The scan has no resolved up axis, so heights, grades, profiles and volumes are withheld: glTF stores Y/);
+  });
+});
+
+describe('work held for a scan that is not open', () => {
+  const chart = [{ distance: 0, height: 30 }, { distance: 1, height: 31 }];
+  const heldProfile = (extra: Partial<Measurement> = {}): Measurement =>
+    ({ id: 'p', kind: 'profile', name: 'p', closed: false, points: [[0, 0, 0], [10, 0, 0]], profileChart: chart, owner: { layerId: 'layer-b', frame: 'source-local' }, ...extra }) as Measurement;
+
+  it('keeps a recorded cut axis, takes the session record for its own scan, and never the format axis', () => {
+    const [kept] = heldCutAxes([heldProfile({ derivedUpAxis: 'z' })], undefined, null);
+    expect(kept!.derivedUpAxis).toBe('z');
+    // Moved between frame records along Z, the axis it was cut along, though the held format axis is Y.
+    expect(shiftMeasurement(kept!, [0, 10, 5], 'y').profileChart!.map((x) => x.height)).toEqual([35, 36]);
+
+    const [fromRecord] = heldCutAxes([heldProfile()], { axis: 'z', basis: 'crs' }, 'layer-b');
+    expect(fromRecord!.derivedUpAxis).toBe('z');
+
+    // An older file: only the format axis is recorded, which is not evidence of the cut.
+    const [unknown] = heldCutAxes([heldProfile()], undefined, 'layer-b');
+    expect(unknown!.derivedUpAxis).toBeUndefined();
+    expect(unknown!.profileChart).toBeUndefined();
+    expect(unknown!.derivedWithheld).toBe("Profile chart withheld: the session did not record the up axis it was cut along. It is re-cut along the layer's resolved up axis when the layer is open.");
+    // Moved between frames, nothing is shifted along a guessed axis.
+    const moved = shiftMeasurement(unknown!, [0, 10, 5], 'y');
+    expect(moved.profileChart).toBeUndefined();
+    expect(moved.points[0]).toEqual([0, 10, 5]);
+    // A record for a different scan does not apply.
+    expect(heldCutAxes([heldProfile()], { axis: 'z', basis: 'crs' }, 'layer-a')[0]!.derivedWithheld).toBeDefined();
+  });
+
+  it('is re-cut along the reopened layer\'s resolved frame when its scan opens, and the restore says so', async () => {
+    const cloud = await site();
+    const r = await open(memoryPort(), cloud, 32613);
+    withSamplers(r);
+    const [held] = heldCutAxes([{ ...heldProfile(), points: [pt(cloud, 0), pt(cloud, 2)], owner: own.owner, pickLayers: own.pickLayers }], undefined, null);
+    r.measure.loadMeasurements([held!]);
+    const recut = r.measure.recutDerived();
+    expect(recut).toEqual({ recut: 1, withheld: 0 });
+    expect(r.cuts).toEqual(['profile 0,0,1']);
+    const m = r.measure.getMeasurements()[0]!;
+    expect(m.derivedUpAxis).toBe('z');
+    expect(m.derivedWithheld).toBeUndefined();
+    expect(sessionUpAxisNote({ recorded: undefined, formatAxis: 'y', live: null, recut })).toBe(" 1 profile or volume result was re-cut along the scan's resolved up axis.");
   });
 });

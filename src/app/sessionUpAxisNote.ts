@@ -44,3 +44,42 @@ export function sessionUpAxisNote(input: {
   if (withheld > 0) parts.push(`${withheld} profile or volume result${withheld === 1 ? ' is' : 's are'} withheld: cut along another up axis and not re-cut here.`);
   return parts.length > 0 ? ` ${parts.join(' ')}` : '';
 }
+
+/**
+ * Settle the cut axis of work a restore holds for a scan that is not open.
+ * Held work is moved between frame records before it is placed, and its
+ * stored profile heights and volume reference planes move with it, so the
+ * axis they were cut along must be known. It is the measurement's own record;
+ * else the session's recorded resolved frame when the work belongs to the scan
+ * that frame describes. Otherwise it is not known (an older file records only
+ * the format's axis, which is not evidence of the cut): the value is withheld
+ * with the reason rather than moved along a guessed axis, and is re-cut along
+ * the reopened layer's resolved frame when that layer opens.
+ */
+export function heldCutAxes<M extends {
+  readonly kind: string;
+  readonly owner?: { readonly layerId?: string };
+  readonly pickLayers?: readonly string[];
+  profileChart?: unknown;
+  volume?: unknown;
+  volumeResidentOnly?: boolean;
+  derivedUpAxis?: 'y' | 'z';
+  derivedWithheld?: string;
+}>(measurements: readonly M[], recorded: SessionUpFrame | undefined, recordedLayerId: string | null): M[] {
+  return measurements.map((m) => {
+    if (m.derivedUpAxis || !(m.profileChart || m.volume)) return m;
+    const layer = m.owner?.layerId ?? null;
+    if (recorded && recorded.basis !== 'unresolved' && layer !== null && layer === recordedLayerId) {
+      return { ...m, derivedUpAxis: recorded.axis };
+    }
+    const what = m.kind === 'profile' ? 'Profile chart' : 'Cut and fill';
+    const next: M = {
+      ...m,
+      derivedWithheld: `${what} withheld: the session did not record the up axis it was cut along. It is re-cut along the layer's resolved up axis when the layer is open.`,
+    };
+    delete next.profileChart;
+    delete next.volume;
+    delete next.volumeResidentOnly;
+    return next;
+  });
+}
