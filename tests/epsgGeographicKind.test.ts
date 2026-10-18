@@ -158,13 +158,15 @@ describe('convert writes the resolved CRS kind', () => {
 
   it('writes a 4547 LAS with no vertical datum instead of refusing on its vertical unit', () => {
     const crs = crsFromEpsg(4547, { isGeographic: false, linearUnit: 'metre' });
-    for (const format of ['las', 'las14'] as const) {
-      const { file, report } = convertCloud(gkCloud(crs), { format, crsMode: 'keep' });
-      const messages = report.log.map((l) => l.message).join('\n');
-      expect(messages).not.toMatch(/Vertical check failed/);
-      expect(report.ok).toBe(true);
-      expect(geoKeys(file!.bytes).get(3072)).toBe(4547);
-    }
+    const { file, report } = convertCloud(gkCloud(crs), { format: 'las', crsMode: 'keep' });
+    const messages = report.log.map((l) => l.message).join('\n');
+    expect(messages).not.toMatch(/Vertical check failed/);
+    expect(report.ok).toBe(true);
+    expect(geoKeys(file!.bytes).get(3072)).toBe(4547);
+    // LAS 1.4 needs WKT, and this build holds none for 4547: refused by name.
+    const r14 = convertCloud(gkCloud(crs), { format: 'las14', crsMode: 'keep' });
+    expect(r14.file).toBeNull();
+    expect(r14.report.log.map((l) => l.message).join('\n')).toMatch(/no verified WKT definition for EPSG:4547.*LAS 1\.2/);
   });
 
   it('takes the kind of an assigned code from the EPSG table', () => {

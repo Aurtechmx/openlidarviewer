@@ -479,6 +479,20 @@ gives the reason. The scale widens on an axis whose extent would need more than
   records within the extent Float32 positions resolve (16 km at a 1 mm scale);
   a reprojected, voxel-reduced, streamed or non-LAS export is re-quantised at
   1 mm. See the section above.
+- LAS 1.4 export writes the coordinate system as OGC WKT only for the CRS
+  whose definition OLV stores (checked against PROJ 9.8.1, EPSG v12.029):
+  WGS 84, NAD83, NAD83(2011), NAD27 and ETRS89 UTM zones, GDA94 and GDA2020
+  MGA zones, the national grids and geographic CRS of the built-in registry,
+  and a scan's own valid WKT. Any other EPSG code, including State Plane
+  codes, is refused for LAS 1.4 and can be written as LAS 1.2 with GeoTIFF
+  keys. A vertical CRS is added to the WKT only for the vertical codes the
+  LAS vertical keys already check; another vertical code travels as a GeoKey
+  beside a horizontal WKT.
+- Assign EPSG accepts a geographic or projected code from the EPSG v12.029
+  tables or the built-in registry. A code added to EPSG after v12.029 is
+  refused as unknown until the tables are regenerated
+  (`scripts/gen-epsg-crs-tables.mjs`). No datum transformation is applied by
+  an assignment.
 - LAS classes convert by meaning only where the specification gives one.
   Between LAS 1.0 to 1.3 and LAS 1.4, legacy class 8 (Model Key-point) becomes
   class 1 with the key-point flag, and legacy class 12 (Overlap Points) becomes

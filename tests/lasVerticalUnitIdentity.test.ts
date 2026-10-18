@@ -148,6 +148,17 @@ function convertOk(cloud: PointCloud, opts: Parameters<typeof convertCloud>[1]):
 }
 
 /** The physical elevation difference the output states for the 10-unit rise. */
+/**
+ * LAS 1.4 point formats 6-10 need the CRS as WKT, and this build holds no
+ * verified WKT for the State Plane foot code used below, so a LAS 1.4 export
+ * of it is refused by name (LAS 1.2 records it as GeoKeys).
+ */
+function expectNoWktRefusal(cloud: PointCloud, opts: Parameters<typeof convertCloud>[1], code: number): void {
+  const out = convertCloud(cloud, opts);
+  expect(out.file).toBeNull();
+  expect(out.report.log.map((l) => l.message).join(' ')).toContain(`no verified WKT definition for EPSG:${code}`);
+}
+
 function riseMetres(r: Reread): number {
   expect(r.zToMetres).toBeDefined();
   return (r.zMax - r.zMin) * (r.zToMetres as number);
@@ -224,6 +235,7 @@ describe('LAS conversion keeps the declared vertical unit (load → resolve → 
 
       it('foot XY + metre Z: Keep writes foot horizontal and metre vertical', () => {
         const { cloud, resolved } = load(sourceLas({ epsg: 2225, linearUnitCode: 9003, verticalEpsg: 5703, verticalUnitCode: 9001 }, [6000000, 2000000]), 'ftxy.las', [6000000, 2000000]);
+        if (format === 'las14') return expectNoWktRefusal(cloud, { format, crsMode: 'keep', resolvedSourceCrs: resolved }, 2225);
         const r = convertOk(cloud, { format, crsMode: 'keep', resolvedSourceCrs: resolved });
         expect(r.crs?.linearUnit).toBe('us-survey-foot');
         expect(r.crs?.verticalEpsg).toBe(5703);
@@ -242,6 +254,7 @@ describe('LAS conversion keeps the declared vertical unit (load → resolve → 
       it('absent vertical unit: Keep adds no vertical claim and the reader interprets Z as before', () => {
         const { cloud, resolved } = load(sourceLas({ epsg: 2225, linearUnitCode: 9003 }, [6000000, 2000000]), 'novert.las', [6000000, 2000000]);
         expect(resolved.verticalUnitToMetres).toBeUndefined();
+        if (format === 'las14') return expectNoWktRefusal(cloud, { format, crsMode: 'keep', resolvedSourceCrs: resolved }, 2225);
         const r = convertOk(cloud, { format, crsMode: 'keep', resolvedSourceCrs: resolved });
         expect(r.keys.has(4099)).toBe(false);
         expect(r.keys.has(4096)).toBe(false);
@@ -273,6 +286,8 @@ describe('LAS conversion keeps the declared vertical unit (load → resolve → 
 
       it('Reproject of foot XY with no declared vertical unit keeps Z in the source foot', () => {
         const { cloud, resolved } = load(sourceLas({ epsg: 2225, linearUnitCode: 9003 }, [6000000, 2000000]), 'ftrep.las', [6000000, 2000000]);
+        // The reproject is skipped (no definition for 2225), so the file stays in 2225.
+        if (format === 'las14') return expectNoWktRefusal(cloud, { format, crsMode: 'reproject', targetEpsg: 4326, resolvedSourceCrs: resolved }, 2225);
         const r = convertOk(cloud, { format, crsMode: 'reproject', targetEpsg: 4326, resolvedSourceCrs: resolved });
         expect(r.zMin).toBe(100);
         expect(r.crs?.verticalUnitToMetres).toBeCloseTo(US_FT, 12);

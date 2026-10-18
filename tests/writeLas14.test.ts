@@ -12,6 +12,7 @@ import { describe, it, expect } from 'vitest';
 import { PointCloud } from '../src/model/PointCloud';
 import type { GlobalPoints } from '../src/convert/globalPoints';
 import { writeLas, writeLas14, pickPointFormat14 } from '../src/convert/writeLas';
+import { wktForEpsg } from '../src/io/epsgWkt';
 import { parseLasHeader } from '../src/io/lasHeader';
 import { loadLas } from '../src/io/loadLas';
 import { convertCloud } from '../src/convert/convertCloud';
@@ -87,12 +88,15 @@ describe('writeLas14 header', () => {
       expect(view.getBigUint64(255 + r * 8, true)).toBe(0n);
     }
 
-    // Point data offset: 375-byte header + one GeoKey VLR. The VLR is a
-    // 54-byte header + 8-byte GeoKey header + 2 keys × 8 bytes = 78 bytes.
-    expect(view.getUint32(100, true)).toBe(1); // one VLR (GeoKeys, no WKT)
-    expect(view.getUint32(96, true)).toBe(375 + 54 + 8 + 2 * 8); // 453
-    // No WKT given → global-encoding WKT bit (bit 4) stays clear.
-    expect(view.getUint16(6, true) & 0x10).toBe(0);
+    // Point data offset: 375-byte header + one OGC WKT VLR (54-byte header +
+    // the null-terminated WKT the writer builds for EPSG:32611). Formats 6-10
+    // carry the CRS as WKT, so no GeoKey VLR is written beside it here.
+    const wktBytes = wktForEpsg(32611)!.length + 1;
+    expect(view.getUint32(100, true)).toBe(1); // one VLR (WKT)
+    expect(view.getUint32(96, true)).toBe(375 + 54 + wktBytes);
+    expect(view.getUint16(375 + 18, true)).toBe(2112);
+    // WKT written → global-encoding WKT bit (bit 4) set.
+    expect(view.getUint16(6, true) & 0x10).toBe(0x10);
 
     // Returns above the extended 15-slot range clamp to the TOP slot, exactly
     // like the record field's Math.min(15, …) clamp — never into slot 1.
@@ -108,7 +112,7 @@ describe('writeLas14 header', () => {
     expect(header.versionMinor).toBe(4);
     expect(header.pointFormat).toBe(6);
     expect(header.pointCount).toBe(3); // read from the extended uint64
-    expect(header.offsetToPointData).toBe(453);
+    expect(header.offsetToPointData).toBe(375 + 54 + wktBytes);
   });
 
   it('picks format 7 (36-byte records) when the cloud has colour, 6 otherwise', () => {
@@ -319,13 +323,17 @@ describe('GeoKeys — the vertical unit comes from the source, not the horizonta
   });
 
   it('writes the SOURCE vertical unit over a metre horizontal', () => {
-    // Foot heights reprojected horizontally to metres: Z is still feet.
+    // Foot heights reprojected horizontally to metres: Z is still feet. The
+    // horizontal frame is in the WKT (here a compound with NAVD88 in US survey
+    // feet), so only the vertical keys travel as GeoKeys, and they agree.
     const bytes = writeLas14(g(), {
       epsg: 26913, isGeographic: false, linearUnitCode: 9001,
       verticalEpsg: 5703, verticalUnitCode: 9003,
     });
-    expect(key(bytes, 3076)).toBe(9001);
+    expect(key(bytes, 3076)).toBeUndefined();
+    expect(key(bytes, 4096)).toBe(6360);
     expect(key(bytes, 4099)).toBe(9003);
+    expect(new TextDecoder().decode(bytes)).toContain('AUTHORITY["EPSG","6360"]]]');
   });
 
   it('omits VerticalUnits rather than guessing when the source unit is unknown', () => {
@@ -370,7 +378,9 @@ describe('GeoKeys — the vertical unit comes from the source, not the horizonta
 
   it('no longer copies a foot horizontal into the vertical slot', () => {
     // The old derivation: foot horizontal ⇒ foot vertical, even for metre Z.
-    const bytes = writeLas14(g(), {
+    // EPSG:2231 has no built-in WKT, so LAS 1.4 refuses it; the GeoKey rule
+    // is the same in the LAS 1.2 writer.
+    const bytes = writeLas(g(), {
       epsg: 2231, isGeographic: false, linearUnitCode: 9003,
       verticalEpsg: 5703, verticalUnitCode: 9001,
     });
