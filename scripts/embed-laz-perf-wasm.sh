@@ -9,7 +9,7 @@ WASM=node_modules/laz-perf/lib/web/laz-perf.wasm
   echo "// AUTO-GENERATED — do not edit. Regenerate with scripts/embed-laz-perf-wasm.sh"
   echo "// Source: laz-perf/lib/web/laz-perf.wasm — the LAZ decompression WASM module."
   printf 'export const LAZ_PERF_WASM_BASE64 =\n  "'
-  base64 -w0 "$WASM"
+  base64 < "$WASM" | tr -d '\n'
   printf '";\n'
 } > src/io/lazPerfWasm.ts
 echo "wrote src/io/lazPerfWasm.ts ($(wc -c < src/io/lazPerfWasm.ts) bytes)"
