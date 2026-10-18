@@ -410,7 +410,7 @@ fails the build when either passes its recorded baseline, so a raise is a hand
 edit to `docs/validation/monolith-size-baseline.json` and always shows in the
 diff.
 Fan-out is 97 for the shell, 73 for the renderer and 29 for the Analyse panel,
-across 1154 modules with no dependency cycles.
+across 1156 modules with no dependency cycles.
 
 ## The shell has little headroom
 
@@ -559,8 +559,12 @@ gives the reason. The scale widens on an axis whose extent would need more than
   height, grade, profile, box or volume figure; its CSV and GeoJSON exports are
   refused and the PDF leaves it out with the reason. Assigning, replacing or
   clearing a CRS re-reads measurements already taken and re-cuts their
-  profiles and volumes. A profile or volume restored from a saved session is
-  not re-cut, and the session file records the format's up axis.
+  profiles and volumes. Height colouring, the elevation scale and the colour
+  legend follow the same axis. A reopened session re-cuts a profile or volume
+  that was cut along another axis; when the layer's points are not there to
+  re-cut it, the chart or cut and fill is withheld with the reason until they
+  are. The session file keeps the format's up axis for matching and records
+  the resolved axis beside it.
 - The reproduction pack's metrics reproduce exactly under the Node version
   pinned in `.nvmrc`. Another Node or V8 version can change the last digits.
 

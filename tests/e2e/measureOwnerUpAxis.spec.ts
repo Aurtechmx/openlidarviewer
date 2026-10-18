@@ -267,6 +267,36 @@ test.describe('a PLY under a projected CRS measures, exports and navigates along
     expect(v[0]).toMatch(/^0(\.0+)?\b/);
   });
 
+  test('a session saved under EPSG:32613 records the resolved frame and reopens with Z heights', async ({ page }) => {
+    await page.goto('/?test=1');
+    await dropBytes(page, surveyPly(), 'survey.ply');
+    await opened(page, 1, 'survey.ply');
+    await assignCrs(page, '32613');
+    await expect.poll(() => sceneUp(page)).toEqual(Z_UP);
+    await measure(page, 'height', [[0, 0, 0], [0, 0, 100]]);
+    await measure(page, 'height', [[0, 0, 0], [0, 100, 0]]);
+    await openToolPage(page, 'Measure');
+    const dl = page.waitForEvent('download');
+    await page.locator('.olv-mp-action', { hasText: 'Export' }).click();
+    const file = await dl;
+    const bytes = readFileSync((await file.path())!);
+    const json = JSON.parse(bytes.toString('utf8')) as { upAxis: string; upFrame?: { axis: string; basis: string } };
+    // The format axis stays for matching; the resolved frame is recorded beside it.
+    expect(json.upAxis).toBe('y');
+    expect(json.upFrame).toEqual({ axis: 'z', basis: 'crs' });
+
+    await page.reload();
+    await expect(page.locator('.olv-empty')).toBeVisible({ timeout: 30_000 });
+    await dropBytes(page, surveyPly(), 'survey.ply');
+    await opened(page, 1, 'survey.ply');
+    await dropBytes(page, new Uint8Array(bytes), file.suggestedFilename());
+    await expect.poll(async () => (await values(page)).length, { timeout: 20_000 }).toBe(2);
+    const v = await values(page);
+    expect(v[0]).toMatch(/^100\.00 m/);
+    expect(v[1]).toMatch(/^0\.0 cm/);
+    expect(await csvColumn(page, 'vertical_m')).toEqual([100, 0]);
+  });
+
   test('on a phone the layer details still state the up axis and its basis', async ({ page }) => {
     await page.setViewportSize({ width: 390, height: 844 });
     await page.goto('/?test=1');

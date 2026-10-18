@@ -19,6 +19,8 @@
  * Part of the v0.6 decomposition (see `docs/architecture/architecture-map.md`).
  */
 
+import { sessionUpAxisNote } from './sessionUpAxisNote';
+import type { LayerUpFrame } from '../geo/frame/layerUpFrame';
 import type { Viewer } from '../render/Viewer';
 import type { WorkplaneSettings } from '../model/workplaneSettings';
 import type { PointCloud } from '../model/PointCloud';
@@ -139,6 +141,8 @@ export interface SessionIoDeps {
   layerOrigin?: (layerId: string) => readonly [number, number, number] | null;
   /** The live project origin, or null when no project frame is set. */
   projectOrigin?: () => readonly [number, number, number] | null;
+  /** The active scan's resolved up frame (`app/layerUpFrames.ts`), or null when none is open. */
+  activeUpFrame?: () => LayerUpFrame | null;
   /**
    * The open static layers with the source evidence their ids are bound on.
    * Present: saved layer ids are mapped onto these before anything is placed.
@@ -582,6 +586,10 @@ export async function importSession(
       a.owner || !annotationOwners.has(a.id) ? a : { ...a, owner: annotationOwners.get(a.id) },
     );
     viewer.measure.loadMeasurements(ownedMeasurements);
+    // Profiles and volumes cut along an up axis the reopened layer no longer
+    // resolves to are re-cut along its frame, or withheld with the reason.
+    const recut = viewer.measure.recutDerived?.() ?? { recut: 0, withheld: 0 };
+    const axisNote = sessionUpAxisNote({ recorded: session.upFrame, formatAxis: session.upAxis, live: haveCloud ? deps.activeUpFrame?.() ?? null : null, recut });
     viewer.annotate.loadAnnotations(ownedAnnotations);
     applied = true;
     // Work that names a scan not open here is kept, unplaced, with the frame
@@ -727,11 +735,11 @@ export async function importSession(
       deps.showToast((lead ?? `Session restored — drop “${wantFile}” to view its scan.`) + manifestSuffix,
         lead ? { label: 'Need the scan', onClick: () => deps.showToast(`Drop “${wantFile}” to view this evidence on its scan.`) } : undefined);
     } else if (lead) {
-      deps.showToast(`${lead}${frameNote}${refusedNote}${appliedNote}${manifestSuffix}`);
+      deps.showToast(`${lead}${frameNote}${axisNote}${refusedNote}${appliedNote}${manifestSuffix}`);
     } else {
       deps.showToast(
         `Session restored — ${restored} item${restored === 1 ? '' : 's'} ` +
-          `(measurements, annotations, views).${frameNote}${refusedNote}${appliedNote}${manifestSuffix}`,
+          `(measurements, annotations, views).${frameNote}${axisNote}${refusedNote}${appliedNote}${manifestSuffix}`,
       );
     }
   } catch (err) {
@@ -808,7 +816,11 @@ export async function restoreHeldSessionWork(deps: SessionIoDeps, openedLayerId:
   );
   const restored = placed.measurements.length + placed.annotations.length;
   if (restored === 0) return 0;
-  if (placed.measurements.length > 0) viewer.measure.loadMeasurements([...viewer.measure.getMeasurements(), ...placed.measurements]);
+  let recut = { recut: 0, withheld: 0 };
+  if (placed.measurements.length > 0) {
+    viewer.measure.loadMeasurements([...viewer.measure.getMeasurements(), ...placed.measurements]);
+    recut = viewer.measure.recutDerived?.() ?? recut;
+  }
   if (placed.annotations.length > 0) viewer.annotate.loadAnnotations([...viewer.annotate.getAnnotations(), ...placed.annotations]);
   // The rest stay held exactly as they were, with the records they name.
   const done = new Set([...placed.measurements.map((m) => m.id), ...placed.annotations.map((a) => a.id)]);
@@ -821,7 +833,8 @@ export async function restoreHeldSessionWork(deps: SessionIoDeps, openedLayerId:
   deps.showToast(
     `Restored ${plural(placed.measurements.length, 'measurement')} and ${plural(placed.annotations.length, 'annotation')} `
       + `from the session onto “${target.sourceName || 'the opened scan'}”.`
-      + (left > 0 ? ` ${plural(left, 'item')} ${left === 1 ? 'is' : 'are'} still waiting for another scan.` : ''),
+      + (left > 0 ? ` ${plural(left, 'item')} ${left === 1 ? 'is' : 'are'} still waiting for another scan.` : '')
+      + sessionUpAxisNote({ recorded: undefined, formatAxis: held.upAxis, live: null, recut }),
   );
   return restored;
 }

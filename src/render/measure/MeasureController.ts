@@ -527,8 +527,6 @@ export class MeasureController {
    * axis-dependent figure prints instead. Null otherwise.
    */
   private _upRefusalText: string | null = null;
-  /** The up each profile chart or volume was last derived along (`upFor`), so a moved frame re-derives it. */
-  private readonly _derivedUp = new WeakMap<Measurement, string>();
   private _units: UnitSystem = 'metric';
   /**
    * Render-units → metres factor from the scan's CRS (B2, v0.4.5). Render
@@ -1361,7 +1359,7 @@ export class MeasureController {
       const result = this._inFrameOf(m, () => sampler(m.points[0], m.points[1], opts));
       if (!result) return false;
       this._stampProfileSample(m, result);
-      this._derivedUp.set(m, this.upFor(m).join(','));
+      this._noteDerivedUp(m);
     } catch {
       // Sampler errors must not poison the existing measurement — the row
       // keeps its previous chart and the panel stays consistent.
@@ -1392,16 +1390,18 @@ export class MeasureController {
   /** Re-sample one profile with the parameters it was last sampled with; true when it was. */
   private _resampleInPlace(m: Measurement): boolean {
     const sampler = this._profileSampler;
-    if (!sampler || m.kind !== 'profile' || m.points.length < 2 || !m.profileChart) return false;
+    if (!sampler || m.kind !== 'profile' || m.points.length < 2) return false;
+    // A chart withheld for a moved axis is re-cut with the default sample count.
+    if (!m.profileChart && m.derivedWithheld === undefined) return false;
     try {
       const result = this._inFrameOf(m, () => sampler(m.points[0], m.points[1], {
         corridorWidth: m.profileCorridorWidth ?? null,
         groundPercentile: m.profileGroundPercentile ?? null,
-        sampleCount: m.profileChart!.length,
+        sampleCount: m.profileChart?.length ?? null,
       }));
       if (!result) return false;
       this._stampProfileSample(m, result);
-      this._derivedUp.set(m, this.upFor(m).join(','));
+      this._noteDerivedUp(m);
       return true;
     } catch {
       // A failed re-sample keeps the previous chart, as in `resampleProfile`.
@@ -1409,26 +1409,71 @@ export class MeasureController {
     }
   }
 
+  /** Record the up axis `m`'s profile chart or volume was just cut along. */
+  private _noteDerivedUp(m: Measurement): void {
+    const axis = axisOfUp(this.upFor(m));
+    if (axis && (m.profileChart || m.volume)) {
+      m.derivedUpAxis = axis;
+      delete m.derivedWithheld;
+    }
+  }
+
   /**
-   * Re-derive the profiles and volumes whose layer's resolved up moved since
-   * they were cut (a CRS assigned, replaced or cleared after the measurement),
-   * so the stored chart and cut/fill follow the frame every other figure is
-   * read in. Stored points never move. A result that cannot be re-derived is
-   * dropped rather than kept along the old axis.
+   * Re-cut every profile chart and volume record that was cut along an up axis
+   * its layer no longer resolves to: a session saved under another frame and
+   * reopened, or a CRS assigned, replaced or cleared after the measurement was
+   * taken. Stored points never move. A result that cannot be re-cut here (no
+   * sampler, no points under it) is withheld with the reason rather than kept
+   * along the old axis, and is retried on the next frame change. Returns how
+   * many were re-cut and how many are withheld.
    */
-  private _rederiveMovedUp(): void {
+  recutDerived(): { readonly recut: number; readonly withheld: number } {
+    const r = this._rederiveMovedUp();
+    for (const m of this._measurements) m.trust = this._gradeMeasurement(m);
+    this._emitChange();
+    return r;
+  }
+
+  private _rederiveMovedUp(): { recut: number; withheld: number } {
+    let recut = 0;
+    let withheld = 0;
     for (const m of this._measurements) {
-      const was = this._derivedUp.get(m);
-      const now = this.upFor(m).join(',');
-      if (was === undefined || was === now) continue;
-      if (m.kind === 'profile' && !this._resampleInPlace(m)) m.profileChart = undefined;
-      if (m.kind === 'volume') {
+      if (m.kind !== 'profile' && m.kind !== 'volume') continue;
+      const now = axisOfUp(this.upFor(m));
+      const was = m.derivedUpAxis;
+      if (now === null || (m.derivedWithheld === undefined && (was === undefined || was === now))) continue;
+      if (m.kind === 'profile' ? this._resampleInPlace(m) : this._resampleVolume(m)) {
+        recut++;
+        continue;
+      }
+      withheld++;
+      if (m.derivedWithheld !== undefined) continue;
+      const what = m.kind === 'profile' ? 'Profile chart' : 'Cut and fill';
+      m.derivedWithheld =
+        `${what} withheld: it was cut along ${was!.toUpperCase()}, and this layer's up axis is now ${now.toUpperCase()}. ` +
+        `It could not be re-cut here; ${m.kind === 'profile' ? 'resample the profile' : 'redraw the volume'} once the layer's points are loaded.`;
+      if (m.kind === 'profile') m.profileChart = undefined;
+      else {
         m.volume = undefined;
         m.volumeResidentOnly = undefined;
-        this._sampleVolume(m);
       }
-      this._derivedUp.set(m, now);
     }
+    return { recut, withheld };
+  }
+
+  /** Re-sample one volume along its own up; true when a record was written. */
+  private _resampleVolume(m: Measurement): boolean {
+    const before = { volume: m.volume, residentOnly: m.volumeResidentOnly };
+    m.volume = undefined;
+    m.volumeResidentOnly = undefined;
+    this._sampleVolume(m);
+    if (m.volume) {
+      this._noteDerivedUp(m);
+      return true;
+    }
+    m.volume = before.volume;
+    m.volumeResidentOnly = before.residentOnly;
+    return false;
   }
 
   /**
@@ -2059,8 +2104,8 @@ export class MeasureController {
     }
     this._sampleVolume(m);
     // The up these derived results were cut along; a later change of the
-    // layer's resolved frame (a CRS assigned, replaced or cleared) re-derives.
-    if (m.profileChart || m.volume) this._derivedUp.set(m, this.upFor(m).join(','));
+    // layer's resolved frame (a CRS assigned, replaced or cleared) re-cuts.
+    this._noteDerivedUp(m);
     m.trust = this._gradeMeasurement(m);
     // Record which layer this measurement belongs to, by stable id, in that
     // layer's source-local frame. Undefined for a single-layer scene, so the
@@ -2137,6 +2182,7 @@ export class MeasureController {
       geographicCrs: this._frameRefusal(m.kind) === GEOGRAPHIC_NOT_AVAILABLE,
       verticalRefused: this._frameRefusal(m.kind) === VERTICAL_NOT_AVAILABLE,
       verticalScaleInvalid: this._frameRefusal(m.kind) === VERTICAL_SCALE_NOT_AVAILABLE,
+      ...(m.derivedWithheld ? { derivedWithheld: m.derivedWithheld } : {}),
       upConflict: this._upRefusalText === UP_AXIS_CONFLICT && upAxisRefusesKind(m.kind),
       ...(this._upRefusalText !== null && this._upRefusalText !== UP_AXIS_CONFLICT && upAxisRefusesKind(m.kind) ? { upRefusal: this._upRefusalText } : {}),
     });
@@ -2979,4 +3025,11 @@ function freshId(): string {
   const bytes = new Uint32Array(2);
   c.getRandomValues(bytes);
   return `m_${bytes[0].toString(36).padStart(7, '0')}${bytes[1].toString(36).padStart(7, '0')}`;
+}
+
+/** 'z' or 'y' for an axis-aligned up vector; null for any other (a rotating frame's tangent up). */
+function axisOfUp(u: Vec3): 'y' | 'z' | null {
+  if (u[0] === 0 && u[1] === 0 && u[2] === 1) return 'z';
+  if (u[0] === 0 && u[1] === 1 && u[2] === 0) return 'y';
+  return null;
 }

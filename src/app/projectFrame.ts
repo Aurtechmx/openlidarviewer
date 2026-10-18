@@ -22,6 +22,9 @@
  * does not belong to.
  */
 
+import { layerUpFrameOf, type LayerFrameCrs } from './layerUpFrames';
+import type { LayerUpFrame } from '../geo/frame/layerUpFrame';
+import type { PointCloud } from '../model/PointCloud';
 import {
   chooseProjectOrigin,
   createProjectFrame,
@@ -382,6 +385,8 @@ export interface SessionImportSources {
   fallback(): V3;
   /** The identity record bound to a viewer id: stable id and fingerprint key. */
   record?(viewerId: string): { readonly layerId: string; readonly fingerprint: string } | null;
+  /** The CRS service, so the restore can state the active scan's resolved up frame. */
+  crs?: LayerFrameCrs;
 }
 
 /**
@@ -393,6 +398,7 @@ export function sessionImportOrigins(src: SessionImportSources): {
   layerOrigin: (layerId: string) => V3 | null;
   projectOrigin: () => V3 | null;
   liveLayers?: () => readonly LiveLayerEvidence[];
+  activeUpFrame?: () => LayerUpFrame | null;
 } {
   const layerSources = (): LayerOriginSources => ({
     projectOrigin: src.frame()?.projectOrigin,
@@ -410,7 +416,15 @@ export function sessionImportOrigins(src: SessionImportSources): {
     layerOrigin: (layerId) => layerSceneOrigin(layerId, layerSources()),
     projectOrigin: () => src.frame()?.projectOrigin ?? null,
     ...(src.record ? { liveLayers: () => liveLayerEvidence(src) } : {}),
+    ...(src.crs ? { activeUpFrame: () => activeUpFrameOf(src, src.crs!) } : {}),
   };
+}
+
+/** The active scan's resolved up frame, or null when no static scan is active. */
+function activeUpFrameOf(src: SessionImportSources, crs: LayerFrameCrs): LayerUpFrame | null {
+  const id = src.activeId();
+  const cloud = id ? src.cloud(id) : null;
+  return cloud?.sourceFormat ? layerUpFrameOf(crs, cloud as PointCloud, true) : null;
 }
 
 /** Every open layer with a bound identity, with the source facts it is matched on. */

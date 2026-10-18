@@ -3508,7 +3508,7 @@ const sessionIoDeps: SessionIoDeps = {
   getActiveScanId: () => scans.activeId,
   getActiveLayerId: () => (scans.activeId ? runtime.layerIdentity.stableIdFor(scans.activeId) : null),
   getActiveCloud: () => scans.activeCloud(),
-  ...sessionImportOrigins({ frame: () => projectFrame.frame, activeId: () => (scans.activeCloud() ? scans.activeId : null), viewerIds: () => viewer?.clouds() ?? [], stableIdFor: (v) => runtime.layerIdentity.stableIdFor(v), cloud: (v) => viewer?.getCloud(v), placement: layerService.placementOf, fallback: () => exportGeoContext().origin, record: (v) => runtime.layerIdentity.recordFor(v) }),
+  ...sessionImportOrigins({ frame: () => projectFrame.frame, activeId: () => (scans.activeCloud() ? scans.activeId : null), viewerIds: () => viewer?.clouds() ?? [], stableIdFor: (v) => runtime.layerIdentity.stableIdFor(v), cloud: (v) => viewer?.getCloud(v), placement: layerService.placementOf, fallback: () => exportGeoContext().origin, record: (v) => runtime.layerIdentity.recordFor(v), crs: crsService }),
   bookmarks,
   setInspectorViews: (names) => inspector.setViews(names),
   restoreLayerGroups: (groups) => inspector.restoreLayerGroups(groups),

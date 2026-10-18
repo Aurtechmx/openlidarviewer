@@ -90,6 +90,8 @@ export interface MeasurementTrustInput {
    * no resolved up axis (a glTF under a CRS): the refusal sentence, with the fix.
    */
   readonly upRefusal?: string;
+  /** Why this measurement's profile chart or volume record was withheld (`Measurement.derivedWithheld`). */
+  readonly derivedWithheld?: string;
   /**
    * True when the frame is geographic, whatever the kind. Its scale signal is
    * then the vertical unit (the only linear unit a permitted figure, a
@@ -218,6 +220,11 @@ export function gradeMeasurement(input: MeasurementTrustInput): MeasurementTrust
   if (upConflict) {
     reasons.push(`Value ${upUnresolved ? input.upRefusal : UP_AXIS_CONFLICT}.`);
     grade = 'red';
+  }
+
+  if (input.derivedWithheld) {
+    reasons.push(input.derivedWithheld);
+    if (grade === 'green') grade = 'yellow';
   }
 
   if (input.residentOnly) {

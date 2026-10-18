@@ -399,6 +399,18 @@ export interface Measurement {
    */
   volumeResidentOnly?: boolean;
   /**
+   * The up axis the stored profile chart or volume record was cut along. A
+   * session reopened, or a CRS assigned, replaced or cleared, under which the
+   * layer resolves to another up axis re-cuts it (`MeasureController.recutDerived`).
+   */
+  derivedUpAxis?: 'y' | 'z';
+  /**
+   * Why the stored profile chart or volume record was withheld: it was cut
+   * along an up axis the layer no longer resolves to, and could not be re-cut
+   * here. Cleared by a successful re-cut.
+   */
+  derivedWithheld?: string;
+  /**
    * The per-measurement honesty grade — red/yellow/green plus the reasons
    * behind it and a `presentable` refusal flag. Stamped at commit from the
    * support under each endpoint (snapped-to-a-return? returns nearby?) and the
