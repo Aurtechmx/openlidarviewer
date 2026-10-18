@@ -612,6 +612,15 @@ other code is treated as unknown, not as metres. A vertical EPSG code fixes the 
 vertical unit is declared. A declared vertical unit wins over the code's own
 (NAVD88 with US survey feet reads as NAVD88 height in ftUS, as in GDAL), and a
 declared vertical unit code the app cannot read leaves the height unit unknown.
+A WKT vertical unit is read by its conversion factor, as PROJ reads it: a
+centimetre, millimetre, kilometre or yard, or a unit with any other name,
+converts by the factor the file states. A unit name that disagrees with its
+factor (UNIT["metre",0.3048]) is converted by the factor and the conflict is
+noted. A vertical unit that is not a length (an angular unit), or whose factor
+is missing, zero, negative or not finite, is invalid: no height is derived from
+it, and it never falls back to the vertical code's unit or the horizontal unit.
+GeoKey vertical unit codes other than metre, foot and US survey foot are not
+read and count as invalid.
 
 ## Depth references, geocentric frames and Web Mercator are refused, not converted
 
@@ -655,6 +664,17 @@ Scan Report and in metres in Measure. Only the lasso volume readout says so, wit
 height read in Measure carries no vertical-unit note of its own; it is flagged
 only when the horizontal unit is unknown. A valid declared vertical unit is used
 by every feature.
+
+A declared vertical unit that cannot be read is never borrowed from the
+horizontal unit. Measure, the trust grade, chain totals, the lasso volume, the
+PDF report, CSV, GeoJSON, KML, findings and the integrity report withhold every
+height and every figure built on one (3D length, tilted area, angle, grade,
+profile, box and volume) with "height unit could not be interpreted", and keep
+only plan figures: the horizontal distance of a height or profile, the run of a
+grade, the plan area of an area, the width and depth of a box and the footprint
+of a volume. Measure withholds the whole row, including those plan figures,
+which only the exports carry. Coordinates are unchanged, and no figure is shown
+in raw source units instead.
 
 ## Imperial readouts are in international feet
 
@@ -712,7 +732,14 @@ LAS files written by the converter name the vertical CRS in the unit of the Z
 values through the same table (NAVD88 in US survey feet is EPSG:6360). A
 vertical code outside the table, or one with no unit to check it against,
 passes through from the source unchanged, so a reader takes its unit from the
-code.
+code. A source vertical unit that cannot be read, or one that is not metre,
+foot or US survey foot (a centimetre or yard height, for example), refuses the
+LAS conversion with the reason, because no LAS vertical unit key can state it.
+
+The DTM and DSM GeoTIFFs of a source whose heights are in a valid unit other
+than metre, foot or US survey foot keep those heights in the source unit with
+no vertical CRS and no band unit, and the DEM package README reads the
+elevation unit as unknown.
 
 ## One streamed source at a time
 
