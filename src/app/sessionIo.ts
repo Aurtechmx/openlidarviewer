@@ -51,6 +51,7 @@ import {
   scanFactsFromStatic,
   declaredSpatialFromStreaming,
   declaredSpatialFromStatic,
+  sessionSpatialClaimsOf,
   type StreamingScanSource,
   type StaticScanCloud,
 } from './sessionScanFacts';
@@ -380,7 +381,7 @@ export async function importSession(
       // conflict is a harder, different failure and is never waved through.)
       const declaredSpatial = declaredSpatialForActiveScan(viewer, deps);
       const spatial = detectSessionSpatialConflict(
-        { upAxis: session.upAxis, epsg: session.crs?.epsg, linearUnit: session.crs?.linearUnit },
+        sessionSpatialClaimsOf(session),
         declaredSpatial,
       );
       // A persisted EXPLICIT user CRS override on a STRONGLY matched same scan is

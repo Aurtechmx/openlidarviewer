@@ -41,10 +41,15 @@ import {
 } from './lasQuantisation';
 import { BUILD_IDENTITY, type BuildIdentity } from '../build/buildIdentity';
 import { SCAN_ANGLE_EXTENDED_UNIT_DEG } from '../io/lasDecodeShared';
+import { compoundWkt, isUsableWkt, wktForEpsg } from '../io/epsgWkt';
+import { epsgCrsKind } from './epsg';
 
 const HEADER_SIZE = 227; // LAS 1.2 public header block
 const HEADER_SIZE_14 = 375; // LAS 1.4 public header block (R15)
 const VLR_HEADER_SIZE = 54;
+const EVLR_HEADER_SIZE = 60;
+/** Largest VLR payload: the record-length field is a uint16. */
+const VLR_PAYLOAD_MAX = 0xffff;
 const RECORD_LEN: Record<number, number> = { 0: 20, 1: 28, 2: 26, 3: 34 };
 const RECORD_LEN_14: Record<number, number> = { 6: 30, 7: 36 };
 /** Global-encoding bit 4 — declares the CRS VLR is OGC WKT (LAS 1.4 §2.2). */
@@ -120,19 +125,149 @@ export interface WriteLasOptions {
 /** LAS 1.4 options: everything LAS 1.2 takes, plus the OGC WKT CRS payload. */
 export interface WriteLas14Options extends WriteLasOptions {
   /**
-   * OGC WKT describing the CRS. LAS 1.4 requires the CRS as WKT for point
-   * formats 6+ (global-encoding bit 4); when this is present it is written
-   * as a LASF_Projection/2112 VLR and the bit is set. Callers should pass the
-   * source's WKT when there is one and otherwise try `wktForEpsg`, which
-   * derives it for the codes whose parameters are exactly determined; a scan
-   * georeferenced by GeoKeys alone used to arrive here with nothing and
-   * produce a file no strict 1.4 reader would accept the CRS from.
-   *
-   * A null WKT still falls back to the same GeoKey VLR the 1.2 writer emits
-   * (bit 4 clear) — honest about the encoding actually in the file, rather
-   * than fabricating a parameterless WKT downstream tools could not use.
+   * OGC WKT describing the CRS, normally the source file's own. LAS 1.4 R15
+   * requires the CRS as WKT for point formats 6-10, flagged by global-encoding
+   * bit 4. A usable WKT given here is written as is; otherwise the writer
+   * builds one for `epsg` from the verified definitions in `io/epsgWkt.ts`
+   * (with the vertical CRS as a compound when a vertical code is written).
+   * When neither yields a definition for a georeferenced output the writer
+   * throws {@link LasCrsError} instead of writing GeoKeys under a clear bit 4,
+   * which strict readers report as a file with no CRS.
    */
   readonly wkt?: string | null;
+}
+
+/** Thrown by {@link writeLas14} when a georeferenced output has no WKT it can write. */
+export class LasCrsError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'LasCrsError';
+  }
+}
+
+/** How the LAS 1.4 writer records the CRS, or why it cannot. */
+export type Las14CrsPlan =
+  | {
+      readonly ok: true;
+      /** The WKT written, or null for an output with no CRS at all. */
+      readonly wkt: string | null;
+      /** `source`: the caller's WKT; `constructed`: built from `epsg`; `none`: no CRS. */
+      readonly origin: 'source' | 'constructed' | 'none';
+      /** True when the constructed WKT is a compound of the horizontal and vertical CRS. */
+      readonly compound: boolean;
+      /** True when the WKT is too long for a VLR and goes in an extended VLR. */
+      readonly evlr: boolean;
+      /** True when a WKT was given but was not usable, so one was built from `epsg`. */
+      readonly sourceWktRejected: boolean;
+    }
+  | { readonly ok: false; readonly message: string };
+
+/** The vertical CRS code and unit code the GeoKey VLR records for these options. */
+function writtenVertical(opts: WriteLasOptions): { code: number | null; unit: number | null } {
+  const keys = buildVerticalGeoKeys(opts);
+  return {
+    code: keys.find(([id]) => id === 4096)?.[1] ?? null,
+    unit: keys.find(([id]) => id === 4099)?.[1] ?? null,
+  };
+}
+
+const UNIT_LABEL: Record<number, string> = { 9001: 'metres', 9002: 'feet', 9003: 'US survey feet' };
+const unitLabel = (code: number | null): string => (code != null ? UNIT_LABEL[code] ?? `unit ${code}` : 'an unknown unit');
+
+/** The GeoTIFF unit code of the horizontal axes, 'degree' for a geographic CRS, or null when not known. */
+function horizontalUnit(opts: WriteLasOptions, epsg: number | null): number | 'degree' | null {
+  if (opts.isGeographic === true) return 'degree';
+  if (opts.linearUnitCode != null && opts.linearUnitCode > 0) return opts.linearUnitCode;
+  const info = epsgCrsKind(epsg);
+  if (info.kind === 'geographic') return 'degree';
+  if (info.kind !== 'projected') return null;
+  return info.unit === 'metre' ? 9001 : info.unit === 'foot' ? 9002 : info.unit === 'us-survey-foot' ? 9003 : null;
+}
+
+const COMPOUND_ROOT = /^(COMPD_CS|COMPOUNDCRS)\s*\[/i;
+
+const LAS12_ALTERNATIVE = ' Choose LAS 1.2, which records it as GeoTIFF keys.';
+
+/**
+ * Decide the OGC WKT a LAS 1.4 file carries. Pure, so the converter can refuse
+ * with a clear message before any bytes are produced; {@link writeLas14} runs
+ * the same plan and throws on a refusal.
+ *
+ * Readers such as PDAL take the whole CRS from the WKT when bit 4 is set and
+ * ignore the GeoKeys, so the WKT must carry the vertical CRS as well:
+ *   - a source compound WKT is kept as it is;
+ *   - a horizontal WKT (the source's WKT1, else the stored one for `epsg`) is
+ *     combined with the stored VERT_CS of the vertical code the GeoKeys
+ *     record, which is in the unit of the heights (5703 in US survey feet is
+ *     6360);
+ *   - a vertical code with no stored VERT_CS is refused, since the WKT would
+ *     drop its datum and unit;
+ *   - a height unit with no vertical datum is written only when it is the
+ *     unit a WKT reader assumes for Z (the horizontal linear unit, or metres
+ *     under a geographic CRS); otherwise refused, because no datum is invented
+ *     and the heights would be read in the wrong unit.
+ * The vertical GeoKeys are still written beside the WKT, with the same code.
+ */
+export function planLas14Crs(opts: WriteLas14Options): Las14CrsPlan {
+  const epsg = opts.epsg != null && Number.isInteger(opts.epsg) && opts.epsg > 0 ? opts.epsg : null;
+  const given = opts.wkt != null && opts.wkt.trim().length > 0;
+  const usable = given && isUsableWkt(opts.wkt);
+  const fit = (wkt: string, origin: 'source' | 'constructed', compound: boolean): Las14CrsPlan => ({
+    ok: true, wkt, origin, compound, evlr: wkt.length + 1 > VLR_PAYLOAD_MAX, sourceWktRejected: given && !usable,
+  });
+  const refuse = (message: string): Las14CrsPlan => ({ ok: false, message: `LAS 1.4 was not written. ${message}` });
+
+  const source = usable ? asciiFold((opts.wkt as string).trim()) : null;
+  if (source != null && COMPOUND_ROOT.test(source)) return fit(source, 'source', true);
+  const stored = epsg != null ? wktForEpsg(epsg) : null;
+  const horizontal = source ?? stored;
+  if (horizontal == null) {
+    if (epsg != null) {
+      return refuse(
+        'Point formats 6 to 10 require the coordinate system as OGC WKT, ' +
+          `and this build has no verified WKT definition for EPSG:${epsg}` +
+          `${given ? ' (the WKT the source carried is not a usable definition)' : ''}.` +
+          (epsg <= 65535
+            ? ' Choose LAS 1.2, which records the EPSG code as GeoTIFF keys, or reproject to a CRS this build defines.'
+            : ' Reproject to a CRS this build defines.'),
+      );
+    }
+    if (given) {
+      return refuse(
+        'The WKT the source carried is not a usable coordinate-system definition, ' +
+          'and no EPSG code identifies the CRS, so no valid WKT record can be written. Assign the EPSG code of the CRS, ' +
+          'or export without a CRS.',
+      );
+    }
+    return { ok: true, wkt: null, origin: 'none', compound: false, evlr: false, sourceWktRejected: false };
+  }
+  const origin = source != null ? 'source' : 'constructed';
+
+  const vertical = writtenVertical(opts);
+  if (vertical.code != null) {
+    // A source WKT2 horizontal cannot take a WKT1 VERT_CS; the stored WKT1 for
+    // the same code can.
+    const compound = compoundWkt(horizontal, vertical.code) ?? (stored != null ? compoundWkt(stored, vertical.code) : null);
+    if (compound == null) {
+      return refuse(
+        `The heights are in vertical CRS EPSG:${vertical.code}, and this build cannot write that vertical CRS into the file's WKT, ` +
+          'so a reader of the WKT would lose the vertical datum and unit.' + LAS12_ALTERNATIVE,
+      );
+    }
+    return fit(compound, compound.includes(horizontal) ? origin : 'constructed', true);
+  }
+  if (vertical.unit != null) {
+    const h = horizontalUnit(opts, epsg);
+    const assumed = h === 'degree' ? 9001 : h;
+    if (assumed !== vertical.unit) {
+      return refuse(
+        `The heights are declared in ${unitLabel(vertical.unit)} with no vertical datum. A WKT cannot state a vertical unit ` +
+          `without a vertical CRS, and a reader of it would take the heights in ${h === 'degree' ? 'metres' : unitLabel(h)}.` +
+          LAS12_ALTERNATIVE,
+      );
+    }
+  }
+  return fit(horizontal, origin, false);
 }
 
 function writeFixedString(bytes: Uint8Array, offset: number, len: number, text: string): void {
@@ -596,29 +731,31 @@ export function writeLas14(g: GlobalPoints, opts: WriteLas14Options = {}): Uint8
   const n = g.count;
   const geo = opts.isGeographic === true;
 
-  // CRS: the OGC WKT VLR when real WKT exists (the LAS 1.4 way — payload is
-  // null-terminated ASCII, hence the +1), else the same GeoKey VLR the 1.2
-  // writer emits. A WKT too long for the uint16 VLR length field cannot be
-  // recorded at all (none of our sources come close; guarded anyway).
-  const wkt = opts.wkt != null && opts.wkt.trim().length > 0 && opts.wkt.length + 1 <= 0xffff
-    ? opts.wkt
-    : null;
+  // CRS: OGC WKT, required for point formats 6-10 (LAS 1.4 R15). The payload
+  // is null-terminated ASCII, hence the +1. A WKT too long for the uint16 VLR
+  // length goes in an extended VLR after the points instead.
+  const plan = planLas14Crs(opts);
+  if (!plan.ok) throw new LasCrsError(plan.message);
+  const wkt = plan.wkt;
+  const wktInEvlr = wkt != null && plan.evlr;
   // With a WKT, the GeoKey VLR carries ONLY the vertical keys: LAS 1.4 permits
   // both VLRs to coexist, and a horizontal-only WKT would otherwise take the
   // vertical datum and unit down with it (see buildVerticalGeoKeys).
   const geoKeys = wkt == null ? buildGeoKeys(opts, geo) : buildVerticalGeoKeys(opts);
   const geoKeyDataBytes = geoKeys.length > 0 ? 8 + geoKeys.length * 8 : 0;
   const wktDataBytes = wkt != null ? wkt.length + 1 : 0;
-  const wktVlrBytes = wkt != null ? VLR_HEADER_SIZE + wktDataBytes : 0;
+  const wktVlrBytes = wkt != null && !wktInEvlr ? VLR_HEADER_SIZE + wktDataBytes : 0;
+  const wktEvlrBytes = wktInEvlr ? EVLR_HEADER_SIZE + wktDataBytes : 0;
   const geoKeyVlrBytes = geoKeys.length > 0 ? VLR_HEADER_SIZE + geoKeyDataBytes : 0;
   // Optional provenance/caveat VLR (Text Area Description), placed after the CRS
   // VLR(s) so nothing that navigates by the leading WKT/GeoKey VLR is disturbed.
   const { text: descText, label: descLabel } = textArea(opts);
   const descVlrBytes = descText != null ? VLR_HEADER_SIZE + descText.length + 1 : 0;
   const vlrCount =
-    (wkt != null ? 1 : 0) + (geoKeys.length > 0 ? 1 : 0) + (descText != null ? 1 : 0);
+    (wktVlrBytes > 0 ? 1 : 0) + (geoKeys.length > 0 ? 1 : 0) + (descText != null ? 1 : 0);
   const pointDataOffset = HEADER_SIZE_14 + wktVlrBytes + geoKeyVlrBytes + descVlrBytes;
-  const total = pointDataOffset + n * recLen;
+  const evlrOffset = pointDataOffset + n * recLen;
+  const total = evlrOffset + wktEvlrBytes;
 
   const buf = new ArrayBuffer(total);
   const view = new DataView(buf);
@@ -629,8 +766,8 @@ export function writeLas14(g: GlobalPoints, opts: WriteLas14Options = {}): Uint8
   // ── Public Header Block (375 bytes) ────────────────────────────────────
   writeFixedString(bytes, 0, 4, 'LASF');
   view.setUint16(4, 0, true); // file source id
-  // Global encoding: bit 4 declares the CRS VLR is OGC WKT — required by the
-  // spec for point formats 6+, but only settable when we actually have WKT.
+  // Global encoding: bit 4 declares the CRS record is OGC WKT — required by the
+  // spec for point formats 6+, and set only when a WKT record is written.
   // Bit 0 = GPS Time Type: formats 6+ always carry GPS time, so declare Adjusted
   // Standard GPS Time (the modern convention) unless a caller opts out.
   const gpsBit14 = (opts.gpsStandardTime ?? true) ? GLOBAL_ENCODING_GPS_STANDARD : 0;
@@ -655,14 +792,18 @@ export function writeLas14(g: GlobalPoints, opts: WriteLas14Options = {}): Uint8
 
   writeScaleOffsetBounds(view, scale, offset, min, max);
 
-  // 227 start-of-waveform (f64), 235 first-EVLR offset (u64), 243 EVLR count
-  // (u32) — all zero (no waveforms, no EVLRs). Then the extended counts.
+  // 227 start-of-waveform (f64) stays zero (no waveforms). 235 first-EVLR
+  // offset (u64) and 243 EVLR count (u32) are set only for an oversized WKT.
+  if (wktInEvlr) {
+    view.setBigUint64(235, BigInt(evlrOffset), true);
+    view.setUint32(243, 1, true);
+  }
   view.setBigUint64(247, BigInt(n), true); // extended number of point records
   const byReturn = tallyByReturn(g, 15); // 15 × uint64 extended by-return
   for (let r = 0; r < 15; r++) view.setBigUint64(255 + r * 8, BigInt(byReturn[r]), true);
 
-  // ── VLR: OGC WKT (preferred) or GeoKeyDirectory fallback ───────────────
-  if (wkt != null) {
+  // ── VLR: OGC WKT, or GeoKeyDirectory alone for a file with no WKT ───────
+  if (wkt != null && !wktInEvlr) {
     const p = HEADER_SIZE_14;
     view.setUint16(p, 0, true); // reserved
     writeFixedString(bytes, p + 2, 16, 'LASF_Projection');
@@ -723,6 +864,19 @@ export function writeLas14(g: GlobalPoints, opts: WriteLas14Options = {}): Uint8
       view.setUint16(rp + 30, c[i * 3] * 257, true);
       view.setUint16(rp + 32, c[i * 3 + 1] * 257, true);
       view.setUint16(rp + 34, c[i * 3 + 2] * 257, true);
+    }
+  }
+
+  // ── EVLR: OGC WKT too long for a VLR (record length is a uint64 here) ──
+  if (wkt != null && wktInEvlr) {
+    const p = evlrOffset;
+    view.setUint16(p, 0, true); // reserved
+    writeFixedString(bytes, p + 2, 16, 'LASF_Projection');
+    view.setUint16(p + 18, 2112, true); // record id: OGC Coordinate System WKT
+    view.setBigUint64(p + 20, BigInt(wktDataBytes), true);
+    writeFixedString(bytes, p + 28, 32, 'OGC Coordinate System WKT');
+    for (let i = 0; i < wkt.length; i++) {
+      bytes[p + EVLR_HEADER_SIZE + i] = wkt.charCodeAt(i) & 0x7f;
     }
   }
 

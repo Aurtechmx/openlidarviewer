@@ -30,7 +30,18 @@ export interface ExportFrame {
   /** Origin, resolved CRS label and name, source key and interpretation of the scan. */
   readonly geo: GeoExportContext;
   readonly unitToMetres: number;
+  /**
+   * Up-axis factor. With a valid vertical scale it is that scale; with none
+   * declared it is the horizontal one (the GeoTIFF default); with an invalid
+   * one it is only a drawing factor, and {@link verticalScaleInvalid} is set.
+   */
   readonly verticalUnitToMetres: number;
+  /**
+   * The source declares a vertical unit that cannot be read
+   * (`SpatialContext.verticalScaleState === 'invalid'`): every figure that
+   * reads Z is withheld, whatever {@link verticalUnitToMetres} holds.
+   */
+  readonly verticalScaleInvalid: boolean;
   /**
    * Horizontal ground metrics are refused: `SpatialContext.horizontalMetricRefused`
    * (geographic degrees, a Web Mercator grid or a geocentric frame). The same
@@ -60,10 +71,14 @@ export interface ExportFrame {
  * to the controller): there is no second rule here. A known metre unit alone
  * never authorizes a distance; the frame must also permit horizontal metrics.
  */
-export function frameScalars(ctx: SpatialContext): Pick<ExportFrame, 'unitToMetres' | 'verticalUnitToMetres' | 'geographic' | 'verticalRefused' | 'unitsVerified'> {
+export function frameScalars(ctx: SpatialContext): Pick<ExportFrame, 'unitToMetres' | 'verticalUnitToMetres' | 'verticalScaleInvalid' | 'geographic' | 'verticalRefused' | 'unitsVerified'> {
+  // An invalid vertical scale draws with the horizontal factor, and is refused
+  // through `verticalScaleInvalid`; it is never a metre value.
+  const invalid = ctx.verticalScaleState === 'invalid';
   return {
     unitToMetres: ctx.linearUnitToMetres,
-    verticalUnitToMetres: verticalMetresPerUnit(ctx, 'horizontal') ?? 1,
+    verticalUnitToMetres: (invalid ? undefined : verticalMetresPerUnit(ctx, 'horizontal')) ?? ctx.linearUnitToMetres,
+    verticalScaleInvalid: invalid,
     geographic: ctx.horizontalMetricRefused,
     verticalRefused: ctx.verticalMetricRefused,
     unitsVerified: ctx.linearUnitKnown && !ctx.horizontalMetricRefused,
@@ -83,6 +98,7 @@ export function measureUnitFrameOf(ctx: SpatialContext): MeasureUnitFrame {
     unitToMetres: s.unitToMetres,
     verticalUnitToMetres: s.verticalUnitToMetres,
     verticalUnitKnown: verticalMetresPerUnit(ctx, 'none') !== undefined,
+    verticalUnitInvalid: s.verticalScaleInvalid,
     crsKnown: ctx.linearUnitKnown,
     geographic: s.geographic,
     verticalRefused: s.verticalRefused,
@@ -100,7 +116,7 @@ export function exportFrameOf(geo: GeoExportContext, ctx: SpatialContext, upAxis
   const scalars = frameScalars(ctx);
   const key = JSON.stringify([
     ctx.kind, ctx.epsg ?? null, geo.crsName ?? null, ctx.linearUnit,
-    scalars.unitToMetres, scalars.verticalUnitToMetres, scalars.geographic, scalars.verticalRefused, scalars.unitsVerified,
+    scalars.unitToMetres, scalars.verticalUnitToMetres, scalars.verticalScaleInvalid, scalars.geographic, scalars.verticalRefused, scalars.unitsVerified,
     ctx.verticalReference, ctx.verticalDatum ?? null, ctx.verticalEpsg ?? null, upAxis,
   ]);
   const label = ctx.epsg != null ? `EPSG:${ctx.epsg}` : geo.crsName ?? 'no CRS';
@@ -163,7 +179,7 @@ function describeFrames(groups: readonly { frame: ExportFrame; names: readonly s
   return groups.map((g) => {
     const f = g.frame;
     const detail = (seen.get(f.label) ?? 0) > 1
-      ? `, ${f.unitToMetres} m/unit, vertical ${f.verticalUnitToMetres} m/unit, ${f.upAxis}-up`
+      ? `, ${f.unitToMetres} m/unit, vertical ${f.verticalScaleInvalid ? 'unit unreadable' : `${f.verticalUnitToMetres} m/unit`}, ${f.upAxis}-up`
       : '';
     return `${g.names.join(', ')} (${f.label}${detail})`;
   });

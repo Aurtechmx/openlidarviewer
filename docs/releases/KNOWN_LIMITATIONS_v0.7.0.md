@@ -364,9 +364,11 @@ the `TERRAIN-ACCESS` claim sits at E3.
 
 Six modules implement alignment. No user path reaches them.
 
-Compare elevation, which needs exactly two loaded layers, aligns the second
-epoch to the first with its own planar fit, applying a yaw and a horizontal
-shift with Z locked, before it differences them. That fit lives in the change
+Compare elevation, which needs exactly two loaded layers, compares two epochs
+that declare the same horizontal CRS in their supplied coordinates, with no
+registration. Only a pair without a common declared CRS is aligned, with its
+own planar fit that applies a yaw and a horizontal shift and not the fitted Z,
+and only when the surface constrains the pose. That fit lives in the change
 detection code and does not reach the six modules.
 
 A half-wired alignment tool is worse than none, and the workflow it would need
@@ -389,11 +391,11 @@ consecutive passes, counted by `scripts/ios-streak.mjs`.
 
 ## The two monoliths are still monoliths
 
-`src/main.ts` is 4,260 lines, after the Save view snapshot
+`src/main.ts` is 4,259 lines, after the Save view snapshot
 moved to its own lazy module, the Analyse panel's longitude and latitude
 wiring moved to the mapper module, the Planetary Computer CRS record moved to
 its own module and the view cube's wiring was condensed, and
-`src/render/Viewer.ts` is 5,946, 277 lines below its v0.6.9 count of 6,223. Five getters collapsed to make room for a memory
+`src/render/Viewer.ts` is 5,936, 287 lines below its v0.6.9 count of 6,223. Five getters collapsed to make room for a memory
 accessor and a size-mode call, and the streamed draw cull then paid for its own
 wiring by moving the pass onto the streaming renderer and collapsing two more
 expressions. Making the loop request-driven then took another thirty-one out:
@@ -403,12 +405,12 @@ there. The frame gained a decision while the file lost lines. The two-finger
 pinch and pan now share one screen-space shift, which took another
 thirty-six out. The figure view context moved into the export adapter, which
 took twenty-one more. The measure click handling moved into the
-measurement controller, which took twenty-eight more. The draw precision bound's model-view accessor took one line and a shorter doc comment gave back two. A shrink-only lint
+measurement controller, which took twenty-eight more. The draw precision bound's model-view accessor took one line and a shorter doc comment gave back two. The terrain gather's up-axis rule moved to its own module, which took ten more. A shrink-only lint
 fails the build when either passes its recorded baseline, so a raise is a hand
 edit to `docs/validation/monolith-size-baseline.json` and always shows in the
 diff.
-Fan-out is 97 for the shell, 74 for the renderer and 29 for the Analyse panel,
-across 1146 modules with no dependency cycles.
+Fan-out is 97 for the shell, 73 for the renderer and 29 for the Analyse panel,
+across 1152 modules with no dependency cycles.
 
 ## The shell has little headroom
 
@@ -477,6 +479,25 @@ gives the reason. The scale widens on an axis whose extent would need more than
   records within the extent Float32 positions resolve (16 km at a 1 mm scale);
   a reprojected, voxel-reduced, streamed or non-LAS export is re-quantised at
   1 mm. See the section above.
+- LAS 1.4 export writes the coordinate system as OGC WKT only for the CRS
+  whose definition OLV stores (checked against PROJ 9.8.1, EPSG v12.029):
+  WGS 84, NAD83, NAD83(2011), NAD27 and ETRS89 UTM zones, GDA94 and GDA2020
+  MGA zones, the national grids and geographic CRS of the built-in registry,
+  and a scan's own valid WKT. Any other EPSG code, including State Plane
+  codes, is refused for LAS 1.4 and can be written as LAS 1.2 with GeoTIFF
+  keys. The vertical CRS goes into the WKT as a compound only for the vertical
+  codes the LAS vertical keys already check (NAVD88, NGVD29, MSL, EGM, AHD,
+  NAP, DHHN2016, EVRF and the others in that table, in the unit of the
+  heights); a LAS 1.4 export with another vertical code is refused. Heights
+  with a declared unit but no vertical datum are written to LAS 1.4 only when
+  the unit is the one a WKT reader assumes (the horizontal unit, or metres
+  under a geographic CRS); otherwise the export is refused, because no datum
+  is invented. LAS 1.2 records either case as GeoTIFF keys.
+- Assign EPSG accepts a geographic or projected code from the EPSG v12.029
+  tables or the built-in registry. A code added to EPSG after v12.029 is
+  refused as unknown until the tables are regenerated
+  (`scripts/gen-epsg-crs-tables.mjs`). No datum transformation is applied by
+  an assignment.
 - LAS classes convert by meaning only where the specification gives one.
   Between LAS 1.0 to 1.3 and LAS 1.4, legacy class 8 (Model Key-point) becomes
   class 1 with the key-point flag, and legacy class 12 (Overlap Points) becomes
@@ -506,6 +527,28 @@ gives the reason. The scale widens on an axis whose extent would need more than
   without asking. The text
   area is the only place the file itself records a conversion: a reader that
   ignores it sees nothing, and a format other than LAS has no such record.
+- The point-cloud converter writes the source coordinates in their stored
+  axis order. It does not infer an up axis from the scan's shape, and the
+  viewer's display orientation does not change an exported coordinate. A
+  local PLY, OBJ or glTF model with no CRS is rotated from Y-up to Z-up,
+  (x, y, z) written as (x, -z, y), only when "Rotate a local Y-up model to
+  Z-up" is ticked; the report and the file's conversion record say so. That
+  option is refused when the export keeps or assigns a CRS and for a format
+  that is Z-up by specification. A glTF source, Y-up by specification, is
+  refused under a CRS until its axes are reconciled: set the scan to Local,
+  export with the rotation, then assign the CRS to that file. A PLY or OBJ
+  under a CRS is assumed to store easting, northing and height in X, Y and
+  Z; OLV cannot tell from a PLY or OBJ file that its axes are otherwise.
+- Terrain analysis, and the DTM, contours, map sheet and terrain exports
+  built from it, take the up axis from metadata by the same rule. A PLY or
+  OBJ under a CRS (the file's, or one assigned in the app) is analysed as
+  stored and is never rotated because of its shape. A glTF or GLB under a CRS
+  is not analysed, and the Analyse panel says how to reconcile its axes. Only
+  a PLY, OBJ or glTF model with no CRS, or one set to Local, has its up axis
+  detected from the point layout; the panel states the detected axis and,
+  for Y-up, that the points were rotated to Z-up as (x, -z, y). A detected
+  Y-up model is not analysed together with Z-up layers. The detected axis is
+  shown in the panel only and is not recorded in the exported provenance.
 - The reproduction pack's metrics reproduce exactly under the Node version
   pinned in `.nvmrc`. Another Node or V8 version can change the last digits.
 
@@ -569,6 +612,20 @@ other code is treated as unknown, not as metres. A vertical EPSG code fixes the 
 vertical unit is declared. A declared vertical unit wins over the code's own
 (NAVD88 with US survey feet reads as NAVD88 height in ftUS, as in GDAL), and a
 declared vertical unit code the app cannot read leaves the height unit unknown.
+A WKT vertical unit is read by its conversion factor, as PROJ reads it: a
+centimetre, millimetre, kilometre or yard, or a unit with any other name,
+converts by the factor the file states. A unit name that disagrees with its
+factor (UNIT["metre",0.3048]) is converted by the factor and the conflict is
+noted. A vertical unit that is not a length (an angular unit), or whose factor
+is missing, zero, negative or not finite, is invalid: no height is derived from
+it, and it never falls back to the vertical code's unit or the horizontal unit.
+GeoKey vertical unit codes other than metre, foot and US survey foot are not
+read and count as invalid. A projected CRS unit is read the same way: a
+centimetre, kilometre or yard grid converts by its declared factor in Measure,
+the exports and the scan reports. LAS 1.2 output refuses such a unit, LAS 1.4
+output keeps the source WKT that states it, and the contour DXF, contour SVG
+and map sheet label its coordinates as unitless source units rather than
+naming the unit.
 
 ## Depth references, geocentric frames and Web Mercator are refused, not converted
 
@@ -612,6 +669,17 @@ Scan Report and in metres in Measure. Only the lasso volume readout says so, wit
 height read in Measure carries no vertical-unit note of its own; it is flagged
 only when the horizontal unit is unknown. A valid declared vertical unit is used
 by every feature.
+
+A declared vertical unit that cannot be read is never borrowed from the
+horizontal unit. Measure, the trust grade, chain totals, the lasso volume, the
+PDF report, CSV, GeoJSON, KML, findings and the integrity report withhold every
+height and every figure built on one (3D length, tilted area, angle, grade,
+profile, box and volume) with "height unit could not be interpreted", and keep
+only plan figures: the horizontal distance of a height or profile, the run of a
+grade, the plan area of an area, the width and depth of a box and the footprint
+of a volume. Measure withholds the whole row, including those plan figures,
+which only the exports carry. Coordinates are unchanged, and no figure is shown
+in raw source units instead.
 
 ## Imperial readouts are in international feet
 
@@ -669,7 +737,14 @@ LAS files written by the converter name the vertical CRS in the unit of the Z
 values through the same table (NAVD88 in US survey feet is EPSG:6360). A
 vertical code outside the table, or one with no unit to check it against,
 passes through from the source unchanged, so a reader takes its unit from the
-code.
+code. A source vertical unit that cannot be read, or one that is not metre,
+foot or US survey foot (a centimetre or yard height, for example), refuses the
+LAS conversion with the reason, because no LAS vertical unit key can state it.
+
+The DTM and DSM GeoTIFFs of a source whose heights are in a valid unit other
+than metre, foot or US survey foot keep those heights in the source unit with
+no vertical CRS and no band unit, and the DEM package README reads the
+elevation unit as unknown.
 
 ## One streamed source at a time
 
@@ -888,7 +963,8 @@ before the voxel pass at load.
 
 ## Change detection does not estimate a vertical offset between epochs
 
-Epoch alignment solves yaw and x/y only. A systematic vertical offset between
+Epoch alignment never applies a vertical shift, and two epochs that declare one
+horizontal CRS are not aligned at all. A systematic vertical offset between
 the two epochs, such as a datum or geoid difference or a sensor bias, is not
 estimated or removed, so it appears as change over the whole compared area. The
 change result in the panel says so. Check the difference over ground known to
@@ -902,8 +978,9 @@ epoch's own bias. It is not checkpoint accuracy and not a per-cell DEM
 uncertainty. The 95 % level holds only if the errors are normal, independent
 and unbiased. σreg must be the vertical registration error measured on stable
 reference areas; the app has no stable-area assessment yet, so σreg is
-unavailable. The alignment's residuals (at the applied pose, and the solver's
-own fit) are reported but are fit statistics and are not used as σreg. With
+unavailable. When a local-frame alignment runs, its residuals (at the applied
+pose, and the solver's own fit) are reported but are fit statistics and are
+not used as σreg. With
 σreg missing and both σz measured, the threshold is
 max(1.96·√(σz_before² + σz_after²), 0.1 m) and is labelled "incomplete — lower
 bound"; significance counts and detectable volumes carry the same label, and the
@@ -925,17 +1002,34 @@ estimated from all its points; a finer extent-based cell is kept only when the
 data are that dense. Where ground returns are much sparser than all returns,
 under dense vegetation, cells without a ground return are still left out.
 
-Epoch alignment starts at the unmoved pose when both epochs declare one CRS,
-pairs points only within three mean point spacings (estimated from the before
-epoch's sample), and measures the overlap at that distance. It is withheld,
-and the epochs compared unshifted, when under half of the sampled after points
-have a partner, when the fit residual exceeds 0.75 spacings, or when the fit
-would move the after sample farther than the pairing distance. A real
-misregistration larger than about three point spacings is therefore not
-corrected; it is reported as withheld. Over flat ground the horizontal shift is
-not constrained by the surface, and the fit leaves it near zero rather than
-guessing. Epochs without a declared CRS still start from a centroid placement,
-under the same gates.
+## Epochs in one CRS are not registered; local-frame alignment needs informative relief
+
+Two epochs that declare the same horizontal CRS are compared in their supplied
+coordinates. No registration is estimated or applied, and the panel and the
+registration record say so. A rigid fit cannot separate a horizontal shift
+along a slope from a real change in height: on two identical lattices on a 0.5
+slope, a +1 m uplift was read as a 0.40 m x shift and a mean change of 0.800 m.
+A real horizontal misregistration between such epochs is therefore not
+corrected and appears as change. A shared declared CRS is not an accuracy
+statement, and registration uncertainty is not quantified, so the level of
+detection is labelled incomplete, a lower bound.
+
+Epochs without a common declared CRS are aligned only when the surface
+constrains yaw, x, y and z independently. Before any damping, every iteration
+tests the point-to-plane information matrix of those four terms (the yaw row
+scaled by the RMS lever arm): its smallest-to-largest eigenvalue ratio and the
+information left on each horizontal direction after the other terms are
+eliminated must both reach 0.01. A plane, flat or sloped, and a single ridge are
+refused as unobservable, and the epochs are compared as supplied. Gentle relief
+can be refused too: a synthetic surface with RMS slopes of 14 % and 11 % along
+its two axes was. An accepted fit pairs
+points only within three mean point spacings of the before epoch's sample,
+starts from a centroid placement, and is withheld when under half of the
+sampled after points have a partner or the fit residual exceeds 0.75 spacings.
+It applies yaw and x/y, not the fitted Z. Non-uniform real change on the
+compared relief can still pull the fit. The fitting residual and the residual
+at the applied pose are reported separately; neither is a registration
+uncertainty, and a small fitting residual does not validate the alignment.
 
 ## The CRS override fingerprint samples a source, it does not hash it
 

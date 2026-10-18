@@ -319,15 +319,23 @@ export const METHOD_REGISTRY: Readonly<Record<string, MethodEntry>> = {
   },
   'olv.registration.epoch-horizontal-icp': {
     id: 'olv.registration.epoch-horizontal-icp',
-    version: 2,
-    name: 'Repeat-epoch horizontal alignment (yaw + XY, Z locked)',
+    version: 3,
+    name: 'Repeat-epoch horizontal alignment (local frames, observability-gated; yaw + XY applied)',
     summary:
-      'The transform applied to align repeat epochs: the yaw and translation from ' +
-      'the planar ICP solver, with the vertical component constrained to zero so a ' +
-      'real elevation change between epochs is preserved rather than absorbed into ' +
-      'the fit. Describes the applied product; the generic solver it wraps is ' +
-      'olv.registration.icp-planar. v2: epochs that declare one CRS start at the ' +
-      'identity pose (no centroid or median warm start); each iteration minimises ' +
+      'The transform applied to align repeat epochs: the yaw and x/y translation from ' +
+      'the planar ICP solver, with the fitted vertical component not applied. ' +
+      'Describes the applied product; the generic solver it wraps is ' +
+      'olv.registration.icp-planar. v3: epochs that declare one horizontal CRS keep ' +
+      'their supplied coordinates and no registration is estimated (a rigid fit cannot ' +
+      'separate a shift along a slope from a real height change, and discarding the ' +
+      'fitted Z let x/y absorb real change); registration uncertainty is not quantified. ' +
+      'Pairs without a common declared CRS are fitted only when, at every iteration and ' +
+      'before damping, the point-to-plane information matrix of yaw, x, y and z has a ' +
+      'smallest-to-largest eigenvalue ratio, and a conditional information on each ' +
+      'horizontal direction, of at least 0.01 (yaw row scaled by the RMS lever arm); a ' +
+      'plane or a single slope is refused as unobservable. v2 fitted common-CRS epochs ' +
+      'too, so a +1 m uplift on a 0.5 slope applied a 0.40 m x shift. v2: epochs ' +
+      'that declare one CRS start at the identity pose (no centroid or median warm start); each iteration minimises ' +
       'point-to-plane distances (target normals from a plane fit within 2 mean point ' +
       'spacings) over the pairs within 3 mean point spacings, estimated from the ' +
       'before sample, keeping the best 90 %; the overlap is measured at that same ' +
@@ -339,7 +347,7 @@ export const METHOD_REGISTRY: Readonly<Record<string, MethodEntry>> = {
       'shifted by a share of the footprint difference.',
     citation: 'Besl & McKay (1992), doi:10.1109/34.121791; Chen & Medioni (1992), doi:10.1016/0262-8856(92)90066-C (point-to-plane); Umeyama (1991) planar LS',
     category: 'registration',
-    implementation: ['src/terrain/change/alignEpochs.ts', 'src/terrain/change/icpRegister.ts'],
+    implementation: ['src/terrain/change/alignEpochs.ts', 'src/terrain/change/icpRegister.ts', 'src/terrain/change/rigidObservability.ts'],
   },
   'olv.volume.stockpile': {
     id: 'olv.volume.stockpile',

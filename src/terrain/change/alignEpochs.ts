@@ -9,28 +9,34 @@
  * fraction of a degree of yaw — and a raw cell-for-cell difference reads that
  * registration error as if it were real ground movement.
  *
- * This module runs the planar ICP core ({@link icpRegister}) on a subsample of
- * the two clouds and, when the fit is trustworthy, applies the solved transform
- * to the `after` cloud so the comparison starts from a registered pair. The fit
- * is reported, not hidden: the residual, the solved yaw and shift, and whether
- * the transform was applied or refused all ride out in {@link EpochAlignment},
- * so a reader can see what the alignment did. A fit whose residual exceeds the
- * gate is refused and the clouds are left untouched, so alignment never invents
- * a shift it cannot stand behind.
+ * Two epochs that declare one horizontal CRS keep their supplied coordinates:
+ * no registration is estimated or applied (`frameKept`). A rigid fit cannot
+ * tell a horizontal shift along a slope from a real change in height (on a
+ * plane z = s·x, moving the after cloud by Δz/s in x removes a uniform uplift
+ * Δz), so fitting the pair and then discarding the fitted Z lets the
+ * horizontal terms absorb real change. The comparison runs in the original
+ * frame and registration uncertainty stays unquantified. A caller can still
+ * opt in with `commonFrame: 'estimate'`, under the gates below.
  *
- * Two epochs that declare one CRS are already in a common frame, so the solve
- * starts at the identity pose. Correspondences farther apart than a few mean
- * point spacings (estimated from the before sample) are rejected in every
- * iteration, and the overlap is measured at that same distance. A fit is
- * withheld when the overlap is low, when its residual exceeds a spacing-scaled
- * limit, or when it moved the after cloud farther than that correspondence
- * distance, which no pair formed at the starting pose could support.
+ * Pairs without a common declared CRS (local frames) run the planar ICP core
+ * ({@link icpRegister}) on a subsample. Before any damping, every iteration
+ * tests the undamped point-to-plane information matrix of the full rigid
+ * problem (yaw, x, y, z) and withholds the fit when it is rank-deficient or
+ * ill-conditioned ({@link OBSERVABILITY_MIN_RATIO}); a plane, flat or sloped,
+ * is refused. Correspondences farther apart than a few mean point spacings
+ * (estimated from the before sample) are rejected in every iteration, and the
+ * overlap is measured at that same distance. A fit is also withheld when the
+ * overlap is low or its residual exceeds a spacing-scaled limit. The fit is
+ * reported, not hidden, in {@link EpochAlignment}: the fitting residual, the
+ * residual at the applied pose and the observability are separate figures, and
+ * none of them is a registration uncertainty.
  *
  * Pure: no DOM, no three.js, no I/O. The clouds are strided down to a bounded
  * sample before the fit runs.
  */
 
 import { icpRegister, applyIcp, type Vec3, type IcpResult } from './icpRegister';
+import { OBSERVABILITY_MIN_RATIO, type RigidObservability } from './rigidObservability';
 import { buildPointIndex, nearestPoint, nearestState } from './pointIndex';
 import { meanPointSpacing } from './pointSpacing';
 
@@ -83,6 +89,12 @@ export interface AlignEpochOptions {
    * option — they are refused before the fit (see {@link EpochAlignment.geographicSkipped}).
    */
   readonly horizontalUnitKnown?: boolean;
+  /**
+   * What to do with two epochs that declare one horizontal CRS. `'preserve'`
+   * (default): compare them in their supplied coordinates, no fit at all.
+   * `'estimate'`: run the gated fit from the identity pose.
+   */
+  readonly commonFrame?: 'preserve' | 'estimate';
 }
 
 /**
@@ -211,6 +223,21 @@ export interface EpochAlignment {
   readonly correspondenceDistanceM?: number;
   /** The solve started at the identity pose (both epochs declare one CRS). */
   readonly identityStart?: boolean;
+  /**
+   * Both epochs declare one horizontal CRS, so their supplied coordinates were
+   * kept: no registration was estimated and none applied. This is not an
+   * accuracy statement about that frame; registration uncertainty is not
+   * quantified.
+   */
+  readonly frameKept?: boolean;
+  /**
+   * The geometry does not determine the rigid pose (yaw, x, y, z): the
+   * undamped information matrix was rank-deficient or ill-conditioned, so no
+   * pose was estimated and nothing was applied.
+   */
+  readonly unobservable?: boolean;
+  /** Weakest observability of the fit (absent when no fit ran). */
+  readonly observability?: RigidObservability;
 }
 
 /** Below this inlier fraction the fit is untrustworthy and is not applied. */
@@ -253,6 +280,13 @@ const NO_ALIGNMENT: EpochAlignment = {
   translation: ZERO,
   sampleCount: 0,
   overlapFraction: 0,
+};
+
+/** Both epochs declare one CRS: coordinates kept, no fit attempted. */
+const FRAME_KEPT: EpochAlignment = {
+  ...NO_ALIGNMENT,
+  degenerate: false,
+  frameKept: true,
 };
 
 /** The geographic-frame refusal: nothing attempted, clouds untouched. */
@@ -427,6 +461,14 @@ export function alignEpochClouds(
     };
   }
 
+  // One declared horizontal CRS on both sides (a contradiction was refused
+  // above): keep the supplied coordinates. See the module header for why a
+  // rigid fit here would read real change as a shift.
+  const identityStart = Boolean(before.crs && after.crs);
+  if (identityStart && options.commonFrame !== 'estimate') {
+    return { after, alignment: { ...FRAME_KEPT, frameUnverified } };
+  }
+
   // Projected frame with an UNKNOWN linear unit. The fit still runs (the
   // transform is valid in the cloud's own units and the residual gate is
   // self-consistent — both the span-derived threshold and the residual live in
@@ -467,13 +509,10 @@ export function alignEpochClouds(
   const metresPerUnit =
     before.linearUnitToMetres && before.linearUnitToMetres > 0 ? before.linearUnitToMetres : 1;
 
-  // Two epochs that declare one CRS already share a frame: start at the
-  // identity pose. A centroid or median warm start measures the difference in
-  // the two footprints, and on epochs of different extent it shifted a
-  // perfectly registered pair by a large fraction of that difference.
-  // Undeclared local scans keep the warm start: their frames may differ
-  // arbitrarily, and the gates below still bound what is applied.
-  const identityStart = Boolean(before.crs && after.crs);
+  // An opted-in common-CRS fit starts at the identity pose: a centroid or
+  // median warm start measures the difference in the two footprints. Local
+  // scans keep the warm start: their frames may differ arbitrarily, and the
+  // gates below still bound what is applied.
   const trimFraction = options.trimFraction ?? (identityStart ? COMMON_FRAME_TRIM : undefined);
   // Spacing in source units, from the target sample the solve pairs against.
   const spacing = meanPointSpacing(beforeSample);
@@ -490,6 +529,7 @@ export function alignEpochClouds(
     maxCorrespondenceDistance: Number.isFinite(gate) ? gate : undefined,
     metric: 'plane',
     normalRadius: NORMAL_SPACINGS * spacing,
+    minObservability: OBSERVABILITY_MIN_RATIO,
   });
   const sampleCount = Math.min(beforeSample.length, afterSample.length);
   const yawDeg = (fit.yawRad * 180) / Math.PI;
@@ -501,6 +541,7 @@ export function alignEpochClouds(
     pointSpacingM: spacing * metresPerUnit,
     correspondenceDistanceM: gate * metresPerUnit,
     identityStart,
+    ...(fit.observability ? { observability: fit.observability } : {}),
   };
   // Residual at the identity pose: what the comparison sees when nothing is applied.
   const unappliedResidualM = (): number =>
@@ -516,6 +557,32 @@ export function alignEpochClouds(
     const q = applyIcp(pose, centre);
     return [(q[0] - centre[0]) * metresPerUnit, (q[1] - centre[1]) * metresPerUnit, pose.translation[2] * metresPerUnit];
   };
+
+  // Unobservable: the geometry does not determine the pose, so there is no
+  // estimate to report or apply. Checked first: nothing else about the fit
+  // means anything without it.
+  if (fit.unobservable) {
+    return {
+      after,
+      alignment: {
+        attempted: true,
+        applied: false,
+        appliedDof: 'none',
+        refused: true,
+        degenerate: false,
+        solverResidualM: Infinity,
+        appliedTransformResidualM: unappliedResidualM(),
+        yawDeg: 0,
+        translation: ZERO,
+        sampleCount,
+        overlapFraction: 0,
+        unobservable: true,
+        frameUnverified,
+        horizontalUnitUnknown,
+        ...gateFacts,
+      },
+    };
+  }
 
   // Low overlap: too few sampled points have a partner within the
   // correspondence distance. Checked first: a residual over a small overlap
@@ -665,6 +732,13 @@ export function summarizeAlignment(a: EpochAlignment): string {
   if (a.frameIncompatible) {
     return `Alignment not attempted. ${a.frameReason ?? 'The epochs do not share a proven spatial frame.'}`;
   }
+  if (a.frameKept) {
+    return (
+      'Registration: not estimated. Both epochs declare the same horizontal CRS, so they are ' +
+      'compared in their supplied coordinates with no shift or yaw applied. Registration ' +
+      'uncertainty is not quantified, so the level of detection is a lower bound.'
+    );
+  }
   if (a.geographicSkipped) {
     return (
       'Alignment: skipped — geographic (degree) coordinates cannot be rigidly ' +
@@ -672,6 +746,15 @@ export function summarizeAlignment(a: EpochAlignment): string {
     );
   }
   if (!a.attempted || a.degenerate) return 'Alignment: skipped (not enough points to register).';
+  if (a.unobservable) {
+    return (
+      'Alignment: refused as unobservable. The surface does not constrain yaw and x, y, z ' +
+      'independently (a plane or a single slope cannot separate a horizontal shift from a ' +
+      'height change), so no shift was estimated and the clouds are compared as supplied. ' +
+      'Registration uncertainty is not quantified.' +
+      (a.frameUnverified ? ' Indicative local-frame result — one or both epochs declare no CRS or vertical datum.' : '')
+    );
+  }
   // Projected frame, unknown linear unit: the residual and shift were scaled by
   // the placeholder factor 1, so every "m" figure would be a source-unit number
   // wearing a metre label. Withhold them — the same fail-closed posture as
@@ -707,7 +790,8 @@ export function summarizeAlignment(a: EpochAlignment): string {
     `${(a.overlapFraction * 100).toFixed(0)}% overlap over ${a.sampleCount} sampled points). ` +
     `Residual at the applied pose ${a.appliedTransformResidualM.toFixed(2)} m; solver fit residual ` +
     `(yaw + x/y/z, not what was applied) ${a.solverResidualM.toFixed(2)} m. Both are fit statistics, ` +
-    `not a vertical registration uncertainty.` +
+    `not a registration uncertainty, and a small fitting residual does not validate the alignment; ` +
+    `registration uncertainty is not quantified.` +
     (a.appliedDof === 'yaw+xyz' ? '' : ' Vertical change preserved.');
   // The figures above describe the FIT. Without a declared frame on both sides
   // they say nothing about the relationship between the epochs, and a residual

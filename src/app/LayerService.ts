@@ -526,7 +526,7 @@ export function createLayerService(deps: LayerServiceDeps): LayerService {
             crsName: info.crsName ?? null,
             crsSource: (crs as { source?: string } | null)?.source ?? null,
             horizontalUnit:
-              crs && isLinearUnitKnown(crs) ? crs.linearUnit : null,
+              crs && isLinearUnitKnown(crs) ? (crs.linearUnit === 'unknown' ? `units of ${crs.linearUnitToMetres} m` : crs.linearUnit) : null,
             // The parsed vertical unit NAME (WKT VERT_CS UNIT / GeoTIFF key)
             // from the CrsInfo the file declared; never reverse-mapped from
             // the numeric factor. Null only when the CRS declares none.

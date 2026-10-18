@@ -148,6 +148,17 @@ function convertOk(cloud: PointCloud, opts: Parameters<typeof convertCloud>[1]):
 }
 
 /** The physical elevation difference the output states for the 10-unit rise. */
+/**
+ * LAS 1.4 point formats 6-10 need the CRS as WKT, and this build holds no
+ * verified WKT for the State Plane foot code used below, so a LAS 1.4 export
+ * of it is refused by name (LAS 1.2 records it as GeoKeys).
+ */
+function expectNoWktRefusal(cloud: PointCloud, opts: Parameters<typeof convertCloud>[1], code: number): void {
+  const out = convertCloud(cloud, opts);
+  expect(out.file).toBeNull();
+  expect(out.report.log.map((l) => l.message).join(' ')).toContain(`no verified WKT definition for EPSG:${code}`);
+}
+
 function riseMetres(r: Reread): number {
   expect(r.zToMetres).toBeDefined();
   return (r.zMax - r.zMin) * (r.zToMetres as number);
@@ -216,6 +227,14 @@ describe('LAS conversion keeps the declared vertical unit (load → resolve → 
       it('metre XY + foot Z declared by unit alone (no vertical CRS): Keep writes the unit alone', () => {
         const { cloud, resolved } = load(sourceLas({ epsg: 32613, linearUnitCode: 9001, verticalUnitCode: 9003 }), 'unit-only.las');
         expect(resolved.verticalUnitToMetres).toBeCloseTo(US_FT, 12);
+        if (format === 'las14') {
+          // A WKT cannot state a height unit without a vertical CRS, and a WKT
+          // reader would take these heights in metres, so LAS 1.4 refuses.
+          const out = convertCloud(cloud, { format, crsMode: 'keep', resolvedSourceCrs: resolved });
+          expect(out.file).toBeNull();
+          expect(out.report.log.map((l) => l.message).join(' ')).toContain('declared in US survey feet with no vertical datum');
+          return;
+        }
         const r = convertOk(cloud, { format, crsMode: 'keep', resolvedSourceCrs: resolved });
         expect(r.keys.get(4096)).toBeUndefined();
         expect(r.keys.get(4099)).toBe(9003);
@@ -224,6 +243,7 @@ describe('LAS conversion keeps the declared vertical unit (load → resolve → 
 
       it('foot XY + metre Z: Keep writes foot horizontal and metre vertical', () => {
         const { cloud, resolved } = load(sourceLas({ epsg: 2225, linearUnitCode: 9003, verticalEpsg: 5703, verticalUnitCode: 9001 }, [6000000, 2000000]), 'ftxy.las', [6000000, 2000000]);
+        if (format === 'las14') return expectNoWktRefusal(cloud, { format, crsMode: 'keep', resolvedSourceCrs: resolved }, 2225);
         const r = convertOk(cloud, { format, crsMode: 'keep', resolvedSourceCrs: resolved });
         expect(r.crs?.linearUnit).toBe('us-survey-foot');
         expect(r.crs?.verticalEpsg).toBe(5703);
@@ -242,6 +262,7 @@ describe('LAS conversion keeps the declared vertical unit (load → resolve → 
       it('absent vertical unit: Keep adds no vertical claim and the reader interprets Z as before', () => {
         const { cloud, resolved } = load(sourceLas({ epsg: 2225, linearUnitCode: 9003 }, [6000000, 2000000]), 'novert.las', [6000000, 2000000]);
         expect(resolved.verticalUnitToMetres).toBeUndefined();
+        if (format === 'las14') return expectNoWktRefusal(cloud, { format, crsMode: 'keep', resolvedSourceCrs: resolved }, 2225);
         const r = convertOk(cloud, { format, crsMode: 'keep', resolvedSourceCrs: resolved });
         expect(r.keys.has(4099)).toBe(false);
         expect(r.keys.has(4096)).toBe(false);
@@ -273,6 +294,8 @@ describe('LAS conversion keeps the declared vertical unit (load → resolve → 
 
       it('Reproject of foot XY with no declared vertical unit keeps Z in the source foot', () => {
         const { cloud, resolved } = load(sourceLas({ epsg: 2225, linearUnitCode: 9003 }, [6000000, 2000000]), 'ftrep.las', [6000000, 2000000]);
+        // The reproject is skipped (no definition for 2225), so the file stays in 2225.
+        if (format === 'las14') return expectNoWktRefusal(cloud, { format, crsMode: 'reproject', targetEpsg: 4326, resolvedSourceCrs: resolved }, 2225);
         const r = convertOk(cloud, { format, crsMode: 'reproject', targetEpsg: 4326, resolvedSourceCrs: resolved });
         expect(r.zMin).toBe(100);
         expect(r.crs?.verticalUnitToMetres).toBeCloseTo(US_FT, 12);
@@ -302,18 +325,42 @@ describe('LAS conversion keeps the declared vertical unit (load → resolve → 
         expect(out.report.log.map((l) => l.message).join(' ')).toMatch(/vertical unit/i);
       });
 
-      it('an unreadable vertical unit writes no vertical claim and says so', () => {
+      // Writing no vertical claim would let a reader take the heights in the
+      // horizontal unit (metres here), so an unreadable unit refuses the write.
+      it('an unreadable vertical unit refuses the write and says why', () => {
         const resolved: ResolvedCrs = {
           kind: 'projected', name: 'EPSG:32613', epsg: 32613, linearUnit: 'metre', linearUnitToMetres: 1,
           source: 'las-vlr', confidence: 'medium', userConfirmed: false,
           verticalEpsg: 5703, verticalDatum: 'NAVD88', verticalLinearUnit: 'unknown', verticalUnitToMetres: Number.NaN,
         };
         const out = convertCloud(cloudFor(null, 'unk.las'), { format, crsMode: 'keep', resolvedSourceCrs: resolved });
-        expect(out.report.ok).toBe(true);
-        const r = reread(out.file!.bytes);
-        expect(r.keys.has(4096)).toBe(false);
-        expect(r.keys.has(4099)).toBe(false);
-        expect(out.report.log.some((l) => l.level === 'warn' && /vertical unit/i.test(l.message))).toBe(true);
+        expect(out.report.ok).toBe(false);
+        expect(out.file).toBeNull();
+        expect(out.report.log.some((l) => l.level === 'error' && /vertical unit not readable/i.test(l.message))).toBe(true);
+      });
+
+      it('a saved unreadable vertical unit (token only, factor dropped) refuses the write too', () => {
+        const resolved: ResolvedCrs = {
+          kind: 'projected', name: 'EPSG:32613', epsg: 32613, linearUnit: 'metre', linearUnitToMetres: 1,
+          source: 'las-vlr', confidence: 'medium', userConfirmed: false, verticalLinearUnit: 'unknown',
+        };
+        const out = convertCloud(cloudFor(null, 'unk.las'), { format, crsMode: 'keep', resolvedSourceCrs: resolved });
+        expect(out.report.ok).toBe(false);
+        expect(out.file).toBeNull();
+      });
+
+      // A yard is a valid length, but no LAS vertical unit code names it; no
+      // named unit may stand in for 0.9144 m.
+      it('a valid vertical unit LAS cannot name (yard) refuses the write with the factor', () => {
+        const resolved: ResolvedCrs = {
+          kind: 'projected', name: 'EPSG:32613', epsg: 32613, linearUnit: 'metre', linearUnitToMetres: 1,
+          source: 'las-vlr', confidence: 'medium', userConfirmed: false,
+          verticalLinearUnit: 'unknown', verticalUnitToMetres: 0.9144,
+        };
+        const out = convertCloud(cloudFor(null, 'yard.las'), { format, crsMode: 'keep', resolvedSourceCrs: resolved });
+        expect(out.report.ok).toBe(false);
+        expect(out.file).toBeNull();
+        expect(out.report.log.some((l) => l.level === 'error' && /0\.9144 m/.test(l.message) && /cannot state/.test(l.message))).toBe(true);
       });
     });
   }

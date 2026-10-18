@@ -45,6 +45,21 @@ export type CrsMode =
   /** Transform every point from the source CRS to the target EPSG. */
   | 'reproject';
 
+/**
+ * What the converter does with the source axes. `preserve` (the default)
+ * writes the source coordinates as stored. `y-up-to-z-up` rotates a local
+ * Y-up model into the Z-up frame, (x, y, z) to (x, -z, y), and is refused when
+ * the export keeps or assigns a CRS or the source format is Z-up by
+ * specification (see `axisHandling.ts`).
+ */
+export type AxisHandling = 'preserve' | 'y-up-to-z-up';
+
+/** The label of the control that sets `axisHandling: 'y-up-to-z-up'`. */
+export const Y_UP_TO_Z_UP_OPT_IN = 'Rotate a local Y-up model to Z-up';
+/** The hint shown under that control. */
+export const Y_UP_TO_Z_UP_HINT =
+  'For a PLY, OBJ or glTF model with no CRS whose up axis is Y: writes (x, y, z) as (x, -z, y) and records the rotation in the file. Unticked, coordinates are written as stored.';
+
 /** Options that drive a single conversion. */
 export interface ConvertOptions {
   /** The output format to write. */
@@ -139,6 +154,12 @@ export interface ConvertOptions {
    * allows this loss and no other. LAS 1.4 keeps the flag.
    */
   readonly allowLegacyOverlapDrop?: boolean;
+  /**
+   * Source axis handling. Absent or `preserve`: the source coordinates are
+   * written as stored, whatever the scan's shape or the viewer's orientation.
+   * `y-up-to-z-up` is the explicit rotation for a local Y-up model.
+   */
+  readonly axisHandling?: AxisHandling;
 }
 
 /**

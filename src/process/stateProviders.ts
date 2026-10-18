@@ -78,6 +78,10 @@ export interface HorizontalCrs {
   readonly epsg: number | undefined;
   readonly linearUnit: SpatialContext['linearUnit'];
   readonly linearUnitKnown: boolean;
+  /** Metres per horizontal unit; names a valid unit that is not metre, foot or US survey foot. */
+  readonly linearUnitToMetres?: number;
+  /** The horizontal unit is known by its declared factor alone (see `CrsInfo.linearUnitByFactor`). */
+  readonly linearUnitByFactor?: boolean;
   /** The catalogue assertion the CRS came from, when it did not come from the file. */
   readonly assertedBy?: string;
 }
@@ -98,6 +102,10 @@ export function horizontalCrsProvider(
       epsg: context.epsg,
       linearUnit: context.linearUnit,
       linearUnitKnown: context.linearUnitKnown,
+      // A valid unit the token cannot name carries its factor for the label.
+      ...(context.linearUnit === 'unknown' && context.linearUnitKnown
+        ? { linearUnitToMetres: context.linearUnitToMetres, linearUnitByFactor: true }
+        : {}),
       assertedBy: resolved?.source === 'catalog-tile' ? resolved.assertedBy : undefined,
     },
     source,

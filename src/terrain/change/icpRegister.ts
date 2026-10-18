@@ -30,6 +30,7 @@
 import { NeumaierSum } from '../../process/numerics';
 import { symEig3 } from '../../math/symEig3';
 import { buildPointIndex, nearestPoint, nearestState } from './pointIndex';
+import { rigidObservability, type RigidObservability } from './rigidObservability';
 
 /** A point as [x, y, z]. World up is +Z (the yaw axis). */
 export type Vec3 = readonly [number, number, number];
@@ -97,6 +98,14 @@ export interface IcpOptions {
   readonly metric?: 'point' | 'plane';
   /** Neighbour radius (cloud units) for the target normals of the plane metric. */
   readonly normalRadius?: number;
+  /**
+   * Plane metric only: test every iteration's UNDAMPED information matrix of
+   * the full rigid problem (yaw, x, y, z) before damping is added, and stop
+   * with `unobservable` (no pose estimated) when its weakest direction falls
+   * below this ratio (see `rigidObservability.ts`). Omitted: no test, the
+   * damped solve as before.
+   */
+  readonly minObservability?: number;
 }
 
 export interface IcpResult {
@@ -140,6 +149,14 @@ export interface IcpResult {
    * option is finite; it is the overlap the solve actually used.
    */
   readonly overlapFraction?: number;
+  /**
+   * The geometry does not determine the rigid pose (see
+   * `IcpOptions.minObservability`): the fit stopped, `refused` is set, and the
+   * pose is the identity because none was estimated.
+   */
+  readonly unobservable?: boolean;
+  /** The weakest observability seen over the iterations, when it was tested. */
+  readonly observability?: RigidObservability;
 }
 
 /** Apply a solved ICP transform to a point: R(yaw)·p + t. */
@@ -315,6 +332,8 @@ export function icpRegister(
 
   let prevRms = Infinity;
   let rms: number;
+  const minObs = options.minObservability;
+  let observability: RigidObservability | undefined;
   let iter = 0;
   let converged = false;
 
@@ -416,6 +435,25 @@ export function icpRegister(
         }
         used++;
       }
+      // Observability of the full rigid problem, BEFORE damping: damping makes
+      // a rank-deficient system solvable, it does not make it determined.
+      if (minObs !== undefined) {
+        let lever2 = 0;
+        for (let k = 0; k < keep; k++) {
+          const i = order[k];
+          if (!Number.isFinite(normals[3 * corr[i]])) continue;
+          lever2 += (mx[i] - cm[0]) ** 2 + (my[i] - cm[1]) ** 2;
+        }
+        const obs = rigidObservability(A, used, Math.sqrt(lever2 / Math.max(1, used)), minObs);
+        if (!observability || Math.min(obs.eigenRatio, obs.horizontalRatio) < Math.min(observability.eigenRatio, observability.horizontalRatio)) observability = obs;
+        if (!obs.observable) {
+          return {
+            converged: false, refused: true, iterations: iter + 1, rmsResidual: Infinity,
+            yawRad: 0, translation: [0, 0, 0], degenerate: false, inlierFraction: 0,
+            trimFraction, unobservable: true, observability: obs,
+          };
+        }
+      }
       const damp = PLANE_DAMPING * Math.max(A[0][0], A[1][1], A[2][2], A[3][3]);
       for (let u = 0; u < 4; u++) A[u][u] += damp;
       const x = used >= 4 ? solve4(A, b) : null;
@@ -510,5 +548,6 @@ export function icpRegister(
     inlierFraction,
     trimFraction,
     ...(gated ? { overlapFraction: within / n } : {}),
+    ...(observability ? { observability } : {}),
   };
 }

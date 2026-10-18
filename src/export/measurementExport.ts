@@ -18,17 +18,18 @@
  */
 
 import type { Measurement, Vec3 } from '../render/measure/types';
-import { GEOGRAPHIC_NOT_AVAILABLE, VERTICAL_NOT_AVAILABLE, frameRefusalText, geographicRefusesKind, isComplete, reductionExportFields } from '../render/measure/types';
+import { GEOGRAPHIC_NOT_AVAILABLE, VERTICAL_NOT_AVAILABLE, VERTICAL_SCALE_NOT_AVAILABLE, frameRefusalText, geographicRefusesKind, isComplete, reductionExportFields } from '../render/measure/types';
 import {
   evidenceNote,
   evidenceStatus,
   geographicRefusalCaveat,
   unverifiedUnitsCaveat,
   verticalRefusalCaveat,
+  verticalScaleRefusalCaveat,
 } from '../validation/exportEvidenceNote';
 
 /** The refusal rule and wording, for the report and KML serializers. */
-export { GEOGRAPHIC_NOT_AVAILABLE, VERTICAL_NOT_AVAILABLE, geographicRefusesKind };
+export { GEOGRAPHIC_NOT_AVAILABLE, VERTICAL_NOT_AVAILABLE, VERTICAL_SCALE_NOT_AVAILABLE, geographicRefusesKind };
 export { reducedSampleCaveat } from '../render/measure/types';
 import { lightProvenance, type LightProvenanceInput } from './lightProvenance';
 import {
@@ -90,6 +91,13 @@ export interface MeasurementExportContext {
    * volumes are then withheld too, pure-vertical keys included.
    */
   readonly verticalRefused?: boolean;
+  /**
+   * True when the source declares a vertical unit that cannot be read
+   * (`SpatialContext.verticalScaleState === 'invalid'`). `verticalUnitToMetres`
+   * is then not a metre factor: every figure that reads Z is withheld, and
+   * only the purely horizontal figures of a measurement are written.
+   */
+  readonly verticalScaleInvalid?: boolean;
   /**
    * True when the scan's linear scale is KNOWN (a resolved CRS unit), so the
    * `_m` / `_m2` / `_m3` columns genuinely mean metres. False for a local /
@@ -358,23 +366,52 @@ export function angleWithheldNote(
 const PURE_VERTICAL_KEYS: ReadonlySet<string> = new Set(['vertical_m', 'rise_m', 'height_m']);
 
 /**
+ * Metric keys measured in the horizontal plane alone, by kind: they read X/Y
+ * at the horizontal scale and never Z. When only the vertical scale is invalid
+ * they are still honest metres, so a refused measurement keeps them. A volume's
+ * `area_m2` is its horizontal footprint; an area's `area_m2` is the tilted
+ * plane and is not listed.
+ */
+const PURE_HORIZONTAL_KEYS: Readonly<Partial<Record<Measurement['kind'], ReadonlySet<string>>>> = {
+  height: new Set(['horizontal_m']),
+  profile: new Set(['horizontal_m']),
+  slope: new Set(['run_m']),
+  area: new Set(['horizontal_area_m2']),
+  box: new Set(['width_m', 'depth_m']),
+  volume: new Set(['area_m2']),
+};
+
+/**
  * True when a geographic frame refuses this measurement's figures. The kind
  * rule is the live grade's own (`geographicRefusesKind`), so an export cannot
  * publish a number the Measure panel marks as not a distance.
  */
-export function geographicRefuses(m: Measurement, geographic: boolean | undefined, verticalRefused?: boolean): boolean {
-  return refusalNote(m, geographic, verticalRefused) !== null;
+export function geographicRefuses(m: Measurement, geographic: boolean | undefined, verticalRefused?: boolean, verticalScaleInvalid?: boolean): boolean {
+  return refusalNote(m, geographic, verticalRefused, verticalScaleInvalid) !== null;
 }
 
 /** The sentence a refused measurement carries in place of its figures, or null. */
-export function refusalNote(m: Measurement, geographic: boolean | undefined, verticalRefused?: boolean): string | null {
-  return frameRefusalText(m.kind, geographic === true, verticalRefused === true);
+export function refusalNote(m: Measurement, geographic: boolean | undefined, verticalRefused?: boolean, verticalScaleInvalid?: boolean): string | null {
+  return frameRefusalText(m.kind, geographic === true, verticalRefused === true, verticalScaleInvalid === true);
+}
+
+/**
+ * Whether a refused measurement still writes metric key `k`: a pure-vertical
+ * key while the vertical is valid (a geographic frame keeps heights), and a
+ * purely horizontal key while the horizontal is valid (an unreadable vertical
+ * unit keeps plan figures). A frame with no local vertical keeps neither.
+ */
+function keptUnderRefusal(m: Measurement, k: string, geographic: boolean | undefined, verticalRefused?: boolean, verticalScaleInvalid?: boolean): boolean {
+  if (verticalRefused === true) return false;
+  if (PURE_VERTICAL_KEYS.has(k)) return verticalScaleInvalid !== true;
+  return geographic !== true && verticalScaleInvalid === true && PURE_HORIZONTAL_KEYS[m.kind]?.has(k) === true;
 }
 
 /**
  * The metrics with every refused figure set to null. A refused measurement on
  * a geographic frame keeps only its pure-vertical keys; every other figure
- * mixes degree X/Y with linear Z. Key order is unchanged. A measurement that
+ * mixes degree X/Y with linear Z. With an unreadable vertical unit it keeps
+ * only its purely horizontal keys. Key order is unchanged. A measurement that
  * is not refused passes through as is.
  */
 export function geographicFilter(
@@ -382,12 +419,11 @@ export function geographicFilter(
   m: Measurement,
   geographic: boolean | undefined,
   verticalRefused?: boolean,
+  verticalScaleInvalid?: boolean,
 ): Record<string, number | null> {
-  if (!geographicRefuses(m, geographic, verticalRefused)) return metrics;
-  // With no local vertical, the pure-vertical keys go too.
-  const keep = (k: string): boolean => verticalRefused !== true && PURE_VERTICAL_KEYS.has(k);
+  if (!geographicRefuses(m, geographic, verticalRefused, verticalScaleInvalid)) return metrics;
   return Object.fromEntries(
-    Object.entries(metrics).map(([k, v]) => [k, keep(k) ? v : null]),
+    Object.entries(metrics).map(([k, v]) => [k, keptUnderRefusal(m, k, geographic, verticalRefused, verticalScaleInvalid) ? v : null]),
   );
 }
 
@@ -521,14 +557,16 @@ export function measurementsToGeoJSON(
         m,
         ctx.geographic,
         ctx.verticalRefused,
+        ctx.verticalScaleInvalid,
       );
+      const refused = refusalNote(m, ctx.geographic, ctx.verticalRefused, ctx.verticalScaleInvalid);
       const properties: Record<string, unknown> = {
         id: m.id,
         name: m.name,
         kind: m.kind,
         ...(ctx.sourceOf ? { source: ctx.sourceOf(m) } : {}),
         ...(unitsKnown ? metrics : inSourceUnits(metrics)),
-        ...(refusalNote(m, ctx.geographic, ctx.verticalRefused) ? { not_available: refusalNote(m, ctx.geographic, ctx.verticalRefused) } : {}),
+        ...(refused ? { not_available: refused } : {}),
         ...areaNoteProp(m, ctx),
         ...(placed.withheld ? { geometry_withheld: placed.withheld } : {}),
         ...(lonLat.sourceHeights ? { elevations_source: placed.elevations } : {}),
@@ -572,8 +610,9 @@ export function measurementsToGeoJSON(
   const evidence =
     claims.map((c) => `${c}: ${evidenceNote(c)}`).join(' ')
     + unverifiedUnitsCaveat(ctx.unitsVerified ?? true)
-    + geographicRefusalCaveat(measurements.some((m) => refusalNote(m, ctx.geographic, ctx.verticalRefused) === GEOGRAPHIC_NOT_AVAILABLE))
-    + verticalRefusalCaveat(measurements.some((m) => refusalNote(m, ctx.geographic, ctx.verticalRefused) === VERTICAL_NOT_AVAILABLE));
+    + geographicRefusalCaveat(measurements.some((m) => refusalNote(m, ctx.geographic, ctx.verticalRefused, ctx.verticalScaleInvalid) === GEOGRAPHIC_NOT_AVAILABLE))
+    + verticalRefusalCaveat(measurements.some((m) => refusalNote(m, ctx.geographic, ctx.verticalRefused, ctx.verticalScaleInvalid) === VERTICAL_NOT_AVAILABLE))
+    + verticalScaleRefusalCaveat(measurements.some((m) => refusalNote(m, ctx.geographic, ctx.verticalRefused, ctx.verticalScaleInvalid) === VERTICAL_SCALE_NOT_AVAILABLE));
   // A collection with nothing in it makes no claim, so there is no verdict to
   // carry — and an `evidence: ""` member would be a field that says nothing
   // where a reader expects a statement. The key is omitted instead.
@@ -764,7 +803,7 @@ export function measurementsToCsv(
   const evidenceFor = (m: Measurement): string => {
     const status = evidenceStatus(claimForMeasurement(m) ?? 'MEAS-DISTANCE');
     const units = unitsKnown ? status : `${status}; units-unverified (source render units, not metres)`;
-    const refused = refusalNote(m, ctx.geographic, ctx.verticalRefused);
+    const refused = refusalNote(m, ctx.geographic, ctx.verticalRefused, ctx.verticalScaleInvalid);
     const withGeo = refused ? `${units}; ${refused}` : units;
     const note = areaWithheldNote(m, ctx.up, ctx.unitToMetres, ctx.verticalUnitToMetres)
       ?? angleWithheldNote(m, ctx.up, ctx.unitToMetres, ctx.verticalUnitToMetres);
@@ -774,8 +813,8 @@ export function measurementsToCsv(
     const all = measurementMetrics(m, ctx.up, ctx.unitToMetres, ctx.verticalUnitToMetres);
     // Refused figures are dropped, so the cell is empty like any figure the
     // geometry cannot establish.
-    const raw = geographicRefuses(m, ctx.geographic, ctx.verticalRefused)
-      ? Object.fromEntries(Object.entries(all).filter(([k]) => ctx.verticalRefused !== true && PURE_VERTICAL_KEYS.has(k)))
+    const raw = geographicRefuses(m, ctx.geographic, ctx.verticalRefused, ctx.verticalScaleInvalid)
+      ? Object.fromEntries(Object.entries(all).filter(([k]) => keptUnderRefusal(m, k, ctx.geographic, ctx.verticalRefused, ctx.verticalScaleInvalid)))
       : all;
     const metrics = unitsKnown ? raw : inSourceUnits(raw);
     const base: Record<string, string | number> = {

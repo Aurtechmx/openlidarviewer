@@ -285,7 +285,7 @@ export function createMeasurePanelMount(deps: MeasurePanelMountDeps): MeasurePan
           // The same frame verdicts the live grade and the exports read: a
           // geographic frame refuses all but height, and an unconfirmed scale
           // is not called metres.
-          { geographic: f.geographic, verticalRefused: f.verticalRefused, unitsVerified: f.crsKnown && !f.geographic },
+          { geographic: f.geographic, verticalRefused: f.verticalRefused, verticalScaleInvalid: f.verticalUnitInvalid, unitsVerified: f.crsKnown && !f.geographic },
         );
       },
       // v0.3.10 Profile-as-Deliverable — expose the controller's unit

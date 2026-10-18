@@ -1,85 +1,100 @@
 /**
- * epsgWkt.ts — OGC WKT for the EPSG codes whose parameters we can derive.
+ * epsgWkt.ts — OGC WKT for the EPSG codes OLV can describe exactly.
  *
  * LAS 1.4 requires the CRS as WKT for point data record formats 6-10, with
- * global-encoding bit 4 set. The writer does that whenever it is given a WKT,
- * but the only source of one used to be the input file, so a scan carrying a
- * GeoTIFF GeoKey VLR (what LAS 1.2 uses, and what PDAL commonly emits) came
- * back out as a 1.4 file with GeoKeys and bit 4 clear. The codes in it were
- * right; the encoding was not the one the format mandates.
+ * global-encoding bit 4 set. A scan georeferenced by GeoTIFF keys alone (what
+ * LAS 1.2 uses, and what many tools emit) has no WKT of its own, so one has to
+ * be written for it, and it has to be the right one.
  *
- * The writer deliberately refuses to invent "a parameterless WKT downstream
- * tools could not use", and that refusal is correct. This is not that. A WGS
- * 84 UTM zone is fully determined by its zone number: the central meridian is
- * 6n - 183, the scale factor is 0.9996, the false easting is 500 km, and the
- * false northing is 0 north of the equator and 10 000 km south of it. Writing
- * those is arithmetic, not fabrication.
- *
- * The line is drawn at what is derivable. ETRS89 or NAD83 UTM zones share the
- * projection but not the datum, and a datum is not something to guess at when
- * the difference is metres on the ground, so they return null and fall back to
- * GeoKeys. Same for national grids and vertical-only codes.
+ * Every string this module returns is either stored verbatim from PROJ
+ * (`projinfo EPSG:<code> -o WKT1_GDAL`, see epsgWktTable.ts) or assembled from
+ * a stored base geographic CRS by the UTM template, which the table generator
+ * checked against projinfo for every zone it covers. Codes outside those sets
+ * return null: a datum is not something to guess at when the difference is
+ * metres on the ground, and the LAS 1.4 writer then refuses rather than write
+ * a GeoKey-only file that strict readers report as having no CRS.
  */
 
-/** WGS 84 UTM: 326zz northern, 327zz southern, zz = 01..60. */
-const UTM_NORTH_BASE = 32600;
-const UTM_SOUTH_BASE = 32700;
-const UTM_ZONE_MIN = 1;
-const UTM_ZONE_MAX = 60;
+import { STATIC_WKT, UTM_FAMILIES, VERT_CS_WKT } from './epsgWktTable';
 
-/** The WGS 84 geographic CRS, used standalone and as every UTM zone's base. */
-const WGS84_GEOGCS =
-  'GEOGCS["WGS 84",'
-  + 'DATUM["WGS_1984",'
-  + 'SPHEROID["WGS 84",6378137,298.257223563,AUTHORITY["EPSG","7030"]],'
-  + 'AUTHORITY["EPSG","6326"]],'
-  + 'PRIMEM["Greenwich",0,AUTHORITY["EPSG","8901"]],'
-  + 'UNIT["degree",0.0174532925199433,AUTHORITY["EPSG","9122"]],'
-  + 'AUTHORITY["EPSG","4326"]]';
-
-/**
- * Central meridian of UTM zone `n`, in degrees. Zone 1 is centred on -177 and
- * each zone steps 6 degrees east, so zone 29 is -9 and zone 60 is 177.
- */
-function centralMeridian(zone: number): number {
-  return 6 * zone - 183;
-}
-
-function utmWkt(zone: number, south: boolean): string {
-  const code = (south ? UTM_SOUTH_BASE : UTM_NORTH_BASE) + zone;
-  const name = `WGS 84 / UTM zone ${zone}${south ? 'S' : 'N'}`;
-  return (
-    `PROJCS["${name}",`
-    + `${WGS84_GEOGCS},`
-    + 'PROJECTION["Transverse_Mercator"],'
-    + 'PARAMETER["latitude_of_origin",0],'
-    + `PARAMETER["central_meridian",${centralMeridian(zone)}],`
-    + 'PARAMETER["scale_factor",0.9996],'
-    + 'PARAMETER["false_easting",500000],'
-    + `PARAMETER["false_northing",${south ? 10000000 : 0}],`
-    + 'UNIT["metre",1,AUTHORITY["EPSG","9001"]],'
-    + 'AXIS["Easting",EAST],'
-    + 'AXIS["Northing",NORTH],'
-    + `AUTHORITY["EPSG","${code}"]]`
-  );
+function utmWkt(code: number): string | null {
+  for (const f of UTM_FAMILIES) {
+    if (code < f.first || code > f.last) continue;
+    const zone = code - f.zoneBase;
+    const base = STATIC_WKT[f.base];
+    return (
+      `PROJCS["${f.name.replace('{z}', String(zone))}",${base},`
+      + 'PROJECTION["Transverse_Mercator"],'
+      + 'PARAMETER["latitude_of_origin",0],'
+      // Zone 1 is centred on -177 and each zone steps 6 degrees east.
+      + `PARAMETER["central_meridian",${6 * zone - 183}],`
+      + 'PARAMETER["scale_factor",0.9996],'
+      + 'PARAMETER["false_easting",500000],'
+      + `PARAMETER["false_northing",${f.south ? 10000000 : 0}],`
+      + 'UNIT["metre",1,AUTHORITY["EPSG","9001"]],'
+      + 'AXIS["Easting",EAST],'
+      + 'AXIS["Northing",NORTH],'
+      + `AUTHORITY["EPSG","${code}"]]`
+    );
+  }
+  return null;
 }
 
 /**
- * OGC WKT for `code`, or null when we cannot derive it exactly.
- *
- * Null is the honest answer, not a failure: the caller falls back to a GeoKey
- * tag, which records the code faithfully even though strict LAS 1.4 readers
- * prefer WKT for the extended point formats.
+ * OGC WKT1 for a horizontal (or geocentric) EPSG `code`, or null when this
+ * build holds no verified definition for it.
  */
 export function wktForEpsg(code: number | null | undefined): string | null {
   if (code == null || !Number.isInteger(code)) return null;
+  return STATIC_WKT[code] ?? utmWkt(code);
+}
 
-  if (code === 4326) return WGS84_GEOGCS;
+/** The name in a WKT1 node's first quoted string. */
+function wktName(wkt: string): string | null {
+  const m = /^[A-Z_]+\["([^"]*)"/.exec(wkt);
+  return m ? m[1] : null;
+}
 
-  for (const [base, south] of [[UTM_NORTH_BASE, false], [UTM_SOUTH_BASE, true]] as const) {
-    const zone = code - base;
-    if (zone >= UTM_ZONE_MIN && zone <= UTM_ZONE_MAX) return utmWkt(zone, south);
+/**
+ * A WKT1 compound CRS of a horizontal WKT1 (`PROJCS` or `GEOGCS`) and the
+ * stored VERT_CS for `verticalEpsg`, in the form PROJ writes for
+ * `EPSG:<h>+<v>`. Null when either half is missing or not WKT1.
+ */
+export function compoundWkt(horizontal: string, verticalEpsg: number | null | undefined): string | null {
+  if (verticalEpsg == null) return null;
+  const vert = VERT_CS_WKT[verticalEpsg];
+  if (vert == null) return null;
+  if (!/^(PROJCS|GEOGCS)\[/.test(horizontal)) return null;
+  const h = wktName(horizontal);
+  const v = wktName(vert);
+  if (h == null || v == null) return null;
+  return `COMPD_CS["${h} + ${v}",${horizontal},${vert}]`;
+}
+
+/** WKT1 and WKT2 root keywords a coordinate-system WKT can start with. */
+const WKT_ROOT =
+  /^(PROJCS|GEOGCS|GEOCCS|COMPD_CS|LOCAL_CS|PROJCRS|PROJECTEDCRS|GEOGCRS|GEOGRAPHICCRS|GEODCRS|GEODETICCRS|COMPOUNDCRS|BOUNDCRS|ENGCRS|ENGINEERINGCRS)\s*[[(]/i;
+
+/**
+ * True when `text` has the shape of a coordinate-system WKT: a CRS root
+ * keyword and balanced brackets outside quoted names. A VERT_CS alone is not
+ * accepted because it cannot stand for a point cloud's horizontal frame.
+ * This is a shape check, not a parse; it keeps a truncated or empty record
+ * from being copied into an output file as if it were a definition.
+ */
+export function isUsableWkt(text: string | null | undefined): text is string {
+  if (text == null) return false;
+  const s = text.trim();
+  if (!WKT_ROOT.test(s)) return false;
+  let depth = 0;
+  let quoted = false;
+  for (const ch of s) {
+    if (ch === '"') quoted = !quoted;
+    else if (!quoted && (ch === '[' || ch === '(')) depth++;
+    else if (!quoted && (ch === ']' || ch === ')')) {
+      depth--;
+      if (depth < 0) return false;
+    }
   }
-
-  return null;
+  return depth === 0 && !quoted && /[\])]$/.test(s);
 }

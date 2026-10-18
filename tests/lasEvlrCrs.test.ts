@@ -24,7 +24,7 @@ import {
 import { parseLasHeader } from '../src/io/lasHeader';
 import { loadLas, loadLazFromFile } from '../src/io/loadLas';
 import { convertCloud } from '../src/convert/convertCloud';
-import { writeLas14 } from '../src/convert/writeLas';
+import { writeLas, writeLas14 } from '../src/convert/writeLas';
 import { resolvedFromCrsInfo } from '../src/geo/CoordinateTypes';
 import { CopcSource } from '../src/io/copc/CopcSource';
 import { ArrayBufferRangeSource } from '../src/io/range/ArrayBufferRangeSource';
@@ -166,8 +166,8 @@ describe('EVLR vs VLR precedence', () => {
   });
 
   it('an EVLR WKT outranks VLR GeoKeys, as WKT does within the VLRs', async () => {
-    // A writer's own 1.4 file: GeoKeys VLR (32613) and the WKT placed in an EVLR.
-    const las = writeLas14(
+    // A GeoKeys VLR (32613, as LAS 1.2 writes it) and a WKT placed in an EVLR.
+    const las = writeLas(
       { count: 1, x: Float64Array.of(500000), y: Float64Array.of(4100000), z: Float64Array.of(1) },
       { epsg: 32613, isGeographic: false, linearUnitCode: 9001 },
     );

@@ -12,7 +12,17 @@
  * Pure data — no DOM, no proj4 import (keeps this leaf trivially testable).
  */
 
-import { GEOGRAPHIC_EPSG_RANGES } from './geographicEpsgCodes';
+import { EPSG_DATASET_VERSION, GEOGRAPHIC_EPSG_RANGES, GEOGRAPHIC_GRAD_EPSG_RANGES } from './geographicEpsgCodes';
+import {
+  COMPOUND_EPSG_RANGES,
+  ENGINEERING_EPSG_RANGES,
+  GEOCENTRIC_EPSG_RANGES,
+  PROJECTED_EPSG_RANGES,
+  PROJECTED_FOOT_EPSG_RANGES,
+  PROJECTED_OTHER_UNIT_EPSG_RANGES,
+  PROJECTED_US_FOOT_EPSG_RANGES,
+  VERTICAL_EPSG_RANGES,
+} from './epsgCrsKindTable';
 
 /** Curated non-parametric definitions for common named CRS. */
 const STATIC_DEFS: Record<number, string> = {
@@ -48,26 +58,90 @@ const STATIC_DEFS: Record<number, string> = {
     '+proj=krovak +lat_0=49.5 +lon_0=24.8333333333333 +alpha=30.2881397527778 +k=0.9999 +x_0=0 +y_0=0 +ellps=bessel +towgs84=570.8,85.7,462.8,4.998,1.587,5.261,3.56 +units=m +no_defs', // S-JTSK / Krovák East-North (Czechia). East-North → negated axes → negative easting/northing. The 7-parameter Bursa-Wolf datum shift agrees with authoritative PROJ to ~5 cm on the surveyed reference points (Zenodo 15421291); the naive 3-parameter shift was off by ~10 m.
 };
 
+/** True when `code` falls inside one of the flattened inclusive ranges. */
+function inRanges(r: readonly number[], code: number): boolean {
+  let lo = 0;
+  let hi = r.length / 2 - 1;
+  while (lo <= hi) {
+    const mid = (lo + hi) >> 1;
+    if (code < r[2 * mid]) hi = mid - 1;
+    else if (code > r[2 * mid + 1]) lo = mid + 1;
+    else return true;
+  }
+  return false;
+}
+
 /**
  * True when an EPSG code names a geographic (longitude/latitude) CRS, 2D or 3D,
  * per the EPSG dataset table in {@link GEOGRAPHIC_EPSG_RANGES}. A fallback for
  * when only a code is known: a resolved CRS's own kind (a WKT, GeoKeys, or the
  * proj4 definition a reprojection used) takes precedence over this. Geocentric
  * codes such as 4978, projected codes such as 4547 (CGCS2000 / 3-degree
- * Gauss-Kruger), and compound codes such as 6349 return false.
+ * Gauss-Kruger), and compound codes such as 6349 return false, and so does a
+ * code the table does not hold: false here does NOT mean projected. Use
+ * {@link epsgCrsKind} when the difference matters.
  */
 export function isGeographicEpsg(epsg: number): boolean {
-  if (!Number.isInteger(epsg)) return false;
-  const r = GEOGRAPHIC_EPSG_RANGES;
-  let lo = 0;
-  let hi = r.length / 2 - 1;
-  while (lo <= hi) {
-    const mid = (lo + hi) >> 1;
-    if (epsg < r[2 * mid]) hi = mid - 1;
-    else if (epsg > r[2 * mid + 1]) lo = mid + 1;
-    else return true;
+  return Number.isInteger(epsg) && inRanges(GEOGRAPHIC_EPSG_RANGES, epsg);
+}
+
+/** The kind of CRS an EPSG code names, or `unknown` when it cannot be determined. */
+export type EpsgCrsKind = 'geographic' | 'projected' | 'geocentric' | 'compound' | 'vertical' | 'engineering' | 'unknown';
+
+/** The unit of a CRS's first axis, as far as it is known. */
+export type EpsgCrsUnit = 'degree' | 'grad' | 'metre' | 'foot' | 'us-survey-foot' | 'other';
+
+export interface EpsgCrsKindInfo {
+  readonly kind: EpsgCrsKind;
+  /** The horizontal unit; null for unknown, compound, vertical and engineering codes. */
+  readonly unit: EpsgCrsUnit | null;
+  /** Where the answer came from: the built-in proj4 registry, the EPSG table, or nowhere. */
+  readonly basis: 'registry' | 'epsg-table' | 'none';
+}
+
+/** The EPSG dataset version the code tables were generated from (for messages). */
+export const EPSG_TABLE_VERSION = EPSG_DATASET_VERSION;
+
+function unitFromProj4(def: string): EpsgCrsUnit {
+  const m = /(?:^|\s)\+units=(\S+)/.exec(def);
+  if (m == null || m[1] === 'm') return 'metre';
+  if (m[1] === 'ft') return 'foot';
+  if (m[1] === 'us-ft') return 'us-survey-foot';
+  return 'other';
+}
+
+/**
+ * The kind and horizontal unit of the CRS an EPSG code names. The built-in
+ * proj4 registry answers first, then the EPSG dataset tables. A code in
+ * neither is `unknown`, and a caller must not read that as projected: it is
+ * the case where writing GeoKeys, a scale or a decimal count would be a guess.
+ */
+export function epsgCrsKind(epsg: number | null | undefined): EpsgCrsKindInfo {
+  if (epsg == null || !Number.isInteger(epsg) || epsg <= 0) return { kind: 'unknown', unit: null, basis: 'none' };
+  const def = epsgToProj4(epsg);
+  if (def != null) {
+    if (isGeographicProj4(def)) return { kind: 'geographic', unit: 'degree', basis: 'registry' };
+    if (isGeocentricProj4(def)) return { kind: 'geocentric', unit: 'metre', basis: 'registry' };
+    return { kind: 'projected', unit: unitFromProj4(def), basis: 'registry' };
   }
-  return false;
+  if (inRanges(GEOGRAPHIC_EPSG_RANGES, epsg)) {
+    return { kind: 'geographic', unit: inRanges(GEOGRAPHIC_GRAD_EPSG_RANGES, epsg) ? 'grad' : 'degree', basis: 'epsg-table' };
+  }
+  if (inRanges(PROJECTED_EPSG_RANGES, epsg)) {
+    const unit: EpsgCrsUnit = inRanges(PROJECTED_US_FOOT_EPSG_RANGES, epsg)
+      ? 'us-survey-foot'
+      : inRanges(PROJECTED_FOOT_EPSG_RANGES, epsg)
+        ? 'foot'
+        : inRanges(PROJECTED_OTHER_UNIT_EPSG_RANGES, epsg)
+          ? 'other'
+          : 'metre';
+    return { kind: 'projected', unit, basis: 'epsg-table' };
+  }
+  if (inRanges(GEOCENTRIC_EPSG_RANGES, epsg)) return { kind: 'geocentric', unit: 'metre', basis: 'epsg-table' };
+  if (inRanges(COMPOUND_EPSG_RANGES, epsg)) return { kind: 'compound', unit: null, basis: 'epsg-table' };
+  if (inRanges(VERTICAL_EPSG_RANGES, epsg)) return { kind: 'vertical', unit: null, basis: 'epsg-table' };
+  if (inRanges(ENGINEERING_EPSG_RANGES, epsg)) return { kind: 'engineering', unit: null, basis: 'epsg-table' };
+  return { kind: 'unknown', unit: null, basis: 'none' };
 }
 
 /** True when a proj4 definition describes a longitude/latitude CRS. */

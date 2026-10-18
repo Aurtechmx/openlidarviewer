@@ -245,7 +245,7 @@ import { CatalogPanel, buildCuratedDemoSample } from './ui/CatalogPanel';
 // streaming clouds expose `.crs()` returning the same shape.
 import type { StreamingReportCloud } from './app/streamingScanReport'; import { runStreamingModules, preloadStreamingReport } from './app/streamingReportSeam';
 import { CrsService, datasetIdentity } from './geo/CrsService';
-import { groundMetresPermitted, verticalMetresPerUnit, volumeUnitCaveat } from './geo/SpatialContext';
+import { groundMetresPermitted, verticalMetresPerUnit, volumeClaimRefusal, volumeUnitCaveat } from './geo/SpatialContext';
 import { prepareEpochFrames, epochUnitMismatchLines, compareSuggestionAllowed } from './app/epochFramePrep';
 // Shared vertical-unit labeller (already eager via terrainAnalysisRunner) —
 // feeds the colorbar legend's elevation unit from the resolved CRS.
@@ -592,10 +592,10 @@ const lassoVolumeTool = new LassoVolumeTool(stage.canvas, {
     // misleading: replace the metrics line with the caveat and refuse a Save
     // button (project / confirm a CRS first). safe-explicit-local keeps the
     // metrics in source units with a softer "units assumed metres" line.
-    const crsVerdict = crsService.validation();
-    if (!crsVerdict.canDisplayMetric) {
+    const crsVerdict = crsService.validation(), volumeRefused = volumeClaimRefusal(ctx, crsVerdict);
+    if (volumeRefused) {
       showLassoToast(
-        `Volume can't be claimed in this CRS — ${crsVerdict.reason} ${crsVerdict.suggestion}`,
+        `Volume can't be claimed in this CRS — ${volumeRefused}`,
         { label: 'Learn why', onClick: () => helpOverlay.openTopic('export-trust') }, // Help explains the unit gate
       );
       pendingLassoSave = null;
@@ -4118,11 +4118,10 @@ function compareLoadedLayers(): void {
         inspector.setDifferenceAvailable(false);
         return;
       }
-      // Coarse-register the after cloud onto the before cloud first (yaw + x/y
-      // only — a real vertical change is the signal, so z is preserved), so a
-      // small horizontal misregistration between epochs is not read as movement.
-      // Refuse a fit whose residual exceeds 10% of the scene span: that means the
-      // two clouds never registered, so it's compared as-is rather than shifted.
+      // Epochs in one declared CRS keep their supplied coordinates (no fit: a slope
+      // cannot separate a horizontal shift from a real height change). Local-frame
+      // pairs get the yaw + x/y fit, refused when the surface leaves the pose
+      // unobservable or the residual exceeds 10% of the scene span.
       // `span` is the before epoch's in SOURCE units; the gate is metres.
       const spanUnitToM = frames.horizontalUnitToMetres ?? 1;
       const { after: alignedAfter, alignment } = alignEpochClouds(beforeCloud, afterCloud, {

@@ -196,7 +196,7 @@ function metadataCrsKeyWkt(cloud: PointCloud): ExportCloudCrs {
     wkt: detected?.wkt ?? null,
     key,
     name: detected?.name ?? null,
-    unit: detected ? linearUnitLabel(detected.linearUnit) : null,
+    unit: detected ? linearUnitLabel(detected.linearUnit, detected) : null,
     epsg: detected?.epsg ?? null,
   };
 }
@@ -497,7 +497,7 @@ export function buildExportAdapter(host: ExportAdapterHost): ExportSceneAdapter 
       if (fromStreaming) {
         return {
           name: fromStreaming.name,
-          unit: linearUnitLabel(fromStreaming.linearUnit),
+          unit: linearUnitLabel(fromStreaming.linearUnit, fromStreaming),
           epsg: fromStreaming.epsg,
         };
       }

@@ -13,7 +13,7 @@
  */
 
 import { describe, it, expect } from 'vitest';
-import { writeLas14 } from '../src/convert/writeLas';
+import { LasCrsError, writeLas14 } from '../src/convert/writeLas';
 import { wktForEpsg } from '../src/io/epsgWkt';
 import type { GlobalPoints } from '../src/convert/globalPoints';
 
@@ -73,19 +73,19 @@ describe('LAS 1.4 CRS conformance', () => {
     expect(vlrs.some((v) => v.recordId === 34735)).toBe(false);
   });
 
-  it('still falls back to GeoKeys, honestly, when no WKT can be derived', () => {
-    // ETRS89 / UTM 29N: same projection, different datum, not ours to guess.
-    const bytes = writeLas14(points(), {
-      epsg: 25829,
-      linearUnitCode: 9001,
-      wkt: wktForEpsg(25829),
-    });
-    const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  it('refuses, rather than writing GeoKeys under a clear bit 4, when no WKT can be built', () => {
+    // EPSG:2231 (NAD83 / Colorado North (ftUS)) has no built-in definition.
+    expect(() => writeLas14(points(), { epsg: 2231, linearUnitCode: 9003 })).toThrow(LasCrsError);
+    expect(() => writeLas14(points(), { epsg: 2231, linearUnitCode: 9003 })).toThrow(/EPSG:2231/);
+  });
 
-    expect(view.getUint16(6, true) & GLOBAL_ENCODING_WKT).toBe(0);
-    const vlrs = readVlrs(bytes);
-    expect(vlrs.some((v) => v.recordId === 2112)).toBe(false);
-    expect(vlrs.some((v) => v.recordId === 34735)).toBe(true);
+  it('builds the ETRS89 / UTM 29N WKT on its own datum', () => {
+    const bytes = writeLas14(points(), { epsg: 25829, linearUnitCode: 9001 });
+    const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+    expect(view.getUint16(6, true) & GLOBAL_ENCODING_WKT).toBe(GLOBAL_ENCODING_WKT);
+    const wkt = readVlrs(bytes).find((v) => v.recordId === 2112)!.payload;
+    expect(wkt).toContain('DATUM["European_Terrestrial_Reference_System_1989"');
+    expect(wkt).toContain('AUTHORITY["EPSG","25829"]]');
   });
 
   it('keeps the WKT payload inside the VLR length it declared', () => {

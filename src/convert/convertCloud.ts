@@ -15,11 +15,9 @@ import { truncationOf } from '../io/truncation';
 import { safeEntryName, singleLine } from '../export/safeText';
 import { classEditLine, classesEdited, pointBasisOfCloud, softwareLine, sourceFileLine } from '../export/exportProvenanceLines';
 import type { PointCloud } from '../model/PointCloud';
+import type { CrsInfo } from '../io/crs';
 import { ATTR_COLOUR_INVALID, ATTR_INTENSITY_INVALID, countAttributeInvalid, intensityNormalisationLine } from '../model/PointCloud';
-import { sourcePositions } from '../model/pointFrames';
-import { classifyScanShape } from '../terrain/scanShape';
-import { isZUpFormat } from '../io/sniffFormat';
-import { wktForEpsg } from '../io/epsgWkt';
+import { planAxisHandling, rotateYUpToZUp, yUpRotationEvent } from './axisHandling';
 import { cloudToGlobal } from './globalPoints';
 import { describeLoss, inspectLegacyConversion } from '../lasSemantics';
 import { legacyClassReinterpretationRefusal, planClassSemantics } from './classSemantics';
@@ -70,18 +68,16 @@ function legacyOverlapDropRefusal(points: number): string {
     `Choose LAS 1.4 to keep it, or tick "${LEGACY_OVERLAP_DROP_OPT_IN}" to write the base class without it.`
   );
 }
-import { writeLas, writeLas14 } from './writeLas';
+import { planLas14Crs, writeLas, writeLas14 } from './writeLas';
+import { outputCrsKind } from './outputCrsKind';
 import { planQuantisation } from './lasQuantisation';
 import { spatialContextFrom, verticalMetresPerUnit } from '../geo/SpatialContext';
-import { planLasVertical, verifyLasVertical } from './lasVerticalIdentity';
+import { planLasVertical, verifyLasVertical, verifyLasWktVertical } from './lasVerticalIdentity';
 import { writeXyzBytes, writeAscBytes } from './writeAscii';
 import { reprojectGlobal } from './reproject';
 import type { TransformProvenance } from './transformProvenance';
 import {
-  isGeographicEpsg,
-  isGeographicProj4,
   epsgLabel,
-  epsgToProj4,
   epsgDatumFamily,
   isGeocentricEpsg,
   GEOCENTRIC_REPROJECT_REFUSAL,
@@ -209,33 +205,25 @@ export function convertCloud(
   if (g.count === 0) {
     return fail('Nothing was exported: the scan has no points in the current scope, so no file was written.');
   }
-  // Every output format here reads Z as elevation (LAS by spec; the ASCII
-  // writers by the same convention), which is wrong for the Y-up mesh formats:
-  // raw storage order would put the mesh's elevation in the northing column and
-  // its depth in the height column — plausible numbers, scrambled axes. Same
-  // remedy as the terrain pipeline (`terrain/canonicalFrame.ts`): one rotation
-  // at the boundary, (x, y, z) → (x, −z, y), so every writer stays
-  // axis-ignorant. Disclosed in the report because the written coordinates no
-  // longer match the source bytes.
-  // Mesh formats carry no mandated up-axis (photogrammetry writes Y-up,
-  // CloudCompare/PDAL-style tools write Z-up PLYs), so the DATA decides via the
-  // same detection the terrain gather uses — a format table alone rotated
-  // genuinely Z-up PLYs into vertical walls there, and would corrupt exports
-  // identically here. Survey formats skip detection: Z-up by spec.
-  let rotatedToZUp = false;
-  if (!isZUpFormat(cloud.sourceFormat) && classifyScanShape(sourcePositions(cloud)).up === 'y') {
-    rotatedToZUp = true;
-    const { y, z } = g;
-    for (let i = 0; i < g.count; i++) {
-      const yv = y[i];
-      y[i] = -z[i];
-      z[i] = yv;
-    }
-    log.push({
-      level: 'info',
-      message:
-        'Y-up source rotated into the Z-up survey frame (elevation → Z, north → Y) so the output axes mean what the format says they mean.',
-    });
+  // The written coordinates are the source coordinates. A shape classifier
+  // never authorises a transformation (a surveyed facade reads as Y-up to it),
+  // and nor does the viewer's display orientation, so the only axis change is
+  // the rotation of a local Y-up model the request asks for explicitly. Metadata
+  // decides the refusals: a kept or assigned CRS, a Z-up-by-spec format, or a
+  // glTF (Y-up by spec) under a CRS. See axisHandling.ts.
+  const axes = planAxisHandling({
+    format: cloud.sourceFormat,
+    handling: opts.axisHandling ?? 'preserve',
+    mode,
+    sourceCrs,
+    sourceEpsg,
+    targetEpsg: opts.targetEpsg ?? null,
+  });
+  if (!axes.ok) return fail(axes.message);
+  const rotatedToZUp = axes.rotate;
+  if (rotatedToZUp) {
+    rotateYUpToZUp(g);
+    record(yUpRotationEvent(g.count));
   }
   let outEpsg: number | null = sourceEpsg;
   let crsNote: string;
@@ -253,18 +241,13 @@ export function convertCloud(
   let transformProvenance: TransformProvenance | null = null;
 
   if (mode === 'keep') {
-    crsNote = sourceEpsg != null ? `kept ${epsgLabel(sourceEpsg)}` : 'no CRS recorded (coordinates unchanged)';
+    crsNote = sourceEpsg != null ? `kept ${epsgLabel(sourceEpsg)}` : rotatedToZUp ? 'no CRS recorded (axes rotated Y-up to Z-up)' : 'no CRS recorded (coordinates unchanged)';
   } else if (mode === 'assign') {
     if (opts.targetEpsg == null) return fail('Assign mode needs a target EPSG.');
     outEpsg = opts.targetEpsg;
     crsNote = `assigned ${epsgLabel(outEpsg)} (coordinates unchanged)`;
-    // Light validation: a code outside the plausible EPSG range, or one we
-    // don't recognise, is tagged as given but flagged so a typo is visible.
-    if (outEpsg < 1024 || outEpsg > 99999) {
-      log.push({ level: 'warn', message: `EPSG:${outEpsg} is outside the valid EPSG range — check the code.` });
-    } else if (epsgToProj4(outEpsg) == null) {
-      log.push({ level: 'info', message: `EPSG:${outEpsg} isn't in the built-in registry — tagged as given; verify it's correct.` });
-    }
+    // The code's kind (geographic or projected) and units are resolved below;
+    // a code whose kind cannot be determined refuses the export there.
     if (sourceEpsg != null && sourceEpsg !== outEpsg) {
       log.push({
         level: 'warn',
@@ -369,9 +352,17 @@ export function convertCloud(
   // default LAS scale and the ASCII decimals. It comes from the RESOLVED CRS:
   // the source's own kind while the file stays in the source CRS (keep, a
   // skipped reproject, or an assign of the same code), the proj4 definition a
-  // reprojection used, and the EPSG table only for a code known by number.
-  const sourceIsGeographic = sourceCrs != null ? spatialContextFrom(sourceCrs).isGeographic : null;
-  const geo = outputIsGeographic(mode, reprojectApplied, outEpsg, sourceEpsg, sourceIsGeographic);
+  // reprojection used, and the EPSG tables for a code known by number. A code
+  // of unknown kind refuses: it is never taken to be projected.
+  const kind = outputCrsKind({ mode, reprojectApplied, outEpsg, sourceEpsg, sourceCrs });
+  if (!kind.ok) return fail(kind.message, crsNote);
+  const geo = kind.geographic;
+  if (mode === 'assign' && kind.unit != null) {
+    log.push({
+      level: 'info',
+      message: `EPSG:${outEpsg} is a ${geo ? 'geographic' : 'projected'} CRS in ${kind.unit === 'us-survey-foot' ? 'US survey feet' : kind.unit === 'foot' ? 'feet' : kind.unit === 'other' ? 'a non-metre unit' : `${kind.unit}s`}.`,
+    });
+  }
   const filename = `${safeEntryName(baseName(cloud.name), 'converted')}${opts.displaySample ? DISPLAY_SAMPLE_SUFFIX : ''}.${spec.ext}`;
 
   let bytes: Uint8Array;
@@ -384,19 +375,12 @@ export function convertCloud(
     // (blocker 2). A local resolution carries no unit facts, so the output is
     // untagged rather than restoring the rejected CRS.
     const srcCtx = spatialContextFrom(sourceCrs);
-    // LAS 1.4 wants the CRS as OGC WKT for point formats 6+. A real WKT only
-    // exists when the source carried one AND nothing changed (keep mode) —
-    // after assign/reproject the source WKT would describe the wrong CRS,
-    // so those modes fall back to a GeoKey tag built from the EPSG. The WKT is
-    // the RESOLVED source CRS's, matching the EPSG the same object supplied.
+    // LAS 1.4 point formats 6-10 require the CRS as OGC WKT. The source's own
+    // WKT is used only in keep mode (after assign or reproject it describes
+    // the wrong CRS); otherwise the writer builds a verified WKT for outEpsg,
+    // and refuses when it has none (planLas14Crs, below).
     const sourceWkt = opts.format === 'las14' && mode === 'keep' ? (sourceCrs?.wkt ?? null) : null;
-    // Falling back to a WKT derived from the OUTPUT code covers the modes the
-    // source WKT cannot: after assign or reproject the source WKT describes
-    // the wrong CRS, but a derived one describes outEpsg by construction. It
-    // also covers keep mode for the common case of a source georeferenced by
-    // GeoKeys alone, which is what left LAS 1.4 files with bit 4 clear.
-    const wkt = opts.format === 'las14' ? (sourceWkt ?? wktForEpsg(outEpsg)) : null;
-    if (outEpsg != null && outEpsg > 65535 && wkt == null) {
+    if (opts.format === 'las' && outEpsg != null && outEpsg > 65535) {
       log.push({
         level: 'warn',
         message: `EPSG:${outEpsg} is too large to record in a LAS GeoKey — the file is written without a CRS tag.`,
@@ -420,6 +404,19 @@ export function convertCloud(
     // declares the SOURCE's own vertical unit, never the horizontal one in its
     // place; an unreadable one is left undeclared and a contradictory one
     // refuses (see lasVerticalIdentity.ts).
+    // A source horizontal unit that is a valid length but not metre, foot or
+    // US survey foot (a centimetre or kilometre grid) has no LAS unit key. The
+    // output keeps source coordinates unless a reprojection was applied, so
+    // only the source's own WKT, written verbatim in LAS 1.4, can state it.
+    const byFactorUnit = sourceCrs != null && srcCtx.linearUnit === 'unknown' && srcCtx.linearUnitKnown
+      && (mode === 'keep' || (mode === 'reproject' && !reprojectApplied));
+    if (byFactorUnit && (opts.format === 'las' || sourceWkt == null)) {
+      return fail(
+        `Horizontal unit not representable: the source coordinates are in a unit of ${srcCtx.linearUnitToMetres} m, which LAS GeoKeys (metre, foot or US survey foot) cannot state. ` +
+        'Nothing was written. Export as LAS 1.4 with the source WKT kept, or reproject to a metre CRS.',
+        crsNote,
+      );
+    }
     const vertical = planLasVertical(srcCtx, sourceCrs != null, mode);
     if (!vertical.ok) return fail(vertical.message, crsNote);
     if (vertical.warning) log.push({ level: 'warn', message: vertical.warning });
@@ -433,8 +430,12 @@ export function convertCloud(
         : rotatedToZUp
           ? 'the axes were rotated into the Z-up frame'
           : null,
+      angularOutput: geo,
     });
     log.push({ level: 'info', message: quantPlan.line });
+    if (geo && quantPlan.use == null) {
+      log.push({ level: 'info', message: 'X and Y are written at 1e-7 degree steps because the output CRS is geographic.' });
+    }
     const lasProvenance = [...provenance, quantPlan.line];
     // Global Encoding bit 0 on the source, when it declared one. undefined
     // leaves the writer's modern default in place for a source that carries no
@@ -454,10 +455,25 @@ export function convertCloud(
       });
       g = { ...g, classification: semantics.classification, classificationFlags: semantics.classificationFlags };
       record(...semantics.events);
-      if (outEpsg != null && outEpsg <= 65535 && wkt == null) {
+      const crsPlan = planLas14Crs({
+        epsg: outEpsg, wkt: sourceWkt, verticalEpsg: vertical.verticalEpsg, verticalUnitCode: vertical.unitCode,
+      });
+      if (!crsPlan.ok) return fail(crsPlan.message, crsNote);
+      if (byFactorUnit && crsPlan.origin !== 'source') {
+        return fail(
+          `Horizontal unit not representable: the source coordinates are in a unit of ${srcCtx.linearUnitToMetres} m, and the source WKT that states it could not be kept. Nothing was written.`,
+          crsNote,
+        );
+      }
+      if (crsPlan.sourceWktRejected) {
+        log.push({ level: 'warn', message: `The source WKT is not a usable definition; the CRS is written as the WKT for EPSG:${outEpsg}.` });
+      }
+      if (crsPlan.wkt != null) {
         log.push({
           level: 'info',
-          message: 'No WKT available for this CRS — recorded as GeoTIFF keys (strict LAS 1.4 readers prefer WKT for point formats 6+).',
+          message:
+            `CRS written as OGC WKT${crsPlan.origin === 'source' ? ' from the source WKT' : ` for EPSG:${outEpsg}`}${crsPlan.compound ? ' with its vertical CRS' : ''}` +
+            `${crsPlan.evlr ? ', in an extended VLR because it exceeds the 65,535-byte VLR limit' : ''}.`,
         });
       }
       const record14 = fitProvenance(lasProvenance, datumNote, events);
@@ -469,7 +485,7 @@ export function convertCloud(
         linearUnitCode,
         verticalEpsg: vertical.verticalEpsg,
         verticalUnitCode: vertical.unitCode,
-        wkt,
+        wkt: crsPlan.wkt,
         description: datumNote,
         provenance: record14.lines,
         quantisation: quantPlan.use ?? undefined,
@@ -565,7 +581,8 @@ export function convertCloud(
       });
     }
     const z = zRange(g);
-    const verticalProblem = verifyLasVertical(bytes, vertical, z.min, z.max, (crs) => verticalMetresPerUnit(spatialContextFrom(crs), 'horizontal-when-known'));
+    const zToMetres = (crs: CrsInfo): number | undefined => verticalMetresPerUnit(spatialContextFrom(crs), 'horizontal-when-known');
+    const verticalProblem = verifyLasVertical(bytes, vertical, z.min, z.max, zToMetres) ?? verifyLasWktVertical(bytes, vertical, zToMetres);
     if (verticalProblem) return fail(verticalProblem, crsNote);
   } else {
     // ASCII holds fewer columns than the cloud: say which were left out, here
@@ -594,21 +611,6 @@ export function convertCloud(
     },
   };
   }
-}
-
-/** Whether the written coordinates are longitude/latitude degrees. */
-function outputIsGeographic(
-  mode: string,
-  reprojectApplied: boolean,
-  outEpsg: number | null,
-  sourceEpsg: number | null,
-  sourceIsGeographic: boolean | null,
-): boolean {
-  const inSourceCrs = mode === 'keep' || (mode === 'reproject' && !reprojectApplied) || (outEpsg != null && outEpsg === sourceEpsg);
-  if (inSourceCrs && sourceIsGeographic != null) return sourceIsGeographic;
-  if (outEpsg == null) return false;
-  const def = epsgToProj4(outEpsg);
-  return def != null ? isGeographicProj4(def) : isGeographicEpsg(outEpsg);
 }
 
 /** Source-file digest and CRS origin for this export's provenance, resolved off the main thread. */

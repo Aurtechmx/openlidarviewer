@@ -193,12 +193,14 @@ describe('writeLas — linear-unit + vertical GeoKeys', () => {
 });
 
 describe('convertCloud — assign-EPSG validation', () => {
-  it('warns for an out-of-range EPSG and notes an unrecognised one', () => {
+  it('refuses a code of unknown kind and states the kind and unit of a code from the EPSG table', () => {
     const bad = convertCloud(cloud(), { format: 'las', crsMode: 'assign', targetEpsg: 7 });
-    expect(bad.report.log.some((l) => l.level === 'warn' && /valid EPSG range/i.test(l.message))).toBe(true);
+    expect(bad.file).toBeNull();
+    expect(bad.report.log.some((l) => l.level === 'error' && /EPSG:7 was not assigned.*cannot be determined/i.test(l.message))).toBe(true);
 
-    const unknown = convertCloud(cloud(), { format: 'las', crsMode: 'assign', targetEpsg: 2227 });
-    expect(unknown.report.log.some((l) => /in the built-in registry/i.test(l.message))).toBe(true);
+    const fromTable = convertCloud(cloud(), { format: 'las', crsMode: 'assign', targetEpsg: 2227 });
+    expect(fromTable.report.ok).toBe(true);
+    expect(fromTable.report.log.some((l) => l.message === 'EPSG:2227 is a projected CRS in US survey feet.')).toBe(true);
   });
 });
 

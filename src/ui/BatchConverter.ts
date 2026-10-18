@@ -34,6 +34,8 @@ import {
   LEGACY_OVERLAP_DROP_OPT_IN,
   LEGACY_RETURN_CLAMP_HINT,
   LEGACY_RETURN_CLAMP_OPT_IN,
+  Y_UP_TO_Z_UP_HINT,
+  Y_UP_TO_Z_UP_OPT_IN,
   type ConvertFormat,
   type CrsMode,
   type ConvertOptions,
@@ -92,6 +94,9 @@ export class BatchConverter {
   private readonly _reinterpretationRow: HTMLElement;
   private _allowOverlapDrop = false;
   private readonly _overlapRow: HTMLElement;
+  /** Rotate local Y-up models to Z-up; offered in Keep mode only, off by default. */
+  private _rotateYUp = false;
+  private readonly _axisRow: HTMLElement;
   private _crsMode: CrsMode = 'keep';
   private _targetEpsg = '';
   private _sourceEpsg = '';
@@ -140,6 +145,7 @@ export class BatchConverter {
     this._acquisitionRow = optInRow(LEGACY_ACQUISITION_LOSS_OPT_IN, LEGACY_ACQUISITION_LOSS_HINT, (on) => { this._allowAcquisitionLoss = on; });
     this._reinterpretationRow = optInRow(LEGACY_CLASS_REINTERPRETATION_OPT_IN, LEGACY_CLASS_REINTERPRETATION_HINT, (on) => { this._allowReinterpretation = on; });
     this._overlapRow = optInRow(LEGACY_OVERLAP_DROP_OPT_IN, LEGACY_OVERLAP_DROP_HINT, (on) => { this._allowOverlapDrop = on; });
+    this._axisRow = optInRow(Y_UP_TO_Z_UP_OPT_IN, Y_UP_TO_Z_UP_HINT, (on) => { this._rotateYUp = on; });
     this._crsRow = el('div', { className: 'olv-bc-pills' });
     this._crsExtra = el('div', { className: 'olv-bc-crs-extra' });
     this._hint = el('p', { className: 'olv-bc-hint' });
@@ -167,7 +173,7 @@ export class BatchConverter {
       })()),
       this._section('Coordinate system', (() => {
         const wrap = el('div');
-        wrap.append(this._crsRow, this._crsExtra);
+        wrap.append(this._crsRow, this._crsExtra, this._axisRow);
         return wrap;
       })()),
       (() => {
@@ -345,6 +351,8 @@ export class BatchConverter {
 
   private _renderCrsExtra(): void {
     this._crsExtra.replaceChildren();
+    // Assign and reproject write a CRS, so their coordinates are never rotated.
+    this._axisRow.classList.toggle('olv-hidden', this._crsMode !== 'keep');
     if (this._crsMode === 'keep') return;
     if (this._crsMode === 'reproject') {
       this._crsExtra.append(
@@ -427,6 +435,8 @@ export class BatchConverter {
       allowLegacyAcquisitionLoss: this._allowAcquisitionLoss,
       allowLegacyClassReinterpretation: this._allowReinterpretation,
       allowLegacyOverlapDrop: this._allowOverlapDrop,
+      // Explicit only; a file with a CRS or a Z-up format refuses the rotation.
+      axisHandling: this._rotateYUp && this._crsMode === 'keep' ? 'y-up-to-z-up' : 'preserve',
     };
 
     this._abort = new AbortController();

@@ -369,7 +369,7 @@ export function epochVerticalScalesComparable(
   after: SpatialContext,
 ): boolean {
   for (const ctx of [before, after]) {
-    if (ctx.verticalUnitToMetres !== undefined && !ctx.verticalScaleKnown) return false;
+    if ((ctx.verticalUnitToMetres !== undefined || ctx.verticalScaleState === 'invalid') && !ctx.verticalScaleKnown) return false;
   }
   const vb = verticalMetresPerUnit(before, 'horizontal-when-known');
   const va = verticalMetresPerUnit(after, 'horizontal-when-known');

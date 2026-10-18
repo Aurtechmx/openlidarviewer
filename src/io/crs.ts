@@ -68,6 +68,16 @@ export interface CrsInfo {
   readonly linearUnit: CrsLinearUnit;
   /** Linear-unit conversion to metres. 1 for metres, 0.3048 for international foot, etc. */
   readonly linearUnitToMetres: number;
+  /**
+   * Set when the horizontal unit is a valid length that is not metre, foot or
+   * US survey foot (a centimetre, kilometre or yard grid): `linearUnit` is then
+   * 'unknown' and `linearUnitToMetres` is the factor the source declares, which
+   * converts every horizontal figure. Absent for a named unit, and for an
+   * unknown one whose `linearUnitToMetres` is only the inert placeholder 1.
+   */
+  readonly linearUnitByFactor?: true;
+  /** Set when the horizontal unit's name disagrees with its factor, or is not one of the named units. */
+  readonly linearUnitNote?: string;
   /** Whether the CRS is geographic (lat/lon in degrees) vs projected (metres on a plane). */
   readonly isGeographic: boolean;
   /**
@@ -90,7 +100,14 @@ export interface CrsInfo {
    * (the GeoTIFF default: vertical units follow the model's linear units).
    */
   readonly verticalLinearUnit?: CrsLinearUnit;
-  /** Z-unit conversion to metres (1 metre, 0.3048 foot, …). Absent ⇒ unknown. */
+  /**
+   * Z-unit conversion to metres as the source declares it (1 metre, 0.3048
+   * foot, 0.01 centimetre, 0.9144 yard, …). The factor, not the token, is the
+   * physical scale: a valid length unit that is not one of the three named
+   * units keeps its own factor with the token 'unknown'. Absent: no vertical
+   * unit was declared. Present but not finite and positive: one was declared
+   * and cannot be read, and no height is converted.
+   */
   readonly verticalUnitToMetres?: number;
   /**
    * Set when the source declares a vertical unit that is not a length unit we
@@ -334,7 +351,7 @@ function crsFromHeldRecords(records: ProjectionRecords): CrsInfo | null {
       ? { unit: fromWkt.verticalLinearUnit, toMetres: fromWkt.verticalUnitToMetres, conflict: fromWkt.verticalUnitConflict, note: fromWkt.verticalUnitNote }
       : fromKeys.verticalUnitConflict || fromWkt.verticalEpsg == null
         ? { unit: fromKeys.verticalLinearUnit, toMetres: fromKeys.verticalUnitToMetres, conflict: fromKeys.verticalUnitConflict, note: fromKeys.verticalUnitNote }
-        : resolveVerticalUnit(fromKeys.verticalLinearUnit, verticalEpsg);
+        : resolveVerticalUnit(declaredVerticalUnitOf(fromKeys), verticalEpsg);
     const merged: CrsInfo = {
       ...fromWkt,
       verticalEpsg,
@@ -616,6 +633,8 @@ export function crsFromWkt(wkt: string): CrsInfo {
     horizNodes.some((n) => isGeographicKeyword(n.keyword) || (isGeodeticKeyword(n.keyword) && csTypeOf(n) === 'ellipsoidal'));
   let linearUnit: CrsLinearUnit = 'unknown';
   let linearUnitToMetres = 1;
+  let linearUnitByFactor = false;
+  let linearUnitNote: string | undefined;
   if (!isGeographic) {
     // Scan ONLY the horizontal slice. A COMPD_CS's vertical block carries
     // its own UNIT (almost always metres); scanning the full text let that
@@ -625,8 +644,13 @@ export function crsFromWkt(wkt: string): CrsInfo {
     if (projectedUnit) {
       const scale = projectedUnit.scale;
       if (Number.isFinite(scale) && scale > 0) {
-        linearUnitToMetres = scale;
-        linearUnit = linearUnitFromNameOrScale(projectedUnit.name.toLowerCase(), scale);
+        // The factor is the unit, as for a vertical unit: a name never
+        // overrides it ("centimetre" is 0.01 m per unit, not a metre).
+        const h = horizontalUnitOf(projectedUnit.name, scale);
+        linearUnit = h.unit;
+        linearUnitToMetres = h.toMetres;
+        linearUnitByFactor = h.unit === 'unknown';
+        linearUnitNote = h.note;
       }
     } else {
       // No UNIT clause is rare on a projected CRS. Take the unit its EPSG
@@ -650,6 +674,8 @@ export function crsFromWkt(wkt: string): CrsInfo {
     epsg,
     linearUnit,
     linearUnitToMetres,
+    ...(linearUnitByFactor ? { linearUnitByFactor: true as const } : {}),
+    ...(linearUnitNote ? { linearUnitNote } : {}),
     isGeographic,
     verticalEpsg: vert.epsg,
     verticalDatum: vUnit.datumLabel ?? vert.name,
@@ -660,24 +686,41 @@ export function crsFromWkt(wkt: string): CrsInfo {
   };
 }
 
-/** Extract the vertical-CRS name + best-effort EPSG + unit from a VERT_CS node. */
+/** Extract the vertical-CRS name + best-effort EPSG + declared unit from a VERT_CS node. */
 function extractVerticalFromNode(
   vert: WktNode,
-): { epsg?: number; name?: string; unit?: CrsLinearUnit } {
+): { epsg?: number; name?: string; unit?: DeclaredVerticalUnit } {
   const name = wktNodeName(vert);
   // A known datum name resolves to the vertical CRS code directly; otherwise
   // fall back to an explicit EPSG authority on the vertical node itself (its own
   // AUTHORITY / ID, NOT a nested VERT_DATUM authority).
   const epsg = (name ? verticalEpsgFromName(name) : undefined) ?? epsgFromNodeChildren(vert);
-  // The vertical node's UNIT child names the Z-axis unit (LAS WKT puts at most
-  // one UNIT here). Mapped to our enum so elevation can convert by its own unit.
-  let unit: CrsLinearUnit | undefined;
-  const unitClause = lastLinearUnit(collectWktNodes(vert));
-  if (unitClause) {
-    const scale = unitClause.scale;
-    if (Number.isFinite(scale) && scale > 0) unit = linearUnitFromNameOrScale(unitClause.name.toLowerCase(), scale);
+  return { name, epsg, unit: verticalUnitClause(vert) };
+}
+
+/** Unit keywords a vertical CRS can carry. Only UNIT and LENGTHUNIT can be a length. */
+const VERTICAL_UNIT_KEYWORDS: ReadonlySet<string> = new Set(['UNIT', 'LENGTHUNIT', 'ANGLEUNIT', 'SCALEUNIT', 'TIMEUNIT', 'PARAMETRICUNIT']);
+
+/** Unit names that are not lengths, whatever their factor (a WKT1 UNIT clause has no type). */
+const NON_LENGTH_UNIT_NAME = /degree|radian|\bgrad|\bgon\b|arc|second|minute|unity|parts per|ppm|percent/i;
+
+/**
+ * The vertical unit a vertical CRS node declares, as written: its name and its
+ * metres-per-unit factor, read from the last unit clause in the node. Absent
+ * when the node declares no unit. A clause that is not a length (an angular,
+ * scale or time unit) or that carries no usable factor is returned with a
+ * non-finite factor, so it reads as declared but invalid, never as absent.
+ */
+function verticalUnitClause(vert: WktNode): DeclaredVerticalUnit | undefined {
+  let found: DeclaredVerticalUnit | undefined;
+  for (const n of collectWktNodes(vert)) {
+    if (!VERTICAL_UNIT_KEYWORDS.has(n.keyword)) continue;
+    const name = wktNodeName(n);
+    const scale = wktFirstNumber(n);
+    const length = (n.keyword === 'UNIT' || n.keyword === 'LENGTHUNIT') && !NON_LENGTH_UNIT_NAME.test(name ?? '');
+    found = { ...(name !== undefined ? { name } : {}), toMetres: length && scale !== undefined ? scale : Number.NaN };
   }
-  return { name, epsg, unit };
+  return found;
 }
 
 /** Map a vertical-datum name to its EPSG code (the common geoids/datums). */
@@ -838,22 +881,23 @@ function lastLinearUnit(candidates: readonly WktNode[]): { name: string; scale: 
 }
 
 /**
- * Map a WKT unit name + scale to our internal `CrsLinearUnit` enum. The
- * scale is the authoritative signal — `0.3048006096...` is US survey foot
- * regardless of the unit's textual name — but the name resolves ambiguity
- * when the scale was emitted with limited precision.
+ * The horizontal unit of a WKT unit clause with a valid factor. The factor is
+ * the unit: it is named metre, foot or US survey foot only when it is that
+ * unit within 1e-9 m (writers emit the US survey foot at limited precision),
+ * and then carries the exact factor. Any other factor keeps its declared value
+ * with the token 'unknown', and is a valid unit (`linearUnitByFactor`). A name
+ * is never matched as a substring ("centimetre" is not a metre), and a name
+ * that spells a different named unit than its factor is noted, not obeyed.
  */
-function linearUnitFromNameOrScale(name: string, scale: number): CrsLinearUnit {
-  // US survey foot is 1200/3937 m ≈ 0.3048006096012192. Most writers emit
-  // it as 0.30480060960121921 or rounded to a few decimals; we accept any
-  // value within 1 ppm of the canonical.
-  if (Math.abs(scale - 1200 / 3937) < 1e-9) return 'us-survey-foot';
-  if (Math.abs(scale - 0.3048) < 1e-9) return 'foot';
-  if (Math.abs(scale - 1) < 1e-9) return 'metre';
-  if (/us\s*survey|us\s*foot|ussfoot/i.test(name)) return 'us-survey-foot';
-  if (/foot|feet|^ft$/i.test(name)) return 'foot';
-  if (/metre|meter|^m$/i.test(name)) return 'metre';
-  return 'unknown';
+function horizontalUnitOf(name: string, scale: number): { unit: CrsLinearUnit; toMetres: number; note?: string } {
+  const named = namedUnitForFactor(scale);
+  const spelled = namedUnitForName(name);
+  const note = spelled !== undefined && spelled !== named
+    ? `Declared horizontal unit name "${name}" disagrees with its factor (${scale} m per unit); the factor is used`
+    : named === undefined ? `Declared horizontal unit "${name}" is ${scale} m per unit` : undefined;
+  return named
+    ? { unit: named, toMetres: metresPerLinearUnit(named), ...(note ? { note } : {}) }
+    : { unit: 'unknown', toMetres: scale, ...(note ? { note } : {}) };
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -1271,13 +1315,49 @@ function unitForMetresPerUnit(m: number): CrsLinearUnit | undefined {
   return undefined;
 }
 
+/**
+ * The named unit a declared factor IS, within the precision writers emit the
+ * three named units at (1e-9 m, which still separates the two feet by 600x).
+ * Undefined for any other factor: a centimetre, a yard or a kilometre is a
+ * valid length unit, but not one of the three the app names.
+ */
+function namedUnitForFactor(m: number): CrsLinearUnit | undefined {
+  for (const u of ['metre', 'foot', 'us-survey-foot'] as const) {
+    if (Math.abs(metresPerLinearUnit(u) - m) < 1e-9) return u;
+  }
+  return undefined;
+}
+
+/**
+ * The named unit a unit NAME spells, matched as a whole name so "centimetre"
+ * or "kilometre" never reads as a metre. Used only to notice a name that
+ * disagrees with its factor; the factor decides the unit.
+ */
+function namedUnitForName(name: string | undefined): CrsLinearUnit | undefined {
+  const n = (name ?? '').trim().toLowerCase().replaceAll('_', ' ');
+  if (/^(us survey foot|us survey feet|foot us|ftus|us foot|us feet|survey foot)$/.test(n)) return 'us-survey-foot';
+  if (/^(foot|feet|ft|international foot|international feet)$/.test(n)) return 'foot';
+  if (/^(metre|meter|metres|meters|m)$/.test(n)) return 'metre';
+  return undefined;
+}
+
+/**
+ * A vertical unit as the source declares it: the name it gives (when any) and
+ * its metres-per-unit factor exactly as written. A factor that is not finite
+ * and positive marks a unit that was declared but cannot be read as a length.
+ */
+export interface DeclaredVerticalUnit {
+  readonly name?: string;
+  readonly toMetres: number;
+}
+
 /** Outcome of {@link resolveVerticalUnit}. */
 export interface VerticalUnitResolution {
   readonly unit?: CrsLinearUnit;
   readonly toMetres?: number;
   /** Set when a declared unit could not be read as a length unit. */
   readonly conflict?: string;
-  /** Set when a declared unit overrides the unit the vertical code defines. */
+  /** Set when a declared unit overrides the unit the vertical code defines, or its name disagrees with its factor. */
   readonly note?: string;
   /** Label of the same-datum code in the declared unit (6360 for 5703 in ftUS), when one is known. */
   readonly datumLabel?: string;
@@ -1290,12 +1370,23 @@ export interface VerticalUnitResolution {
  * NAVD88 height in US survey feet (EPSG:6360), the common encoding of it.
  * When it differs from the code's own unit, `note` records the override and
  * `datumLabel` names the same-datum variant in that unit if one is known.
- * With no declared unit, the code's own unit applies. A declared unit that is
- * not a length unit we can read ('unknown') resolves to 'unknown' with a
- * non-finite factor, which every vertical-scale gate reads as not known.
+ * With no declared unit, the code's own unit applies.
+ *
+ * A declaration is a unit token (a GeoKey code already mapped) or a name and
+ * factor read from WKT. The FACTOR is the physical scale, as PROJ reads it:
+ * a centimetre is 0.01 m per unit and a yard 0.9144, whatever the token. The
+ * token is 'metre', 'foot' or 'us-survey-foot' only when the factor is that
+ * unit; any other valid factor keeps its own value with the token 'unknown'.
+ * A name that spells a different named unit than the factor ("metre" at
+ * 0.3048) does not change the number: the factor is used and `note` says so.
+ * A declaration that is not a length unit, or whose factor is missing, zero,
+ * negative or non-finite, resolves to 'unknown' with a non-finite factor and
+ * a `conflict`, which every vertical-scale gate reads as invalid. It is never
+ * replaced by the code's unit or the horizontal unit: the source stated a
+ * vertical unit, and stated it wrongly.
  */
 export function resolveVerticalUnit(
-  declared: CrsLinearUnit | undefined,
+  declared: CrsLinearUnit | DeclaredVerticalUnit | undefined,
   verticalEpsg: number | undefined,
 ): VerticalUnitResolution {
   const known = knownVerticalCrs(verticalEpsg);
@@ -1303,22 +1394,42 @@ export function resolveVerticalUnit(
   if (declared === undefined) {
     return implied ? { unit: implied, toMetres: known!.metresPerUnit } : {};
   }
-  if (declared === 'unknown') {
+  const d: DeclaredVerticalUnit = typeof declared === 'string'
+    ? (declared === 'unknown' ? { toMetres: Number.NaN } : { toMetres: metresPerLinearUnit(declared) })
+    : declared;
+  if (!(Number.isFinite(d.toMetres) && d.toMetres > 0)) {
+    const what = d.name ? `Declared vertical unit "${d.name}"` : 'Declared vertical unit';
     return {
       unit: 'unknown',
       toMetres: Number.NaN,
-      conflict: 'Declared vertical unit is not a length unit that can be read',
+      conflict: `${what} is not a length unit that can be read`,
     };
   }
-  const toMetres = metresPerLinearUnit(declared);
-  if (implied === undefined || implied === declared) return { unit: declared, toMetres };
+  const named = namedUnitForFactor(d.toMetres);
+  const unit: CrsLinearUnit = named ?? 'unknown';
+  const toMetres = named ? metresPerLinearUnit(named) : d.toMetres;
+  const spelled = namedUnitForName(d.name);
+  const notes: string[] = [];
+  if (spelled !== undefined && spelled !== named) {
+    notes.push(`Declared vertical unit name "${d.name}" disagrees with its factor (${d.toMetres} m per unit); the factor is used`);
+  } else if (named === undefined) {
+    notes.push(`Declared vertical unit${d.name ? ` "${d.name}"` : ''} is ${d.toMetres} m per unit`);
+  }
+  if (implied === undefined || implied === unit) return { unit, toMetres, ...(notes.length ? { note: notes.join('. ') } : {}) };
   const variant = sameDatumVariantInUnit(verticalEpsg, toMetres);
+  notes.push(`Declared vertical unit (${named ?? `${toMetres} m per unit`}) overrides the unit of EPSG:${verticalEpsg} (${implied})`);
   return {
-    unit: declared,
+    unit,
     toMetres,
-    note: `Declared vertical unit (${declared}) overrides the unit of EPSG:${verticalEpsg} (${implied})`,
+    note: notes.join('. '),
     ...(variant !== undefined ? { datumLabel: knownVerticalCrs(variant)!.label } : {}),
   };
+}
+
+/** The declared vertical unit a CrsInfo carries, for re-resolving against another vertical code. */
+export function declaredVerticalUnitOf(crs: Pick<CrsInfo, 'verticalLinearUnit' | 'verticalUnitToMetres'>): DeclaredVerticalUnit | undefined {
+  if (crs.verticalUnitToMetres !== undefined) return { toMetres: crs.verticalUnitToMetres };
+  return crs.verticalLinearUnit === undefined ? undefined : crs.verticalLinearUnit === 'unknown' ? { toMetres: Number.NaN } : { toMetres: metresPerLinearUnit(crs.verticalLinearUnit) };
 }
 
 /** The CrsInfo vertical fields a {@link VerticalUnitResolution} sets. */
@@ -1374,13 +1485,20 @@ function readNullTerminatedBytes(bytes: Uint8Array): string {
 // Display + measurement helpers (used by UI + the scan-report card)
 // ─────────────────────────────────────────────────────────────────────────────
 
-/** Compact human label for a unit — for inspector + scan-report rows. */
-export function linearUnitLabel(unit: CrsLinearUnit): string {
+/**
+ * Compact human label for a unit — for inspector + scan-report rows. Pass the
+ * CRS's factor too, so a valid unit that is not one of the named three (a
+ * centimetre or kilometre grid) reads by its size rather than as unknown.
+ */
+export function linearUnitLabel(unit: CrsLinearUnit, byFactor?: { readonly linearUnitByFactor?: boolean; readonly linearUnitToMetres?: number }): string {
   switch (unit) {
     case 'metre': return 'metres';
     case 'foot': return 'international ft';
     case 'us-survey-foot': return 'US survey ft';
-    case 'unknown': return 'unknown';
+    case 'unknown': {
+      const f = byFactor?.linearUnitToMetres;
+      return byFactor?.linearUnitByFactor === true && f !== undefined && Number.isFinite(f) && f > 0 ? `units of ${f} m` : 'unknown';
+    }
   }
 }
 

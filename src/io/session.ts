@@ -37,6 +37,7 @@ import type { ColorMode } from '../render/colorModes';
 import type { PointSizeMode } from '../render/pointStyle';
 import type { ResolvedCrs } from '../geo/CoordinateTypes';
 import type { CrsLinearUnit } from './crs';
+import { UNIT_FACTORS } from '../units/units';
 import type { BoxBounds } from '../render/measure/geometry';
 import type { ClipBox, ClipMode } from '../render/clip/clipBox';
 import { parseResolvedCrs } from './sessionCrs';
@@ -1114,8 +1115,14 @@ export interface SessionSpatialClaims {
   readonly upAxis: 'y' | 'z';
   /** Horizontal EPSG the session declares, when it carried a resolved CRS. */
   readonly epsg?: number;
-  /** Linear unit the session's CRS declares; `'unknown'`/absent ⇒ no unit claim. */
+  /** Linear unit the session's CRS declares; `'unknown'`/absent ⇒ no unit claim unless {@link linearUnitByFactor}. */
   readonly linearUnit?: CrsLinearUnit;
+  /** Metres per horizontal unit the session's CRS records. */
+  readonly linearUnitToMetres?: number;
+  /** The horizontal unit is a valid length known by its factor alone (centimetres, a yard). */
+  readonly linearUnitByFactor?: boolean;
+  /** Metres per vertical unit the session's CRS records; non-finite = declared but unreadable. */
+  readonly verticalUnitToMetres?: number;
 }
 
 /**
@@ -1129,8 +1136,14 @@ export interface DeclaredSpatialFacts {
   readonly upAxis?: 'y' | 'z' | 'unknown';
   /** The file's horizontal EPSG, when it declares one. */
   readonly epsg?: number;
-  /** The file's linear unit; `'unknown'`/absent ⇒ the file makes no unit claim. */
+  /** The file's linear unit; `'unknown'`/absent ⇒ the file makes no unit claim unless {@link linearUnitByFactor}. */
   readonly linearUnit?: CrsLinearUnit;
+  /** Metres per horizontal unit the file declares. */
+  readonly linearUnitToMetres?: number;
+  /** The horizontal unit is a valid length known by its factor alone. */
+  readonly linearUnitByFactor?: boolean;
+  /** Metres per vertical unit the file declares; non-finite = declared but unreadable. */
+  readonly verticalUnitToMetres?: number;
 }
 
 /** Which spatial claim a {@link SpatialClaimConflict} concerns. */
@@ -1154,6 +1167,52 @@ export interface SessionSpatialVerdict {
 /** A linear unit that positively names a real metric length (not the inert placeholder). */
 function isKnownLinearUnit(u: CrsLinearUnit | undefined): u is Exclude<CrsLinearUnit, 'unknown'> {
   return u != null && u !== 'unknown';
+}
+
+const NAMED_METRES_PER_UNIT: Readonly<Record<Exclude<CrsLinearUnit, 'unknown'>, number>> = {
+  metre: 1,
+  foot: UNIT_FACTORS.M_PER_FT,
+  'us-survey-foot': UNIT_FACTORS.M_PER_US_FT,
+};
+
+/**
+ * Metres per horizontal unit one side positively claims: a named unit's own
+ * factor, or the declared factor of a valid unit known by factor alone (a
+ * centimetre grid). Undefined is no claim: an unknown unit with only the inert
+ * placeholder, or none at all.
+ */
+function claimedHorizontalFactor(s: { readonly linearUnit?: CrsLinearUnit; readonly linearUnitToMetres?: number; readonly linearUnitByFactor?: boolean }): number | undefined {
+  if (isKnownLinearUnit(s.linearUnit)) return NAMED_METRES_PER_UNIT[s.linearUnit];
+  const f = s.linearUnitToMetres;
+  return s.linearUnit === 'unknown' && s.linearUnitByFactor === true && f !== undefined && Number.isFinite(f) && f > 0 ? f : undefined;
+}
+
+/** Two metres-per-unit factors that describe different units (relative difference above 1e-9). */
+function differentFactor(a: number, b: number): boolean {
+  return Math.abs(a - b) > 1e-9 * Math.max(Math.abs(a), Math.abs(b));
+}
+
+/** A unit for a conflict sentence: the token when named, else its factor. */
+function unitWords(token: CrsLinearUnit | undefined, factor: number): string {
+  return isKnownLinearUnit(token) ? token : `unit of ${factor} m`;
+}
+
+/**
+ * Whether the recorded vertical scales disagree. Absent on either side is no
+ * claim. Two unreadable scales agree; an unreadable one against a valid one,
+ * or two valid factors that differ, disagree.
+ */
+function verticalScalesDisagree(a: number | undefined, b: number | undefined): boolean {
+  if (a === undefined || b === undefined) return false;
+  const va = Number.isFinite(a) && a > 0;
+  const vb = Number.isFinite(b) && b > 0;
+  if (!va || !vb) return va !== vb;
+  return differentFactor(a, b);
+}
+
+/** A vertical scale for a conflict sentence. */
+function verticalWords(f: number): string {
+  return Number.isFinite(f) && f > 0 ? `${f} m per unit` : 'unreadable';
 }
 
 /**
@@ -1208,17 +1267,26 @@ export function detectSessionSpatialConflict(
     });
   }
 
-  // Unit — only when BOTH sides name a KNOWN unit (an unknown unit is the
-  // fail-closed "no claim", never a conflict). Metre vs foot silently rescales
-  // every distance, so the file's unit wins.
-  if (
-    isKnownLinearUnit(claims.linearUnit) &&
-    isKnownLinearUnit(declared.linearUnit) &&
-    claims.linearUnit !== declared.linearUnit
-  ) {
+  // Unit — only when BOTH sides claim a unit: a named one, or a valid unit
+  // known by its factor (a centimetre grid). A genuinely unknown unit is the
+  // fail-closed "no claim", never a conflict. The claims are compared as
+  // metres per unit, so a named foot and a declared 0.3048 agree while a
+  // centimetre session against a metre scan does not. Metre vs foot silently
+  // rescales every distance, so the file's unit wins.
+  const hClaim = claimedHorizontalFactor(claims);
+  const hDeclared = claimedHorizontalFactor(declared);
+  if (hClaim !== undefined && hDeclared !== undefined && differentFactor(hClaim, hDeclared)) {
     conflicts.push({
       field: 'unit',
-      reason: `the session's linear unit (${claims.linearUnit}) disagrees with the scan's ${declared.linearUnit}`,
+      reason: `the session's linear unit (${unitWords(claims.linearUnit, hClaim)}) disagrees with the scan's ${unitWords(declared.linearUnit, hDeclared)}`,
+    });
+  }
+  // The vertical scale, where both sides recorded one: heights restored under
+  // another scale would be converted by the wrong factor.
+  if (verticalScalesDisagree(claims.verticalUnitToMetres, declared.verticalUnitToMetres)) {
+    conflicts.push({
+      field: 'unit',
+      reason: `the session's vertical unit (${verticalWords(claims.verticalUnitToMetres!)}) disagrees with the scan's (${verticalWords(declared.verticalUnitToMetres!)})`,
     });
   }
 

@@ -78,9 +78,8 @@ import {
 } from './gpuErrorLedger';
 import { computeExportFrontier, type FrontierNode } from './streaming/exportFrontier';
 import { intensityFilterUniform } from './intensityFilterUniform';
-import { isZUpFormat, sceneUpAxisPolicy, sceneUpOf } from '../io/sniffFormat';
-import { classifyScanShape } from '../terrain/scanShape';
-import { yUpToCanonicalZUp } from '../terrain/canonicalFrame';
+import { isZUpFormat, sceneUpOf } from '../io/sniffFormat';
+import { settleTerrainGatherFrame, type TerrainGatherSource, type TerrainUpAxisBasis } from '../terrain/gatherUpAxis';
 import type { SourceFormat } from '../io/sniffFormat';
 import { colorForMode, defaultMode, refreshClassificationColours } from './colorModes';
 import type { ColorMode, CoverageColorGrid, ColorForModeOptions } from './colorModes';
@@ -2016,6 +2015,8 @@ export class Viewer {
     return [...this._clouds.keys()];
   }
 
+  /** Why the last terrain gather declined a frame it could not settle, for the runner to show; null otherwise. */
+  terrainGatherDecline: string | null = null;
   /**
    * Gather a flattened (x,y,z interleaved) positions buffer from all
    * loaded static clouds plus resident streaming nodes, for terrain
@@ -2055,7 +2056,10 @@ export class Viewer {
      * would georeference a correctly-rotated surface to the wrong place.
      */
     sourceUpAxis?: 'z' | 'y';
+    /** What settled `sourceUpAxis`: a format specification, a CRS, or detection from the points. */
+    upAxisBasis?: TerrainUpAxisBasis;
   } & TerrainWithheldOutcome) | null {
+    this.terrainGatherDecline = null;
     // Track each buffer's classification alongside it (when the cloud carries
     // an index-aligned class channel) so terrain analysis can drop vegetation
     // and buildings before contouring.
@@ -2074,7 +2078,7 @@ export class Viewer {
     // "the file classified this", and the review panel announced classified
     // ground for a scan its own report called unclassified.
     let sourceGround = false;
-    const staticFormats: SourceFormat[] = [];
+    const staticSources: TerrainGatherSource[] = [];
     const alignedClass = (
       cls: ArrayLike<number> | null | undefined,
       pos: Float32Array,
@@ -2090,7 +2094,8 @@ export class Viewer {
         }
         staticBuffers.push({ pos: cloud.positions, cls, flags: cloud.classificationFlags, placement });
         staticPoints += cloud.positions.length / 3;
-        staticFormats.push(cloud.sourceFormat);
+        // The app's resolved CRS (override applied) when wired, else the file's declared one.
+        staticSources.push({ format: cloud.sourceFormat, crs: this._exportCrsResolver?.(cloud).resolved ?? cloud.metadata?.crs });
       }
     }
     // Terrain is the estimator with the most to lose from a frame it cannot
@@ -2135,39 +2140,24 @@ export class Viewer {
     // i.e. the working set spans the whole cloud.
     const residentOnly = streamingPoints > 0 && !this.profileSeam.fullyResident();
     // Normalise the buffer into the canonical Z-up survey frame BEFORE anything
-    // reads it. Nine modules under `src/terrain` index positions as "X/Y
-    // horizontal, Z elevation", which is wrong for the Y-up mesh formats, and a
-    // Y-up height field reaches terrain analysis easily — drone photogrammetry
-    // exported as OBJ or glTF classifies as terrain. Rotating once here keeps
-    // the analysis, the core-cache fingerprints and all three exporters correct
-    // with no changes of their own, and cannot be half-applied the way an axis
-    // parameter threaded through every consumer could.
-    //
-    // A MIXED gather has no single frame — a Y-up mesh and a Z-up scan are not
-    // in the same space, so their union describes no surface. Decline it rather
-    // than analyse a meaningless combination.
-    const policy = sceneUpAxisPolicy(staticFormats, streamingPoints > 0);
-    if (policy === null) return null;
-    let sceneUp: 'z' | 'y' = 'z';
-    if (policy.kind === 'detect') {
-      // Mesh formats carry no mandated up-axis (photogrammetry writes Y-up,
-      // CloudCompare/PDAL-style tools write Z-up PLYs), so the DATA decides:
-      // the same up-axis detection the scan-shape router uses, one authority.
-      sceneUp = classifyScanShape(sample.positions).up === 'y' ? 'y' : 'z';
-      if (sceneUp === 'y' && policy.hasSpecZ) {
-        // A detected-Y-up mesh beside Z-up-by-spec sources is two provably
-        // different frames; their union describes no surface. Decline.
-        return null;
-      }
-    }
-    if (sceneUp === 'y') yUpToCanonicalZUp(sample.positions);
+    // reads it: nine modules under `src/terrain` index positions as X/Y
+    // horizontal, Z elevation, and rotating once here keeps the analysis, the
+    // core-cache fingerprints and the exporters correct with no changes of
+    // their own. Metadata decides the axis (a format specification, else the
+    // CRS); only a mesh with no CRS is decided by detection. A frame that
+    // cannot be settled (glTF under a CRS, a Y-up mesh beside Z-up layers)
+    // declines with the reason the runner shows.
+    const frame = settleTerrainGatherFrame(staticSources, streamingPoints > 0, sample.positions);
+    if (frame && !frame.ok) this.terrainGatherDecline = frame.reason;
+    if (!frame?.ok) return null;
     return {
       // positions, classification, sampled and the Withheld outcome.
       ...sample,
       groundIsDerived: !sourceGround,
       residentOnly,
       totalPoints,
-      sourceUpAxis: sceneUp,
+      sourceUpAxis: frame.up,
+      upAxisBasis: frame.basis,
       // Always 'z': the buffer above is canonical now, so scan-shape detection
       // has nothing left to guess at.
       verticalAxisHint: 'z',

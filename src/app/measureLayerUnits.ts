@@ -79,7 +79,9 @@ export function bindMeasureUnitFrames(measure: MeasureController, src: LayerUnit
       memo.clear();
       const f = measureUnitFrameOf(src.crs.context());
       measure.setUnitToMetres(f.unitToMetres);
-      measure.setVerticalUnitToMetres(f.verticalUnitToMetres ?? 1);
+      // An unreadable vertical unit reaches the controller as an invalid
+      // factor, so it withholds every height rather than riding the horizontal.
+      measure.setVerticalUnitToMetres(f.verticalUnitInvalid ? Number.NaN : f.verticalUnitToMetres ?? 1);
       measure.setVerticalUnitKnown(f.verticalUnitKnown);
       measure.setCrsKnown(f.crsKnown);
       measure.setGeographicCrs(f.geographic, f.verticalRefused);

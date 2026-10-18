@@ -44,7 +44,7 @@ import {
 import type { KmlExportInput, KmlSiteOutline, KmlViewpoint } from '../export/kmlExport';
 import type { GeoExportContext } from './reportExport';
 import type { ResolvedCrs } from '../geo/CoordinateTypes';
-import type { SpatialUpAxis } from '../geo/SpatialContext';
+import { spatialContextFrom, type SpatialUpAxis } from '../geo/SpatialContext';
 import type { Annotation } from '../render/annotate/types';
 import type { Measurement, Vec3 } from '../render/measure/types';
 import type { loadKmlExport } from '../lazyChunks';
@@ -161,7 +161,7 @@ const NOT_SURVEY_GRADE =
 function linearScaleIsMetric(resolved: ResolvedCrs | null): boolean {
   return resolved != null
     && resolved.kind === 'projected'
-    && resolved.linearUnit !== 'unknown'
+    && spatialContextFrom(resolved).linearUnitKnown
     && Number.isFinite(resolved.linearUnitToMetres)
     && resolved.linearUnitToMetres > 0;
 }
@@ -337,6 +337,9 @@ export async function exportSiteKml(deps: KmlActionDeps): Promise<void> {
     // grade, angle or length.
     geographic: deps.isGeographic?.() ?? false,
     verticalRefused: deps.verticalRefused?.() ?? false,
+    // A declared vertical unit that cannot be read, from the same resolved CRS
+    // as the factor above: no height leaves as metres.
+    verticalScaleInvalid: spatialContextFrom(crs).verticalScaleState === 'invalid',
     toLonLat,
     notSurveyGradeNote: NOT_SURVEY_GRADE,
     // The scan's outline, placed through the same mapper as every feature. The

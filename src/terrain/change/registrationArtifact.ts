@@ -19,6 +19,7 @@
 
 import type { EpochAlignment, EpochAppliedDof } from './alignEpochs';
 import type { Vec3 } from './icpRegister';
+import type { RigidObservability } from './rigidObservability';
 import { methodRef, type MethodRef } from '../../science/methodRegistry';
 
 /** The registered method the epoch alignment implements. */
@@ -65,6 +66,24 @@ export interface RegistrationArtifact {
   readonly centroidShiftM?: Vec3;
   /** Fraction of the scenes that overlapped, 0..1. */
   readonly overlapFraction: number;
+  /**
+   * A pose was estimated at all. False when the supplied coordinates were kept
+   * (`frameKept`), when the geometry was unobservable, or when no fit ran.
+   */
+  readonly estimated: boolean;
+  /** Both epochs declare one horizontal CRS; their coordinates were kept, no fit ran. */
+  readonly frameKept: boolean;
+  /** The fit was refused because the geometry does not determine the pose. */
+  readonly unobservable: boolean;
+  /** Observability of the fit (absent when no fit ran). */
+  readonly observability?: RigidObservability;
+  /**
+   * Registration uncertainty (σreg, metres). Always null in this build: it
+   * needs an independent assessment on stable reference areas, and neither
+   * fit residual above is a substitute. Kept as its own field so a residual is
+   * never read as one.
+   */
+  readonly registrationSigmaM: null;
   /** Epoch-millisecond stamp of when this record was built (staleness marker). */
   readonly generatedAt: number;
 }
@@ -88,6 +107,11 @@ export function buildRegistrationArtifact(
     translation: alignment.translation,
     ...(alignment.centroidShiftM ? { centroidShiftM: alignment.centroidShiftM } : {}),
     overlapFraction: alignment.overlapFraction,
+    estimated: alignment.attempted && !alignment.degenerate && alignment.unobservable !== true,
+    frameKept: alignment.frameKept === true,
+    unobservable: alignment.unobservable === true,
+    ...(alignment.observability ? { observability: alignment.observability } : {}),
+    registrationSigmaM: null,
     generatedAt,
   };
 }
@@ -104,8 +128,15 @@ export function summarizeRegistration(a: RegistrationArtifact): string {
       `Registration: applied (${a.appliedDof}) — ` +
       (a.centroidShiftM ? `shift ${Math.hypot(a.centroidShiftM[0], a.centroidShiftM[1]).toFixed(3)} m at the centroid, ${a.yawDeg.toFixed(3)}° yaw, ` : '') +
       `residual at applied pose ${a.appliedTransformResidualM.toFixed(3)} m, ` +
-      `solver fit residual ${a.solverResidualM.toFixed(3)} m, overlap ${Math.round(a.overlapFraction * 100)}% · ${m}`
+      `solver fit residual ${a.solverResidualM.toFixed(3)} m, overlap ${Math.round(a.overlapFraction * 100)}%; ` +
+      `registration uncertainty not quantified · ${m}`
     );
+  }
+  if (a.frameKept) {
+    return `Registration: not estimated — epochs compared in their supplied coordinates; registration uncertainty not quantified · ${m}`;
+  }
+  if (a.unobservable) {
+    return `Registration: refused — the geometry does not constrain the pose (unobservable); epochs compared unshifted; registration uncertainty not quantified · ${m}`;
   }
   if (a.refused) {
     return `Registration: refused — solver fit residual ${a.solverResidualM.toFixed(3)} m exceeded the gate; epochs compared unshifted · ${m}`;

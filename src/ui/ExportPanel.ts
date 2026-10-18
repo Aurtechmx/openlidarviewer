@@ -35,6 +35,8 @@ import {
   LEGACY_OVERLAP_DROP_OPT_IN,
   LEGACY_RETURN_CLAMP_HINT,
   LEGACY_RETURN_CLAMP_OPT_IN,
+  Y_UP_TO_Z_UP_HINT,
+  Y_UP_TO_Z_UP_OPT_IN,
   type ConvertFormat,
   type CrsMode,
   type ConvertOptions,
@@ -355,6 +357,13 @@ export class ExportPanel {
   /** Write LAS 1.2 even when the overlap flag is dropped (see `allowLegacyOverlapDrop`). */
   private _allowOverlapDrop = false;
   private readonly _overlapRow: HTMLElement;
+  /**
+   * Rotate a local Y-up model to Z-up (`axisHandling: 'y-up-to-z-up'`). Off by
+   * default, offered only while the scan has no CRS, and cleared when one is
+   * resolved: coordinates under a CRS are always written as stored.
+   */
+  private _rotateYUp = false;
+  private readonly _axisRow: HTMLElement;
   /** Every warning of the last export, under the status line. */
   private readonly _notes: HTMLElement;
   /**
@@ -416,11 +425,13 @@ export class ExportPanel {
     this._crsLabel = this._label('Coordinate system');
     this._crsRow = el('div', { className: 'olv-bc-pills' });
     this._crsExtra = el('div', { className: 'olv-bc-crs-extra' });
-    this._crsLocalNote = el('p', {
-      className: 'olv-export-crs-note',
-      text: 'No CRS recorded in the file. Coordinates are written unchanged from the source.',
-    });
+    this._crsLocalNote = el('p', { className: 'olv-export-crs-note', text: crsLocalNoteText(false) });
     this._crsLocalNote.style.display = 'none';
+    this._axisRow = optInRow(Y_UP_TO_Z_UP_OPT_IN, Y_UP_TO_Z_UP_HINT, (on) => {
+      this._rotateYUp = on;
+      this._crsLocalNote.textContent = crsLocalNoteText(on);
+    });
+    this._axisRow.style.display = 'none';
     this._fullResRow = el('div', { className: 'olv-export-fullres' });
     this._gzipRow = el('div', { className: 'olv-export-fullres' });
     this._classRow = el('div', { className: 'olv-export-fullres' });
@@ -470,6 +481,7 @@ export class ExportPanel {
       this._crsRow,
       this._crsExtra,
       this._crsLocalNote,
+      this._axisRow,
       this._fullResRow,
       this._classRow,
       this._wrapRow,
@@ -642,6 +654,14 @@ export class ExportPanel {
     this._crsRow.style.display = collapsed ? 'none' : '';
     this._crsExtra.style.display = collapsed ? 'none' : '';
     this._crsLocalNote.style.display = collapsed ? '' : 'none';
+    // The axis rotation is for local models only; a resolved CRS clears it.
+    if (!collapsed && this._rotateYUp) {
+      this._rotateYUp = false;
+      const box = this._axisRow.querySelector<HTMLInputElement>('input');
+      if (box) box.checked = false;
+    }
+    this._crsLocalNote.textContent = crsLocalNoteText(this._rotateYUp);
+    this._axisRow.style.display = collapsed ? '' : 'none';
   }
 
   /**
@@ -1439,6 +1459,9 @@ export class ExportPanel {
     const allowAcquisitionLoss = this._allowAcquisitionLoss;
     const allowReinterpretation = this._allowReinterpretation;
     const allowOverlapDrop = this._allowOverlapDrop;
+    // Display orientation never reaches the converter: only this explicit
+    // request rotates axes, and only for a scan with no CRS.
+    const axisHandling = this._rotateYUp && !this._crsKnown ? 'y-up-to-z-up' : 'preserve';
     const gzip = this._gzip;
 
     this._busy = true;
@@ -1526,6 +1549,7 @@ export class ExportPanel {
         allowLegacyAcquisitionLoss: allowAcquisitionLoss,
         allowLegacyClassReinterpretation: allowReinterpretation,
         allowLegacyOverlapDrop: allowOverlapDrop,
+        axisHandling,
         scopeNote,
         displaySample,
         // Read from the loaded cloud, so a truncated file is named as truncated;
@@ -1582,6 +1606,13 @@ export class ExportPanel {
 }
 
 const parseEpsg = parseEpsgField;
+
+/** The note shown in place of the CRS step for a scan with no CRS. */
+function crsLocalNoteText(rotateYUp: boolean): string {
+  return rotateYUp
+    ? 'No CRS recorded in the file. The Y-up model is rotated to Z-up as requested below; the file and the report record the rotation.'
+    : 'No CRS recorded in the file. Coordinates are written unchanged from the source.';
+}
 
 /** The app state {@link exportLayerHooks} reads. */
 export interface ExportLayerState {

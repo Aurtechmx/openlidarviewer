@@ -15,7 +15,11 @@ function cloudFrom(pts: P[], origin?: [number, number, number]): EpochCloud {
   return origin ? { positions: f, origin } : { positions: f };
 }
 
-/** Deterministic, asymmetric scatter so ICP can resolve translation AND yaw. */
+/**
+ * Deterministic, asymmetric scatter so ICP can resolve translation AND yaw.
+ * The surface varies along both x and y: a ridge varying along x alone leaves
+ * the y shift unconstrained, and the fit refuses it as unobservable.
+ */
 function scatter(n: number, seed = 12345): P[] {
   let s = seed >>> 0;
   const rnd = (): number => {
@@ -26,7 +30,7 @@ function scatter(n: number, seed = 12345): P[] {
   for (let i = 0; i < n; i++) {
     const x = rnd() * 20; // wide span on x
     const y = rnd() * 8; // narrower on y → not rotationally symmetric
-    const z = Math.sin(x * 0.3) + rnd() * 0.02;
+    const z = Math.sin(x * 0.3) + 0.8 * Math.cos(y * 0.7) + rnd() * 0.02;
     pts.push([x, y, z]);
   }
   return pts;
@@ -74,7 +78,9 @@ describe('alignEpochClouds', () => {
     // its translation[2] is in scaled units. It was applied to raw foot Z
     // unscaled, leaving ~70% of a vertical offset behind while the metre figure
     // in the summary read correctly.
-    const base = scatter(200);
+    // Heights in feet are scaled by 0.3048 in the fit space, so the relief is
+    // raised four-fold to keep the surface observable there.
+    const base = scatter(200).map(([x, y, z]) => [x, y, 4 * z] as P);
     const FT = 0.3048;
     const compound = (pts: P[]) => ({
       ...cloudFrom(pts), linearUnitToMetres: 1, verticalUnitToMetres: FT,
@@ -139,7 +145,8 @@ describe('alignEpochClouds', () => {
 
   test('withholds a low-overlap (subset-lock) fit and applies nothing', () => {
     // 30% of `after` matches `before` under a +3/-2 shift; the other 70% is
-    // scattered far away with no correspondence, so the inlier fraction falls
+    // scattered far away with no correspondence (heights scrambled over 20 m,
+    // so it is not a displaced copy of the surface), so the inlier fraction falls
     // below the gate. With trimming the solver still locks onto the matching
     // subset (a small residual), which is exactly the failure RMS alone hides —
     // the transform must be WITHHELD, not applied.
@@ -148,12 +155,14 @@ describe('alignEpochClouds', () => {
       base.map(([x, y, z], i) =>
         i % 10 < 3
           ? ([x + 3, y - 2, z] as P)
-          : ([x + 800 + (i % 7), y - 800 - (i % 5), z + 40] as P),
+          : ([x + 800 + (i % 7), y - 800 - (i % 5), z + 40 + ((i * 7919) % 101) * 0.2] as P),
       ),
     );
     const r = alignEpochClouds(cloudFrom(base), after, { trimFraction: 0.3, maxResidualM: 1 });
     expect(r.alignment.attempted).toBe(true);
-    expect(r.alignment.lowOverlap).toBe(true);
+    // Either gate may stop it first: the trimmed subset is too poor to
+    // determine the pose (unobservable), or the overlap is too low.
+    expect(r.alignment.lowOverlap === true || r.alignment.unobservable === true).toBe(true);
     expect(r.alignment.overlapFraction).toBeLessThan(0.5);
     expect(r.alignment.applied).toBe(false);
     expect(r.alignment.appliedDof).toBe('none');
@@ -395,7 +404,9 @@ describe('undeclared frames are labelled indicative', () => {
  * unit, withhold the metre figures rather than caption an unverified unit as m.
  */
 describe('unknown projected linear unit withholds the metre figures', () => {
-  // These epochs declare one CRS, so the solve starts at the identity pose and
+  // These epochs declare one CRS, so by default their coordinates are kept and
+  // no fit runs; the tests opt in with commonFrame: 'estimate' to examine the
+  // figures a fit reports. The solve then starts at the identity pose and
   // only pairs within three point spacings (about 2.8 units here) count. The
   // shift is 0.5 units, a misregistration that pose supports; a 10-unit shift
   // on this 20 x 8 scene is withheld as unsupported (see
@@ -412,7 +423,7 @@ describe('unknown projected linear unit withholds the metre figures', () => {
   test('an applied fit reports yaw but withholds the shift and residual', () => {
     const before = declared(cloudFrom(scatter(200)));
     const after = declared(shiftedScatter(0.5));
-    const r = alignEpochClouds(before, after, { horizontalUnitKnown: false });
+    const r = alignEpochClouds(before, after, { horizontalUnitKnown: false, commonFrame: 'estimate' });
     expect(r.alignment.applied).toBe(true);
     expect(r.alignment.horizontalUnitUnknown).toBe(true);
     // frameUnverified is NOT the guard here — a CRS and a datum are declared.
@@ -427,7 +438,7 @@ describe('unknown projected linear unit withholds the metre figures', () => {
   test('a refused fit withholds the metre residual too', () => {
     const before = declared(cloudFrom(scatter(200, 1)));
     const after = declared(cloudFrom(scatter(200, 2)));
-    const r = alignEpochClouds(before, after, { maxResidualM: 0.001, horizontalUnitKnown: false });
+    const r = alignEpochClouds(before, after, { maxResidualM: 0.001, horizontalUnitKnown: false, commonFrame: 'estimate' });
     expect(r.alignment.refused).toBe(true);
     expect(r.alignment.horizontalUnitUnknown).toBe(true);
     const s = summarizeAlignment(r.alignment);
@@ -440,7 +451,7 @@ describe('unknown projected linear unit withholds the metre figures', () => {
     // The honest path is unchanged: omitting horizontalUnitKnown means known.
     const before = declared(cloudFrom(scatter(200)));
     const after = declared(shiftedScatter(0.5));
-    const r = alignEpochClouds(before, after);
+    const r = alignEpochClouds(before, after, { commonFrame: 'estimate' });
     expect(r.alignment.horizontalUnitUnknown).not.toBe(true);
     const s = summarizeAlignment(r.alignment);
     expect(s).toMatch(/m shift/i);
@@ -459,7 +470,7 @@ describe('unknown projected linear unit withholds the metre figures', () => {
     expect(horizontalUnitKnown).toBe(false);
     const before = declared(cloudFrom(scatter(200)));
     const after = declared(shiftedScatter(0.5));
-    const r = alignEpochClouds(before, after, { horizontalUnitKnown });
+    const r = alignEpochClouds(before, after, { horizontalUnitKnown, commonFrame: 'estimate' });
     expect(r.alignment.applied).toBe(true);
     expect(r.alignment.horizontalUnitUnknown).toBe(true);
     const s = summarizeAlignment(r.alignment);

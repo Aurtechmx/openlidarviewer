@@ -115,6 +115,11 @@ export interface KmlExportInput {
    */
   readonly verticalRefused?: boolean;
   /**
+   * True when the source declares a vertical unit that cannot be read: every
+   * figure that reads Z is withheld, plan figures are kept. Defaults false.
+   */
+  readonly verticalScaleInvalid?: boolean;
+  /**
    * Why measurements were left out of this file (taken on another scan, or on
    * one whose owner cannot be resolved). Stated in the document; absent when
    * every measurement belongs to the scan this file describes.
@@ -371,9 +376,9 @@ function annotationPlacemark(a: Annotation, input: KmlExportInput): string {
  */
 function metricsLine(m: Measurement, input: KmlExportInput): string {
   const all = measurementMetrics(m, input.up, input.unitToMetres, input.verticalUnitToMetres);
-  const metrics = geographicFilter(all, m, input.geographic, input.verticalRefused);
+  const metrics = geographicFilter(all, m, input.geographic, input.verticalRefused, input.verticalScaleInvalid);
   const parts = Object.entries(metrics).filter(([, v]) => v !== null).map(([k, v]) => `${k}=${typeof v === 'number' ? plainDecimal(v) : v}`);
-  const note0 = refusalNote(m, input.geographic, input.verticalRefused);
+  const note0 = refusalNote(m, input.geographic, input.verticalRefused, input.verticalScaleInvalid);
   if (note0 && Object.keys(all).length > 0) {
     if (parts.length === 0) return `Figures ${note0}.`;
     return `Measured (${input.unitLabel}): ${parts.join(', ')}. Other figures ${note0}.`;

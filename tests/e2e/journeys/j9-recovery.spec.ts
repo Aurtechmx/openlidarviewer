@@ -53,7 +53,11 @@ test('P1: double-clicking Export writes one file and the button comes back', asy
     await panel.locator('.olv-bc-convert').dblclick();
     await expect.poll(() => names.length, { timeout: 15_000 }).toBeGreaterThan(0);
     await page.waitForTimeout(2_000);
-    expect(names, `downloads: ${names.join(', ')}`).toHaveLength(1);
+    // One export: one .xyz, plus at most its own .prj sidecar when the CRS has a verified WKT.
+    const xyz = names.filter((n) => n.endsWith('.xyz'));
+    expect(xyz, `downloads: ${names.join(', ')}`).toHaveLength(1);
+    const stem = xyz[0].replace(/\.xyz$/, '');
+    expect(names.filter((n) => n !== xyz[0]), `downloads: ${names.join(', ')}`).toEqual(names.length > 1 ? [`${stem}.prj`] : []);
     await expect(panel.locator('.olv-bc-convert')).toBeEnabled({ timeout: 10_000 });
   });
 });

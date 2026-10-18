@@ -103,6 +103,8 @@ const SUPPORTING_TESTS: Readonly<Record<string, readonly string[]>> = {
     'tests/alignEpochsPartialOverlap.test.ts',
     'tests/alignEpochsCentroidShift.test.ts',
     'tests/registrationArtifact.test.ts',
+    'tests/changeRegistrationPreserveFrame.test.ts',
+    'tests/rigidObservability.test.ts',
   ],
   'olv.volume.stockpile': [
     'tests/stockpileVolume.test.ts',

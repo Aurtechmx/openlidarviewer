@@ -121,6 +121,20 @@ export function verticalRefusalCaveat(refused: boolean): string {
   );
 }
 
+/**
+ * The caveat for a frame whose source declares a vertical unit that cannot be
+ * read (an angular unit, or a zero, negative or non-finite factor). Empty
+ * when the vertical unit is valid or simply not declared.
+ */
+export function verticalScaleRefusalCaveat(refused: boolean): string {
+  if (!refused) return '';
+  return (
+    ' Height unit could not be interpreted: the source declares a vertical unit that is not a readable length, ' +
+    'so heights, 3D lengths, tilted areas, angles, grades, profiles and volumes are not available and are left empty. ' +
+    'Purely horizontal figures are kept. Coordinates are unchanged.'
+  );
+}
+
 export function evidenceStatus(claimId: string): EvidenceStatus {
   const d = exportGate(claimId);
   if (d.exploratoryOnly) return 'exploratory';

@@ -59,6 +59,11 @@ export interface MeasureExportView {
    * Absent reads false.
    */
   readonly verticalRefused?: boolean;
+  /**
+   * True when the source declares a vertical unit that cannot be read, so
+   * `verticalUnitToMetres` is only a drawing factor. Absent reads false.
+   */
+  readonly verticalUnitInvalid?: boolean;
 }
 
 export interface MeasurementExportActionDeps {
@@ -237,6 +242,8 @@ interface MeasureSnapshot {
   readonly verticalUnitToMetres: number;
   readonly geographicCrs: boolean;
   readonly verticalRefused: boolean;
+  /** The vertical unit is declared and cannot be read; read with the factor, at the same instant. */
+  readonly verticalScaleInvalid: boolean;
   /** Linear scale known and the frame not angular: the metre columns are real metres. */
   readonly unitsVerified: boolean;
 }
@@ -256,6 +263,7 @@ function snapshotMeasure(measure: MeasureExportView): MeasureSnapshot {
     verticalUnitToMetres: measure.verticalUnitToMetres,
     geographicCrs: measure.geographicCrs,
     verticalRefused: measure.verticalRefused === true,
+    verticalScaleInvalid: measure.verticalUnitInvalid === true,
     unitsVerified: measure.crsKnown && !measure.geographicCrs,
   };
 }
@@ -430,6 +438,7 @@ export async function exportMeasurementsFile(
     // scalar metres-per-unit at all, so it is neither verified nor convertible.
     geographic: owned ? owned.geographic : snap.geographicCrs,
     verticalRefused: owned ? owned.verticalRefused : snap.verticalRefused,
+    verticalScaleInvalid: owned ? owned.verticalScaleInvalid : snap.verticalScaleInvalid,
     // A local / unknown-unit scan has an inert factor of 1, so the `_m` columns
     // are nominal, not metres — the evidence note then says so (M1). An angular
     // frame is unverified for a stronger reason: no scalar could make it metres.
@@ -647,6 +656,7 @@ export async function exportMeasurementIntegrityReport(
   const crsKnown = owned.frame ? owned.frame.unitsVerified : snap.unitsVerified;
   const geographic = owned.frame ? owned.frame.geographic : snap.geographicCrs;
   const verticalRefused = owned.frame ? owned.frame.verticalRefused : snap.verticalRefused;
+  const verticalScaleInvalid = owned.frame ? owned.frame.verticalScaleInvalid : snap.verticalScaleInvalid;
   const generatedAt = deps.now();
   const { integrityReportFile, resolveExportDigests, signReportText } = await deps.loadMeasurementReport();
   // The digest describes one source file; with several owning scans in one frame it is omitted.
@@ -669,6 +679,7 @@ export async function exportMeasurementIntegrityReport(
     // recorded as a null finding with the reason.
     geographic,
     verticalRefused,
+    verticalScaleInvalid,
   );
   const out = await textToWrite(f.text, deps, signReportText);
   if (out === null) return;
@@ -704,6 +715,7 @@ export async function collectMeasurementFindings(
   const verticalUnitToMetres = frame ? frame.verticalUnitToMetres : snap.verticalUnitToMetres;
   const geographic = frame ? frame.geographic : snap.geographicCrs;
   const verticalRefused = frame ? frame.verticalRefused : snap.verticalRefused;
+  const verticalScaleInvalid = frame ? frame.verticalScaleInvalid : snap.verticalScaleInvalid;
   const unitsVerified = frame ? frame.unitsVerified : snap.unitsVerified;
   const up = sharedUp(own, snap);
   if ('refused' in up) {
@@ -711,7 +723,7 @@ export async function collectMeasurementFindings(
     return [];
   }
   const { measurementsToFindings } = await deps.loadMeasurementReport();
-  return measurementsToFindings(own, up, unitToMetres, verticalUnitToMetres, { geographic, unitsVerified, verticalRefused });
+  return measurementsToFindings(own, up, unitToMetres, verticalUnitToMetres, { geographic, unitsVerified, verticalRefused, verticalScaleInvalid });
 }
 
 /**
@@ -730,6 +742,7 @@ export async function exportFindingsReport(
   // Geographic reads as unverified here too — see `exportIntegrityReport`.
   const geographic = deps.measure.geographicCrs;
   const verticalRefused = deps.measure.verticalRefused === true;
+  const verticalScaleInvalid = deps.measure.verticalUnitInvalid === true;
   const crsKnown = deps.measure.crsKnown && !geographic;
   const { findingsReportFile, resolveExportDigests, signReportText } = await deps.loadMeasurementReport();
   const digests = await resolveExportDigests(geo.source, geo.crs);
@@ -746,6 +759,7 @@ export async function exportFindingsReport(
     digests,
     geographic,
     verticalRefused,
+    verticalScaleInvalid,
   );
   const out = await textToWrite(f.text, deps, signReportText);
   if (out !== null) deps.downloadText(f.filename, out);

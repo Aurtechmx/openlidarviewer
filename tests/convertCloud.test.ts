@@ -240,15 +240,15 @@ describe('convertCloud — omitClassification guard', () => {
   });
 });
 
-describe('convertCloud — mesh up-axis is DETECTED, then normalised', () => {
+describe('convertCloud — mesh axes are written as stored unless the request rotates them', () => {
   const N = 40;
-  /** A height field authored in the given frame — enough surface to detect. */
+  /** A height field authored in the given frame. */
   function field(up: 'y' | 'z'): PointCloud {
     const pts: number[] = [];
     for (let i = 0; i < N; i++) {
       for (let j = 0; j < N; j++) {
-        // A clear hill: wide footprint, modest height — unambiguously a
-        // surface, so up-axis detection has something to decide with.
+        // A clear hill: wide footprint, modest height, so a shape classifier
+        // would call the Y-up one Y-up. The converter must not ask it.
         const e = 5 * Math.exp(-(((i - 20) ** 2 + (j - 20) ** 2) / 180));
         if (up === 'y') pts.push(i * 2, e, j * 2);
         else pts.push(i * 2, j * 2, e);
@@ -261,29 +261,26 @@ describe('convertCloud — mesh up-axis is DETECTED, then normalised', () => {
       name: 'field.ply',
     });
   }
-  it('rotates a DETECTED Y-up mesh so elevation lands in the Z column', () => {
-    // First authored point is (0, e, 0): east 0, elevation e (Y), north 0 (−Z)
-    // — the XYZ line must read 0, 0, e, not the raw storage order.
+  const elev = 5 * Math.exp(-((3 - 20) ** 2 + (0 - 20) ** 2) / 180);
+
+  it('writes a Y-up mesh in its stored axis order by default', () => {
+    // Authored point at grid (3, 0): (6, e30, 0), written as stored.
     const out = convertCloud(field('y'), { format: 'xyz' });
-    const e = 0;
-    const second = '';
-    expect(out.report.log.some((l) => /y-up/i.test(l.message))).toBe(true);
-    // Decisive coordinate check: authored point (3, sin(1)cos(0), 0) is line 3*N.
-    // Authored point at grid (3, 0): (6, e30, 0) → east 6, north 0, up e30.
-    const line = dataLines(out.file!.bytes)[3 * N];
-    const elev = 5 * Math.exp(-((3 - 20) ** 2 + (0 - 20) ** 2) / 180);
-    expect(line).toBe(`6.000 0.000 ${elev.toFixed(3)}`);
-    void e; void second;
+    expect(dataLines(out.file!.bytes)[3 * N]).toBe(`6.000 ${elev.toFixed(3)} 0.000`);
+    expect(out.report.log.some((l) => /y-up/i.test(l.message))).toBe(false);
   });
 
-  it('leaves a Z-up-AUTHORED ply untouched — the format table alone was wrong', () => {
-    // CloudCompare/PDAL-style tools write Z-up PLYs; hard-classifying the
-    // format as Y-up rotated real terrain into vertical walls in the terrain
-    // gather, caught by e2e. The converter uses the same detection.
+  it('rotates a Y-up mesh into Z-up only when the request asks for it', () => {
+    // (x, y, z) -> (x, -z, y): east 6, north 0, up e30.
+    const out = convertCloud(field('y'), { format: 'xyz', axisHandling: 'y-up-to-z-up' });
+    expect(dataLines(out.file!.bytes)[3 * N]).toBe(`6.000 0.000 ${elev.toFixed(3)}`);
+    expect(out.report.log.some((l) => /y-up/i.test(l.message))).toBe(true);
+    expect(out.report.crsNote).not.toMatch(/unchanged/);
+  });
+
+  it('leaves a Z-up-authored ply untouched', () => {
     const out = convertCloud(field('z'), { format: 'xyz' });
-    const line = dataLines(out.file!.bytes)[3 * N];
-    const elev = 5 * Math.exp(-((3 - 20) ** 2 + (0 - 20) ** 2) / 180);
-    expect(line).toBe(`6.000 0.000 ${elev.toFixed(3)}`);
+    expect(dataLines(out.file!.bytes)[3 * N]).toBe(`6.000 0.000 ${elev.toFixed(3)}`);
     expect(out.report.log.some((l) => /y-up/i.test(l.message))).toBe(false);
   });
 

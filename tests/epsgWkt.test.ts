@@ -51,9 +51,9 @@ describe('wktForEpsg', () => {
   });
 
   it('refuses codes it cannot derive rather than inventing them', () => {
-    // Zone 0 and 61 do not exist; 25829 (ETRS89 UTM 29N) is a different datum
-    // we have no parameters for; 5703 is vertical-only.
-    for (const code of [32600, 32661, 32700, 32761, 25829, 5703, 27700, 0, -1, 1.5, NaN]) {
+    // Zone 0 and 61 do not exist; 2231 and 9990 have no stored definition;
+    // 5703 is vertical-only.
+    for (const code of [32600, 32661, 32700, 32761, 2231, 9990, 5703, 0, -1, 1.5, NaN]) {
       expect(wktForEpsg(code)).toBeNull();
     }
   });

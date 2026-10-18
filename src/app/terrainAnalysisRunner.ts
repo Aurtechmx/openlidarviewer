@@ -23,6 +23,7 @@ import { ProcessService } from '../process/ProcessService';
 import type { ProductId, ScanFacts } from '../process/ProcessPlan';
 import type { AuthorizationCheck } from '../process/ProcessService';
 import { yUpOriginToCanonicalZUp } from '../terrain/canonicalFrame';
+import { detectedUpAxisNote } from '../terrain/gatherUpAxis';
 import type { AnalysePanel } from '../ui/AnalysePanel';
 // Shell-resident already (ExportPanel renders Export Health, main builds the
 // story inputs), so reading the Dataset Story here adds no chunk weight.
@@ -752,10 +753,13 @@ export function createTerrainAnalysisRunner(
       // Nothing gathers either because nothing is loaded or because several
       // visible layers would be combined without a proven shared frame; the
       // status names which, so the way out is clear.
+      // A frame the gather could not settle (glTF under a CRS, a Y-up mesh
+      // beside Z-up layers) says why; otherwise nothing is loaded or the
+      // layers have not proven they share a frame.
       analysePanel.setStatus(
-        viewer.clouds().length > 1
+        viewer.terrainGatherDecline ?? (viewer.clouds().length > 1
           ? 'Terrain analysis combines every visible, unlocked layer, and these layers have not proven they share a frame. Hide or lock all but one layer, then run.'
-          : 'Load a scan first, then run terrain analysis.',
+          : 'Load a scan first, then run terrain analysis.'),
       );
       return;
     }
@@ -884,23 +888,32 @@ export function createTerrainAnalysisRunner(
       // and can never hit a recovered core's different ones.
       lastCommittedCore = { core, datasetId: runDatasetId, crsRevision: runCrsRevision };
       refreshDatasetStory(analysePanel);
+      // A mesh with no CRS had its up axis read from the point layout; that is
+      // stated beside whatever else the status line says about this run.
+      const upAxisNote = detectedUpAxisNote(gathered.upAxisBasis, gathered.sourceUpAxis);
+      const status = (text: string | null): void => {
+        const line = [text, upAxisNote].filter((t): t is string => t !== null).join(' ');
+        if (line !== '') analysePanel.setStatus(line);
+      };
       if (withheldRecovered) {
         // The recovered core went through the worker bridge too. Its
         // main-thread fallback only runs under the sync-fallback ceiling, and a
         // recovered sample is normally far above it, so a failed worker makes
         // the recovery refuse and the display core take over instead.
-        analysePanel.setStatus(WITHHELD_RECOVERY_STATUS);
+        status(WITHHELD_RECOVERY_STATUS);
       } else if (coreSource === 'restored') {
-        analysePanel.setStatus(
+        status(
           'Terrain core restored from the on-device cache. The analysed points, the classification, the parameters and the method versions all matched.',
         );
       } else if (getLastTerrainComputePath() === 'fallback') {
         // The worker died and the core was small enough to rescue inline. The
         // result is real, but the page blocked while it ran, so say so rather
         // than let a successful-looking analysis hide a broken worker.
-        analysePanel.setStatus(
+        status(
           'Computed on the main thread because the analysis worker was unavailable; the page may have paused. Reload to restore the worker.',
         );
+      } else {
+        status(null);
       }
       // Contour Studio launcher: hand the panel the CRS frame facts (projected
       // vs geographic, vertical unit known) that live here on the CRS service.
@@ -990,7 +1003,7 @@ export function createTerrainAnalysisRunner(
   }): Promise<AnalyseContoursResult> {
     const viewer = getViewer();
     const gathered = viewer.gatherTerrainPositions();
-    if (!gathered) throw new Error('No scan loaded to build contours from.');
+    if (!gathered) throw new Error(viewer.terrainGatherDecline ?? 'No scan loaded to build contours from.');
     // Same frame capture as run() — an export from an interval re-pick keeps the
     // annotation markers aligned with the contours it just built.
     if (gathered.sourceUpAxis) lastSourceUpAxis = gathered.sourceUpAxis;

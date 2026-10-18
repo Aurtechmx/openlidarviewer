@@ -65,6 +65,9 @@ export function parseResolvedCrs(v: unknown): SerializedResolvedCrs | null {
     name: v.name,
     linearUnit: v.linearUnit as ResolvedCrs['linearUnit'],
     linearUnitToMetres: v.linearUnitToMetres,
+    // A valid non-named horizontal unit is known only by its factor; keep the
+    // flag only with a factor that can carry it.
+    ...(v.linearUnitByFactor === true && v.linearUnit === 'unknown' && v.linearUnitToMetres > 0 ? { linearUnitByFactor: true as const } : {}),
     source: v.source as ResolvedCrs['source'],
     confidence: v.confidence as ResolvedCrs['confidence'],
     userConfirmed: v.userConfirmed,
@@ -78,9 +81,12 @@ export function parseResolvedCrs(v: unknown): SerializedResolvedCrs | null {
     ...(typeof v.verticalDatum === 'string' && v.verticalDatum.length > 0
       ? { verticalDatum: v.verticalDatum }
       : {}),
+    // A declared vertical unit that could not be read was saved as a
+    // non-finite factor, which JSON writes as null. It comes back invalid
+    // (NaN), never absent: absent would let heights borrow the horizontal unit.
     ...(isFiniteNumber(v.verticalUnitToMetres) && v.verticalUnitToMetres > 0
       ? { verticalUnitToMetres: v.verticalUnitToMetres }
-      : {}),
+      : 'verticalUnitToMetres' in v && v.verticalUnitToMetres !== undefined ? { verticalUnitToMetres: Number.NaN } : {}),
     ...(typeof v.verticalLinearUnit === 'string' && CRS_LINEAR_UNITS.includes(v.verticalLinearUnit as never)
       ? { verticalLinearUnit: v.verticalLinearUnit as ResolvedCrs['linearUnit'] }
       : {}),

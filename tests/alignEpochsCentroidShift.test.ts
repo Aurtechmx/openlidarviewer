@@ -7,6 +7,8 @@ import type { EpochCloud } from '../src/terrain/change/compareEpochs';
  * The shift an alignment states is the displacement at the before sample's
  * centroid. The transform's translation turns its yaw about the world origin,
  * so at projected coordinates a fraction of a degree reads as kilometres.
+ * The epochs declare one CRS, so these tests opt in to a fit with
+ * `commonFrame: 'estimate'`; by default their coordinates are kept.
  */
 
 const ORIGIN: [number, number, number] = [500000, 4000000, 0];
@@ -30,7 +32,7 @@ const epoch = (positions: Float32Array): EpochCloud => ({
 });
 
 describe('alignment shift at UTM coordinates', () => {
-  const { alignment } = alignEpochClouds(epoch(lattice()), epoch(lattice(0.5, 0.3, -0.2)), { maxResidualM: 10, horizontalUnitKnown: true });
+  const { alignment } = alignEpochClouds(epoch(lattice()), epoch(lattice(0.5, 0.3, -0.2)), { maxResidualM: 10, horizontalUnitKnown: true, commonFrame: 'estimate' });
 
   test('the 0.5° yaw is recovered and applied', () => {
     expect(alignment.applied).toBe(true);

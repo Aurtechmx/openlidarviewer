@@ -34,6 +34,8 @@ export interface SpacingCrs {
   readonly linearUnit?: CrsLinearUnit;
   /** Linear unit → metres factor (1 metre, ~0.3048 foot). Used to convert feet to m. */
   readonly linearUnitToMetres?: number;
+  /** A valid unit the token cannot name (centimetres, a yard): converted by its factor. */
+  readonly linearUnitByFactor?: boolean;
   /** Geographic (degrees) CRS — a linear spacing is undefined. */
   readonly isGeographic?: boolean;
   /**
@@ -211,6 +213,12 @@ export function spacingRowFor(
     return copcRow(`${spacing.toFixed(2)} m`, 'Root-node point spacing in metres.');
   }
   let title = 'Linear unit unconfirmed — spacing shown in the source CRS units, not metres.';
+  if (crs?.linearUnit === 'unknown' && crs.linearUnitByFactor === true) {
+    const f = crs.linearUnitToMetres;
+    if (f !== undefined && Number.isFinite(f) && f > 0) {
+      return copcRow(`${(spacing * f).toFixed(2)} m`, `Root-node point spacing, converted from the source unit (${f} m) to metres.`);
+    }
+  }
   if (crs?.linearUnit === 'foot' || crs?.linearUnit === 'us-survey-foot') {
     // Spacing is in feet; convert to metres so the number is comparable.
     const factor = crs.linearUnitToMetres;

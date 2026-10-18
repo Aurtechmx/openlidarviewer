@@ -374,11 +374,16 @@ export function buildMeasurementRows(
    * reads "not available" too. `SpatialContext.verticalMetricRefused`.
    */
   verticalRefused = false,
+  /**
+   * True when the source declares a vertical unit that cannot be read: every
+   * figure that reads Z reads "not available" with the reason.
+   */
+  verticalScaleInvalid = false,
 ): readonly ReportMeasurementRow[] {
   const f = Number.isFinite(unitToMetres) && unitToMetres > 0 ? unitToMetres : 1;
   const vf = Number.isFinite(verticalToMetres) && verticalToMetres > 0 ? verticalToMetres : f;
   return measurements.map((m) => {
-    const note = refusalNote(m, geographicCrs, verticalRefused);
+    const note = refusalNote(m, geographicCrs, verticalRefused, verticalScaleInvalid);
     const refused = note !== null;
     return {
       name: m.name,

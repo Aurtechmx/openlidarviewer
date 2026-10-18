@@ -968,29 +968,31 @@ claims:
   # ── Change detection ────────────────────────────────────────────────────────
   - claimId: EPOCH-ALIGN
     product: Epoch alignment
-    algorithm: ICP (yaw + horizontal translation model; full model optional)
+    algorithm: ICP (yaw + horizontal translation applied; local-frame pairs only, observability-gated)
     methodId: olv.registration.epoch-horizontal-icp
     algorithmVersion: v0.5.x
-    claim: "Rigid alignment of two epochs; horizontal-only model preserves the vertical signal."
+    claim: "Epochs that declare one horizontal CRS are compared in their supplied coordinates with no registration estimated. Pairs without a common CRS are rigidly aligned only when the surface constrains yaw, x, y and z independently."
     currentEvidence: E2_ANALYTICALLY_VERIFIED
     requiredEvidence: E5_EXTERNALLY_VALIDATED
     supportingTests: [tests/alignEpochs*.test.ts, tests/compareEpochs*.test.ts]
     supportingDatasets: [synthetic epoch pairs]
     units: [metres]
     crsDatum: "Refuses cross-datum / unknown-datum quantitative comparison."
-    assumptions: ["applied permissively today — refusal-by-default gates are Phase 9", "epochs that declare one CRS are solved from the unmoved pose with point-to-plane pairs within three mean point spacings of the before sample; the overlap is measured at that distance, and a fit with overlap under 50 %, a residual over 0.75 spacings or a move beyond the pairing distance is withheld"]
-    failureModes: ["low overlap", "stride sampling spatial bias", "geographic-frame ICP", "a real misregistration larger than about three point spacings is withheld, not corrected", "horizontal shift over flat ground is unconstrained and left near zero"]
+    assumptions: ["epochs that declare one horizontal CRS keep their supplied coordinates: no fit runs, no shift or yaw is applied, and registration uncertainty is not quantified", "pairs without a common declared CRS are fitted only when, at every iteration and before damping, the point-to-plane information matrix of yaw, x, y and z has an eigenvalue ratio and a conditional horizontal information of at least 0.01; the overlap is measured at three mean point spacings, and a fit with overlap under 50 % or a residual over 0.75 spacings is withheld"]
+    failureModes: ["a rigid fit cannot separate a horizontal shift along a slope from a real height change; a plane or a single slope is refused as unobservable", "a real horizontal misregistration between two epochs that declare one CRS is not estimated or corrected and appears as change", "non-uniform real change on observable relief can still bias a local-frame fit", "low overlap", "stride sampling spatial bias", "geographic-frame ICP"]
     exportAllowed: true
-    userLabel: "Yaw + horizontal translation (vertical signal preserved)"
+    userLabel: "Yaw + horizontal translation, local frames only (observability-gated)"
     softwareStatus: shipping
     evidenceLevel: E2_ANALYTICALLY_VERIFIED
     externalValidationStatus: pending
     approvedClaim: "Rigid alignment with reported residuals on synthetic pairs."
-    prohibitedClaim: ["validated registration accuracy", "safe cross-datum comparison"]
+    prohibitedClaim: ["validated registration accuracy", "safe cross-datum comparison", "a shared declared CRS as a registration accuracy figure", "a small fitting residual as validation of the alignment", "registration uncertainty (σreg) from any fit residual"]
     scope:
       supported: []
       unsupported:
         - "Registration accuracy. Residuals are reported on synthetic epoch pairs and are not a validated accuracy figure."
+        - "Registration of two epochs that declare one horizontal CRS. Their coordinates are kept as supplied; agreement of the declared CRS is not an accuracy statement, and registration uncertainty is not quantified."
+        - "Alignment over a plane, a single slope or any surface that does not constrain yaw, x, y and z independently. Such a fit is refused as unobservable."
         - "Cross-datum and unknown-datum pairs, which are refused for quantitative comparison."
         - "Low-overlap pairs, and the spatial bias stride sampling introduces."
 
@@ -1007,14 +1009,14 @@ claims:
     units: [metres]
     crsDatum: "Blocks cross-datum / unknown-datum comparison."
     assumptions: ["single global LoD today — per-cell LoD95 is Phase 10", "cells treated independently", "a cell is compared only where both DTMs hold a measured height, on a shared cell at least twice the sparser epoch's mean point spacing; cells interpolated or extrapolated in either epoch are left out and their count and share reported"]
-    failureModes: ["registration error", "sparse ground returns leave cells between them uncompared", "spatial covariance ignored"]
+    failureModes: ["registration error, which is not estimated for epochs that declare one CRS (their coordinates are kept) and appears as change", "sparse ground returns leave cells between them uncompared", "spatial covariance ignored"]
     exportAllowed: true
     userLabel: "Change raster (single-LoD, exploratory uncertainty)"
     softwareStatus: shipping
     evidenceLevel: E4_CROSS_IMPLEMENTATION_VALIDATED
     externalValidationStatus: partial
     approvedClaim: "Per-cell change vs a global LoD on synthetic pairs."
-    prohibitedClaim: ["validated change accuracy", "per-cell LoD95 (pending)"]
+    prohibitedClaim: ["validated change accuracy", "per-cell LoD95 (pending)", "change corrected for registration error between epochs that declare one CRS"]
     scope:
       supported:
         - datasetId: OLV-DS-075-CHANGE-EPOCH-PAIRS
@@ -1041,7 +1043,7 @@ claims:
     units: [cubic-metres]
     crsDatum: "Blocks cross-datum."
     assumptions: ["uncertainty is exploratory model-based; spatial correlation unquantified", "the thresholded gross gain/loss (and thresholded net) are a cell-centre Riemann sum over the above-LoD cells, so sub-LoD mass is excluded by design", "the raw net volume is a cell-centre Riemann sum over ALL comparable cells with no LoD threshold, so it retains sub-LoD mass; its evidence is the analytical oracle only, distinct from the E4 the thresholded gross earned"]
-    failureModes: ["propagates registration + surface error", "quadrature defect on a curved surface, second order in cell size"]
+    failureModes: ["propagates registration + surface error; registration error is not estimated for epochs that declare one CRS", "quadrature defect on a curved surface, second order in cell size"]
     exportAllowed: true
     userLabel: "Analytically-verified change volume (exploratory)"
     softwareStatus: shipping

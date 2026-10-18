@@ -155,6 +155,12 @@ export interface DemPackageOptions {
    * bounds / elevation unit so a foot-based scan reads "ft" / "feet" instead of
    * the metre default. Omitted ⇒ the standing metre assumption (back-compat).
    */
+  /**
+   * Metres per horizontal unit when the CRS states a valid unit that
+   * `linearUnit` cannot name (a centimetre or kilometre grid). Ground
+   * distances (the attention residual's cell size) use it.
+   */
+  readonly horizontalUnitToMetres?: number | null;
   readonly linearUnit?: DemLinearUnit;
   /** ISO generation timestamp. Default `new Date().toISOString()`. */
   readonly generationDateIso?: string;
@@ -802,8 +808,10 @@ export function buildDemPackage(
   let residual: ReturnType<typeof reconstructionResidual> | null = null;
   const vRef = evVUnit === 'unknown' ? null : verticalReferenceInUnit(evFactor);
   if (evidenceBytes && hasEvidenceArrays(dtm) && options.attention === true) {
+    const byFactor = options.horizontalUnitToMetres;
     const hFactor = options.linearUnit === 'foot' ? UNIT_FACTORS.M_PER_FT
-      : options.linearUnit === 'us-survey-foot' ? UNIT_FACTORS.M_PER_US_FT : 1;
+      : options.linearUnit === 'us-survey-foot' ? UNIT_FACTORS.M_PER_US_FT
+        : options.linearUnit === 'unknown' && byFactor != null && Number.isFinite(byFactor) && byFactor > 0 ? byFactor : 1;
     const lat = isGeographic ? yll + (dtm.rows * cellSize) / 2 : 0;
     const step = horizontalCellMetresXY(cellSize, isGeographic, lat, hFactor);
     residual = reconstructionResidual(dtm, {

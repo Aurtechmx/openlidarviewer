@@ -115,7 +115,7 @@ describe('changeRasterSidecars', () => {
 
   it('refuses an unknown CRS and a CRS with no writable definition', () => {
     expect(() => changeRasterSidecars({ ...common, crs: { kind: 'unknown', name: '?' } })).toThrow(ChangeRasterRefusal);
-    expect(() => changeRasterSidecars({ ...common, crs: { kind: 'geographic', name: 'Odd', epsg: 4258 } })).toThrow(/no projection definition/);
+    expect(() => changeRasterSidecars({ ...common, crs: { kind: 'geographic', name: 'Odd', epsg: 9990 } })).toThrow(/no projection definition/);
     expect(() => changeRasterSidecars({ ...common, crs: { kind: 'projected', name: 'Odd' } })).toThrow(ChangeRasterRefusal);
   });
 });

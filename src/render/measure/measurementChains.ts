@@ -41,7 +41,7 @@
 import { areaRingVerdict } from './areaValidity';
 import type { Measurement, MeasurementKind, UnitSystem } from './types';
 import { displayDecimals, formatArea, formatLength, formatVolume } from './format';
-import { GEOGRAPHIC_NOT_AVAILABLE, VERTICAL_NOT_AVAILABLE } from './types';
+import { GEOGRAPHIC_NOT_AVAILABLE, VERTICAL_NOT_AVAILABLE, VERTICAL_SCALE_NOT_AVAILABLE } from './types';
 import {
   angleAtVertex,
   boxFromCorners,
@@ -101,6 +101,12 @@ export interface ChainScale {
    * height, grade and the volume dimensions are refused too.
    */
   readonly verticalRefused?: boolean;
+  /**
+   * True when the source declares a vertical unit that cannot be read. Every
+   * dimension reads Z at that scale (a 3D length, a tilted area, an angle, a
+   * height, a grade, a volume), so every one is refused.
+   */
+  readonly verticalScaleInvalid?: boolean;
 }
 
 /**
@@ -287,8 +293,10 @@ export function aggregate(
     return { value: Number.NaN, unit: '', contributingCount: 0, totalCount, operation, dimension, refusal: VERTICAL_NOT_AVAILABLE };
   }
   // A geographic frame refuses every figure that mixes degree X/Y with a
-  // linear Z; only a height (along up, in the Z unit) is left.
-  if (scale.geographic === true && dimension !== 'height') {
+  // linear Z; only a height (along up, in the Z unit) is left. An unreadable
+  // vertical unit refuses the rest, the height included.
+  const geographicRefusal = scale.geographic === true && dimension !== 'height';
+  if (geographicRefusal || scale.verticalScaleInvalid === true) {
     return {
       value: Number.NaN,
       unit: '',
@@ -296,7 +304,7 @@ export function aggregate(
       totalCount,
       operation,
       dimension,
-      refusal: GEOGRAPHIC_NOT_AVAILABLE,
+      refusal: geographicRefusal ? GEOGRAPHIC_NOT_AVAILABLE : VERTICAL_SCALE_NOT_AVAILABLE,
     };
   }
   // Geometry values arrive in render (source) units; each value is converted

@@ -26,7 +26,7 @@ const Z: Vec3 = [0, 0, 1];
 const Y: Vec3 = [0, 1, 0];
 
 const frame = (up: Vec3): MeasureUnitFrame => ({
-  unitToMetres: 1, verticalUnitToMetres: 1, verticalUnitKnown: true, crsKnown: true,
+  unitToMetres: 1, verticalUnitToMetres: 1, verticalUnitKnown: true, verticalUnitInvalid: false, crsKnown: true,
   geographic: false, verticalRefused: false, projected: true, up,
 });
 const FRAMES: Record<string, MeasureUnitFrame> = { 'layer-las': frame(Z), 'layer-ply': frame(Y) };

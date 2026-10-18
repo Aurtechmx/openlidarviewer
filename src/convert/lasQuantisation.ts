@@ -41,7 +41,16 @@ export interface QuantisationContext {
   readonly sourceOrigin: readonly [number, number, number];
   /** Why the exported coordinates differ from the source's, or null when they do not. */
   readonly coordinatesChanged: string | null;
+  /**
+   * True when the output CRS is geographic, so X and Y are degrees. A source
+   * scale coarser than {@link ANGULAR_SCALE_MAX} is then not kept: a projected
+   * source's 1 mm step read as degrees is about 100 m on the ground.
+   */
+  readonly angularOutput?: boolean;
 }
+
+/** Coarsest X/Y scale kept for degree coordinates: 1e-6 degree, about 0.1 m. */
+export const ANGULAR_SCALE_MAX = 1e-6;
 
 export type QuantisationStatus = 'kept-exact' | 'kept-approximate' | 'requantised';
 
@@ -139,6 +148,12 @@ export function planQuantisation(
   if (!source) return requantised('the source scale and offset are not recorded for this cloud');
   if (!isValidQuantisation(source)) return requantised('the source header scale or offset is not valid');
   if (ctx.coordinatesChanged) return requantised(ctx.coordinatesChanged);
+  if (ctx.angularOutput && (source.scale[0] > ANGULAR_SCALE_MAX || source.scale[1] > ANGULAR_SCALE_MAX)) {
+    return requantised(
+      `the output CRS is geographic and the source X/Y scale of ${fmt(source.scale.slice(0, 2))} is coarser than ` +
+        `${ANGULAR_SCALE_MAX} degree; X and Y are written at 1e-7 degree steps`,
+    );
+  }
   if (g.count === 0) return requantised('there are no points');
 
   const { min, max } = globalBounds(g);

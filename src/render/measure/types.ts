@@ -85,14 +85,22 @@ export function verticalRefusesKind(kind: MeasurementKind): boolean {
  * live grade, the overlay labels and every export call this one rule, so a
  * figure the panel withholds never leaves in a file.
  */
-export function frameRefusesKind(kind: MeasurementKind, horizontalRefused: boolean, verticalRefused = false): boolean {
-  return frameRefusalText(kind, horizontalRefused, verticalRefused) !== null;
+export function frameRefusesKind(kind: MeasurementKind, horizontalRefused: boolean, verticalRefused = false, verticalScaleInvalid = false): boolean {
+  return frameRefusalText(kind, horizontalRefused, verticalRefused, verticalScaleInvalid) !== null;
 }
 
-/** The sentence a refused figure prints in place of its number, or null when it is allowed. */
-export function frameRefusalText(kind: MeasurementKind, horizontalRefused: boolean, verticalRefused = false): string | null {
+/**
+ * The sentence a refused figure prints in place of its number, or null when it
+ * is allowed. `verticalScaleInvalid` is a declared vertical unit that cannot be
+ * read (`SpatialContext.verticalScaleState === 'invalid'`): every kind's
+ * headline reads Z at that scale (a height directly; a 3D length, tilted area,
+ * angle, grade, profile, box or volume through it), so every kind is refused.
+ * Purely horizontal figures survive in the exports (see `measurementExport`).
+ */
+export function frameRefusalText(kind: MeasurementKind, horizontalRefused: boolean, verticalRefused = false, verticalScaleInvalid = false): string | null {
   if (verticalRefused && verticalRefusesKind(kind)) return VERTICAL_NOT_AVAILABLE;
   if (horizontalRefused && geographicRefusesKind(kind)) return GEOGRAPHIC_NOT_AVAILABLE;
+  if (verticalScaleInvalid) return VERTICAL_SCALE_NOT_AVAILABLE;
   return null;
 }
 
@@ -110,6 +118,14 @@ export const GEOGRAPHIC_NOT_AVAILABLE =
  */
 export const VERTICAL_NOT_AVAILABLE =
   'not available: the frame has no valid local vertical (geocentric axis or depth-positive-down reference), so this is not an elevation figure';
+
+/**
+ * What a figure prints when the source declares a vertical unit that cannot be
+ * read (an angular unit, or a zero, negative or non-finite factor). Heights
+ * have no metres value, and neither does any figure that combines them.
+ */
+export const VERTICAL_SCALE_NOT_AVAILABLE =
+  'not available: height unit could not be interpreted; metric height unavailable, and so is any figure that uses it';
 
 /** Unit system for displayed values; toggled live from the Measurements panel. */
 export type UnitSystem = 'metric' | 'imperial';
@@ -499,6 +515,11 @@ export interface MeasureUnitFrame {
    * known unit at all.
    */
   readonly verticalUnitKnown: boolean;
+  /**
+   * The file declares a vertical unit that cannot be read. Every figure that
+   * reads Z is withheld; `verticalUnitToMetres` is then only a drawing factor.
+   */
+  readonly verticalUnitInvalid: boolean;
   readonly crsKnown: boolean;
   readonly geographic: boolean;
   readonly verticalRefused: boolean;
@@ -536,6 +557,7 @@ export const UNRESOLVED_UNIT_FRAME: MeasureUnitFrame = Object.freeze({
   unitToMetres: 1,
   verticalUnitToMetres: null,
   verticalUnitKnown: false,
+  verticalUnitInvalid: false,
   crsKnown: false,
   geographic: false,
   verticalRefused: false,
@@ -546,7 +568,7 @@ export const UNRESOLVED_UNIT_FRAME: MeasureUnitFrame = Object.freeze({
 export function sameUnitFrame(a: MeasureUnitFrame, b: MeasureUnitFrame): boolean {
   return a.unitToMetres === b.unitToMetres &&
     (a.verticalUnitToMetres ?? a.unitToMetres) === (b.verticalUnitToMetres ?? b.unitToMetres) &&
-    a.verticalUnitKnown === b.verticalUnitKnown &&
+    a.verticalUnitKnown === b.verticalUnitKnown && a.verticalUnitInvalid === b.verticalUnitInvalid &&
     a.crsKnown === b.crsKnown && a.geographic === b.geographic &&
     a.verticalRefused === b.verticalRefused && a.projected === b.projected;
 }

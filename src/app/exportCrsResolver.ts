@@ -53,7 +53,7 @@ export function resolvedExportCrs(resolved: ResolvedCrs | null): ExportCloudCrs 
     wkt: resolved.wkt ?? null,
     key: crsKeyOf(resolved),
     name: resolved.name,
-    unit: linearUnitLabel(resolved.linearUnit),
+    unit: linearUnitLabel(resolved.linearUnit, resolved),
     epsg: resolved.epsg ?? null,
     resolved,
   };

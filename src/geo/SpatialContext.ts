@@ -65,6 +65,9 @@ import { UNIT_FACTORS } from '../units/units';
  */
 export type SpatialUpAxis = 'z' | 'y' | 'unknown';
 
+/** Whether a vertical unit was declared and can be read; see `SpatialContext.verticalScaleState`. */
+export type VerticalScaleState = 'valid' | 'absent' | 'invalid';
+
 // ─────────────────────────────────────────────────────────────────────────────
 // The model
 // ─────────────────────────────────────────────────────────────────────────────
@@ -124,6 +127,16 @@ export interface SpatialContext {
    * one, and vice versa. An absent factor is `false`, never a defaulted 1.
    */
   readonly verticalScaleKnown: boolean;
+  /**
+   * The vertical scale's validity, three ways: `'valid'` (a finite, positive
+   * declared factor, {@link verticalScaleKnown}), `'absent'` (no vertical unit
+   * declared; a consumer may borrow the horizontal unit under its stated
+   * policy) and `'invalid'` (a vertical unit was declared and cannot be read:
+   * an angular unit, a zero, negative or non-finite factor). An invalid scale
+   * never borrows the horizontal unit: every height and every figure built on
+   * one is withheld. Carried separately from any factor used only to draw.
+   */
+  readonly verticalScaleState: VerticalScaleState;
   /**
    * Whether the vertical REFERENCE SURFACE is known, i.e.
    * `verticalReference !== 'unknown'`. Separate from
@@ -252,8 +265,9 @@ export function spatialContextFrom(
 
   // THE gate: unit must be real AND the ladder must permit a metric headline.
   // The two catch different failures — the ladder alone passes a projected CRS
-  // whose unit is 'unknown' (British foot, say: kind is still 'projected'), and
-  // only `isLinearUnitKnown` refuses it; the unit gate alone would pass a
+  // whose unit is 'unknown' with no declared factor (kind is still
+  // 'projected'), and only `isLinearUnitKnown` refuses it; a declared valid
+  // factor that is not a named unit (centimetres, a yard) is known by it; the unit gate alone would pass a
   // geographic CRS if its factor were finite, and only the ladder refuses that.
   const metricClaimsPermitted = linearUnitKnown && verdict.canDisplayMetric;
 
@@ -271,6 +285,11 @@ export function spatialContextFrom(
     verticalScale !== undefined && Number.isFinite(verticalScale) && verticalScale > 0;
   const verticalLinearUnit =
     crs?.verticalLinearUnit ?? (verticalScale !== undefined ? linearUnitForFactor(verticalScale) : undefined);
+  // A declared factor that is not a length, or a token of 'unknown' with no
+  // factor (a saved session drops a non-finite factor), is invalid, not absent.
+  const verticalScaleState: VerticalScaleState = verticalScaleKnown
+    ? 'valid'
+    : verticalScale !== undefined || verticalLinearUnit === 'unknown' ? 'invalid' : 'absent';
 
   return {
     crsName: resolved.name,
@@ -288,6 +307,7 @@ export function spatialContextFrom(
     verticalUnitToMetres: crs?.verticalUnitToMetres,
     verticalLinearUnit,
     verticalScaleKnown,
+    verticalScaleState,
     verticalReferenceKnown: verticalReference !== 'unknown',
     verticalAxisDown: verticalReference === 'depth' || crs?.verticalAxisDown === true,
     horizontalMetricRefused: resolved.kind === 'geographic' || refusesHorizontalGround(verdict.validity),
@@ -419,13 +439,25 @@ export function verticalMetresPerUnit(
   // degenerate (zero, negative, non-finite) the source is corrupt, and
   // borrowing the horizontal factor would answer a question the file already
   // answered wrongly — so that case fails closed rather than falling through.
-  if (ctx.verticalUnitToMetres !== undefined) {
+  if (ctx.verticalUnitToMetres !== undefined || ctx.verticalScaleState === 'invalid') {
     return ctx.verticalScaleKnown ? ctx.verticalUnitToMetres : undefined;
   }
   if (fallback === 'none') return undefined;
   if (fallback === 'horizontal-when-known' && !ctx.linearUnitKnown) return undefined;
   const h = ctx.linearUnitToMetres;
   return Number.isFinite(h) && h > 0 ? h : undefined;
+}
+
+/**
+ * Why a volume cannot be stated in metres in this frame, or null when it can.
+ * The CRS verdict's reason first (a geographic or unknown frame); then a
+ * vertical unit the source declares but that cannot be read, which no
+ * horizontal factor may stand in for.
+ */
+export function volumeClaimRefusal(ctx: SpatialContext, verdict: { readonly canDisplayMetric: boolean; readonly reason: string; readonly suggestion: string }): string | null {
+  if (!verdict.canDisplayMetric) return `${verdict.reason} ${verdict.suggestion}`;
+  if (ctx.verticalScaleState === 'invalid') return 'Height unit could not be interpreted; metric height unavailable, so no volume is stated. Correct the vertical unit of the source CRS.';
+  return null;
 }
 
 /**
@@ -437,7 +469,7 @@ export function verticalMetresPerUnit(
  */
 export function volumeUnitCaveat(ctx: SpatialContext, validity: string): string {
   if (validity === 'safe-explicit-local') return ' · units assumed metres';
-  return ctx.verticalUnitToMetres === undefined ? ' · heights assumed in the horizontal unit (vertical unit not declared)' : '';
+  return ctx.verticalUnitToMetres === undefined && ctx.verticalScaleState !== 'invalid' ? ' · heights assumed in the horizontal unit (vertical unit not declared)' : '';
 }
 
 /**

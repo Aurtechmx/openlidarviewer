@@ -155,7 +155,7 @@
       ]
     },
     "src/render/Viewer.ts": {
-      "runtime": 74,
+      "runtime": 73,
       "typeOnly": 18,
       "dynamic": 1,
       "modules": [
@@ -228,8 +228,7 @@
         "src/render/touchTapGate.ts",
         "src/render/touchTracker.ts",
         "src/render/viewerRenderBootstrap.ts",
-        "src/terrain/canonicalFrame.ts",
-        "src/terrain/scanShape.ts",
+        "src/terrain/gatherUpAxis.ts",
         "three/addons/controls/OrbitControls.js",
         "three/tsl",
         "three/webgpu"

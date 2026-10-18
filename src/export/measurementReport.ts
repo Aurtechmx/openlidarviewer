@@ -35,6 +35,7 @@ import {
   geographicRefusalCaveat,
   unverifiedUnitsCaveat,
   verticalRefusalCaveat,
+  verticalScaleRefusalCaveat,
   type EvidenceStatus,
 } from '../validation/exportEvidenceNote';
 import type { ClaimId } from '../validation/evidenceRegistry';
@@ -127,6 +128,11 @@ export interface FindingsFrame {
    */
   readonly verticalRefused?: boolean;
   /**
+   * True when the source declares a vertical unit that cannot be read: every
+   * figure that reads Z becomes a null finding with the reason.
+   */
+  readonly verticalScaleInvalid?: boolean;
+  /**
    * False when the linear scale is not confirmed: the unit then names source
    * units rather than metres. Defaults true.
    */
@@ -162,7 +168,7 @@ export function measurementsToFindings(
     const metrics = measurementMetrics(m, up, unitToMetres, verticalToMetres);
     // A figure the live tool refuses is recorded as an explicit null with the
     // reason, never as a number. Only complete measurements produce a finding.
-    const refused = refusalNote(m, frame.geographic, frame.verticalRefused);
+    const refused = refusalNote(m, frame.geographic, frame.verticalRefused, frame.verticalScaleInvalid);
     if (refused) {
       if (Object.keys(metrics).length === 0) return;
       const label = m.name?.trim() || `${m.kind} ${i + 1}`;
@@ -331,6 +337,8 @@ export function integrityReportFile(
   geographic: boolean = false,
   /** True when the frame has no valid local vertical; see {@link FindingsFrame}. */
   verticalRefused: boolean = false,
+  /** True when the vertical unit is declared and cannot be read; see {@link FindingsFrame}. */
+  verticalScaleInvalid: boolean = false,
 ): IntegrityReportFile {
   const gate = exportGate(claimId);
   // A product the register disables entirely never leaves — not even as an
@@ -345,13 +353,13 @@ export function integrityReportFile(
     generatedAt,
     classificationEpoch,
     software,
-    notes: reportNotes(unitsVerified, crsName, geographic, verticalRefused),
+    notes: reportNotes(unitsVerified, crsName, geographic, verticalRefused, verticalScaleInvalid),
     digests,
-  }, verticalToMetres, undefined, { geographic, unitsVerified, verticalRefused });
+  }, verticalToMetres, undefined, { geographic, unitsVerified, verticalRefused, verticalScaleInvalid });
   return {
     filename: `${datasetId}-report.json`,
     text: JSON.stringify(manifest, null, 2),
-    evidence: evidenceNote(claimId) + unverifiedUnitsCaveat(unitsVerified) + geographicRefusalCaveat(geographic) + verticalRefusalCaveat(verticalRefused),
+    evidence: evidenceNote(claimId) + unverifiedUnitsCaveat(unitsVerified) + geographicRefusalCaveat(geographic) + verticalRefusalCaveat(verticalRefused) + verticalScaleRefusalCaveat(verticalScaleInvalid),
     evidenceStatus: evidenceStatus(claimId),
     exploratory: gate.exploratoryOnly,
   };
@@ -378,6 +386,8 @@ export function findingsReportFile(
   geographic: boolean = false,
   /** True when the frame has no valid local vertical; adds the note saying so. */
   verticalRefused: boolean = false,
+  /** True when the vertical unit is declared and cannot be read; adds the note saying so. */
+  verticalScaleInvalid: boolean = false,
 ): IntegrityReportFile {
   const gate = exportGate(claimId);
   if (!gate.allowed && !gate.exploratoryOnly) {
@@ -389,12 +399,12 @@ export function findingsReportFile(
     software,
     classificationEpoch,
     findings: [...findings],
-    notes: reportNotes(unitsVerified, crsName, geographic, verticalRefused),
+    notes: reportNotes(unitsVerified, crsName, geographic, verticalRefused, verticalScaleInvalid),
   });
   return {
     filename: `${datasetId}-findings.json`,
     text: JSON.stringify(manifest, null, 2),
-    evidence: evidenceNote(claimId) + unverifiedUnitsCaveat(unitsVerified) + geographicRefusalCaveat(geographic) + verticalRefusalCaveat(verticalRefused),
+    evidence: evidenceNote(claimId) + unverifiedUnitsCaveat(unitsVerified) + geographicRefusalCaveat(geographic) + verticalRefusalCaveat(verticalRefused) + verticalScaleRefusalCaveat(verticalScaleInvalid),
     evidenceStatus: evidenceStatus(claimId),
     exploratory: gate.exploratoryOnly,
   };
@@ -410,7 +420,7 @@ export function findingsReportFile(
  * for the same scan renamed their columns and carried the note. These go
  * INTO the manifest, where the digest covers them.
  */
-function reportNotes(unitsVerified: boolean, crsName: string | undefined, geographic = false, verticalRefused = false): string[] {
+function reportNotes(unitsVerified: boolean, crsName: string | undefined, geographic = false, verticalRefused = false, verticalScaleInvalid = false): string[] {
   const notes: string[] = [];
   const units = unverifiedUnitsCaveat(unitsVerified).trim();
   if (units) notes.push(units);
@@ -420,6 +430,8 @@ function reportNotes(unitsVerified: boolean, crsName: string | undefined, geogra
   if (geo) notes.push(geo);
   const vertical = verticalRefusalCaveat(verticalRefused).trim();
   if (vertical) notes.push(vertical);
+  const scale = verticalScaleRefusalCaveat(verticalScaleInvalid).trim();
+  if (scale) notes.push(scale);
   // An absent `crs` key is indistinguishable from an older build that did not
   // record one. Saying so is shorter than leaving the reader to guess.
   if (!crsName) {
