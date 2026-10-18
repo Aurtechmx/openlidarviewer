@@ -2580,6 +2580,7 @@ export class MeasureController {
         this._appendMeasurement(m, vertices, edges, polygons, labels);
         this._refuseGeographicLabels(m, labels, from);
       });
+      if (this._drag?.id === m.id) for (let i = from; i < labels.length; i++) labels[i] = { ...labels[i]!, priority: true };
     }
     const d = this._draft;
     if (d) {
@@ -2588,6 +2589,7 @@ export class MeasureController {
         this._appendDraft(d, vertices, edges, polygons, labels);
         this._refuseGeographicLabels(d, labels, from);
       });
+      for (let i = from; i < labels.length; i++) labels[i] = { ...labels[i]!, priority: true };
     }
     return { polygons, edges, vertices, labels };
   }
