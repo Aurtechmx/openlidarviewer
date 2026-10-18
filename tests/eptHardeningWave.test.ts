@@ -325,3 +325,52 @@ test('#2 a laszip tile whose decoded count matches the hierarchy count passes', 
   const decoded = await decoder.decode(TILE_HEADER_100.slice(0), META_100);
   expect(decoded.pointCount).toBe(100);
 });
+
+// ── total-node ceiling ───────────────────────────────────────────────────────
+
+/** A synthetic hierarchy source: the root links to one sub-file per octant, each holding `perFile` nodes. */
+function wideHierarchy(perFile: number): (key: EptKey) => Promise<string> {
+  return async (key) => {
+    if (key.d === 0) {
+      const root: Record<string, number> = { '0-0-0-0': 10 };
+      for (let i = 0; i < 8; i++) root[`1-${i & 1}-${(i >> 1) & 1}-${(i >> 2) & 1}`] = -1;
+      return JSON.stringify(root);
+    }
+    // Sub-file at depth 1: `perFile` distinct nodes at depth 5 under this octant.
+    const out: Record<string, number> = {};
+    for (let n = 0; n < perFile; n++) out[`5-${key.x * 16 + (n % 16)}-${key.y * 16 + Math.floor(n / 16) % 16}-${key.z * 16 + Math.floor(n / 256)}`] = 1;
+    return JSON.stringify(out);
+  };
+}
+
+test('an EPT hierarchy past the total-node ceiling stops with an error and a notice', async () => {
+  const notices: string[] = [];
+  const octree = new EptOctree(parsedMeta({ points: 1_000_000 }), wideHierarchy(100), {
+    maxNodes: 250,
+    onNotice: (m) => notices.push(m),
+  });
+  await octree.loadFullHierarchy();
+  // The root file (1 node) and two sub-files (100 each) fit; the third would pass 250.
+  expect(octree.store.size).toBeLessThanOrEqual(250);
+  expect(octree.errors.some((e) => e.includes('exceeded 250 nodes'))).toBe(true);
+  expect(octree.capNotice).toMatch(/more than 250 nodes/);
+  expect(notices).toEqual([octree.capNotice]);
+  expect(octree.fullyLoaded).toBe(true);
+  expect(octree.isComplete).toBe(false);
+});
+
+test('a hierarchy under the ceiling raises no cap error or notice', async () => {
+  const octree = new EptOctree(parsedMeta({ points: 1_000_000 }), wideHierarchy(10), { maxNodes: 250 });
+  await octree.loadFullHierarchy();
+  expect(octree.capNotice).toBeUndefined();
+  expect(octree.errors.some((e) => e.includes('exceeded'))).toBe(false);
+  expect(octree.store.size).toBe(1 + 8 * 10);
+});
+
+test('the default ceiling is the COPC node ceiling', async () => {
+  const { MAX_HIERARCHY_NODES } = await import('../src/render/streaming/StreamingOctree');
+  expect(MAX_HIERARCHY_NODES).toBe(2_000_000);
+  const octree = new EptOctree(parsedMeta(), rootOnlyFetcher(1));
+  await octree.loadFullHierarchy();
+  expect(octree.capNotice).toBeUndefined();
+});

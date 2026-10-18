@@ -180,6 +180,7 @@ export class EptStreamingPointCloud implements StreamingSource {
     transport: EptTransport,
     signal?: AbortSignal,
     search = '',
+    onNotice?: (message: string) => void,
   ): Promise<EptStreamingPointCloud> {
     const renderOrigin = pickRenderOriginFromCube(metadata.bounds.cubic as Box6);
     // The root hierarchy document is kept for the source fingerprint.
@@ -189,7 +190,7 @@ export class EptStreamingPointCloud implements StreamingSource {
       if (key.d === 0 && rootHierarchy === null) rootHierarchy = text;
       return text;
     };
-    const octree = new EptOctree(metadata, fetcher);
+    const octree = new EptOctree(metadata, fetcher, { onNotice });
     // Load only enough hierarchy to render coarse geometry, then attach — a
     // multi-billion-point EPT links to thousands of sub-files, and waiting for
     // all of them looked like a hang. The root file alone spans the whole extent
