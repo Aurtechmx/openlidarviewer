@@ -16,7 +16,7 @@ import { LoadError } from '../loadErrors';
 import { detectCopc } from './copcDetect';
 import { parseCopcMetadata } from './copcHeader';
 import { readLasCrsLocation, resolveLasCrs } from '../crs';
-import { parseHierarchyPage } from './copcHierarchy';
+import { parseHierarchyPage, MAX_COPC_NODE_BYTES } from './copcHierarchy';
 import type { HierarchyPage } from './copcHierarchy';
 import { fingerprintParts } from '../sourceFingerprint';
 import type {
@@ -195,6 +195,13 @@ export class CopcSource {
         `COPC hierarchy entry for node ${node.id} (offset ${node.byteOffset}, ` +
           `${node.byteSize} bytes) points past the end of the file (${this._size} bytes) — ` +
           `the file appears truncated.`,
+      );
+    }
+    if (node.byteSize > MAX_COPC_NODE_BYTES) {
+      throw new LoadError(
+        'malformed-file',
+        `COPC hierarchy entry for node ${node.id} declares ${node.byteSize} bytes, ` +
+          `above the ${MAX_COPC_NODE_BYTES}-byte limit.`,
       );
     }
     return this._range.readRange(node.byteOffset, node.byteSize, signal);

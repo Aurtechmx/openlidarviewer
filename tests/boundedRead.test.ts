@@ -284,3 +284,45 @@ describe('readAtMostBounded — declared length does not eagerly allocate', () =
     expect(out[size - 1]).toBe(7);
   });
 });
+
+describe('readExactlyBounded — expected length does not eagerly allocate', () => {
+  it('a huge requested span with few bytes delivered never allocates the full span', async () => {
+    const expected = 1000 * 1024 * 1024;
+    const Real = globalThis.Uint8Array;
+    let overPrealloc = 0;
+    class U8 extends Real {
+      constructor(...args: unknown[]) {
+        if (typeof args[0] === 'number' && args[0] > MAX_DECLARED_PREALLOC_BYTES) overPrealloc++;
+        // @ts-expect-error forward whatever the reader passed
+        super(...args);
+      }
+    }
+    (globalThis as { Uint8Array: unknown }).Uint8Array = U8;
+    try {
+      await expect(readExactlyBounded(streamingResponse([bytes(30)]), expected)).rejects.toThrow(
+        /returned 30 bytes for a 1048576000-byte request/,
+      );
+    } finally {
+      (globalThis as { Uint8Array: unknown }).Uint8Array = Real;
+    }
+    expect(overPrealloc).toBe(0);
+  });
+
+  it('a body larger than the prealloc bound is still delivered in full and exactly sized', async () => {
+    const size = MAX_DECLARED_PREALLOC_BYTES + 5 * 1024 * 1024;
+    const parts = [bytes(MAX_DECLARED_PREALLOC_BYTES, 9), bytes(5 * 1024 * 1024, 4)];
+    const out = await readExactlyBounded(streamingResponse(parts), size);
+    expect(out.byteLength).toBe(size);
+    const view = new Uint8Array(out);
+    expect(view[0]).toBe(9);
+    expect(view[MAX_DECLARED_PREALLOC_BYTES - 1]).toBe(9);
+    expect(view[MAX_DECLARED_PREALLOC_BYTES]).toBe(4);
+    expect(view[size - 1]).toBe(4);
+  });
+
+  it('a body longer than requested is still refused after growth', async () => {
+    const size = MAX_DECLARED_PREALLOC_BYTES + 10;
+    const parts = [bytes(MAX_DECLARED_PREALLOC_BYTES), bytes(20)];
+    await expect(readExactlyBounded(streamingResponse(parts), size)).rejects.toThrow(/more than the requested/);
+  });
+});

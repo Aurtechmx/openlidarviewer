@@ -372,8 +372,18 @@ export async function readExactlyBounded(
     }
     return buffer;
   }
-  const out = new Uint8Array(expectedBytes);
+  // `expectedBytes` is a claim by the caller, taken from a file or a server
+  // header, not yet bytes. Allocate a bounded buffer first and grow it to the
+  // full length once real bytes have filled it (as `readAtMostBounded` does),
+  // so a request for a huge span that never delivers reserves nothing.
+  let out = new Uint8Array(Math.min(expectedBytes, MAX_DECLARED_PREALLOC_BYTES));
   let filled = 0;
+  const ensureCapacity = (needed: number): void => {
+    if (needed <= out.length) return;
+    const bigger = new Uint8Array(expectedBytes);
+    bigger.set(out.subarray(0, filled));
+    out = bigger;
+  };
   const reader = body.getReader();
   const clock = startClock(options);
   try {
@@ -394,6 +404,7 @@ export async function readExactlyBounded(
           `Server returned more than the requested ${expectedBytes} bytes.`,
         );
       }
+      ensureCapacity(filled + value.byteLength);
       out.set(value, filled);
       filled += value.byteLength;
     }
