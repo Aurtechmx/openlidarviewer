@@ -1,6 +1,5 @@
 import { test, expect, type Page, type Locator } from '@playwright/test';
 import { readFileSync } from 'node:fs';
-import { fileURLToPath } from 'node:url';
 import proj4 from 'proj4';
 import { geomFixtures, dropBytes } from './geomFixtures';
 import { openToolPage, showWorkspaceMode, dropHillsPly } from './helpers';
@@ -11,8 +10,8 @@ import { COPC_FIXTURE } from './streamingFixtures';
  *
  * The up-axis a lon/lat placement relies on is resolved through the shared
  * per-layer frame rule: an ordinary Z-up LAS, a streamed (LAS-derived) scan and
- * a PLY under a CRS export; a mesh with no CRS and a glTF under a CRS are
- * refused. Annotations are
+ * a PLY under a CRS export; a mesh with no CRS is refused (a glTF under a
+ * CRS is refused too: tests/kmlSiteUpAxisWiring.test.ts). Annotations are
  * placed only when the active scan owns them; one left behind by a closed scan
  * is withheld and the document says so, rather than being written at the
  * active scan's lon/lat for coordinates it never had there.
@@ -167,15 +166,4 @@ test('a mesh with no CRS is refused; once a CRS is chosen its X, Y, Z are eastin
   // Z-up, so the footprint is read off X/Y like any survey.
   site = await siteKmlButton(page);
   await expect(site).toBeEnabled({ timeout: 20_000 });
-});
-
-test('a glTF under a CRS has no resolved up axis and is refused', async ({ page }) => {
-  await page.locator('.olv-file-input').first().setInputFiles(fileURLToPath(new URL('../fixtures/tiny.glb', import.meta.url)));
-  await expect(page.locator('.olv-empty')).toBeHidden({ timeout: 20_000 });
-  await showWorkspaceMode(page, 'data');
-  await page.locator('summary', { hasText: 'Coordinate system' }).first().click();
-  await page.locator('.olv-crs-select').first().selectOption('32613');
-  const site = await siteKmlButton(page);
-  await expect(site).toBeDisabled();
-  await expect(site).toHaveAttribute('title', /up-axis was not determined/);
 });
