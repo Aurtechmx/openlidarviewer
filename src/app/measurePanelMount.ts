@@ -18,7 +18,9 @@
  */
 
 import { aggregate as aggregateMeasurements } from '../render/measure/measurementChains';
-import { layerUpVectorResolver } from './layerUpFrames';
+import { layerUpFrameOf, layerUpVectorResolver } from './layerUpFrames';
+import { upVectorOf } from '../geo/frame/layerUpFrame';
+import { cloudUpAxisMoved, setCloudUpResolver } from '../render/layerUpRegistry';
 import { bindMeasureUnitFrames, chainUnitFrame, type LayerUnitSource, type MeasureUnitFrames } from './measureLayerUnits';
 import { buildMeasureConfidenceContext } from './measureConfidenceContext';
 import { loadMeasurePanel, loadProfileWorkbenchRuntime } from '../lazyChunks';
@@ -430,7 +432,19 @@ export function createMeasurePanelMount(deps: MeasurePanelMountDeps): MeasurePan
       // Navigation up reads the same per-layer frame as the owner frames, and
       // re-aligns when a CRS change moves the active layer's axis.
       v.layerUp = layerUpVectorResolver(src.cloud, src.activeId, deps.crsService);
-      return bindMeasureUnitFrames(v.measure, { ...src, crs: deps.crsService, realignUp: () => v.alignUpToLayer(src.activeId()) });
+      // Height colouring, the elevation scale and the legend read it too.
+      setCloudUpResolver((c) => {
+        const id = src.activeId();
+        return upVectorOf(layerUpFrameOf(deps.crsService, c, id !== null && src.cloud(id) === c));
+      });
+      return bindMeasureUnitFrames(v.measure, {
+        ...src,
+        crs: deps.crsService,
+        realignUp: () => {
+          v.alignUpToLayer(src.activeId());
+          if (cloudUpAxisMoved(src.clouds().map(src.cloud))) v.refreshProjectSharedElevation(true);
+        },
+      });
     },
   };
 }

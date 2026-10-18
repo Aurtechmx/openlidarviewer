@@ -19,7 +19,7 @@
 
 import { rampRangeForMode, colorForMode, type ColorForModeOptions } from './colorModes';
 import { writeFloatColorsInto } from './colorEncode';
-import { isZUpFormat } from '../io/sniffFormat';
+import { cloudUpAxisIndex } from './layerUpRegistry';
 import { participatesInSharedAnalysis, type LayerCompatibility } from '../model/layerCompatibility';
 import type { PointCloud } from '../model/PointCloud';
 
@@ -36,9 +36,12 @@ export interface FrameLayer {
   compatibility?: LayerCompatibility;
 }
 
-/** Which interleaved component is "up" for a cloud (Z for surveys, Y for phone scans). */
+/**
+ * Which interleaved component is "up" for a cloud: its resolved layer frame
+ * (`layerUpRegistry.ts`; a PLY under a CRS is Z-up), else its format rule.
+ */
 export function upAxisOf(cloud: PointCloud): 0 | 1 | 2 {
-  return isZUpFormat(cloud.sourceFormat) ? 2 : 1;
+  return cloudUpAxisIndex(cloud);
 }
 
 /**
