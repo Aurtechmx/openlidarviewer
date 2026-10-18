@@ -93,30 +93,21 @@ export function upOfFormat(format: SourceFormat): [number, number, number] {
  * names when it is open (the active one), else the last added, else null (no
  * static layer: keep the current up). Stored geometry never moves, and a
  * measurement reads along its own layer's up, not this one.
+ *
+ * `upOf` is the app's per-layer resolver (`app/layerUpFrames.ts`), which also
+ * reads the layer's CRS: a PLY under a projected CRS navigates Z-up, as it is
+ * measured and analysed. Without it (or when it has no answer) the format rule
+ * applies.
  */
 export function sceneUpOf(
   layers: ReadonlyMap<string, { readonly cloud: { readonly sourceFormat: SourceFormat } }>,
   id: string | null,
+  upOf?: ((id: string) => [number, number, number] | null) | null,
 ): [number, number, number] | null {
-  const layer = (id !== null ? layers.get(id) : undefined) ?? [...layers.values()].pop();
-  return layer ? upOfFormat(layer.cloud.sourceFormat) : null;
-}
-
-/**
- * The up-axis a lon/lat placement may rely on. A resolved axis wins. When
- * detection left it undetermined, LAS/LAZ and the COPC/EPT streams built on
- * them are still z-up by specification, so the axis is settled by the format.
- * Formats that are z-up only by convention stay undetermined.
- */
-export function sourceUpAxis(
-  resolved: 'z' | 'y' | 'unknown',
-  format: SourceFormat | undefined,
-  streaming: boolean,
-): 'z' | 'y' | 'unknown' {
-  if (resolved !== 'unknown') return resolved;
-  if (format === 'las' || format === 'laz') return 'z';
-  if (format === undefined && streaming) return 'z';
-  return 'unknown';
+  const key = id !== null && layers.has(id) ? id : [...layers.keys()].pop();
+  const layer = key !== undefined ? layers.get(key) : undefined;
+  if (key === undefined || !layer) return null;
+  return upOf?.(key) ?? upOfFormat(layer.cloud.sourceFormat);
 }
 
 /**

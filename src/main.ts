@@ -142,7 +142,7 @@ import type { DebugOverlay, StreamingDebugStats } from './ui/DebugOverlay';
 import type { ColorbarOverlay } from './ui/ColorbarOverlay';
 import { estimateDecodedBytes, estimateGpuBytes } from './render/streaming/streamingBudget';
 import { streamingHasGpsTime } from './render/streaming/StreamingSource';
-import { isZUpFormat, sourceUpAxis } from './io/sniffFormat';
+import { activeSpatialUpAxis } from './app/layerUpFrames';
 // The PLY/OBJ/XYZ/CSV encoders load on first export (`loadExporters`).
 // Only the tiny file-router predicate is eager; the (large) serializer/parser
 // is dynamically imported in exportSession/importSession so it stays off the
@@ -2268,8 +2268,8 @@ function streamingExportCloud(): PointCloud | null {
 
 /** Origin + CRS + name for the active scan; the rules live in `src/app/reportExport.ts`. */
 function exportGeoContext(): GeoExportContext { return runExportGeoContext(reportExportDeps); }
-/** The active scan's up-axis through the format/frame policy every lon/lat and frame gate shares (`sourceUpAxis`). */
-const activeUpAxis = () => sourceUpAxis(crsService.context().upAxis, scans.activeCloud()?.sourceFormat, !!viewer?.streamingCloud);
+/** The active scan's resolved up-axis (`app/layerUpFrames.ts`), the per-layer rule every lon/lat, footprint and frame gate shares. */
+const activeUpAxis = () => activeSpatialUpAxis({ activeCloud: () => scans.activeCloud(), streaming: () => !!viewer?.streamingCloud, crs: crsService });
 
 /**
  * The running-app seam the two Google Earth products write through (see
@@ -2297,7 +2297,7 @@ const kmlDeps: KmlActionDeps = {
       const b = c.bounds();
       return {
         extent: { minX: b.min[0], minY: b.min[1], maxX: b.max[0], maxY: b.max[1] },
-        basis: 'the resident points', upAxis: isZUpFormat(c.sourceFormat) ? 'z' : 'y',
+        basis: 'the resident points', upAxis: activeUpAxis(),
       };
     }
     const b = viewer?.streamingCloud?.dataBounds();
@@ -2310,7 +2310,7 @@ const kmlDeps: KmlActionDeps = {
   // Resident points for the convex-hull outline: a Z-up static cloud only.
   // Streaming and Y-up read null and keep the declared-extent rectangle.
   scanHullPositions: () =>
-    ((c) => (c && isZUpFormat(c.sourceFormat) ? c.positions : null))(scans.activeCloud()),
+    ((c) => (c && activeUpAxis() === 'z' ? c.positions : null))(scans.activeCloud()),
   baseName: (name) => baseName(name),
   downloadText: (filename, text) => downloadText(filename, text),
   setError: (message) => dropZone.setError(message),

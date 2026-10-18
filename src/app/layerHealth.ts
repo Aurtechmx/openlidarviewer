@@ -49,6 +49,12 @@ export interface LayerHealthInput {
   readonly verticalUnit: string | null;
   /** Vertical datum label ('NAVD88', …), or null when none was declared. */
   readonly verticalDatum: string | null;
+  /**
+   * The layer's resolved up axis: what settled it (`geo/frame/layerUpFrame.ts`)
+   * and the sentence naming axis and basis, or the refusal when unresolved.
+   * Null or absent: no row (no static cloud to read it from).
+   */
+  readonly upAxis?: { readonly basis: 'specification' | 'crs' | 'detected' | 'explicit' | 'unresolved'; readonly text: string } | null;
   /** The four-state classification, or null when not yet classified. */
   readonly compatibility: LayerHealthCompatibility | null;
   /** Whether the layer is genuinely IN the project frame (not merely eligible). */
@@ -281,6 +287,14 @@ export function buildLayerHealth(input: LayerHealthInput): LayerHealthRow[] {
     input.verticalDatum === null
       ? { label: 'Vertical datum', value: 'not established', status: 'warn' }
       : { label: 'Vertical datum', value: input.verticalDatum, status: 'ok' },
+  );
+  // Up axis beside the CRS and units it depends on. A rule applied to a mesh
+  // with no CRS is stated as such (info); an unresolved axis is a refusal.
+  if (input.upAxis) {
+    const b = input.upAxis.basis;
+    rows.push({ label: 'Up axis', value: input.upAxis.text, status: b === 'unresolved' ? 'warn' : b === 'explicit' ? 'info' : 'ok' });
+  }
+  rows.push(
     compatibilityRow(input.compatibility, input.soleLayer ?? false),
     projectFrameRow,
     input.sourceOrigin === null

@@ -12,17 +12,19 @@
  * per-scan export frame does. A layer id that no open layer carries, or that
  * more than one carries, has no frame: its work reads as unverified.
  *
- * The frame also carries the layer's own up axis (Z for a survey format, Y for
- * a mesh format), so a height reads along the axis its layer was captured in,
- * not along whichever up the active scan gave the scene.
+ * The frame also carries the layer's own resolved up axis and its basis
+ * (`app/layerUpFrames.ts`: Z for a survey format, Z for a PLY or OBJ under a
+ * CRS, the format rule for a mesh with none), so a height reads along the axis
+ * its layer was captured in, not along whichever up the active scan gave the
+ * scene. A layer with no resolved axis (a glTF under a CRS) withholds every
+ * axis-dependent figure with the reason.
  */
 
 import type { PointCloud } from '../model/PointCloud';
-import type { CrsService } from '../geo/CrsService';
 import type { MeasureController } from '../render/measure/MeasureController';
 import { UNRESOLVED_UNIT_FRAME, sameUnitFrame, type MeasureUnitFrame } from '../render/measure/types';
 import { measureUnitFrameOf, scanContextOf } from './measurementExportFrame';
-import { upOfFormat } from '../io/sniffFormat';
+import { layerUpFrameOf, measureUpFieldsOf, type LayerFrameCrs } from './layerUpFrames';
 
 /** The slice of the app a layer's unit frame is resolved from. */
 export interface LayerUnitSource {
@@ -32,7 +34,12 @@ export interface LayerUnitSource {
   readonly clouds: () => readonly string[];
   readonly cloud: (viewerId: string) => PointCloud | undefined;
   readonly stableIdFor: (viewerId: string) => string | null;
-  readonly crs: Pick<CrsService, 'context' | 'resolveFor'>;
+  readonly crs: LayerFrameCrs;
+  /**
+   * Re-align navigation up after a CRS change: assigning, replacing or clearing
+   * a CRS can move a layer's resolved up axis. Optional for narrow seams.
+   */
+  readonly realignUp?: () => void;
 }
 
 /** The binding the CRS subscription drives. */
@@ -67,8 +74,11 @@ export function bindMeasureUnitFrames(measure: MeasureController, src: LayerUnit
     if (matches.length === 1) {
       const id = matches[0]!;
       const c = src.cloud(id);
-      if (id === src.activeId()) out = { ...measureUnitFrameOf(src.crs.context()), ...(c ? { up: upOfFormat(c.sourceFormat) } : {}) };
-      else if (c) out = { ...measureUnitFrameOf(scanContextOf(src.crs, c)), up: upOfFormat(c.sourceFormat) };
+      // The up axis is the layer's resolved frame (format, then its own CRS),
+      // the rule terrain, conversion and navigation share: a PLY under a
+      // projected CRS reads its height along Z, as its terrain does.
+      if (id === src.activeId()) out = { ...measureUnitFrameOf(src.crs.context()), ...(c ? measureUpFieldsOf(layerUpFrameOf(src.crs, c, true)) : {}) };
+      else if (c) out = { ...measureUnitFrameOf(scanContextOf(src.crs, c)), ...measureUpFieldsOf(layerUpFrameOf(src.crs, c, false)) };
     }
     memo.set(layerId, out);
     return out;
@@ -88,6 +98,9 @@ export function bindMeasureUnitFrames(measure: MeasureController, src: LayerUnit
       measure.setProjectedCrs(f.projected);
       // Owned work re-reads its layer's frame (a late resolve or an override
       // on another layer); the setters above only re-emit when a value moved.
+      // A CRS assigned, replaced or cleared can move a layer's up axis, so
+      // navigation re-aligns first and the cached frames above are dropped.
+      src.realignUp?.();
       measure.refreshUnitFrames();
     },
   };
@@ -102,6 +115,7 @@ export function chainUnitFrame(frames: readonly MeasureUnitFrame[]): { frame: Me
   if (!first) return { frame: UNRESOLVED_UNIT_FRAME };
   const up = (f: MeasureUnitFrame): string => (f.up ? f.up.join(',') : 'scene');
   if (frames.some((f) => f.upConflict === true || up(f) !== up(first))) return { refusal: 'not combined: the selected measurements sit on layers with different up axes' };
+  if (frames.some((f) => f.upRefusal)) return { refusal: 'not combined: a selected measurement sits on a layer with no resolved up axis' };
   if (frames.every((f) => sameUnitFrame(f, first))) return { frame: first };
   return { refusal: 'not combined: the selected measurements were taken on scans with different units' };
 }

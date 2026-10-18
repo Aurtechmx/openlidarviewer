@@ -410,7 +410,7 @@ fails the build when either passes its recorded baseline, so a raise is a hand
 edit to `docs/validation/monolith-size-baseline.json` and always shows in the
 diff.
 Fan-out is 97 for the shell, 73 for the renderer and 29 for the Analyse panel,
-across 1152 modules with no dependency cycles.
+across 1154 modules with no dependency cycles.
 
 ## The shell has little headroom
 
@@ -549,6 +549,18 @@ gives the reason. The scale widens on an axis whose extent would need more than
   for Y-up, that the points were rotated to Z-up as (x, -z, y). A detected
   Y-up model is not analysed together with Z-up layers. The detected axis is
   shown in the panel only and is not recorded in the exported provenance.
+- Measurement, navigation, the Layer Health card and the measurement and map
+  exports (CSV, GeoJSON, KML, integrity report, PDF) read a layer's up axis by
+  the same rule as terrain and conversion. A PLY or OBJ under a CRS is
+  measured and navigated Z-up; with no CRS it is read Y-up, and the Up axis
+  row in Layer Health says so. Measurement does not detect the axis from the
+  point layout, so a local Z-up PLY measures along Y until a CRS is assigned.
+  A measurement on a glTF or GLB under a CRS prints the reason in place of any
+  height, grade, profile, box or volume figure; its CSV and GeoJSON exports are
+  refused and the PDF leaves it out with the reason. Assigning, replacing or
+  clearing a CRS re-reads measurements already taken and re-cuts their
+  profiles and volumes. A profile or volume restored from a saved session is
+  not re-cut, and the session file records the format's up axis.
 - The reproduction pack's metrics reproduce exactly under the Node version
   pinned in `.nvmrc`. Another Node or V8 version can change the last digits.
 

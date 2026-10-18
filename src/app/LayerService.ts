@@ -31,6 +31,8 @@ import {
 import { compareCodeUnits } from '../canonicalHash';
 import { loadLayerHealth } from '../lazyChunks';
 import { isLinearUnitKnown } from '../geo/CoordinateTypes';
+import { describeLayerUpFrame, resolveLayerUpFrame, type LayerUpFrame } from '../geo/frame/layerUpFrame';
+import type { SourceFormat } from '../io/sniffFormat';
 import type { ResolvedCrs } from '../geo/CoordinateTypes';
 import type { CrsInfo } from '../io/crs';
 import { datasetIdentity, type DatasetIdentity } from '../geo/CrsService';
@@ -532,6 +534,9 @@ export function createLayerService(deps: LayerServiceDeps): LayerService {
             // the numeric factor. Null only when the CRS declares none.
             verticalUnit: verticalUnitName(c?.metadata?.crs),
             verticalDatum: info.verticalDatum ?? null,
+            // The layer's resolved up axis and what settled it, by the rule
+            // measurement, terrain, conversion and navigation share.
+            upAxis: c?.sourceFormat ? upAxisFactsOf(resolveLayerUpFrame({ format: c.sourceFormat, crs }), c.sourceFormat) : null,
             compatibility: lastCompatibility.get(info.id) ?? null,
             mounted: !lastUnmounted.includes(info.id),
             sourceOrigin: c?.sourceOrigin ? [c.sourceOrigin[0], c.sourceOrigin[1], c.sourceOrigin[2]] : null,
@@ -608,4 +613,9 @@ function residencyOf(
   if (!c) return null;
   const source = c.sourceDeclaredPointCount ?? c.declaredPointCount;
   return source === undefined ? null : { resident: c.pointCount, source, truncated: truncationNote(c) };
+}
+
+/** The layer-details facts of a resolved up frame. */
+function upAxisFactsOf(frame: LayerUpFrame, format: SourceFormat): { readonly basis: LayerUpFrame['basis']; readonly text: string } {
+  return { basis: frame.basis, text: describeLayerUpFrame(frame, format) };
 }

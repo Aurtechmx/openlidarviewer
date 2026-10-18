@@ -11,6 +11,7 @@
  * always stays consistent and there is a single source of truth.
  */
 
+import type { LayerUpBasis } from '../../geo/frame/layerUpFrame';
 import type { Vec3 } from '../navMath';
 import type { MeasurementTrust } from './measurementTrust';
 import type { ProfileProvenance } from './profileProvenance';
@@ -533,6 +534,14 @@ export interface MeasureUnitFrame {
   readonly up?: Vec3;
   /** The points sit on layers with different up axes: no vertical is shared. */
   readonly upConflict?: boolean;
+  /** What settled {@link up} (`geo/frame/layerUpFrame.ts`); absent: the scene's up. */
+  readonly upBasis?: LayerUpBasis;
+  /**
+   * The layer has no resolved up axis (a glTF under a CRS): the sentence every
+   * axis-dependent figure prints instead of a number. {@link up} is then only
+   * the axis the layer is drawn with.
+   */
+  readonly upRefusal?: string;
 }
 
 /** What an up-dependent figure prints when its points span layers with different up axes. */
