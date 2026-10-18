@@ -11,7 +11,9 @@ import {
   MAX_ANNOTATION_TITLE,
   MAX_ANNOTATION_NOTE,
   MAX_MANIFEST_BYTES,
+  MAX_SESSION_MEASUREMENTS,
 } from '../src/io/session';
+import { MAX_FRAME_LAYERS } from '../src/io/sessionFrame';
 import type { InspectionSession, SavedView } from '../src/io/session';
 import {
   buildProcessingManifest,
@@ -1326,5 +1328,68 @@ describe('session resource ceilings (hostile / corrupt input)', () => {
     const manifest = { schema: 'olv@1', steps: [{ op: 'crop' }] };
     const session = parseSession(JSON.stringify(baseDoc({ processingManifest: manifest })));
     expect(session.processingManifest).toEqual(manifest);
+  });
+
+  // The session carries a project frame (one record per layer) and measurements
+  // that name pick layers from it. Resolving each pick id must not walk the
+  // layer list per id.
+  const frameDoc = (nLayers: number, nMeas: number, pickCount = 16): Record<string, unknown> => {
+    const layers = Array.from({ length: nLayers }, (_, i) => ({
+      layerId: `layer-${String(i).padStart(6, '0')}`,
+      sourceFingerprint: `fp${i}`,
+      sourceName: `n${i}`,
+      upAxis: 'z',
+      sourceOrigin: [0, 0, 0],
+      sourceToProject: [0, 0, 0],
+    }));
+    const ids = layers.slice(-pickCount).map((l) => l.layerId);
+    const measurements = Array.from({ length: nMeas }, (_, i) => ({
+      id: `m${i}`,
+      kind: 'distance',
+      name: 'd',
+      points: [[0, 0, 0], [1, 0, 0]],
+      pickLayers: ids,
+    }));
+    return baseDoc({ measurements, projectFrame: { projectOrigin: [0, 0, 0], layers } });
+  };
+
+  it('refuses a project frame above the layer cap with a message naming the cap', () => {
+    const doc = frameDoc(MAX_FRAME_LAYERS + 1, 1);
+    expect(() => parseSession(JSON.stringify(doc))).toThrow(new RegExp(`above the ${MAX_FRAME_LAYERS} cap`));
+  });
+
+  it('keeps the layer cap far below the size that made pick resolution quadratic', () => {
+    expect(MAX_FRAME_LAYERS).toBeLessThanOrEqual(1024);
+    expect(MAX_FRAME_LAYERS).toBeGreaterThanOrEqual(64);
+  });
+
+  it('parses a full-cap frame with 10,000 pick-bearing measurements in bounded time', () => {
+    const text = JSON.stringify(frameDoc(MAX_FRAME_LAYERS, 10_000));
+    const t0 = performance.now();
+    const s = parseSession(text);
+    const ms = performance.now() - t0;
+    expect(s.measurements).toHaveLength(10_000);
+    expect(s.measurements.every((m) => m.pickLayers?.length === 16)).toBe(true);
+    // The per-id layer scan this replaces took ~10 s at this size with 10,000
+    // layers; the budget is loose enough for a loaded CI machine.
+    expect(ms).toBeLessThan(5_000);
+  });
+
+  it('still drops pickLayers when one id is missing from the frame, and keeps them when all are present', () => {
+    const doc = frameDoc(3, 2, 2) as { measurements: Array<{ pickLayers: string[] }> };
+    doc.measurements[1]!.pickLayers = ['layer-000000', 'not-in-frame'];
+    const s = parseSession(JSON.stringify(doc));
+    expect(s.measurements[0]!.pickLayers).toEqual(['layer-000001', 'layer-000002']);
+    expect(s.measurements[1]!.pickLayers).toBeUndefined();
+  });
+
+  it('refuses a measurement list above MAX_SESSION_MEASUREMENTS instead of truncating it', () => {
+    const measurements = new Array(MAX_SESSION_MEASUREMENTS + 1).fill({ kind: 'distance', points: [[0, 0, 0], [1, 0, 0]] });
+    expect(() => parseSession(JSON.stringify(baseDoc({ measurements })))).toThrow(/measurements, above the 20,000/);
+  });
+
+  it('accepts a measurement list exactly at the cap', () => {
+    const measurements = new Array(MAX_SESSION_MEASUREMENTS).fill({ kind: 'distance', points: [[0, 0, 0], [1, 0, 0]] });
+    expect(parseSession(JSON.stringify(baseDoc({ measurements }))).measurements).toHaveLength(MAX_SESSION_MEASUREMENTS);
   });
 });
