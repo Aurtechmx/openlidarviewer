@@ -61,7 +61,10 @@ const MAX_PAGE_SIZE = 1024 * 1024;
 /**
  * Largest XML section this reader accepts. Real E57 schemas are a few MB; the
  * whole section is read and decoded before any point, so an unbounded length
- * could exhaust memory first.
+ * could exhaust memory first. The byte cap is kept generous (a multi-thousand
+ * scan file with per-scan images and pose metadata stays well inside it); the
+ * element and attribute counts in `xml.ts` (`MAX_XML_NODES`,
+ * `MAX_XML_ATTRIBUTES`) are what bound the parsed tree.
  */
 export const MAX_XML_BYTES = 64 * 1024 * 1024;
 

@@ -7,6 +7,8 @@
  * Node-unit-testable (no browser `DOMParser`).
  */
 
+import { LoadError } from '../loadErrors';
+
 /** A parsed XML element. */
 export interface XmlNode {
   name: string;
@@ -20,13 +22,34 @@ function isSpace(c: string): boolean {
   return c === ' ' || c === '\t' || c === '\n' || c === '\r';
 }
 
-/** Parse a well-formed XML document into an element tree. */
 /** Deepest element nesting the E57 XML reader accepts. */
 export const MAX_XML_DEPTH = 256;
 
+/**
+ * Most elements the E57 XML reader accepts in one document.
+ *
+ * Every element becomes a JavaScript object with an attribute map and a child
+ * array (roughly 650 bytes of heap), and the section is parsed twice on a
+ * normal open (once for the declared-size preflight, once for the decode). The
+ * 64 MiB byte cap alone still admits tens of millions of `<a/>` elements.
+ * Real files are tiny: the libE57Format corpus, the PDAL sample and the project
+ * fixtures hold 8 to 60 elements and 11 to 96 attributes, about 25 elements per
+ * scan. 200,000 therefore leaves room for roughly 8,000 scans in one file, three
+ * orders of magnitude over any file seen, while bounding the tree to about
+ * 130 MB.
+ */
+export const MAX_XML_NODES = 200_000;
+
+/** Most attributes the E57 XML reader accepts in one document (about 4 per element at the node cap, doubled). */
+export const MAX_XML_ATTRIBUTES = 400_000;
+
+/** Parse a well-formed XML document into an element tree. */
 export function parseXml(source: string): XmlNode {
   let i = 0;
   const n = source.length;
+
+  let nodeCount = 0;
+  let attrCount = 0;
 
   const skipSpace = (): void => {
     while (i < n && isSpace(source[i])) i++;
@@ -55,6 +78,13 @@ export function parseXml(source: string): XmlNode {
       } else {
         attrs[key] = '';
       }
+      if (++attrCount > MAX_XML_ATTRIBUTES) {
+        throw new LoadError(
+          'malformed-file',
+          `E57 file is malformed or too complex: its XML section declares more than ${MAX_XML_ATTRIBUTES} attributes, ` +
+            'which is beyond what this reader accepts.',
+        );
+      }
     }
     return attrs;
   };
@@ -64,6 +94,13 @@ export function parseXml(source: string): XmlNode {
   let depth = 0;
   const parseElement = (): XmlNode => {
     if (++depth > MAX_XML_DEPTH) throw new Error(`Invalid XML: nesting deeper than ${MAX_XML_DEPTH} levels.`);
+    if (++nodeCount > MAX_XML_NODES) {
+      throw new LoadError(
+        'malformed-file',
+        `E57 file is malformed or too complex: its XML section declares more than ${MAX_XML_NODES} elements, ` +
+          'which is beyond what this reader accepts.',
+      );
+    }
     i++; // consume '<'
     let name = '';
     while (i < n && !isSpace(source[i]) && source[i] !== '>' && source[i] !== '/') {
