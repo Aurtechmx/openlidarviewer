@@ -30,8 +30,23 @@ const epoch = (positions: Float32Array): EpochCloud => ({
   positions, crs: 'EPSG:32612', verticalDatum: 'NAVD88', linearUnitToMetres: 1,
 });
 
-/** The gate the compare flow passes: 10 % of the before epoch's span. */
-const LIVE = { maxResidualM: 10, horizontalUnitKnown: true };
+/**
+ * The gate the compare flow passes (10 % of the before epoch's span), with the
+ * common-CRS fit opted in: by default these epochs keep their coordinates.
+ */
+const LIVE = { maxResidualM: 10, horizontalUnitKnown: true, commonFrame: 'estimate' as const };
+
+describe('alignEpochClouds keeps the coordinates of a common-CRS pair by default', () => {
+  test('no fit, no shift, the after cloud returned as supplied', () => {
+    const after = epoch(lattice(0, 100, 0, 100, { dx: 0.5, dy: 0.3, yawDeg: 1 }));
+    const r = alignEpochClouds(epoch(lattice(0, 100, 0, 100)), after, { maxResidualM: 10, horizontalUnitKnown: true });
+    expect(r.alignment.frameKept).toBe(true);
+    expect(r.alignment.attempted).toBe(false);
+    expect(r.alignment.applied).toBe(false);
+    expect(r.after).toBe(after);
+    expect(summarizeAlignment(r.alignment)).toMatch(/not estimated/i);
+  });
+});
 
 const shiftOf = (t: readonly number[]): number => Math.hypot(t[0], t[1]);
 

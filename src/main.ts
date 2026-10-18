@@ -4118,11 +4118,10 @@ function compareLoadedLayers(): void {
         inspector.setDifferenceAvailable(false);
         return;
       }
-      // Coarse-register the after cloud onto the before cloud first (yaw + x/y
-      // only — a real vertical change is the signal, so z is preserved), so a
-      // small horizontal misregistration between epochs is not read as movement.
-      // Refuse a fit whose residual exceeds 10% of the scene span: that means the
-      // two clouds never registered, so it's compared as-is rather than shifted.
+      // Epochs in one declared CRS keep their supplied coordinates (no fit: a slope
+      // cannot separate a horizontal shift from a real height change). Local-frame
+      // pairs get the yaw + x/y fit, refused when the surface leaves the pose
+      // unobservable or the residual exceeds 10% of the scene span.
       // `span` is the before epoch's in SOURCE units; the gate is metres.
       const spanUnitToM = frames.horizontalUnitToMetres ?? 1;
       const { after: alignedAfter, alignment } = alignEpochClouds(beforeCloud, afterCloud, {

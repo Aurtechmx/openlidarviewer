@@ -7,12 +7,14 @@
  *  - MOUNT. Both clouds have a proven, compatible CRS and georeferenced origins,
  *    so they are already in one frame — place them directly, run no ICP. Fitting
  *    a transform here would move correctly-placed data.
- *  - PLANAR ICP. Two AIRBORNE epochs of the same area (change detection). ICP is
- *    constrained to the horizontal plane (x, y, yaw) so it CANNOT absorb real
- *    elevation change — subsidence, uplift, erosion — into a vertical shift. A
- *    full 6-DOF fit would minimise residual by eating the very signal being
- *    measured. The solver lives at `./planarIcp` (a re-export of the tested
- *    `terrain/change` planar `icpRegister`), so this case is allowed, not withheld.
+ *  - PLANAR ICP. Two AIRBORNE epochs of the same area without a proven common
+ *    frame (change detection). The applied transform is yaw + x/y; the fitted z
+ *    is not applied. Discarding z does not stop x/y from absorbing real change on
+ *    a slope, so the epoch pipeline (`terrain/change/alignEpochs`) fits only when
+ *    the surface constrains yaw, x, y and z independently (an undamped
+ *    observability test) and refuses a plane or a single slope. The solver lives
+ *    at `./planarIcp` (a re-export of the tested `terrain/change` planar
+ *    `icpRegister`), so this case is allowed, not withheld.
  *  - FULL 6-DOF. Terrestrial or object scans with no shared frame — solve all
  *    six degrees of freedom.
  *
@@ -63,13 +65,13 @@ export function selectRegistrationModel(inp: RegistrationInputs): RegistrationDe
     return { allowed: false, reasonCode: 'LOW_OVERLAP', reason: `Estimated overlap ${(inp.overlapEstimate! * 100).toFixed(0)}% is below the ${(minOverlap * 100).toFixed(0)}% needed to register.` };
   }
 
-  // Airborne change-detection epochs WANT planar ICP (yaw + horizontal
-  // translation, Z locked) so vertical change is preserved rather than absorbed
-  // into a Z shift. That solver exists — `src/registration/planarIcp` re-exports
+  // Airborne change-detection epochs without a proven frame use planar ICP
+  // (yaw + horizontal translation applied, the fitted Z not applied), gated on
+  // observability in the epoch pipeline. That solver exists — `src/registration/planarIcp` re-exports
   // the tested planar `icpRegister` already wired to the epoch-compare pipeline —
   // so the planar model is now selected and allowed rather than withheld.
   if (inp.capture === 'airborne' && inp.sameAreaEpochs) {
-    return { model: 'planar-icp', allowed: true, reasonCode: 'PLANAR_ICP_AVAILABLE', reason: 'Two airborne epochs of the same area register with a planar-constrained ICP (yaw + XY, Z locked) so vertical change is preserved rather than absorbed into a Z shift.' };
+    return { model: 'planar-icp', allowed: true, reasonCode: 'PLANAR_ICP_AVAILABLE', reason: 'Two airborne epochs of the same area register with a planar ICP (yaw + XY applied, the fitted Z not applied), only where the surface constrains yaw, x, y and z independently; a plane or a single slope is refused as unobservable.' };
   }
 
   // Terrestrial / object → full 6-DOF.

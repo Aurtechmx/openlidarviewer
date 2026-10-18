@@ -51,7 +51,11 @@ const gauss = (r: () => number): number => {
 const round = (x: number, d = 4): number => Number(x.toFixed(d));
 const mean = (a: number[]): number => a.reduce((s, x) => s + x, 0) / (a.length || 1);
 
-/** An irregular terrain-like cloud, as interleaved xyz. */
+/**
+ * An irregular terrain-like cloud, as interleaved xyz. The relief varies along
+ * both x and y strongly enough for the alignment's observability test: a
+ * surface with gentle slopes (RMS about 10 %) is refused as unobservable.
+ */
 function terrain(n: number, seed: number): Float32Array {
   const r = rng(seed);
   const f = new Float32Array(n * 3);
@@ -60,7 +64,7 @@ function terrain(n: number, seed: number): Float32Array {
     const y = r() * 25;
     f[i * 3] = x;
     f[i * 3 + 1] = y;
-    f[i * 3 + 2] = Math.sin(x * 0.2) + Math.cos(y * 0.15) + r() * 0.03;
+    f[i * 3 + 2] = 2 * Math.sin(x * 0.3) + 1.5 * Math.cos(y * 0.25) + r() * 0.03;
   }
   return f;
 }

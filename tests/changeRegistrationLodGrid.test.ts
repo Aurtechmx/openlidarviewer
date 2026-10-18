@@ -15,29 +15,42 @@ import { compareDtms, gridTolerance, summarizeChange } from '../src/terrain/chan
 import type { DtmGrid } from '../src/terrain/ground/cellConfidence';
 
 describe('registration residuals describe the transform they name', () => {
-  const before = {
-    positions: new Float32Array([0, 0, 0, 10, 0, 0, 0, 10, 0, 10, 10, 0]),
-    crs: 'EPSG:32612',
-    verticalDatum: 'NAVD88',
-    linearUnitToMetres: 1,
+  // A local-frame pair (no CRS) on a surface that constrains yaw, x, y and z,
+  // so the fit is observable and runs. A common-CRS pair keeps its coordinates
+  // and is not fitted at all (last test).
+  const lattice = (dz: number): Float32Array => {
+    const out: number[] = [];
+    for (let x = 0; x <= 30; x++) for (let y = 0; y <= 30; y++) out.push(x, y, 2 * Math.sin(x / 4) + 1.5 * Math.cos(y / 3) + dz);
+    return new Float32Array(out);
   };
-  const after = { ...before, positions: new Float32Array([0, 0, 1, 10, 0, 1, 0, 10, 1, 10, 10, 1]) };
+  const before = { positions: lattice(0), crs: null, verticalDatum: null, linearUnitToMetres: 1 };
+  const after = { ...before, positions: lattice(1) };
 
   it('a pure 1 m vertical offset: applied residual 1 m, solver residual 0 m', () => {
     const r = alignEpochClouds(before, after, { maxResidualM: 0.1 });
     expect(r.alignment.appliedDof).toBe('yaw+xy');
-    expect(r.after.positions[2]).toBe(1); // z was kept
-    expect(r.alignment.appliedTransformResidualM).toBeCloseTo(1, 6);
-    expect(r.alignment.solverResidualM).toBeCloseTo(0, 6);
+    expect(r.after.positions[2]).toBeCloseTo(after.positions[2], 4); // z was kept
+    expect(r.alignment.appliedTransformResidualM).toBeCloseTo(1, 2);
+    expect(r.alignment.solverResidualM).toBeCloseTo(0, 3);
     const s = summarizeAlignment(r.alignment);
     expect(s).toMatch(/Residual at the applied pose 1\.00 m/);
     expect(s).toMatch(/solver fit residual \(yaw \+ x\/y\/z, not what was applied\) 0\.00 m/);
+    expect(s).toMatch(/registration uncertainty is not quantified/);
   });
 
   it('the full 3-D path re-measures at its own pose', () => {
     const r = alignEpochClouds(before, after, { maxResidualM: 0.1, horizontalOnly: false });
     expect(r.alignment.appliedDof).toBe('yaw+xyz');
-    expect(r.alignment.appliedTransformResidualM).toBeCloseTo(0, 6);
+    expect(r.alignment.appliedTransformResidualM).toBeCloseTo(0, 3);
+  });
+
+  it('a common-CRS pair is not fitted: no residual is reported as if it were one', () => {
+    const geo = { ...before, crs: 'EPSG:32612', verticalDatum: 'NAVD88' };
+    const r = alignEpochClouds(geo, { ...geo, positions: lattice(1) }, { maxResidualM: 0.1 });
+    expect(r.alignment.frameKept).toBe(true);
+    expect(r.alignment.appliedDof).toBe('none');
+    expect(r.alignment.solverResidualM).toBe(Infinity);
+    expect(summarizeAlignment(r.alignment)).toMatch(/not estimated/);
   });
 });
 
