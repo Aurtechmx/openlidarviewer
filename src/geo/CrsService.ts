@@ -418,6 +418,13 @@ export class CrsService {
   private _currentSource: CrsSource = 'las-vlr';
   /** A remembered override offered for the active scan but not applied. */
   private _suggestion: OverrideSuggestion | null = null;
+  /**
+   * Overrides applied for this app session only, never written to the port.
+   * A session file supplies one without the user having chosen it in this app,
+   * so it must not outlive the app or reach the next open of the scan until the
+   * user keeps it. Read before the persisted record for the same dataset.
+   */
+  private readonly _sessionOverrides = new Map<string, CrsOverride>();
 
   constructor(port: CrsOverridePort = DEFAULT_CRS_OVERRIDE_PORT) {
     this._port = port;
@@ -535,7 +542,7 @@ export class CrsService {
     readonly suggestion: OverrideSuggestion | null;
   } {
     const datasetKey = keyForDataset(input.name);
-    const override = this._port.get(datasetKey);
+    const override = this._sessionOverrides.get(datasetKey) ?? this._port.get(datasetKey);
     const match = override ? classifyOverrideMatch(override, input.detected, input.identity) : undefined;
     if (override && match?.kind === 'verified') {
       return { resolved: this._resolveDatum(this._fromOverride(override, input.detected)), suggestion: null };
@@ -578,10 +585,17 @@ export class CrsService {
     readonly detected: CrsInfo | undefined;
     /** Source the loader assigned to the detected CRS. */
     readonly source: CrsSource;
+    /**
+     * `false` applies the override for this app session only and writes nothing
+     * to the persistent store: used for a CRS a session file carries, which the
+     * user has not chosen here. Defaults to `true`, the user's own choice.
+     */
+    readonly persist?: boolean;
   }): ResolvedCrs | null {
     if (!this._currentDatasetKey) return null;
     this._suggestion = null;
     if (args.override.kind === 'detected') {
+      this._sessionOverrides.delete(this._currentDatasetKey);
       this._port.clear(this._currentDatasetKey);
       const resolved = this._resolveDatum(
         resolvedFromCrsInfo(args.detected, args.source) ?? unknownCrs(),
@@ -589,7 +603,7 @@ export class CrsService {
       this._setCurrent(resolved);
       return resolved;
     }
-    this._port.set(this._currentDatasetKey, {
+    const record = {
       epsg: args.override.epsg,
       kind: args.override.kind,
       // What this file declared when the choice was made — see resolveForScan.
@@ -602,8 +616,15 @@ export class CrsService {
       detectedEpsgObserved: true,
       ...(this._currentIdentity ? { identity: this._currentIdentity } : {}),
       identityVersion: OVERRIDE_IDENTITY_VERSION,
-    });
-    const override = this._port.get(this._currentDatasetKey);
+    };
+    if (args.persist === false) {
+      this._sessionOverrides.set(this._currentDatasetKey, { ...record, updatedAt: Date.now() });
+    } else {
+      // The user's own choice supersedes anything a session file applied.
+      this._sessionOverrides.delete(this._currentDatasetKey);
+      this._port.set(this._currentDatasetKey, record);
+    }
+    const override = this._sessionOverrides.get(this._currentDatasetKey) ?? this._port.get(this._currentDatasetKey);
     if (!override) return this._current;
     const resolved = this._resolveDatum(this._fromOverride(override, args.detected));
     this._setCurrent(resolved);
@@ -612,6 +633,7 @@ export class CrsService {
 
   /** Clear the active scan's CRS state. Used on close. */
   clear(): void {
+    if (this._currentDatasetKey) this._sessionOverrides.delete(this._currentDatasetKey);
     this._currentDatasetKey = undefined;
     this._suggestion = null;
     this._setCurrent(null);

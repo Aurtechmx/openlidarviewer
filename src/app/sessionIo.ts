@@ -83,10 +83,12 @@ export type { StreamingScanSource, StaticScanCloud };
  * `JSON.parse` over the entire text — an unbounded file can exhaust memory
  * before the parser's per-dimension caps ever apply (and before the try/catch
  * can surface it). An inspection session is analysis metadata, not the scan, so
- * even a rich Evidence Capsule is a few MB; 256 MB is far above any real session
- * while bounding the parse. Over-limit is rejected onto the drop zone.
+ * even a rich Evidence Capsule is a few MB and a session of 20,000 measurements
+ * is about 7 MB; 64 MiB is far above any real session while bounding the
+ * parse (`JSON.parse` of a file of near-empty records costs roughly ten times
+ * its size in heap). Over-limit is rejected onto the drop zone.
  */
-export const MAX_SESSION_BYTES = 256 * 1024 * 1024;
+export const MAX_SESSION_BYTES = 64 * 1024 * 1024;
 
 /** The pure session functions `importSession` resolves lazily (from `../io/session`). */
 export interface SessionModule {
@@ -514,26 +516,58 @@ export async function importSession(
     // WKT/unit as trusted state. `detected` is the ACTIVE scan's own declared CRS
     // — the streaming source's `crs()` when streaming, so compound/vertical
     // metadata reconstruction is not lost to `undefined`.
-    // A catalogue-asserted CRS is not the user's choice, so it is never restored
-    // as a user override; the catalogue record resolves it again on open.
+    // A CRS is restored only when the file records it as a choice the user
+    // confirmed (`userConfirmed` with source `user-override`): a session is
+    // untrusted input, and a CRS it merely names would otherwise rescale every
+    // measurement made under it. A catalogue-asserted or file-derived CRS is not
+    // the user's choice, so it is never restored as one; the scan's own record
+    // resolves it again on open. The restored override applies for this app
+    // session only (`persist: false`): it is written to the device's CRS store
+    // only when the user keeps it, through the toast action below or the
+    // Inspector. When it changes the scan's CRS or unit the user is told.
+    const sessionCrs = session.crs;
     if (
-      session.crs &&
-      session.crs.source !== 'catalog-tile' &&
-      (session.crs.kind === 'local' ||
-        ((session.crs.kind === 'projected' || session.crs.kind === 'geographic') &&
-          session.crs.epsg != null))
+      sessionCrs &&
+      sessionCrs.userConfirmed === true &&
+      sessionCrs.source === 'user-override' &&
+      (sessionCrs.kind === 'local' ||
+        ((sessionCrs.kind === 'projected' || sessionCrs.kind === 'geographic') &&
+          sessionCrs.epsg != null))
     ) {
       const activeStreaming = viewer.streamingCloud;
       const activeStaticId = deps.getActiveScanId();
-      deps.setCrsOverride({
-        override: { epsg: session.crs.epsg ?? null, kind: session.crs.kind },
+      const override = {
+        override: { epsg: sessionCrs.epsg ?? null, kind: sessionCrs.kind },
         detected: activeStreaming
           ? activeStreaming.crs() ?? undefined
           : activeStaticId
             ? viewer.getCloud(activeStaticId)?.metadata?.crs ?? undefined
             : undefined,
-        source: 'user-override',
-      });
+        source: 'user-override' as const,
+      };
+      const declared = declaredSpatialForActiveScan(viewer, deps);
+      deps.setCrsOverride({ ...override, persist: false });
+      const sameAsFile =
+        sessionCrs.kind === 'local'
+          ? declared.epsg === undefined
+          : declared.epsg === sessionCrs.epsg &&
+            (declared.linearUnitToMetres === undefined || declared.linearUnitToMetres === sessionCrs.linearUnitToMetres);
+      if (!sameAsFile) {
+        const unit = sessionCrs.kind === 'local' ? 'no linear unit' : sessionCrs.linearUnit;
+        deps.showToast(
+          `This session set the coordinate system to ${sessionCrs.name} (${unit}). ` +
+            'It applies to this scan for now and is not saved on this device.',
+          {
+            label: 'Keep',
+            // Only for the scan it was applied to: the override acts on whichever scan is active.
+            onClick: () => {
+              if (viewer.streamingCloud === activeStreaming && deps.getActiveScanId() === activeStaticId) {
+                deps.setCrsOverride({ ...override, persist: true });
+              }
+            },
+          },
+        );
+      }
     }
 
     // Import-side ownership resolution (#22). Work restored from a session must
