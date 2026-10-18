@@ -7,6 +7,12 @@ updates:
     directory: "/"
     schedule:
       interval: "weekly"
+    # A release has to be public for a week (two for a major) before it is
+    # offered, so a freshly published malicious version is usually yanked
+    # before it reaches a pull request. Security updates are not delayed.
+    cooldown:
+      default-days: 7
+      semver-major-days: 14
     open-pull-requests-limit: 5
     # Group the noisy dev-tooling bumps into one PR; keep runtime deps separate
     # so a three/loaders.gl bump gets its own focused review.
@@ -27,6 +33,24 @@ updates:
       # ignored, so the release that fixes the peer range is still offered.
       - dependency-name: "@loaders.gl/core"
         versions: ["4.5.1"]
+    labels:
+      - "dependencies"
+
+  # The Node oracles installed into the validation image. A separate manifest
+  # and lockfile from the product's, never shipped, but its advisories are
+  # still reported against this repository, so it is kept current too.
+  - package-ecosystem: "npm"
+    directory: "/validation/oracles/npm"
+    schedule:
+      interval: "weekly"
+    cooldown:
+      default-days: 7
+      semver-major-days: 14
+    open-pull-requests-limit: 5
+    groups:
+      oracle-tooling:
+        patterns:
+          - "*"
     labels:
       - "dependencies"
 
