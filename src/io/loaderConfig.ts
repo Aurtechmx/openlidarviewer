@@ -34,10 +34,14 @@ export const LOCAL_ONLY_LOADER_OPTIONS = {
 } as const;
 
 setLoaderOptions({
-  // No worker spawned ⇒ no worker module fetched from a CDN. This is the single
-  // outbound third-party request the app would otherwise make, so removing it
-  // keeps the runtime fully self-hosted.
+  // No worker spawned ⇒ no worker module fetched from a CDN for the parsers
+  // that run through this module (OBJ, PLY, glTF).
   worker: false,
-  // Belt and suspenders: prefer locally-bundled libraries over the CDN base.
+  // Prefer locally-bundled libraries over the CDN base. This does not cover
+  // every optional library: the Draco mesh decoder is not bundled, and
+  // loaders.gl's library loader would fetch it from a public CDN and evaluate
+  // the returned text. `loadGltf` therefore refuses Draco-compressed assets
+  // before parsing and sets `decompressMeshes: false`, so that path is never
+  // reached.
   useLocalLibraries: true,
 });
