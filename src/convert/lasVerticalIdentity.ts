@@ -11,11 +11,13 @@
  *
  * After writing, the bytes are re-read through the same parser the app opens
  * files with, and the write is refused unless the vertical scale a reader
- * applies and the Z range match the source.
+ * applies and the Z range match the source. That parser merges the WKT with
+ * the vertical GeoKeys beside it, which readers such as PDAL do not do, so a
+ * LAS 1.4 file is checked a second time from its WKT record alone.
  */
 
 import type { CrsInfo, CrsLinearUnit } from '../io/crs';
-import { metresPerLinearUnit } from '../io/crs';
+import { crsFromWkt, metresPerLinearUnit } from '../io/crs';
 import { parseLasHeader } from '../io/lasHeader';
 import { resolveVerticalGeoKeys, verticalUnitName } from '../terrain/export/demGeoTiff';
 
@@ -159,6 +161,65 @@ export function verifyLasVertical(
   if (got === undefined || Math.abs(got - plan.expectedToMetres) > 1e-12) {
     return (
       `Vertical check failed: the written file states ${got === undefined ? 'no usable vertical unit' : `${got} m per height unit`}, ` +
+      `but the source heights are ${plan.expectedToMetres} m per unit. Nothing was written, because the elevations would be misread.`
+    );
+  }
+  return null;
+}
+
+/** The OGC WKT record (LASF_Projection 2112) of a LAS 1.4 file, from its VLRs or EVLRs, or null. */
+function wktRecord(bytes: Uint8Array): string | null {
+  const v = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  const ascii = (at: number, len: number): string => {
+    let out = '';
+    for (let i = 0; i < len; i++) {
+      const c = bytes[at + i];
+      if (c === 0) break;
+      out += String.fromCharCode(c);
+    }
+    return out;
+  };
+  let p = v.getUint16(94, true);
+  for (let i = 0; i < v.getUint32(100, true) && p + 54 <= bytes.byteLength; i++) {
+    const len = v.getUint16(p + 20, true);
+    if (ascii(p + 2, 16) === 'LASF_Projection' && v.getUint16(p + 18, true) === 2112) return ascii(p + 54, len);
+    p += 54 + len;
+  }
+  let e = Number(v.getBigUint64(235, true));
+  for (let i = 0; i < v.getUint32(243, true) && e > 0 && e + 60 <= bytes.byteLength; i++) {
+    const len = Number(v.getBigUint64(e + 20, true));
+    if (ascii(e + 2, 16) === 'LASF_Projection' && v.getUint16(e + 18, true) === 2112) return ascii(e + 60, len);
+    e += 60 + len;
+  }
+  return null;
+}
+
+/**
+ * Check a LAS 1.4 file's heights as a reader that takes the CRS from the WKT
+ * record alone would read them (PDAL and GDAL ignore the GeoKeys once global
+ * encoding bit 4 is set). Returns why the file must not be delivered, or null.
+ */
+export function verifyLasWktVertical(
+  bytes: Uint8Array,
+  plan: Extract<LasVerticalPlan, { ok: true }>,
+  zToMetres: (crs: CrsInfo) => number | undefined,
+): string | null {
+  const v = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  if (v.getUint8(25) < 4 || (v.getUint16(6, true) & 0x10) === 0) return null;
+  const wkt = wktRecord(bytes);
+  if (wkt == null) return 'Vertical check failed: the header declares a WKT coordinate system but the file holds none. Nothing was written.';
+  const crs = crsFromWkt(wkt);
+  if (plan.unknown) {
+    return crs.verticalUnitToMetres !== undefined
+      ? 'Vertical check failed: the written WKT declares a vertical unit the source does not establish. Nothing was written.'
+      : null;
+  }
+  if (plan.expectedToMetres === undefined) return null;
+  // Under a geographic CRS with no vertical CRS, a WKT reader takes heights as metres.
+  const got = zToMetres(crs) ?? (crs.isGeographic && crs.verticalEpsg == null ? 1 : undefined);
+  if (got === undefined || Math.abs(got - plan.expectedToMetres) > 1e-12) {
+    return (
+      `Vertical check failed: read from its WKT alone, the written file states ${got === undefined ? 'no usable vertical unit' : `${got} m per height unit`}, ` +
       `but the source heights are ${plan.expectedToMetres} m per unit. Nothing was written, because the elevations would be misread.`
     );
   }

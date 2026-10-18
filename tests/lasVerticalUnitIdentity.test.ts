@@ -227,6 +227,14 @@ describe('LAS conversion keeps the declared vertical unit (load → resolve → 
       it('metre XY + foot Z declared by unit alone (no vertical CRS): Keep writes the unit alone', () => {
         const { cloud, resolved } = load(sourceLas({ epsg: 32613, linearUnitCode: 9001, verticalUnitCode: 9003 }), 'unit-only.las');
         expect(resolved.verticalUnitToMetres).toBeCloseTo(US_FT, 12);
+        if (format === 'las14') {
+          // A WKT cannot state a height unit without a vertical CRS, and a WKT
+          // reader would take these heights in metres, so LAS 1.4 refuses.
+          const out = convertCloud(cloud, { format, crsMode: 'keep', resolvedSourceCrs: resolved });
+          expect(out.file).toBeNull();
+          expect(out.report.log.map((l) => l.message).join(' ')).toContain('declared in US survey feet with no vertical datum');
+          return;
+        }
         const r = convertOk(cloud, { format, crsMode: 'keep', resolvedSourceCrs: resolved });
         expect(r.keys.get(4096)).toBeUndefined();
         expect(r.keys.get(4099)).toBe(9003);

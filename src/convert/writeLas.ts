@@ -42,6 +42,7 @@ import {
 import { BUILD_IDENTITY, type BuildIdentity } from '../build/buildIdentity';
 import { SCAN_ANGLE_EXTENDED_UNIT_DEG } from '../io/lasDecodeShared';
 import { compoundWkt, isUsableWkt, wktForEpsg } from '../io/epsgWkt';
+import { epsgCrsKind } from './epsg';
 
 const HEADER_SIZE = 227; // LAS 1.2 public header block
 const HEADER_SIZE_14 = 375; // LAS 1.4 public header block (R15)
@@ -161,51 +162,112 @@ export type Las14CrsPlan =
     }
   | { readonly ok: false; readonly message: string };
 
-/** The vertical CRS code the GeoKey VLR records for these options, or null. */
-function writtenVerticalEpsg(opts: WriteLasOptions): number | null {
-  const key = buildVerticalGeoKeys(opts).find(([id]) => id === 4096);
-  return key ? key[1] : null;
+/** The vertical CRS code and unit code the GeoKey VLR records for these options. */
+function writtenVertical(opts: WriteLasOptions): { code: number | null; unit: number | null } {
+  const keys = buildVerticalGeoKeys(opts);
+  return {
+    code: keys.find(([id]) => id === 4096)?.[1] ?? null,
+    unit: keys.find(([id]) => id === 4099)?.[1] ?? null,
+  };
 }
+
+const UNIT_LABEL: Record<number, string> = { 9001: 'metres', 9002: 'feet', 9003: 'US survey feet' };
+const unitLabel = (code: number | null): string => (code != null ? UNIT_LABEL[code] ?? `unit ${code}` : 'an unknown unit');
+
+/** The GeoTIFF unit code of the horizontal axes, 'degree' for a geographic CRS, or null when not known. */
+function horizontalUnit(opts: WriteLasOptions, epsg: number | null): number | 'degree' | null {
+  if (opts.isGeographic === true) return 'degree';
+  if (opts.linearUnitCode != null && opts.linearUnitCode > 0) return opts.linearUnitCode;
+  const info = epsgCrsKind(epsg);
+  if (info.kind === 'geographic') return 'degree';
+  if (info.kind !== 'projected') return null;
+  return info.unit === 'metre' ? 9001 : info.unit === 'foot' ? 9002 : info.unit === 'us-survey-foot' ? 9003 : null;
+}
+
+const COMPOUND_ROOT = /^(COMPD_CS|COMPOUNDCRS)\s*\[/i;
+
+const LAS12_ALTERNATIVE = ' Choose LAS 1.2, which records it as GeoTIFF keys.';
 
 /**
  * Decide the OGC WKT a LAS 1.4 file carries. Pure, so the converter can refuse
  * with a clear message before any bytes are produced; {@link writeLas14} runs
  * the same plan and throws on a refusal.
+ *
+ * Readers such as PDAL take the whole CRS from the WKT when bit 4 is set and
+ * ignore the GeoKeys, so the WKT must carry the vertical CRS as well:
+ *   - a source compound WKT is kept as it is;
+ *   - a horizontal WKT (the source's WKT1, else the stored one for `epsg`) is
+ *     combined with the stored VERT_CS of the vertical code the GeoKeys
+ *     record, which is in the unit of the heights (5703 in US survey feet is
+ *     6360);
+ *   - a vertical code with no stored VERT_CS is refused, since the WKT would
+ *     drop its datum and unit;
+ *   - a height unit with no vertical datum is written only when it is the
+ *     unit a WKT reader assumes for Z (the horizontal linear unit, or metres
+ *     under a geographic CRS); otherwise refused, because no datum is invented
+ *     and the heights would be read in the wrong unit.
+ * The vertical GeoKeys are still written beside the WKT, with the same code.
  */
 export function planLas14Crs(opts: WriteLas14Options): Las14CrsPlan {
   const epsg = opts.epsg != null && Number.isInteger(opts.epsg) && opts.epsg > 0 ? opts.epsg : null;
   const given = opts.wkt != null && opts.wkt.trim().length > 0;
-  const fit = (wkt: string, origin: 'source' | 'constructed', compound: boolean, rejected: boolean): Las14CrsPlan => ({
-    ok: true, wkt, origin, compound, evlr: wkt.length + 1 > VLR_PAYLOAD_MAX, sourceWktRejected: rejected,
+  const usable = given && isUsableWkt(opts.wkt);
+  const fit = (wkt: string, origin: 'source' | 'constructed', compound: boolean): Las14CrsPlan => ({
+    ok: true, wkt, origin, compound, evlr: wkt.length + 1 > VLR_PAYLOAD_MAX, sourceWktRejected: given && !usable,
   });
-  if (given && isUsableWkt(opts.wkt)) return fit(asciiFold(opts.wkt.trim()), 'source', false, false);
-  if (epsg != null) {
-    const horizontal = wktForEpsg(epsg);
-    if (horizontal == null) {
-      const alt = epsg <= 65535
-        ? ' Choose LAS 1.2, which records the EPSG code as GeoTIFF keys, or reproject to a CRS this build defines.'
-        : ' Reproject to a CRS this build defines.';
-      return {
-        ok: false,
-        message:
-          `LAS 1.4 was not written. Point formats 6 to 10 require the coordinate system as OGC WKT, ` +
+  const refuse = (message: string): Las14CrsPlan => ({ ok: false, message: `LAS 1.4 was not written. ${message}` });
+
+  const source = usable ? asciiFold((opts.wkt as string).trim()) : null;
+  if (source != null && COMPOUND_ROOT.test(source)) return fit(source, 'source', true);
+  const stored = epsg != null ? wktForEpsg(epsg) : null;
+  const horizontal = source ?? stored;
+  if (horizontal == null) {
+    if (epsg != null) {
+      return refuse(
+        'Point formats 6 to 10 require the coordinate system as OGC WKT, ' +
           `and this build has no verified WKT definition for EPSG:${epsg}` +
-          `${given ? ' (the WKT the source carried is not a usable definition)' : ''}.${alt}`,
-      };
+          `${given ? ' (the WKT the source carried is not a usable definition)' : ''}.` +
+          (epsg <= 65535
+            ? ' Choose LAS 1.2, which records the EPSG code as GeoTIFF keys, or reproject to a CRS this build defines.'
+            : ' Reproject to a CRS this build defines.'),
+      );
     }
-    const compound = compoundWkt(horizontal, writtenVerticalEpsg(opts));
-    return fit(compound ?? horizontal, 'constructed', compound != null, given);
+    if (given) {
+      return refuse(
+        'The WKT the source carried is not a usable coordinate-system definition, ' +
+          'and no EPSG code identifies the CRS, so no valid WKT record can be written. Assign the EPSG code of the CRS, ' +
+          'or export without a CRS.',
+      );
+    }
+    return { ok: true, wkt: null, origin: 'none', compound: false, evlr: false, sourceWktRejected: false };
   }
-  if (given) {
-    return {
-      ok: false,
-      message:
-        'LAS 1.4 was not written. The WKT the source carried is not a usable coordinate-system definition, ' +
-        'and no EPSG code identifies the CRS, so no valid WKT record can be written. Assign the EPSG code of the CRS, ' +
-        'or export without a CRS.',
-    };
+  const origin = source != null ? 'source' : 'constructed';
+
+  const vertical = writtenVertical(opts);
+  if (vertical.code != null) {
+    // A source WKT2 horizontal cannot take a WKT1 VERT_CS; the stored WKT1 for
+    // the same code can.
+    const compound = compoundWkt(horizontal, vertical.code) ?? (stored != null ? compoundWkt(stored, vertical.code) : null);
+    if (compound == null) {
+      return refuse(
+        `The heights are in vertical CRS EPSG:${vertical.code}, and this build cannot write that vertical CRS into the file's WKT, ` +
+          'so a reader of the WKT would lose the vertical datum and unit.' + LAS12_ALTERNATIVE,
+      );
+    }
+    return fit(compound, compound.includes(horizontal) ? origin : 'constructed', true);
   }
-  return { ok: true, wkt: null, origin: 'none', compound: false, evlr: false, sourceWktRejected: false };
+  if (vertical.unit != null) {
+    const h = horizontalUnit(opts, epsg);
+    const assumed = h === 'degree' ? 9001 : h;
+    if (assumed !== vertical.unit) {
+      return refuse(
+        `The heights are declared in ${unitLabel(vertical.unit)} with no vertical datum. A WKT cannot state a vertical unit ` +
+          `without a vertical CRS, and a reader of it would take the heights in ${h === 'degree' ? 'metres' : unitLabel(h)}.` +
+          LAS12_ALTERNATIVE,
+      );
+    }
+  }
+  return fit(horizontal, origin, false);
 }
 
 function writeFixedString(bytes: Uint8Array, offset: number, len: number, text: string): void {

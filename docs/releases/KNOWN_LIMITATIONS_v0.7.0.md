@@ -485,9 +485,14 @@ gives the reason. The scale widens on an axis whose extent would need more than
   MGA zones, the national grids and geographic CRS of the built-in registry,
   and a scan's own valid WKT. Any other EPSG code, including State Plane
   codes, is refused for LAS 1.4 and can be written as LAS 1.2 with GeoTIFF
-  keys. A vertical CRS is added to the WKT only for the vertical codes the
-  LAS vertical keys already check; another vertical code travels as a GeoKey
-  beside a horizontal WKT.
+  keys. The vertical CRS goes into the WKT as a compound only for the vertical
+  codes the LAS vertical keys already check (NAVD88, NGVD29, MSL, EGM, AHD,
+  NAP, DHHN2016, EVRF and the others in that table, in the unit of the
+  heights); a LAS 1.4 export with another vertical code is refused. Heights
+  with a declared unit but no vertical datum are written to LAS 1.4 only when
+  the unit is the one a WKT reader assumes (the horizontal unit, or metres
+  under a geographic CRS); otherwise the export is refused, because no datum
+  is invented. LAS 1.2 records either case as GeoTIFF keys.
 - Assign EPSG accepts a geographic or projected code from the EPSG v12.029
   tables or the built-in registry. A code added to EPSG after v12.029 is
   refused as unknown until the tables are regenerated

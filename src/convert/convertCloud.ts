@@ -15,6 +15,7 @@ import { truncationOf } from '../io/truncation';
 import { safeEntryName, singleLine } from '../export/safeText';
 import { classEditLine, classesEdited, pointBasisOfCloud, softwareLine, sourceFileLine } from '../export/exportProvenanceLines';
 import type { PointCloud } from '../model/PointCloud';
+import type { CrsInfo } from '../io/crs';
 import { ATTR_COLOUR_INVALID, ATTR_INTENSITY_INVALID, countAttributeInvalid, intensityNormalisationLine } from '../model/PointCloud';
 import { sourcePositions } from '../model/pointFrames';
 import { classifyScanShape } from '../terrain/scanShape';
@@ -73,7 +74,7 @@ import { planLas14Crs, writeLas, writeLas14 } from './writeLas';
 import { outputCrsKind } from './outputCrsKind';
 import { planQuantisation } from './lasQuantisation';
 import { spatialContextFrom, verticalMetresPerUnit } from '../geo/SpatialContext';
-import { planLasVertical, verifyLasVertical } from './lasVerticalIdentity';
+import { planLasVertical, verifyLasVertical, verifyLasWktVertical } from './lasVerticalIdentity';
 import { writeXyzBytes, writeAscBytes } from './writeAscii';
 import { reprojectGlobal } from './reproject';
 import type { TransformProvenance } from './transformProvenance';
@@ -462,7 +463,7 @@ export function convertCloud(
         log.push({
           level: 'info',
           message:
-            `CRS written as OGC WKT${crsPlan.origin === 'source' ? ' (the source\u2019s own)' : ` for EPSG:${outEpsg}${crsPlan.compound ? ' with its vertical CRS' : ''}`}` +
+            `CRS written as OGC WKT${crsPlan.origin === 'source' ? ' from the source WKT' : ` for EPSG:${outEpsg}`}${crsPlan.compound ? ' with its vertical CRS' : ''}` +
             `${crsPlan.evlr ? ', in an extended VLR because it exceeds the 65,535-byte VLR limit' : ''}.`,
         });
       }
@@ -571,7 +572,8 @@ export function convertCloud(
       });
     }
     const z = zRange(g);
-    const verticalProblem = verifyLasVertical(bytes, vertical, z.min, z.max, (crs) => verticalMetresPerUnit(spatialContextFrom(crs), 'horizontal-when-known'));
+    const zToMetres = (crs: CrsInfo): number | undefined => verticalMetresPerUnit(spatialContextFrom(crs), 'horizontal-when-known');
+    const verticalProblem = verifyLasVertical(bytes, vertical, z.min, z.max, zToMetres) ?? verifyLasWktVertical(bytes, vertical, zToMetres);
     if (verticalProblem) return fail(verticalProblem, crsNote);
   } else {
     // ASCII holds fewer columns than the cloud: say which were left out, here

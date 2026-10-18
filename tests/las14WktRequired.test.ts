@@ -107,7 +107,7 @@ describe('source WKT', () => {
       expect(report.ok).toBe(true);
       expect(encoding(file!.bytes) & 0x10).toBe(0x10);
       expect(wktOf(file!.bytes)).toBe(SOURCE_WKT);
-      expect(messages(report)).toContain('CRS written as OGC WKT (the source’s own).');
+      expect(messages(report)).toContain('CRS written as OGC WKT from the source WKT.');
     }
   });
 
