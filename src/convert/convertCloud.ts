@@ -17,9 +17,7 @@ import { classEditLine, classesEdited, pointBasisOfCloud, softwareLine, sourceFi
 import type { PointCloud } from '../model/PointCloud';
 import type { CrsInfo } from '../io/crs';
 import { ATTR_COLOUR_INVALID, ATTR_INTENSITY_INVALID, countAttributeInvalid, intensityNormalisationLine } from '../model/PointCloud';
-import { sourcePositions } from '../model/pointFrames';
-import { classifyScanShape } from '../terrain/scanShape';
-import { isZUpFormat } from '../io/sniffFormat';
+import { planAxisHandling, rotateYUpToZUp, yUpRotationEvent } from './axisHandling';
 import { cloudToGlobal } from './globalPoints';
 import { describeLoss, inspectLegacyConversion } from '../lasSemantics';
 import { legacyClassReinterpretationRefusal, planClassSemantics } from './classSemantics';
@@ -207,33 +205,25 @@ export function convertCloud(
   if (g.count === 0) {
     return fail('Nothing was exported: the scan has no points in the current scope, so no file was written.');
   }
-  // Every output format here reads Z as elevation (LAS by spec; the ASCII
-  // writers by the same convention), which is wrong for the Y-up mesh formats:
-  // raw storage order would put the mesh's elevation in the northing column and
-  // its depth in the height column — plausible numbers, scrambled axes. Same
-  // remedy as the terrain pipeline (`terrain/canonicalFrame.ts`): one rotation
-  // at the boundary, (x, y, z) → (x, −z, y), so every writer stays
-  // axis-ignorant. Disclosed in the report because the written coordinates no
-  // longer match the source bytes.
-  // Mesh formats carry no mandated up-axis (photogrammetry writes Y-up,
-  // CloudCompare/PDAL-style tools write Z-up PLYs), so the DATA decides via the
-  // same detection the terrain gather uses — a format table alone rotated
-  // genuinely Z-up PLYs into vertical walls there, and would corrupt exports
-  // identically here. Survey formats skip detection: Z-up by spec.
-  let rotatedToZUp = false;
-  if (!isZUpFormat(cloud.sourceFormat) && classifyScanShape(sourcePositions(cloud)).up === 'y') {
-    rotatedToZUp = true;
-    const { y, z } = g;
-    for (let i = 0; i < g.count; i++) {
-      const yv = y[i];
-      y[i] = -z[i];
-      z[i] = yv;
-    }
-    log.push({
-      level: 'info',
-      message:
-        'Y-up source rotated into the Z-up survey frame (elevation → Z, north → Y) so the output axes mean what the format says they mean.',
-    });
+  // The written coordinates are the source coordinates. A shape classifier
+  // never authorises a transformation (a surveyed facade reads as Y-up to it),
+  // and nor does the viewer's display orientation, so the only axis change is
+  // the rotation of a local Y-up model the request asks for explicitly. Metadata
+  // decides the refusals: a kept or assigned CRS, a Z-up-by-spec format, or a
+  // glTF (Y-up by spec) under a CRS. See axisHandling.ts.
+  const axes = planAxisHandling({
+    format: cloud.sourceFormat,
+    handling: opts.axisHandling ?? 'preserve',
+    mode,
+    sourceCrs,
+    sourceEpsg,
+    targetEpsg: opts.targetEpsg ?? null,
+  });
+  if (!axes.ok) return fail(axes.message);
+  const rotatedToZUp = axes.rotate;
+  if (rotatedToZUp) {
+    rotateYUpToZUp(g);
+    record(yUpRotationEvent(g.count));
   }
   let outEpsg: number | null = sourceEpsg;
   let crsNote: string;
@@ -251,7 +241,7 @@ export function convertCloud(
   let transformProvenance: TransformProvenance | null = null;
 
   if (mode === 'keep') {
-    crsNote = sourceEpsg != null ? `kept ${epsgLabel(sourceEpsg)}` : 'no CRS recorded (coordinates unchanged)';
+    crsNote = sourceEpsg != null ? `kept ${epsgLabel(sourceEpsg)}` : rotatedToZUp ? 'no CRS recorded (axes rotated Y-up to Z-up)' : 'no CRS recorded (coordinates unchanged)';
   } else if (mode === 'assign') {
     if (opts.targetEpsg == null) return fail('Assign mode needs a target EPSG.');
     outEpsg = opts.targetEpsg;

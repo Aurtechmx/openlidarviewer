@@ -134,7 +134,7 @@ describe('XYZ', () => {
     const t = text(file!.bytes);
     expect(comments(t)).toEqual([
       '# OpenLiDARViewer XYZ export',
-      '# crs: none recorded (coordinates unchanged from the source)',
+      '# crs: none recorded',
       expect.stringMatching(/^# Software: OpenLiDARViewer \S+ \(testtest\)$/),
       '# Source file: survey.las',
       '# Point basis: full file (3 points)',

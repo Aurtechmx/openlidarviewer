@@ -46,11 +46,15 @@ function datumTransformComment(note: string | null | undefined): string | null {
   return t ? `# datum-transform: ${singleLine(t)}` : null;
 }
 
-/** The `# crs:` comment both ASCII writers put in their header. */
+/**
+ * The `# crs:` comment both ASCII writers put in their header. It names the
+ * CRS only; whether the coordinates changed is said by the conversion-event
+ * lines that follow (an explicit axis rotation records one).
+ */
 export function crsComment(epsg: number | null | undefined, crsName: string | null | undefined): string {
   if (epsg != null) return `# crs: EPSG:${epsg}`;
   if (crsName) return `# crs: ${singleLine(crsName)}`;
-  return '# crs: none recorded (coordinates unchanged from the source)';
+  return '# crs: none recorded';
 }
 
 type XyzCrs = { readonly epsg?: number | null; readonly crsName?: string | null };
