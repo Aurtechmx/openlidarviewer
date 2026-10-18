@@ -12,11 +12,17 @@
  * produces assets nobody may publish, which invites someone to publish them
  * anyway "since the tests passed".
  *
+ * A publishable tag must also sit on the main branch's history. Pushing a tag
+ * is a smaller act than merging to a protected branch, so a tag on a commit
+ * that never went through main's review and required checks would otherwise
+ * run the whole release pipeline and attest the result as this repository's
+ * release. `git.ancestorOfMain` carries that answer.
+ *
  * Usage: node scripts/validate-release-ref.mjs [--require-tag]
  */
 
 import { readFileSync, existsSync } from 'node:fs';
-import { execFileSync } from 'node:child_process';
+import { execFileSync, spawnSync } from 'node:child_process';
 import { resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { requireBinaryOnPath } from './lib/binaryOnPath.mjs';
@@ -59,6 +65,18 @@ export function validateReleaseRef({ env = {}, git = {}, files = {}, requireTag 
   const tagTarget = git.tagTarget ?? null;
   if (requireTag && head && tagTarget && head !== tagTarget) {
     problems.push(`HEAD ${head.slice(0, 7)} is not the ${expectedTag} target ${tagTarget.slice(0, 7)}`);
+  }
+
+  // 2b. The tagged commit must be reachable from main. `true` is the only
+  // passing value: `false` means the commit is off main, and anything else
+  // (not computed, origin/main not fetched) means the rule could not be
+  // checked, which for a trust boundary is a refusal, not a pass.
+  if (requireTag) {
+    if (git.ancestorOfMain === false) {
+      problems.push(`${expectedTag} points at a commit that is not an ancestor of origin/main — release tags must be on main`);
+    } else if (git.ancestorOfMain !== true) {
+      problems.push('could not establish that the tagged commit is an ancestor of origin/main (fetch main first)');
+    }
   }
 
   // 3. A dirty tree means the archive would not match the commit.
@@ -117,6 +135,16 @@ if (isMain()) {
       return null;
     }
   };
+  /** true / false from `git merge-base --is-ancestor`; null when git could not answer. */
+  const isAncestorOfMain = () => {
+    const r = spawnSync(GIT, ['merge-base', '--is-ancestor', 'HEAD', 'refs/remotes/origin/main'], {
+      cwd: ROOT,
+      stdio: 'ignore',
+    });
+    if (r.status === 0) return true;
+    if (r.status === 1) return false;
+    return null;
+  };
   const version = JSON.parse(readFileSync(resolve(ROOT, 'package.json'), 'utf8')).version;
   const { ok, problems, expectedTag } = validateReleaseRef({
     env: process.env,
@@ -124,6 +152,7 @@ if (isMain()) {
       head: sh(['rev-parse', 'HEAD']),
       tagTarget: sh(['rev-list', '-n1', `v${version}`]),
       dirty: (sh(['status', '--porcelain']) ?? '') !== '',
+      ancestorOfMain: requireTag ? isAncestorOfMain() : null,
     },
     requireTag,
   });

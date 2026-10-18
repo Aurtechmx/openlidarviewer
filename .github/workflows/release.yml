@@ -42,10 +42,11 @@ jobs:
     permissions:
       contents: read
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0 # tags, so the ref validator can resolve the target
-      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           # .nvmrc pins the exact canonical version. `node-version: 22` floats
           # to the newest 22.x, which now ships npm 10.9.8 while the evidence
@@ -58,7 +59,25 @@ jobs:
           npm --version
           test "$(node -p 'process.versions.node')" = "$(cat .nvmrc)"
           test "$(npm --version)" = "$(node -p "require('./package.json').packageManager.split('@')[1]")"
-      - name: Ref is publishable (tag matches package, HEAD is the tag, tree clean)
+      # A tag is cheaper to push than a merge to a protected branch is to
+      # make, so the tag alone is not a trust root. A release is built only
+      # from a commit that is already on main, which is the history that
+      # required review and passing checks. Main is fetched explicitly rather
+      # than trusted from the checkout, so the comparison is against its
+      # current tip.
+      - name: Tagged commit is on main
+        if: github.ref_type == 'tag'
+        env:
+          TAG: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          git fetch --no-tags origin '+refs/heads/main:refs/remotes/origin/main'
+          if ! git merge-base --is-ancestor "$GITHUB_SHA" refs/remotes/origin/main; then
+            echo "::error::Tag ${TAG} points at ${GITHUB_SHA}, which is not an ancestor of origin/main. Release tags must be created on commits that are already on main."
+            exit 1
+          fi
+          echo "${GITHUB_SHA} is reachable from origin/main."
+      - name: Ref is publishable (tag matches package, HEAD is the tag, tree clean, tag is on main)
         run: node scripts/validate-release-ref.mjs
 
   # ── Every mandatory stage, one log, one record ────────────────────────────
@@ -81,13 +100,13 @@ jobs:
     # mutation workflow carries its own, larger budget.
     timeout-minutes: 150
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
-      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version-file: '.nvmrc'
-          cache: npm
       # No dependency lifecycle script runs during install. The browsers the
       # e2e stages need are not a side effect of the install either; the step
       # below fetches them explicitly, from the version the lockfile pinned.
@@ -170,10 +189,11 @@ jobs:
     permissions:
       contents: read
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
-      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version-file: '.nvmrc'
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
@@ -266,18 +286,21 @@ jobs:
       checks: read
     timeout-minutes: 140
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
-      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version-file: '.nvmrc'
       - name: CI passed for the tagged commit
         env:
           GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
         run: |
           set -euo pipefail
           SHA="$(git rev-parse HEAD)"
           node scripts/check-ci-for-sha.mjs \
-            --repo "${{ github.repository }}" \
+            --repo "$REPO" \
             --sha "$SHA" \
             --workflow ci.yml \
             --timeout-minutes 120 \
@@ -291,7 +314,10 @@ jobs:
     # This job only reports a status, so it needs no access to the repository.
     permissions: {}
     steps:
-      - run: echo "Every blocking job passed for ${{ github.ref_name }}."
+      - name: Report
+        env:
+          TAG: ${{ github.ref_name }}
+        run: echo "Every blocking job passed for ${TAG}."
 
   # ── Draft prerelease, tag refs only ───────────────────────────────────────
   # A draft, never auto-published: a human reads the body and presses publish.
@@ -309,6 +335,27 @@ jobs:
       id-token: write
       attestations: write
     steps:
+      # A release that already exists is never modified from here. Tags are
+      # meant to be immutable, and a rerun or a re-pushed tag must not replace
+      # the assets, notes or attestations people have already been pointed at.
+      # Only a "not found" answer lets the job continue; any other failure
+      # (network, permission) stops it rather than being read as "absent".
+      - name: Refuse to modify an existing release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          set -uo pipefail
+          if out="$(gh release view "$TAG" 2>&1)"; then
+            echo "::error::A release for ${TAG} already exists. This workflow only creates releases; it will not modify one. Delete the release deliberately if it must be rebuilt."
+            exit 1
+          fi
+          if ! grep -qi 'release not found' <<<"$out"; then
+            echo "::error::Could not determine whether a release for ${TAG} exists: ${out}"
+            exit 1
+          fi
+          echo "No release for ${TAG} yet."
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           name: release-assets
@@ -336,7 +383,9 @@ jobs:
       # empty body. v0.6.8 was tagged that way: every asset uploaded, the job
       # green, the release page blank. Fail here instead.
       - name: Check the notes reached the publish job
-        run: test -f "assets/RELEASE_NOTES_${{ github.ref_name }}.md"
+        env:
+          TAG: ${{ github.ref_name }}
+        run: test -f "assets/RELEASE_NOTES_${TAG}.md"
 
       - name: Create the draft release
         uses: softprops/action-gh-release@efb35369e0ad2afab669f228072c1b0d510eae64 # v3.0.3
@@ -354,3 +403,7 @@ jobs:
           body_path: assets/RELEASE_NOTES_${{ github.ref_name }}.md
           files: assets/**/*
           fail_on_unmatched_files: true
+          # The default replaces a same-named asset on an existing release. The
+          # step above already refuses an existing release; this keeps the
+          # action itself from overwriting if that ever changes.
+          overwrite_files: false
