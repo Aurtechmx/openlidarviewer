@@ -78,9 +78,12 @@ export function parseResolvedCrs(v: unknown): SerializedResolvedCrs | null {
     ...(typeof v.verticalDatum === 'string' && v.verticalDatum.length > 0
       ? { verticalDatum: v.verticalDatum }
       : {}),
+    // A declared vertical unit that could not be read was saved as a
+    // non-finite factor, which JSON writes as null. It comes back invalid
+    // (NaN), never absent: absent would let heights borrow the horizontal unit.
     ...(isFiniteNumber(v.verticalUnitToMetres) && v.verticalUnitToMetres > 0
       ? { verticalUnitToMetres: v.verticalUnitToMetres }
-      : {}),
+      : 'verticalUnitToMetres' in v && v.verticalUnitToMetres !== undefined ? { verticalUnitToMetres: Number.NaN } : {}),
     ...(typeof v.verticalLinearUnit === 'string' && CRS_LINEAR_UNITS.includes(v.verticalLinearUnit as never)
       ? { verticalLinearUnit: v.verticalLinearUnit as ResolvedCrs['linearUnit'] }
       : {}),

@@ -538,6 +538,8 @@ export async function generateReportPdf(templateId: string, deps: ReportExportDe
     geographicCrs: viewer.measure.geographicCrs,
     // No local vertical (geocentric, depth-down): heights are withheld too.
     verticalRefused: viewer.measure.verticalRefused === true,
+    // A declared vertical unit that cannot be read: no height prints as metres.
+    verticalScaleInvalid: viewer.measure.verticalUnitInvalid === true,
     provenance: provenanceFp,
     // The file's own declared source metadata (E57 today) — verbatim,
     // rendered by the report's "Declared source metadata" section under the

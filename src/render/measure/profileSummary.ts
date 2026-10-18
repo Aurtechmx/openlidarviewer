@@ -20,7 +20,7 @@
  */
 
 import type { ProfileChartSample } from './types';
-import { VERTICAL_NOT_AVAILABLE } from './types';
+import { VERTICAL_NOT_AVAILABLE, VERTICAL_SCALE_NOT_AVAILABLE } from './types';
 import { formatStationing, formatGradePercent, formatEndpointGradient, profileSampleCovered } from './civilProfileStats';
 import { GEOGRAPHIC_CRS_MEASURE_NOTICE, formatElevation, formatRise, formatLength, formatUnitUnverified, unitToken, type DisplayUnits } from './format';
 // Height headings come from one vocabulary, where "Elevation" is earned by an
@@ -431,7 +431,7 @@ function heightColumnToken(reference: VerticalReference): string {
  * caller passes the active CRS's geographic flag too.
  */
 export function profileCsvRefusal(
-  s: { readonly trust?: { readonly reasons: readonly string[] } },
+  s: { readonly trust?: { readonly reasons: readonly string[] }; readonly value?: string },
   geographicCrs: boolean | undefined,
   verticalRefused?: boolean,
 ): string | null {
@@ -442,8 +442,10 @@ export function profileCsvRefusal(
   // A frame with no local vertical refuses the profile's elevations too; the
   // live grade carries that reason on the trust record.
   // The live flag counts as well as the trust record, as for the geographic case.
-  const fromTrust = s.trust?.reasons.find((r) => r.includes(VERTICAL_NOT_AVAILABLE));
+  const fromTrust = s.trust?.reasons.find((r) => r.includes(VERTICAL_NOT_AVAILABLE) || r.includes(VERTICAL_SCALE_NOT_AVAILABLE));
   if (fromTrust) return fromTrust;
+  // An unreadable vertical unit refuses the row itself; its value says why.
+  if (s.value === VERTICAL_SCALE_NOT_AVAILABLE) return `Profile elevations ${VERTICAL_SCALE_NOT_AVAILABLE}.`;
   return verticalRefused === true ? `Profile elevations ${VERTICAL_NOT_AVAILABLE}.` : null;
 }
 

@@ -245,7 +245,7 @@ import { CatalogPanel, buildCuratedDemoSample } from './ui/CatalogPanel';
 // streaming clouds expose `.crs()` returning the same shape.
 import type { StreamingReportCloud } from './app/streamingScanReport'; import { runStreamingModules, preloadStreamingReport } from './app/streamingReportSeam';
 import { CrsService, datasetIdentity } from './geo/CrsService';
-import { groundMetresPermitted, verticalMetresPerUnit, volumeUnitCaveat } from './geo/SpatialContext';
+import { groundMetresPermitted, verticalMetresPerUnit, volumeClaimRefusal, volumeUnitCaveat } from './geo/SpatialContext';
 import { prepareEpochFrames, epochUnitMismatchLines, compareSuggestionAllowed } from './app/epochFramePrep';
 // Shared vertical-unit labeller (already eager via terrainAnalysisRunner) —
 // feeds the colorbar legend's elevation unit from the resolved CRS.
@@ -592,10 +592,10 @@ const lassoVolumeTool = new LassoVolumeTool(stage.canvas, {
     // misleading: replace the metrics line with the caveat and refuse a Save
     // button (project / confirm a CRS first). safe-explicit-local keeps the
     // metrics in source units with a softer "units assumed metres" line.
-    const crsVerdict = crsService.validation();
-    if (!crsVerdict.canDisplayMetric) {
+    const crsVerdict = crsService.validation(), volumeRefused = volumeClaimRefusal(ctx, crsVerdict);
+    if (volumeRefused) {
       showLassoToast(
-        `Volume can't be claimed in this CRS — ${crsVerdict.reason} ${crsVerdict.suggestion}`,
+        `Volume can't be claimed in this CRS — ${volumeRefused}`,
         { label: 'Learn why', onClick: () => helpOverlay.openTopic('export-trust') }, // Help explains the unit gate
       );
       pendingLassoSave = null;

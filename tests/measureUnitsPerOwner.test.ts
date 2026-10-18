@@ -30,6 +30,7 @@ const frame = (unitToMetres: number, over: Partial<MeasureUnitFrame> = {}): Meas
   unitToMetres,
   verticalUnitToMetres: unitToMetres,
   verticalUnitKnown: true,
+  verticalUnitInvalid: false,
   crsKnown: true,
   geographic: false,
   verticalRefused: false,

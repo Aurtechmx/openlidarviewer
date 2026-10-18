@@ -83,6 +83,8 @@ export interface ComposeReportInputs {
   readonly geographicCrs?: boolean;
   /** True when the frame has no valid local vertical; see `buildMeasurementRows`. */
   readonly verticalRefused?: boolean;
+  /** True when the vertical unit is declared and cannot be read; see `buildMeasurementRows`. */
+  readonly verticalScaleInvalid?: boolean;
   /**
    * Why measurements were left out of this scan's report (taken on another
    * scan, or on one whose owner cannot be resolved). Printed under the
@@ -154,6 +156,7 @@ export function composeReportInputs(input: ComposeReportInputs): ReportInputs {
       input.unitsVerified ?? true,
       input.geographicCrs ?? false,
       input.verticalRefused ?? false,
+      input.verticalScaleInvalid ?? false,
     ),
     ...(input.measurementsWithheld ? { measurementsWithheld: input.measurementsWithheld } : {}),
     technicalNotes: input.technicalNotes,

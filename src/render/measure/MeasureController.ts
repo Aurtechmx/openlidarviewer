@@ -31,7 +31,7 @@ import type {
   UnitSystem,
   VolumeRecord,
 } from './types';
-import { GEOGRAPHIC_NOT_AVAILABLE, MIN_POINTS, UNRESOLVED_UNIT_FRAME, UP_AXIS_CONFLICT, VERTICAL_NOT_AVAILABLE, frameRefusalText, isFull, sameUnitFrame, sameUp, upAxisRefusesKind, type MeasureUnitFrame } from './types';
+import { GEOGRAPHIC_NOT_AVAILABLE, MIN_POINTS, UNRESOLVED_UNIT_FRAME, UP_AXIS_CONFLICT, VERTICAL_NOT_AVAILABLE, VERTICAL_SCALE_NOT_AVAILABLE, frameRefusalText, isFull, sameUnitFrame, sameUp, upAxisRefusesKind, type MeasureUnitFrame } from './types';
 import type { WorkOwnership } from '../../model/workOwnership';
 import type { ProfileProvenance } from './profileProvenance';
 import type { WithheldReadCounts } from '../../science/withheldCounts';
@@ -550,6 +550,13 @@ export class MeasureController {
    * declared vertical unit therefore has none.
    */
   private _verticalUnitKnown = false;
+  /**
+   * The file declares a vertical unit that cannot be read (an angular unit, a
+   * zero, negative or non-finite factor). Every figure that reads Z is then
+   * refused with {@link VERTICAL_SCALE_NOT_AVAILABLE}; the up axis draws with
+   * the horizontal factor but no height is ever converted by it.
+   */
+  private _verticalUnitInvalid = false;
   // ── Snap (A1) ──────────────────────────────────────────────────────────────
   // Snapping a placed vertex to the nearest real return (honest default) or to
   // existing measurement geometry. `_snapIndex` is built from the resident
@@ -901,16 +908,25 @@ export class MeasureController {
    * single-unit CRS this equals the horizontal factor and every readout is
    * bit-identical to the pre-compound behaviour; when it differs, heights and
    * other pure-vertical readouts scale by this factor and the mixed 3D
-   * quantities refuse (see {@link _gradeMeasurement}). Invalid factors (NaN, 0,
-   * negative) clear the override so the up axis rides the horizontal factor.
+   * quantities refuse (see {@link _gradeMeasurement}). An invalid factor (NaN,
+   * 0, negative) is a declared vertical unit that cannot be read: the up axis
+   * draws with the horizontal factor, and every figure that reads Z is refused
+   * rather than converted by that factor.
    */
   setVerticalUnitToMetres(factor: number): void {
-    const next = Number.isFinite(factor) && factor > 0 ? factor : null;
-    if (next === this._verticalUnitToMetres) return;
+    const valid = Number.isFinite(factor) && factor > 0;
+    const next = valid ? factor : null;
+    if (next === this._verticalUnitToMetres && valid !== this._verticalUnitInvalid) return;
     this._verticalUnitToMetres = next;
+    this._verticalUnitInvalid = !valid;
     for (const m of this._measurements) m.trust = this._gradeMeasurement(m);
     this._updateHint();
     this._emitChange();
+  }
+
+  /** True when the file declares a vertical unit that cannot be read (see the field doc). */
+  get verticalUnitInvalid(): boolean {
+    return this._verticalUnitInvalid;
   }
 
   /** Flag whether the file declares a valid vertical unit (see the field doc). */
@@ -1046,6 +1062,7 @@ export class MeasureController {
       unitToMetres: this._unitToMetres,
       verticalUnitToMetres: this._verticalUnitToMetres,
       verticalUnitKnown: this._verticalUnitKnown,
+      verticalUnitInvalid: this._verticalUnitInvalid,
       crsKnown: this._crsKnown,
       geographic: this._geographicCrs,
       verticalRefused: this._verticalRefused,
@@ -1104,6 +1121,7 @@ export class MeasureController {
       this._unitToMetres = f.unitToMetres;
       this._verticalUnitToMetres = f.verticalUnitToMetres;
       this._verticalUnitKnown = f.verticalUnitKnown;
+      this._verticalUnitInvalid = f.verticalUnitInvalid;
       this._crsKnown = f.crsKnown;
       this._geographicCrs = f.geographic;
       this._verticalRefused = f.verticalRefused;
@@ -1151,7 +1169,7 @@ export class MeasureController {
     const f = this._unitToMetres;
     // The row, its breakdown and the overlay obey one refusal: a frame whose
     // axes are not ground distances (degrees) prints the reason, not a number.
-    const refusal = this._upConflict && upAxisRefusesKind(m.kind) ? UP_AXIS_CONFLICT : frameRefusalText(m.kind, this._geographicCrs, this._verticalRefused);
+    const refusal = this._upConflict && upAxisRefusesKind(m.kind) ? UP_AXIS_CONFLICT : this._frameRefusal(m.kind);
     const metricsOk = refusal === null && !this._upConflict;
     return {
       id: m.id,
@@ -1159,7 +1177,8 @@ export class MeasureController {
       name: m.name,
       value: refusal ?? this._headlineText(m),
       ...(this._unitUnverified() || (m.kind === 'height' && this._heightUnverified()) ? { unitUnverified: true } : {}),
-      profileChart: m.profileChart
+      // An unreadable vertical unit has no metres for the chart's elevations.
+      profileChart: m.profileChart && !this._verticalUnitInvalid
         ? scaleProfileSamples(m.profileChart, f, this._originUp, this._effVertical())
         : undefined,
       profileDatumKnown: this._originUp !== null,
@@ -2068,8 +2087,9 @@ export class MeasureController {
       // unit-free unless the axes share a scale: it is invariant under UNIFORM
       // scaling only, so an arm mixing degree horizontal with linear vertical
       // gives a raw-coordinate angle that is physically wrong (pass-6 M3).
-      geographicCrs: frameRefusalText(m.kind, this._geographicCrs, this._verticalRefused) === GEOGRAPHIC_NOT_AVAILABLE,
-      verticalRefused: frameRefusalText(m.kind, this._geographicCrs, this._verticalRefused) === VERTICAL_NOT_AVAILABLE,
+      geographicCrs: this._frameRefusal(m.kind) === GEOGRAPHIC_NOT_AVAILABLE,
+      verticalRefused: this._frameRefusal(m.kind) === VERTICAL_NOT_AVAILABLE,
+      verticalScaleInvalid: this._frameRefusal(m.kind) === VERTICAL_SCALE_NOT_AVAILABLE,
       upConflict: this._upConflict && upAxisRefusesKind(m.kind),
     });
   }
@@ -2197,6 +2217,11 @@ export class MeasureController {
    * own caveat): the factor is an inert 1, so values print in source units
    * marked unverified rather than as metres.
    */
+  /** The frame refusal for `kind` in the current frame (see `frameRefusalText`). */
+  private _frameRefusal(kind: MeasurementKind): string | null {
+    return frameRefusalText(kind, this._geographicCrs, this._verticalRefused, this._verticalUnitInvalid);
+  }
+
   private _unitUnverified(): boolean {
     return !this._crsKnown && !this._geographicCrs;
   }
@@ -2360,6 +2385,7 @@ export class MeasureController {
       }
       // No local vertical (geocentric, depth-down): heights are refused too.
       if (this._verticalRefused) hint = `${hint} — Heights ${VERTICAL_NOT_AVAILABLE}.`;
+      else if (this._verticalUnitInvalid) hint = `${hint} — Figures ${VERTICAL_SCALE_NOT_AVAILABLE}.`;
       this._setHintText(hint);
     }
     this._updateFinishBtnVisibility();
@@ -2479,7 +2505,7 @@ export class MeasureController {
    * the headline reads the refusal and the secondary labels are dropped.
    */
   private _refuseGeographicLabels(m: Measurement, labels: OverlayLabel[], from: number): void {
-    const refusal = this._upConflict && upAxisRefusesKind(m.kind) ? UP_AXIS_CONFLICT : frameRefusalText(m.kind, this._geographicCrs, this._verticalRefused);
+    const refusal = this._upConflict && upAxisRefusesKind(m.kind) ? UP_AXIS_CONFLICT : this._frameRefusal(m.kind);
     if (labels.length <= from) return;
     if (refusal === null) {
       if (!this._geographicCrs) return;
