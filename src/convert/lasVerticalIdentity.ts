@@ -94,6 +94,16 @@ export function planLasVertical(
   if (factor === undefined && token === undefined) {
     // No vertical unit declared: heights are read in the horizontal unit.
     const implied = src.linearUnitKnown ? src.linearUnitToMetres : undefined;
+    // A horizontal unit known only by its factor (centimetres) has no LAS
+    // vertical unit code to state for heights that keep it.
+    if (mode !== 'keep' && implied !== undefined && src.linearUnit === 'unknown') {
+      return {
+        ok: false,
+        message:
+          `Vertical unit not representable: the heights are in the source horizontal unit of ${implied} m, which a LAS vertical unit (metre, foot or US survey foot) cannot state. ` +
+          'Nothing was written, because any of those units would misstate every height.',
+      };
+    }
     const unitCode = mode === 'keep' || implied === undefined ? null : UNIT_CODE[src.linearUnit];
     return { ok: true, verticalEpsg: vEpsg, unitCode, expectedToMetres: implied, unknown: false, warning: null };
   }

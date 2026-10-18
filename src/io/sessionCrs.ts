@@ -65,6 +65,9 @@ export function parseResolvedCrs(v: unknown): SerializedResolvedCrs | null {
     name: v.name,
     linearUnit: v.linearUnit as ResolvedCrs['linearUnit'],
     linearUnitToMetres: v.linearUnitToMetres,
+    // A valid non-named horizontal unit is known only by its factor; keep the
+    // flag only with a factor that can carry it.
+    ...(v.linearUnitByFactor === true && v.linearUnit === 'unknown' && v.linearUnitToMetres > 0 ? { linearUnitByFactor: true as const } : {}),
     source: v.source as ResolvedCrs['source'],
     confidence: v.confidence as ResolvedCrs['confidence'],
     userConfirmed: v.userConfirmed,

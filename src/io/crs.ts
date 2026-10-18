@@ -68,6 +68,16 @@ export interface CrsInfo {
   readonly linearUnit: CrsLinearUnit;
   /** Linear-unit conversion to metres. 1 for metres, 0.3048 for international foot, etc. */
   readonly linearUnitToMetres: number;
+  /**
+   * Set when the horizontal unit is a valid length that is not metre, foot or
+   * US survey foot (a centimetre, kilometre or yard grid): `linearUnit` is then
+   * 'unknown' and `linearUnitToMetres` is the factor the source declares, which
+   * converts every horizontal figure. Absent for a named unit, and for an
+   * unknown one whose `linearUnitToMetres` is only the inert placeholder 1.
+   */
+  readonly linearUnitByFactor?: true;
+  /** Set when the horizontal unit's name disagrees with its factor, or is not one of the named units. */
+  readonly linearUnitNote?: string;
   /** Whether the CRS is geographic (lat/lon in degrees) vs projected (metres on a plane). */
   readonly isGeographic: boolean;
   /**
@@ -623,6 +633,8 @@ export function crsFromWkt(wkt: string): CrsInfo {
     horizNodes.some((n) => isGeographicKeyword(n.keyword) || (isGeodeticKeyword(n.keyword) && csTypeOf(n) === 'ellipsoidal'));
   let linearUnit: CrsLinearUnit = 'unknown';
   let linearUnitToMetres = 1;
+  let linearUnitByFactor = false;
+  let linearUnitNote: string | undefined;
   if (!isGeographic) {
     // Scan ONLY the horizontal slice. A COMPD_CS's vertical block carries
     // its own UNIT (almost always metres); scanning the full text let that
@@ -632,8 +644,13 @@ export function crsFromWkt(wkt: string): CrsInfo {
     if (projectedUnit) {
       const scale = projectedUnit.scale;
       if (Number.isFinite(scale) && scale > 0) {
-        linearUnitToMetres = scale;
-        linearUnit = linearUnitFromNameOrScale(projectedUnit.name.toLowerCase(), scale);
+        // The factor is the unit, as for a vertical unit: a name never
+        // overrides it ("centimetre" is 0.01 m per unit, not a metre).
+        const h = horizontalUnitOf(projectedUnit.name, scale);
+        linearUnit = h.unit;
+        linearUnitToMetres = h.toMetres;
+        linearUnitByFactor = h.unit === 'unknown';
+        linearUnitNote = h.note;
       }
     } else {
       // No UNIT clause is rare on a projected CRS. Take the unit its EPSG
@@ -657,6 +674,8 @@ export function crsFromWkt(wkt: string): CrsInfo {
     epsg,
     linearUnit,
     linearUnitToMetres,
+    ...(linearUnitByFactor ? { linearUnitByFactor: true as const } : {}),
+    ...(linearUnitNote ? { linearUnitNote } : {}),
     isGeographic,
     verticalEpsg: vert.epsg,
     verticalDatum: vUnit.datumLabel ?? vert.name,
@@ -862,22 +881,23 @@ function lastLinearUnit(candidates: readonly WktNode[]): { name: string; scale: 
 }
 
 /**
- * Map a WKT unit name + scale to our internal `CrsLinearUnit` enum. The
- * scale is the authoritative signal — `0.3048006096...` is US survey foot
- * regardless of the unit's textual name — but the name resolves ambiguity
- * when the scale was emitted with limited precision.
+ * The horizontal unit of a WKT unit clause with a valid factor. The factor is
+ * the unit: it is named metre, foot or US survey foot only when it is that
+ * unit within 1e-9 m (writers emit the US survey foot at limited precision),
+ * and then carries the exact factor. Any other factor keeps its declared value
+ * with the token 'unknown', and is a valid unit (`linearUnitByFactor`). A name
+ * is never matched as a substring ("centimetre" is not a metre), and a name
+ * that spells a different named unit than its factor is noted, not obeyed.
  */
-function linearUnitFromNameOrScale(name: string, scale: number): CrsLinearUnit {
-  // US survey foot is 1200/3937 m ≈ 0.3048006096012192. Most writers emit
-  // it as 0.30480060960121921 or rounded to a few decimals; we accept any
-  // value within 1 ppm of the canonical.
-  if (Math.abs(scale - 1200 / 3937) < 1e-9) return 'us-survey-foot';
-  if (Math.abs(scale - 0.3048) < 1e-9) return 'foot';
-  if (Math.abs(scale - 1) < 1e-9) return 'metre';
-  if (/us\s*survey|us\s*foot|ussfoot/i.test(name)) return 'us-survey-foot';
-  if (/foot|feet|^ft$/i.test(name)) return 'foot';
-  if (/metre|meter|^m$/i.test(name)) return 'metre';
-  return 'unknown';
+function horizontalUnitOf(name: string, scale: number): { unit: CrsLinearUnit; toMetres: number; note?: string } {
+  const named = namedUnitForFactor(scale);
+  const spelled = namedUnitForName(name);
+  const note = spelled !== undefined && spelled !== named
+    ? `Declared horizontal unit name "${name}" disagrees with its factor (${scale} m per unit); the factor is used`
+    : named === undefined ? `Declared horizontal unit "${name}" is ${scale} m per unit` : undefined;
+  return named
+    ? { unit: named, toMetres: metresPerLinearUnit(named), ...(note ? { note } : {}) }
+    : { unit: 'unknown', toMetres: scale, ...(note ? { note } : {}) };
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -1465,13 +1485,20 @@ function readNullTerminatedBytes(bytes: Uint8Array): string {
 // Display + measurement helpers (used by UI + the scan-report card)
 // ─────────────────────────────────────────────────────────────────────────────
 
-/** Compact human label for a unit — for inspector + scan-report rows. */
-export function linearUnitLabel(unit: CrsLinearUnit): string {
+/**
+ * Compact human label for a unit — for inspector + scan-report rows. Pass the
+ * CRS's factor too, so a valid unit that is not one of the named three (a
+ * centimetre or kilometre grid) reads by its size rather than as unknown.
+ */
+export function linearUnitLabel(unit: CrsLinearUnit, byFactor?: { readonly linearUnitByFactor?: boolean; readonly linearUnitToMetres?: number }): string {
   switch (unit) {
     case 'metre': return 'metres';
     case 'foot': return 'international ft';
     case 'us-survey-foot': return 'US survey ft';
-    case 'unknown': return 'unknown';
+    case 'unknown': {
+      const f = byFactor?.linearUnitToMetres;
+      return byFactor?.linearUnitByFactor === true && f !== undefined && Number.isFinite(f) && f > 0 ? `units of ${f} m` : 'unknown';
+    }
   }
 }
 

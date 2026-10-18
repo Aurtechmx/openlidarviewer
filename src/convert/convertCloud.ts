@@ -404,6 +404,19 @@ export function convertCloud(
     // declares the SOURCE's own vertical unit, never the horizontal one in its
     // place; an unreadable one is left undeclared and a contradictory one
     // refuses (see lasVerticalIdentity.ts).
+    // A source horizontal unit that is a valid length but not metre, foot or
+    // US survey foot (a centimetre or kilometre grid) has no LAS unit key. The
+    // output keeps source coordinates unless a reprojection was applied, so
+    // only the source's own WKT, written verbatim in LAS 1.4, can state it.
+    const byFactorUnit = sourceCrs != null && srcCtx.linearUnit === 'unknown' && srcCtx.linearUnitKnown
+      && (mode === 'keep' || (mode === 'reproject' && !reprojectApplied));
+    if (byFactorUnit && (opts.format === 'las' || sourceWkt == null)) {
+      return fail(
+        `Horizontal unit not representable: the source coordinates are in a unit of ${srcCtx.linearUnitToMetres} m, which LAS GeoKeys (metre, foot or US survey foot) cannot state. ` +
+        'Nothing was written. Export as LAS 1.4 with the source WKT kept, or reproject to a metre CRS.',
+        crsNote,
+      );
+    }
     const vertical = planLasVertical(srcCtx, sourceCrs != null, mode);
     if (!vertical.ok) return fail(vertical.message, crsNote);
     if (vertical.warning) log.push({ level: 'warn', message: vertical.warning });
@@ -446,6 +459,12 @@ export function convertCloud(
         epsg: outEpsg, wkt: sourceWkt, verticalEpsg: vertical.verticalEpsg, verticalUnitCode: vertical.unitCode,
       });
       if (!crsPlan.ok) return fail(crsPlan.message, crsNote);
+      if (byFactorUnit && crsPlan.origin !== 'source') {
+        return fail(
+          `Horizontal unit not representable: the source coordinates are in a unit of ${srcCtx.linearUnitToMetres} m, and the source WKT that states it could not be kept. Nothing was written.`,
+          crsNote,
+        );
+      }
       if (crsPlan.sourceWktRejected) {
         log.push({ level: 'warn', message: `The source WKT is not a usable definition; the CRS is written as the WKT for EPSG:${outEpsg}.` });
       }

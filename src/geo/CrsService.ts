@@ -784,6 +784,7 @@ export class CrsService {
         detected?.epsg === override.epsg
           ? detected.linearUnitToMetres
           : (entry?.linearUnitToMetres ?? 1),
+      ...(detected?.epsg === override.epsg && detected.linearUnitByFactor ? { linearUnitByFactor: true as const } : {}),
       // Horizontal datum: borrow the detector's WKT datum only when it described
       // this exact EPSG (so an override to a DIFFERENT EPSG drops the now-wrong
       // WKT datum); the registry fallback for the chosen EPSG is then applied

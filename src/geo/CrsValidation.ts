@@ -171,7 +171,7 @@ export function validateCrsForMeasurement(
         severity: 'ok',
         canDisplayMetric: true,
         canSaveMeasurement: true,
-        reason: `Projected CRS with linear unit ${crs.linearUnit}.`,
+        reason: `Projected CRS with linear unit ${crs.linearUnitByFactor ? `of ${crs.linearUnitToMetres} m` : crs.linearUnit}.`,
         suggestion: '',
       };
 

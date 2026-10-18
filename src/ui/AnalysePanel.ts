@@ -2618,6 +2618,8 @@ export class AnalysePanel {
         // Resolved linear unit so a foot-based CRS labels the README's cell
         // size / bounds / elevation as feet instead of the metre default.
         linearUnit: ctx.linearUnit,
+        // A valid unit the token cannot name converts ground distances by its factor.
+        horizontalUnitToMetres: ctx.resolvedUnitToMetres ?? null,
         // Generation parameters (interpolation / smoothing / despike) are derived
         // from the actual run inside buildDemPackage via result.generationParams,
         // so the README can never drift from what produced the raster.
@@ -3281,13 +3283,13 @@ export class AnalysePanel {
     const densityFloor = densityReferenceFloorFor(r.accuracyStandards.densityReferenceFloorsMet, this._contourFrame?.analysedBasis, r.dtm.coverageMode);
     const hasClass = r.excludedByClassification > 0;
     // Whether the source linear unit is confirmed — the same gate every other
-    // unit consumer applies (`crs.linearUnit !== 'unknown'`). An unknown-unit or
+    // unit consumer applies (`isLinearUnitKnown`, which the resolved factor in
+    // the map context is set from; a centimetre grid is known by its factor). An unknown-unit or
     // CRS-less scan carries the inert placeholder factor 1, so the density
     // (pts/m²) and vertical-accuracy (m) verdicts would silently assert metres;
     // pass the flag so scanFitness holds those metric claims and discloses the
     // assumption instead of stamping a bare "pts/m²" / "m".
-    const fitLinearUnit = this._cb.getMapContext?.()?.linearUnit;
-    const unitKnown = fitLinearUnit != null && fitLinearUnit !== 'unknown';
+    const unitKnown = this._cb.getMapContext?.()?.resolvedUnitToMetres != null;
     // What the grade ran on. The grid's coverageMode reads 'full' whenever the
     // grid spans the extent, but the gather strides a large cloud down to a
     // sample first; the core records that stride as its density-scaling

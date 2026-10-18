@@ -265,8 +265,9 @@ export function spatialContextFrom(
 
   // THE gate: unit must be real AND the ladder must permit a metric headline.
   // The two catch different failures — the ladder alone passes a projected CRS
-  // whose unit is 'unknown' (British foot, say: kind is still 'projected'), and
-  // only `isLinearUnitKnown` refuses it; the unit gate alone would pass a
+  // whose unit is 'unknown' with no declared factor (kind is still
+  // 'projected'), and only `isLinearUnitKnown` refuses it; a declared valid
+  // factor that is not a named unit (centimetres, a yard) is known by it; the unit gate alone would pass a
   // geographic CRS if its factor were finite, and only the ladder refuses that.
   const metricClaimsPermitted = linearUnitKnown && verdict.canDisplayMetric;
 

@@ -620,7 +620,12 @@ noted. A vertical unit that is not a length (an angular unit), or whose factor
 is missing, zero, negative or not finite, is invalid: no height is derived from
 it, and it never falls back to the vertical code's unit or the horizontal unit.
 GeoKey vertical unit codes other than metre, foot and US survey foot are not
-read and count as invalid.
+read and count as invalid. A projected CRS unit is read the same way: a
+centimetre, kilometre or yard grid converts by its declared factor in Measure,
+the exports and the scan reports. LAS 1.2 output refuses such a unit, LAS 1.4
+output keeps the source WKT that states it, and the contour DXF, contour SVG
+and map sheet label its coordinates as unitless source units rather than
+naming the unit.
 
 ## Depth references, geocentric frames and Web Mercator are refused, not converted
 

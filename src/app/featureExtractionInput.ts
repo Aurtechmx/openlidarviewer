@@ -24,6 +24,7 @@
  * nothing to extract and the launcher should not appear.
  */
 
+import { isLinearUnitKnown } from '../geo/CoordinateTypes';
 import type { PointCloud } from '../model/PointCloud';
 import type { BuildingPoint, FootprintGrid } from '../features/buildingFootprints';
 import type { Vec3 } from '../features/conductors';
@@ -88,7 +89,7 @@ function nominalSpacing(
  */
 function unitOf(cloud: PointCloud): LinearUnitScale {
   const crs = cloud.metadata?.crs;
-  if (crs != null && crs.linearUnit !== 'unknown' && crs.linearUnitToMetres > 0) {
+  if (crs != null && isLinearUnitKnown(crs) && crs.linearUnitToMetres > 0) {
     return knownUnit(crs.linearUnitToMetres);
   }
   return unknownUnit();

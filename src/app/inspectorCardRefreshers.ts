@@ -221,7 +221,7 @@ export function createInspectorCardRefreshers(
   function captureUnitAuthority(): { readonly metresPerUnit: number | null } | undefined {
     if (!resolvedCrs) return undefined;
     const c = resolvedCrs();
-    if (!c || c.linearUnit === 'unknown') return { metresPerUnit: null };
+    if (!c || !isLinearUnitKnown(c)) return { metresPerUnit: null };
     const f = c.linearUnitToMetres;
     return { metresPerUnit: typeof f === 'number' && Number.isFinite(f) && f > 0 ? f : null };
   }

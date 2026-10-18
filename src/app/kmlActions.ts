@@ -161,7 +161,7 @@ const NOT_SURVEY_GRADE =
 function linearScaleIsMetric(resolved: ResolvedCrs | null): boolean {
   return resolved != null
     && resolved.kind === 'projected'
-    && resolved.linearUnit !== 'unknown'
+    && spatialContextFrom(resolved).linearUnitKnown
     && Number.isFinite(resolved.linearUnitToMetres)
     && resolved.linearUnitToMetres > 0;
 }

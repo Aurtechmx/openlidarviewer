@@ -154,6 +154,8 @@ export interface ResolvedCrs {
    * grid with NAVD88 heights in US survey feet keeps `'us-survey-foot'` here.
    */
   readonly verticalLinearUnit?: CrsLinearUnit;
+  /** See `CrsInfo.linearUnitByFactor`: a valid non-named horizontal unit, converted by its factor. */
+  readonly linearUnitByFactor?: true;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -164,8 +166,10 @@ export interface ResolvedCrs {
  * Whether a CRS declares a REAL linear unit — the canonical fail-closed gate
  * every metric-claiming seam shares (measure tool, lasso density, streaming and
  * scan reports, full-cloud grade, epoch compare). A metre / foot / us-survey-
- * foot CRS is known; a null/undefined CRS, one carrying `linearUnit: 'unknown'`
- * (the inert `linearUnitToMetres: 1` placeholder), or one with no `linearUnit`
+ * foot CRS is known, and so is a valid declared length the source names by
+ * factor (`linearUnitByFactor`, e.g. centimetres); a null/undefined CRS, one
+ * carrying `linearUnit: 'unknown'` with no declared factor (the inert
+ * `linearUnitToMetres: 1` placeholder), or one with no `linearUnit`
  * field at all is NOT — so the caller withholds the "m" / "pts/m²" claim rather
  * than stamping raw source units as metres. The `!== undefined` arm keeps a
  * missing unit on the fail-closed side, matching the streaming-extent / scan-
@@ -175,10 +179,15 @@ export interface ResolvedCrs {
  * passes without a cast. Pure — no DOM, no proj4, no three.
  */
 export function isLinearUnitKnown(
-  crs: { readonly linearUnit?: string } | null | undefined,
+  crs: { readonly linearUnit?: string; readonly linearUnitByFactor?: boolean; readonly linearUnitToMetres?: number } | null | undefined,
 ): boolean {
   const unit = crs?.linearUnit;
-  return unit !== undefined && unit !== 'unknown';
+  if (unit === undefined) return false;
+  if (unit !== 'unknown') return true;
+  // A valid declared length that is not one of the named units (a centimetre
+  // or kilometre grid): known by its own factor, never by the placeholder 1.
+  const f = crs?.linearUnitToMetres;
+  return crs?.linearUnitByFactor === true && f !== undefined && Number.isFinite(f) && f > 0;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -243,6 +252,7 @@ export function resolvedFromCrsInfo(
     epsg: info.epsg,
     linearUnit: info.linearUnit,
     linearUnitToMetres: info.linearUnitToMetres,
+    ...(info.linearUnitByFactor ? { linearUnitByFactor: true as const } : {}),
     // A LAS CRS read from an EVLR is labelled as such, not as a header VLR,
     // and a catalogue assertion as the catalogue's, not the file's.
     source: info.catalogue ? 'catalog-tile' : source === 'las-vlr' && info.record === 'evlr' ? 'las-evlr' : source,
