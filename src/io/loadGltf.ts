@@ -313,6 +313,87 @@ export function externalGltfUris(buffer: ArrayBuffer, sourceFormat: 'glb' | 'glt
   return out;
 }
 
+const DRACO_EXTENSION = 'KHR_draco_mesh_compression';
+
+const DRACO_MESSAGE =
+  'This glTF uses Draco mesh compression (KHR_draco_mesh_compression). The Draco decoder is not bundled ' +
+  'with this viewer and no decoder is downloaded, so the mesh cannot be read. Re-export the model without ' +
+  'Draco compression, or as a PLY or OBJ file.';
+
+/** Bytes per glTF accessor component type; unknown types are costed as 4. */
+const GLTF_COMPONENT_BYTES: Readonly<Record<number, number>> = { 5120: 1, 5121: 1, 5122: 2, 5123: 2, 5125: 4, 5126: 4 };
+/** Components per glTF accessor type; unknown types are costed as 16. */
+const GLTF_TYPE_COMPONENTS: Readonly<Record<string, number>> = {
+  SCALAR: 1, VEC2: 2, VEC3: 3, VEC4: 4, MAT2: 4, MAT3: 9, MAT4: 16,
+};
+
+/**
+ * Refuse a glTF whose JSON asks for work the file cannot back, BEFORE
+ * loaders.gl parses it.
+ *
+ * The parser allocates a zero-filled typed array for an accessor that has no
+ * `bufferView` (the spec's zero-initialised accessor) and for a sparse
+ * accessor's base, sized from the declared `count`. A ~400-byte GLB declaring
+ * 300 million VEC3 floats therefore reserved 3.6 GB before the vertex cap was
+ * consulted. An accessor that does have a `bufferView` is a view into bytes
+ * already in the file, so its count cannot allocate more than the file holds
+ * and is left to the parser.
+ *
+ * The zero-filled bytes of all such accessors together are held to
+ * `maxVertices * 12` (the size of the POSITION array the vertex cap itself
+ * permits), so no accessor and no sum of them can exceed what a conforming
+ * open could emit. Draco-compressed meshes are refused here too: the decoder is
+ * not bundled and loaders.gl would otherwise fetch it from a CDN.
+ */
+function assertGltfJsonAdmissible(buffer: ArrayBuffer, sourceFormat: 'glb' | 'gltf', maxVertices: number): void {
+  const doc = gltfJson(buffer, sourceFormat) as {
+    extensionsUsed?: unknown;
+    extensionsRequired?: unknown;
+    accessors?: unknown;
+  } | null;
+  if (!doc || typeof doc !== 'object') return;
+
+  for (const list of [doc.extensionsUsed, doc.extensionsRequired]) {
+    if (Array.isArray(list) && list.includes(DRACO_EXTENSION)) {
+      throw new LoadError('unsupported-format', DRACO_MESSAGE, DRACO_MESSAGE);
+    }
+  }
+
+  if (!Array.isArray(doc.accessors)) return;
+  const budget = maxVertices * 12;
+  let synthesised = 0;
+  for (const raw of doc.accessors) {
+    const acc = raw as {
+      count?: unknown;
+      bufferView?: unknown;
+      componentType?: unknown;
+      type?: unknown;
+      sparse?: { count?: unknown } | null;
+    } | null;
+    if (!acc || typeof acc !== 'object') continue;
+    const count = acc.count;
+    if (typeof count !== 'number' || !Number.isSafeInteger(count) || count < 0) {
+      throw new LoadError('malformed-file', 'glTF accessor declares a count that is not a non-negative whole number.');
+    }
+    const sparseCount = acc.sparse && typeof acc.sparse === 'object' ? acc.sparse.count : undefined;
+    if (sparseCount !== undefined && (typeof sparseCount !== 'number' || !Number.isSafeInteger(sparseCount) || sparseCount < 0)) {
+      throw new LoadError('malformed-file', 'glTF sparse accessor declares a count that is not a non-negative whole number.');
+    }
+    if (acc.bufferView !== undefined && sparseCount === undefined) continue;
+    const bytes =
+      count *
+      (GLTF_COMPONENT_BYTES[acc.componentType as number] ?? 4) *
+      (GLTF_TYPE_COMPONENTS[acc.type as string] ?? 16);
+    synthesised += bytes;
+    if (!Number.isFinite(synthesised) || synthesised > budget) {
+      throw new LoadError(
+        'memory-constraint',
+        `glTF asset declares accessors that would be zero-filled to more than ${budget} bytes without any data in the file; it is too large to open.`,
+      );
+    }
+  }
+}
+
 const EXTERNAL_GLTF_MESSAGE =
   'This glTF references external files (e.g. buffer.bin or a web address) that a single-file open does not load. Export as GLB, or a self-contained .gltf with embedded/data-URI buffers.';
 
@@ -338,11 +419,20 @@ export async function loadGltf(
   // textures (loaders.gl excludes an extension whose key maps to `false`).
   // Refuse before parsing: nothing outside the file is requested.
   if (externalGltfUris(buffer, sourceFormat).length > 0) throw new Error(EXTERNAL_GLTF_MESSAGE);
+  assertGltfJsonAdmissible(buffer, sourceFormat, options.maxVertices ?? MAX_GLTF_VERTICES);
   const raw = await parse(buffer, GLTFLoader, {
     ...LOCAL_ONLY_LOADER_OPTIONS,
     gltf: {
       loadImages: false,
-      excludeExtensions: { EXT_texture_avif: false, EXT_texture_webp: false, KHR_texture_basisu: false },
+      // Draco files are refused above. These keep loaders.gl from ever trying
+      // to load a decoder (its loader fetches one from a CDN) if that gate is bypassed.
+      decompressMeshes: false,
+      excludeExtensions: {
+        EXT_texture_avif: false,
+        EXT_texture_webp: false,
+        KHR_texture_basisu: false,
+        [DRACO_EXTENSION]: false,
+      },
     },
   }).catch((err: unknown) => {
     // A standard multi-file .gltf that references an external buffer (e.g.
