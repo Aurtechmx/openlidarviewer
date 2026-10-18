@@ -79,6 +79,13 @@ describe('sessionManifestNote', () => {
     expect(sessionManifestNote({ status: 'verified', ops: 3, head: 'h' })).toContain('3 operations)');
   });
 
+  it('calls a passing chain self-consistent and unsigned, never an integrity guarantee', () => {
+    const note = sessionManifestNote({ status: 'verified', ops: 2, head: 'h' }) ?? '';
+    expect(note).toContain('chain is self-consistent (unsigned, author not verified');
+    expect(note).not.toMatch(/integrity|verified\)?\.$/i);
+    expect(sessionManifestNote({ status: 'failed' }) ?? '').not.toMatch(/integrity/i);
+  });
+
   it('flags a failed check and labels a legacy manifest', () => {
     expect(sessionManifestNote({ status: 'failed' })).toContain('failed');
     expect(sessionManifestNote({ status: 'legacy' })).toContain('legacy');

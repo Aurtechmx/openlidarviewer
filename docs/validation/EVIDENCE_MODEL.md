@@ -111,7 +111,10 @@ by SHA-256 hashes seeded from the manifest envelope (schema, build identity,
 source name). `verifyProcessingManifest` recomputes the chain and reports the
 first altered op, so a reviewer holding only the artifact (or a `.olvsession`
 that embeds the same manifest) can confirm the record of *what was run, in
-what order, with which settings* is intact. The claim stops there: it is
+what order, with which settings* is self-consistent. The hashes are unkeyed
+and the manifest is unsigned, so anyone who edits it can recompute the chain:
+a pass does not show who wrote it, and the import line says "self-consistent
+(unsigned, author not verified)". The claim stops there: it is
 ordering + parameters + a hash chain (self-consistency check), not an execution recipe, no executor
 consumes it, and an op whose settings never reached the provenance says
 `params not captured in this slice` rather than fabricating them.

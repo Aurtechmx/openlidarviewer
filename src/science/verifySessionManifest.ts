@@ -1,6 +1,8 @@
 /**
  * verifySessionManifest.ts — turn a session's opaque processing manifest into a
- * user-facing integrity verdict on IMPORT.
+ * user-facing consistency verdict on IMPORT. The chain is an unkeyed SHA-256
+ * fold: anyone who edits a manifest can recompute it, so a `verified` verdict
+ * says the record is self-consistent, not who wrote it or that it is untouched.
  *
  * The session layer carries `processingManifest` as an opaque passthrough: it is
  * size-bounded and copied verbatim, never interpreted. On import we want to tell
@@ -14,7 +16,8 @@
  *
  * Verdicts:
  *  - `absent`   — no manifest present (nothing to say).
- *  - `verified` — recognized schema and the hash chain recomputes (ok).
+ *  - `verified` — recognized schema and the hash chain recomputes (ok). Says
+ *                 nothing about authorship: the chain is unsigned.
  *  - `failed`   — recognized schema but the chain does not verify (tampering or
  *                 corruption); `firstInvalidSeq` locates the first bad op.
  *  - `legacy`   — a manifest is present but does not match the recognized schema
@@ -94,9 +97,9 @@ export function sessionManifestNote(verdict: SessionManifestVerdict): string | n
     case 'absent':
       return null;
     case 'verified':
-      return `Analysis history: integrity verified (${verdict.ops} operation${verdict.ops === 1 ? '' : 's'}).`;
+      return `Analysis history chain is self-consistent (unsigned, author not verified; ${verdict.ops} operation${verdict.ops === 1 ? '' : 's'}).`;
     case 'failed':
-      return '⚠ Analysis history integrity check failed.';
+      return '⚠ Analysis history chain check failed: the recorded operations do not match their hashes.';
     case 'legacy':
       return 'Analysis history: legacy manifest (not verified).';
   }
