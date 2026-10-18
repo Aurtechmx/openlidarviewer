@@ -159,6 +159,7 @@ jobs:
           retention-days: 7
           path: |
             release/gate.log
+            release/gate-steps/
             playwright-report/
             test-results/
 

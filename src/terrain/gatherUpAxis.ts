@@ -3,8 +3,10 @@
  *
  * Terrain reads a position buffer as X and Y horizontal, Z elevation, so the
  * gather settles the buffer's up axis once, before anything reads it. The rule
- * is the converter's (`src/convert/axisHandling.ts`): metadata decides the axes
- * whenever it can, and the scan's shape decides nothing for georeferenced data.
+ * is the per-layer one every consumer shares (`src/geo/frame/layerUpFrame.ts`;
+ * measurement, the converter and navigation read it too): metadata decides the
+ * axes whenever it can, and the scan's shape decides nothing for georeferenced
+ * data.
  *
  * - Survey formats and COPC/EPT streams are Z-up by specification.
  * - A PLY or OBJ under an established horizontal CRS is taken to store easting,
@@ -22,7 +24,7 @@
 import type { CrsInfo } from '../io/crs';
 import type { ResolvedCrs } from '../geo/CoordinateTypes';
 import { isZUpFormat, sceneUpAxisPolicy, type SourceFormat } from '../io/sniffFormat';
-import { Y_UP_TO_Z_UP_OPT_IN } from '../convert/types';
+import { gltfUnderCrsAxisReason, hasHorizontalCrs, resolveLayerUpFrame } from '../geo/frame/layerUpFrame';
 import { classifyScanShape } from './scanShape';
 import { yUpToCanonicalZUp } from './canonicalFrame';
 
@@ -40,37 +42,11 @@ export type TerrainGatherFrame =
   | { readonly ok: true; readonly up: 'z' | 'y'; readonly basis: TerrainUpAxisBasis }
   | { readonly ok: false; readonly reason: string };
 
-/**
- * Whether a CRS establishes real-world horizontal axes: a projected, geographic
- * or geocentric resolution, or an EPSG code or WKT on one that is not Local. A
- * declared CRS from the file is a georeference even without a code. A Local
- * resolution, which is also what the user picks to opt out, is not.
- */
-export function hasHorizontalCrs(crs: CrsInfo | ResolvedCrs | null | undefined): boolean {
-  if (crs == null) return false;
-  if ('kind' in crs) {
-    if (crs.kind === 'local') return false;
-    if (crs.kind === 'projected' || crs.kind === 'geographic' || crs.kind === 'geocentric') return true;
-  }
-  if (crs.epsg != null) return true;
-  if (typeof crs.wkt === 'string' && crs.wkt.trim() !== '') return true;
-  return !('kind' in crs);
-}
-
-function crsLabel(crs: CrsInfo | ResolvedCrs | null | undefined): string {
-  if (crs?.epsg != null) return `EPSG:${crs.epsg}`;
-  const name = crs?.name?.trim();
-  return name ? name : 'the scan’s CRS';
-}
-
-const isYUpBySpec = (f: SourceFormat): boolean => f === 'glb' || f === 'gltf';
+export { hasHorizontalCrs };
 
 /** The decline for a glTF or GLB source under a CRS. */
 export function gltfUnderCrsReason(label: string): string {
-  return (
-    `Terrain analysis did not run. glTF stores Y as the up axis by specification, so its coordinates cannot be read as easting, northing and height under ${label}. ` +
-    `Reconcile the axes first: set the scan's coordinate system to Local, export with "${Y_UP_TO_Z_UP_OPT_IN}", then open that file and assign the CRS.`
-  );
+  return `Terrain analysis did not run. ${gltfUnderCrsAxisReason(label)}`;
 }
 
 /** The decline for a local mesh that reads as Y-up beside Z-up layers. */
@@ -94,18 +70,21 @@ export function settleTerrainGatherFrame(
   // A mesh under a CRS: its axes are the CRS's, never its shape's.
   let hasZ = policy.hasSpecZ;
   let local = false;
+  // Each source's frame comes from the shared per-layer rule
+  // (`geo/frame/layerUpFrame.ts`); only meshes with no CRS are left undecided.
   for (const s of sources) {
     if (isZUpFormat(s.format)) continue;
     if (!hasHorizontalCrs(s.crs)) {
       local = true;
-    } else if (isYUpBySpec(s.format)) {
-      return { ok: false, reason: gltfUnderCrsReason(crsLabel(s.crs)) };
-    } else {
-      hasZ = true;
+      continue;
     }
+    const f = resolveLayerUpFrame({ format: s.format, crs: s.crs });
+    if (!f.ok) return { ok: false, reason: `Terrain analysis did not run. ${f.reason}` };
+    hasZ = true;
   }
   if (!local) return { ok: true, up: 'z', basis: 'crs' };
   // Only meshes with no CRS remain undecided, and only their points can say.
+  // (`resolveLayerUpFrame` with `detected` set gives the same answer.)
   const up = classifyScanShape(positions).up === 'y' ? 'y' : 'z';
   // A Y-up reading beside Z-up layers is two different frames; their union
   // describes no surface.

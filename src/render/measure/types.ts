@@ -11,6 +11,7 @@
  * always stays consistent and there is a single source of truth.
  */
 
+import type { LayerUpBasis } from '../../geo/frame/layerUpFrame';
 import type { Vec3 } from '../navMath';
 import type { MeasurementTrust } from './measurementTrust';
 import type { ProfileProvenance } from './profileProvenance';
@@ -398,6 +399,18 @@ export interface Measurement {
    */
   volumeResidentOnly?: boolean;
   /**
+   * The up axis the stored profile chart or volume record was cut along. A
+   * session reopened, or a CRS assigned, replaced or cleared, under which the
+   * layer resolves to another up axis re-cuts it (`MeasureController.recutDerived`).
+   */
+  derivedUpAxis?: 'y' | 'z';
+  /**
+   * Why the stored profile chart or volume record was withheld: it was cut
+   * along an up axis the layer no longer resolves to, and could not be re-cut
+   * here. Cleared by a successful re-cut.
+   */
+  derivedWithheld?: string;
+  /**
    * The per-measurement honesty grade — red/yellow/green plus the reasons
    * behind it and a `presentable` refusal flag. Stamped at commit from the
    * support under each endpoint (snapped-to-a-return? returns nearby?) and the
@@ -533,6 +546,14 @@ export interface MeasureUnitFrame {
   readonly up?: Vec3;
   /** The points sit on layers with different up axes: no vertical is shared. */
   readonly upConflict?: boolean;
+  /** What settled {@link up} (`geo/frame/layerUpFrame.ts`); absent: the scene's up. */
+  readonly upBasis?: LayerUpBasis;
+  /**
+   * The layer has no resolved up axis (a glTF under a CRS): the sentence every
+   * axis-dependent figure prints instead of a number. {@link up} is then only
+   * the axis the layer is drawn with.
+   */
+  readonly upRefusal?: string;
 }
 
 /** What an up-dependent figure prints when its points span layers with different up axes. */

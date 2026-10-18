@@ -10,7 +10,7 @@
  * orchestration is testable without the whole app.
  */
 
-import type { Measurement, Vec3 } from '../render/measure/types';
+import type { Measurement, MeasureUnitFrame, Vec3 } from '../render/measure/types';
 import type { GeoJsonLonLat, MeasurementExportContext } from '../export/measurementExport';
 import type { SpatialUpAxis } from '../geo/SpatialContext';
 import type { ReportFinding } from '../render/measure/reportManifest';
@@ -36,9 +36,11 @@ export interface MeasureExportView {
   readonly worldUp: Vec3;
   /**
    * The up vector a measurement's figures are read along: its own layer's
-   * (Z for a survey, Y for a mesh scan), not the scene's. Absent: `worldUp`.
+   * resolved up (`app/layerUpFrames.ts`), not the scene's. Absent: `worldUp`.
    */
   upFor?(m: Measurement): Vec3;
+  /** A measurement's own unit frame; read for its up refusal (a layer with no resolved up axis). */
+  unitFrameOf?(m: Measurement): Pick<MeasureUnitFrame, 'upRefusal'>;
   readonly unitToMetres: number;
   readonly verticalUnitToMetres: number;
   /** True when the scan's linear scale is known — drives the M1 units caveat. */
@@ -238,6 +240,8 @@ interface MeasureSnapshot {
   readonly worldUp: Vec3;
   /** Each measurement's own layer up, by id, read with the rest. */
   readonly upOf: ReadonlyMap<string, Vec3>;
+  /** Each measurement's up refusal (its layer has no resolved up axis), by id, read with the rest. */
+  readonly upRefusalOf: ReadonlyMap<string, string>;
   readonly unitToMetres: number;
   readonly verticalUnitToMetres: number;
   readonly geographicCrs: boolean;
@@ -255,10 +259,16 @@ function snapshotMeasure(measure: MeasureExportView): MeasureSnapshot {
     const u = measure.upFor ? measure.upFor(m) : w;
     return [m.id, [u[0], u[1], u[2]]];
   }));
+  const upRefusalOf = new Map<string, string>();
+  for (const m of measure.getMeasurements()) {
+    const r = measure.unitFrameOf?.(m).upRefusal;
+    if (r) upRefusalOf.set(m.id, r);
+  }
   return {
     measurements,
     worldUp: [w[0], w[1], w[2]],
     upOf,
+    upRefusalOf,
     unitToMetres: measure.unitToMetres,
     verticalUnitToMetres: measure.verticalUnitToMetres,
     geographicCrs: measure.geographicCrs,
@@ -274,6 +284,9 @@ function snapshotMeasure(measure: MeasureExportView): MeasureSnapshot {
  * (a Z-up survey and a Y-up scan) are refused rather than written along one.
  */
 function sharedUp(measurements: readonly Measurement[], snap: MeasureSnapshot): Vec3 | { refused: string } {
+  // A layer with no resolved up axis has no vertical to write any figure along.
+  const unresolved = measurements.map((m) => snap.upRefusalOf.get(m.id)).find((r) => r !== undefined);
+  if (unresolved) return { refused: `Not exported: ${unresolved.replace(/^not available: /, '')}` };
   const ups = measurements.map((m) => snap.upOf.get(m.id) ?? snap.worldUp);
   const first = ups[0] ?? snap.worldUp;
   if (ups.every((u) => u[0] === first[0] && u[1] === first[1] && u[2] === first[2])) return first;

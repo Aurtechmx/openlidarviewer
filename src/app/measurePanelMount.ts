@@ -18,6 +18,9 @@
  */
 
 import { aggregate as aggregateMeasurements } from '../render/measure/measurementChains';
+import { layerUpFrameOf, layerUpVectorResolver } from './layerUpFrames';
+import { upVectorOf } from '../geo/frame/layerUpFrame';
+import { cloudUpAxisMoved, setCloudUpResolver } from '../render/layerUpRegistry';
 import { bindMeasureUnitFrames, chainUnitFrame, type LayerUnitSource, type MeasureUnitFrames } from './measureLayerUnits';
 import { buildMeasureConfidenceContext } from './measureConfidenceContext';
 import { loadMeasurePanel, loadProfileWorkbenchRuntime } from '../lazyChunks';
@@ -102,8 +105,12 @@ export interface MeasurePanelMount {
    * Feed the controller the active scan's unit frame and every other open
    * layer's, so work reads out in the units of the layer it was taken on.
    * Call once the viewer exists; drive the result from the CRS subscription.
+   * Also binds navigation up to the same per-layer frame (`app/layerUpFrames.ts`).
    */
-  bindUnitFrames(src: Omit<LayerUnitSource, 'crs'>): MeasureUnitFrames;
+  bindUnitFrames(src: Omit<LayerUnitSource, 'crs' | 'realignUp'> & {
+    /** A CRS change moved a layer's resolved up axis: colours were rebuilt; re-express the elevation filter. */
+    readonly onUpAxisMoved?: () => void;
+  }): MeasureUnitFrames;
 }
 
 /**
@@ -423,7 +430,28 @@ export function createMeasurePanelMount(deps: MeasurePanelMountDeps): MeasurePan
       panel?.setVisible(false);
       desiredVisible = false;
     },
-    bindUnitFrames: (src) => bindMeasureUnitFrames(deps.getViewer().measure, { ...src, crs: deps.crsService }),
+    bindUnitFrames: (src) => {
+      const v = deps.getViewer();
+      // Navigation up reads the same per-layer frame as the owner frames, and
+      // re-aligns when a CRS change moves the active layer's axis.
+      v.layerUp = layerUpVectorResolver(src.cloud, src.activeId, deps.crsService);
+      // Height colouring, the elevation scale and the legend read it too.
+      setCloudUpResolver((c) => {
+        const id = src.activeId();
+        return upVectorOf(layerUpFrameOf(deps.crsService, c, id !== null && src.cloud(id) === c));
+      });
+      return bindMeasureUnitFrames(v.measure, {
+        ...src,
+        crs: deps.crsService,
+        realignUp: () => {
+          v.alignUpToLayer(src.activeId());
+          if (cloudUpAxisMoved(src.clouds().map(src.cloud))) {
+            v.refreshProjectSharedElevation(true);
+            src.onUpAxisMoved?.();
+          }
+        },
+      });
+    },
   };
 }
 

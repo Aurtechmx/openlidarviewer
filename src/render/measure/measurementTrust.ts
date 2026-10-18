@@ -86,6 +86,13 @@ export interface MeasurementTrustInput {
    */
   readonly upConflict?: boolean;
   /**
+   * Set when this measurement's number reads along an up axis and its layer has
+   * no resolved up axis (a glTF under a CRS): the refusal sentence, with the fix.
+   */
+  readonly upRefusal?: string;
+  /** Why this measurement's profile chart or volume record was withheld (`Measurement.derivedWithheld`). */
+  readonly derivedWithheld?: string;
+  /**
    * True when the frame is geographic, whatever the kind. Its scale signal is
    * then the vertical unit (the only linear unit a permitted figure, a
    * height, uses), not {@link crsKnown}: a geographic CRS has no linear
@@ -208,10 +215,16 @@ export function gradeMeasurement(input: MeasurementTrustInput): MeasurementTrust
     reasons.push(`Value ${VERTICAL_SCALE_NOT_AVAILABLE}.`);
     grade = 'red';
   }
-  const upConflict = input.upConflict === true;
+  const upUnresolved = input.upConflict !== true && typeof input.upRefusal === 'string';
+  const upConflict = input.upConflict === true || upUnresolved;
   if (upConflict) {
-    reasons.push(`Value ${UP_AXIS_CONFLICT}.`);
+    reasons.push(`Value ${upUnresolved ? input.upRefusal : UP_AXIS_CONFLICT}.`);
     grade = 'red';
+  }
+
+  if (input.derivedWithheld) {
+    reasons.push(input.derivedWithheld);
+    if (grade === 'green') grade = 'yellow';
   }
 
   if (input.residentOnly) {
@@ -221,7 +234,8 @@ export function gradeMeasurement(input: MeasurementTrustInput): MeasurementTrust
 
   const presentable = !anyVoid && !geographicRefusal && !verticalRefusal && !scaleRefusal && !upConflict;
   let caption: string;
-  if (upConflict) caption = 'Unverified — the points sit on layers with different up axes';
+  if (upUnresolved) caption = 'Unverified — this layer has no resolved up axis';
+  else if (upConflict) caption = 'Unverified — the points sit on layers with different up axes';
   else if (verticalRefusal) caption = 'Unverified — this frame has no local vertical (geocentric or depth-down)';
   else if (geographicRefusal) caption = 'Unverified — degrees are not distances (geographic CRS)';
   else if (scaleRefusal) caption = 'Unverified — the height unit could not be interpreted';

@@ -368,6 +368,28 @@ export interface InspectionSession {
    * inconsistent frame is therefore refused on read and on write.
    */
   projectFrame?: SessionProjectFrame;
+  /**
+   * The active scan's RESOLVED up axis at save and what settled it
+   * (`geo/frame/layerUpFrame.ts`): a PLY under a CRS is Z-up by its CRS though
+   * {@link upAxis}, the format's axis kept for matching, reads Y. Additive
+   * within v8; absent in older files, whose stored heights follow `upAxis`.
+   */
+  upFrame?: SessionUpFrame;
+}
+
+/** A session's record of the active scan's resolved up axis. */
+export interface SessionUpFrame {
+  readonly axis: 'y' | 'z';
+  readonly basis: 'specification' | 'crs' | 'detected' | 'explicit' | 'unresolved';
+}
+
+const UP_BASES: ReadonlySet<string> = new Set(['specification', 'crs', 'detected', 'explicit', 'unresolved']);
+
+/** A session's `upFrame`, or undefined when absent or malformed (it is a record, never a reading instruction). */
+function parseUpFrame(raw: unknown): SessionUpFrame | undefined {
+  if (!isRecord(raw)) return undefined;
+  if ((raw.axis !== 'y' && raw.axis !== 'z') || typeof raw.basis !== 'string' || !UP_BASES.has(raw.basis)) return undefined;
+  return { axis: raw.axis, basis: raw.basis as SessionUpFrame['basis'] };
 }
 
 const KINDS: ReadonlySet<MeasurementKind> = new Set([
@@ -457,6 +479,7 @@ export function serializeSession(
   const groups = sanitizeLayerGroups(session.layerGroups);
   if (groups.length > 0) doc.layerGroups = groups;
   if (session.referencePlane) doc.referencePlane = session.referencePlane;
+  if (session.upFrame) doc.upFrame = { axis: session.upFrame.axis, basis: session.upFrame.basis };
   // v8. The project frame, validated here as well as on read, so this app can
   // never write a session it would itself refuse to open.
   if (session.projectFrame) {
@@ -654,6 +677,8 @@ export function parseSession(text: string): InspectionSession {
   // ignored (treated as absent) rather than throwing.
   if (typeof raw.layerId === 'string' && raw.layerId !== '') out.layerId = raw.layerId;
   if (typeof raw.layerName === 'string' && raw.layerName !== '') out.layerName = raw.layerName;
+  const upFrame = parseUpFrame(raw.upFrame);
+  if (upFrame) out.upFrame = upFrame;
   // Layer groups — additive within v8, version-independent on read like the
   // other additive fields, so a file that carries an arrangement is never
   // stripped by a round trip.
@@ -753,8 +778,17 @@ export function rebaseSessionGeometry(
     v[2] + d[2],
   ];
   // Elevation-only scalars (profile-chart heights, a volume reference plane)
-  // move by the UP-axis component of the shift, not the full vector.
-  const elevOf = (d: Vec3): number => (session.upAxis === 'z' ? d[2] : d[1]);
+  // move by the component of the shift along the axis they were CUT along:
+  // the measurement's own record, else its layer's record in the project
+  // frame, else the session's. A value is never shifted along an axis it is
+  // not in. When that axis is not the layer's resolved up axis on reopen (an
+  // older file recorded a PLY under a CRS as Y-up), the caller re-cuts the
+  // value (`MeasureController.recutDerived`) or withholds it with the reason.
+  const cutAxisOf = (m: Measurement): 'y' | 'z' => {
+    if (m.derivedUpAxis) return m.derivedUpAxis;
+    const rec = session.projectFrame ? frameLayer(session.projectFrame, m.owner?.layerId) : undefined;
+    return rec?.upAxis === 'y' || rec?.upAxis === 'z' ? rec.upAxis : session.upAxis;
+  };
   // The camera, saved views and clip box are in the scene frame. With a project
   // frame on both sides that is the project frame, so they move by the change
   // of project origin, never by one layer's offset: an active layer placed in
@@ -835,11 +869,13 @@ export function rebaseSessionGeometry(
     }
     if (d === null) {
       unrebased.push(m.id);
-      measurements.push({ ...m, points: m.points.map(copyVec) });
+      measurements.push({ ...m, points: m.points.map(copyVec), ...(m.profileChart || m.volume ? { derivedUpAxis: cutAxisOf(m) } : {}) });
       continue;
     }
-    const elevDelta = elevOf(d);
+    const cutAxis = cutAxisOf(m);
+    const elevDelta = cutAxis === 'z' ? d[2] : d[1];
     const next: Measurement = { ...m, points: m.points.map(shiftBy(d)) };
+    if (m.profileChart || m.volume) next.derivedUpAxis = cutAxis;
     if (m.profileChart) {
       next.profileChart = m.profileChart.map((s) => ({
         ...s,
@@ -1552,6 +1588,12 @@ function parseMeasurements(v: unknown): Measurement[] {
       const volume = parseVolumeRecord(item.volume);
       if (volume) m.volume = volume;
       if (item.volumeResidentOnly === true) m.volumeResidentOnly = true;
+    }
+    // Additive within v8: the up axis a profile chart or volume was cut along,
+    // and why one was withheld. Absent in older files.
+    if (k === 'profile' || k === 'volume') {
+      if (item.derivedUpAxis === 'y' || item.derivedUpAxis === 'z') m.derivedUpAxis = item.derivedUpAxis;
+      if (typeof item.derivedWithheld === 'string' && item.derivedWithheld !== '') m.derivedWithheld = item.derivedWithheld;
     }
     out.push(m);
   }

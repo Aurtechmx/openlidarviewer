@@ -21,6 +21,7 @@
 import type { CrsInfo } from '../io/crs';
 import type { ResolvedCrs } from '../geo/CoordinateTypes';
 import { isZUpFormat, type SourceFormat } from '../io/sniffFormat';
+import { resolveLayerUpFrame } from '../geo/frame/layerUpFrame';
 import type { ConversionEvent } from './conversionEvents';
 import { Y_UP_TO_Z_UP_OPT_IN, type AxisHandling, type CrsMode } from './types';
 
@@ -39,11 +40,6 @@ export interface AxisPlanInput {
   /** The source EPSG the conversion uses, when one is known. */
   readonly sourceEpsg: number | null;
   readonly targetEpsg: number | null;
-}
-
-/** Formats whose specification fixes +Y as up (glTF 2.0, section 3.4). */
-function isYUpBySpec(format: SourceFormat): boolean {
-  return format === 'glb' || format === 'gltf';
 }
 
 /**
@@ -92,7 +88,11 @@ export function planAxisHandling(input: AxisPlanInput): AxisPlan {
     }
     return { ok: true, rotate: true };
   }
-  if (isYUpBySpec(input.format) && crsInPlay) {
+  // The source frame comes from the per-layer rule every consumer shares
+  // (`geo/frame/layerUpFrame.ts`): a PLY or OBJ under a CRS is written as
+  // stored, X/Y/Z easting/northing/height; a glTF under one has no frame.
+  const frame = resolveLayerUpFrame({ format: input.format, crsInPlay, crsLabel: label });
+  if (!frame.ok) {
     return {
       ok: false,
       message:

@@ -20,7 +20,8 @@ import type { PointCloud } from '../model/PointCloud';
 import type { ResolvedCrs } from '../geo/CoordinateTypes';
 import type { CrsService } from '../geo/CrsService';
 import { datasetIdentity } from '../geo/CrsService';
-import { sourceUpAxis } from '../io/sniffFormat';
+import { layerUpFrameOf } from './layerUpFrames';
+import { spatialUpAxisOf } from '../geo/frame/layerUpFrame';
 import { geoContextForCloud } from './reportExport';
 import { spatialContextFrom, verticalMetresPerUnit, type SpatialContext, type SpatialUpAxis } from '../geo/SpatialContext';
 import type { MeasureUnitFrame } from '../render/measure/types';
@@ -136,7 +137,7 @@ export interface FrameResolverDeps {
   readonly cloud: (viewerId: string) => PointCloud | undefined;
   /** Resolve a scan's own CRS, override included, without making it active. */
   readonly resolveCrs: (cloud: PointCloud) => ResolvedCrs;
-  /** Resolved up-axis of a non-active scan from its own format. */
+  /** Resolved up-axis of a non-active scan from its own format and CRS. */
   readonly upAxisOf: (cloud: PointCloud, resolved: SpatialUpAxis) => SpatialUpAxis;
   /** The geo context of a static cloud under a resolved CRS. */
   readonly geoOf: (cloud: PointCloud, crs: ResolvedCrs | null) => GeoExportContext;
@@ -258,7 +259,8 @@ export function framesOfApp(src: AppFrameSource): ExportFrames {
     // The scan's OWN resolved CRS, a remembered override included, as the
     // Inspector shows it; never the active scan's.
     resolveCrs: (c) => src.crs.resolveFor({ name: c.name, detected: c.metadata?.crs ?? undefined, source: 'las-vlr', identity: datasetIdentity(c) }),
-    upAxisOf: (c, resolved) => sourceUpAxis(resolved, c.sourceFormat, false),
+    // The scan's own resolved frame (`app/layerUpFrames.ts`): a PLY under a CRS is Z-up.
+    upAxisOf: (c) => spatialUpAxisOf(layerUpFrameOf(src.crs, c, false)),
     geoOf: geoContextForCloud,
     epochOf: src.classificationEpoch,
   });

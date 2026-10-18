@@ -521,8 +521,12 @@ export class MeasureController {
   private _originUp: number | null = 0;
   /** The scene's render origin as `setContext` last gave it (undefined: never), so a layer's own up can reduce it. */
   private _origin: Vec3 | null | undefined = undefined;
-  /** True while `_inFrameOf` holds work whose points sit on layers with different up axes. */
-  private _upConflict = false;
+  /**
+   * While `_inFrameOf` holds work with no shared, resolved up axis (layers with
+   * different up axes, or a layer whose axis is unresolved): what an
+   * axis-dependent figure prints instead. Null otherwise.
+   */
+  private _upRefusalText: string | null = null;
   private _units: UnitSystem = 'metric';
   /**
    * Render-units → metres factor from the scan's CRS (B2, v0.4.5). Render
@@ -1051,6 +1055,7 @@ export class MeasureController {
 
   /** Re-read every measurement's unit frame: re-grade and re-emit. */
   refreshUnitFrames(): void {
+    this._rederiveMovedUp();
     for (const m of this._measurements) m.trust = this._gradeMeasurement(m);
     this._updateHint();
     this._emitChange();
@@ -1083,8 +1088,12 @@ export class MeasureController {
     const units = own.every((f) => sameUnitFrame(f, own[0]!)) ? own[0]! : UNRESOLVED_UNIT_FRAME;
     // The up axis is the layers' own, never the scene's: a Z-up survey keeps Z
     // while a Y-up scan drives navigation. Layers that disagree share no vertical.
+    // A layer with no resolved up axis withholds every axis-dependent figure.
     const ups = own.map((f) => f.up ?? this._worldUp);
-    return ups.every((u) => sameUp(u, ups[0]!)) ? { ...units, up: ups[0]!, upConflict: false } : { ...units, up: this._worldUp, upConflict: true };
+    if (!ups.every((u) => sameUp(u, ups[0]!))) return { ...units, up: this._worldUp, upConflict: true };
+    const upRefusal = own.find((f) => f.upRefusal)?.upRefusal;
+    const { upRefusal: _drop, ...rest } = units;
+    return { ...rest, up: ups[0]!, upConflict: false, ...(upRefusal ? { upRefusal } : {}) };
   }
 
   /**
@@ -1116,7 +1125,7 @@ export class MeasureController {
     const set = (f: MeasureUnitFrame): void => {
       // Up and the datum it reduces the origin along travel with the frame.
       this._worldUp = f.up ?? saved.up!;
-      this._upConflict = f.upConflict === true;
+      this._upRefusalText = f.upConflict === true ? UP_AXIS_CONFLICT : f.upRefusal ?? null;
       this._originUp = f === saved || !this._origin ? savedOriginUp : elevationDatumOffset(this._origin, this._worldUp);
       this._unitToMetres = f.unitToMetres;
       this._verticalUnitToMetres = f.verticalUnitToMetres;
@@ -1169,8 +1178,8 @@ export class MeasureController {
     const f = this._unitToMetres;
     // The row, its breakdown and the overlay obey one refusal: a frame whose
     // axes are not ground distances (degrees) prints the reason, not a number.
-    const refusal = this._upConflict && upAxisRefusesKind(m.kind) ? UP_AXIS_CONFLICT : this._frameRefusal(m.kind);
-    const metricsOk = refusal === null && !this._upConflict;
+    const refusal = this._upRefusalText !== null && upAxisRefusesKind(m.kind) ? this._upRefusalText : this._frameRefusal(m.kind);
+    const metricsOk = refusal === null && this._upRefusalText === null;
     return {
       id: m.id,
       kind: m.kind,
@@ -1350,6 +1359,7 @@ export class MeasureController {
       const result = this._inFrameOf(m, () => sampler(m.points[0], m.points[1], opts));
       if (!result) return false;
       this._stampProfileSample(m, result);
+      this._noteDerivedUp(m);
     } catch {
       // Sampler errors must not poison the existing measurement — the row
       // keeps its previous chart and the panel stays consistent.
@@ -1372,25 +1382,98 @@ export class MeasureController {
    * writes no stored preference, unlike `resampleProfile`.
    */
   resampleProfilesInPlace(): void {
-    const sampler = this._profileSampler;
-    if (!sampler) return;
     let changed = false;
+    for (const m of this._measurements) changed = this._resampleInPlace(m) || changed;
+    if (changed) this._emitChange();
+  }
+
+  /** Re-sample one profile with the parameters it was last sampled with; true when it was. */
+  private _resampleInPlace(m: Measurement): boolean {
+    const sampler = this._profileSampler;
+    if (!sampler || m.kind !== 'profile' || m.points.length < 2) return false;
+    // A chart withheld for a moved axis is re-cut with the default sample count.
+    if (!m.profileChart && m.derivedWithheld === undefined) return false;
+    try {
+      const result = this._inFrameOf(m, () => sampler(m.points[0], m.points[1], {
+        corridorWidth: m.profileCorridorWidth ?? null,
+        groundPercentile: m.profileGroundPercentile ?? null,
+        sampleCount: m.profileChart?.length ?? null,
+      }));
+      if (!result) return false;
+      this._stampProfileSample(m, result);
+      this._noteDerivedUp(m);
+      return true;
+    } catch {
+      // A failed re-sample keeps the previous chart, as in `resampleProfile`.
+      return false;
+    }
+  }
+
+  /** Record the up axis `m`'s profile chart or volume was just cut along. */
+  private _noteDerivedUp(m: Measurement): void {
+    const axis = axisOfUp(this.upFor(m));
+    if (axis && (m.profileChart || m.volume)) {
+      m.derivedUpAxis = axis;
+      delete m.derivedWithheld;
+    }
+  }
+
+  /**
+   * Re-cut every profile chart and volume record that was cut along an up axis
+   * its layer no longer resolves to: a session saved under another frame and
+   * reopened, or a CRS assigned, replaced or cleared after the measurement was
+   * taken. Stored points never move. A result that cannot be re-cut here (no
+   * sampler, no points under it) is withheld with the reason rather than kept
+   * along the old axis, and is retried on the next frame change. Returns how
+   * many were re-cut and how many are withheld.
+   */
+  recutDerived(): { readonly recut: number; readonly withheld: number } {
+    const r = this._rederiveMovedUp();
+    for (const m of this._measurements) m.trust = this._gradeMeasurement(m);
+    this._emitChange();
+    return r;
+  }
+
+  private _rederiveMovedUp(): { recut: number; withheld: number } {
+    let recut = 0;
+    let withheld = 0;
     for (const m of this._measurements) {
-      if (m.kind !== 'profile' || m.points.length < 2 || !m.profileChart) continue;
-      try {
-        const result = this._inFrameOf(m, () => sampler(m.points[0], m.points[1], {
-          corridorWidth: m.profileCorridorWidth ?? null,
-          groundPercentile: m.profileGroundPercentile ?? null,
-          sampleCount: m.profileChart!.length,
-        }));
-        if (!result) continue;
-        this._stampProfileSample(m, result);
-        changed = true;
-      } catch {
-        // A failed re-sample keeps the previous chart, as in `resampleProfile`.
+      if (m.kind !== 'profile' && m.kind !== 'volume') continue;
+      const now = axisOfUp(this.upFor(m));
+      const was = m.derivedUpAxis;
+      if (now === null || (m.derivedWithheld === undefined && (was === undefined || was === now))) continue;
+      if (m.kind === 'profile' ? this._resampleInPlace(m) : this._resampleVolume(m)) {
+        recut++;
+        continue;
+      }
+      withheld++;
+      if (m.derivedWithheld !== undefined) continue;
+      const what = m.kind === 'profile' ? 'Profile chart' : 'Cut and fill';
+      m.derivedWithheld =
+        `${what} withheld: it was cut along ${was!.toUpperCase()}, and this layer's up axis is now ${now.toUpperCase()}. ` +
+        `It could not be re-cut here; ${m.kind === 'profile' ? 'resample the profile' : 'redraw the volume'} once the layer's points are loaded.`;
+      if (m.kind === 'profile') m.profileChart = undefined;
+      else {
+        m.volume = undefined;
+        m.volumeResidentOnly = undefined;
       }
     }
-    if (changed) this._emitChange();
+    return { recut, withheld };
+  }
+
+  /** Re-sample one volume along its own up; true when a record was written. */
+  private _resampleVolume(m: Measurement): boolean {
+    const before = { volume: m.volume, residentOnly: m.volumeResidentOnly };
+    m.volume = undefined;
+    m.volumeResidentOnly = undefined;
+    this._sampleVolume(m);
+    if (m.volume) {
+      this._noteDerivedUp(m);
+      return true;
+    }
+    m.volume = before.volume;
+    m.volumeResidentOnly = before.residentOnly;
+    return false;
   }
 
   /**
@@ -2019,10 +2102,28 @@ export class MeasureController {
         // metrics still display correctly without the chart.
       }
     }
-    // Volume-only: sample cut/fill against the loaded cloud, using the
-    // polygon's auto-reference Z (median of vertex heights). The sampler
-    // is allowed to fail; a null result leaves `m.volume` unset and the
-    // panel shows the polygon area + "—" cut/fill.
+    this._sampleVolume(m);
+    // The up these derived results were cut along; a later change of the
+    // layer's resolved frame (a CRS assigned, replaced or cleared) re-cuts.
+    this._noteDerivedUp(m);
+    m.trust = this._gradeMeasurement(m);
+    // Record which layer this measurement belongs to, by stable id, in that
+    // layer's source-local frame. Undefined for a single-layer scene, so the
+    // pre-identity byte shape is preserved exactly (see LayerIdentityService).
+    const owner = this._newOwner();
+    if (owner && !m.owner) m.owner = owner;
+    this._measurements.push(m);
+    this._draft = null;
+    this._emitChange();
+  }
+
+  /**
+   * Volume-only: sample cut/fill against the loaded cloud, using the
+   * polygon's auto-reference Z (median of vertex heights), along the
+   * measurement's own up. The sampler is allowed to fail; a null result
+   * leaves `m.volume` unset and the panel shows the polygon area + "—" cut/fill.
+   */
+  private _sampleVolume(m: Measurement): void {
     if (
       m.kind === 'volume' &&
       this._volumeSampler &&
@@ -2048,15 +2149,6 @@ export class MeasureController {
         // poison the commit; the polygon still appears as a measurement.
       }
     }
-    m.trust = this._gradeMeasurement(m);
-    // Record which layer this measurement belongs to, by stable id, in that
-    // layer's source-local frame. Undefined for a single-layer scene, so the
-    // pre-identity byte shape is preserved exactly (see LayerIdentityService).
-    const owner = this._newOwner();
-    if (owner && !m.owner) m.owner = owner;
-    this._measurements.push(m);
-    this._draft = null;
-    this._emitChange();
   }
 
   /**
@@ -2090,7 +2182,9 @@ export class MeasureController {
       geographicCrs: this._frameRefusal(m.kind) === GEOGRAPHIC_NOT_AVAILABLE,
       verticalRefused: this._frameRefusal(m.kind) === VERTICAL_NOT_AVAILABLE,
       verticalScaleInvalid: this._frameRefusal(m.kind) === VERTICAL_SCALE_NOT_AVAILABLE,
-      upConflict: this._upConflict && upAxisRefusesKind(m.kind),
+      ...(m.derivedWithheld ? { derivedWithheld: m.derivedWithheld } : {}),
+      upConflict: this._upRefusalText === UP_AXIS_CONFLICT && upAxisRefusesKind(m.kind),
+      ...(this._upRefusalText !== null && this._upRefusalText !== UP_AXIS_CONFLICT && upAxisRefusesKind(m.kind) ? { upRefusal: this._upRefusalText } : {}),
     });
   }
 
@@ -2279,13 +2373,13 @@ export class MeasureController {
     // Every figure that combines the horizontal and vertical axes is computed
     // on the isotropic points, so a compound CRS reads what the export writes.
     const q = this._iso(p);
-    if (this._upConflict && upAxisRefusesKind(m.kind)) return UP_AXIS_CONFLICT;
+    if (this._upRefusalText !== null && upAxisRefusesKind(m.kind)) return this._upRefusalText;
     switch (m.kind) {
       case 'distance': {
         if (p.length < 2) return '—';
         const len = this._fmtLen(distance(q[0], q[1]));
         // A bearing is taken in the plane normal to up; mixed ups have none.
-        if (this._upConflict) return len;
+        if (this._upRefusalText !== null) return len;
         const az = bearingDegrees(p[0], p[1], this._worldUp);
         // Append the bearing when the segment has a horizontal run, labelled
         // with what it is measured from. It is taken against +Y, which is grid
@@ -2505,7 +2599,7 @@ export class MeasureController {
    * the headline reads the refusal and the secondary labels are dropped.
    */
   private _refuseGeographicLabels(m: Measurement, labels: OverlayLabel[], from: number): void {
-    const refusal = this._upConflict && upAxisRefusesKind(m.kind) ? UP_AXIS_CONFLICT : this._frameRefusal(m.kind);
+    const refusal = this._upRefusalText !== null && upAxisRefusesKind(m.kind) ? this._upRefusalText : this._frameRefusal(m.kind);
     if (labels.length <= from) return;
     if (refusal === null) {
       if (!this._geographicCrs) return;
@@ -2931,4 +3025,11 @@ function freshId(): string {
   const bytes = new Uint32Array(2);
   c.getRandomValues(bytes);
   return `m_${bytes[0].toString(36).padStart(7, '0')}${bytes[1].toString(36).padStart(7, '0')}`;
+}
+
+/** 'z' or 'y' for an axis-aligned up vector; null for any other (a rotating frame's tangent up). */
+function axisOfUp(u: Vec3): 'y' | 'z' | null {
+  if (u[0] === 0 && u[1] === 0 && u[2] === 1) return 'z';
+  if (u[0] === 0 && u[1] === 1 && u[2] === 0) return 'y';
+  return null;
 }

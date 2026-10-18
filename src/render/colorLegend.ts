@@ -18,7 +18,7 @@
 
 import { INTENSITY_PERCENTILE_TRIM, rampRangeForMode, type ColorMode } from './colorModes';
 import { buildActiveColorbarSpec, type ActiveColorbar } from './activeColorbar';
-import { isZUpFormat } from '../io/sniffFormat';
+import { cloudUpAxisIndex } from './layerUpRegistry';
 import { ATTR_INTENSITY_INVALID, type PointCloud } from '../model/PointCloud';
 import type { StreamingColorRanges } from './streaming/streamingColors';
 
@@ -144,7 +144,7 @@ export function buildColorLegend(host: ColorLegendHost): ColorLegend {
       }
       const cloud = host.firstStaticCloud();
       if (!cloud) return null;
-      const upAxis = isZUpFormat(cloud.sourceFormat) ? 2 : 1;
+      const upAxis = cloudUpAxisIndex(cloud);
       const range = rampRangeForMode(mode, cloud, {
         heightPercentileTrim: host.heightPercentileTrim(),
         upAxis,

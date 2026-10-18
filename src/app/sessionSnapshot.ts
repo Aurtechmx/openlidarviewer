@@ -15,6 +15,7 @@ import type { AnalyseContoursResult } from '../terrain/contour/analyseContours';
 import type { StoredView } from './appContext';
 import type { WorkplaneSettings } from '../model/workplaneSettings';
 import { isZUpFormat } from '../io/sniffFormat';
+import { resolveLayerUpFrame } from '../geo/frame/layerUpFrame';
 import { TERRAIN_METRIC_VERSION } from '../terrain/datasetIntelligence';
 import { partitionSessionWork, type OwnershipView } from './measurementOwnership';
 import { buildSessionProjectFrame, carryHeldSessionWork, type HeldSessionWork, type SessionFrameInput, type SessionProjectFrame } from '../io/sessionFrame';
@@ -93,6 +94,10 @@ export function serializeActiveSession(
   // Streaming-only: no static cloud, but COPC/EPT are LAS-derived (Z-up) with a
   // renderOrigin frame; [0,0,0] + Y-up reopened the session displaced and mis-oriented.
   const upAxis: 'y' | 'z' = cloud ? (isZUpFormat(cloud.sourceFormat) ? 'z' : 'y') : viewer.streamingCloud ? 'z' : 'y';
+  // `upAxis` stays the format's axis, which reopening matches scans on. The
+  // RESOLVED axis and its basis (a PLY under a CRS is Z-up) are recorded beside it.
+  const resolvedUp = cloud?.sourceFormat ? resolveLayerUpFrame({ format: cloud.sourceFormat, crs: deps.crs() }) : null;
+  const upFrame = resolvedUp ? { axis: resolvedUp.ok ? resolvedUp.axis : resolvedUp.drawAxis, basis: resolvedUp.basis } : undefined;
 
   // v3 fields capture the full working state; optional fields are emitted only when meaningful.
   const streamingCloud = viewer.streamingCloud;
@@ -181,6 +186,7 @@ export function serializeActiveSession(
   }
   return serializeSession({
     upAxis,
+    ...(upFrame ? { upFrame } : {}),
     // The frame every saved coordinate is local to. With two or more scans, or
     // one still placed in the project frame, that is the project frame, and
     // the origin comes from the frame block itself so the two can never

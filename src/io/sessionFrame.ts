@@ -408,10 +408,14 @@ export function assertOwnershipWithinFrame(
 
 // --- moving work between frames ----------------------------------------------
 
-/** A measurement with every stored coordinate moved by `d`. Elevation-only values move by the up component. */
+/**
+ * A measurement with every stored coordinate moved by `d`. Elevation-only
+ * values move by the component along the axis they were cut along
+ * (`derivedUpAxis`), else `upAxis`.
+ */
 export function shiftMeasurement(m: Measurement, d: Vec3, upAxis: 'y' | 'z'): Measurement {
   if (d[0] === 0 && d[1] === 0 && d[2] === 0) return { ...m, points: m.points.map((p) => [p[0], p[1], p[2]]) };
-  const elev = upAxis === 'z' ? d[2] : d[1];
+  const elev = (m.derivedUpAxis ?? upAxis) === 'z' ? d[2] : d[1];
   const next: Measurement = { ...m, points: m.points.map((p) => [p[0] + d[0], p[1] + d[1], p[2] + d[2]]) };
   if (m.profileChart) {
     next.profileChart = m.profileChart.map((s) => ({ ...s, height: Number.isFinite(s.height) ? s.height + elev : s.height }));

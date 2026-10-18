@@ -54,6 +54,7 @@ import { streamingFormatToken } from '../render/streaming/StreamingSource';
 import { classificationCoverage } from '../render/class/classificationCoverage';
 import { truncationNote, truncationOf, truncationText } from '../io/truncation';
 import { measurementsOwnedByActive, type OwnershipView } from './measurementOwnership';
+import { withholdUnresolvedUp } from './layerUpFrames';
 
 /** Re-exported so the shell wires report and KML ownership from one import. */
 export { ownershipViewOf, handOverLayerWork } from './measurementOwnership';
@@ -505,10 +506,12 @@ export async function generateReportPdf(templateId: string, deps: ReportExportDe
   // scan's measurement (or one whose scan is closed or unrecorded) is withheld,
   // and the Measurements section states why, rather than being printed through
   // this scan's conversion factor.
-  const owned = measurementsOwnedByActive(
+  // A measurement on a layer with no resolved up axis (a glTF under a CRS) has
+  // no vertical to print any figure along; it is withheld with the reason.
+  const owned = withholdUnresolvedUp(measurementsOwnedByActive(
     viewer.measure.getMeasurements(),
     deps.measurementOwnership ? deps.measurementOwnership() : { layers: [], activeViewerId: deps.scans.activeId ?? null },
-  );
+  ), (m) => viewer.measure.unitFrameOf?.(m).upRefusal);
   const captured = {
     scanQualityFacts,
     subtitle: metadata.fileName,

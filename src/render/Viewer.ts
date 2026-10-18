@@ -78,12 +78,12 @@ import {
 } from './gpuErrorLedger';
 import { computeExportFrontier, type FrontierNode } from './streaming/exportFrontier';
 import { intensityFilterUniform } from './intensityFilterUniform';
-import { isZUpFormat, sceneUpOf } from '../io/sniffFormat';
+import { sceneUpOf } from '../io/sniffFormat';
 import { settleTerrainGatherFrame, type TerrainGatherSource, type TerrainUpAxisBasis } from '../terrain/gatherUpAxis';
 import type { SourceFormat } from '../io/sniffFormat';
 import { colorForMode, defaultMode, refreshClassificationColours } from './colorModes';
 import type { ColorMode, CoverageColorGrid, ColorForModeOptions } from './colorModes';
-import { computeSharedElevationRange, elevationOptsFor, applyElevationColors } from './projectElevationScale';
+import { computeSharedElevationRange, elevationOptsFor, applyElevationColors, upAxisOf } from './projectElevationScale';
 import { type ActiveColorbar } from './activeColorbar';
 import type { NoDataCapture, SizedCapture, SnapshotHost, SnapshotOptions } from './snapshot';
 import { runRenderFrame, feedFrameMs, governDpr, governPoints, type RenderLoopHost } from './renderLoop';
@@ -1404,12 +1404,12 @@ export class Viewer {
 
   /** A cloud's point mesh coloured by `mode`; the layer and the preview share it. */
   private _meshForCloud(cloud: PointCloud, mode: ColorMode): PointMeshHandle {
-    // upAxis from the source format so a Y-up scan's elevation ramp follows
-    // true height. Classification and intensity are the cloud's own, already
+    // upAxis from the layer's resolved frame so the elevation ramp follows
+    // true height (a PLY under a CRS is Z-up). Classification and intensity are the cloud's own, already
     // in lockstep with its positions, so every attribute aligns per point.
     return this.buildPointMesh(
       cloud.positions,
-      colorForMode(mode, cloud, { upAxis: isZUpFormat(cloud.sourceFormat) ? 2 : 1 }),
+      colorForMode(mode, cloud, { upAxis: upAxisOf(cloud) as 1 | 2 }),
       cloud.classification ?? null,
       cloud.intensity ?? null,
     );
@@ -1682,9 +1682,9 @@ export class Viewer {
     });
   }
 
-  /** Navigation, standard views and the view cube take layer `id`'s up, else the last added's (`sceneUpOf`);
-   *  stored geometry is untouched, and each measurement keeps reading along its own layer's up. */
-  alignUpToLayer(id: string | null, refreshDatum = false): void { this._upAuthority = id; const up = sceneUpOf(this._clouds, id), moved = up !== null && this._worldUp.toArray().join() !== up.join(); if (up) { this._worldUp.fromArray(up); } if (moved || refreshDatum) { this._nav.setWorldUp(this._worldUp); this._refreshMeasureDatum(); } }
+  /** Navigation, standard views, view cube and orbit take layer `id`'s resolved up (`layerUp`, else the format rule), else the last added's (`sceneUpOf`); stored geometry is untouched. */
+  layerUp: ((viewerId: string) => [number, number, number] | null) | null = null;
+  alignUpToLayer(id: string | null, refreshDatum = false): void { this._upAuthority = id; const up = sceneUpOf(this._clouds, id, this.layerUp), moved = up !== null && this._worldUp.toArray().join() !== up.join(); if (up) { this._worldUp.fromArray(up); } if (moved || refreshDatum) { this._nav.setWorldUp(this._worldUp); this._refreshMeasureDatum(); } }
   /** Size navigation, clip planes and the orbit pivot again from every visible cloud, with the up axis from the last-added one. */
   reconfigureForClouds(): void { if (this._clouds.size > 0) this._configureForClouds(); }
 
@@ -2356,9 +2356,9 @@ export class Viewer {
     this._recolorElevation(); this._demand.changed('style');
   }
 
-  /** Re-apply the shared window after the cloud set changes while on. */
-  refreshProjectSharedElevation(): void {
-    if (this._projectSharedElevation) this._recolorElevation();
+  /** Re-apply the shared window after the cloud set changes while on; `force` recolours anyway (a layer's resolved up axis moved). */
+  refreshProjectSharedElevation(force = false): void {
+    if (force || this._projectSharedElevation) this._recolorElevation();
   }
 
   /** Recolour every elevation-mode cloud; shared window folded in when on. */
@@ -2667,7 +2667,7 @@ export class Viewer {
     const opts: ColorForModeOptions =
       mode === 'elevation'
         ? elevationOptsFor(entry, this._projectSharedElevation ? this.projectSharedElevationRange() : null, this._heightPercentileTrim)
-        : { heightPercentileTrim: this._heightPercentileTrim, coverageGrid: this._coverageGrid ?? undefined, upAxis: isZUpFormat(entry.cloud.sourceFormat) ? 2 : 1 };
+        : { heightPercentileTrim: this._heightPercentileTrim, coverageGrid: this._coverageGrid ?? undefined, upAxis: upAxisOf(entry.cloud) as 1 | 2 };
     const raw = colorForMode(mode, entry.cloud, opts);
     const arr = entry.colorAttr.array as Float32Array;
     // sRGB → linear via the shared EOTF seam — keeps a mode switch
@@ -3207,7 +3207,7 @@ export class Viewer {
 
   /** ONE cloud's own origin + up-axis — the facts that decide its conversion. */
   private _elevLayerOf(cloud: PointCloud): ElevFallback {
-    const axis: UpAxis = isZUpFormat(cloud.sourceFormat) ? 2 : 1;
+    const axis = upAxisOf(cloud) as UpAxis;
     return { originAlongAxis: cloud.origin[axis], axis };
   }
   /** Each static layer with the two facts that decide its own conversion. */

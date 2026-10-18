@@ -12,8 +12,12 @@
  *   - steps with `after` / `needs` wait for their dependencies, so builds and
  *     the test buckets keep their order;
  *   - a failing step does not stop the run. Every failure is reported at the
- *     end with its exit code and the tail of its output. A step whose `needs`
- *     failed is reported as skipped and counts as a failure.
+ *     end with its exit code, the tail of its output and the path of its full
+ *     log. A step whose `needs` failed is reported as skipped and counts as a
+ *     failure;
+ *   - every step's whole output is written to release/gate-steps/<step>.log
+ *     (`OLV_GATE_STEP_LOG_DIR` moves it), emptied at the start of each run.
+ *     release/ is git-ignored and is not packaged (scripts/lib/gateStepLogs.mjs).
  *
  * Usage:
  *   node scripts/run-gates.mjs                 # parallel where the manifest allows
@@ -28,6 +32,8 @@ import { spawn } from 'node:child_process';
 import { availableParallelism } from 'node:os';
 import { ROOT, loadGates } from './lib/gates.mjs';
 import { runSchedule } from './lib/gateScheduler.mjs';
+import { resolve } from 'node:path';
+import { DEFAULT_STEP_LOG_DIR, failureBlock, prepareStepLogDir, writeStepLog } from './lib/gateStepLogs.mjs';
 
 const TAIL_LINES = 40;
 // Lines collect-evidence.mjs reads from the gate log. A passing step's output
@@ -108,10 +114,14 @@ function runStep(step) {
   });
 }
 
+const logDir = resolve(ROOT, process.env.OLV_GATE_STEP_LOG_DIR || DEFAULT_STEP_LOG_DIR);
+const logPaths = new Map();
+
 async function main() {
   console.log(
     `run-gates: ${steps.length} step(s), ${serial ? 'serial (chain order)' : `parallel, ${jobs} job(s)`}`,
   );
+  prepareStepLogDir(logDir);
   let outcome;
   try {
     outcome = await runSchedule({
@@ -122,6 +132,7 @@ async function main() {
       runStep,
       onSkip: (step, need) => console.log(`  SKIP ${step.script} (needs ${need})`),
       onDone: (step, r) => {
+        logPaths.set(step.script, writeStepLog(logDir, step.script, r.output));
         console.log(`  ${r.code === 0 ? 'ok  ' : 'FAIL'} ${step.script} ${fmt(r.ms)}${r.code === 0 ? '' : ` exit=${r.code}`}`);
         for (const line of r.output.split('\n')) if (EVIDENCE_LINE.test(line)) console.log(line);
       },
@@ -135,8 +146,8 @@ async function main() {
   const failed = steps.filter((s) => state.get(s.script) !== 'passed');
   for (const s of failed) {
     const r = results.get(s.script);
-    const tail = r.output.trimEnd().split('\n').slice(-TAIL_LINES).join('\n');
-    console.log(`\n==== ${s.script}: ${state.get(s.script) === 'skipped' ? 'skipped' : `exit ${r.code}`} ====\n${tail}`);
+    const skipped = state.get(s.script) === 'skipped';
+    console.log(failureBlock({ script: s.script, skipped, code: r?.code, output: r?.output, logPath: logPaths.get(s.script), root: ROOT, tailLines: TAIL_LINES }));
   }
   console.log(
     `\nrun-gates: ${steps.length - failed.length}/${steps.length} passed in ${fmt(Date.now() - t0)}` +
