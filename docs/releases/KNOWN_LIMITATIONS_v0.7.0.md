@@ -410,7 +410,7 @@ fails the build when either passes its recorded baseline, so a raise is a hand
 edit to `docs/validation/monolith-size-baseline.json` and always shows in the
 diff.
 Fan-out is 97 for the shell, 74 for the renderer and 29 for the Analyse panel,
-across 1150 modules with no dependency cycles.
+across 1151 modules with no dependency cycles.
 
 ## The shell has little headroom
 
@@ -527,6 +527,18 @@ gives the reason. The scale widens on an axis whose extent would need more than
   without asking. The text
   area is the only place the file itself records a conversion: a reader that
   ignores it sees nothing, and a format other than LAS has no such record.
+- The point-cloud converter writes the source coordinates in their stored
+  axis order. It does not infer an up axis from the scan's shape, and the
+  viewer's display orientation does not change an exported coordinate. A
+  local PLY, OBJ or glTF model with no CRS is rotated from Y-up to Z-up,
+  (x, y, z) written as (x, -z, y), only when "Rotate a local Y-up model to
+  Z-up" is ticked; the report and the file's conversion record say so. That
+  option is refused when the export keeps or assigns a CRS and for a format
+  that is Z-up by specification. A glTF source, Y-up by specification, is
+  refused under a CRS until its axes are reconciled: set the scan to Local,
+  export with the rotation, then assign the CRS to that file. A PLY or OBJ
+  under a CRS is assumed to store easting, northing and height in X, Y and
+  Z; OLV cannot tell from a PLY or OBJ file that its axes are otherwise.
 - The reproduction pack's metrics reproduce exactly under the Node version
   pinned in `.nvmrc`. Another Node or V8 version can change the last digits.
 
