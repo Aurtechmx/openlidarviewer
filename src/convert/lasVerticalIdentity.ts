@@ -5,9 +5,11 @@
  * No conversion mode moves Z, so the output must declare the vertical unit the
  * source heights are in: the source's declared vertical unit (token or proven
  * factor), never the horizontal unit put in its place. A vertical unit that
- * cannot be read is written as no vertical claim at all; a vertical CRS code
- * whose unit contradicts the declared unit, or a token that contradicts its
- * factor, refuses the write, because either label would misstate every height.
+ * cannot be read, or a valid one LAS cannot name (a centimetre, a yard),
+ * refuses the write: writing no vertical unit would let a reader take the
+ * heights in the horizontal unit. A vertical CRS code whose unit contradicts
+ * the declared unit, or a token that contradicts its factor, refuses the write
+ * too, because either label would misstate every height.
  *
  * After writing, the bytes are re-read through the same parser the app opens
  * files with, and the write is refused unless the vertical scale a reader
@@ -28,6 +30,14 @@ const UNIT_CODE: Record<CrsLinearUnit, number | null> = {
   'us-survey-foot': 9003,
   unknown: null,
 };
+
+/** The named unit a factor is exactly, or undefined for any other factor. */
+function namedLinearUnitOf(factor: number): Exclude<CrsLinearUnit, 'unknown'> | undefined {
+  for (const u of ['metre', 'foot', 'us-survey-foot'] as const) {
+    if (Math.abs(metresPerLinearUnit(u) - factor) < 1e-12) return u;
+  }
+  return undefined;
+}
 
 /** The GDAL name of a vertical unit code, for messages. */
 function unitName(code: number | null): string {
@@ -88,20 +98,30 @@ export function planLasVertical(
     return { ok: true, verticalEpsg: vEpsg, unitCode, expectedToMetres: implied, unknown: false, warning: null };
   }
 
-  const tokenFactor = token !== undefined && token !== 'unknown' ? metresPerLinearUnit(token) : undefined;
-  if (token === 'unknown' || (factor !== undefined && !src.verticalScaleKnown) || (token === undefined && factor !== undefined)) {
+  // A declared vertical unit that cannot be read has no unit to write, and
+  // writing none would let every reader take the heights in the horizontal
+  // unit (metres, on a metre grid): the invalid scale would leave as a valid one.
+  if ((factor !== undefined && !src.verticalScaleKnown) || (factor === undefined && token === 'unknown')) {
     return {
-      ok: true,
-      verticalEpsg: null,
-      unitCode: null,
-      expectedToMetres: undefined,
-      unknown: true,
-      warning:
-        'The source vertical unit could not be read, so the file declares no vertical CRS and no vertical unit. ' +
-        'Readers will take the heights in the horizontal unit; confirm the vertical unit before using elevations.',
+      ok: false,
+      message:
+        'Vertical unit not readable: the source declares a vertical unit that is not a readable length, so the heights have no unit to declare. ' +
+        'Nothing was written, because a file without one would be read in the horizontal unit. Correct the source vertical unit and export again.',
     };
   }
-  if (factor !== undefined && tokenFactor !== undefined && Math.abs(factor - tokenFactor) > 1e-12) {
+  // A valid factor that is not metre, foot or US survey foot (a centimetre, a
+  // yard) has no LAS vertical unit code, and no named unit may stand in for it.
+  const named = token !== undefined && token !== 'unknown' ? token : factor !== undefined ? namedLinearUnitOf(factor) : undefined;
+  if (named === undefined) {
+    return {
+      ok: false,
+      message:
+        `Vertical unit not representable: the source heights are in a unit of ${factor} m, which a LAS vertical unit (metre, foot or US survey foot) cannot state. ` +
+        'Nothing was written, because any of those units would misstate every height. Export to a format that keeps source units, or convert the heights first.',
+    };
+  }
+  const tokenFactor = metresPerLinearUnit(named);
+  if (factor !== undefined && Math.abs(factor - tokenFactor) > 1e-12) {
     return {
       ok: false,
       message:
@@ -109,7 +129,7 @@ export function planLasVertical(
         'Nothing was written, because either value would misstate every height. Correct the vertical unit and export again.',
     };
   }
-  const unitCode = UNIT_CODE[token as CrsLinearUnit];
+  const unitCode = UNIT_CODE[named];
   const expected = factor ?? tokenFactor;
   let warning: string | null = null;
   if (vEpsg != null) {
