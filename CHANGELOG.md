@@ -59,6 +59,8 @@ The format is based on Keep a Changelog and the project follows Semantic Version
 
 ### Fixed
 
+- Compare elevation no longer registers two epochs that declare the same horizontal CRS. They are compared in their supplied coordinates, and the panel and registration record state that no registration was estimated and that registration uncertainty is not quantified. On two 51 x 51 lattices with identical XY on a 0.5 slope, a +1 m uplift applied a 0.40 m x shift and read a mean change of 0.800 m; it now applies no shift and reads 1.000 m. Slope 1 read 0.458 m.
+- Epoch alignment of pairs without a common declared CRS is refused as unobservable when the surface does not constrain yaw, x, y and z independently. The test runs on the point-to-plane information matrix before damping, and a plane or a single slope is refused. The record keeps the fitting residual, the residual at the applied pose and the registration uncertainty (not quantified) as separate fields. `olv.registration.epoch-horizontal-icp` is now version 3.
 - Terrain Access reports the p95 longitudinal grade and cross slope at an exact length boundary correctly. With 100 equal diagonal edges valued 1 to 100 the p95 read 96; it now reads 95, the smallest value whose edges cover 95% of the route length.
 - Terrain Access no longer reports the minimum terrain confidence as evaluated under the penalize unknown policy, where it blocks no cell and adds no cost. The run record, run card, diagnostics CSV and export README now mark it disclosed; under the block policy it stays evaluated.
 - The Terrain Access why-not inspector names the move that misses its limit by the smallest share of that limit. It compared a step excess in metres with a grade excess in tangents before.

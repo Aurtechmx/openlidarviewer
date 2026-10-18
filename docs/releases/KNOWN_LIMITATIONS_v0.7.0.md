@@ -364,9 +364,11 @@ the `TERRAIN-ACCESS` claim sits at E3.
 
 Six modules implement alignment. No user path reaches them.
 
-Compare elevation, which needs exactly two loaded layers, aligns the second
-epoch to the first with its own planar fit, applying a yaw and a horizontal
-shift with Z locked, before it differences them. That fit lives in the change
+Compare elevation, which needs exactly two loaded layers, compares two epochs
+that declare the same horizontal CRS in their supplied coordinates, with no
+registration. Only a pair without a common declared CRS is aligned, with its
+own planar fit that applies a yaw and a horizontal shift and not the fitted Z,
+and only when the surface constrains the pose. That fit lives in the change
 detection code and does not reach the six modules.
 
 A half-wired alignment tool is worse than none, and the workflow it would need
@@ -389,7 +391,7 @@ consecutive passes, counted by `scripts/ios-streak.mjs`.
 
 ## The two monoliths are still monoliths
 
-`src/main.ts` is 4,260 lines, after the Save view snapshot
+`src/main.ts` is 4,259 lines, after the Save view snapshot
 moved to its own lazy module, the Analyse panel's longitude and latitude
 wiring moved to the mapper module, the Planetary Computer CRS record moved to
 its own module and the view cube's wiring was condensed, and
@@ -408,7 +410,7 @@ fails the build when either passes its recorded baseline, so a raise is a hand
 edit to `docs/validation/monolith-size-baseline.json` and always shows in the
 diff.
 Fan-out is 97 for the shell, 74 for the renderer and 29 for the Analyse panel,
-across 1146 modules with no dependency cycles.
+across 1147 modules with no dependency cycles.
 
 ## The shell has little headroom
 
@@ -888,7 +890,8 @@ before the voxel pass at load.
 
 ## Change detection does not estimate a vertical offset between epochs
 
-Epoch alignment solves yaw and x/y only. A systematic vertical offset between
+Epoch alignment never applies a vertical shift, and two epochs that declare one
+horizontal CRS are not aligned at all. A systematic vertical offset between
 the two epochs, such as a datum or geoid difference or a sensor bias, is not
 estimated or removed, so it appears as change over the whole compared area. The
 change result in the panel says so. Check the difference over ground known to
@@ -902,8 +905,9 @@ epoch's own bias. It is not checkpoint accuracy and not a per-cell DEM
 uncertainty. The 95 % level holds only if the errors are normal, independent
 and unbiased. σreg must be the vertical registration error measured on stable
 reference areas; the app has no stable-area assessment yet, so σreg is
-unavailable. The alignment's residuals (at the applied pose, and the solver's
-own fit) are reported but are fit statistics and are not used as σreg. With
+unavailable. When a local-frame alignment runs, its residuals (at the applied
+pose, and the solver's own fit) are reported but are fit statistics and are
+not used as σreg. With
 σreg missing and both σz measured, the threshold is
 max(1.96·√(σz_before² + σz_after²), 0.1 m) and is labelled "incomplete — lower
 bound"; significance counts and detectable volumes carry the same label, and the
@@ -925,17 +929,34 @@ estimated from all its points; a finer extent-based cell is kept only when the
 data are that dense. Where ground returns are much sparser than all returns,
 under dense vegetation, cells without a ground return are still left out.
 
-Epoch alignment starts at the unmoved pose when both epochs declare one CRS,
-pairs points only within three mean point spacings (estimated from the before
-epoch's sample), and measures the overlap at that distance. It is withheld,
-and the epochs compared unshifted, when under half of the sampled after points
-have a partner, when the fit residual exceeds 0.75 spacings, or when the fit
-would move the after sample farther than the pairing distance. A real
-misregistration larger than about three point spacings is therefore not
-corrected; it is reported as withheld. Over flat ground the horizontal shift is
-not constrained by the surface, and the fit leaves it near zero rather than
-guessing. Epochs without a declared CRS still start from a centroid placement,
-under the same gates.
+## Epochs in one CRS are not registered; local-frame alignment needs informative relief
+
+Two epochs that declare the same horizontal CRS are compared in their supplied
+coordinates. No registration is estimated or applied, and the panel and the
+registration record say so. A rigid fit cannot separate a horizontal shift
+along a slope from a real change in height: on two identical lattices on a 0.5
+slope, a +1 m uplift was read as a 0.40 m x shift and a mean change of 0.800 m.
+A real horizontal misregistration between such epochs is therefore not
+corrected and appears as change. A shared declared CRS is not an accuracy
+statement, and registration uncertainty is not quantified, so the level of
+detection is labelled incomplete, a lower bound.
+
+Epochs without a common declared CRS are aligned only when the surface
+constrains yaw, x, y and z independently. Before any damping, every iteration
+tests the point-to-plane information matrix of those four terms (the yaw row
+scaled by the RMS lever arm): its smallest-to-largest eigenvalue ratio and the
+information left on each horizontal direction after the other terms are
+eliminated must both reach 0.01. A plane, flat or sloped, and a single ridge are
+refused as unobservable, and the epochs are compared as supplied. Gentle relief
+can be refused too: a synthetic surface with RMS slopes of 14 % and 11 % along
+its two axes was. An accepted fit pairs
+points only within three mean point spacings of the before epoch's sample,
+starts from a centroid placement, and is withheld when under half of the
+sampled after points have a partner or the fit residual exceeds 0.75 spacings.
+It applies yaw and x/y, not the fitted Z. Non-uniform real change on the
+compared relief can still pull the fit. The fitting residual and the residual
+at the applied pose are reported separately; neither is a registration
+uncertainty, and a small fitting residual does not validate the alignment.
 
 ## The CRS override fingerprint samples a source, it does not hash it
 
