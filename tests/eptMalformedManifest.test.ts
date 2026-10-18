@@ -61,6 +61,24 @@ describe('EPT manifest perimeter', () => {
     expect(parseEptMetadata(manifest({ points: -1 })).isEpt).toBe(false);
   });
 
+  it('refuses a schema longer than the field ceiling, quickly', () => {
+    const many = Array.from({ length: 60_000 }, (_, i) => ({ name: `D${i}`, size: 4, type: 'float' }));
+    const t = performance.now();
+    const result = parseEptMetadata(manifest({ schema: [...XYZ, ...many] }));
+    expect(result.isEpt).toBe(false);
+    if (!result.isEpt) expect(result.reason).toMatch(/more than the 64/);
+    // The duplicate check was quadratic: 60,000 fields took seconds.
+    expect(performance.now() - t).toBeLessThan(1000);
+  });
+
+  it('accepts a schema at the field ceiling and refuses a duplicate name within it', () => {
+    const extra = Array.from({ length: 61 }, (_, i) => ({ name: `D${i}`, size: 4, type: 'float' }));
+    expect(parseEptMetadata(manifest({ schema: [...XYZ, ...extra] })).isEpt).toBe(true);
+    const dup = parseEptMetadata(manifest({ schema: [...XYZ, extra[0], extra[0]] }));
+    expect(dup.isEpt).toBe(false);
+    if (!dup.isEpt) expect(dup.reason).toMatch(/more than once/);
+  });
+
   it('refuses a fractional span', () => {
     expect(parseEptMetadata(manifest({ span: 128.5 })).isEpt).toBe(false);
   });
