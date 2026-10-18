@@ -18,17 +18,36 @@
 import { isZUpFormat } from '../io/sniffFormat';
 import type { SourceFormat } from '../io/sniffFormat';
 import type { CrsLinearUnit } from '../io/crs';
-import type { DeclaredSpatialFacts, ScanFacts } from '../io/session';
+import type { DeclaredSpatialFacts, ScanFacts, SessionSpatialClaims } from '../io/session';
+import type { ResolvedCrs } from '../geo/CoordinateTypes';
+
+/** The CRS fields the scan facts read: identity, and the unit scales a session may not redefine. */
+export interface ScanUnitCrs {
+  readonly name?: string;
+  readonly epsg?: number;
+  readonly linearUnit?: CrsLinearUnit;
+  readonly linearUnitToMetres?: number;
+  readonly linearUnitByFactor?: boolean;
+  readonly verticalUnitToMetres?: number;
+}
+
+/** The unit scales of a scan's declared CRS, for the session conflict check. */
+function declaredUnitsOf(crs: ScanUnitCrs | null | undefined): Pick<DeclaredSpatialFacts, 'linearUnit' | 'linearUnitToMetres' | 'linearUnitByFactor' | 'verticalUnitToMetres'> {
+  if (!crs) return {};
+  return {
+    linearUnit: crs.linearUnit,
+    ...(crs.linearUnitToMetres !== undefined ? { linearUnitToMetres: crs.linearUnitToMetres } : {}),
+    ...(crs.linearUnitByFactor ? { linearUnitByFactor: true } : {}),
+    ...(crs.verticalUnitToMetres !== undefined ? { verticalUnitToMetres: crs.verticalUnitToMetres } : {}),
+  };
+}
 
 /** The streaming-source slice `scanFactsFromStreaming` reads — a structural subset of {@link StreamingSource}. */
 export interface StreamingScanSource {
   readonly name: string;
   readonly sourcePointCount: number | null;
   dataBounds(): readonly [number, number, number, number, number, number];
-  crs():
-    | { readonly name?: string; readonly epsg?: number; readonly linearUnit?: CrsLinearUnit }
-    | null
-    | undefined;
+  crs(): ScanUnitCrs | null | undefined;
 }
 
 /** The static-cloud slice `scanFactsFromStatic` reads — a structural subset of {@link PointCloud}. */
@@ -53,9 +72,7 @@ export interface StaticScanCloud {
   /** Source file format — drives the file's own up-axis (`isZUpFormat`). */
   readonly sourceFormat?: SourceFormat;
   readonly metadata?: {
-    readonly crs?:
-      | { readonly name?: string; readonly epsg?: number; readonly linearUnit?: CrsLinearUnit }
-      | null;
+    readonly crs?: ScanUnitCrs | null;
   };
 }
 
@@ -133,7 +150,7 @@ export function scanFactsFromStatic(cloud: StaticScanCloud): ScanFacts {
  */
 export function declaredSpatialFromStreaming(cloud: StreamingScanSource): DeclaredSpatialFacts {
   const crs = cloud.crs();
-  return { epsg: crs?.epsg, linearUnit: crs?.linearUnit };
+  return { epsg: crs?.epsg, ...declaredUnitsOf(crs) };
 }
 
 /**
@@ -153,6 +170,23 @@ export function declaredSpatialFromStatic(cloud: StaticScanCloud): DeclaredSpati
   return {
     upAxis,
     epsg: crs?.epsg,
-    linearUnit: crs?.linearUnit,
+    ...declaredUnitsOf(crs),
+  };
+}
+
+/**
+ * The spatial claims a parsed session makes, from its top-level up-axis and
+ * its resolved CRS: the code, the horizontal unit and its factor, and the
+ * vertical scale when the CRS recorded one.
+ */
+export function sessionSpatialClaimsOf(session: { readonly upAxis: 'y' | 'z'; readonly crs?: ResolvedCrs | null }): SessionSpatialClaims {
+  const c = session.crs ?? undefined;
+  return {
+    upAxis: session.upAxis,
+    epsg: c?.epsg,
+    linearUnit: c?.linearUnit,
+    ...(c ? { linearUnitToMetres: c.linearUnitToMetres } : {}),
+    ...(c?.linearUnitByFactor ? { linearUnitByFactor: true } : {}),
+    ...(c && c.verticalUnitToMetres !== undefined ? { verticalUnitToMetres: c.verticalUnitToMetres } : {}),
   };
 }
