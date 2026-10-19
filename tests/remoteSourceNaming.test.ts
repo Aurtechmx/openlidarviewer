@@ -75,7 +75,7 @@ describe('describeRemoteCopcError', () => {
     const e = new RangeReadError('range-unsupported', 'The host does not support range requests.');
     const msg = describeRemoteCopcError(e, URL_);
     expect(msg).toContain('range requests');
-    expect(msg).toContain('S3');
+    expect(msg).toContain('object store');
   });
 
   it('adds a CORS hint for a transport failure', () => {
