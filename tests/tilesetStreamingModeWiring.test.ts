@@ -173,7 +173,7 @@ async function open(t: ReturnType<typeof harness>): Promise<void> {
       ? new Response(DOC, { status: 200, headers: { 'content-type': 'application/json' } })
       : new Response(new ArrayBuffer(0), { status: 404 })) as unknown as typeof fetch;
   try {
-    await openRemoteTileset('https://host/d/tileset.json', undefined, t.d as never);
+    await openRemoteTileset('https://host.example/d/tileset.json', undefined, t.d as never);
   } finally {
     globalThis.fetch = realFetch;
   }

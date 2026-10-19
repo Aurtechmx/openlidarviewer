@@ -104,11 +104,11 @@ const AXES: ReadonlySet<FrameUpAxis> = new Set(['x', 'y', 'z']);
 
 /**
  * Cap on the number of layer records a project frame may declare. One record per
- * loaded layer, so a real project has a handful; 10k is far beyond any genuine
+ * loaded layer, so a real project has a handful; 512 is far beyond any genuine
  * frame while bounding how much a hostile file can make the validator allocate
  * and walk. Over-cap is refused, like any other self-inconsistent frame.
  */
-export const MAX_FRAME_LAYERS = 10_000;
+export const MAX_FRAME_LAYERS = 512;
 
 function isFiniteNumber(v: unknown): v is number {
   return typeof v === 'number' && Number.isFinite(v);

@@ -26,6 +26,7 @@
  */
 
 import { StreamingNodeStore } from './StreamingNodeStore';
+import { MAX_HIERARCHY_NODES } from './StreamingOctree';
 import type { StreamingNode } from './StreamingNode';
 import type { StreamingOctreeView } from './StreamingSource';
 import type { Box6, StreamingNodeRecord, VoxelKey } from '../../io/copc/copcTypes';
@@ -89,14 +90,35 @@ export class EptOctree implements StreamingOctreeView {
   // budget and a later `continueHierarchy` picks up from exactly where it left.
   private _frontier: EptKey[] | null = null;
   private _filesLoaded = 0;
+  /**
+   * Total-node ceiling. The same 2,000,000 the COPC octree enforces: the file
+   * count cap alone (4096 files) still admits tens of millions of entries, each
+   * a store record, so the walk stops when the store would pass this.
+   */
+  private readonly _maxNodes: number;
+  private readonly _onNotice: ((message: string) => void) | undefined;
+  private _capNotice: string | undefined;
 
   constructor(
     meta: EptMetadata,
     fetcher: HierarchyFetcher,
+    options: { maxNodes?: number; onNotice?: (message: string) => void } = {},
   ) {
     this._meta = meta;
     this._cube = meta.bounds.cubic as Box6;
     this._fetcher = fetcher;
+    this._maxNodes = options.maxNodes ?? MAX_HIERARCHY_NODES;
+    this._onNotice = options.onNotice;
+  }
+
+  /**
+   * A user-facing notice when the node ceiling stopped the walk, mirroring
+   * `StreamingOctree.capNotice`. Because the deepening runs after the cloud
+   * attaches, the notice can appear after open; the optional `onNotice`
+   * constructor callback fires the moment it is set.
+   */
+  get capNotice(): string | undefined {
+    return this._capNotice;
   }
 
   nodes(): StreamingNode[] {
@@ -217,6 +239,7 @@ export class EptOctree implements StreamingOctreeView {
       // point without an O(N) rebuild per wave.
       const next: EptKey[] = [];
       const ingested: string[] = [];
+      let capped = false;
       for (const { fileId, text } of fetched) {
         let parsed;
         try {
@@ -229,6 +252,15 @@ export class EptOctree implements StreamingOctreeView {
           );
           continue;
         }
+        if (this.store.size + parsed.nodes.length > this._maxNodes) {
+          capped = true;
+          this._errors.push(`EPT hierarchy exceeded ${this._maxNodes} nodes; stopped`);
+          this._capNotice =
+            `This EPT hierarchy has more than ${this._maxNodes.toLocaleString('en-US')} nodes. ` +
+            'Only those were read, so part of the scene is missing.';
+          this._onNotice?.(this._capNotice);
+          break;
+        }
         this._loadedFiles.add(fileId);
         this._filesLoaded++;
         // NODE entries become nodes; link entries (`value === -1`) name the next
@@ -240,6 +272,11 @@ export class EptOctree implements StreamingOctreeView {
         for (const link of parsed.links) next.push(link.key);
       }
       this._linkToParents(ingested);
+      if (capped) {
+        // Nothing past the ceiling is fetched: drop the frontier so the walk ends.
+        this._frontier = [];
+        break;
+      }
 
       // Drop every file we ATTEMPTED this round — not just the ones that loaded.
       // A fetch or parse failure leaves a file out of `_loadedFiles`, and if such

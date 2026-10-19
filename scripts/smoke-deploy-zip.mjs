@@ -33,6 +33,7 @@ import {
 import { tmpdir } from 'node:os';
 import { join, resolve, dirname, basename } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { runDeployChecks } from './check-deploy-output.mjs';
 import {
   DEPLOY_SMOKE_SCHEMA_VERSION, DEPLOY_SMOKE_PROJECT, REQUIRED_SMOKE_CHECKS,
 } from './lib/deploySmokeContract.mjs';
@@ -127,6 +128,14 @@ try {
   for (const legal of ['LICENSE', 'THIRD_PARTY_NOTICES.md']) {
     if (!existsSync(join(work, legal))) throw new Error(`the archive has no ${legal} at its root`);
   }
+
+  // The extracted bytes are what the archive ships, so the build checks run on
+  // them, before anything is served: a test seam, a maintainer flag or a page
+  // the shipped policy breaks fails the smoke instead of reaching users.
+  const checks = runDeployChecks(work);
+  for (const c of checks) console.log(`  ${c.ok ? 'ok  ' : 'FAIL'} ${c.name}${c.ok ? '' : `\n${c.output.replace(/^/gm, '       ')}`}`);
+  const failedChecks = checks.filter((c) => !c.ok).map((c) => c.name);
+  if (failedChecks.length > 0) throw new Error(`the archive fails ${failedChecks.join(', ')}`);
 
   const port = await freePort();
   console.log(`smoke:deploy — ${basename(zip)}\n  sha256 ${digest}\n  port ${port}`);

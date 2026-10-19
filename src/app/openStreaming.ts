@@ -934,6 +934,7 @@ export async function handleRemoteEpt(
       transport,
       controller.signal,
       eptSearch,
+      (message: string) => deps.showToast(message),
     );
     if (controller.signal.aborted) throw new LoadCancelledError();
 

@@ -16,8 +16,12 @@
  * separate `?copc=<url>` parameter, which routes to the `PointCloudSource`
  * abstraction for both COPC and EPT entries.
  *
- * Pure — unit-tested in Node.
+ * Pure — unit-tested in Node. The one import below runs the frame policy when
+ * the app starts (a no-op outside a browser); see `frameGuardBoot.ts`.
  */
+
+// Imported by `main.ts`, so this runs before the app's own code does.
+import './frameGuardBoot';
 
 /** The viewer theme. Only `dark` exists; the type is the seam for future ones. */
 export type ViewerTheme = 'dark';

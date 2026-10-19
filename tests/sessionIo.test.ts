@@ -501,15 +501,16 @@ describe('importSession — per-scan spatial-metadata guard (roadmap P1 #5)', ()
     expect(warn).toMatch(/EPSG:32614/);
   });
 
-  it('applies the session CRS when it AGREES with the file', async () => {
+  it('applies a confirmed user-override session CRS that AGREES with the file, without a toast', async () => {
     const { deps, calls } = makeDeps({ streaming: strongStreaming({ epsg: 32613 }) });
     await importSession(
-      asFile(sessionJson({ crs: resolvedCrs({ epsg: 32613 }), scanSummary: strongSummary() })),
+      asFile(sessionJson({ crs: resolvedCrs({ epsg: 32613, source: 'user-override' }), scanSummary: strongSummary() })),
       {},
       deps,
     );
     expect(calls.setCrsOverride).toHaveBeenCalledTimes(1);
     expect(calls.setCrsOverride.mock.calls[0][0].override).toMatchObject({ epsg: 32613 });
+    expect(calls.showToast.mock.calls.every((c) => !/coordinate system/.test(c[0] as string))).toBe(true);
     expect(calls.showToast.mock.calls.every((c) => !/conflicts with this scan/.test(c[0] as string))).toBe(true);
   });
 
@@ -520,7 +521,7 @@ describe('importSession — per-scan spatial-metadata guard (roadmap P1 #5)', ()
     const { deps, calls } = makeDeps({ streaming: strongStreaming() });
     await importSession(
       asFile(sessionJson({
-        crs: resolvedCrs({ kind: 'local', epsg: undefined, linearUnit: 'unknown', name: 'Local coordinates (no CRS)' }),
+        crs: resolvedCrs({ kind: 'local', epsg: undefined, linearUnit: 'unknown', name: 'Local coordinates (no CRS)', source: 'user-override' }),
         scanSummary: strongSummary(),
       })),
       {},
@@ -601,7 +602,8 @@ describe('importSession — per-scan spatial-metadata guard (roadmap P1 #5)', ()
     expect(calls.loadAnnotations).toHaveBeenCalledTimes(1);
     expect(calls.restore).toHaveBeenCalledTimes(1);
     expect(calls.applyViewState).toHaveBeenCalledTimes(1);
-    expect(calls.setCrsOverride).toHaveBeenCalledTimes(1);
+    // The session's CRS is the file's own (not a confirmed user choice): nothing to restore.
+    expect(calls.setCrsOverride).not.toHaveBeenCalled();
     expect(calls.showToast.mock.calls.every((c) => !/conflicts with this scan/.test(c[0] as string))).toBe(true);
   });
 
@@ -632,6 +634,21 @@ describe('importSession — whole-file byte ceiling (OOM hardening)', () => {
     expect(calls.loadMeasurements).not.toHaveBeenCalled();
     // Rejected on size alone — the file's bytes are never even read.
     expect(text).not.toHaveBeenCalled();
+  });
+
+  it('caps a session at 64 MiB and says so, a few times the size of a 20,000-measurement session', async () => {
+    expect(MAX_SESSION_BYTES).toBe(64 * 1024 * 1024);
+    const { deps, calls } = makeDeps();
+    const overSize = { size: 65 * 1024 * 1024, text: vi.fn(async () => '') } as unknown as File;
+    await importSession(overSize, {}, deps);
+    expect(calls.setDropError).toHaveBeenCalledWith(expect.stringMatching(/too large \(65 MiB; limit 64 MiB\)/));
+  });
+
+  it('reads a file just under the ceiling (a 20,000-measurement session is about 7 MB)', async () => {
+    const { deps, calls } = makeDeps();
+    const okFile = { size: 8 * 1024 * 1024, text: async () => sessionJson() } as unknown as File;
+    await importSession(okFile, {}, deps);
+    expect(calls.setDropError).not.toHaveBeenCalled();
   });
 
   it('reads a file whose size is under the ceiling (regression guard)', async () => {
@@ -724,6 +741,47 @@ describe('importSession — persisted user CRS override round-trip (FIX 2)', () 
     const detected = calls.setCrsOverride.mock.calls[0][0].detected as { epsg?: number } | undefined;
     expect(detected).toBeDefined();
     expect(detected?.epsg).toBe(32614);
+  });
+
+  describe('a CRS the session names but the user did not confirm', () => {
+    const foot = (over: Partial<ResolvedCrs> = {}): ResolvedCrs =>
+      baseCrs({ epsg: 2225, name: 'NAD83 / California zone 1 (ftUS)', linearUnit: 'us-survey-foot', linearUnitToMetres: 0.3048006096012192, ...over });
+
+    it('does not apply a file-derived CRS (source las-vlr) to a scan that declares none', async () => {
+      const { deps, calls } = makeDeps({ streaming: loaded() });
+      await importSession(asFile(sessionJson({ crs: foot({ source: 'las-vlr', userConfirmed: true }), scanSummary: strongSummary() })), {}, deps);
+      expect(calls.loadMeasurements).toHaveBeenCalled();
+      expect(calls.setCrsOverride).not.toHaveBeenCalled();
+    });
+
+    it('does not apply a user-override record the author never confirmed', async () => {
+      const { deps, calls } = makeDeps({ streaming: loaded() });
+      await importSession(asFile(sessionJson({ crs: foot({ source: 'user-override', userConfirmed: false }), scanSummary: strongSummary() })), {}, deps);
+      expect(calls.setCrsOverride).not.toHaveBeenCalled();
+    });
+
+    it('applies a confirmed override for this session only and names the CRS and unit in a toast', async () => {
+      const { deps, calls } = makeDeps({ streaming: loaded() });
+      await importSession(asFile(sessionJson({ crs: foot({ source: 'user-override', userConfirmed: true }), scanSummary: strongSummary() })), {}, deps);
+      expect(calls.setCrsOverride).toHaveBeenCalledTimes(1);
+      const arg = calls.setCrsOverride.mock.calls[0][0];
+      expect(arg.override).toMatchObject({ epsg: 2225, kind: 'projected' });
+      expect(arg.persist).toBe(false);
+      const toast = calls.showToast.mock.calls.map((c) => c[0] as string).find((m) => /coordinate system/.test(m));
+      expect(toast).toContain('NAD83 / California zone 1 (ftUS)');
+      expect(toast).toContain('us-survey-foot');
+    });
+
+    it('keeps the override on this device only when the user chooses Keep', async () => {
+      const { deps, calls } = makeDeps({ streaming: loaded() });
+      await importSession(asFile(sessionJson({ crs: foot({ source: 'user-override', userConfirmed: true }), scanSummary: strongSummary() })), {}, deps);
+      const keep = calls.showToast.mock.calls.find((c) => /coordinate system/.test(c[0] as string))?.[1] as { label: string; onClick: () => void };
+      expect(keep.label).toBe('Keep');
+      expect(calls.setCrsOverride).toHaveBeenCalledTimes(1);
+      keep.onClick();
+      expect(calls.setCrsOverride).toHaveBeenCalledTimes(2);
+      expect(calls.setCrsOverride.mock.calls[1][0].persist).toBe(true);
+    });
   });
 
   // A CRS a catalogue entry supplied is catalogue metadata, not the user's choice.

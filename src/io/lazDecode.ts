@@ -28,6 +28,7 @@
  */
 
 import { createLazPerf } from 'laz-perf';
+import { LoadError } from './loadErrors';
 import { LAZ_PERF_WASM_BASE64 } from './lazPerfWasm';
 import type { LasHeader } from './lasHeader';
 import type { ProgressUpdate } from './loadProgress';
@@ -151,6 +152,17 @@ export async function decodeLaz(
     }
     finalizeRawColors(out); // narrow staged 16-bit RGB once, per-file
     return out;
+  } catch (err) {
+    // laz-perf is compiled without exception catching: on a corrupt stream it
+    // aborts by throwing a raw Emscripten value (a string such as "<address> -
+    // Exception catching is disabled…"), not an Error. Left alone, that reaches
+    // the caller as a non-Error with no category. A LoadError (the count guard
+    // above) and an allocation RangeError keep their own shape.
+    if (err instanceof LoadError || err instanceof RangeError) throw err;
+    throw new LoadError(
+      'malformed-file',
+      'malformed LAZ: decompression failed — the compressed point data is corrupt or truncated.',
+    );
   } finally {
     reader.delete();
     if (pointPtr) lazPerf._free(pointPtr);

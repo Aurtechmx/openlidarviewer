@@ -139,6 +139,12 @@ if [[ "$SOURCE_ONLY" != "1" ]]; then
   done
   normalise_modes "$TMP/deploy"
 
+  # The checks run on the staged copy that is about to be zipped, not on dist/:
+  # a seam or dev flag compiled in by an exported OLV_TEST_SEAM, or a page the
+  # shipped policy would break, must stop here and not reach the archive.
+  echo "→ Checking the staged deploy output (test seam, dev flags, CSP)…"
+  node "$ROOT/scripts/check-deploy-output.mjs" "$TMP/deploy"
+
   DEPLOY="openlidarviewer-v${VERSION}-deploy-${TS}-root.zip"
   zip_deterministic "$TMP/deploy" "$TMP/$DEPLOY"
   cp "$TMP/$DEPLOY" "$OUT_DIR/$DEPLOY"

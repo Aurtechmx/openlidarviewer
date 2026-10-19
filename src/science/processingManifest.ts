@@ -285,7 +285,9 @@ export function buildProcessingManifest(input: ProcessingManifestInput): Process
 
 /**
  * Recompute the whole chain — envelope genesis, every op fold, and the head —
- * and report whether the chain matches the manifest. On failure, `firstInvalid` is the
+ * and report whether the chain matches the manifest. The fold is an unkeyed
+ * SHA-256: a passing result shows the record is self-consistent, and it does
+ * not authenticate the author, because anyone can rebuild a chain they edited. On failure, `firstInvalid` is the
  * index of the first op that does not recompute (an edited envelope therefore
  * surfaces at index 0, because the genesis it seeds no longer matches), or
  * `ops.length` when the ops all verify but the recorded head does not.

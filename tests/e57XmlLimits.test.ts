@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { parseXml } from '../src/io/e57/xml';
+import { parseXml, MAX_XML_NODES, MAX_XML_ATTRIBUTES } from '../src/io/e57/xml';
+import { LoadError } from '../src/io/loadErrors';
 import { parseE57Header } from '../src/io/e57/header';
 
 /** A 48-byte ASTM E57 header with the given XML length (uint64 little-endian). */
@@ -36,5 +37,37 @@ describe('E57 XML limits', () => {
 
   it('accepts a normal XML length', () => {
     expect(parseE57Header(header(4096n, 8192), 8192).xmlLogicalLength).toBe(4096);
+  });
+});
+
+describe('E57 XML element and attribute ceilings', () => {
+  it('refuses a document with more elements than the ceiling, naming the limit', () => {
+    const doc = `<r>${'<a/>'.repeat(MAX_XML_NODES)}</r>`;
+    let caught: unknown;
+    try {
+      parseXml(doc);
+    } catch (e) {
+      caught = e;
+    }
+    expect(caught).toBeInstanceOf(LoadError);
+    expect((caught as LoadError).category).toBe('malformed-file');
+    expect((caught as LoadError).message).toContain(String(MAX_XML_NODES));
+  });
+
+  it('accepts a document exactly at the element ceiling', () => {
+    const doc = `<r>${'<a/>'.repeat(MAX_XML_NODES - 1)}</r>`;
+    expect(parseXml(doc).children).toHaveLength(MAX_XML_NODES - 1);
+  });
+
+  it('refuses a document with more attributes than the ceiling', () => {
+    const attrs = Array.from({ length: 1000 }, (_, i) => `k${i}="v"`).join(' ');
+    const doc = `<r>${`<a ${attrs}/>`.repeat(Math.ceil(MAX_XML_ATTRIBUTES / 1000) + 1)}</r>`;
+    expect(() => parseXml(doc)).toThrow(/attributes/);
+  });
+
+  it('keeps every shipped E57 fixture far below the ceilings', () => {
+    // The shipped files declare 8 to 60 elements; 200,000 is three orders above.
+    expect(MAX_XML_NODES).toBeGreaterThanOrEqual(100 * 60);
+    expect(MAX_XML_ATTRIBUTES).toBeGreaterThanOrEqual(100 * 96);
   });
 });

@@ -302,3 +302,53 @@ describe('loadPcd — packed rgb keeps the stored sRGB bytes', () => {
     }
   });
 });
+
+describe('loadPcd — header sizes that would defeat the allocation guard', () => {
+  /** A PCD header with the given SIZE/COUNT text and a small body of `bodyBytes` zero bytes. */
+  function craft(opts: { size: string; count?: string; points: number | string; data?: string; bodyBytes?: number; extra?: string }): ArrayBuffer {
+    const header =
+      `# .PCD v0.7\nVERSION 0.7\nFIELDS x y z\nSIZE ${opts.size}\nTYPE F F F\n` +
+      `COUNT ${opts.count ?? '1 1 1'}\nWIDTH ${opts.points}\nHEIGHT 1\nVIEWPOINT 0 0 0 1 0 0 0\n` +
+      `POINTS ${opts.points}\n${opts.extra ?? ''}DATA ${opts.data ?? 'binary'}\n`;
+    const head = new TextEncoder().encode(header);
+    const out = new Uint8Array(head.length + (opts.bodyBytes ?? 48));
+    out.set(head);
+    return out.buffer;
+  }
+
+  test.each([
+    ['SIZE 0 0 0', '0 0 0'],
+    ['non-numeric SIZE', 'a b c'],
+    ['negative SIZE', '4 -4 4'],
+    ['fractional SIZE', '4 4.5 4'],
+  ])('refuses %s with a large POINTS count instead of building a huge cloud', async (_label, size) => {
+    await expect(loadPcd(craft({ size, points: 5_000_000 }), 'x.pcd')).rejects.toMatchObject({
+      name: 'LoadError',
+      category: 'malformed-file',
+    });
+  });
+
+  test('refuses a zero COUNT and a SIZE line shorter than FIELDS', async () => {
+    await expect(loadPcd(craft({ size: '4 4 4', count: '0 0 0', points: 5_000_000 }))).rejects.toMatchObject({ name: 'LoadError' });
+    await expect(loadPcd(craft({ size: '4 4', points: 5_000_000 }))).rejects.toMatchObject({ name: 'LoadError' });
+  });
+
+  test('refuses a binary_compressed chunk whose SIZE entries are zero', async () => {
+    const buf = craft({ size: '0 0 0', points: 5_000_000, data: 'binary_compressed', bodyBytes: 16 });
+    // compressed = 8, decompressed = 8: inside the LZF bound, so only the SIZE check can catch it.
+    const dv = new DataView(buf, buf.byteLength - 16, 8);
+    dv.setUint32(0, 8, true);
+    dv.setUint32(4, 8, true);
+    await expect(loadPcd(buf)).rejects.toMatchObject({ name: 'LoadError' });
+  });
+
+  test('a repeated POINTS line cannot hide a larger first one from the guard', async () => {
+    const buf = craft({ size: '4 4 4', points: 5_000_000, extra: 'POINTS 4\n' });
+    await expect(loadPcd(buf)).rejects.toMatchObject({ name: 'LoadError' });
+  });
+
+  test('a well-formed binary file with the same header shape still loads', async () => {
+    const pc = await loadPcd(makeBinaryPcd([[1, 2, 3], [4, 5, 6]]), 'ok.pcd');
+    expect(pc.pointCount).toBe(2);
+  });
+});

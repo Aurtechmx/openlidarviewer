@@ -46,6 +46,9 @@ export function detectEptUrl(url: string): boolean {
   }
 }
 
+/** Most schema attributes an EPT manifest may list (see the check in {@link parseEptMetadata}). */
+export const MAX_EPT_SCHEMA_FIELDS = 64;
+
 /**
  * Validate + parse an EPT metadata document from the raw manifest text.
  *
@@ -134,7 +137,19 @@ export function parseEptMetadata(text: string): EptDetection {
   if (!Array.isArray(schema)) {
     return { isEpt: false, reason: 'EPT manifest is missing a "schema" array.' };
   }
+  // An EPT schema lists point dimensions. The PDAL dimension registry the
+  // format draws on holds about 30 standard dimensions, and real manifests list
+  // between 4 and about 20 of them plus a few extra-byte dimensions. 64 is
+  // several times that, and bounds the work and the heap a hostile manifest
+  // can ask for (the duplicate check below used to be quadratic in this length).
+  if (schema.length > MAX_EPT_SCHEMA_FIELDS) {
+    return {
+      isEpt: false,
+      reason: `EPT schema lists ${schema.length} attributes, more than the ${MAX_EPT_SCHEMA_FIELDS} this viewer accepts.`,
+    };
+  }
   const parsedSchema: EptSchemaField[] = [];
+  const seenNames = new Set<string>();
   for (const entry of schema) {
     const field = parseSchemaField(entry);
     if (!field) {
@@ -143,12 +158,13 @@ export function parseEptMetadata(text: string): EptDetection {
         reason: 'EPT schema contains an invalid field entry.',
       };
     }
-    if (parsedSchema.some((f) => f.name === field.name)) {
+    if (seenNames.has(field.name)) {
       return {
         isEpt: false,
         reason: `EPT schema declares "${field.name}" more than once.`,
       };
     }
+    seenNames.add(field.name);
     parsedSchema.push(field);
   }
   // The viewer requires X/Y/Z to be present.

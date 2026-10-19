@@ -483,3 +483,10 @@ describe('the claim stamp orders the same way everywhere', () => {
     expect(ids).toEqual(['MEAS-AREA', 'MEAS-DISTANCE', 'VOL-POINT-SAMPLE']);
   });
 });
+
+describe('measurementsToCsv — bare carriage return', () => {
+  it('quotes a cell that holds a CR that is not followed by LF', () => {
+    const csv = measurementsToCsv([mk('distance', [[0, 0, 0], [1, 0, 0]], { name: 'a\rb' })], CTX);
+    expect(csv).toContain('"a\rb"');
+  });
+});

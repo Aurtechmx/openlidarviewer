@@ -44,11 +44,13 @@ AddType application/manifest+json .webmanifest
     Header set Cache-Control "no-cache"
   </FilesMatch>
 
-  # Root icons/share images look hash-like to the rule above
-  # (`apple-touch-icon.png` matches the `-…8+ chars…` pattern) but are NOT
-  # content-hashed — they must stay refreshable. Later FilesMatch wins, so
-  # this override must remain BELOW the immutable rule.
-  <FilesMatch "^(apple-touch-icon\.png|og-card\.jpg|favicon\.(ico|svg))$">
+  # Root icons/share images and the brand marks look hash-like to the rule above
+  # (`apple-touch-icon.png` and `brand-mark-light.svg` match the `-…8+ chars…`
+  # pattern) but are NOT content-hashed — they must stay refreshable. Later
+  # FilesMatch wins, so this override must remain BELOW the immutable rule.
+  # Anything else hash-shaped that ships in public/ and is not content-hashed
+  # belongs in this list; tests/deployCaching.test.ts fails when one is missing.
+  <FilesMatch "^(apple-touch-icon\.png|og-card\.jpg|favicon\.(ico|svg)|brand-mark(-light)?\.svg)$">
     Header set Cache-Control "public, max-age=86400"
   </FilesMatch>
 
@@ -71,9 +73,11 @@ AddType application/manifest+json .webmanifest
 
   # ── Content-Security-Policy (ENFORCING) ──
   # script-src is strict: 'self' + 'wasm-unsafe-eval' for the embedded laz-perf
-  # WASM only. The live (obfuscated) bundle carries no eval/Function and there
-  # are no inline scripts, so no 'unsafe-eval' is needed — script injection is
-  # blocked. Notes:
+  # WASM only, with no 'unsafe-eval', and there are no inline scripts, so script
+  # injection is blocked. The shipped glTF chunk still contains loaders.gl's
+  # loadLibrary eval path and the gstatic.com and raw.githubusercontent.com Draco
+  # decoder URLs; loadGltf refuses Draco files before it can be reached, and this
+  # policy would block the eval and those hosts. Notes:
   #   - 'wasm-unsafe-eval' is required for the laz-perf WASM (compiled from a
   #     base64 blob, not fetched).
   #   - worker-src needs blob: — Vite emits module workers via blob URLs.

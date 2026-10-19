@@ -410,7 +410,7 @@ fails the build when either passes its recorded baseline, so a raise is a hand
 edit to `docs/validation/monolith-size-baseline.json` and always shows in the
 diff.
 Fan-out is 97 for the shell, 73 for the renderer and 29 for the Analyse panel,
-across 1157 modules with no dependency cycles.
+across 1160 modules with no dependency cycles.
 
 ## The shell has little headroom
 
@@ -792,9 +792,45 @@ file whose scans are all spherical-only opens no points.
 
 A glTF or GLB is refused when its node graph reaches the same node twice,
 when its node hierarchy is deeper than 256 levels, or when opening it would
-emit more vertices than the loader's cap. A PLY is
+emit more vertices than the loader's cap. It is also refused before parsing
+when an accessor with no bufferView, or a sparse accessor, would be
+zero-filled to more than 96 MB in total, or when an accessor count is not a
+non-negative whole number. A PLY is
 refused when an element declares records but no properties, or when its
 header is longer than 64 KiB.
+
+## Draco-compressed glTF and GLB files do not open
+
+The Draco mesh decoder is not bundled with the viewer, and the viewer does not
+download one. A glTF or GLB that lists KHR_draco_mesh_compression, as used or
+as required, is refused with a message that says so, even when the file carries
+an uncompressed fallback. Re-export the model without Draco compression, or as
+PLY or OBJ. The glTF loader's own library loader would otherwise fetch a
+decoder from a public CDN and evaluate it.
+
+## Limits on E57, PCD, EPT, COPC and remote URLs
+
+These limits are fixed numbers. A file past one is refused, or its hierarchy is
+read only up to it, with the limit named.
+
+- E57: an XML section above 64 MiB, nested deeper than 256 levels, or holding
+  more than 200,000 elements or 400,000 attributes. The E57 files checked here
+  hold 8 to 60 elements; a single file of about 8,000 scans fits.
+- PCD: a SIZE or COUNT entry that is not a positive whole number for a declared
+  field, a binary header with fewer SIZE entries than fields, and a binary
+  body shorter than POINTS records. An ascii body with a POINTS count above its
+  rows opens with the rows present.
+- EPT: a hierarchy of more than 2,000,000 nodes (the COPC ceiling) is read up
+  to that point, the scene is missing the rest, and the open reports it. A
+  manifest schema of more than 64 attributes is refused.
+- COPC: a hierarchy entry for a data node larger than 128 MiB is dropped.
+- Remote URLs (COPC, EPT, 3D Tiles): host names that are bare single labels
+  (`intranet`), end in a private-network suffix (`.local`, `.internal`, `.lan`,
+  `.home.arpa`, `.intranet`, `.corp`, `.private`, `.localdomain`), or are
+  loopback, private, link-local, shared, multicast or reserved IPv4 or IPv6
+  literals are refused. The check reads the text of the host. A public name
+  whose DNS record points at a private address (for example `127.0.0.1.nip.io`)
+  is not refused, because the address is not known before the request.
 
 ## E57 intensity is normalised; a missing channel is dropped
 

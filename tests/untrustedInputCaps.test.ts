@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { parseHierarchyPage, MAX_COPC_HIERARCHY_PAGE_BYTES } from '../src/io/copc/copcHierarchy';
+import { parseHierarchyPage, MAX_COPC_HIERARCHY_PAGE_BYTES, MAX_COPC_NODE_BYTES } from '../src/io/copc/copcHierarchy';
 import { isValidKey } from '../src/io/copc/voxelKey';
 import { parseCopcMetadata } from '../src/io/copc/copcHeader';
 import { CopcSource } from '../src/io/copc/CopcSource';
@@ -34,6 +34,28 @@ describe('COPC hierarchy caps', () => {
     const page = parseHierarchyPage(hierarchyEntry(1, 0, MAX_COPC_HIERARCHY_PAGE_BYTES + 32, -1), CUBE, 1);
     expect(page.childPages).toEqual([]);
     expect(page.errors).toHaveLength(1);
+  });
+
+  it('drops a data node whose byte size exceeds the node cap (int32 max passes a bare > 0 check)', () => {
+    for (const size of [MAX_COPC_NODE_BYTES + 1, 0x7fffffff]) {
+      const page = parseHierarchyPage(hierarchyEntry(1, 0, size, 100), CUBE, 1);
+      expect(page.nodes).toEqual([]);
+      expect(page.errors).toHaveLength(1);
+      expect(page.errors[0]).toContain(`${MAX_COPC_NODE_BYTES}-byte limit`);
+    }
+  });
+
+  it('readNodeChunk refuses a node over the cap before asking the range source for bytes', async () => {
+    const fixture = buildSyntheticCopc();
+    const source = await CopcSource.open(new ArrayBufferRangeSource(fixture.buffer, 'cap.copc.laz'));
+    const node = { ...source.rootPage.nodes[0], byteSize: MAX_COPC_NODE_BYTES + 1 };
+    await expect(source.readNodeChunk(node)).rejects.toMatchObject({ name: 'LoadError', category: 'malformed-file' });
+  });
+
+  it('keeps a data node at the node cap', () => {
+    const page = parseHierarchyPage(hierarchyEntry(1, 0, MAX_COPC_NODE_BYTES, 100), CUBE, 1);
+    expect(page.errors).toEqual([]);
+    expect(page.nodes).toHaveLength(1);
   });
 
   it('keeps a child page reference at the cap', () => {

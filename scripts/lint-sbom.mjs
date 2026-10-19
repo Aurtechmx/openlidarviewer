@@ -264,6 +264,6 @@ if (isMain()) {
   console.error('');
   for (const p of problems) console.error(`  • ${p}`);
   console.error('');
-  console.error('  Regenerate with: npx @cyclonedx/cyclonedx-npm --omit dev --output-file sbom.json');
+  console.error('  Regenerate with: npx @cyclonedx/cyclonedx-npm@6.0.1 --omit dev --output-file sbom.json');
   process.exit(1);
 }

@@ -11,8 +11,16 @@ hardening steps are deliberately staged and easy to forget.
 a bump leaves it stale and `lint:sbom` fails. Regenerate it in the same change:
 
 ```bash
-npx @cyclonedx/cyclonedx-npm --omit dev --output-file sbom.json
+npx @cyclonedx/cyclonedx-npm@6.0.1 --omit dev --output-file sbom.json
 ```
+
+The generator version is pinned to `6.0.1`, the version the SBOM's own
+`metadata.tools` records, so an unpinned `npx` cannot pick up a newer release
+between regenerations. Run it with the pinned toolchain (Node from `.nvmrc`,
+npm from `packageManager`, currently Node 22 and npm 10): the SBOM records the
+npm that produced it, and the current `sbom.json` metadata names npm 11.19.0,
+which is not the pinned npm. That is noted here and not corrected; the next
+regeneration should come from the pinned toolchain.
 
 While the bump lives on a branch and `main` is still on the old version, every
 merge from `main` resolves `sbom.json` backwards and the gate fails again. That

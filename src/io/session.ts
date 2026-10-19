@@ -576,6 +576,15 @@ function parseOrigin(raw: unknown): Vec3 {
 export const MAX_SESSION_ITEMS = 100_000;
 
 /**
+ * Cap on the number of measurements one session may carry. A real survey holds
+ * hundreds to a few thousand; 20k is well past any genuine session. Unlike the
+ * list caps above this one REFUSES rather than truncates: silently dropping
+ * the tail of a measurement list would hand back a different set of results
+ * than the file recorded.
+ */
+export const MAX_SESSION_MEASUREMENTS = 20_000;
+
+/**
  * Cap on a SINGLE measurement's vertex list. A real measurement holds at most a
  * few thousand hand-placed / traced vertices, so a million is orders beyond any
  * legitimate one while still bounding the per-measurement heap: one hostile
@@ -1507,18 +1516,27 @@ function parsePickLayers(v: unknown): string[] | undefined {
  */
 function knownPickLayers(measurements: Measurement[], frame: SessionProjectFrame | undefined): void {
   if (!frame) return;
+  // Built once: a per-id scan of the layer list is O(measurements x ids x layers).
+  const known = new Set(frame.layers.map((l) => l.layerId));
   for (const m of measurements) {
     if (!m.pickLayers) continue;
     // One unknown id makes the whole record untrustworthy; the measurement
     // then takes the stricter path for work with no pick record.
-    if (!m.pickLayers.every((id) => frameLayer(frame, id))) delete m.pickLayers;
+    if (!m.pickLayers.every((id) => known.has(id))) delete m.pickLayers;
   }
 }
 
 function parseMeasurements(v: unknown): Measurement[] {
   if (!Array.isArray(v)) return [];
+  if (v.length > MAX_SESSION_MEASUREMENTS) {
+    throw new Error(
+      `Session lists ${v.length.toLocaleString('en-US')} measurements, above the `
+        + `${MAX_SESSION_MEASUREMENTS.toLocaleString('en-US')} this viewer will load. `
+        + 'Refusing the file rather than loading part of it.',
+    );
+  }
   const out: Measurement[] = [];
-  for (const item of v.slice(0, MAX_SESSION_ITEMS)) {
+  for (const item of v) {
     if (!isRecord(item)) continue;
     const kind = item.kind;
     if (typeof kind !== 'string' || !KINDS.has(kind as MeasurementKind)) continue;

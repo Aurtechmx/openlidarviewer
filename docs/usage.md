@@ -165,14 +165,26 @@ In embed mode the viewer posts one `ready` message to the host page once the ren
 
 ### Embedding origin and security
 
-The shipped deploy headers set `Content-Security-Policy: frame-ancestors 'self'` (which replaces the older `X-Frame-Options: SAMEORIGIN`), so out of the box the viewer only embeds in a page on the same origin. To embed it cross-origin, the deployer edits that directive to a deliberate allow-list, for example `frame-ancestors 'self' https://portal.example.org`, in both `public/.htaccess` and `public/_headers`.
+Who may embed the viewer is decided in two places, and a host should set both.
 
-The bridge accepts commands only from the actual embedding parent frame, and only when that frame's origin is the viewer's own or is on an allow-list passed on the viewer URL:
+**1. Response headers (a deployer's server).** The shipped deploy headers set `Content-Security-Policy: frame-ancestors 'self'` (which replaces the older `X-Frame-Options: SAMEORIGIN`), so out of the box a browser lets the viewer embed only in a page on the same origin. To embed it cross-origin, edit that directive to a deliberate allow-list, for example `frame-ancestors 'self' https://portal.example.org`, in both `public/.htaccess` and `public/_headers`.
 
-- `?embedParent=https://host.example.com`: allows one origin.
-- `?embedOrigins=https://a.example.com,https://b.example.com`: allows a comma-separated list.
+**2. The viewer itself.** A static host that cannot send headers (GitHub Pages, an S3 or other bucket host) cannot set `frame-ancestors`, so any page can frame the viewer there. The page that frames the viewer also chooses the viewer's URL, so the URL cannot be what authorises it. The viewer therefore decides for itself:
 
-The viewer's own origin is always allowed, so a same-origin embed needs no list. The `ready` message goes only to allowed origins, and commands from any other origin are ignored.
+- A parent on the viewer's own origin is always trusted, with no configuration. The docs site and same-origin portals need nothing.
+- A parent on another origin is trusted only if the deployer built the viewer with that origin in `OLV_EMBED_ORIGINS`, a comma-separated list of origins that is empty by default:
+
+  ```sh
+  OLV_EMBED_ORIGINS=https://portal.example.org,https://courses.example.edu npm run build:live
+  ```
+
+  The list is compiled into the build. A visitor's URL cannot add to it. Entries that are not `http` or `https` origins are dropped, and the build prints a warning for each.
+- `?embedParent=` and `?embedOrigins=` on the viewer URL are a request, not an authorisation. They can narrow the deployer's list to the origins that embed wants (`?embedParent=https://host.example.com`, or `?embedOrigins=https://a.example.com,https://b.example.com`); an origin they name that is not on the list is ignored.
+- Where the browser reports the framing page (`location.ancestorOrigins`: Chromium and Safari, not Firefox), the viewer checks that origin against the rules and talks to it alone. Without it, a cross-origin parent can be told apart only by the origin of each message, which must be on the list.
+
+When the page is framed and nothing above allows the framing page, the viewer runs in safe mode: it does not start, sends no `ready` message, ignores every message, and shows a plain notice with a link to open the viewer in its own tab. A page that is not framed is unaffected.
+
+Once a parent is trusted, the bridge accepts commands only from that parent frame, from an origin on the rules, and sends `ready` only to those origins. Commands from any other origin are ignored. A `load-file` buffer is capped at 256 MiB and must be a plain `ArrayBuffer` (not a typed-array view or a `SharedArrayBuffer`), with a file name of 1 to 255 characters. Transfer the buffer (`postMessage(msg, '*', [buffer])` with the real target origin) rather than cloning it: a receiver cannot tell the two apart, and a clone copies the whole file into the viewer's frame before the cap applies. For a larger scan, open it in the viewer itself.
 
 ## Developer diagnostics
 

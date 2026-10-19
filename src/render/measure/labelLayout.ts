@@ -43,6 +43,92 @@ const LEADER_THRESHOLD = 6;
  */
 const MAX_PASSES = 64;
 
+/** Grid cell size used to find the labels a box can touch. */
+const CELL_W = 64;
+const CELL_H = 24;
+
+/** A placed label, as the collision test sees it. */
+interface Occupied {
+  /** Insertion order: the test visits candidates in this order, as a linear scan would. */
+  seq: number;
+  top: number;
+  bottom: number;
+  x: number;
+  halfW: number;
+  /** Visit stamp, so a label spanning several cells is collected once per query. */
+  stamp: number;
+}
+
+/**
+ * Uniform grid over the placed labels. A box is only tested against the labels
+ * in the cells it overlaps, rather than against every label placed so far.
+ */
+class OccupiedGrid {
+  private readonly cells = new Map<string, Occupied[]>();
+  private seq = 0;
+  private stamp = 0;
+
+  private static key(cx: number, cy: number): string {
+    return `${cx},${cy}`;
+  }
+
+  add(top: number, bottom: number, x: number, halfW: number): void {
+    const o: Occupied = { seq: this.seq++, top, bottom, x, halfW, stamp: 0 };
+    // The vertical extent is widened by GAP: a box within GAP of a label counts as touching it.
+    const [c0, c1, r0, r1] = OccupiedGrid.span(x - halfW, x + halfW, top - GAP, bottom + GAP);
+    for (let cx = c0; cx <= c1; cx++) {
+      for (let cy = r0; cy <= r1; cy++) {
+        const k = OccupiedGrid.key(cx, cy);
+        const list = this.cells.get(k);
+        if (list) list.push(o);
+        else this.cells.set(k, [o]);
+      }
+    }
+  }
+
+  /**
+   * The earliest-placed label after `after` (by insertion order) that overlaps
+   * the box horizontally and vertically, or null. Only the grid cells the box
+   * covers are visited.
+   */
+  firstOverlap(
+    x: number,
+    halfW: number,
+    y: number,
+    halfH: number,
+    after: number,
+  ): Occupied | null {
+    const top = y - halfH;
+    const bottom = y + halfH;
+    const [c0, c1, r0, r1] = OccupiedGrid.span(x - halfW, x + halfW, top, bottom);
+    const stamp = ++this.stamp;
+    let best: Occupied | null = null;
+    for (let cx = c0; cx <= c1; cx++) {
+      for (let cy = r0; cy <= r1; cy++) {
+        const list = this.cells.get(OccupiedGrid.key(cx, cy));
+        if (!list) continue;
+        for (const o of list) {
+          if (o.stamp === stamp || o.seq <= after) continue;
+          o.stamp = stamp;
+          if (best && o.seq > best.seq) continue;
+          if (!(Math.abs(x - o.x) < halfW + o.halfW)) continue;
+          if (top < o.bottom + GAP && bottom > o.top - GAP) best = o;
+        }
+      }
+    }
+    return best;
+  }
+
+  private static span(left: number, right: number, top: number, bottom: number): [number, number, number, number] {
+    return [
+      Math.floor(left / CELL_W),
+      Math.floor(right / CELL_W),
+      Math.floor(top / CELL_H),
+      Math.floor(bottom / CELL_H),
+    ];
+  }
+}
+
 /**
  * Resolve label collisions. Labels are processed top-to-bottom; any label that
  * would overlap one already placed is pushed straight down until it is clear.
@@ -52,12 +138,14 @@ const MAX_PASSES = 64;
  * never join the occupied set (NaN/Infinity cannot meaningfully collide), a
  * move must STRICTLY increase `y` to count (so a float boundary can never
  * re-trigger forever), and `MAX_PASSES` caps the work per label regardless.
+ * Each box is tested only against the placed labels in the grid cells it
+ * overlaps, so the cost follows local crowding instead of the label count.
  */
 export function layoutLabels(boxes: LabelBox[]): PlacedLabel[] {
   // Process in y-sorted order, but remember original indices to restore order.
   const order = boxes.map((_, i) => i).sort((a, b) => boxes[a].y - boxes[b].y);
   const placed: PlacedLabel[] = new Array<PlacedLabel>(boxes.length);
-  const occupied: { top: number; bottom: number; x: number; halfW: number }[] = [];
+  const occupied = new OccupiedGrid();
 
   for (const i of order) {
     const box = boxes[i];
@@ -78,27 +166,27 @@ export function layoutLabels(boxes: LabelBox[]): PlacedLabel[] {
       continue;
     }
 
-    // Push down past any horizontally-overlapping label already placed.
+    // Push down past any horizontally-overlapping label already placed. A pass
+    // walks the placed labels in the order they were placed, testing each at
+    // the label's current height (a push lowers it for the rest of the pass).
     let moved = true;
     for (let pass = 0; moved && pass < MAX_PASSES; pass++) {
       moved = false;
-      for (const o of occupied) {
-        const overlapsX = Math.abs(box.x - o.x) < halfW + o.halfW;
-        if (!overlapsX) continue;
-        const top = y - halfH;
-        const bottom = y + halfH;
-        if (top < o.bottom + GAP && bottom > o.top - GAP) {
-          const next = o.bottom + GAP + halfH;
-          // Strict-progress guard: only a real advance counts as a move.
-          if (next > y) {
-            y = next;
-            moved = true;
-          }
+      let after = -1;
+      for (;;) {
+        const o = occupied.firstOverlap(box.x, halfW, y, halfH, after);
+        if (!o) break;
+        after = o.seq;
+        const next = o.bottom + GAP + halfH;
+        // Strict-progress guard: only a real advance counts as a move.
+        if (next > y) {
+          y = next;
+          moved = true;
         }
       }
     }
 
-    occupied.push({ top: y - halfH, bottom: y + halfH, x: box.x, halfW });
+    occupied.add(y - halfH, y + halfH, box.x, halfW);
     placed[i] = {
       x: box.x,
       y,
@@ -106,4 +194,40 @@ export function layoutLabels(boxes: LabelBox[]): PlacedLabel[] {
     };
   }
   return placed;
+}
+
+/** Most labels the overlay draws in one frame; past it the nearest to the centre are kept. */
+export const MAX_DRAWN_LABELS = 400;
+
+/** A candidate for the per-frame label budget. */
+export interface LabelCandidate {
+  /** Projected screen position of the label's anchor. */
+  x: number;
+  y: number;
+  /** Always drawn first: the measurement being drawn or dragged. */
+  priority: boolean;
+}
+
+/**
+ * Pick which labels to draw when there are more than `cap`. Priority labels
+ * come first, then the rest by distance from the screen centre (`cx`, `cy`).
+ * Returns the kept indices in their original order. With `cap` or fewer
+ * candidates every index is kept, so ordinary scenes lay out exactly as before.
+ */
+export function selectLabelsToDraw(
+  items: readonly LabelCandidate[],
+  cap: number,
+  cx: number,
+  cy: number,
+): number[] {
+  if (items.length <= cap) return items.map((_, i) => i);
+  const rank = items.map((it, i) => {
+    const d = Math.hypot(it.x - cx, it.y - cy);
+    return { i, priority: it.priority, d: Number.isFinite(d) ? d : Infinity };
+  });
+  rank.sort((a, b) => Number(b.priority) - Number(a.priority) || a.d - b.d || a.i - b.i);
+  return rank
+    .slice(0, cap)
+    .map((r) => r.i)
+    .sort((a, b) => a - b);
 }

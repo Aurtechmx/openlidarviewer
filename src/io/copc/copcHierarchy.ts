@@ -57,6 +57,18 @@ function readKey(view: DataView, pos: number): VoxelKey {
 /** Largest hierarchy page read, root or child: 524,288 entries. */
 export const MAX_COPC_HIERARCHY_PAGE_BYTES = 16 * 1024 * 1024;
 
+/**
+ * Largest compressed data node a hierarchy entry may declare: 128 MiB.
+ *
+ * `byteSize` is an int32 from the file, so an entry can name 2 GiB, and the
+ * node read sizes its buffer from it. A node is one LAZ chunk of a single
+ * octree cell; real COPC writers (untwine, PDAL) keep a cell to a few hundred
+ * thousand points, which compresses to a few MB, and the streaming pipeline
+ * queues 6 to 16 MiB of compressed bytes in total. 128 MiB is roughly 25 times
+ * the largest node that arrangement can use, so no honest file meets it.
+ */
+export const MAX_COPC_NODE_BYTES = 128 * 1024 * 1024;
+
 export function parseHierarchyPage(
   pageBuffer: ArrayBuffer,
   cube: OctreeCube,
@@ -120,6 +132,13 @@ export function parseHierarchyPage(
     // A data node (pointCount > 0).
     if (!offsetOk || byteSize <= 0) {
       errors.push(`entry ${i} (${keyId(key)}): malformed data node (offset/size)`);
+      continue;
+    }
+    if (byteSize > MAX_COPC_NODE_BYTES) {
+      errors.push(
+        `entry ${i} (${keyId(key)}): data node declares ${byteSize} bytes, above the ` +
+          `${MAX_COPC_NODE_BYTES}-byte limit`,
+      );
       continue;
     }
     const bounds: Box6 = nodeBounds(key, cube);

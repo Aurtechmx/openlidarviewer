@@ -738,3 +738,39 @@ describe('CrsService — detected vs local are distinct (C3)', () => {
     expect(reresolved.kind).toBe('local');
   });
 });
+
+describe('CrsService.setOverride — session-scoped (persist: false)', () => {
+  const resolve = (svc: CrsService) =>
+    svc.resolveForScan({ name: 's.laz', detected: undefined, source: 'las-vlr', identity: ID });
+
+  it('applies the override to the active scan without writing to the persistent store', () => {
+    const port = makePort();
+    const svc = new CrsService(port);
+    resolve(svc);
+    const out = svc.setOverride({ override: { epsg: 2225, kind: 'projected' }, detected: undefined, source: 'las-vlr', persist: false });
+    expect(out?.epsg).toBe(2225);
+    expect(svc.current()?.epsg).toBe(2225);
+    expect(port.store.size).toBe(0);
+  });
+
+  it('keeps applying it on a re-resolve of the same scan, and drops it when the scan is closed', () => {
+    const port = makePort();
+    const svc = new CrsService(port);
+    resolve(svc);
+    svc.setOverride({ override: { epsg: 2225, kind: 'projected' }, detected: undefined, source: 'las-vlr', persist: false });
+    expect(resolve(svc).epsg).toBe(2225);
+    svc.clear();
+    expect(resolve(svc).kind).toBe('unknown');
+    expect(port.store.size).toBe(0);
+  });
+
+  it('persists when the user keeps it (default persist) and the persisted record supersedes the session one', () => {
+    const port = makePort();
+    const svc = new CrsService(port);
+    resolve(svc);
+    svc.setOverride({ override: { epsg: 2225, kind: 'projected' }, detected: undefined, source: 'las-vlr', persist: false });
+    svc.setOverride({ override: { epsg: 32613, kind: 'projected' }, detected: undefined, source: 'las-vlr' });
+    expect(port.store.get('s.laz')?.epsg).toBe(32613);
+    expect(resolve(svc).epsg).toBe(32613);
+  });
+});

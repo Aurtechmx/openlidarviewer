@@ -30,7 +30,7 @@ function files(over: Record<string, string | null> = {}) {
 const run = (o: Record<string, unknown> = {}) =>
   validateReleaseRef({
     env: { GITHUB_REF_TYPE: 'tag', GITHUB_REF_NAME: TAG },
-    git: { head: HEAD, tagTarget: HEAD, dirty: false },
+    git: { head: HEAD, tagTarget: HEAD, dirty: false, ancestorOfMain: true },
     files: files(),
     requireTag: true,
     ...o,
@@ -56,12 +56,35 @@ describe('validateReleaseRef', () => {
   it('refuses when the tag does not point at HEAD', () => {
     // The defect this whole pass exists to remove: a tag on a commit that is
     // not the one being built.
-    const r = run({ git: { head: HEAD, tagTarget: 'b'.repeat(40), dirty: false } });
+    const r = run({ git: { head: HEAD, tagTarget: 'b'.repeat(40), dirty: false, ancestorOfMain: true } });
     expect(r.problems.some((p) => p.includes('is not the v0.6.0-alpha.3 target'))).toBe(true);
   });
 
+  it('refuses a tag on a commit that is not an ancestor of origin/main', () => {
+    const r = run({ git: { head: HEAD, tagTarget: HEAD, dirty: false, ancestorOfMain: false } });
+    expect(r.ok).toBe(false);
+    expect(r.problems.some((p) => p.includes('not an ancestor of origin/main'))).toBe(true);
+  });
+
+  it('fails closed when main ancestry could not be established', () => {
+    for (const ancestorOfMain of [null, undefined]) {
+      const r = run({ git: { head: HEAD, tagTarget: HEAD, dirty: false, ancestorOfMain } });
+      expect(r.ok).toBe(false);
+      expect(r.problems.some((p) => p.includes('could not establish'))).toBe(true);
+    }
+  });
+
+  it('does not demand main ancestry from a non-publication run', () => {
+    const r = run({
+      requireTag: false,
+      env: { GITHUB_REF_TYPE: 'branch', GITHUB_REF_NAME: 'feature' },
+      git: { head: HEAD, tagTarget: null, dirty: false, ancestorOfMain: false },
+    });
+    expect(r.ok).toBe(true);
+  });
+
   it('refuses a dirty working tree', () => {
-    const r = run({ git: { head: HEAD, tagTarget: HEAD, dirty: true } });
+    const r = run({ git: { head: HEAD, tagTarget: HEAD, dirty: true, ancestorOfMain: true } });
     expect(r.problems.some((p) => p.includes('not clean'))).toBe(true);
   });
 

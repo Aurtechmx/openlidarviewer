@@ -71,7 +71,7 @@ function sourceFor(doc: string): TilesetStreamingSource {
   return new TilesetStreamingSource(
     'id',
     'n',
-    'https://host/d/tileset.json',
+    'https://host.example/d/tileset.json',
     transport(),
     parseTileset(doc),
   );
@@ -167,7 +167,7 @@ function withTransport<T>(doc: string, run: () => Promise<T>): Promise<T> {
 async function reportTextFor(doc: string): Promise<string> {
   const t = deps();
   await withTransport(doc, () =>
-    openRemoteTileset('https://host/d/tileset.json', undefined, t.d as never),
+    openRemoteTileset('https://host.example/d/tileset.json', undefined, t.d as never),
   );
   return t.setReport.mock.calls
     .flatMap((call) => (call[0] as { label: string; value: string }[]) ?? [])

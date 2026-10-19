@@ -102,3 +102,22 @@ test('parseCopcMetadata rejects non-finite offset and bounds', () => {
     parseCopcMetadata(buildSyntheticCopc({ headerMin: [NaN, 0, 0] }).buffer),
   ).toThrow(LoadError);
 });
+
+test.each([
+  [6, 29],
+  [7, 35],
+  [8, 37],
+])('parseCopcMetadata refuses a record length shorter than format %i requires (%i bytes)', (pointFormat, length) => {
+  const fixture = buildSyntheticCopc({ pointFormat, pointRecordLength: length });
+  expect(() => parseCopcMetadata(fixture.buffer)).toThrow(/shorter than the/);
+});
+
+test.each([
+  [6, 30],
+  [7, 36],
+  [8, 38],
+  [6, 40], // extra bytes beyond the format are legitimate
+])('parseCopcMetadata still accepts format %i with record length %i', (pointFormat, length) => {
+  const fixture = buildSyntheticCopc({ pointFormat, pointRecordLength: length });
+  expect(parseCopcMetadata(fixture.buffer).header.pointRecordLength).toBe(length);
+});

@@ -247,7 +247,7 @@ for (const name of EVIDENCE) {
 // SBOM root identity. A stale SBOM shipped once identifying the app as the
 // previous release: `metadata.component` still said alpha.2 while package.json
 // was alpha.3. The SBOM is generated (regenerate with
-// `npx @cyclonedx/cyclonedx-npm --omit dev --output-file sbom.json`), so this
+// `npx @cyclonedx/cyclonedx-npm@6.0.1 --omit dev --output-file sbom.json`), so this
 // checks its ROOT identity against package.json rather than editing it by hand.
 if (existsSync(resolve(ROOT, 'sbom.json'))) {
   try {

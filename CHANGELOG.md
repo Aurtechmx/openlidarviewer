@@ -4,6 +4,16 @@ The format is based on Keep a Changelog and the project follows Semantic Version
 
 ## [Unreleased]
 
+### Security
+
+- Opening a session file no longer stalls the tab on a crafted file. Pick layers are resolved through a set, a project frame is limited to 512 layers, a session to 20,000 measurements (a larger one is refused with a message, not truncated) and a `.olvsession` to 64 MiB.
+- A session's coordinate system is restored only when the file records it as a CRS the author confirmed. It applies to the open scan for the app session, a toast names the CRS and its unit, and it is saved on the device only if you choose Keep or confirm it in the Inspector.
+- The analysis-history line on import now reads "chain is self-consistent (unsigned, author not verified)". The chain is an unkeyed SHA-256 fold, so a pass never meant the file was untouched or who wrote it.
+- The measurement overlay draws at most 400 labels per frame (the measurement being drawn first, then those nearest the screen centre), lays them out on a spatial grid, and says when some are left out.
+- Embedding: `?embedParent=` and `?embedOrigins=` only request an origin. The viewer talks to a same-origin parent, or to a parent whose origin the deployer compiled in with `OLV_EMBED_ORIGINS` (empty by default). A page framed by anything else shows a notice with a link to open the viewer in its own tab and does not start. This matters on hosts that cannot send `frame-ancestors`. `load-file` is capped at 256 MiB. See docs/usage.md.
+- A live build never includes the Playwright test seam, even with `OLV_TEST_SEAM=1` exported. `npm run package` and the deploy smoke run the seam, dev-flag and CSP checks on the files that ship.
+- The credits page loads its styles from `credits.css` instead of an inline style the policy did not name, and `lint:csp-html` and `check:built-csp` now check every page's inline script and style hashes against the policy. `brand-mark-light.svg` is no longer cached as immutable. `lint:unsafe-html` covers `insertAdjacentHTML`, `outerHTML`, `createContextualFragment`, `DOMParser`, `document.write` and multi-line values.
+
 ## [0.7.0] - 2026-10-18
 
 ### Added
@@ -330,6 +340,17 @@ The format is based on Keep a Changelog and the project follows Semantic Version
 - The site KML places a measurement whose owner records source-local coordinates at its file-frame position on a placed scan, as it already did for annotations. It was shifted by the placement offset.
 - Export site KML is no longer offered when the file would hold only the note that measurements or annotations were withheld. Only measurements and annotations the active scan owns, saved views and the scan outline count as content. The export re-checks this, and that one scan is open, when clicked.
 - On desktop the rail task header no longer repeats the header Back ("← Data" twice): while the location bar shows a Back to the same place, the rail shows only the page title. The rail keeps its Back while a workspace is open, when the header Back closes that workspace, and on the phone sheet.
+- The E57 reader refuses an XML section with more than 200,000 elements or 400,000 attributes, with an error that names the limit. A file of 2 million empty elements, about 8 MB of XML, held about 1.3 GB of heap while it was parsed. The files in the libE57Format corpus, the PDAL sample and the project fixtures hold 8 to 60 elements.
+- A PCD whose SIZE or COUNT entry for a declared field is zero, negative, fractional or not a number, or whose binary header gives fewer SIZE entries than fields, is refused. Such a header made the record size 0, which switched off the length checks while the loader still read POINTS records: a 200-byte file with POINTS 20000000 built a 20-million-point cloud. A repeated POINTS or SIZE line is read as the first one, the line the loader uses.
+- EPT hierarchy loading stops at 2,000,000 nodes, the ceiling COPC already had, with an error entry and a notice that part of the scene is missing. The 4096-file limit alone admitted tens of millions of nodes. `EptStreamingPointCloud.open` takes an optional notice callback and the octree exposes `capNotice`.
+- A COPC hierarchy entry that declares a data node larger than 128 MiB is dropped, and a read of such a node is refused. The size is an int32 from the file, so an entry could ask for 2 GiB.
+- A range read of an exact length no longer allocates the full length before any byte arrives. A server that accepted a 1000 MB request and sent nothing held 1000 MB; the buffer now starts at 16 MiB and grows to the requested length once the bytes have filled it. A body shorter or longer than requested is still an error.
+- An EPT manifest whose schema lists more than 64 attributes is refused, and the duplicate-name check is linear. A schema of 60,000 attributes took 3.7 s to check.
+- A glTF or GLB is checked before parsing: an accessor with no bufferView, or a sparse accessor, whose zero-filled size (all such accessors together) exceeds 12 bytes per permitted vertex, 96 MB at the vertex cap, and an accessor count that is not a non-negative whole number, are refused. A 400-byte GLB declaring 300 million vertices reserved 3.6 GB.
+- A glTF or GLB that lists KHR_draco_mesh_compression is refused with a message that the Draco decoder is not bundled. The glTF loader's library loader would otherwise fetch a decoder from a public CDN and evaluate it. `decompressMeshes` is off and the extension is excluded as well, and the comments in `loaderConfig.ts` now say that Draco is not bundled.
+- A corrupt LAZ stream is reported as a malformed-file error. laz-perf threw a bare string for 87 of 400 mutated headers, which reached the caller with no category. A COPC file whose point record length is shorter than its point data record format requires is refused, as a LAS header already was.
+- The remote URL host filter (COPC, EPT and 3D Tiles) refuses bare single-label host names such as `intranet`, the `.lan`, `.home.arpa`, `.intranet`, `.corp`, `.private` and `.localdomain` suffixes, IPv4 `192.0.0.0/24`, `198.18.0.0/15` and `224.0.0.0` up to `255.255.255.255`, and the IPv6 forms `::/96`, `64:ff9b::/96`, `2002::/16`, `2001::/32`, `fec0::/10`, `ff00::/8` and `100::/64`. IPv4-mapped and IPv4-translated IPv6 hosts are judged by the IPv4 address they carry. A name that resolves to a private address through DNS cannot be refused on its text.
+- KML and floor plan SVG text drops the control characters XML 1.0 cannot carry (U+0000 to U+0008, U+000B, U+000C, U+000E to U+001F, U+FFFE, U+FFFF), and a measurement CSV cell holding a bare carriage return is quoted.
 
 ## [0.7.0-alpha.1] - 2026-09-18
 

@@ -166,11 +166,17 @@ function parsePcdHeaderFacts(buffer: ArrayBuffer): PcdHeaderFacts | null {
     height: 0,
     bodyOffset: m.index + m[0].length,
   };
+  const seen = new Set<string>();
   for (const raw of probe.slice(0, m.index).split(/\r?\n/)) {
     const line = raw.trim();
     if (line === '' || line.startsWith('#')) continue;
     const tok = line.split(/\s+/);
     const key = tok[0].toUpperCase();
+    // PCDLoader reads the FIRST line for each key (its regexes are not global),
+    // so the first occurrence wins here too. A repeated POINTS or SIZE line must
+    // not let this guard validate one value while the loader walks another.
+    if (seen.has(key)) continue;
+    seen.add(key);
     if (key === 'FIELDS') facts.fields = tok.slice(1).map((f) => f.toLowerCase());
     else if (key === 'SIZE') facts.sizes = tok.slice(1).map(Number);
     else if (key === 'TYPE') facts.types = tok.slice(1).map((t) => t.toUpperCase());
@@ -459,12 +465,35 @@ function assertPcdSizesPlausible(buffer: ArrayBuffer, facts: PcdHeaderFacts | nu
   const points = facts.points;
   if (!Number.isSafeInteger(points) || points < 0) fail(`invalid POINTS ${points}.`);
   const remaining = Math.max(0, buffer.byteLength - facts.bodyOffset);
+  // Every SIZE and COUNT the header gives for a declared field must be a
+  // positive integer. A zero, negative, fractional or non-numeric entry made
+  // the record size 0 (or NaN), which switched the length checks below off
+  // while PCDLoader still looped POINTS times: 20 million points from a
+  // 200-byte file.
+  const declared = facts.fields.length;
+  for (let i = 0; i < Math.min(declared, facts.sizes.length); i++) {
+    if (!Number.isSafeInteger(facts.sizes[i]) || facts.sizes[i] <= 0) {
+      fail(`field ${i + 1} declares SIZE ${facts.sizes[i]}, which is not a positive integer.`);
+    }
+  }
+  for (let i = 0; i < Math.min(declared, facts.counts.length); i++) {
+    if (!Number.isSafeInteger(facts.counts[i]) || facts.counts[i] <= 0) {
+      fail(`field ${i + 1} declares COUNT ${facts.counts[i]}, which is not a positive integer.`);
+    }
+  }
   let rowSize = 0;
-  for (let i = 0; i < facts.sizes.length; i++) rowSize += (facts.sizes[i] || 0) * (facts.counts[i] ?? 1);
-  // An ascii body is deliberately NOT refused here: a lying POINTS degrades to
-  // the rows present, and the f64 re-read bounds its buffer by the body length.
+  for (let i = 0; i < declared; i++) rowSize += (facts.sizes[i] || 0) * (facts.counts[i] ?? 1);
+  // A binary record layout needs a SIZE for every declared field; a short SIZE
+  // line leaves the loader summing NaN while its POINTS loop still runs.
+  if (facts.data !== 'ascii' && points > 0 && (rowSize <= 0 || facts.sizes.length < declared)) {
+    fail('the header declares no positive SIZE for each of its fields, so no record size can be derived.');
+  }
+  // An ascii body is deliberately NOT refused on POINTS: PCDLoader walks the
+  // text lines, never POINTS, and the f64 re-read clamps its buffer to the body
+  // length, so a lying POINTS degrades to the rows present at a cost bounded by
+  // the file. (Only the binary encodings loop POINTS times.)
   if (facts.data === 'binary') {
-    if (rowSize > 0 && points * rowSize > remaining) {
+    if (points * rowSize > remaining) {
       fail(`POINTS ${points} × ${rowSize}-byte records exceed the ${remaining}-byte body.`);
     }
   } else if (facts.data === 'binary_compressed') {
@@ -478,7 +507,7 @@ function assertPcdSizesPlausible(buffer: ArrayBuffer, facts: PcdHeaderFacts | nu
     if (decompressed > compressed * LZF_MAX_EXPANSION) {
       fail(`the chunk claims to inflate ${compressed} bytes to ${decompressed}, beyond what LZF can produce.`);
     }
-    if (rowSize > 0 && points * rowSize > decompressed) {
+    if (points * rowSize > decompressed) {
       fail(`POINTS ${points} × ${rowSize}-byte records exceed the ${decompressed}-byte decompressed chunk.`);
     }
   }

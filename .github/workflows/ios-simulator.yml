@@ -26,11 +26,12 @@
 name: iOS simulator
 
 on:
-  # `workflow_dispatch` alone cannot be triggered from a branch: GitHub only
-  # offers it once the file is on the default branch. The path filter is how
-  # the leg can be exercised before then, and it is self-limiting — it fires
-  # only when the leg's own files change, never on ordinary work.
+  # The push trigger fires only on the default branch and only when the leg's
+  # own files change, never on ordinary work. It is restricted to main so a
+  # push to some other branch cannot start a macOS runner; to run the leg
+  # against a branch, dispatch it by hand.
   push:
+    branches: [main]
     paths:
       - '.github/workflows/ios-simulator.yml'
       - 'scripts/ios-touch-check.mjs'
@@ -53,8 +54,10 @@ jobs:
     env:
       OLV_WDA_DERIVED_DATA: ${{ github.workspace }}/wda-derived-data
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
-      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version-file: '.nvmrc'
           cache: npm
@@ -165,7 +168,9 @@ jobs:
       # The WebDriverAgent build keeps the runner busy for minutes. Confirm
       # the device is still fully booted before the session asks for it.
       - name: Confirm the simulator is booted
-        run: xcrun simctl bootstatus "${{ steps.sim.outputs.udid }}" -b
+        env:
+          UDID: ${{ steps.sim.outputs.udid }}
+        run: xcrun simctl bootstatus "$UDID" -b
 
       - name: Drive the touch model in Mobile Safari
         env:
@@ -176,15 +181,18 @@ jobs:
 
       - name: Capture the screen
         if: always()
-        run: xcrun simctl io "${{ steps.sim.outputs.udid }}" screenshot ios-screen.png || true
+        env:
+          UDID: ${{ steps.sim.outputs.udid }}
+        run: xcrun simctl io "$UDID" screenshot ios-screen.png || true
 
       # When Safari exits mid-run, its crash report is the only record of why.
       # Collected from the host and from inside the simulator's data volume.
       - name: Collect crash reports
         if: failure()
+        env:
+          UDID: ${{ steps.sim.outputs.udid }}
         run: |
           mkdir -p crash-reports
-          UDID="${{ steps.sim.outputs.udid }}"
           find "$HOME/Library/Logs/DiagnosticReports" \
             "$HOME/Library/Developer/CoreSimulator/Devices/$UDID/data/Library/Logs" \
             -type f \( -iname '*safari*' -o -iname '*webcontent*' -o -iname '*.ips' \) \

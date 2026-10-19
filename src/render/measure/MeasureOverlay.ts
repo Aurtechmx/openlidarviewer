@@ -13,7 +13,7 @@
 
 import * as THREE from 'three/webgpu';
 import type { Vec3 } from '../navMath';
-import { layoutLabels } from './labelLayout';
+import { layoutLabels, MAX_DRAWN_LABELS, selectLabelsToDraw } from './labelLayout';
 import type { LabelBox } from './labelLayout';
 import { standaloneSvg, viewBoxSize } from '../snapshotSvg';
 
@@ -88,6 +88,8 @@ export interface OverlayLabel {
   text: string;
   /** Primary labels (the headline value) render larger. */
   primary: boolean;
+  /** Drawn ahead of the per-frame label budget: the measurement in progress or being dragged. */
+  priority?: boolean;
 }
 
 /** Everything to draw for one frame. */
@@ -220,10 +222,20 @@ export class MeasureOverlay {
       }
     }
 
-    // Labels — projected, then nudged apart so values never overlap.
-    const onScreen = model.labels
+    // Labels — projected, then nudged apart so values never overlap. At most
+    // MAX_DRAWN_LABELS are drawn per frame (the measurement in progress first,
+    // then those nearest the screen centre): one SVG node and one layout slot
+    // per label per frame is otherwise unbounded in the number of measurements.
+    const visibleLabels = model.labels
       .map((l) => ({ l, p: this.project(l.anchor, camera, w, h) }))
       .filter((x) => x.p.visible);
+    const keep = selectLabelsToDraw(
+      visibleLabels.map((x) => ({ x: x.p.x, y: x.p.y, priority: x.l.priority === true })),
+      MAX_DRAWN_LABELS,
+      w / 2,
+      h / 2,
+    );
+    const onScreen = keep.length === visibleLabels.length ? visibleLabels : keep.map((i) => visibleLabels[i]);
     const boxes: LabelBox[] = onScreen.map((x) => ({
       x: x.p.x,
       y: x.p.y - 16,
@@ -248,6 +260,20 @@ export class MeasureOverlay {
       text.textContent = x.l.text;
       kids.push(text);
     });
+    if (onScreen.length < visibleLabels.length) {
+      const note = svg('text', {
+        x: 10,
+        y: h - 10,
+        'text-anchor': 'start',
+        class: 'olv-measure-label olv-m-label-note',
+      });
+      const msg = `Labels shown for ${onScreen.length} of ${visibleLabels.length} measurements`;
+      note.textContent = msg;
+      const tip = document.createElementNS(SVG_NS, 'title');
+      tip.textContent = `${msg}: the rest are hidden to keep the view responsive. Zoom in to see more.`;
+      note.append(tip);
+      kids.push(note);
+    }
 
     this.element.replaceChildren(...kids);
   }

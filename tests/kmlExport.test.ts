@@ -206,6 +206,18 @@ describe('buildKml — escaping', () => {
   });
 });
 
+describe('buildKml — XML 1.0 illegal characters', () => {
+  it('strips control characters a strict parser would reject, keeping tab, newline and CR', () => {
+    const dirty = 'A\u0000B\u0008C\u000BD\u000CE\u001FF\uFFFEG\uFFFFH\tI';
+    const kml = buildKml(
+      input({ annotations: [annotation({ title: dirty })], measurements: [], viewpoints: [] }),
+    );
+    expect(kml).toContain('ABCDEFGH\tI');
+    // eslint-disable-next-line no-control-regex
+    expect(kml).not.toMatch(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\uFFFE\uFFFF]/);
+  });
+});
+
 describe('buildKml — empty input', () => {
   it('produces a minimal valid kml/Document with no placemarks', () => {
     const kml = buildKml(

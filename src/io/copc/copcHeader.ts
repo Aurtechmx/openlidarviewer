@@ -14,6 +14,7 @@
 
 import { LoadError } from '../loadErrors';
 import { readSafeUint64 } from '../lasHeader';
+import { recordLengthFitsFormat, minimumRecordLength } from '../../lasSemantics';
 import { parseCrsFromVlrs } from '../crs';
 import { MAX_COPC_HIERARCHY_PAGE_BYTES } from './copcHierarchy';
 import type { CopcMetadata, CopcHeaderInfo, CopcInfo } from './copcTypes';
@@ -53,6 +54,15 @@ export function parseCopcMetadata(headSlice: ArrayBuffer): CopcMetadata {
   const pointRecordLength = view.getUint16(105, true);
   if (pointRecordLength <= 0) {
     throw new LoadError('malformed-file', 'LAS point record length is invalid.');
+  }
+  // The record must hold at least the fields its format defines; a shorter
+  // declared length makes the decoder read past each record into the next.
+  if (!recordLengthFitsFormat(pdrf, pointRecordLength)) {
+    throw new LoadError(
+      'malformed-file',
+      `LAS point data record length ${pointRecordLength} is shorter than the ` +
+        `${minimumRecordLength(pdrf)} bytes point data record format ${pdrf} requires.`,
+    );
   }
 
   const scale: [number, number, number] = [

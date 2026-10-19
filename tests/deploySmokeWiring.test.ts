@@ -179,6 +179,16 @@ describe('smoke-deploy-zip leaves no stale success', () => {
       join(ROOT, 'scripts/lib/deploySmokeContract.mjs'),
       join(dir, 'scripts/lib/deploySmokeContract.mjs'),
     );
+    // The checks it runs on the extracted archive, and what they read from the repository.
+    for (const f of [
+      'check-deploy-output.mjs', 'check-no-test-seam.mjs', 'check-no-dev-flags.mjs', 'check-built-csp.mjs',
+      'lib/isCliEntry.mjs', 'lib/cspInline.mjs', 'lib/htmlComments.mjs',
+    ]) {
+      cpSync(join(ROOT, 'scripts', f), join(dir, 'scripts', f));
+    }
+    mkdirSync(join(dir, 'public'), { recursive: true });
+    cpSync(join(ROOT, 'index.html'), join(dir, 'index.html'));
+    for (const f of ['_headers', '.htaccess']) cpSync(join(ROOT, 'public', f), join(dir, 'public', f));
     writeFileSync(join(dir, 'package.json'), JSON.stringify({ version: '0.6.8' }));
 
     const zipName = 'openlidarviewer-v0.6.8-deploy-20260101-0000-root.zip';
@@ -221,7 +231,10 @@ describe('smoke-deploy-zip leaves no stale success', () => {
     // is stubbed to fail, which is how a failing spec reaches this script: a
     // non-zero exit from the child, thrown by execFileSync.
     const src = mkdtempSync(join(tmpdir(), 'olv-zipsrc-'));
-    writeFileSync(join(src, 'index.html'), '<!doctype html>');
+    // A deploy the build checks accept: the repository's index.html and policies.
+    writeFileSync(join(src, 'index.html'), readFileSync(join(ROOT, 'index.html')));
+    for (const f of ['_headers', '.htaccess']) writeFileSync(join(src, f), readFileSync(join(ROOT, 'public', f)));
+    for (const f of ['LICENSE', 'THIRD_PARTY_NOTICES.md']) writeFileSync(join(src, f), 'x');
     const zipPath = join(mkdtempSync(join(tmpdir(), 'olv-zipout-')), 'a.zip');
     execFileSync('zip', ['-rqX', zipPath, '.'], { cwd: src });
     const { dir, zip, result } = sandbox(readFileSync(zipPath));
@@ -236,6 +249,28 @@ describe('smoke-deploy-zip leaves no stale success', () => {
       for (const d of [dir, src, binDir, dirname(zipPath)]) {
         rmSync(d, { recursive: true, force: true });
       }
+    }
+  });
+
+  // POSIX-only: it plants a `#!/bin/sh` npx stub and joins PATH with ':'.
+  it.skipIf(process.platform === 'win32')('removes it when the extracted archive fails a build check, before anything is served', () => {
+    const src = mkdtempSync(join(tmpdir(), 'olv-zipsrc-'));
+    writeFileSync(join(src, 'index.html'), readFileSync(join(ROOT, 'index.html')));
+    for (const f of ['LICENSE', 'THIRD_PARTY_NOTICES.md']) writeFileSync(join(src, f), 'x');
+    mkdirSync(join(src, 'assets'));
+    writeFileSync(join(src, 'assets/index-abcd1234.js'), 'window.__OLV_TEST_API__ = {};\n');
+    const zipPath = join(mkdtempSync(join(tmpdir(), 'olv-zipout-')), 'a.zip');
+    execFileSync('zip', ['-rqX', zipPath, '.'], { cwd: src });
+    const { dir, zip, result } = sandbox(readFileSync(zipPath));
+    // A reachable `npx` that succeeds would let a missing check pass; this one would still not start.
+    const binDir = mkdtempSync(join(tmpdir(), 'olv-bin-'));
+    writeFileSync(join(binDir, 'npx'), '#!/bin/sh\ntouch "$0.ran"\nexit 0\n', { mode: 0o755 });
+    try {
+      expect(run(dir, zip, { PATH: `${binDir}:${process.env.PATH}` })).not.toBe(0);
+      expect(existsSync(result)).toBe(false);
+      expect(existsSync(join(binDir, 'npx.ran'))).toBe(false);
+    } finally {
+      for (const d of [dir, src, binDir, dirname(zipPath)]) rmSync(d, { recursive: true, force: true });
     }
   });
 

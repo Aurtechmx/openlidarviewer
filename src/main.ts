@@ -2983,7 +2983,7 @@ async function startEmbedBridgeLazy(): Promise<typeof import('./ui/embedBridge')
 }
 
 if (embed) {
-  // Commands are accepted from the page's own origin and ?embedParent / ?embedOrigins.
+  // Commands come from a same-origin or deployer-listed parent only (src/ui/embedPolicy.ts).
   startEmbedBridgeLazy().then((m) => m.startEmbedBridge({
     onLoadFile: (buffer, fileName) => void handleFile(new File([buffer], fileName)),
     onJumpCamera: (camera) => viewer.applyCameraState(camera),

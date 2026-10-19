@@ -15,6 +15,15 @@ name: Mutation
 # 30532907233 scored 96.81, retried a rejected push three times, and lost the
 # measurement to a red run that had passed its own threshold.
 #
+# Two jobs, split by what each one is trusted with. `mutation` executes the
+# repository's code and its dev dependencies (Stryker, vitest, their plugins),
+# so it holds read-only repository access, no stored git credential, and the
+# one dashboard secret on the one step that needs it. `open-pr` holds the write
+# permissions but runs no repository code and no npm: it downloads the
+# evidence file as data, checks its shape, and opens the pull request. A
+# compromised dev dependency can therefore not push a branch or open a pull
+# request, because the token that could is never in the job that runs it.
+#
 # This fails, it does not merely report. `stryker.conf.json` sets break: 75
 # against a measured 87.23; the runner breaks on it and
 # collect-mutation-evidence.mjs latches the same threshold a second time, so a
@@ -45,20 +54,21 @@ jobs:
     # under GitHub's 6 h job limit while giving the fuller test matrix headroom.
     timeout-minutes: 350
     permissions:
-      # A branch for the evidence file, and a pull request to carry it.
-      contents: write
-      pull-requests: write
+      # Read only. This job runs repository and dev-dependency code.
+      contents: read
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
-      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # No token is left in .git/config for the code below to find.
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version-file: '.nvmrc'
           cache: npm
-      # See the note on the same step in ci.yml for what was measured. The only
-      # install scripts in the lockfile belong to darwin-only fsevents and to
-      # vitepress's nested esbuild, neither of which this job uses. The job
-      # holds `contents: write` to push the evidence file, so install-time code
-      # execution is worth removing here in particular.
+      # See the note on the same step in ci.yml for what was measured. Two
+      # lockfile entries have install scripts, darwin-only fsevents and
+      # vitepress's nested esbuild, neither of which this job uses, so install
+      # scripts are skipped.
       - run: npm ci --ignore-scripts
       - name: Lockfile is unchanged by a clean install
         run: git diff --exit-code -- package-lock.json
@@ -71,6 +81,7 @@ jobs:
         env:
           # Enables the dashboard reporter to publish the core score. Absent
           # locally, the reporter skips silently; the run itself is unchanged.
+          # Scoped to this step only.
           STRYKER_DASHBOARD_API_KEY: ${{ secrets.STRYKER_DASHBOARD_API_KEY }}
         run: npm run mutation
 
@@ -87,12 +98,57 @@ jobs:
             reports/mutation/
             docs/validation/mutation-evidence.json
 
-      # Only from the default branch, and only when the figure actually moved.
-      # A dispatch against a feature branch still produces the artifact above;
-      # what it must not do is publish a measurement of that branch as the one
-      # every release cites.
+      # The single file the next job consumes, alone in its artifact so that
+      # job downloads one data file and nothing else. Skipped when the run
+      # failed: a failed run records nothing.
+      - name: Hand the evidence file to the pull request job
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: mutation-evidence
+          retention-days: 7
+          if-no-files-found: error
+          path: docs/validation/mutation-evidence.json
+
+  # Only from the default branch, and only when the figure actually moved.
+  # A dispatch against a feature branch still produces the artifacts above;
+  # what it must not do is publish a measurement of that branch as the one
+  # every release cites. This job runs no repository code and no npm.
+  open-pr:
+    needs: mutation
+    if: github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      # A branch for the evidence file, and a pull request to carry it.
+      contents: write
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # This job pushes a branch, so it keeps the token the checkout writes.
+          persist-credentials: true
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: mutation-evidence
+          path: incoming
+
+      # The file was produced by a job that ran repository code, so it is
+      # treated as data: it must parse as JSON with a plain numeric score
+      # before anything is committed or interpolated into a title.
+      - name: Take the evidence file
+        run: |
+          set -euo pipefail
+          node -e '
+            const fs = require("node:fs");
+            const e = JSON.parse(fs.readFileSync("incoming/mutation-evidence.json", "utf8"));
+            if (typeof e !== "object" || e === null || typeof e.score !== "number" || !Number.isFinite(e.score)) {
+              console.error("mutation-evidence.json has no numeric score");
+              process.exit(1);
+            }
+          '
+          cp incoming/mutation-evidence.json docs/validation/mutation-evidence.json
+
       - name: Open a pull request carrying the evidence
-        if: github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
