@@ -32,6 +32,7 @@ The format is based on Keep a Changelog and the project follows Semantic Version
 
 ### Changed
 
+- The v0.7 implementation ledger and its generated status table are no longer in the source archive; they stay in the repository. lint:known-limitations and lint:v070-status skip with a printed notice when run from an archive, and still fail in a git checkout when the ledger is missing.
 - The georeferenced orthographic PNG (PNG + .pgw + .prj) now has transparent no-data: pixels with no points have alpha 0 and pixels with points have alpha 255, with no partly transparent pixels. The PNG carries an `olv:nodata` text chunk that says so. The world file, the raster size and the colours of fully covered pixels are unchanged; a pixel at least half covered is written opaque with its point colour. Screen rendering and every other snapshot or export stay opaque.
 - The Data › Classes and Analyse › Terrain pages use the View panel's chips, section labels, rows and notes. The header Back shows only its arrow where the next crumb already names the page, and the left panel's card edge sits on its scroller, so content no longer runs under the Results bar or the page title.
 - The "Two scans loaded" before/after prompt is offered only when both scans declare the same CRS and linear unit and neither is a truncated load. Otherwise no prompt is shown; Compare in the Inspector is unchanged.
@@ -59,6 +60,16 @@ The format is based on Keep a Changelog and the project follows Semantic Version
 
 ### Fixed
 
+- Contours drawn over a georeferenced PLY or OBJ are no longer rotated and mirrored; the overlay follows the terrain gather's up axis.
+- The Scan Report, PDF scan metadata, feature candidates and acquisition-coverage fit read each layer's up axis, so a PLY under a CRS reports footprint X by Y and height as the Z span. A glTF under a CRS withholds those figures.
+- The coordinate-system notice that a session sets stays visible with its Keep action, and names the CRS actually applied.
+- A measurement label far off screen no longer hangs the label layout.
+- Work whose owner layer is not open withholds heights instead of using the active layer's axis.
+- An unreadable vertical unit is no longer replaced by the horizontal unit in the full-cloud grade, Classify and scan-type routing.
+- A CRS change notifies measurement subscribers once, after profile and volume results are re-cut.
+- The embed frame guard fails closed, and packaging refuses an embed allow-list left in the shell unless `OLV_ALLOW_EMBED_ORIGINS=1`.
+- The gate runner only empties a step log directory inside `release/`.
+- The CSP lint catches `<a href="x"onclick=…>`, skips commented policy lines, and Dependabot's GitHub Actions entry has the same cooldown as npm.
 - A WKT vertical unit is read by its conversion factor. UNIT["centimetre",0.01] and UNIT["millimetre",0.001] matched the metre name and resolved to 1 m per unit, so a 100-unit rise read 100 m in Measure and in the CSV vertical_m column instead of 1 m and 0.1 m. A yard (0.9144) or any other unit name with a valid factor resolved to unknown. The declared factor is now kept for WKT1 UNIT and WKT2 LENGTHUNIT, in compound and standalone vertical CRSs, and the 100-unit yard rise reads 91.44 m, as PDAL reads it. The unit is named metre, foot or US survey foot only when the factor is that unit. A name that disagrees with its factor, such as UNIT["metre",0.3048], is converted by the factor and the conflict is noted.
 - A declared vertical unit that cannot be read (an angular unit, or a missing, zero, negative or non-finite factor) no longer produces metre heights. An angular VerticalUnitsGeoKey beside NAVD88 marked the vertical unit unknown, yet Measure and the CSV printed the 100-unit rise as 100 m, because the export frame replaced the missing factor with 1 and judged units by the horizontal scale alone. The vertical scale is now carried as valid, absent or invalid. An invalid one withholds every height and every figure built on one (3D length, tilted area, angle, grade, profile, box, volume) in the readout, trust grade, chain totals, lasso volume, CSV, GeoJSON, KML, PDF, findings and integrity report, with "height unit could not be interpreted". Plan figures are kept. The state follows each measurement's own layer, a saved session and a delayed export, and an invalid factor set on the measure tool no longer falls back to the horizontal unit.
 - LAS conversion refuses a source whose vertical unit cannot be read, or whose vertical unit is not metre, foot or US survey foot, with the reason. Such a file was written with no vertical unit, which readers take as the horizontal unit.
