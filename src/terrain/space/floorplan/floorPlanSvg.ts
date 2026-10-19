@@ -102,9 +102,19 @@ export function regionAreaReconcileScale(
   return floorAreaM2 / sum;
 }
 
+/**
+ * Remove characters XML 1.0 cannot carry in any form, escaped or not: the C0
+ * controls other than tab, newline and carriage return, and U+FFFE / U+FFFF.
+ * A name pasted from a PDF or a terminal can hold them, and a strict XML parser
+ * rejects the whole document at the first one.
+ */
+function stripXmlIllegal(s: string): string {
+  return s.replaceAll(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\uFFFE\uFFFF]/g, '');
+}
+
 /** XML-escape a string for safe insertion into SVG text / attributes. */
 export function escapeXml(s: string): string {
-  return s
+  return stripXmlIllegal(s)
     .replaceAll(/&/g, '&amp;')
     .replaceAll(/</g, '&lt;')
     .replaceAll(/>/g, '&gt;')
