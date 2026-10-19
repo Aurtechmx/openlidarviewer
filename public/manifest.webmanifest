@@ -1,7 +1,7 @@
 {
   "name": "OpenLiDARViewer",
   "short_name": "OpenLiDAR",
-  "description": "Local-first browser-based point-cloud exploration",
+  "description": "LiDAR and point-cloud viewer that runs in your browser",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",

@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <meta name="theme-color" content="#030817" />
-  <title>Data sources & credits, OpenLiDARViewer</title>
+  <title>Data sources and credits: OpenLiDARViewer</title>
   <link rel="stylesheet" href="credits.css" />
 </head>
 <body>
@@ -12,13 +12,10 @@
     <a class="back" href="./">← Back to OpenLiDARViewer</a>
     <h1>Data sources &amp; credits</h1>
     <p>
-      OpenLiDARViewer streams its sample datasets directly from public,
-      openly-hosted buckets, and we don't host or own them. A genuine thank-you to
-      everyone who publishes LiDAR openly, and to the open-source projects that
-      keep moving this field forward; it's what makes a free, in-browser viewer
-      like this possible. Credit and thanks go to the providers below. To
-      change or remove a dataset, email
-      <a href="mailto:info@aurtech.mx">info@aurtech.mx</a> and we'll act on it.
+      OpenLiDARViewer streams its sample datasets directly from public, openly
+      hosted buckets. The project does not host or own them. The providers are
+      credited below. To change or remove a dataset, email
+      <a href="mailto:info@aurtech.mx">info@aurtech.mx</a>.
     </p>
 
     <h2>Sample datasets</h2>
@@ -31,12 +28,12 @@
           <td>Public domain</td>
         </tr>
         <tr>
-          <td>Switzerland — swisssurface3D (2022)</td>
+          <td>Switzerland: swisssurface3D (2022)</td>
           <td><strong>swisstopo</strong>, via FLAI</td>
           <td>© swisstopo, <a href="https://www.swisstopo.admin.ch/en/terms-of-use-free-geodata-and-geoservices">free geodata terms</a></td>
         </tr>
         <tr>
-          <td>Slovenia — GURS CLSS (2023)</td>
+          <td>Slovenia: GURS CLSS (2023)</td>
           <td><strong>GURS</strong>, via FLAI</td>
           <td>CC BY 4.0 (© GURS)</td>
         </tr>
@@ -44,11 +41,11 @@
     </table>
     <p class="note">
       Attribution, as each provider requires:
-      <strong>USGS 3DEP</strong> &mdash; "Data available from U.S. Geological Survey,
+      <strong>USGS 3DEP</strong>: "Data available from U.S. Geological Survey,
       National Geospatial Program" (streams from the AWS Registry of Open Data);
-      <strong>swisstopo</strong> (swisssurface3D) &mdash; "© swisstopo" / "Source:
+      <strong>swisstopo</strong> (swisssurface3D): "© swisstopo" / "Source:
       Federal Office of Topography swisstopo";
-      <strong>GURS</strong> (Slovenia) &mdash; © GURS, licensed
+      <strong>GURS</strong> (Slovenia): © GURS, licensed
       <a href="https://creativecommons.org/licenses/by/4.0/">CC BY 4.0</a>.
       The European datasets are streamed via
       <a href="https://github.com/flai-ai/open-lidar-data">FLAI Open LiDAR Data</a>,
@@ -57,13 +54,12 @@
     </p>
 
     <h2>Formats &amp; tooling</h2>
-    <p>This viewer runs on open point-cloud formats and tools maintained by <strong>Hobu, Inc.</strong> and a broad community of contributors:</p>
+    <p>The viewer reads formats and uses tools maintained by <strong>Hobu, Inc.</strong> and other contributors:</p>
     <ul>
-      <li><strong>laz-perf</strong> (Apache-2.0) — the in-browser LAZ decoder we use to read compressed point data</li>
-      <li><strong>COPC</strong> (Cloud Optimized Point Cloud) — the open streaming format</li>
-      <li><strong>EPT / Entwine</strong> — the hierarchical point-tile format and the Entwine tool that builds it</li>
+      <li><strong>laz-perf</strong> (Apache-2.0): the in-browser LAZ decoder</li>
+      <li><strong>COPC</strong> (Cloud Optimized Point Cloud): the open streaming format</li>
+      <li><strong>EPT / Entwine</strong>: the hierarchical point-tile format and the Entwine tool that builds it</li>
     </ul>
-    <p>With particular thanks to <strong>Howard Butler</strong> and <strong>Hobu, Inc.</strong>, and the wider PDAL / COPC community.</p>
 
     <h2>Beta testing</h2>
     <ul>
@@ -96,26 +92,25 @@
       cache of its own files, plus the full offline copy if you choose to make
       one. None of it leaves your device. When you open a remote dataset or a sample, it is downloaded
       from the server that hosts it, and that server sees your IP address and
-      the tiles you view. See <a href="https://github.com/aurtechmx/openlidarviewer/blob/main/PRIVACY.md">PRIVACY.md</a>.
+      the tiles you view. A location search in the public LiDAR catalogue is sent
+      to Microsoft Planetary Computer, only when you run one, and opening a result
+      sends a request to its signing service carrying that tile's address. See <a href="https://github.com/aurtechmx/openlidarviewer/blob/main/PRIVACY.md">PRIVACY.md</a>.
     </p>
 
     <h2>Built with</h2>
     <p>
-      This is an open-source project, and a research one. None of it would exist
-      without people who gave their work away so that others could go and measure
-      something with it. Every library below ships inside the viewer you are
-      using right now.
+      These libraries ship inside the viewer.
     </p>
     <ul>
       <li><strong>three.js</strong>, the WebGPU and WebGL rendering engine (MIT)</li>
-      <li><strong>loaders.gl</strong>, glTF, LAS, OBJ and PLY parsing (MIT)</li>
+      <li><strong>loaders.gl</strong>, glTF, OBJ and PLY parsing (MIT). LAS is parsed by the project's own reader.</li>
       <li><strong>proj4js</strong>, coordinate-system transforms (MIT)</li>
       <li><strong>pdf-lib</strong>, the PDF reports (MIT)</li>
       <li><strong>laz-perf</strong>, the in-browser LAZ decoder (Apache-2.0)</li>
+      <li><strong>spe-check</strong> (A. Urias, MIT), the draw precision bound, from "Per-Draw Precision Bounds for Large-Coordinate Rendering in WebGL2 and WebGPU"</li>
     </ul>
     <p>
-      The type is open too, and the people who drew it belong here as much as
-      anyone: <strong>Olv Font</strong>, a modified version of Poppins by the
+      Fonts: <strong>Olv Font</strong>, a modified version of Poppins by the
       Poppins Project Authors, <strong>Inter</strong> by Rasmus Andersson, and
       <strong>JetBrains Mono</strong> by the JetBrains Mono authors. All three
       are under the SIL Open Font License.
@@ -155,9 +150,8 @@
     <p class="note">
       Full licence texts and copyright lines for every bundled package ship with
       the app, in <a href="THIRD_PARTY_NOTICES.md">THIRD_PARTY_NOTICES.md</a>.
-      If we have credited you wrongly, or missed you, write to
-      <a href="mailto:info@aurtech.mx">info@aurtech.mx</a> and we will put it
-      right.
+      To correct a credit, write to
+      <a href="mailto:info@aurtech.mx">info@aurtech.mx</a>.
     </p>
 
     <footer>OpenLiDARViewer · <a data-olv-source href="https://github.com/aurtechmx/openlidarviewer">Source</a> · <a href="https://hobu.co">Hobu</a></footer>

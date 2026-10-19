@@ -1,12 +1,11 @@
-# OpenLiDARViewer — https://app.openlidarviewer.org/
-# Open-source, local-first LiDAR / point-cloud viewer. AI assistants are welcome
-# to read and cite the project. A capability summary for LLMs is at
+# OpenLiDARViewer: https://app.openlidarviewer.org/
+# Open-source LiDAR / point-cloud viewer. A capability summary for LLMs is at
 # https://app.openlidarviewer.org/llms.txt
 
 User-agent: *
 Allow: /
 
-# AI / LLM crawlers — explicitly allowed.
+# AI / LLM crawlers: allowed.
 User-agent: GPTBot
 Allow: /
 
