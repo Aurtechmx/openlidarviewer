@@ -16,7 +16,7 @@
       "type": "Other"
     }
   ],
-  "description": "OpenLiDARViewer is an open-source, local-first, browser-native viewer for LiDAR and point-cloud inspection, streaming visualization, measurement, terrain analysis, validation, and reproducible reporting. Each release ships with machine-generated test evidence, a release manifest binding the tag to the commit and to every attached artifact's hash, a CycloneDX SBOM, and versioned validation, limitations, and reproducibility documents. Scientific claims are bounded and recorded in a machine-checked claim register; the vocabulary and the claim set are defined in docs/project/CLAIMS_AND_LIMITATIONS.md.",
+  "description": "OpenLiDARViewer is an open-source LiDAR and point-cloud viewer that runs in the browser. It opens LAS, LAZ, E57, PLY, OBJ, glTF and PCD files and streams COPC, EPT and 3D Tiles; it measures, classifies, cuts profiles, builds terrain models and contours, compares epochs and exports reports. It renders on WebGPU with a WebGL 2 fallback, and local files stay on the device. Each release ships with machine-generated test evidence, a release manifest binding the tag to the commit and to every attached artifact's hash, a CycloneDX SBOM, and versioned validation, limitations, and reproducibility documents. Scientific claims are bounded and recorded in a machine-checked claim register; the vocabulary and the claim set are defined in docs/project/CLAIMS_AND_LIMITATIONS.md.",
   "keywords": [
     "LiDAR",
     "point cloud",
