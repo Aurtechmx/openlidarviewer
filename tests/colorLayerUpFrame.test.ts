@@ -159,3 +159,20 @@ describe('the elevation filter after a layer\'s axis moves', () => {
     expect(mount).toMatch(/if \(cloudUpAxisMoved\(src\.clouds\(\)\.map\(src\.cloud\)\)\) \{\s*v\.refreshProjectSharedElevation\(true\);\s*src\.onUpAxisMoved\?\.\(\);/);
   });
 });
+
+describe('a moved axis is reported once', () => {
+  it('a cloud never recoloured by height (RGB or intensity mode) does not stay moved', async () => {
+    const cloud = await strip();
+    const crs = new CrsService(port());
+    crs.resolveForScan({ name: cloud.name, detected: undefined, source: 'las-vlr', identity: datasetIdentity(cloud) });
+    install(crs, cloud);
+    expect(cloudUpAxisIndex(cloud)).toBe(1);
+    crs.setOverride({ override: { kind: 'projected', epsg: 32613 }, detected: undefined, source: 'las-vlr' });
+    // No cloudUpAxisIndex call in between: the colour mode is not elevation.
+    expect(cloudUpAxisMoved([cloud])).toBe(true);
+    expect(cloudUpAxisMoved([cloud])).toBe(false);
+    // A later move is still found.
+    crs.setOverride({ override: { kind: 'local', epsg: null }, detected: undefined, source: 'las-vlr' });
+    expect(cloudUpAxisMoved([cloud])).toBe(true);
+  });
+});
