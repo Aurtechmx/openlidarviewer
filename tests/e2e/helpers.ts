@@ -312,6 +312,7 @@ export async function dropHillsPly(page: Page): Promise<void> {
     dt.items.add(new File([t], 'hills.ply'));
     return dt;
   }, text);
+  await waitForLoadIdle(page);
   await page.dispatchEvent('body', 'drop', { dataTransfer });
 }
 
@@ -321,6 +322,19 @@ export async function dropHillsPly(page: Page): Promise<void> {
  * dragged file takes, and works whether or not the empty-state sample
  * card exists. Use this anywhere a test previously clicked a sample.
  */
+/**
+ * Wait until no open or session import holds the one-load-at-a-time flag. A
+ * drop made while it is held is refused ("Already loading"), so a spec that
+ * drops straight after a measurement, a layer or a session appears can lose
+ * its file on a loaded machine. Passes at once before the seam has mounted.
+ */
+export async function waitForLoadIdle(page: Page, timeout = 60_000): Promise<void> {
+  await page.waitForFunction(() => {
+    const api = (window as unknown as { __OLV_TEST_API__?: { isLoading?: () => boolean } }).__OLV_TEST_API__;
+    return !api?.isLoading || !api.isLoading();
+  }, undefined, { timeout });
+}
+
 export async function dropTinyPly(page: Page): Promise<void> {
   const bytes = readFileSync(
     fileURLToPath(new URL('../fixtures/tiny.ply', import.meta.url)),
@@ -330,6 +344,7 @@ export async function dropTinyPly(page: Page): Promise<void> {
     dt.items.add(new File([new Uint8Array(b)], 'tiny.ply'));
     return dt;
   }, [...bytes]);
+  await waitForLoadIdle(page);
   await page.dispatchEvent('body', 'drop', { dataTransfer });
 }
 
@@ -346,6 +361,7 @@ export async function dropTinyLas(page: Page): Promise<void> {
     dt.items.add(new File([new Uint8Array(b)], 'tiny.las'));
     return dt;
   }, [...bytes]);
+  await waitForLoadIdle(page);
   await page.dispatchEvent('body', 'drop', { dataTransfer });
 }
 
@@ -368,6 +384,7 @@ export async function dropTerrainAccessUtmLas(page: Page): Promise<void> {
     dt.items.add(new File([new Uint8Array(b)], 'terrain-access-utm.las'));
     return dt;
   }, [...bytes]);
+  await waitForLoadIdle(page);
   await page.dispatchEvent('body', 'drop', { dataTransfer });
 }
 
@@ -419,6 +436,7 @@ export async function dropTerrainAccessBoxLas(page: Page): Promise<void> {
     dt.items.add(new File([new Uint8Array(data)], 'terrain-access-box-utm.las'));
     return dt;
   }, [...bytes]);
+  await waitForLoadIdle(page);
   await page.dispatchEvent('body', 'drop', { dataTransfer });
 }
 
@@ -467,6 +485,7 @@ export async function dropTinyPtx(page: Page): Promise<void> {
     dt.items.add(new File([t], 'setup.ptx'));
     return dt;
   }, text);
+  await waitForLoadIdle(page);
   await page.dispatchEvent('body', 'drop', { dataTransfer });
 }
 
@@ -516,6 +535,7 @@ export async function dropDenseGridPly(page: Page): Promise<void> {
     dt.items.add(new File([new Uint8Array(b)], 'dense-grid.ply'));
     return dt;
   }, [...bytes]);
+  await waitForLoadIdle(page);
   await page.dispatchEvent('body', 'drop', { dataTransfer });
 }
 
@@ -747,6 +767,7 @@ export async function dropDenseGridUtmLas(page: Page): Promise<void> {
     d.items.add(new File([new Uint8Array(b)], 'dense-grid-utm.las'));
     return d;
   }, [...bytes]);
+  await waitForLoadIdle(page);
   await page.dispatchEvent('body', 'drop', { dataTransfer: dt });
 }
 

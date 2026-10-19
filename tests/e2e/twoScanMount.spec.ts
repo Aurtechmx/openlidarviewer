@@ -1,6 +1,6 @@
 import { test, expect, type Page } from '@playwright/test';
 import { isBenignPageError } from './pageErrors';
-import { railChromeSettled, expectHittable, showWorkspaceMode } from './helpers';
+import { railChromeSettled, expectHittable, showWorkspaceMode, waitForLoadIdle } from './helpers';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { tileAt } from './georefTile';
@@ -75,6 +75,7 @@ async function dropBytes(page: Page, bytes: number[], name: string): Promise<voi
     },
     { b: bytes, n: name },
   );
+  await waitForLoadIdle(page);
   await page.dispatchEvent('body', 'drop', { dataTransfer: dt });
 }
 

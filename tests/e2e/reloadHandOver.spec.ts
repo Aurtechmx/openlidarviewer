@@ -1,7 +1,7 @@
 import { test, expect, type Browser, type Page, type TestInfo } from '@playwright/test';
 import { readFileSync } from 'node:fs';
 import { geomFixtures, dropBytes } from './geomFixtures';
-import { openToolPage, showWorkspaceMode } from './helpers';
+import { openToolPage, showWorkspaceMode, waitForLoadIdle } from './helpers';
 
 /**
  * "Reload at higher density" opens the same file again and hands the original
@@ -87,6 +87,7 @@ async function importSession(page: Page, session: Session): Promise<void> {
     d.items.add(new File([text], 'saved.olvsession'));
     return d;
   }, JSON.stringify(session));
+  await waitForLoadIdle(page);
   await page.dispatchEvent('body', 'drop', { dataTransfer: dt });
 }
 

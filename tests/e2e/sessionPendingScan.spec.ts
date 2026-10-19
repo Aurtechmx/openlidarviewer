@@ -1,6 +1,6 @@
 import { test, expect, type Page } from '@playwright/test';
 import { readFileSync } from 'node:fs';
-import { dropTinyPly, gotoSettled, openToolPage, reloadSettled, showWorkspaceMode, type MeasureTestApi } from './helpers';
+import { dropTinyPly, gotoSettled, openToolPage, reloadSettled, showWorkspaceMode, type MeasureTestApi, waitForLoadIdle } from './helpers';
 
 /**
  * A session imported on an empty viewer keeps its annotations and views when
@@ -60,6 +60,7 @@ test('a session imported before its scan keeps its annotations and views when th
     d.items.add(new File([t], 'pending.olvsession'));
     return d;
   }, JSON.stringify(seeded));
+  await waitForLoadIdle(page);
   await page.dispatchEvent('body', 'drop', { dataTransfer: dt });
   // The seam mounts once the viewer has loaded, which the import starts.
   await page.waitForFunction(() => 'getMeasurementCount' in ((window as unknown as { __OLV_TEST_API__?: object }).__OLV_TEST_API__ ?? {}), undefined, { timeout: 30_000 });

@@ -1,3 +1,4 @@
+import { waitForLoadIdle } from './helpers';
 import type { Page } from '@playwright/test';
 import type { GlobalPoints } from '../../src/convert/globalPoints';
 
@@ -93,6 +94,7 @@ export async function dropBytes(page: Page, bytes: Uint8Array, name: string): Pr
     },
     { b64: Buffer.from(bytes).toString('base64'), n: name },
   );
+  await waitForLoadIdle(page);
   await page.dispatchEvent('body', 'drop', { dataTransfer: dt });
 }
 

@@ -2825,7 +2825,7 @@ stage.overlay.append(dropZone.toast);
 if (__OLV_TEST_SEAM__ && testApi) {
   void loadTestSeamMount().then(({ mountTestSeam }) => mountTestSeam({
     getViewer: ensureViewer,
-    getActiveScanId: () => scans.activeId,
+    getActiveScanId: () => scans.activeId, isLoading: () => loading,
     showReclassify: () => showReclassifyUi(),
     refreshReclassify: () => reclassifyUi?.refresh(), activeGeo: () => ({ ...exportGeoContext(), epsg: crsService.context().epsg ?? null }), reloadLayer: (id, budget) => exportPanel.reloadLayer(id, budget),
   }));

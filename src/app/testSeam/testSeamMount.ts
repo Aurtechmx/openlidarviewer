@@ -28,6 +28,8 @@ export interface TestSeamDeps {
   refreshReclassify: () => void;
   /** The export frame and resolved CRS code of the active scan. */
   activeGeo?: () => { name: string | null; origin: readonly number[]; epsg: number | null };
+  /** Whether an open or a session import is still in flight (the one-load-at-a-time flag). */
+  isLoading?: () => boolean;
   /** The Output panel's "Reload at higher density" for the layer with this viewer id. */
   reloadLayer?: (id: string, budget: number) => Promise<void>;
 }
@@ -143,6 +145,9 @@ export function mountTestSeam(deps: TestSeamDeps): void {
       }),
     // The active layer's name, export frame and resolved CRS, so a spec can
     // check every scan-scoped reader moved together.
+    // True while an open or a session import holds the one-load-at-a-time
+    // flag; a drop made then is refused, so specs wait for false first.
+    isLoading: (): boolean => deps.isLoading?.() ?? false,
     activeScan: () => {
       const id = deps.getActiveScanId();
       return { activeName: id ? v.getCloud(id)?.name ?? null : null, geo: deps.activeGeo?.() ?? null };
