@@ -117,8 +117,8 @@ because that script rewrites the files several tests assert byte identity
 against.
 
 Every other LAS fixture here leaves the flag byte at zero, so excluding
-Withheld points changed no number anywhere and ledger entry L26 could record
-the policy's consequence only as unmeasured. This file gives it something to
+Withheld points changed no number anywhere and the policy's consequence
+could be recorded only as unmeasured. This file gives it something to
 measure. LAS point format 6, version 1.4.
 
 - pointCount: 12

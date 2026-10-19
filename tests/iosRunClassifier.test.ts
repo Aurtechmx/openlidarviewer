@@ -1,5 +1,5 @@
 /**
- * The iOS simulator leg's run classifier (ledger L13): INFRASTRUCTURE only for
+ * The iOS simulator leg's run classifier: INFRASTRUCTURE only for
  * a signature-matched failure before the first app assertion.
  */
 import { describe, it, expect } from 'vitest';

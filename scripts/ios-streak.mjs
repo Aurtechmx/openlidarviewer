@@ -9,7 +9,7 @@
  * `--limit` is the evaluated window (default 30 completed runs). The 20%
  * INFRASTRUCTURE guard is computed over that window. Runs whose "Set up job"
  * log names a non-Intel (arm64) image are listed as EXCLUDED and do not
- * count: the leg is pinned to macos-26-intel (ledger L13).
+ * count: the leg is pinned to macos-26-intel.
  */
 import { readFileSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';

@@ -2,7 +2,7 @@
  * withheldAwareTerrainGather.test.ts: recovering the Withheld outcome for a
  * static file the display path voxel-downsampled at load.
  *
- * The scenario (ledger L26/L28): a static file above the display point budget
+ * The scenario: a static file above the display point budget
  * is voxel-downsampled at load, and the reduction leaves `classificationFlags`
  * undefined on the reduced cloud. The canonical gather (`sampleStridedTerrain`)
  * then has no flags channel to read, so it can only declare the Withheld

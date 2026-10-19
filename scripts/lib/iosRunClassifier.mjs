@@ -2,7 +2,7 @@
  * iosRunClassifier.mjs: classify an iOS simulator run as PASS, FAILURE or
  * INFRASTRUCTURE, and derive the streak the leg must reach before it blocks.
  *
- * Rule (ledger L13): INFRASTRUCTURE only when the first failing step precedes
+ * Rule: INFRASTRUCTURE only when the first failing step precedes
  * the first app assertion AND the pre-assertion log matches a signature in
  * scripts/ios-infra-signatures.json. Anything else that failed is FAILURE.
  * Where the evidence is missing (no assertion step, no log, no start marker)
