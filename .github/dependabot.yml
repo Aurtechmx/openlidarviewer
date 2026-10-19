@@ -58,11 +58,11 @@ updates:
     directory: "/"
     schedule:
       interval: "weekly"
-    # Same delay as the npm entries: an action release is public for a week
-    # (two for a major) before it is offered. Security updates are not delayed.
+    # An action release is public for a week before it is offered. Dependabot
+    # takes no per-semver delay for this ecosystem, so majors wait a week too.
+    # Security updates are not delayed.
     cooldown:
       default-days: 7
-      semver-major-days: 14
     labels:
       - "dependencies"
       - "ci"
