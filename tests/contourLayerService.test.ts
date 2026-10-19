@@ -64,7 +64,7 @@ function setup() {
 const input = (over: Partial<ContourLayerInput> = {}): ContourLayerInput => ({
   scanId: 'scan-a',
   model: MODEL,
-  format: 'las',
+  upAxis: 'z',
   renderOrigin: [1, 2, 3],
   ...over,
 });

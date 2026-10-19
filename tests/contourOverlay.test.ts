@@ -47,7 +47,7 @@ function model(): ContourFeatureModel {
 }
 
 const zUpInput = (m = model()) =>
-  ({ model: m, format: 'las' as const, renderOrigin: [100, 200, 5] as const });
+  ({ model: m, upAxis: 'z' as const, renderOrigin: [100, 200, 5] as const });
 
 describe('ContourOverlay — lifecycle', () => {
   it('attaches one object to the host on first build', () => {
@@ -122,7 +122,7 @@ describe('ContourOverlay — placement', () => {
   it('height offset lifts along Y for a Y-up mesh scan', () => {
     const host = fakeHost();
     const overlay = new ContourOverlay(host);
-    overlay.setModel({ model: model(), format: 'gltf', renderOrigin: [0, 0, 0] });
+    overlay.setModel({ model: model(), upAxis: 'y', renderOrigin: [0, 0, 0] });
     overlay.setHeightOffset(2);
     const p = overlay.object!.position;
     expect([p.x, p.y, p.z]).toEqual([0, 2, 0]);
@@ -131,12 +131,12 @@ describe('ContourOverlay — placement', () => {
   it('a Y-up scan is built through the rotation, so its northing is negated', () => {
     const host = fakeHost();
     const zUp = new ContourOverlay(host);
-    zUp.setModel({ model: model(), format: 'las', renderOrigin: null });
+    zUp.setModel({ model: model(), upAxis: 'z', renderOrigin: null });
     const zPos = (zUp.object as THREE.LineSegments).geometry.getAttribute('position');
 
     const yHost = fakeHost();
     const yUp = new ContourOverlay(yHost);
-    yUp.setModel({ model: model(), format: 'gltf', renderOrigin: null });
+    yUp.setModel({ model: model(), upAxis: 'y', renderOrigin: null });
     const yPos = (yUp.object as THREE.LineSegments).geometry.getAttribute('position');
 
     // canonicalZUpToYUp: (x, y, z) -> (x, z, -y).

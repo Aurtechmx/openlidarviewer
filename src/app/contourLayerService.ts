@@ -34,7 +34,6 @@ import { type DerivedLayer } from '../model/DerivedLayer';
 import type { ContourOverlay, ContourOverlayHost } from '../render/ContourOverlay';
 import type { DerivedLayerStore } from '../model/DerivedLayer';
 import type { ContourFeatureModel } from '../terrain/contour/contourFeatureModel';
-import type { SourceFormat } from '../io/sniffFormat';
 
 /** The stable id of the contour layer derived from a given scan. */
 export function contourLayerId(scanId: string): string {
@@ -47,7 +46,7 @@ export interface ContourLayerInput {
   readonly scanId: string;
   readonly model: ContourFeatureModel;
   /** Fixes the scene frame — a Y-up scan is drawn through the inverse rotation. */
-  readonly format: SourceFormat;
+  readonly upAxis: 'z' | 'y';
   readonly renderOrigin: readonly [number, number, number] | null;
   /** Vertical exaggeration currently applied to the scene. Default 1. */
   readonly zScale?: number;
@@ -132,7 +131,7 @@ export function createContourLayerService(deps: ContourLayerServiceDeps): Contou
       const o = ensureOverlay();
       o.setModel({
         model: input.model,
-        format: input.format,
+        upAxis: input.upAxis,
         renderOrigin: input.renderOrigin,
         zScale: input.zScale ?? 1,
       });

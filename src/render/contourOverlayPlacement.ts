@@ -12,7 +12,8 @@
  * `terrain/canonicalFrame.ts`), but the scene draws each cloud in its OWN
  * source frame: a LAS/LAZ/E57 cloud is Z-up, a phone-scan mesh (glTF/OBJ/PLY)
  * is Y-up. So the overlay has to be placed into the frame of the scan it
- * describes, not into a fixed one.
+ * describes, not into a fixed one. That frame is the gather's `sourceUpAxis`
+ * (see `overlayBufferParamsFor`), not the format.
  *
  * The trap this module exists to close: for a Y-up scan it is tempting to "just
  * put the elevation in Y" (`(x, y, z) → (x, z, y)`). That is a REFLECTION. It
@@ -27,22 +28,18 @@
  */
 
 import type { OverlayVerticalAxis } from '../terrain/contour/contourOverlayGeometry';
-import { isZUpFormat } from '../io/sniffFormat';
-import type { SourceFormat } from '../io/sniffFormat';
 
 /**
- * The scene vertical axis for a scan's source format: 'z' for the survey
- * formats (LAS/LAZ/XYZ/E57/PCD/PTX/PTS), 'y' for the mesh formats the scene
- * draws Y-up. Mirrors the axis the Viewer already colours elevation by, so an
- * overlay can never disagree with the cloud it is drawn over.
- */
-export function overlayVerticalAxisFor(format: SourceFormat): OverlayVerticalAxis {
-  return isZUpFormat(format) ? 'z' : 'y';
-}
-
-/**
- * The buffer-build parameters for a scan's format: the vertical axis AND the
- * northing sign, together.
+ * The buffer-build parameters for the up axis of the frame the contours were
+ * gathered in: the vertical axis AND the northing sign, together.
+ *
+ * The input is the terrain gather's own `sourceUpAxis`, never the scan's
+ * format. The gather decides it per layer (a PLY or OBJ under a CRS is taken
+ * as Z-up and is not rotated; a mesh with no CRS is detected from its point
+ * layout), so the format table would draw the contours of a georeferenced PLY
+ * rotated and mirrored. 'z' means the gather did not rotate the points, so the
+ * overlay is built unrotated; 'y' means it rotated Y-up points into Z-up, and
+ * the overlay applies the inverse.
  *
  * They are returned as one object on purpose. `verticalAxis: 'y'` on its own is
  * the reflection described above; it is only a rotation when paired with
@@ -50,11 +47,11 @@ export function overlayVerticalAxisFor(format: SourceFormat): OverlayVerticalAxi
  * they must remember to call together — is what makes the mirrored-contour bug
  * unreachable from the wiring.
  */
-export function overlayBufferParamsFor(format: SourceFormat): {
+export function overlayBufferParamsFor(upAxis: OverlayVerticalAxis): {
   readonly verticalAxis: OverlayVerticalAxis;
   readonly negateNorthing: boolean;
 } {
-  const verticalAxis = overlayVerticalAxisFor(format);
+  const verticalAxis: OverlayVerticalAxis = upAxis === 'y' ? 'y' : 'z';
   return { verticalAxis, negateNorthing: verticalAxis === 'y' };
 }
 

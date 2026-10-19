@@ -8,7 +8,7 @@
  * unit-tested. What remains here is upload, style, and lifecycle.
  *
  * FRAME (load-bearing). The buffers are built through
- * `overlayBufferParamsFor(format)`, which returns the vertical axis and the
+ * `overlayBufferParamsFor(upAxis)`, which returns the vertical axis and the
  * northing sign TOGETHER. Taking only the axis for a Y-up scan is a reflection
  * that mirrors the scan while still looking like a contour map; the pairing is
  * what makes that unreachable from here. See the proof in
@@ -34,10 +34,8 @@ import {
   type ContourOverlayBuffers,
 } from '../terrain/contour/contourOverlayGeometry';
 import type { ContourFeatureModel } from '../terrain/contour/contourFeatureModel';
-import type { SourceFormat } from '../io/sniffFormat';
 import {
   overlayBufferParamsFor,
-  overlayVerticalAxisFor,
   overlayScenePosition,
   overlayHeightOffsetVector,
 } from './contourOverlayPlacement';
@@ -56,8 +54,13 @@ export interface ContourOverlayHost {
 /** What to draw, and the frame of the scan it belongs to. */
 export interface ContourOverlayInput {
   readonly model: ContourFeatureModel;
-  /** The source format of the scan the contours were derived from (fixes the frame). */
-  readonly format: SourceFormat;
+  /**
+   * The up axis of the frame the contours were gathered in (the terrain gather's
+   * `sourceUpAxis`): 'z' when the points were analysed as stored, 'y' when the
+   * gather rotated Y-up points into Z-up. Not the source format: a PLY or OBJ
+   * under a CRS is Z-up here whatever the format table says.
+   */
+  readonly upAxis: 'z' | 'y';
   /** The scan's render-recentre origin, so the lines land over their own terrain. */
   readonly renderOrigin: readonly [number, number, number] | null;
   /** Vertical exaggeration currently applied to the scene. Default 1. */
@@ -121,13 +124,13 @@ export class ContourOverlay {
    * re-analysis cannot leak buffers.
    */
   setModel(input: ContourOverlayInput): void {
-    const { verticalAxis, negateNorthing } = overlayBufferParamsFor(input.format);
+    const { verticalAxis, negateNorthing } = overlayBufferParamsFor(input.upAxis);
     const buffers = buildContourOverlayBuffers(input.model, {
       verticalAxis,
       negateNorthing,
       zScale: input.zScale ?? 1,
     });
-    this._verticalAxis = overlayVerticalAxisFor(input.format);
+    this._verticalAxis = verticalAxis;
     this._basePosition = overlayScenePosition(input.renderOrigin);
     this._upload(buffers);
     this._applyTransform();

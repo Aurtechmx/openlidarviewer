@@ -518,6 +518,7 @@ export function createTerrainAnalysisRunner(
   async function showContourLayer(
     result: AnalyseContoursResult,
     scanId: string | null,
+    upAxis: 'z' | 'y',
   ): Promise<void> {
     if (!scanId) return;
     try {
@@ -575,7 +576,9 @@ export function createTerrainAnalysisRunner(
       contourLayers.show({
         scanId,
         model: result.model,
-        format: cloud.sourceFormat,
+        // The gather's own up axis, not the format: a PLY or OBJ under a CRS is
+        // gathered Z-up and unrotated, and a mesh with no CRS is detected.
+        upAxis,
         // NO offset. The contour model is built from `gatherTerrainPositions`,
         // which returns one assembled sample with every layer placement already
         // folded in — the PROJECT frame, which the scene draws at its own
@@ -977,7 +980,7 @@ export function createTerrainAnalysisRunner(
       // the overlay chunk loads lazily, and a scene overlay must never delay or
       // fail the analysis that produced it — a throw here would turn a
       // successful analysis into a reported failure.
-      void showContourLayer(result, runDatasetId);
+      void showContourLayer(result, runDatasetId, gathered.sourceUpAxis ?? 'z');
     } catch (err) {
       // A stale run must not clobber the winning run's busy flag or status.
       if (bail()) return;
