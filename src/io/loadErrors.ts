@@ -24,8 +24,25 @@ export type LoadErrorCategory =
   | 'decode-failure'
   | 'resource-load';
 
+/**
+ * Marks a LoadError. It is a registered symbol, so every copy of this module in
+ * one thread uses the same key.
+ */
+const LOAD_ERROR_BRAND = Symbol.for('openlidarviewer.LoadError');
+
 /** A load failure tagged with its category, so the UI can explain it clearly. */
 export class LoadError extends Error {
+  /**
+   * `instanceof LoadError` reads the brand rather than the prototype chain. A
+   * worker can hold two copies of this module: WebKit evaluates a worker's
+   * entry chunk again when a lazily loaded chunk imports from it, so a loader
+   * throws one copy's LoadError and the worker's catch tests the other's. With
+   * a prototype test the category and report were dropped and the user saw the
+   * generic decode-failure message instead of the loader's reason.
+   */
+  static override [Symbol.hasInstance](value: unknown): boolean {
+    return typeof value === 'object' && value !== null && (value as Record<symbol, unknown>)[LOAD_ERROR_BRAND] === true;
+  }
   readonly category: LoadErrorCategory;
   /**
    * A plain-text report the UI offers to copy (the open failure report for a
@@ -38,6 +55,7 @@ export class LoadError extends Error {
     this.name = 'LoadError';
     this.category = category;
     if (report !== undefined) this.report = report;
+    Object.defineProperty(this, LOAD_ERROR_BRAND, { value: true });
   }
 }
 

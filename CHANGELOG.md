@@ -60,6 +60,7 @@ The format is based on Keep a Changelog and the project follows Semantic Version
 
 ### Fixed
 
+- In Safari, a file a loader refuses shows the loader's reason, such as the Draco refusal, instead of the generic decoding-failure message. The parse worker could hold two copies of the error class, and the copy it checked did not match the one the loader threw.
 - Contours drawn over a georeferenced PLY or OBJ are no longer rotated and mirrored; the overlay follows the terrain gather's up axis.
 - The Scan Report, PDF scan metadata, feature candidates and acquisition-coverage fit read each layer's up axis, so a PLY under a CRS reports footprint X by Y and height as the Z span. A glTF under a CRS withholds those figures.
 - The coordinate-system notice that a session sets stays visible with its Keep action, and names the CRS actually applied.
