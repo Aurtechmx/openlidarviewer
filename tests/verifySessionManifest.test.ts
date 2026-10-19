@@ -82,7 +82,8 @@ describe('sessionManifestNote', () => {
   it('calls a passing chain self-consistent and unsigned, never an integrity guarantee', () => {
     const note = sessionManifestNote({ status: 'verified', ops: 2, head: 'h' }) ?? '';
     expect(note).toContain('chain is self-consistent (unsigned, author not verified');
-    expect(note).not.toMatch(/integrity|verified\)?\.$/i);
+    expect(note).not.toMatch(/integrity/i);
+    expect(note).not.toMatch(/verified\)?\.$/i);
     expect(sessionManifestNote({ status: 'failed' }) ?? '').not.toMatch(/integrity/i);
   });
 

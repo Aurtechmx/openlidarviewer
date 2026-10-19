@@ -55,7 +55,8 @@ describe('scripts/embed-laz-perf-wasm.sh', () => {
     expect(text).not.toMatch(/base64\s+-w/);
   });
 
-  it.skipIf(!havePkg)('regenerates src/io/lazPerfWasm.ts identically with this platform\'s base64', () => {
+  // The generator is a bash script; Windows runners may resolve `bash` to WSL.
+  it.skipIf(!havePkg || process.platform === 'win32')('regenerates src/io/lazPerfWasm.ts identically with this platform\'s base64', () => {
     const dir = mkdtempSync(join(tmpdir(), 'olv-embed-'));
     try {
       // The script cds to its own parent directory, so give it a scratch tree

@@ -18,7 +18,7 @@
  */
 import { createHash } from 'node:crypto';
 import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
-import { join, relative, resolve, dirname } from 'node:path';
+import { join, relative, resolve, dirname, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { inlineProblems } from './lib/cspInline.mjs';
@@ -131,7 +131,7 @@ if (isCliEntry(import.meta.url)) {
     return existsSync(shipped) ? read(shipped) : read(join(root, 'public', name));
   };
   const pages = {};
-  for (const file of htmlFiles(dist)) pages[relative(dist, file)] = read(file);
+  for (const file of htmlFiles(dist)) pages[relative(dist, file).split(sep).join('/')] = read(file);
   problems.push(
     ...builtHtmlProblems(pages, { _headers: policyFile('_headers'), '.htaccess': policyFile('.htaccess') }),
   );

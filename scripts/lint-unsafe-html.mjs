@@ -32,7 +32,7 @@
 
 import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import { dirname, resolve, join, relative } from 'node:path';
+import { dirname, resolve, join, relative, sep } from 'node:path';
 import { isCliEntry } from './lib/isCliEntry.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -267,7 +267,7 @@ function walk(dir) {
 if (isCliEntry(import.meta.url)) {
   const offenders = [];
   for (const file of walk(SRC)) {
-    offenders.push(...scanSource(readFileSync(file, 'utf8'), relative(resolve(HERE, '..'), file)));
+    offenders.push(...scanSource(readFileSync(file, 'utf8'), relative(resolve(HERE, '..'), file).split(sep).join('/')));
   }
   if (offenders.length === 0) {
     console.log('lint:unsafe-html OK — no user-derived string reaches a markup sink, and every other sink is on the reviewed list');

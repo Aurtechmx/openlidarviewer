@@ -252,7 +252,8 @@ describe('smoke-deploy-zip leaves no stale success', () => {
     }
   });
 
-  it('removes it when the extracted archive fails a build check, before anything is served', () => {
+  // POSIX-only: it plants a `#!/bin/sh` npx stub and joins PATH with ':'.
+  it.skipIf(process.platform === 'win32')('removes it when the extracted archive fails a build check, before anything is served', () => {
     const src = mkdtempSync(join(tmpdir(), 'olv-zipsrc-'));
     writeFileSync(join(src, 'index.html'), readFileSync(join(ROOT, 'index.html')));
     for (const f of ['LICENSE', 'THIRD_PARTY_NOTICES.md']) writeFileSync(join(src, f), 'x');
