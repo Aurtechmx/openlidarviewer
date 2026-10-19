@@ -1,4 +1,4 @@
-// Self-hosted type: Olv Font (@font-face in styles/01-tokens.css) + JetBrains Mono.
+import './ui/frameGuardBoot'; // First: a page framed by an untrusted site gets a notice and the app does not start.
 import '@fontsource/jetbrains-mono/latin-400.css';
 import '@fontsource/jetbrains-mono/latin-500.css';
 import './styles';

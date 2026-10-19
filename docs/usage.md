@@ -184,6 +184,8 @@ Who may embed the viewer is decided in two places, and a host should set both.
 
 When the page is framed and nothing above allows the framing page, the viewer runs in safe mode: it does not start, sends no `ready` message, ignores every message, and shows a plain notice with a link to open the viewer in its own tab. A page that is not framed is unaffected.
 
+One case is not caught by this check. In a browser that does not report the framing page (Firefox) and with a non-empty `OLV_EMBED_ORIGINS` list, a cross-origin parent cannot be named, so the viewer starts with its full interface and an inert bridge: it answers only messages from origins on the list, but shows no notice to an unlisted framing page. To keep an unlisted site from framing the viewer at all, send `frame-ancestors` from the host (see the threat model).
+
 Once a parent is trusted, the bridge accepts commands only from that parent frame, from an origin on the rules, and sends `ready` only to those origins. Commands from any other origin are ignored. A `load-file` buffer is capped at 256 MiB and must be a plain `ArrayBuffer` (not a typed-array view or a `SharedArrayBuffer`), with a file name of 1 to 255 characters. Transfer the buffer (`postMessage(msg, '*', [buffer])` with the real target origin) rather than cloning it: a receiver cannot tell the two apart, and a clone copies the whole file into the viewer's frame before the cap applies. For a larger scan, open it in the viewer itself.
 
 ## Developer diagnostics

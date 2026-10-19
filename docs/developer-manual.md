@@ -490,7 +490,7 @@ viewer's own origin is always trusted, and `?embedParent=` / `?embedOrigins=` in
 the URL can only narrow the list. A framed page that no rule allows shows a
 notice instead of starting. The policy lives in `src/ui/embedPolicy.ts` (pure,
 unit-tested in `tests/embedPolicy.test.ts`), the notice in `src/ui/frameGuard.ts`,
-and `src/ui/frameGuardBoot.ts` is the first import of `src/main.ts`. See
+and `src/ui/frameGuardBoot.ts` is the first import of `src/main.ts` (`embedConfig.ts` imports it too). If the policy cannot be evaluated the guard fails closed for a framed page. See
 [usage.md](usage.md#embedding-origin-and-security).
 
 ---
