@@ -179,3 +179,27 @@ describe('the CSV uses the owner up, whichever layer is active', () => {
     expect(Number(row!.split(',')[header!.split(',').indexOf('vertical_m')])).toBe(5);
   });
 });
+
+describe('work whose owner layer is not open', () => {
+  it('withholds height, grade and the other up-dependent figures instead of using the active layer\'s axis', async () => {
+    const { UNRESOLVED_UNIT_FRAME } = await import('../src/render/measure/types');
+    const { MeasureController } = await import('../src/render/measure/MeasureController');
+    const measure = new MeasureController({ onExit: () => {} } as unknown as ConstructorParameters<typeof MeasureController>[0]);
+    measure.setContext({ worldUp: Z, origin: null });
+    measure.setCrsKnown(true);
+    measure.setUnitToMetres(1);
+    // The resolver the app binds answers UNRESOLVED_UNIT_FRAME for a layer id no open layer carries.
+    measure.setUnitResolver((layerId) => FRAMES[layerId] ?? UNRESOLVED_UNIT_FRAME);
+    measure.loadMeasurements([
+      m('gone-h', 'height', [[0, 0, 0], [0, 0, 6]], ['layer-gone']),
+      m('gone-d', 'distance', [[0, 0, 0], [3, 4, 0]], ['layer-gone']),
+      m('open-h', 'height', [[0, 0, 0], [0, 0, 6]], ['layer-las']),
+    ]);
+    const s = measure.getSummaries();
+    expect(s[0]!.value).toMatch(/^not available: no up axis; owner layer not open/);
+    expect(s[0]!.value).not.toMatch(/\d m/);
+    // A 3D length needs no up axis, only a unit it cannot verify.
+    expect(s[1]!.lineMetrics).toBeUndefined();
+    expect(s[2]!.value).toMatch(/^6\.0000 m/);
+  });
+});
