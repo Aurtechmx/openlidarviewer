@@ -80,7 +80,7 @@ Converted XYZ, ASC and LAS files record the software and version, the source fil
 
 ### E57
 
-- The E57 reader refuses an XML section larger than 64 MiB or nested deeper than 256 levels with a clear error.
+- The E57 reader refuses an XML section larger than 64 MiB, nested deeper than 256 levels, or holding more than 200,000 elements or 400,000 attributes, with a clear error that names the limit.
 - Colour and intensity that the file flags invalid are masked per point. The point keeps its position; the flagged value is drawn grey, left out of ranges, colour balance and voxel means, and exported as an empty field or `nan`. PLY, OBJ and LAS omit the attribute for the whole file when any exported point is flagged, and the file says so.
 - Intensity with declared limits is normalised over the declared range, so a signed range keeps its negative values. Colour is normalised per channel by its declared limits, so 16-bit colour is no longer clipped to 255.
 - A scan whose pose rotation is malformed or degenerate is skipped instead of placed with the identity rotation. Channels dropped because some merged scans lack them are named.
@@ -173,3 +173,4 @@ These limits are stated in full in `KNOWN_LIMITATIONS_v0.7.0.md`. They apply to 
 - Registration is not exposed in the interface.
 - Touch gestures run in CI as synthesized pointer events. Multi-touch on a real device is unverified.
 - An E57 is decoded whole in memory, so one of about 900 MB or more is refused before its points are read; convert larger E57 files to LAS, LAZ or COPC. A scan that stores only spherical coordinates is skipped with a warning.
+- A glTF or GLB that uses Draco mesh compression is refused: the decoder is not bundled and none is downloaded. EPT hierarchies are read up to 2,000,000 nodes, COPC data nodes above 128 MiB are dropped, and remote URLs naming a bare host name, a private-network suffix or a non-public IP literal are refused.
