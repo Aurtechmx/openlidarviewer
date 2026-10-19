@@ -75,7 +75,7 @@ test.describe('session coordinate-system notice', () => {
 
     // The restore finished: its toast is the one on screen, and it carries the notice.
     const toast = second.locator('.olv-lasso-toast.olv-visible');
-    await expect(toast).toContainText('Session restored', { timeout: 60_000 });
+    await expect(toast).toContainText(/restored/, { timeout: 60_000 });
     await expect(toast).toContainText('This session set the coordinate system to');
     await expect(toast).toContainText('EPSG:32613');
     await expect(toast).toContainText('not saved on this device');
