@@ -1,6 +1,6 @@
 import { test, expect, type Page } from '@playwright/test';
 import { readFileSync } from 'node:fs';
-import { showWorkspaceMode } from './helpers';
+import { showWorkspaceMode, waitForLoadIdle } from './helpers';
 import { dropBytes, geomFixtures } from './geomFixtures';
 import { utm13LonLat } from '../helpers/geoJsonLonLat';
 
@@ -219,7 +219,7 @@ for (const vertical of [false, true]) {
 // Save, close both scans, reopen them and the session: the record of where each
 // point was picked survives, so the export still places it on its own scan.
 test('a session saved and reopened with two scans keeps each point on the scan it was picked on', async ({ page }) => {
-  test.setTimeout(90_000);
+  test.setTimeout(150_000);
   const fx = await geomFixtures();
   await dropBytes(page, fx.geomA, 'geom-a.las');
   await expect(page.locator('.olv-layer')).toHaveCount(1, { timeout: 20_000 });
@@ -249,6 +249,10 @@ test('a session saved and reopened with two scans keeps each point on the scan i
   await expect.poll(() => page.evaluate(() =>
     (window as unknown as { __OLV_TEST_API__: { activeScan(): { activeName: string | null } } }).__OLV_TEST_API__.activeScan().activeName)).toBe('geom-b.las');
   await dropBytes(page, new TextEncoder().encode(sessionText), 'geom-b.olvsession');
+  // The import runs on the main thread, over a second on a quiet machine and
+  // several on a loaded one; the page reports when it is done. Wait for that,
+  // then check the result, rather than racing a fixed timeout against it.
+  await waitForLoadIdle(page);
   await expect(page.locator('.olv-mp-row')).toHaveCount(1, { timeout: 10_000 });
 
   const geo = await exportFile(page, 'GeoJSON');
