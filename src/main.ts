@@ -3925,7 +3925,7 @@ function showProjectCard(cloud: PointCloud, totalCount: number): void {
     format: cloud.sourceFormat, interpretationLevel: cloud.metadata?.interpretationLevel, truncation: cloud.metadata?.truncation,
     shownCount: cloud.pointCount,
     totalCount,
-    ...describeProjectSize(b.min, b.max, { upAxis: c.upAxis, linearUnitKnown: groundMetresPermitted(c), linearUnitToMetres: c.linearUnitToMetres, verticalUnitToMetres: verticalMetresPerUnit(c, 'horizontal') ?? undefined }),
+    ...describeProjectSize(b.min, b.max, { upAxis: c.upAxis, linearUnitKnown: groundMetresPermitted(c), linearUnitToMetres: c.linearUnitToMetres, verticalUnitToMetres: verticalMetresPerUnit(c, 'horizontal') ?? undefined, verticalUnitInvalid: c.verticalScaleState === 'invalid' }),
     hasRgb: cloud.colors !== undefined,
     hasIntensity: cloud.intensity !== undefined,
     hasClassification: cloud.classification !== undefined,

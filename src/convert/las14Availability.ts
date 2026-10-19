@@ -6,8 +6,9 @@
  * and many national grids among them, is refused for LAS 1.4 and written as
  * LAS 1.2 GeoTIFF keys. The panels ask here before the user presses Export so
  * the default format is one that can succeed. The answer comes from
- * `planLas14Crs`, the plan the writer itself runs, so a panel and the converter
- * cannot disagree.
+ * `planLas14Crs`, the plan the writer itself runs, so the horizontal WKT check
+ * here and in the converter agree. The vertical-datum and compound-CRS checks
+ * need the decoded file and are reported when Export runs.
  *
  * Pure: no DOM, no I/O.
  */

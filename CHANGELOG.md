@@ -1351,8 +1351,8 @@ states how strongly it is supported.
   level, the level required to export as validated, and the approved and
   prohibited claims. Independent evidence begins at E4; nothing ships at E4+ yet,
   and the docs say so.
-- **glTF capture stamps.** The glTF `asset.generator` string (e.g. Polycam,
-  Scaniverse, RealityKit) and a texture/material presence flag are read on load
+- **glTF capture stamps.** The glTF `asset.generator` string written by the
+  capture app and a texture/material presence flag are read on load
   and fed to the display profile for handheld-capture identification.
 
 ### Changed

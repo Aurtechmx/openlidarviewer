@@ -163,8 +163,11 @@ export async function decodeLaz(
     // a non-Error with no category. Only those are rewrapped, and the original
     // stays as the cause. A LoadError (the count guard above), an allocation
     // RangeError and any other Error, such as a TypeError from a bug here, keep
-    // their own shape instead of being reported as a corrupt file.
-    if (typeof err === 'string' || typeof err === 'number' || err instanceof WebAssembly.RuntimeError) {
+    // their own shape instead of being reported as a corrupt file. Emscripten's
+    // abort() throws an Error whose message starts "Aborted(", which is the
+    // same corrupt-stream case and is rewrapped too.
+    const emscriptenAbort = err instanceof Error && err.message.startsWith('Aborted(');
+    if (typeof err === 'string' || typeof err === 'number' || err instanceof WebAssembly.RuntimeError || emscriptenAbort) {
       throw new LoadError(
         'malformed-file',
         'malformed LAZ: decompression failed — the compressed point data is corrupt or truncated.',

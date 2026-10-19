@@ -72,6 +72,15 @@ describe('decodeLaz error shape', () => {
     expect(['string', 'number']).toContain(typeof (err as LoadError).cause);
   });
 
+  it('rewraps an Emscripten abort() Error as a malformed-file error and keeps it as the cause', async () => {
+    const abort = new Error('Aborted(native code called abort())');
+    wasm.open = () => { throw abort; };
+    const err = await run().catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(LoadError);
+    expect((err as LoadError).category).toBe('malformed-file');
+    expect((err as LoadError).cause).toBe(abort);
+  });
+
   it('lets a programming error through unchanged', async () => {
     const bug = new TypeError('x is not a function');
     wasm.open = () => { throw bug; };

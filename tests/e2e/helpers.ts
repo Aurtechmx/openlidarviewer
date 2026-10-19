@@ -317,12 +317,6 @@ export async function dropHillsPly(page: Page): Promise<void> {
 }
 
 /**
- * Drop the bundled `tiny.ply` fixture onto the page body via a synthesised
- * DataTransfer. Exercises the same load → render → validate path a real
- * dragged file takes, and works whether or not the empty-state sample
- * card exists. Use this anywhere a test previously clicked a sample.
- */
-/**
  * Wait until no open or session import holds the one-load-at-a-time flag. A
  * drop made while it is held is refused ("Already loading"), so a spec that
  * drops straight after a measurement, a layer or a session appears can lose
@@ -335,6 +329,12 @@ export async function waitForLoadIdle(page: Page, timeout = 60_000): Promise<voi
   }, undefined, { timeout });
 }
 
+/**
+ * Drop the bundled `tiny.ply` fixture onto the page body via a synthesised
+ * DataTransfer. Exercises the same load → render → validate path a real
+ * dragged file takes, and works whether or not the empty-state sample
+ * card exists. Use this anywhere a test previously clicked a sample.
+ */
 export async function dropTinyPly(page: Page): Promise<void> {
   const bytes = readFileSync(
     fileURLToPath(new URL('../fixtures/tiny.ply', import.meta.url)),

@@ -254,8 +254,11 @@ export function gradeUnitSuffixes(unitConfirmed: boolean): GradeUnitSuffixes {
     : { areal: 'pts/unit²', volumetric: 'pts/unit³', vertical: '(source units)' };
 }
 
+/** The reason shown when a figure needs a vertical unit the source declares but that cannot be read. */
+export const VERTICAL_UNIT_UNREADABLE = 'the height unit of the coordinate system could not be read';
+
 /**
- * A short, honest human summary of a {@link SampleGrade} for the panel. Pairs
+ * A short human summary of a {@link SampleGrade} for the panel. Pairs
  * with the runner's coverage label (passed separately) so the density figures
  * always travel with their "exact vs sampled" context.
  *
@@ -271,8 +274,6 @@ export function gradeUnitSuffixes(unitConfirmed: boolean): GradeUnitSuffixes {
  * density and any tier judged on it) is then withheld with that reason, rather
  * than computed with the horizontal unit standing in.
  */
-export const VERTICAL_UNIT_UNREADABLE = 'the height unit of the coordinate system could not be read';
-
 export function summarizeSampleGrade(grade: SampleGrade, unitConfirmed = true, verticalUnitInvalid = false): string[] {
   const units = gradeUnitSuffixes(unitConfirmed);
   const lines: string[] = [];
