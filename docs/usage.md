@@ -7,7 +7,7 @@ it without installing anything, open the live version at
 
 ## Opening a scan
 
-Open the app in a modern WebGL/WebGPU-capable browser (Chrome or Edge work well). Drag a point-cloud file anywhere onto the page, or press "Try a sample scan" on the empty state, which asks for approval and then streams a public dataset over the network. The format is detected automatically and parsing runs in the background.
+Open the app in a modern WebGL/WebGPU-capable browser (Chrome or Edge work well). Drag a point-cloud file anywhere onto the page, or press "Launch a sample" on the empty state, which streams the swissSURFACE3D sample (83.8 MB) from a public bucket over the network. The sample asks for confirmation only when it is 250 MB or more on a cellular connection, or 1.2 GB or more on a phone. This one is below both, so no confirmation appears. The format is detected automatically and parsing runs in the background.
 
 For LAS and LAZ files a short preload summary appears first: the format, the source point count, and how the file will be loaded. A status toast then tracks the load through its stages (reading, decoding, optimizing) and a very large file shows a live point counter and a progress bar. A Cancel control on the toast stops a load in progress; nothing is added to the scene if you cancel.
 
@@ -29,7 +29,7 @@ The View panel in the right rail controls how the cloud looks:
 
 - Color by switches the colour mode: RGB, Height, Intensity, Class, Normal, Density, Return, GPS time, and the analysis-gated Coverage and Confidence. Only the modes the file actually contains are offered, and the best one is selected automatically. Normal shading maps each point's surface-normal direction to colour and appears for files that carry per-point normals, such as many E57 scans. Coverage and Confidence stay off until a terrain analysis has run.
 - Point size sets the base on-screen size of each point.
-- Detail shows the honest `shown / total` count. A cloud larger than the point budget is loaded at reduced density so the viewer stays responsive: see [performance.md](performance.md).
+- Detail shows the `shown / total` count. A cloud larger than the point budget is loaded at reduced density so the viewer stays responsive: see [performance.md](performance.md).
 
 ## Rendering
 
@@ -169,9 +169,9 @@ Who may embed the viewer is decided in two places, and a host should set both.
 
 **1. Response headers (a deployer's server).** The shipped deploy headers set `Content-Security-Policy: frame-ancestors 'self'` (which replaces the older `X-Frame-Options: SAMEORIGIN`), so out of the box a browser lets the viewer embed only in a page on the same origin. To embed it cross-origin, edit that directive to a deliberate allow-list, for example `frame-ancestors 'self' https://portal.example.org`, in both `public/.htaccess` and `public/_headers`.
 
-**2. The viewer itself.** A static host that cannot send headers (GitHub Pages, an S3 or other bucket host) cannot set `frame-ancestors`, so any page can frame the viewer there. The page that frames the viewer also chooses the viewer's URL, so the URL cannot be what authorises it. The viewer therefore decides for itself:
+**2. The viewer itself.** A static host that cannot send headers (GitHub Pages, an S3 or other bucket host) cannot set `frame-ancestors`, so the browser lets any page frame the viewer there. The page that frames the viewer also chooses the viewer's URL, so the URL cannot be what authorises it. The viewer therefore decides for itself:
 
-- A parent on the viewer's own origin is always trusted, with no configuration. The docs site and same-origin portals need nothing.
+- A parent on the viewer's own origin is always trusted, with no configuration. A page served from the same origin needs nothing.
 - A parent on another origin is trusted only if the deployer built the viewer with that origin in `OLV_EMBED_ORIGINS`, a comma-separated list of origins that is empty by default:
 
   ```sh

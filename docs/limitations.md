@@ -1,6 +1,6 @@
 # Current Limitations
 
-OpenLiDARViewer is an actively maintained project focused on lightweight visualization and interaction. It is not meant to replace full GIS, photogrammetry, or survey-grade processing tools. Being clear about the limits is part of the design.
+OpenLiDARViewer is an actively maintained project focused on lightweight visualization and interaction. It is not meant to replace full GIS, photogrammetry, or survey-grade processing tools.
 
 ## Known limitations
 
@@ -30,7 +30,7 @@ coverage are in [terrain-intelligence.md](terrain-intelligence.md) and
 
 E57 coverage is broad but not exhaustive. The E57 reader handles the common real-world files terrestrial scanners produce (Cartesian XYZ with colour, intensity, classification and normals) and was checked manually against Trimble exports during development; no Trimble fixture is committed, so that check is not reproducible from this archive. E57 files that use uncommon schema features, spherical coordinates, or non-standard extensions may not load.
 
-Coordinate reference systems are read, not transformed. Precisely, the viewer DOES: detect the CRS and vertical datum from the source (LAS VLRs / GeoKeys, compound-CRS WKT); convert linear units to metres for measurement and density when the unit is known; recenter large coordinates for floating-point precision (a local render frame, reversible via the stored origin); propagate the detected CRS / datum / units into export metadata and warnings; and refuse metric area/volume on a geographic-degree grid. It does NOT: perform full reprojection between coordinate systems, or vertical-datum transformation (e.g. ellipsoidal↔orthometric). Coordinates are shown and exported in their source frame with the source CRS recorded, never silently reprojected. Cross-datum quantitative comparison is blocked rather than approximated.
+Coordinate reference systems are read, and reprojected only on export. The viewer detects the CRS and vertical datum from the source (LAS VLRs / GeoKeys, compound-CRS WKT); converts linear units to metres for measurement and density when the unit is known; recentres large coordinates for floating-point precision (a local render frame, reversible via the stored origin); propagates the detected CRS, datum and units into export metadata and warnings; and refuses metric area and volume on a geographic-degree grid. Reproject in the Export tab and in the batch converter transforms X and Y to a target EPSG code. Z and its vertical reference are left unchanged, so there is no vertical-datum shift, and a move into or out of NAD27 is refused. Measurement, terrain analysis and epoch comparison do not reproject: coordinates are shown and analysed in their source frame with the source CRS recorded. Cross-datum quantitative comparison is blocked rather than approximated.
 
 Classification visualization depends on classification attributes actually being present in the file, and many scans carry none.
 
@@ -48,9 +48,19 @@ Eye Dome Lighting is a screen-space depth cue, not physically-based lighting: it
 
 OBJ and glTF meshes are shown as their vertices. Faces and materials are not rendered. glTF must be GLB or self-contained (a `.gltf` with embedded/data-URI buffers): a `.gltf` that references external files (a separate `buffer.bin`) can't be resolved from a single-file open, and reports a clear error asking for GLB or an embedded glTF.
 
+## Limits in 0.7.0
+
+- A glTF or GLB that uses Draco mesh compression is refused. The decoder is not bundled and none is downloaded.
+- An E57 file of about 900 MB or more is refused before its points are read. Convert it to LAS, LAZ or COPC.
+- A remote URL whose host is a bare single-label name, ends in a private-network suffix, or is a loopback, private, link-local, shared, multicast or reserved IP address is refused.
+- An EPT hierarchy of more than 2,000,000 nodes is read only up to that point, and the open reports it.
+- Two epochs that declare the same horizontal CRS are compared in their supplied coordinates. No registration is estimated.
+
+The full list is in [KNOWN_LIMITATIONS_v0.7.0.md](releases/KNOWN_LIMITATIONS_v0.7.0.md).
+
 ## Not in scope, for now
 
-Full GIS layers and analysis, photogrammetry, survey-grade measurement, CRS reprojection, and editing of point data are deliberately left to dedicated tools.
+Full GIS layers and analysis, photogrammetry, survey-grade measurement, vertical-datum transformation and editing of point data are deliberately left to dedicated tools.
 
 ## Reporting issues
 

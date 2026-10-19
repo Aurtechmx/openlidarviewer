@@ -1,11 +1,8 @@
 # Data sources & credits
 
-OpenLiDARViewer streams its sample datasets directly from public, openly-hosted
-buckets: we don't host or own them. A genuine thank-you to everyone who
-publishes LiDAR openly, and to the open-source projects that keep moving this
-field forward; it's what makes a free, in-browser viewer like this possible.
-Credit and thanks go to the providers below. To change or remove a dataset,
-email info@aurtech.mx and we'll act on it.
+OpenLiDARViewer streams its sample datasets directly from public, openly hosted
+buckets. The project does not host or own them. The providers are credited
+below. To change or remove a dataset, email info@aurtech.mx.
 
 ## Sample datasets
 
@@ -21,10 +18,9 @@ Geospatial Program."
 
 ### The start-screen sample scan
 
-The "Try a sample scan" action on the start screen streams ONE specific object,
-recorded here so the attribution is not inferred from the bucket in general:
-the AWS Registry of Open Data notes that terms vary per dataset and directs users
-to each dataset's own licence.
+The "Launch a sample" button on the start screen streams one object, recorded
+here because the AWS Registry of Open Data notes that terms vary per dataset and
+directs users to each dataset's own licence.
 
 | Field | Value |
 | --- | --- |
@@ -37,32 +33,42 @@ to each dataset's own licence.
 | Transport verified | HTTP 206 partial content, `Accept-Ranges: bytes`, `Access-Control-Allow-Origin: *` (checked 2026-07-19) |
 
 Nothing is uploaded. The object is fetched by range request straight into the
-browser, and the same consent gate that covers any remote scan applies before the
-first byte. If the object is ever withdrawn or moved, the action fails through the
-normal remote-open error path (a toast naming the fetch failure) rather than
-hanging: the start screen stays usable and every other entry point is unaffected.
+browser. There is no built-in copy of the sample. The button asks for confirmation
+only when the object is 250 MB or more on a cellular connection, or 1.2 GB or more
+on a phone, so for this 83.8 MB object no confirmation appears. If the object is
+withdrawn or moved, the button fails with a toast naming the fetch failure, and the
+rest of the start screen keeps working.
 
 ## Formats & tooling
 
-This viewer runs on open point-cloud formats and tools maintained by
-Hobu, Inc. and a broad community of contributors:
+The viewer reads formats and uses tools maintained by Hobu, Inc. and other contributors:
 
-- laz-perf (Apache-2.0): the in-browser LAZ decoder we use to read compressed point data
+- laz-perf (Apache-2.0): the in-browser LAZ decoder
 - COPC (Cloud Optimized Point Cloud): the open streaming format
 - EPT / Entwine: the hierarchical point-tile format and the Entwine tool that builds it
 
-With particular thanks to Howard Butler and Hobu, Inc., and the wider
-PDAL / COPC community.
-
 ## Built with
 
-The viewer itself is built on open-source work we're grateful for:
+The viewer is built on these open-source projects:
 
 - three.js: the WebGPU/WebGL rendering engine
-- loaders.gl: glTF / LAS / OBJ / PLY parsing
+- loaders.gl: glTF, OBJ and PLY parsing (LAS is parsed by the project's own reader)
+- laz-perf: LAZ decoding
 - proj4js: coordinate-system transforms
 - pdf-lib: the PDF reports
 - spe-check (A. Urias, MIT): the draw precision bound, from "Per-Draw Precision Bounds for Large-Coordinate Rendering in WebGL2 and WebGPU"
+
+Fonts: Olv Font, a modified version of Poppins by the Poppins Project Authors,
+Inter by Rasmus Andersson, and JetBrains Mono by the JetBrains Mono authors, all
+under the SIL Open Font License.
+
+## Privacy
+
+Files you open are processed on your device and are not uploaded. A remote
+dataset or sample is downloaded from the server that hosts it. A location search
+in the public LiDAR catalogue is sent to Microsoft Planetary Computer, only when
+you run one, and opening a result sends a request to its signing service
+carrying that tile's address. See [PRIVACY.md](../PRIVACY.md).
 
 Full license details for every bundled dependency are in
 [THIRD_PARTY_NOTICES.md](project/THIRD_PARTY_NOTICES.md).

@@ -31,7 +31,7 @@ Scan Intelligence report describes the dataset, and the result can be exported.
 | FR-3 | Detect format from magic bytes first, file extension second. |
 | FR-4 | Parse and downsample off the main thread, in a Web Worker. |
 | FR-5 | Recenter georeferenced clouds to a shared local origin, doing the subtraction in float64 before the float32 downcast, within a small bounded error. |
-| FR-6 | Keep clouds within a point budget (voxel-downsampling, or stride decoding when far over budget) and always display the honest `shown / total` count. |
+| FR-6 | Keep clouds within a point budget (voxel-downsampling, or stride decoding when far over budget) and always display the `shown / total` count. |
 | FR-7 | Render with three.js using WebGPU, with an automatic WebGL 2 fallback. |
 | FR-8 | Color by RGB, height, intensity, classification, or surface normal; auto-select the best mode on load; offer only the modes the file actually contains. |
 | FR-9 | Hold multiple clouds in one scene, rebased onto a shared origin. |
@@ -80,7 +80,7 @@ Scan Intelligence report describes the dataset, and the result can be exported.
 
 ## 4. Prerequisites
 
-- Node.js 22+ and npm 10+.
+- Node.js `^22.18.0` or `>=24.11.0` (the `engines` field in `package.json`) and npm 10 or later.
 - A modern browser for development (Chrome or Edge recommended for WebGPU).
 
 ### 4.1 Windows
@@ -170,7 +170,7 @@ npm install
 npm run dev
 ```
 
-Open the printed local URL and drop a scan, or click a built-in sample.
+Open the printed local URL and drop a scan, or press "Launch a sample", which streams the swissSURFACE3D sample (83.8 MB) over the network.
 
 ---
 

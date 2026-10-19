@@ -1,6 +1,6 @@
 # Streaming (COPC + EPT)
 
-OpenLiDARViewer opens COPC (Cloud Optimized Point Cloud) and EPT (Entwine Point Tile) datasets through a shared streaming pipeline. Neither format is ever read or decoded whole: only the parts the current view needs are fetched, decoded, and uploaded to the GPU. The pipeline shipped in v0.3.0 (COPC) and was hardened in v0.3.1 (hierarchy-aware eviction, camera-motion awareness, pressure adaptation, resilient remote path with retry / timeout / Content-Range / HEAD fallback). v0.3.3 adds EPT as a first-class peer of COPC behind the same scheduler + renderer + picking machinery, plus an extreme-scale dispatch-pressure gate that bounds residency at the hysteresis cap (`1.5 × pointBudget`) under 1B-synthetic-point stress (see [benchmarks.md](benchmarks.md)).
+OpenLiDARViewer opens COPC (Cloud Optimized Point Cloud) and EPT (Entwine Point Tile) datasets through a shared streaming pipeline. Neither format is ever read or decoded whole: only the parts the current view needs are fetched, decoded, and uploaded to the GPU. The two formats share one scheduler, renderer and picking path. The pipeline has hierarchy-aware eviction, camera-motion awareness, pressure adaptation, and a remote path with retry, timeout, Content-Range and HEAD fallback. A dispatch-pressure gate bounds residency at the hysteresis cap (`1.5 × pointBudget`) under a 1B-synthetic-point stress run (see [benchmarks.md](benchmarks.md)).
 
 ## What COPC is
 
@@ -73,11 +73,13 @@ A COPC file does not have to be on the local disk. Because the streaming
 pipeline only ever issues range reads, the same pipeline reads a COPC file
 hosted at a URL over HTTP `Range:` requests. There are two ways in:
 
-- The start screen. The empty state carries an *open from URL* field:
-  paste a `.copc.laz` URL and the scan streams in.
+- The start screen. The empty state carries an *Open from URL* field:
+  enter a `.copc.laz` URL and the scan streams in.
 - A deep link. Loading the viewer with `?copc=<url>` opens that remote
   scan on startup, so a hosted COPC file becomes a shareable, bookmarkable
-  link. This is COPC's core promise: host the file once, stream it anywhere.
+  link. The viewer first asks for confirmation in a dialog that names the host, and
+  nothing is requested from that host until you choose Open. Cancel leaves the viewer
+  empty. A URL that fails validation is refused without a prompt.
 
 Before the streaming UI appears, a `HEAD` probe checks the host actually
 supports range requests. If it does not, the load fails immediately with a
@@ -91,6 +93,12 @@ precise reason rather than stalling: see the limitation below.
   and similar) do; an arbitrary web server may not. When a host cannot stream,
   the viewer says so plainly: a CORS-blocked or unreachable host, a host with
   no range support, or one that ignored the range and returned the whole file.
+- Remote URLs (COPC, EPT and 3D Tiles) must use a public host. Host names that
+  are a bare single label (`intranet`), end in a private-network suffix (`.local`,
+  `.internal`, `.lan`, `.home.arpa`, `.intranet`, `.corp`, `.private`,
+  `.localdomain`), or are loopback, private, link-local, shared, multicast or
+  reserved IP addresses are refused. The check reads the text of the host: a
+  public name whose DNS record points at a private address is not refused.
 - Remote EPT has the same requirements plus the same CORS posture on every
   sub-resource (`ept.json`, the hierarchy JSON files under `ept-hierarchy/`,
   and the tile files under `ept-data/`). A CDN that strips CORS headers from
@@ -104,7 +112,7 @@ uses two small in-repo fixtures: `tests/fixtures/copc/terrain-access-utm.copc.la
 (`scripts/make-copc-fixture.mjs`) and the EPT tree `tests/fixtures/ept-stream/`
 (`scripts/make-ept-fixture.py --children`).
 
-## EPT (Entwine Point Tile): v0.3.3
+## EPT (Entwine Point Tile)
 
 EPT is the open hierarchical-point-tile format produced by Entwine and consumed by many of the same tools that read COPC. Where COPC packs an octree into a single LAZ file with an internal hierarchy, EPT spreads it across a directory tree: a top-level `ept.json` manifest, an `ept-hierarchy/` directory of small JSON files describing the octree, and an `ept-data/` directory of one tile per node (either raw `binary` records or self-contained `.laz` files).
 
@@ -112,12 +120,12 @@ OpenLiDARViewer reads EPT through the same `StreamingSource` interface COPC uses
 
 Opening an EPT scan works the same two ways COPC does:
 
-- The start screen. Paste a `…/ept.json` URL into the open-from-URL field.
-- A deep link. `?copc=<url>` is the URL router: it auto-detects an `ept.json` entry and routes to the EPT handler.
+- The start screen. Enter a `…/ept.json` URL in the *Open from URL* field.
+- A deep link. `?copc=<url>` is the URL router: it auto-detects an `ept.json` entry and routes to the EPT handler, after the same host confirmation.
 
 The remote-EPT entry has the same fail-fast posture as remote COPC: the URL is validated (http/https only, no embedded credentials, ≤ 2048 chars, must end in `/ept.json`) before any network call, and failures are classified into precise messages (CORS, manifest 404, manifest 5xx, malformed manifest, hierarchy/tile fetch failure, network down) rather than a generic "could not load" stall.
 
-Reference EPT datasets to try: Entwine's public samples (https://entwine.io/data/), or any dataset built locally with `entwine build`.
+Entwine (https://entwine.io) builds EPT datasets; any dataset built locally with `entwine build` opens the same way.
 
 ### Hosting an EPT dataset
 
@@ -149,13 +157,20 @@ The output directory is exactly the layout the viewer reads. Upload it to a CORS
 
 For best EPT streaming, use a Chromium-based browser (Chrome or Edge) with WebGPU enabled and hardware acceleration on. WebGL 2.0 is the supported fallback where WebGPU is unavailable and works for most datasets; performance varies with the dataset's hierarchy density and the device's GPU. See [`docs/performance.md`](performance.md) for general performance guidance.
 
-### What the v0.3.4 EPT transport guarantees
+### EPT transport: retries and timeouts
 
-The remote-EPT transport applies the same retry + timeout discipline the COPC remote path has had since v0.3.1:
+The remote-EPT transport applies the same retry and timeout rules as the COPC remote path:
 
 - Per-attempt request timeout: defaults to 20 seconds; an attempt that hangs is cancelled and retried.
 - Bounded retries: up to three retries on transient transport faults (408, 429, 5xx, network errors). Exponential backoff with jitter prevents thundering-herd retries on a flaky host.
 - Permanent client errors (404 in particular) never retry: the user sees a precise message immediately.
 - Outer-signal cancellation composes cleanly: clicking Cancel during a load aborts every in-flight EPT fetch without leaving stranded requests.
 
-A flaky CDN or a brief network blip no longer collapses an EPT load; a genuinely unreachable host fails fast with a precise reason.
+A brief network fault is retried. A host that is unreachable fails with a specific reason.
+
+## Limits
+
+- An EPT hierarchy of more than 2,000,000 nodes is read up to that point. The scene is missing the rest and the open reports it. An EPT manifest schema of more than 64 attributes is refused.
+- A COPC hierarchy entry for a data node larger than 128 MiB is dropped.
+- A streamed COPC, EPT or 3D Tiles source is open one at a time. Opening one closes the stream already open and every static layer.
+- The full list is in [KNOWN_LIMITATIONS_v0.7.0.md](releases/KNOWN_LIMITATIONS_v0.7.0.md).

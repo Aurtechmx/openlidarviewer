@@ -27,6 +27,6 @@ Both carry the project's honesty envelope: confidence derived from data support 
 
 Deferred planned methods: multi-scale TPI (ten-class landforms), Booth et al. 2009 wavelet curvature, fractal dimension by variogram, arc to chord ratio (Du Preez 2015, doi:10.1007/s10980-014-0118-8), PROTECT-style cross-sections, an optional MCC ground filter (Evans & Hudak 2007, doi:10.1109/TGRS.2006.890412), and per-segment lasso IDs (prior art: Papucci & Yrttimaa 2026, doi:10.5281/zenodo.20395900); archaeological local-relief applications per Niculiță 2020 (doi:10.3390/s20041192).
 
-## Honest positioning
+## Positioning
 
 OpenLiDARViewer is an actively maintained open-source tool. A capability is described as implemented only when the code supports it. Measurement is for visual inspection, not survey-grade use, unless it has been validated against survey-grade data and procedures.

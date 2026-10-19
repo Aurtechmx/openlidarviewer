@@ -1,6 +1,6 @@
 # OpenLiDARViewer: User Guide
 
-Open any 3D scan (drone LiDAR, terrestrial laser scan, or phone scan) in a browser tab. Nothing to install, and nothing is uploaded: your files are read and rendered on your own machine, so there is no server to send them to.
+Open drone LiDAR, terrestrial laser scans and phone scans in a browser tab. Nothing to install. Local files are read and rendered on your own machine and are not uploaded.
 
 This guide walks through opening a scan and finding your way around it. Then measuring, terrain analysis, comparing two scans, and sharing what you found. It assumes no GIS background.
 
@@ -18,7 +18,7 @@ You can open:
 - 3D Tiles: a single `.pnts` tile, or a whole tileset
 - Plain points: XYZ, CSV, ASC, TXT
 
-COPC, EPT and 3D Tiles tilesets usually live on a web server rather than on your disk. Paste the address into the URL field beside the open button and press Open.
+COPC, EPT and 3D Tiles tilesets usually live on a web server rather than on your disk. Enter the address in the Open from URL field and press Open.
 
 Static scans stack. Each file you open joins the scene as its own layer, and many can be open at once. A streamed COPC, EPT or 3D Tiles tileset source is open one at a time. Opening one closes the stream already open and every static layer, and opening a static file while a stream is open closes the stream. A local file too heavy for memory streams from disk: it replaces an open stream and keeps the static layers.
 
@@ -154,7 +154,7 @@ Choose Terrain and run the analysis. After a run, Create contours opens the Cont
 - Contours, drawn into the scene as their own layer, at the interval the analysis judges this surface can support. Contours has its own page under Terrain, with Contour Studio and the layer controls; Back returns to Terrain, then to the Analyse home.
 - The Coverage and Confidence colour modes, which grade the surface in three bands: measured, where a ground return landed in that cell; interpolated, where the height was filled in from nearby data; and extrapolated or gap, where it is a guess or there is no reliable surface at all. Coverage uses green, yellow and red. Confidence says the same thing on a colourblind-safe ramp.
 
-The grade is honest about gaps. A scan that only measured part of the ground will say so rather than pretend the filled-in areas are survey-quality.
+The grade reports gaps. A scan that only measured part of the ground says so, and the filled-in areas are not graded as survey quality.
 
 ### What the analysis was built from
 
@@ -305,9 +305,15 @@ A session is a shareable record of what you measured and how much to trust it, y
 
 ## Privacy
 
-Files are read and rendered in your browser, with no upload. There is no account, no server for your data, and no telemetry. Opening, analysing, measuring, comparing and exporting all happen on your machine.
+Files you open from your device are read and rendered in your browser and are not uploaded. There is no account and no telemetry. Opening, analysing, measuring, comparing and exporting all happen on your machine.
 
-The network is reached only when you ask for it. Opening a COPC, EPT or 3D Tiles address fetches from that server, and searching the public dataset catalogue by location asks Microsoft's Planetary Computer for matching datasets. Neither sends your scan or your measurements anywhere.
+The network requests the app makes are these:
+
+- the app's own files, from the site that serves it, and the full offline copy if you ask for one;
+- a remote dataset or sample you open, from the server that hosts it;
+- a location search in the public LiDAR catalogue, sent to Microsoft Planetary Computer, only when you run one, and, when you open a result, a request to its signing service carrying that tile's address.
+
+None of these sends your scan or your measurements anywhere. See [PRIVACY.md](../PRIVACY.md).
 
 A scan too large to hold in memory is indexed into private browser storage on your own device so it can be streamed from disk. That store stays on the machine, is capped in size, and is cleared with your browser's site data.
 

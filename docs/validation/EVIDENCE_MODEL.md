@@ -1,7 +1,7 @@
 # Evidence model
 
-Research-hardening Phase 1. Every scientific product OpenLiDARViewer generates
-carries an evidence level, an explicit, honest statement of how strongly the
+Every scientific product OpenLiDARViewer generates
+carries an evidence level, an explicit statement of how strongly the
 claim is supported, and a required level it must reach before it may be
 exported as a *validated* (non-exploratory) result. This replaces the single
 `Production` status previously used in the validation matrix, which conflated
@@ -97,7 +97,7 @@ Replacing the old single `Production` status, every entry carries the split:
   watermarked *exploratory* artifact carrying its refusal reason;
 - `exportAllowed: false` → never offered, even exploratory.
 
-The v0.5.7 UI evidence badges (Phase 17) map each level via `evidenceBadge(...)`
+The UI evidence badges map each level via `evidenceBadge(...)`
 to: Not assessed / Analytic / Synthetic / Cross-implementation / External /
 Independently reproduced.
 
@@ -142,24 +142,25 @@ shape is unchanged.
 
 - When adding or changing a product, add/update its register entry in the same
   change. A product with no register entry is treated as `E0` / not exportable.
-- Existing caveats may be strengthened, never silently removed (rule 12).
+- Existing caveats may be strengthened, never silently removed.
 - When external evidence is unavailable, build the harness and write the dataset
   spec, then set `externalValidationStatus: pending`. Never infer it from
-  density, format, or metadata (rule 9).
+  density, format, or metadata.
 
-## Tooling that moves a claim up the ladder (Phase 3 to 4)
+## Tooling that moves a claim up the ladder
 
 These exist now; they are the mechanisms, not the evidence. A claim only rises
 when the mechanism is actually run against real data and the result committed.
 
 - E3 → E4 (cross-implementation). `src/validation/crossCheck.ts` compares our
   grid to an independent tool's grid within a stated tolerance. The procedure is
-  in [`cross-implementation.md`](./cross-implementation.md). Seventeen reference slots
-  are supplied (the count the claim register carries; it is the source), `SLOPE-RASTER`, `ASPECT-RASTER`, `HILLSHADE` and `CONTOURS`,
-  each an independent GDAL comparison on a frozen analytic fixture; every other
-  slot ships `pending`. No reference output is bundled for a slot that has not
-  been compared, and none is fabricated.
-- Honest internal error. `src/terrain/validate/spatialBlockHoldout.ts` adds a
+  in [`cross-implementation.md`](./cross-implementation.md). `REFERENCE_SLOTS` holds
+  16 slots. Thirteen are `supplied`, each an independent comparison against a
+  tool such as GDAL, PDAL, SAGA, R or PROJ on a frozen fixture. Three are
+  `pending` (GROUND-FILTER, CHANGE-RASTER, CHANGE-VOLUME). No reference output
+  is bundled for a slot that has not been compared, and none is fabricated.
+  The 17 claims at E4 in the claim register are a separate count.
+- Internal error. `src/terrain/validate/spatialBlockHoldout.ts` adds a
   spatially-blocked hold-out with a bootstrap CI alongside the random point
   hold-out. It complements rather than replaces it: blocking changes the spatial
   arrangement of the withheld support, and the resulting contrast is

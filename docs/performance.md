@@ -22,7 +22,7 @@ Use a modern Chromium-based browser (Chrome or Edge) with WebGL 2.0 support and 
 
 Small point clouds work on most modern laptops. Medium datasets benefit from 16 GB of RAM and a modern GPU. Very large LiDAR datasets are best handled through streaming formats such as COPC or EPT: opened progressively through their octree hierarchies so only what the current view needs is fetched, decoded, and uploaded to the GPU. Non-streaming formats above the point budget are downsampled on load to stay responsive; browser memory limits can still affect extremely large scans regardless of format.
 
-Clouds above the device's point budget (roughly 3M points on a capable desktop, less on weaker hardware) are downsampled on load to stay responsive: see *Loading large files* below. The Detail control always shows the honest `shown / total` count, so you know exactly what you are looking at.
+Clouds above the device's point budget (roughly 3M points on a capable desktop, less on weaker hardware) are downsampled on load to stay responsive: see *Loading large files* below. The Detail control always shows the `shown / total` count.
 
 ## Loading large files
 
@@ -48,11 +48,11 @@ For best performance, enable hardware acceleration, use a modern Chromium-based 
 
 ## Benchmarks
 
-Real-world figures (a 9.6 M-point drone LAZ survey and a 55 K-point iPhone scan, both opened from one drag-and-drop on an Apple MacBook Pro M3 Max) are recorded in [`benchmarks.md`](benchmarks.md), alongside the v0.3.3 synthetic stress runs that validate bounded residency and zero thrash up to 1 B-point streaming hierarchies. Hardware, browser, dataset, and the rendering detail you pick all change the numbers; the published figures are field observations, not a formal benchmark suite.
+Real-world figures (a 9.6 M-point drone LAZ survey and a 55 K-point iPhone scan, both opened from one drag-and-drop on an Apple MacBook Pro M3 Max) are recorded in [`benchmarks.md`](benchmarks.md), alongside the synthetic stress runs that validate bounded residency and zero thrash up to 1 B-point streaming hierarchies. Hardware, browser, dataset, and the rendering detail you pick all change the numbers; the published figures are field observations, not a formal benchmark suite.
 
 ## Privacy
 
-OpenLiDARViewer is built around local-first inspection. Files are read, parsed, and rendered in the browser, and there is no server to upload them to. See [SECURITY.md](../.github/SECURITY.md).
+OpenLiDARViewer is built around local-first inspection. Files are read, parsed, and rendered in the browser, and there is no server to upload them to. See [PRIVACY.md](../PRIVACY.md).
 
 ## Mobile Performance
 
@@ -67,53 +67,3 @@ Recommendations:
 - Close unused browser tabs.
 - Keep hardware acceleration enabled when available.
 - WebGPU support may vary; the WebGL 2 fallback should remain reliable.
-
-## Startup entry composition (measured 2026-07-21, v0.6.0-alpha.2)
-
-The live entry is 710 KiB against a 720 KiB ceiling and a 680 KiB warning
-line. Attribution below comes from a sourcemap build (`vite build
---sourcemap`, then aggregating `sourcesContent` per module), not from
-reading the import list: two rounds of guessing from imports were wrong,
-both in the optimistic direction.
-
-Entry: **175 modules, 1 910 KiB of source → 477 KiB minified → 710 KiB after
-the live transform.** The transform applies only to `src/**/*.ts`, so source
-removed from the entry pays back roughly 1.5x in the shipped figure.
-
-| Source | KiB | Note |
-|---|---:|---|
-| `src/main.ts` | 343.4 | 18% of the entry on its own |
-| `src/ui/Inspector.ts` | 95.3 | |
-| `src/ui/MeasurePanel.ts` | 74.4 | |
-| `src/ui/Stage.ts` | 40.3 | |
-| `src/render/colorModes.ts` | 36.9 | |
-| `src/io/crs.ts` | 32.5 | |
-| `src/terrain/scanShape.ts` | 29.0 | also imported by `convertCloud` |
-| `src/render/class/deriveClassification.ts` | 27.5 | |
-| `src/ui/ExportPanel.ts` | 27.5 | |
-| `src/terrain/space/floorplan/wallSlice.ts` | 25.1 | interior scans only |
-| `src/terrain/spaceMetrics.ts` | 25.0 | interior/object scans only |
-
-### What is NOT worth deferring, and why
-
-Checked and rejected, so the next person does not re-derive them:
-
-- `kmlExport`, `measurementExport`: `main.ts` imports these as `import
-  type` only. TypeScript erases them at compile time, so they add
-  no bytes even though the import list makes them look eager.
-- `spaceMetrics` / `wallSlice`: called synchronously inside
-  `applyScanRoute(): boolean`. Deferring means making scan routing async and
-  changing every caller's contract, for ~25 KiB. Bad trade against the risk
-  of a routing regression.
-- `benchmark`, `streamingBenchmark`: 30 and 22 references through
-  `main.ts`. Too woven to move without decomposing their callers first.
-
-### Where the real reduction is
-
-`main.ts` at 343 KiB is the entry's single largest contributor, and the
-`Inspector` + `MeasurePanel` + `Stage` + `ExportPanel` UI cluster is another
-238 KiB. Getting under 680 KiB by shaving leaf modules means finding 20 KiB
-of plain source among modules that are mostly already justified; the
-decomposition tracked in `docs/architecture/architecture-map.md` moves an
-order of magnitude more. Treat the ceiling as a reason to decompose, not a
-reason to hunt leaves.
