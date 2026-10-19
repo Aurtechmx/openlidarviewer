@@ -83,6 +83,12 @@ export interface MetadataInputs {
    */
   readonly extentUnitRefusal?: string;
   /**
+   * Why the scan's up axis is not resolved (glTF under a CRS), so the depth,
+   * height, density and elevation range are not stated. The summary prints it
+   * in place of those figures.
+   */
+  readonly upAxisRefusal?: string;
+  /**
    * Active class-filter scope stamp — e.g. `"Ground + Building · 2 of 5
    * classes"`. Present ONLY while a class filter narrows the live view at
    * export time. When set, the dataset-summary table prepends an honesty row
@@ -351,6 +357,9 @@ export function buildDatasetSummary(inputs: MetadataInputs): readonly ReportData
       ...(inputs.elevationRange ? { elevation: inputs.elevationRange } : {}),
     }),
   );
+  if (inputs.upAxisRefusal) {
+    rows.push({ label: 'Up axis', value: inputs.upAxisRefusal });
+  }
   if (Number.isFinite(inputs.density) && inputs.density > 0) {
     // One decimal — same as the Inspection-summary finding and the on-screen
     // panel. Integer rounding printed 2.586 as "3", disagreeing with them.

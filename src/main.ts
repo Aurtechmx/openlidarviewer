@@ -142,7 +142,7 @@ import type { DebugOverlay, StreamingDebugStats } from './ui/DebugOverlay';
 import type { ColorbarOverlay } from './ui/ColorbarOverlay';
 import { estimateDecodedBytes, estimateGpuBytes } from './render/streaming/streamingBudget';
 import { streamingHasGpsTime } from './render/streaming/StreamingSource';
-import { activeSpatialUpAxis, reexpressElevationFilter } from './app/layerUpFrames';
+import { activeSpatialUpAxis, layerUpFrameOf, reexpressElevationFilter } from './app/layerUpFrames';
 // The PLY/OBJ/XYZ/CSV encoders load on first export (`loadExporters`).
 // Only the tiny file-router predicate is eager; the (large) serializer/parser
 // is dynamically imported in exportSession/importSession so it stays off the
@@ -1782,7 +1782,7 @@ function newAnalysePanel(
           : null,
         title: `${lastCloudName} — Contours`,
         sheet: 'letter',
-        isGeographic: ctx.isGeographic, sceneUpAxis: upAxis,
+        isGeographic: ctx.isGeographic, sceneUpAxis: upAxis, layerUpFrame: cloud ? layerUpFrameOf(crsService, cloud, true) : null,
         crs: cur, wkt: cur?.wkt ?? null, // ACTIVE resolved CRS (override applied); Local → no WKT, never the rejected declared one (1A)
         // The resolved CRS's linear unit (same seam every other unit consumer
         // reads) so a foot-based CRS stamps DXF $INSUNITS = feet and the SVG

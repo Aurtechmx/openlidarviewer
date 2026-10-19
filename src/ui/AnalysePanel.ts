@@ -327,6 +327,8 @@ export interface AnalysePanelCallbacks {
      * ⇒ the sheet's 'z' default (identity), correct for every georeferenced case.
      */
     sceneUpAxis?: 'z' | 'y';
+    /** The active layer's resolved up frame, for feature extraction (`layerUpFrame.ts`). */
+    layerUpFrame?: import('../geo/frame/layerUpFrame').LayerUpFrame | null;
   };
 }
 
@@ -939,6 +941,7 @@ export class AnalysePanel {
           // X/Y is the horizontal plane only in a Z-up frame; the extraction's
           // 2D coordinates go to a mapper with that contract.
           upAxis: fctx.sceneUpAxis ?? 'unknown',
+          upFrame: fctx.layerUpFrame ?? null,
           launcherHost: this._featureLauncher,
           reviewHost: this._featureReview,
           onLaunch: () => this._featureReview.classList.remove('olv-hidden'),

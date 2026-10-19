@@ -30,7 +30,7 @@ import type { CrsInfo } from '../../io/crs';
 import type { ResolvedCrs } from '../CoordinateTypes';
 import { isZUpFormat, type SourceFormat } from '../../io/sniffFormat';
 import { Y_UP_TO_Z_UP_OPT_IN } from '../../convert/types';
-import type { SpatialUpAxis } from '../SpatialContext';
+import type { SpatialContext, SpatialUpAxis } from '../SpatialContext';
 
 /** The stored axis that is up. */
 export type LayerUpAxis = 'z' | 'y';
@@ -121,6 +121,20 @@ export function resolveLayerUpFrame(input: LayerUpFrameInput): LayerUpFrame {
   }
   if (input.detected) return { ok: true, axis: input.detected, basis: 'detected' };
   return { ok: true, axis: 'y', basis: isYUpBySpec(format) ? 'specification' : 'explicit' };
+}
+
+/**
+ * The CRS facts of a resolved spatial context, shaped for {@link resolveLayerUpFrame}.
+ * The context is derived from the layer's resolved CRS (override applied), so its
+ * kind and EPSG code carry the same answer to "is a horizontal CRS in play".
+ */
+export function layerCrsFromContext(ctx: SpatialContext): LayerCrs {
+  return { kind: ctx.kind, name: ctx.crsName, ...(ctx.epsg != null ? { epsg: ctx.epsg } : {}) } as LayerCrs;
+}
+
+/** A layer's up frame from its format and the spatial context resolved for it. */
+export function layerUpFrameFromContext(format: SourceFormat, ctx: SpatialContext): LayerUpFrame {
+  return resolveLayerUpFrame({ format, crs: layerCrsFromContext(ctx) });
 }
 
 /** The up vector a layer is drawn, navigated and measured along. */

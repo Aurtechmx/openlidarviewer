@@ -17,7 +17,7 @@
  * cores are translation-invariant — the footprint grid anchors on the points'
  * own bounds, the conductor fit works from their covariance — so the recentred
  * frame is exactly what they need and no origin shift is applied. The horizontal
- * pair is chosen by the up axis: (x, y) for a Z-up source, (x, z) for a Y-up one,
+ * pair is chosen by the layer's up axis (`geo/frame/layerUpFrame.ts`, not the format): (x, y) for a Z-up source, (x, z) for a Y-up one,
  * so a footprint is measured in the ground plane and not a wall.
  *
  * Returns null when the cloud carries neither building nor wire points: there is
@@ -30,7 +30,7 @@ import type { BuildingPoint, FootprintGrid } from '../features/buildingFootprint
 import type { Vec3 } from '../features/conductors';
 import { knownUnit, unknownUnit, type LinearUnitScale } from '../units/units';
 import { defaultCellSizeForSpacing } from '../render/densityColors';
-import { isZUpFormat } from '../io/sniffFormat';
+import { resolveLayerUpFrame, type LayerUpFrame } from '../geo/frame/layerUpFrame';
 import { isWithheld } from '../science/withheldPolicy';
 import { alignedFlags, withheldReadCounts, type WithheldReadCounts } from '../science/withheldCounts';
 
@@ -124,8 +124,17 @@ export function buildFeatureExtractionInput(
      */
     readonly verticalMetresPerUnit?: number | null;
   },
+  /**
+   * The layer's resolved up frame (`app/layerUpFrames.ts`). Absent, the frame is
+   * resolved from the format and the cloud's declared CRS, which is the same
+   * rule without the user's CRS correction. An unresolved frame (glTF under a
+   * CRS) has no ground plane to propose footprints on, so nothing is extracted.
+   */
+  upFrame?: LayerUpFrame | null,
 ): FeatureExtractionInput | null {
   if (!cloud) return null;
+  const frame = upFrame ?? resolveLayerUpFrame({ format: cloud.sourceFormat, crs: cloud.metadata?.crs });
+  if (!frame.ok) return null;
   // A derived classification computed under a frame that has since changed is
   // withheld from the terrain gather; it was still read here, so building and
   // conductor candidates were re-extracted from the invalidated codes on the
@@ -144,7 +153,7 @@ export function buildFeatureExtractionInput(
   const vFactor = unitAuthority?.verticalMetresPerUnit;
   const verticalUnit = vFactor != null && vFactor > 0 ? knownUnit(vFactor) : unit;
 
-  const zUp = isZUpFormat(cloud.sourceFormat);
+  const zUp = frame.axis === 'z';
   // The second horizontal axis by up axis; the first is always x.
   const h2i = zUp ? 1 : 2;
 

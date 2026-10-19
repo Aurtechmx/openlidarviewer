@@ -44,6 +44,7 @@ import { triggerDownload } from '../io/download';
 import type { LocalToLonLatSourceZ } from '../export/lonLatMapper';
 import { lonLatUpAxisRefusal } from '../export/scanFootprint';
 import type { SpatialUpAxis } from '../geo/SpatialContext';
+import { spatialUpAxisOf, upFrameRefusal, type LayerUpFrame } from '../geo/frame/layerUpFrame';
 import { el } from './dom';
 
 export interface MountFeatureCandidatesOptions {
@@ -81,6 +82,12 @@ export interface MountFeatureCandidatesOptions {
    * export from a non-Z-up scan is refused rather than placed from the wrong pair.
    */
   readonly upAxis: SpatialUpAxis;
+  /**
+   * The layer's resolved up frame, when the host has it. It decides which pair
+   * of stored axes is the ground plane and, when it is unresolved, replaces the
+   * launcher with the reason.
+   */
+  readonly upFrame?: LayerUpFrame | null;
   /** Where the launcher card is rendered. */
   readonly launcherHost: HTMLElement;
   /** The container the review list is rendered into, revealed on launch. */
@@ -113,7 +120,7 @@ export function mountFeatureCandidates(
   // A CRS label for the GeoJSON provenance, or null when the scan is not
   // georeferenced. Prefer the EPSG code, else the CRS's own best-effort name.
   // A geographic export needs BOTH a convertible frame and a Z-up one.
-  const axisRefusal = lonLatUpAxisRefusal(opts.upAxis);
+  const axisRefusal = lonLatUpAxisRefusal(opts.upFrame ? spatialUpAxisOf(opts.upFrame) : opts.upAxis);
   const toLonLat = axisRefusal === null ? opts.toLonLat : null;
   // Provenance label only: which frame the extraction ran in. The coordinates
   // written are lon/lat, so this is never a coordinate declaration.
@@ -141,7 +148,20 @@ export function mountFeatureCandidates(
   const input = buildFeatureExtractionInput(cloud, {
     metresPerUnit: opts.unitToMetres ?? null,
     verticalMetresPerUnit: opts.verticalUnitToMetres ?? null,
-  });
+  }, opts.upFrame);
+  // A layer with no up axis has no ground plane to propose footprints on. Say
+  // so, rather than offering nothing and leaving the absence unexplained.
+  const upRefusal = upFrameRefusal(opts.upFrame ?? null);
+  if (!input && upRefusal) {
+    card.append(el('p', { className: 'olv-feature-launcher-message', text: `Feature candidates not available: ${upRefusal}` }));
+    launcherHost.replaceChildren(card);
+    return {
+      dispose: () => {
+        launcherHost.replaceChildren();
+        reviewHost.replaceChildren();
+      },
+    };
+  }
   if (!input) {
     launcherHost.replaceChildren();
     return {
