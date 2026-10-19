@@ -37,6 +37,15 @@ declare const __OLV_TEST_SEAM__: boolean;
 declare const __OLV_DEV_FLAGS__: boolean;
 
 /**
+ * `__OLV_EMBED_ORIGINS__` is replaced by Vite's `define` with the deployer's
+ * comma-separated allow-list of origins that may frame the viewer and drive its
+ * embed bridge (the `OLV_EMBED_ORIGINS` environment variable at build time).
+ * Empty by default: only same-origin framing is trusted. Not defined under
+ * Vitest, so readers check `typeof` first. See src/ui/embedPolicy.ts.
+ */
+declare const __OLV_EMBED_ORIGINS__: string;
+
+/**
  * Inter is not part of the shipped bundle — the interface face is Olv Font
  * (`--font` in styles/01-tokens.css) with JetBrains Mono for monospace. This
  * declaration exists so a side-effect CSS import of it would still type-check.

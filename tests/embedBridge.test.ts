@@ -110,13 +110,22 @@ function makeHandlers() {
   return { handlers: calls as unknown as EmbedBridgeHandlers, calls };
 }
 
+/** How a fake window is framed. */
+interface FrameShape {
+  /** `location.ancestorOrigins`, immediate parent first (Chromium, WebKit). */
+  ancestorOrigins?: string[];
+  /** The origin readable off `parent.location` (a same-origin parent). Absent: a cross-origin parent whose location throws. */
+  parentLocationOrigin?: string;
+}
+
 /**
  * Install a fake `window` for one startEmbedBridge run and capture its 'message'
  * listener. `topLevel: true` makes `window.parent === window` (a page opened
  * directly — the situation an opener/popup exploits); `topLevel: false` gives a
- * DISTINCT parent object (a genuine iframe embed).
+ * DISTINCT parent object (a genuine iframe embed), cross-origin unless `shape`
+ * says otherwise.
  */
-function withWindow(topLevel: boolean) {
+function withWindow(topLevel: boolean, shape: FrameShape = {}) {
   let listener: ((e: MessageEvent) => void) | null = null;
   const win: Record<string, unknown> = {
     addEventListener: (type: string, cb: (e: MessageEvent) => void) => {
@@ -124,17 +133,30 @@ function withWindow(topLevel: boolean) {
     },
     removeEventListener: vi.fn(),
     postMessage: vi.fn(),
-    location: { origin: 'https://viewer.example' },
+    location: { origin: 'https://viewer.example', ancestorOrigins: shape.ancestorOrigins },
   };
-  const parent = topLevel ? win : { postMessage: vi.fn() };
+  const parent: Record<string, unknown> = topLevel ? win : { postMessage: vi.fn() };
+  if (!topLevel) {
+    Object.defineProperty(parent, 'location', {
+      get: () => {
+        if (shape.parentLocationOrigin === undefined) throw new Error('SecurityError: cross-origin');
+        return { origin: shape.parentLocationOrigin };
+      },
+    });
+  }
   win.parent = parent;
+  win.top = topLevel ? win : parent;
   (globalThis as { window?: unknown }).window = win;
   return {
     parent,
+    win,
     dispatch: (e: { source: unknown; origin: string; data: unknown }) =>
       listener?.(e as unknown as MessageEvent),
+    listening: () => listener !== null,
   };
 }
+
+const HOST = { deployerOrigins: ['https://host.example'], allowedOrigins: ['https://host.example'] };
 
 afterEach(() => {
   delete (globalThis as { window?: unknown }).window;
@@ -160,7 +182,7 @@ describe('startEmbedBridge — only the true embedding parent may drive the view
   it('ACCEPTS a command from the genuine embedding parent (iframe case unaffected)', () => {
     const { handlers, calls } = makeHandlers();
     const env = withWindow(false);
-    const dispose = startEmbedBridge(handlers, { allowedOrigins: ['https://host.example'] });
+    const dispose = startEmbedBridge(handlers, HOST);
     env.dispatch({
       source: env.parent,
       origin: 'https://host.example',
@@ -188,7 +210,7 @@ describe('startEmbedBridge — only the true embedding parent may drive the view
   it('DROPS an oversized load-file even from the genuine parent (byte cap)', () => {
     const { handlers, calls } = makeHandlers();
     const env = withWindow(false);
-    const dispose = startEmbedBridge(handlers, { allowedOrigins: ['https://host.example'] });
+    const dispose = startEmbedBridge(handlers, HOST);
     env.dispatch({
       source: env.parent,
       origin: 'https://host.example',
@@ -202,7 +224,7 @@ describe('startEmbedBridge — only the true embedding parent may drive the view
     const { handlers, calls } = makeHandlers();
     const env = withWindow(false);
     // load-file is privileged: it requires an explicitly trusted origin.
-    const dispose = startEmbedBridge(handlers, { allowedOrigins: ['https://host.example'] });
+    const dispose = startEmbedBridge(handlers, HOST);
     const buffer = new ArrayBuffer(8);
     env.dispatch({
       source: env.parent,
@@ -241,7 +263,7 @@ describe('startEmbedBridge — only the true embedding parent may drive the view
 
   it('accepts the page\'s own origin with no allow-list, and refuses others', () => {
     const { handlers, calls } = makeHandlers();
-    const env = withWindow(false);
+    const env = withWindow(false, { parentLocationOrigin: 'https://viewer.example' });
     const dispose = startEmbedBridge(handlers);
     env.dispatch({ source: env.parent, origin: 'https://viewer.example', data: { type: 'focus-annotation', id: 'a1' } });
     env.dispatch({ source: env.parent, origin: 'https://host.example', data: { type: 'focus-annotation', id: 'a2' } });
@@ -253,7 +275,7 @@ describe('startEmbedBridge — only the true embedding parent may drive the view
 
   it('sends no ready message to a foreign origin when none is configured', () => {
     const { handlers } = makeHandlers();
-    const env = withWindow(false);
+    const env = withWindow(false, { parentLocationOrigin: 'https://viewer.example' });
     const dispose = startEmbedBridge(handlers);
     const post = (env.parent as { postMessage: ReturnType<typeof vi.fn> }).postMessage;
     expect(post.mock.calls.map((c) => c[1])).toEqual(['https://viewer.example']);
@@ -263,7 +285,7 @@ describe('startEmbedBridge — only the true embedding parent may drive the view
   it('sends ready only to each configured origin', () => {
     const { handlers } = makeHandlers();
     const env = withWindow(false);
-    const dispose = startEmbedBridge(handlers, { allowedOrigins: ['https://a.example', 'https://b.example'] });
+    const dispose = startEmbedBridge(handlers, { deployerOrigins: ['https://a.example', 'https://b.example'], allowedOrigins: ['https://a.example', 'https://b.example'] });
     const post = (env.parent as { postMessage: ReturnType<typeof vi.fn> }).postMessage;
     expect(post.mock.calls.map((c) => c[1])).toEqual(['https://viewer.example', 'https://a.example', 'https://b.example']);
     dispose();
@@ -280,7 +302,7 @@ describe('startEmbedBridge — only the true embedding parent may drive the view
   ] as const)('with an allow-list set, a state command from %s runs=%s', (_label, origin, shouldRun) => {
     const { handlers, calls } = makeHandlers();
     const env = withWindow(false);
-    const dispose = startEmbedBridge(handlers, { allowedOrigins: ['https://host.example'] });
+    const dispose = startEmbedBridge(handlers, HOST);
     env.dispatch({ source: env.parent, origin, data: { type: 'toggle-layer', id: 'cloud_0', visible: true } });
     if (shouldRun) expect(calls.onToggleLayer).toHaveBeenCalledWith('cloud_0', true);
     else expect(calls.onToggleLayer).not.toHaveBeenCalled();
@@ -304,5 +326,108 @@ describe('embedBridgeOptionsFromUrl', () => {
     });
     expect(embedBridgeOptionsFromUrl('?embedParent=*')).toEqual({});
     expect(embedBridgeOptionsFromUrl('')).toEqual({});
+  });
+});
+
+describe('startEmbedBridge — the viewer URL cannot authorise the page that framed it', () => {
+  const ATTACKER = 'https://attacker.example';
+  const load = { type: 'load-file', name: 'x.las', buffer: new ArrayBuffer(8) };
+
+  it('ignores ?embedParent naming the framing origin when the deployer allows none (no ready, no listener)', () => {
+    const { handlers, calls } = makeHandlers();
+    const env = withWindow(false, { ancestorOrigins: [ATTACKER] });
+    const dispose = startEmbedBridge(handlers, { allowedOrigins: [ATTACKER], deployerOrigins: [] });
+    expect(env.listening()).toBe(false);
+    expect((env.parent as { postMessage: ReturnType<typeof vi.fn> }).postMessage).not.toHaveBeenCalled();
+    env.dispatch({ source: env.parent, origin: ATTACKER, data: load });
+    expect(calls.onLoadFile).not.toHaveBeenCalled();
+    dispose();
+  });
+
+  it('does the same where the browser gives no ancestorOrigins (cross-origin parent, empty list)', () => {
+    const { handlers, calls } = makeHandlers();
+    const env = withWindow(false);
+    const dispose = startEmbedBridge(handlers, { allowedOrigins: [ATTACKER] });
+    expect(env.listening()).toBe(false);
+    expect((env.parent as { postMessage: ReturnType<typeof vi.fn> }).postMessage).not.toHaveBeenCalled();
+    env.dispatch({ source: env.parent, origin: ATTACKER, data: load });
+    expect(calls.onLoadFile).not.toHaveBeenCalled();
+    dispose();
+  });
+
+  it('drops a requested origin the deployer did not list, and accepts the one it did', () => {
+    const { handlers, calls } = makeHandlers();
+    const env = withWindow(false);
+    const dispose = startEmbedBridge(handlers, {
+      allowedOrigins: [ATTACKER, 'https://host.example'],
+      deployerOrigins: ['https://host.example'],
+    });
+    env.dispatch({ source: env.parent, origin: ATTACKER, data: { type: 'focus-annotation', id: 'bad' } });
+    env.dispatch({ source: env.parent, origin: 'https://host.example', data: { type: 'focus-annotation', id: 'good' } });
+    expect(calls.onFocusAnnotation).toHaveBeenCalledTimes(1);
+    expect(calls.onFocusAnnotation).toHaveBeenCalledWith('good');
+    const post = (env.parent as { postMessage: ReturnType<typeof vi.fn> }).postMessage;
+    expect(post.mock.calls.map((c) => c[1])).not.toContain(ATTACKER);
+    dispose();
+  });
+
+  it('with the deployer list set and no request in the URL, serves the listed origins', () => {
+    const { handlers, calls } = makeHandlers();
+    const env = withWindow(false);
+    const dispose = startEmbedBridge(handlers, { deployerOrigins: ['https://host.example'] });
+    env.dispatch({ source: env.parent, origin: 'https://host.example', data: { type: 'focus-annotation', id: 'a' } });
+    expect(calls.onFocusAnnotation).toHaveBeenCalledWith('a');
+    dispose();
+  });
+
+  it('where ancestorOrigins names a listed parent, talks to that origin alone', () => {
+    const { handlers, calls } = makeHandlers();
+    const env = withWindow(false, { ancestorOrigins: ['https://host.example'] });
+    const dispose = startEmbedBridge(handlers, { deployerOrigins: ['https://host.example', 'https://other.example'] });
+    const post = (env.parent as { postMessage: ReturnType<typeof vi.fn> }).postMessage;
+    expect(post.mock.calls.map((c) => c[1])).toEqual(['https://host.example']);
+    env.dispatch({ source: env.parent, origin: 'https://other.example', data: { type: 'focus-annotation', id: 'x' } });
+    expect(calls.onFocusAnnotation).not.toHaveBeenCalled();
+    dispose();
+  });
+
+  it('where ancestorOrigins names an unlisted parent, stays silent even though the deployer lists others', () => {
+    const { handlers } = makeHandlers();
+    const env = withWindow(false, { ancestorOrigins: [ATTACKER] });
+    const dispose = startEmbedBridge(handlers, { deployerOrigins: ['https://host.example'], allowedOrigins: [ATTACKER] });
+    expect(env.listening()).toBe(false);
+    expect((env.parent as { postMessage: ReturnType<typeof vi.fn> }).postMessage).not.toHaveBeenCalled();
+    dispose();
+  });
+
+  it('a same-origin parent is always served, with no deployer list', () => {
+    const { handlers, calls } = makeHandlers();
+    const env = withWindow(false, { parentLocationOrigin: 'https://viewer.example', ancestorOrigins: ['https://viewer.example'] });
+    const dispose = startEmbedBridge(handlers);
+    expect(env.listening()).toBe(true);
+    env.dispatch({ source: env.parent, origin: 'https://viewer.example', data: load });
+    expect(calls.onLoadFile).toHaveBeenCalledTimes(1);
+    dispose();
+  });
+});
+
+describe('interpretEmbedMessage — load-file limits', () => {
+  it('caps a file at 256 MiB', () => {
+    expect(MAX_EMBED_FILE_BYTES).toBe(256 * 1024 * 1024);
+  });
+
+  it.each([
+    ['a typed-array view', new Uint8Array(8)],
+    ['a SharedArrayBuffer', typeof SharedArrayBuffer === 'function' ? new SharedArrayBuffer(8) : 'skip'],
+    ['a string', 'AAAA'],
+  ])('rejects %s as the buffer', (_label, buffer) => {
+    expect(interpretEmbedMessage({ type: 'load-file', buffer, name: 'a.las' })).toBeNull();
+  });
+
+  it('rejects an empty or over-long file name', () => {
+    const buffer = new ArrayBuffer(8);
+    expect(interpretEmbedMessage({ type: 'load-file', buffer, name: '' })).toBeNull();
+    expect(interpretEmbedMessage({ type: 'load-file', buffer, name: 'a'.repeat(256) })).toBeNull();
+    expect(interpretEmbedMessage({ type: 'load-file', buffer, name: 'a'.repeat(255) })).not.toBeNull();
   });
 });

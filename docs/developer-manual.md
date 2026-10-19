@@ -480,6 +480,19 @@ off under the other two. Specs must not assume either starting state.
 (GitHub Pages, Netlify, S3/CloudFront, any CDN): there is no server
 component. For embedding, serve the same build and link with `?embed=1`.
 
+Embedding from another origin needs two settings. A host that can send headers
+widens `frame-ancestors` in `public/_headers` and `public/.htaccess`. A host that
+cannot (GitHub Pages, a bucket) also cannot restrict who frames the viewer, so
+the viewer decides for itself: build with `OLV_EMBED_ORIGINS` set to a
+comma-separated list of the origins that may embed it (`https://portal.example.org`).
+It is a build-time constant (`__OLV_EMBED_ORIGINS__`, empty by default); the
+viewer's own origin is always trusted, and `?embedParent=` / `?embedOrigins=` in
+the URL can only narrow the list. A framed page that no rule allows shows a
+notice instead of starting. The policy lives in `src/ui/embedPolicy.ts` (pure,
+unit-tested in `tests/embedPolicy.test.ts`), the notice in `src/ui/frameGuard.ts`,
+and `src/ui/frameGuardBoot.ts` is the first import of `src/main.ts`. See
+[usage.md](usage.md#embedding-origin-and-security).
+
 ---
 
 ## 16. Release history
