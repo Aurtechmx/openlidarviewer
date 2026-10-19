@@ -44,11 +44,13 @@ AddType application/manifest+json .webmanifest
     Header set Cache-Control "no-cache"
   </FilesMatch>
 
-  # Root icons/share images look hash-like to the rule above
-  # (`apple-touch-icon.png` matches the `-…8+ chars…` pattern) but are NOT
-  # content-hashed — they must stay refreshable. Later FilesMatch wins, so
-  # this override must remain BELOW the immutable rule.
-  <FilesMatch "^(apple-touch-icon\.png|og-card\.jpg|favicon\.(ico|svg))$">
+  # Root icons/share images and the brand marks look hash-like to the rule above
+  # (`apple-touch-icon.png` and `brand-mark-light.svg` match the `-…8+ chars…`
+  # pattern) but are NOT content-hashed — they must stay refreshable. Later
+  # FilesMatch wins, so this override must remain BELOW the immutable rule.
+  # Anything else hash-shaped that ships in public/ and is not content-hashed
+  # belongs in this list; tests/deployCaching.test.ts fails when one is missing.
+  <FilesMatch "^(apple-touch-icon\.png|og-card\.jpg|favicon\.(ico|svg)|brand-mark(-light)?\.svg)$">
     Header set Cache-Control "public, max-age=86400"
   </FilesMatch>
 
