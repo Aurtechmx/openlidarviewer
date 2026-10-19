@@ -7,9 +7,11 @@
 # entry point (a stale index.html points at purged hashes — the classic
 # white-screen-after-deploy), and the same response-hardening headers, including
 # an ENFORCING Content-Security-Policy (matches .htaccess). script-src is strict
-# — 'self' plus 'wasm-unsafe-eval' for the laz-perf WASM only; the live bundle
-# carries no eval/Function so no 'unsafe-eval' is needed, and there are no inline
-# scripts. style-src allows no inline style except the one <style> in
+# — 'self' plus 'wasm-unsafe-eval' for the laz-perf WASM only, with no
+# 'unsafe-eval', and there are no inline scripts. The shipped glTF chunk still
+# contains loaders.gl's loadLibrary eval path and the gstatic.com and
+# raw.githubusercontent.com Draco decoder URLs; loadGltf refuses Draco files
+# before it can be reached, and this policy would block the eval and those hosts. style-src allows no inline style except the one <style> in
 # index.html, by its sha256; the app sets styles through the CSSOM. worker-src/blob and img blob:/data: cover the
 # worker-decoded WASM and generated thumbnails. object-src 'none' refuses
 # plugin content outright. frame-ancestors 'self' is the clickjacking guard and

@@ -35,8 +35,11 @@ is bounded by the browser (its CORS, Private Network Access controls, and the
 `connect-src` CSP) not by this client-side validation. OLV does not claim to be
 SSRF-proof or to guarantee a public destination.
 
-Cross-site scripting is handled by a strict Content-Security-Policy, and there is
-no `eval` or `new Function`. The places where the app turns a string into markup
+Cross-site scripting is handled by a strict Content-Security-Policy that allows no
+`unsafe-eval`. The app's own code does not use `eval` or `new Function`. The
+shipped glTF chunk still contains loaders.gl's `loadLibrary` eval path and the
+`gstatic.com` and `raw.githubusercontent.com` Draco decoder URLs; `loadGltf`
+refuses Draco files before that code can run, and the policy would block both. The places where the app turns a string into markup
 are few and enumerated: the `unsafeHtml` prop of `el()` in `src/ui/dom.ts` (which
 assigns `innerHTML`), four direct `innerHTML` assignments (`NavBar.ts`,
 `FullscreenToggle.ts`, two in `AnalysePanel.ts`) and one `insertAdjacentHTML` in
