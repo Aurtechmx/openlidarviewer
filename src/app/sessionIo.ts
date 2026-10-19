@@ -26,6 +26,7 @@ import type { WorkplaneSettings } from '../model/workplaneSettings';
 import type { PointCloud } from '../model/PointCloud';
 import type { ViewBookmarksService } from './viewBookmarks';
 import type { CrsService } from '../geo/CrsService';
+import type { ResolvedCrs } from '../geo/CoordinateTypes';
 import type { ViewStateBundle } from '../io/viewState';
 import { buildViewState } from '../io/viewState';
 import { isExportStale, staleExportReason } from '../export/exportStaleness';
@@ -169,7 +170,7 @@ export interface SessionIoDeps {
   /** Apply a global view-state bundle through the shared, camera-last path. */
   applyViewState: (vs: ViewStateBundle) => void;
   /** Restore the author's CRS override (`crsService.setOverride`). */
-  setCrsOverride: (args: Parameters<CrsService['setOverride']>[0]) => void;
+  setCrsOverride: (args: Parameters<CrsService['setOverride']>[0]) => ResolvedCrs | null;
   /**
    * Ask before the file replaces measurements, annotations or saved views that
    * are already open. Absent: nothing is asked.
@@ -260,6 +261,30 @@ export function sameSessionWork(
   return open.views.every((v, i) => !v.state && v.name === file.views[i]!.name && JSON.stringify(v.pose) === JSON.stringify(file.views[i]!.camera));
 }
 
+/** The longest CRS name the restore notice prints; a session is untrusted input. */
+const CRS_NOTICE_NAME_MAX = 80;
+
+const CRS_UNIT_WORDS: Readonly<Record<string, string>> = {
+  metre: 'metres',
+  foot: 'international feet',
+  'us-survey-foot': 'US survey feet',
+};
+
+/**
+ * The sentence naming the coordinate system a session applied: the CRS the
+ * service resolved and its unit, whether or not it has an EPSG code. A local
+ * choice with a declared unit says so; one without says no unit.
+ */
+export function appliedCrsSentence(crs: ResolvedCrs): string {
+  const raw = (crs.name ?? '').replace(/\s+/g, ' ').trim();
+  const name = raw.length > CRS_NOTICE_NAME_MAX ? `${raw.slice(0, CRS_NOTICE_NAME_MAX - 1)}…` : raw;
+  const unit = CRS_UNIT_WORDS[crs.linearUnit] ?? 'linear unit not declared';
+  const label = crs.kind === 'local'
+    ? `${name || 'Local coordinates'} (no EPSG code; ${unit})`
+    : `${name || (crs.epsg != null ? `EPSG:${crs.epsg}` : 'an unnamed coordinate system')}${crs.epsg != null && !name.includes(String(crs.epsg)) ? ` [EPSG:${crs.epsg}]` : ''} (${unit})`;
+  return `This session set the coordinate system to ${label}. It applies to this scan for now and is not saved on this device.`;
+}
+
 /**
  * Import an inspection session: restore measurements, annotations and views.
  * `skipScanConfirm` is set only by the "Apply anyway" action after a partial
@@ -275,6 +300,10 @@ export async function importSession(
 ): Promise<boolean> {
   // Set once the session's work is in the scene, so a later failure still reports it applied.
   let applied = false;
+  // The coordinate-system disclosure, held until the final toast: the toast host
+  // shows one message at a time, so a notice shown earlier is replaced by the
+  // restore toast before it can be read.
+  let crsNotice: { readonly text: string; readonly action: { readonly label: string; readonly onClick: () => void } } | null = null;
   try {
     // A shared `.olvsession` is untrusted; reject an over-large file up front,
     // before it is read, so `JSON.parse` of the whole text can't exhaust memory.
@@ -546,18 +575,23 @@ export async function importSession(
         source: 'user-override' as const,
       };
       const declared = declaredSpatialForActiveScan(viewer, deps);
-      deps.setCrsOverride({ ...override, persist: false });
+      // What the service actually applied, not what the file claims: the notice
+      // names this, and nothing is claimed when nothing was applied (null).
+      const appliedCrs = deps.setCrsOverride({ ...override, persist: false });
+      // A local choice matches the file only when the file declares neither a
+      // code nor a linear unit: a declared unit with no EPSG is still a
+      // coordinate system the session has replaced.
       const sameAsFile =
         sessionCrs.kind === 'local'
           ? declared.epsg === undefined
+            && declared.linearUnitToMetres === undefined
+            && (declared.linearUnit === undefined || declared.linearUnit === 'unknown')
           : declared.epsg === sessionCrs.epsg &&
             (declared.linearUnitToMetres === undefined || declared.linearUnitToMetres === sessionCrs.linearUnitToMetres);
-      if (!sameAsFile) {
-        const unit = sessionCrs.kind === 'local' ? 'no linear unit' : sessionCrs.linearUnit;
-        deps.showToast(
-          `This session set the coordinate system to ${sessionCrs.name} (${unit}). ` +
-            'It applies to this scan for now and is not saved on this device.',
-          {
+      if (!sameAsFile && appliedCrs) {
+        crsNotice = {
+          text: ` ${appliedCrsSentence(appliedCrs)}`,
+          action: {
             label: 'Keep',
             // Only for the scan it was applied to: the override acts on whichever scan is active.
             onClick: () => {
@@ -566,7 +600,7 @@ export async function importSession(
               }
             },
           },
-        );
+        };
       }
     }
 
@@ -767,16 +801,25 @@ export async function importSession(
       // Nothing to report: the disclosure is an addition to the toast, and the
       // session it would have described is already restored.
     }
+    const crsNote = crsNotice?.text ?? '';
     if (wantFile && !haveCloud) {
-      deps.showToast((lead ?? `Session restored — drop “${wantFile}” to view its scan.`) + manifestSuffix,
-        lead ? { label: 'Need the scan', onClick: () => deps.showToast(`Drop “${wantFile}” to view this evidence on its scan.`) } : undefined);
+      const base = lead ?? `Session restored — drop “${wantFile}” to view its scan.`;
+      if (crsNotice) {
+        // One action fits: the coordinate system is the choice that needs one,
+        // so the scan hint rides in the text.
+        deps.showToast(`${base}${lead ? ` Drop “${wantFile}” to view this evidence on its scan.` : ''}${crsNote}${manifestSuffix}`, crsNotice.action);
+      } else {
+        deps.showToast(base + manifestSuffix,
+          lead ? { label: 'Need the scan', onClick: () => deps.showToast(`Drop “${wantFile}” to view this evidence on its scan.`) } : undefined);
+      }
     } else if (lead) {
-      deps.showToast(`${lead}${frameNote}${axisNote}${refusedNote}${appliedNote}${manifestSuffix}`);
+      const text = `${lead}${crsNote}${frameNote}${axisNote}${refusedNote}${appliedNote}${manifestSuffix}`;
+      if (crsNotice) deps.showToast(text, crsNotice.action); else deps.showToast(text);
     } else {
-      deps.showToast(
+      const text =
         `Session restored — ${restored} item${restored === 1 ? '' : 's'} ` +
-          `(measurements, annotations, views).${frameNote}${axisNote}${refusedNote}${appliedNote}${manifestSuffix}`,
-      );
+        `(measurements, annotations, views).${crsNote}${frameNote}${axisNote}${refusedNote}${appliedNote}${manifestSuffix}`;
+      if (crsNotice) deps.showToast(text, crsNotice.action); else deps.showToast(text);
     }
   } catch (err) {
     deps.setDropError(err instanceof Error ? err.message : 'Could not import the session');
