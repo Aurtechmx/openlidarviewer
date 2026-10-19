@@ -3,13 +3,14 @@
  * ships: package.sh runs them on the staged copy before zipping, and
  * smoke-deploy-zip.mjs on the extraction of the finished archive.
  */
+import { fileURLToPath } from 'node:url';
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { DEPLOY_CHECKS, runDeployChecks } from '../scripts/check-deploy-output.mjs';
 
-const ROOT = new URL('..', import.meta.url).pathname;
+const ROOT = fileURLToPath(new URL('..', import.meta.url));
 const read = (p: string): string => readFileSync(join(ROOT, p), 'utf8');
 
 const dirs: string[] = [];

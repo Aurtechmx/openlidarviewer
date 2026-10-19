@@ -3,12 +3,13 @@
  * the policy that ships, block by block. A policy that lists some hash does not
  * allow every block.
  */
+import { fileURLToPath } from 'node:url';
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { lintPages, readMirroredPolicy } from '../scripts/lint-csp-html.mjs';
 import { hashSource, inlineProblems } from '../scripts/lib/cspInline.mjs';
 
-const ROOT = new URL('..', import.meta.url).pathname;
+const ROOT = fileURLToPath(new URL('..', import.meta.url));
 const read = (p: string): string => readFileSync(`${ROOT}${p}`, 'utf8');
 const policy = (read('public/.htaccess').match(/Header always set Content-Security-Policy "([^"]+)"/) ?? [])[1]!;
 

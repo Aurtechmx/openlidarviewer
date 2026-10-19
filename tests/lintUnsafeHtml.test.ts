@@ -6,6 +6,7 @@
  * usages the app actually ships. Guards the guard so a future refactor can't
  * quietly defang it.
  */
+import { fileURLToPath } from 'node:url';
 
 import { describe, it, expect } from 'vitest';
 // @ts-expect-error — plain .mjs script, no type declarations.
@@ -116,7 +117,7 @@ describe('lint-unsafe-html — wider sinks and multi-line values', () => {
   it('finds no unlisted sink and no user data in the shipped source', async () => {
     const { readFileSync, readdirSync, statSync } = await import('node:fs');
     const { join } = await import('node:path');
-    const root = new URL('../src', import.meta.url).pathname;
+    const root = fileURLToPath(new URL('../src', import.meta.url));
     const walk = (d: string): string[] =>
       readdirSync(d).flatMap((n) => (statSync(join(d, n)).isDirectory() ? walk(join(d, n)) : /\.tsx?$/.test(n) ? [join(d, n)] : []));
     const offenders = walk(root).flatMap((f) =>

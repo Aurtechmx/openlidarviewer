@@ -4,11 +4,12 @@
  * name merely looks hash-shaped (`brand-mark-light.svg`) was cached for a year
  * and could not be refreshed. _headers scopes the rule to /assets/*.
  */
+import { fileURLToPath } from 'node:url';
 import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { join, relative } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
-const ROOT = new URL('..', import.meta.url).pathname;
+const ROOT = fileURLToPath(new URL('..', import.meta.url));
 const htaccess = readFileSync(join(ROOT, 'public/.htaccess'), 'utf8');
 const headers = readFileSync(join(ROOT, 'public/_headers'), 'utf8');
 
