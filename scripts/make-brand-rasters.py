@@ -35,6 +35,7 @@ import math
 import pathlib
 import subprocess
 
+from fontTools.pens.boundsPen import BoundsPen
 from fontTools.pens.svgPathPen import SVGPathPen
 from fontTools.pens.transformPen import TransformPen
 from fontTools.ttLib import TTFont
@@ -181,14 +182,12 @@ def pair_kerning(font: TTFont) -> dict[tuple[str, str], int]:
     return kern
 
 
-def text_path(font: TTFont, text: str, size: float, x: float, baseline: float, tracking_em: float = 0.0) -> tuple[str, float]:
-    """SVG path data for `text` and its advance width, in output units."""
+def _draw_text(font: TTFont, text: str, size: float, x: float, baseline: float, tracking_em: float, pen) -> float:
     cmap = font.getBestCmap()
     gs = font.getGlyphSet()
     upm = font["head"].unitsPerEm
     kern = pair_kerning(font)
     scale = size / upm
-    pen = SVGPathPen(gs)
     cx = 0.0
     names = [cmap[ord(c)] for c in text]
     for i, g in enumerate(names):
@@ -196,25 +195,61 @@ def text_path(font: TTFont, text: str, size: float, x: float, baseline: float, t
         cx += gs[g].width
         if i + 1 < len(names):
             cx += kern.get((g, names[i + 1]), 0) + tracking_em * upm
-    return pen.getCommands(), cx * scale
+    return cx * scale
 
 
-def tagline_paths(size: float, x: float, baseline: float, max_w: float, leading: float = 1.3) -> str:
-    """Path data for every TAGLINE line, one size for all lines, fitted to max_w."""
-    font = load_font("Regular")
-    widest = max(text_path(font, line, size, x, baseline)[1] for line in TAGLINE)
-    if widest > max_w:
-        size *= max_w / widest
-    return "".join(text_path(font, line, size, x, baseline + i * size * leading)[0] for i, line in enumerate(TAGLINE))
+def text_path(font: TTFont, text: str, size: float, x: float, baseline: float, tracking_em: float = 0.0) -> tuple[str, float]:
+    """SVG path data for `text` and its advance width, in output units."""
+    pen = SVGPathPen(font.getGlyphSet())
+    width = _draw_text(font, text, size, x, baseline, tracking_em, pen)
+    return pen.getCommands(), width
+
+
+def ink_bounds(font: TTFont, text: str, size: float, x: float = 0.0, baseline: float = 0.0, tracking_em: float = 0.0) -> tuple[float, float, float, float]:
+    """(left, top, right, bottom) of the drawn outlines, in output units."""
+    pen = BoundsPen(font.getGlyphSet())
+    _draw_text(font, text, size, x, baseline, tracking_em, pen)
+    return pen.bounds
+
+
+def lockup_text(left: float, centre_y: float, word_size: float, tag_size: float) -> tuple[str, str, float]:
+    """Wordmark and tagline as one block, laid out from the outlines' ink bounds.
+
+    The block's ink starts at `left` and is centred on `centre_y` (the emblem's
+    centre), measured from the wordmark's cap top to the last tagline baseline
+    so descenders hang below as they do in set type. The gap from the
+    wordmark's lowest ink (the descender of "p") to the tagline is half the
+    tagline size, the tagline leading is 1.35, and the tagline is never wider
+    than the wordmark. Returns (wordmark path, tagline path, right ink edge).
+    """
+    medium, regular = load_font("Medium"), load_font("Regular")
+    tracking = -0.02
+    wl, wt, wr, wb = ink_bounds(medium, WORDMARK, word_size, 0, 0, tracking)
+    widest = max(ink_bounds(regular, line, tag_size)[2] - ink_bounds(regular, line, tag_size)[0] for line in TAGLINE)
+    if widest > wr - wl:
+        tag_size *= (wr - wl) / widest
+    leading = tag_size * 1.35
+    tag_top = min(ink_bounds(regular, TAGLINE[0], tag_size)[1], 0.0)
+    first_base = wb + 0.5 * tag_size - tag_top
+    last_base = first_base + leading * (len(TAGLINE) - 1)
+    shift = centre_y - (wt + last_base) / 2
+    word, _ = text_path(medium, WORDMARK, word_size, left - wl, shift, tracking)
+    tag = "".join(
+        text_path(regular, line, tag_size, left - ink_bounds(regular, line, tag_size)[0], shift + first_base + i * leading)[0]
+        for i, line in enumerate(TAGLINE)
+    )
+    return word, tag, left + (wr - wl)
 
 
 def brand_logo_svg() -> str:
     """Horizontal lockup on the #030817 field, all vector."""
     h = 360
-    word, word_w = text_path(load_font("Medium"), WORDMARK, 118, 330, 190, -0.02)
-    # The canvas is as wide as the wordmark needs, so neither line is clipped.
-    w = math.ceil(330 + word_w + 50)
-    tag = tagline_paths(38, 334, 252, w - 334 - 50)
+    # Emblem: translate(40 30) scale(3), so its centre is y 180 and its widest
+    # ring spans x 46 to 334. The text starts 18.4 emblem units (55) past the
+    # rings, the same gap as the share card, and the canvas ends one emblem
+    # margin (46) past the text.
+    word, tag, right = lockup_text(389, 180, 118, 38)
+    w = math.ceil(right + 46)
     return (
         f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {w} {h}" width="{w}" height="{h}">'
         f"<defs>{emblem_defs('l')}</defs>"
@@ -247,8 +282,9 @@ def terrain_dots(w: int, h: int) -> str:
 
 def og_card_svg() -> str:
     w, h = 1200, 630
-    word, _ = text_path(load_font("Medium"), WORDMARK, 92, 392, 272, -0.02)
-    tag = tagline_paths(31, 396, 326, 1200 - 396 - 60)
+    # Emblem: translate(70 115) scale(2.8), so its centre is y 255 and its
+    # widest ring ends at x 344; the text starts 52 past it.
+    word, tag, _ = lockup_text(396, 255, 92, 31)
     return (
         f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {w} {h}" width="{w}" height="{h}">'
         f"<defs>{emblem_defs('o')}"
