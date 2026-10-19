@@ -43,7 +43,7 @@ If you cannot find something below, the directory listing is still the full pict
 | Document | What it covers |
 | --- | --- |
 | [analysis-architecture.md](analysis-architecture.md) | How the analysis stack is layered, and what each layer is allowed to assume. |
-| [coordinate-precision.md](coordinate-precision.md) | The precision contract on georeferenced scans, audited against real data. |
+| [coordinate-precision.md](coordinate-precision.md) | The precision contract on georeferenced scans, checked against real data. |
 | [science/METHOD_REGISTRY.md](science/METHOD_REGISTRY.md) | Every analytical method, with its definition and its reference. |
 | [architecture/project-spatial-frame.md](architecture/project-spatial-frame.md) | The authoritative frame that measurements are expressed in. |
 

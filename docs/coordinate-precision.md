@@ -1,12 +1,11 @@
-# Coordinate precision invariants: v0.3.2 research-grade audit
+# Coordinate precision invariants
 
-OpenLiDARViewer holds itself to a research-grade precision contract on
-georeferenced scans (positions retain millimetre-class fidelity in the
-internal float pipeline). Measurement is for visual inspection rather
-than survey-grade output unless the workflow has been validated against
-survey-grade data and procedures. This document is the precision-audit
-ledger: it spells out every coordinate space the runtime uses, where
-Float64 ends and Float32 begins, and which tests pin each invariant.
+OpenLiDARViewer keeps positions on georeferenced scans at millimetre-class
+fidelity in the internal float pipeline. Measurement is for visual inspection
+rather than survey-grade output unless the workflow has been validated against
+survey-grade data and procedures. This document lists every coordinate space the
+runtime uses, where Float64 ends and Float32 begins, and which tests pin each
+invariant.
 
 If you change anything in the coordinate pipeline, re-validate against this
 doc and update the corresponding test. The numbers here are the contract.
@@ -350,7 +349,7 @@ is no high/low split, and no GPU attribute is widened. The coordinate-integrity
 roadmap asks for measured cases before a precision architecture is adopted; this
 is the measurement, not the architecture.
 
-## What this audit pins (test inventory)
+## What the tests pin (test inventory)
 
 | Invariant | Test |
 |---|---|
