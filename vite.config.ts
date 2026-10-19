@@ -7,7 +7,7 @@ import { visualizer } from 'rollup-plugin-visualizer';
 import { requireBinaryOnPath } from './scripts/lib/binaryOnPath.mjs';
 import { buildSwPrecacheManifest } from './scripts/lib/swPrecacheManifest.mjs';
 import { stampSourceLinks } from './scripts/lib/sourceLink.mjs';
-import { parseEmbedOrigins } from './scripts/lib/viteDefines.mjs';
+import { parseEmbedOrigins, testSeamEnabled } from './scripts/lib/viteDefines.mjs';
 import {
   workerExcludePatterns,
   workerChunkPins,
@@ -679,9 +679,7 @@ export default defineConfig(({ mode }) => {
     // substitutes `false` here and the minifier drops the block, so no
     // artifact a user can be served carries the API surface. `?test=1` in
     // such a build parses as before and mounts nothing.
-    __OLV_TEST_SEAM__: JSON.stringify(
-      mode === 'development' || process.env.OLV_TEST_SEAM === '1',
-    ),
+    __OLV_TEST_SEAM__: JSON.stringify(testSeamEnabled(mode, process.env)),
     // Origins, besides its own, that may frame the viewer and drive the embed
     // bridge. Set OLV_EMBED_ORIGINS=https://a.example,https://b.example when
     // building for a host that cannot send `frame-ancestors`; empty (the
@@ -699,7 +697,7 @@ export default defineConfig(({ mode }) => {
   plugins: [
     chunkEmissionGuard(
       mode !== 'live',
-      mode === 'development' || process.env.OLV_TEST_SEAM === '1',
+      testSeamEnabled(mode, process.env),
     ) as PluginOption,
     thirdPartyNotices() as PluginOption,
     creditsSourceLink(buildIdentity) as PluginOption,
