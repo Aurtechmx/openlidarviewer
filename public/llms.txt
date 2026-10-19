@@ -13,7 +13,7 @@ Live app: https://app.openlidarviewer.org/ · Source: https://github.com/Aurtech
 - Classifies ground, vegetation, and building points to ASPRS codes with an on-device heuristic, including per-point confidence and lasso re-classification. The output is derived, not survey-grade.
 - Builds purpose-driven contour deliverables in Contour Studio (Engineering Plan, Survey Review, Terrain Research, Presentation Map) and exports them to PDF, GeoJSON, or DXF, with the evidence gate's decision stamped into each file's provenance.
 - Annotates with numbered markers, saves sessions, shares a view link, and exports a map-sheet PDF plus CSV and GeoJSON.
-- Embeds the viewer in an iframe (`?embed=1`) with a validated `postMessage` bridge for host-page control.
+- Embeds the viewer in an iframe (`?embed=1`) with a validated `postMessage` bridge for host-page control. Cross-origin embedding requires a deployer allow-list (`OLV_EMBED_ORIGINS`, empty by default; the shipped headers set `frame-ancestors 'self'`).
 
 ## Limits
 

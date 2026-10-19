@@ -121,7 +121,7 @@ Snapping is off until you turn it on. The snap button in the toolbar cycles thre
 
 ### The trust badge
 
-A measurement on a fully loaded scan carries a small red / yellow / green dot next to its value. This is the part most viewers leave out: a number is only as good as the points under its ends, so each measurement is graded on whether its endpoints landed on real returns and how dense the surrounding data is. A streaming COPC or EPT scan holds no resident points to grade against, so measurements taken on one carry no dot.
+A measurement on a fully loaded scan carries a small red / yellow / green dot next to its value. Each measurement is graded on whether its endpoints landed on real returns and how dense the surrounding data is. A streaming COPC or EPT scan holds no resident points to grade against, so measurements taken on one carry no dot.
 
 - Green: supported, with measured points close to the endpoints. This says nothing about how accurate the figure is
 - Yellow: loosely supported, or the scan has no coordinate system so the scale cannot be confirmed as metres

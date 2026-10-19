@@ -39,9 +39,8 @@ evidence review before merge.
 
 ## Evidence
 
-What you ran and what it said. Paste the numbers, not a summary of them, and
-quote exit codes where a command is easy to misread as passing. If a number
-moved, say by how much and against what.
+List the commands you ran with their results and exit codes. If a number moved,
+say by how much and against what.
 
 - [ ] No tracked baseline, reference run, evidence level, tolerance, or
       registered study result changed.

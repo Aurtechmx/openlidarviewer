@@ -4,7 +4,9 @@
 
 OpenLiDARViewer supports mobile-friendly viewing and file loading for compatible point-cloud and 3D scan files. You can open and inspect those files from phones and tablets, directly in a mobile browser.
 
-## Supported mobile browsers
+## Browsers expected to work
+
+Touch gestures are tested only as synthesized events, not on a real device.
 
 - Safari browser on iPhone devices
 - Chrome browser on iPhone devices (note that browsers on iOS use Apple's WebKit engine)

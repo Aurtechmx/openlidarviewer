@@ -32,7 +32,7 @@ npm run preview
 
 ## Something not working?
 
-A file that refuses to open, a warning that looks wrong, one screen that confused you: all of it is worth writing down. Negative results are the useful kind here. Email what you found (a short description, and a screenshot if it helps) to <info@aurtech.mx>.
+A file that refuses to open, a warning that looks wrong, one screen that confused you: all of it is worth writing down. Email what you found (a short description, and a screenshot if it helps) to <info@aurtech.mx>.
 
 ## Where next
 

@@ -692,7 +692,7 @@ export class Stage {
       className: 'olv-convert-chip',
       type: 'button',
       text: 'Convert file formats',
-      title: 'Convert LAS, LAZ, XYZ and ASC files between formats in a batch. No scan needs to be loaded.',
+      title: 'Convert point-cloud files between formats. No scan needs to be loaded.',
     });
     convertChip.addEventListener('click', () => options.onBatchConvert?.());
 

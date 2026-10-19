@@ -5,7 +5,7 @@ dependencies, and the optional figure step installs matplotlib. After that, the
 tests and the evaluation run offline on commodity hardware. You need no account
 and no external dataset, and you upload no data.
 
-## 1. Install and test (~2 min)
+## 1. Install and test
 
 ```bash
 npm ci
@@ -50,7 +50,7 @@ The four metrics measure the following.
   known synthetic noise model; M3 does not calibrate against field data.
 - M4: the integrity-report digest is deterministic and tamper-evident.
 
-## 3. Run the application (~1 min)
+## 3. Run the application
 
 ```bash
 npm run build && npm run preview

@@ -48,7 +48,7 @@ For best performance, enable hardware acceleration, use a modern Chromium-based 
 
 ## Benchmarks
 
-Real-world figures (a 9.6 M-point drone LAZ survey and a 55 K-point iPhone scan, both opened from one drag-and-drop on an Apple MacBook Pro M3 Max) are recorded in [`benchmarks.md`](benchmarks.md), alongside the synthetic stress runs that validate bounded residency and zero thrash up to 1 B-point streaming hierarchies. Hardware, browser, dataset, and the rendering detail you pick all change the numbers; the published figures are field observations, not a formal benchmark suite.
+Real-world figures (a 9.6 M-point drone LAZ survey and a 55 K-point iPhone scan, both opened from one drag-and-drop on a 2023 laptop (M3 Max)) are recorded in [`benchmarks.md`](benchmarks.md), alongside the synthetic stress runs that validate bounded residency and zero thrash up to 1 B-point streaming hierarchies. Hardware, browser, dataset, and the rendering detail you pick all change the numbers; the published figures are field observations, not a formal benchmark suite.
 
 ## Privacy
 

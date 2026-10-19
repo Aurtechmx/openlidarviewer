@@ -23,7 +23,7 @@ Seventeen products reached E4. Five are algorithm checks against GDAL, three are
 ## External threats (does it generalize?)
 
 - Sensor / capture diversity. Results are demonstrated on the bundled synthetic fixtures and a limited set of open datasets; behavior on other sensors, densities, and terrain types is not independently characterized.
-- No prospective preregistered field study is bundled. Raw source point clouds are user-supplied or streamed from third-party open-data hosts and are not redistributed here (see `DATA_AVAILABILITY.md`). Small DERIVED validation crops and checkpoint/reference records from public datasets ARE committed, under `validation/terrain-field/`, so the field comparisons in the next section can be reproduced. What is missing is a study designed and registered before its result was known, not the data: the checkpoint comparisons below are retrospective against existing public reference material.
+- No prospective preregistered field study is bundled. Raw source point clouds are user-supplied or streamed from third-party open-data hosts and are not redistributed here (see `DATA_AVAILABILITY.md`). Small DERIVED validation crops and checkpoint/reference records from public datasets ARE committed, under `validation/terrain-field/`, so the retrospective field comparisons under "What would raise the ceiling" can be reproduced. What is missing is a study designed and registered before its result was known, not the data: the checkpoint comparisons below are retrospective against existing public reference material.
 
 ## What would raise the ceiling
 

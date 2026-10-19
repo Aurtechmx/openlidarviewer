@@ -28,7 +28,7 @@ features:
     link: /validation/claim-register
     linkText: Claim register
   - title: Terrain intelligence
-    details: A confidence-aware DTM and contour pipeline with hold-out validation, evidence-graded exports, and a quality gate that decides whether terrain products can be exported.
+    details: A confidence-aware DTM and contour pipeline with hold-out validation, evidence-graded exports, and an export gate tied to the evidence level.
     link: /guide/terrain-intelligence
     linkText: How it works
 ---

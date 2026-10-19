@@ -303,27 +303,6 @@ AND ground units, Z units, the Horn slope/aspect convention note, the
 derived confidence, and the caveats: reproducible parameters, worded
 identically everywhere.
 
-Licensing note. pyTopoComplexity (Lai et al. 2025,
-doi:10.5194/esurf-13-417-2025) is prior art for several of these measures
-but is AGPL-licensed: no code was read or ported. The cores are implemented
-from the primary literature only.
-
-### Deferred planned methods
-
-Evaluated and deliberately deferred (kept here so the roadmap is explicit):
-
-- multi-scale TPI with the ten-class landform scheme (Weiss 2001);
-- Booth et al. (2009) wavelet/spectral curvature for landslide-texture
-  mapping;
-- fractal dimension by variogram;
-- arc to chord ratio rugosity (Du Preez 2015);
-- PROTECT-style topographic cross-section profiles;
-- an optional MCC ground filter (Evans & Hudak 2007) alongside SMRF;
-- per-segment lasso IDs for complexity-by-region (prior art: Papucci &
-  Yrttimaa 2026, doi:10.5281/zenodo.20395900);
-- archaeological local-relief workflows (cf. Niculiță 2020,
-  doi:10.3390/s20041192).
-
 ## Terrain core cache on this device
 
 The heavy half of the pipeline (classification, ground filtering, DTM,

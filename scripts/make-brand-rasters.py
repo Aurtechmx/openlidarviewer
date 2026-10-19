@@ -52,7 +52,7 @@ ICE = "#C9F6FF"
 WHITE = "#FFFFFF"
 
 WORDMARK = "OpenLiDARViewer"
-TAGLINE = "Local-first browser-based point-cloud exploration"
+TAGLINE = "Open LAS, LAZ, E57, COPC and other point-cloud files in a browser tab. Files are read on your device and are not uploaded."
 
 # (centre offset, rx, ry) in a 100-unit box centred on the sphere.
 RINGS = [(-18, 30, 5.5), (-6.5, 44, 7.5), (5, 48, 8.5), (16, 46, 8.0)]
