@@ -4,7 +4,7 @@
  * Line-icons for the bottom tool dock, in the same house style as the
  * measurement-toolbar glyphs (24×24, currentColor, 1.6 px stroke, round
  * caps/joins). Metaphors follow the strongest cross-tool conventions
- * (Material Symbols / QGIS / Blender / Photoshop) surfaced by research:
+ * (Material Symbols and common GIS and design tools) surfaced by research:
  *
  *   • Inspect and Probe are DELIBERATELY differentiated — Inspect is a
  *     target/crosshair (a deliberate point pick), Probe is an eyedropper
@@ -65,7 +65,7 @@ export const ICON_HELP = svg(
     dot(11.8, 16.4, 1.3),
 );
 
-/** Measure — a ruler with tick marks (CloudCompare / QGIS measure). */
+/** Measure — a ruler with tick marks (point-cloud and GIS measure tools). */
 export const ICON_MEASURE = svg(
   `<path d="M5 15 15 5l4 4L9 19z"/><path d="M8.5 11.5l1.6 1.6"/>` +
     `<path d="M11 9l1.6 1.6"/><path d="M13.5 6.5l1.6 1.6"/>`,

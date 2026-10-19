@@ -2,7 +2,7 @@
  * demAsciiGrid.ts
  *
  * Serialize an elevation grid to the Esri ASCII Grid format (AAIGrid) — the
- * plain-text DEM format read natively by QGIS, ArcGIS and GDAL. The header
+ * plain-text DEM format read natively by GIS software and GDAL. The header
  * carries the georeferencing (lower-left corner + square cell size) and the
  * no-data sentinel; the body lists rows from NORTH (top) down to south, each
  * row left→right, matching the AAIGrid convention.

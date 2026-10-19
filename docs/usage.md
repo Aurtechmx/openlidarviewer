@@ -169,7 +169,7 @@ Who may embed the viewer is decided in two places, and a host should set both.
 
 **1. Response headers (a deployer's server).** The shipped deploy headers set `Content-Security-Policy: frame-ancestors 'self'` (which replaces the older `X-Frame-Options: SAMEORIGIN`), so out of the box a browser lets the viewer embed only in a page on the same origin. To embed it cross-origin, edit that directive to a deliberate allow-list, for example `frame-ancestors 'self' https://portal.example.org`, in both `public/.htaccess` and `public/_headers`.
 
-**2. The viewer itself.** A static host that cannot send headers (GitHub Pages, an S3 or other bucket host) cannot set `frame-ancestors`, so the browser lets any page frame the viewer there. The page that frames the viewer also chooses the viewer's URL, so the URL cannot be what authorises it. The viewer therefore decides for itself:
+**2. The viewer itself.** A static host that cannot send headers (a static host or an object-store bucket) cannot set `frame-ancestors`, so the browser lets any page frame the viewer there. The page that frames the viewer also chooses the viewer's URL, so the URL cannot be what authorises it. The viewer therefore decides for itself:
 
 - A parent on the viewer's own origin is always trusted, with no configuration. A page served from the same origin needs nothing.
 - A parent on another origin is trusted only if the deployer built the viewer with that origin in `OLV_EMBED_ORIGINS`, a comma-separated list of origins that is empty by default:

@@ -292,7 +292,7 @@ See [`architecture.md`](architecture.md) for the full map.
 | `npm run test:watch` | Vitest in watch mode. |
 | `npm run test:e2e` | Playwright end-to-end tests (run `npx playwright install --with-deps chromium` first). |
 | `npm run test:smoke:widths` | The startup smoke spec at five viewport widths: 320, 375, 767, 768, 1440. One build and one preview server serve all five. |
-| `npm run test:e2e:devices` | Opt-in, not run in CI: the phone, tablet and device-agnostic specs under iPhone SE, iPhone 15 Pro Max, iPad Pro 11 and Pixel 7 emulation (`playwright.devices.config.ts`). Cases pinned to a desktop viewport carry the `@desktop-only` tag and are excluded. Emulation is not a device: a pass speaks to layout and touch, not to the renderer on real hardware. |
+| `npm run test:e2e:devices` | Opt-in, not run in CI: the phone, tablet and device-agnostic specs under phone and tablet device emulation (`playwright.devices.config.ts`). Cases pinned to a desktop viewport carry the `@desktop-only` tag and are excluded. Emulation is not a device: a pass speaks to layout and touch, not to the renderer on real hardware. |
 
 A `?debug=1` URL parameter logs a per-stage load-timing breakdown (read, decode, downsample, GPU upload, total) to the browser console. It is useful when profiling the load pipeline and is off in normal use.
 
@@ -428,7 +428,7 @@ matching `tests/myModule.test.ts`.
 | Browser | WebGPU | WebGL 2 fallback |
 |---------|--------|------------------|
 | Chrome / Edge | Default | Yes |
-| Firefox | Windows; macOS on Apple Silicon | Yes |
+| Firefox | Windows; macOS on arm64 | Yes |
 | Safari | iOS / macOS 26+ | Yes |
 
 Where WebGPU is unavailable the viewer automatically uses WebGL 2. The active backend is shown in the UI.
@@ -477,7 +477,7 @@ off under the other two. Specs must not assume either starting state.
 ## 15. Deployment
 
 `npm run build` emits static files in `dist/`. Host them on any static host
-(GitHub Pages, Netlify, S3/CloudFront, any CDN): there is no server
+(any static host, object store or CDN): there is no server
 component. For embedding, serve the same build and link with `?embed=1`.
 
 Embedding from another origin needs two settings. A host that can send headers

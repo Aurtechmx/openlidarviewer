@@ -2,7 +2,7 @@
  * measurementExport.ts
  *
  * Pure serializers that let placed measurements LEAVE the tool in open formats —
- * GeoJSON (for GIS / QGIS / web maps) and CSV (for spreadsheets). Both are an
+ * GeoJSON (for GIS software and web maps) and CSV (for spreadsheets). Both are an
  * open-format trust signal and the round-trip surface for survey/UAV users.
  *
  * Coordinates in `Measurement.points` are LOCAL (render-space). The caller

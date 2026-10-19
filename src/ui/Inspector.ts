@@ -1778,7 +1778,7 @@ export class Inspector {
       className: 'olv-bc-pill olv-layer-compare',
       type: 'button',
       text: 'Download difference (.asc)',
-      title: 'Save the signed elevation difference as a georeferenced ESRI ASCII grid for QGIS / ArcGIS',
+      title: 'Save the signed elevation difference as a georeferenced ESRI ASCII grid for GIS software',
     }) as HTMLButtonElement;
     diff.style.display = 'none';
     diff.addEventListener('click', () => this._cb.onExportDifference?.());

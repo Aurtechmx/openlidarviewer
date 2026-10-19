@@ -58,7 +58,7 @@ export const ROTATE_SPEED = 0.95;
  * rotation than a mouse drag across a 1440 px desktop. Lower rotate
  * speed makes inspection precise; higher damping factor (shorter glide)
  * makes the camera stop when the finger lifts instead of coasting off
- * the model. Picked empirically against an iPhone-class device.
+ * the model. Picked empirically against a phone-class device.
  */
 export const ROTATE_SPEED_TOUCH = 0.55;
 export const DAMPING_FACTOR_TOUCH = 0.18;

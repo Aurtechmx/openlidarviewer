@@ -83,7 +83,7 @@ False building is the share of non-building points called building.
 | pooled | 106765 | 0.702 | 0.914 | 0.479 | 0.541 | 0.783 | 0.752 | 0.001 | 0.037 |
 
 Cost: 2 ms to 11 ms per scene of roughly 9,000 points, measured on Node 26,
-darwin arm64, Apple M3 Max. Peak resident memory stayed under 90 MB across the
+darwin arm64, M3 Max. Peak resident memory stayed under 90 MB across the
 whole run, which is the whole test process and therefore an upper bound rather
 than the classifier's own footprint. Both figures are printed by
 `tests/classifierCorpusEval.test.ts` and are deliberately absent from the frozen

@@ -14,7 +14,7 @@ Use a modern Chromium-based browser (Chrome or Edge) with WebGL 2.0 support and 
 |---|---|---|
 | CPU | Modern dual-core processor | Quad-core or better |
 | RAM | 8 GB | 16 GB or more |
-| GPU | Integrated GPU with WebGL 2.0 | Dedicated GPU, or modern Apple Silicon / integrated GPU |
+| GPU | Integrated GPU with WebGL 2.0 | Dedicated GPU, or a modern integrated GPU |
 | Browser | WebGL 2.0 compatible | WebGL 2.0 and WebGPU-capable |
 | Storage | Space for local scan files | SSD recommended for large datasets |
 
@@ -48,7 +48,7 @@ For best performance, enable hardware acceleration, use a modern Chromium-based 
 
 ## Benchmarks
 
-Real-world figures (a 9.6 M-point drone LAZ survey and a 55 K-point iPhone scan, both opened from one drag-and-drop on a 2023 laptop (M3 Max)) are recorded in [`benchmarks.md`](benchmarks.md), alongside the synthetic stress runs that validate bounded residency and zero thrash up to 1 B-point streaming hierarchies. Hardware, browser, dataset, and the rendering detail you pick all change the numbers; the published figures are field observations, not a formal benchmark suite.
+Real-world figures (a 9.6 M-point drone LAZ survey and a 55 K-point phone scan, both opened from one drag-and-drop on a 2023 laptop (M3 Max)) are recorded in [`benchmarks.md`](benchmarks.md), alongside the synthetic stress runs that validate bounded residency and zero thrash up to 1 B-point streaming hierarchies. Hardware, browser, dataset, and the rendering detail you pick all change the numbers; the published figures are field observations, not a formal benchmark suite.
 
 ## Privacy
 

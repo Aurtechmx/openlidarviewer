@@ -38,7 +38,7 @@
  * device is capped at coverage sizing, which is the rung that reconstructs
  * nothing and keeps no history. Accumulation may rise above that cap only on
  * measured frame evidence from the device class in question, and no such
- * measurement exists: this programme has no phone, tablet or iPhone-class
+ * measurement exists: this programme has no phone, tablet or phone-class
  * WebKit runner, so the cap is where it stays. Taking the cap off on the
  * grounds that the memory arithmetic works would be answering the frame-budget
  * question with the memory-budget answer.

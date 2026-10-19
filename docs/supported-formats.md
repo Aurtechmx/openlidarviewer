@@ -9,7 +9,7 @@ This page lists the formats the viewer reads and writes, and the limits of each.
 | `LAS` | Drone / aerial LiDAR | Georeferenced; coordinate bridge applied |
 | `LAZ` | Drone / aerial LiDAR | Compressed LAS, decoded in-browser (laz-perf WASM) |
 | `E57` | Terrestrial laser scanners | ASTM E2807; coordinates, RGB, intensity, classification, normals; multi-scan files merged; acquisition grid preserved for structured scans; a file of about 900 MB or more is refused |
-| `PLY` | iPhone / mobile scans | Point clouds and meshes; RGB supported |
+| `PLY` | Phone / mobile scans | Point clouds and meshes; RGB supported |
 | `OBJ` | Mesh scans, 3D tools | Mesh vertices used as points |
 | `GLB` / `GLTF` | AR tools, mobile scans | Mesh vertices used as points; Draco-compressed files are refused |
 | `XYZ` | Survey / generic export | Whitespace-delimited text; optional RGB; chunked decoding over the in-memory file |
@@ -27,9 +27,9 @@ This page lists the formats the viewer reads and writes, and the limits of each.
 
 Point data: `LAS` 1.4 and 1.2 (either can be gzipped to `.las.gz`), `XYZ` and `ASC` through the batch converter and the Export tab, and `PLY`, `OBJ`, `XYZ` and `CSV` re-exports in real-world (global) coordinates. LAZ is not written. Images: `PNG` snapshots of the current view (orthographic RGB, height map, intensity, classification, depth, normal, contour with legend customisation). Reports: multi-page PDF technical reports (cover page, dataset summary, embedded image exports, annotations, measurements and technical notes; three built-in templates, including a cloud-derived Scan QA report). Working state (camera, render settings, colour mode, annotations, measurements, scan metadata) round-trips through the `.olvsession` JSON package.
 
-## iPhone and mobile scan exports
+## Phone and mobile scan exports
 
-OpenLiDARViewer opens exports from iPhone LiDAR and mobile scanning apps when they are saved as a supported format. `PLY`, `OBJ`, `GLB` (and self-contained `.gltf` with embedded buffers), `XYZ`, and `CSV` all work today. A `.gltf` that references an external `buffer.bin` needs to be exported as GLB or an embedded glTF instead. glTF vertex colours (COLOR_0) are read as linear light, as the glTF 2.0 specification defines them, and are encoded to sRGB for display; normals the file declares (NORMAL) are kept for the Normal colour mode and the point inspector. `USDZ` exports need conversion to a supported format first. What works depends on the app's export format, the file structure, browser memory, and the current implementation.
+OpenLiDARViewer opens exports from phone LiDAR and mobile scanning apps when they are saved as a supported format. `PLY`, `OBJ`, `GLB` (and self-contained `.gltf` with embedded buffers), `XYZ`, and `CSV` all work today. A `.gltf` that references an external `buffer.bin` needs to be exported as GLB or an embedded glTF instead. glTF vertex colours (COLOR_0) are read as linear light, as the glTF 2.0 specification defines them, and are encoded to sRGB for display; normals the file declares (NORMAL) are kept for the Normal colour mode and the point inspector. `USDZ` exports need conversion to a supported format first. What works depends on the app's export format, the file structure, browser memory, and the current implementation.
 
 ## Terrestrial laser scanners (E57)
 
@@ -37,7 +37,7 @@ OpenLiDARViewer opens exports from iPhone LiDAR and mobile scanning apps when th
 
 The parser decodes Cartesian coordinates and, where present, RGB colour, intensity, classification and per-point surface normals. It applies each scan's recorded pose (rotation and translation), drops points the file flags as invalid, and bridges global coordinates into the viewer's local space with the same coordinate bridge the LAS loader uses. Multi-scan E57 files are merged into a single cloud, and the file's generating software is read from the header and shown in the Scan Report.
 
-E57 exports from Trimble survey scanners were checked manually during development. No Trimble fixture is committed, so that check is not reproducible from this archive. Other standard E57 files, from Leica, FARO, Matterport and similar systems, follow the same ASTM format and are expected to work; E57 files that use uncommon or non-standard schema features may not.
+E57 exports from survey scanners were checked manually during development. No such fixture is committed, so that check is not reproducible from this archive. Other standard E57 files follow the same ASTM format and are expected to work; E57 files that use uncommon or non-standard schema features may not.
 
 ## Drone LiDAR and other professional point clouds
 
@@ -86,9 +86,7 @@ Recommended mobile formats:
 - XYZ / CSV: useful for raw point-coordinate workflows
 - LAS / LAZ: professional LiDAR formats if exported or converted
 
-Several iPhone LiDAR scanning apps (such as Polycam, Scaniverse, or 3D Scanner App) can export scans in these formats. Available formats and free-tier options differ between apps and can change, so check each app's current help documentation. Some formats may require a paid plan.
-
-OpenLiDARViewer has no affiliation with Apple or any third-party scanning app, and none of them endorses or sponsors it.
+Several phone LiDAR scanning apps can export scans in these formats. Available formats and free-tier options differ between apps and can change, so check each app's current help documentation. Some formats may require a paid plan.
 
 ## Notes
 

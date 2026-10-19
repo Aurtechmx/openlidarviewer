@@ -63,7 +63,7 @@ export function describeRemoteCopcError(err: unknown, url: string): string {
   const safeUrl = sanitizeUrlForDisplay(url);
   if (err instanceof RangeReadError) {
     if (err.code === 'range-unsupported') {
-      return `${err.message} Try hosting the file on S3 or a static CDN — most support range requests by default.`;
+      return `${err.message} Try hosting the file on an object store or a static host. Most support range requests by default.`;
     }
     if (err.code === 'transport') {
       return `${err.message} The host also needs to allow cross-origin (CORS) requests from this site.`;

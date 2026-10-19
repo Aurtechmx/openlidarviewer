@@ -23,7 +23,7 @@ npm install
 npm run dev
 ```
 
-Open the local URL it prints, then drop a scan onto the page or press "Launch a sample", which streams the swissSURFACE3D sample (83.8 MB) over the network. To build for static hosting (GitHub Pages, Netlify, or any CDN: it is just files):
+Open the local URL it prints, then drop a scan onto the page or press "Launch a sample", which streams the swissSURFACE3D sample (83.8 MB) over the network. To build for static hosting (any static host or CDN: it is just files):
 
 ```bash
 npm run build

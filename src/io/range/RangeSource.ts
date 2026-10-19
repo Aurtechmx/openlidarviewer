@@ -280,7 +280,7 @@ export function isBlockedHost(hostname: string): boolean {
  * Strip userinfo AND query parameters from a URL so it is safe to
  * surface in error messages, telemetry, or logs. The query string is
  * scrubbed because signed-URL schemes (Azure SAS, AWS presigned URLs,
- * Google Cloud Storage signed URLs) carry the credential in the query
+ * object-store signed URLs) carry the credential in the query
  * — leaking it into a thrown error would put a working bearer token
  * into the UI / console / sentry trail.
  *

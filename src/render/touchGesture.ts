@@ -6,8 +6,8 @@
  *
  * The inherited Three.js `OrbitControls` touch model interprets any
  * two-finger motion as either pinch-zoom or pan. That leaves twist
- * impossible: a user who learned the rotate gesture from Google Maps,
- * Procreate, or Photoshop iPad puts two fingers down, twists them, and
+ * impossible: a user who learned the rotate gesture from map and drawing apps
+ * or a tablet drawing app puts two fingers down, twists them, and
  * the camera dollies instead of rotating. This module fixes that by
  * decomposing every 2-pointer frame into three independent deltas:
  *
@@ -18,7 +18,7 @@
  * The three signals are mathematically orthogonal — a clean pinch
  * produces zero angle delta, a clean twist produces zero distance delta.
  * A user doing all three at once gets a proportional response on each
- * axis, which feels like physical paper and matches the Maps / Procreate
+ * axis, which feels like physical paper and matches common map and drawing apps
  * convention.
  *
  * Per-signal dead-zones suppress touchscreen noise. The recogniser only

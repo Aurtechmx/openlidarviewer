@@ -23,14 +23,14 @@
  *   - Any cloud-data iteration. Everything here is metadata-driven.
  *
  * Sources cited in the literature bounds:
- *   - Luetzenburg 2021 (Nature Scientific Reports) — iPhone-LiDAR
+ *   - Luetzenburg 2021 (Nature Scientific Reports) — phone-LiDAR
  *     accuracy + range bounds.
- *   - Krausková et al. 2025 (Sensors 25/6141) — iPhone-LiDAR walking-drift
+ *   - Krausková et al. 2025 (Sensors 25/6141) — phone-LiDAR walking-drift
  *     thresholds.
- *   - Furlan & Piazentim 2025 (Discover Geoscience) — iPhone outcrop bounds.
+ *   - Furlan & Piazentim 2025 (Discover Geoscience) — phone outcrop bounds.
  *   - Jiang 2025 (IET Cyber-Syst, peer-reviewed survey) — SLAM APE bounds.
  *   - Bolcek et al. 2025 (Sensors review) — spaceborne footprint specs.
- *   - Tondo et al. 2023 (Sensors) — iPhone temporal/edge artefacts.
+ *   - Tondo et al. 2023 (Sensors) — phone temporal/edge artefacts.
  *   - Lohani & Ghosh 2017 (Springer NASI A) — USGS Base Spec / ALS density.
  */
 
@@ -40,10 +40,10 @@
 
 /** The set of capture types the classifier can distinguish. */
 export type CaptureType =
-  | 'iphone-lidar'      // VCSEL-based handheld phone scan (also Polycam, 3D Scanner App, Scaniverse, SiteScape)
+  | 'iphone-lidar'      // VCSEL-based handheld phone scan (also common phone-scanning apps)
   | 'drone-lidar'       // UAV-mounted ALS (low-altitude drone LiDAR)
   | 'terrestrial'       // TLS (tripod-mounted terrestrial scanner)
-  | 'mobile-slam'       // Handheld SLAM scanner (NavVis, GeoSLAM)
+  | 'mobile-slam'       // Handheld SLAM scanner (commercial SLAM systems)
   | 'aerial-als'        // Manned-aircraft airborne laser scanning (USGS 3DEP class)
   | 'spaceborne'        // GEDI, ICESat-2, CALIOP
   | 'unknown';
@@ -66,7 +66,7 @@ export interface AccuracyBound {
 export interface ProvenanceFingerprint {
   readonly captureType: CaptureType;
   readonly confidence: Confidence;
-  /** Short human-readable label, e.g. "iPhone / handheld LiDAR". */
+  /** Short human-readable label, e.g. "Phone / handheld LiDAR". */
   readonly label: string;
   /** Why the classifier picked this — surfaced in the UI under "Signals". */
   readonly signals: readonly string[];
@@ -172,7 +172,7 @@ const AERIAL_DISCLAIMER =
  * inputs always produce the same fingerprint.
  *
  * Decision order is deliberate: explicit software strings beat indirect
- * heuristics (a Polycam export is iPhone-LiDAR even if the density happens
+ * heuristics (a phone-app export is phone-LiDAR even if the density happens
  * to look like something else); format hints win for clearly-tagged
  * streaming sources; numeric signatures are the fallback.
  */
@@ -222,7 +222,7 @@ const AERIAL_CAPTURE_TYPES: ReadonlySet<CaptureType> = new Set<CaptureType>([
  * signal can't say which ground-based method it is, so we don't fabricate
  * TLS/SLAM. Each `reasons` line is appended to the signals so the panel shows
  * what ruled airborne out. An empty `reasons` list, a non-aerial verdict
- * (terrestrial, iPhone, mobile SLAM) and every direct-evidence match pass
+ * (terrestrial, phone, mobile SLAM) and every direct-evidence match pass
  * through unchanged.
  */
 function ruleOutAerialCapture(
@@ -387,8 +387,8 @@ const TLS_SOFTWARE = [
   'leica cyclone',
   'riegl riscan',
   'z+f laser control',
-  // Trimble is already a recognised terrestrial vendor in TLS_SENSORS ('trimble x').
-  // Its processing suite belongs here for the same reason the other four do.
+  // The same vendor is already recognised in TLS_SENSORS; its processing suite
+  // belongs here for the same reason the other tokens do.
   'trimble realworks',
 ];
 
@@ -397,9 +397,9 @@ const SLAM_SOFTWARE = ['navvis', 'geoslam', 'lixel', 'emesent', 'kaarta'];
 /**
  * Lower-case a vendor string and flatten every run of non-alphanumerics to one
  * space, so a token written with spaces matches however the producer separated
- * the words. Writers punctuate these freely: "Trimble-RealWorks-8.1",
- * "FARO_SCENE", "Leica.Cyclone". Matching the raw string would find only the
- * spaced spelling and miss the rest, which is what let a Trimble RealWorks scan
+ * the words. Writers punctuate these freely: "Vendor-Suite-8.1",
+ * "VENDOR_SUITE", "Vendor.Suite". Matching the raw string would find only the
+ * spaced spelling and miss the rest, which is what let a hyphenated suite name
  * fall through the terrestrial tokens and be classified from density instead.
  */
 function normaliseVendorString(s: string): string {
@@ -408,10 +408,9 @@ function normaliseVendorString(s: string): string {
 
 /**
  * Production suites that only appear on manned-aircraft deliveries: the
- * TerraSolid family and GeoCue drive the classification step of most
- * national programmes, and LasMonkey is the tiling/QC tool the USGS 3DEP
- * contractors write into `generating_software`. LAStools is deliberately
- * absent; it processes everything from phone scans to ALS.
+ * classification and tiling/QC tools that national programmes write into
+ * `generating_software`. General-purpose LAS tools are deliberately absent;
+ * they process everything from phone scans to ALS.
  */
 const AERIAL_ALS_SOFTWARE = ['lasmonkey', 'terrascan', 'terrasolid', 'geocue'];
 
@@ -506,7 +505,7 @@ function matchFormat(signals: ScanSignals): ProvenanceFingerprint | null {
     ]);
   }
 
-  // PLY / OBJ / GLB / GLTF from consumer apps are the iPhone-LiDAR
+  // PLY / OBJ / GLB / GLTF from consumer apps are the phone-LiDAR
   // fingerprint when no other signal points elsewhere.
   if (fmt === 'glb' || fmt === 'gltf' || fmt === 'obj') {
     return phoneLidarFingerprint('medium', [
@@ -537,7 +536,7 @@ const PHONE_LIDAR_MAX_DENSITY_PER_SQM = 7225;
 const PROJECT_TILE_MIN_AREA_SQM = 500_000;
 
 function matchNumeric(signals: ScanSignals): ProvenanceFingerprint | null {
-  // High density on a small extent is the iPhone-LiDAR signature. Luetzenburg
+  // High density on a small extent is the phone-LiDAR signature. Luetzenburg
   // 2021 reports 7,225 pts/m² at 25 cm down to 150 pts/m² at 2.5 m for the
   // VCSEL 8×8×3×3 = 576-pts-per-flash pattern.
   if (signals.densityPerSqM !== undefined && signals.extent) {
@@ -637,7 +636,7 @@ function phoneLidarFingerprint(
   return {
     captureType: 'iphone-lidar',
     confidence,
-    label: 'iPhone / handheld LiDAR',
+    label: 'Phone / handheld LiDAR',
     signals,
     bounds: [
       {

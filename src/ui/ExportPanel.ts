@@ -217,8 +217,8 @@ export interface ExportPanelCallbacks {
     isCurrent: () => boolean,
   ) => Promise<'done' | 'stale'>;
   /**
-   * Export a site KML (annotations + measurements + viewpoints) for Google
-   * Earth / QGIS. Wired only when the host can supply a lat/lon transform.
+   * Export a site KML (annotations + measurements + viewpoints) for
+   * a KML viewer or GIS software. Wired only when the host can supply a lat/lon transform.
    */
   exportKml?: () => void;
   /**
@@ -1029,7 +1029,7 @@ export class ExportPanel {
       }
     }
 
-    // The map lane: everything that lands in Google Earth / QGIS as lon/lat.
+    // The map lane: everything that lands in KML viewers and GIS software as lon/lat.
     // Each entry is offered only when the host wires it, and each carries its
     // own readiness because they gate on different things: the site file needs
     // features to place, the outline needs only a known coordinate system.

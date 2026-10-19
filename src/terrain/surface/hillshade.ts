@@ -2,7 +2,7 @@
  * hillshade.ts
  *
  * Hillshade (shaded relief) and slope statistics from PRECOMPUTED slope/aspect
- * grids. Hillshade is the standard ESRI illumination model; aspect from
+ * grids. Hillshade is the standard illumination model; aspect from
  * `hornSlopeAspect` is the downslope direction in the math frame
  * (atan2(−dz/dy, −dz/dx) on our northing-up grids — see terrainDerivatives.ts),
  * which is the same frame `azimuthToMathRad` converts the sun azimuth into, so

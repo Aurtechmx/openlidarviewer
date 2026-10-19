@@ -101,7 +101,7 @@ export const contourMapExporter: ExportFactory = {
 
     // The output is the height-map raster (or the chosen overlay
     // background) with the contour parameters recorded in the scan-report
-    // metadata. External tools (QGIS, GDAL `gdal_contour`) can generate the
+    // metadata. External tools (GIS software, GDAL `gdal_contour`) can generate the
     // vector contour lines from the exported PNG when downstream callers
     // need them as geometry.
     return runStudioExport(

@@ -36,7 +36,7 @@ It is a viewer and an inspection tool, not a GIS or a survey-grade processing su
 ## Features
 
 - Inspect point-cloud datasets in a modern web interface, with nothing to install and nothing uploaded.
-- Open drone LiDAR (LAS, LAZ) and terrestrial laser-scanner data (E57, PTX, PTS). iPhone and mobile scan exports (PLY, OBJ, GLB/GLTF, XYZ, CSV) and Point Cloud Library (PCD) files open too.
+- Open drone LiDAR (LAS, LAZ) and terrestrial laser-scanner data (E57, PTX, PTS). Phone and mobile scan exports (PLY, OBJ, GLB/GLTF, XYZ, CSV) and Point Cloud Library (PCD) files open too.
 - Stream large COPC and EPT datasets progressively, octree node by octree node, with bounded memory and no full-file load.
 - Navigate game-style: Orbit, Walk, Fly, and Pan modes with WASD and mouse-look, plus Top / Iso / Oblique / Planar camera presets.
 - Measure distance, polyline, area, height, angle, slope, cross-section profile, and volume cut/fill, with editable points and JSON session export/import.
@@ -220,7 +220,7 @@ For large datasets, stream COPC (`.copc.laz`) or EPT (`ept.json`), which load pr
 <details>
 <summary><b>Format matrix and compatibility notes</b></summary>
 
-That covers iPhone and mobile scan exports (PLY, OBJ, GLB/GLTF; `USDZ` needs conversion first), terrestrial laser-scanner data in E57 (the ASTM E2807 format; a subset, cross-decoded against PDAL on one CloudCompare re-export as recorded in the claim register under E57-INGEST, with no conformance to that standard claimed) plus PTX and PTS, georeferenced drone LiDAR in LAS/LAZ, and PCD in all three encodings (ASCII, binary, binary-compressed). Large COPC and EPT datasets stream progressively, locally or over HTTP range requests from a URL, with bounded memory and no full-file load.
+That covers phone and mobile scan exports (PLY, OBJ, GLB/GLTF; `USDZ` needs conversion first), terrestrial laser-scanner data in E57 (the ASTM E2807 format; a subset, cross-decoded against PDAL on one re-exported scan as recorded in the claim register under E57-INGEST, with no conformance to that standard claimed) plus PTX and PTS, georeferenced drone LiDAR in LAS/LAZ, and PCD in all three encodings (ASCII, binary, binary-compressed). Large COPC and EPT datasets stream progressively, locally or over HTTP range requests from a URL, with bounded memory and no full-file load.
 
 Format support depends on the device (browser memory, GPU capacity) and on the data: its size, how it was preprocessed, and how complete OLV's reader for that format is. The per-format detail, including scanner and app compatibility, is the format matrix in [`docs/supported-formats.md`](docs/supported-formats.md).
 </details>
@@ -234,7 +234,7 @@ OpenLiDARViewer runs in the browser and depends on modern GPU-accelerated web re
 |---|---|---|
 | CPU | Modern dual-core | Quad-core or better |
 | RAM | 8 GB | 16 GB or more |
-| GPU | Integrated GPU with WebGL 2.0 | Dedicated GPU, or modern Apple Silicon / integrated GPU |
+| GPU | Integrated GPU with WebGL 2.0 | Dedicated GPU, or a modern integrated GPU |
 | Browser | WebGL 2.0 compatible | WebGL 2.0 and WebGPU-capable |
 
 Very large datasets are best handled as COPC or EPT; other very large formats may need downsampling or preprocessing. See [`docs/copc.md`](docs/copc.md) and [`docs/performance.md`](docs/performance.md).
@@ -245,9 +245,9 @@ Very large datasets are best handled as COPC or EPT; other very large formats ma
 
 OpenLiDARViewer includes a mobile-friendly interface for opening compatible point-cloud and 3D scan files from phones and tablets. On mobile: files open from the device file picker or a cloud file provider, Scan Intelligence shows as a compact panel, navigation uses touch gestures, measurement uses tap-based point selection, and rendering defaults to a mobile-safe performance mode.
 
-A typical workflow is to export a compatible scan from a mobile scanning app, save it to device storage or a cloud provider (such as iCloud Drive), open OpenLiDARViewer in a mobile browser, tap "Open scan from device," then inspect, measure, and export. For a practical test, capture a scan with an iPhone LiDAR app such as Polycam, Scaniverse or 3D Scanner App. Export it as GLTF/GLB, OBJ or PLY and open the file. Export formats, free-tier options, and pricing differ between apps and can change, so check each app's current help. Some formats may require a paid plan.
+A typical workflow is to export a compatible scan from a mobile scanning app, save it to device storage or a cloud storage provider, open OpenLiDARViewer in a mobile browser, tap "Open scan from device," then inspect, measure, and export. For a practical test, capture a scan with a phone LiDAR scanning app. Export it as GLTF/GLB, OBJ or PLY and open the file. Export formats, free-tier options, and pricing differ between apps and can change, so check each app's current help. Some formats may require a paid plan.
 
-On mobile, the browser, GPU and memory set the ceiling, and file size and point count decide how close a scan gets to it. Very large datasets may require desktop hardware, downsampling, tiling, or optimized formats. All third-party product names are used only for descriptive compatibility. OpenLiDARViewer has no affiliation with Apple, Polycam or any other scanning-app maker, and none of them endorses or sponsors it. Full detail is in [`docs/mobile-browser-support.md`](docs/mobile-browser-support.md).
+On mobile, the browser, GPU and memory set the ceiling, and file size and point count decide how close a scan gets to it. Very large datasets may require desktop hardware, downsampling, tiling, or optimized formats. Full detail is in [`docs/mobile-browser-support.md`](docs/mobile-browser-support.md).
 </details>
 
 ## Getting started
@@ -259,7 +259,7 @@ npm install
 npm run dev
 ```
 
-Open the local URL it prints, then drop a scan onto the page, or press "Launch a sample", which streams the swissSURFACE3D sample (83.8 MB) over the network. To build for static hosting (GitHub Pages, Netlify, or any CDN, since it is just files):
+Open the local URL it prints, then drop a scan onto the page, or press "Launch a sample", which streams the swissSURFACE3D sample (83.8 MB) over the network. To build for static hosting (any static host or CDN, since it is just files):
 
 ```bash
 npm run build
@@ -293,7 +293,7 @@ Each assumes a single drag-and-drop or URL open, with everything happening local
 - Inspection reporting. Annotate findings, measure distances / areas / slopes / angles / profiles, then export a multi-page PDF report (cover, dataset summary, embedded image exports, annotations, measurements, technical notes). Three templates and brand-aware accent + logo support.
 - Terrain analysis. Export height maps from drone LiDAR with legend customisation and unit-system control, useful for slope review, elevation comparison, and quick topographic figures. Cross-section profiles report 3D length, horizontal distance, vertical drop, and grade across any two picked points.
 - Classification QA. Export classification maps, toggle the colour mode to highlight specific classes, place annotations on misclassified regions, and round-trip the working state through `.olvsession`.
-- Mobile scan review. Open lightweight datasets (`.glb`, `.ply`, `.obj` from Polycam, Scaniverse, or similar) on tablets or phones. The viewer adapts rendering detail and EDL defaults for weaker GPUs so a phone scan is readable from the first frame.
+- Mobile scan review. Open lightweight datasets (`.glb`, `.ply`, `.obj` from a phone scanning app) on tablets or phones. The viewer adapts rendering detail and EDL defaults for weaker GPUs so a phone scan is readable from the first frame.
 </details>
 
 ## Under the hood
@@ -338,7 +338,7 @@ Point count, browser memory and GPU capability matter most for performance. Poin
 
 COPC streaming (local and remote) uses a view-dependent scheduler, hierarchy-aware eviction, a dispatch-pressure gate that bounds residency under 1B-synthetic-point stress, and picking against actively refining clouds. EPT streams through the same scheduler.
 
-For real-world figures (a 9.6M-point drone LAZ survey and a 55K-point iPhone scan, both from one drag-and-drop) see [`docs/benchmarks.md`](docs/benchmarks.md), [`docs/performance.md`](docs/performance.md), and [`docs/streaming.md`](docs/streaming.md).
+For real-world figures (a 9.6M-point drone LAZ survey and a 55K-point phone scan, both from one drag-and-drop) see [`docs/benchmarks.md`](docs/benchmarks.md), [`docs/performance.md`](docs/performance.md), and [`docs/streaming.md`](docs/streaming.md).
 </details>
 
 ## Limitations
@@ -385,7 +385,7 @@ The current release is **v0.7.0**. The dated history is in [CHANGELOG.md](CHANGE
 
 ### Help test OpenLiDARViewer
 
-OpenLiDARViewer improves through feedback from people who work with point clouds day to day: GIS, drone mapping, terrain analysis, hydrology, surveying, web mapping. Open a workflow you already know, on the live demo or a local build. Use one of your own authorised files, compare the values you care about against the tool you normally trust (ArcGIS, CloudCompare and PDAL are the common ones), and say what worked, what failed, and what was unclear.
+OpenLiDARViewer improves through feedback from people who work with point clouds day to day: GIS, drone mapping, terrain analysis, hydrology, surveying, web mapping. Open a workflow you already know, on the live demo or a local build. Use one of your own authorised files, compare the values you care about against the tool you normally trust, and say what worked, what failed, and what was unclear.
 
 The quick report takes five to ten minutes. A longer comparison against a reference tool (metadata, CRS, units, elevations, measurements, terrain products) is optional. Participation is voluntary and unpaid. Please do not submit confidential, restricted, or personal information, and do not send source datasets you are not free to redistribute. A failed file, an unexpected warning, or one confusing screenshot is worth sending. Email what you found to <info@aurtech.mx>.
 

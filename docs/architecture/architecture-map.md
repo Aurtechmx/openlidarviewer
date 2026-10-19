@@ -216,7 +216,7 @@ alongside `exportGeoContext`'s static → streaming → zero frame resolution
 
 Done: `exportKml` / `kmlStatus` (~83 lines) now live in `src/app/kmlActions.ts`
 alongside the new scan-area export, driven through a `KmlActionDeps` object of
-accessor functions. Keeping the two Google Earth products together puts each
+accessor functions. Keeping the two KML products together puts each
 one's readiness rule next to its export path, so a button cannot report ready for
 a reason the exporter does not honour. The polygon geometry and its fail-closed
 CRS gate are a separate pure module, `src/export/scanFootprint.ts`, testable with

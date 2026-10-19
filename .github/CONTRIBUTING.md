@@ -124,7 +124,7 @@ conversations, and linear history are required, with no direct pushes to `main`.
 ## Scientific contributions
 
 Not every contribution is code. Independent reproduction, a surveyed-checkpoint
-dataset, a cross-check against ArcGIS or PDAL, or a careful read of a validation
+dataset, a cross-check against PDAL or your usual reference tool, or a careful read of a validation
 report all help, and they feed the evidence record the releases depend on.
 [docs/collaboration/RESEARCH_COLLABORATION.md](../docs/collaboration/RESEARCH_COLLABORATION.md)
 explains what is useful and what we can offer in return. Open an issue or a

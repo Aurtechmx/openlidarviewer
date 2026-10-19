@@ -5,7 +5,7 @@
  * The Visual Export Studio ships in its own lazy chunk (`viewer.exportImage`
  * pulls it in on first use); the download triggers off the returned Blob. A
  * georeferenced ortho export returns world-file data and ships as a PNG + .pgw +
- * .prj ZIP that QGIS/ArcGIS place directly; every other export ships the bare
+ * .prj ZIP that GIS software place directly; every other export ships the bare
  * PNG. Packaging failures fall back to the bare PNG rather than sinking an
  * export that already rendered.
  *
@@ -99,7 +99,7 @@ export function exportImageAction(mode: ExportMode, deps: ExportImageActionDeps)
       }
       // Georeferenced ortho path: when the exporter returned world-file data
       // (true top-down ortho frame + known world origin + CRS WKT), the download
-      // is one ZIP — PNG + `.pgw` + `.prj` — that QGIS/ArcGIS place directly.
+      // is one ZIP — PNG + `.pgw` + `.prj` — that GIS software place directly.
       // Packaging failures fall back to the bare PNG.
       if (result.worldFile) {
         try {

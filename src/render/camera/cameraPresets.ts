@@ -22,7 +22,7 @@
  *               is a gimbal-lock case for spherical controls).
  *
  *   - Iso     — classic 45° azimuth, 35° elevation isometric pose
- *               (the same angle convention Blender / Maya use). The
+ *               (the common 3D-package angle convention). The
  *               horizontal heading is rotated 45° clockwise from the
  *               input horizontal axis so the analyst gets a clean
  *               three-quarter view of the dominant extent.
@@ -367,7 +367,7 @@ export function cameraPresetPose(
     }
     case 'iso': {
       // Classic 45° azimuth, 35.264° (= atan(1/√2)) elevation iso —
-      // the angle Blender's numpad-1+5 reaches and Maya's
+      // the angle common 3D packages reach and
       // viewport-iso uses. Heading is rotated 45° CW from the input
       // horizontal so the dominant extent reads at a three-quarter
       // angle.
@@ -411,7 +411,7 @@ export function cameraPresetPose(
 
 // ── Six standard (axis-aligned) views ──────────────────────────────
 //
-// The Polycam-style "look straight at a face" views: Top / Bottom along the
+// The "look straight at a face" views: Top / Bottom along the
 // world-up axis, and Front / Back / Left / Right around the two horizontal
 // axes. Distinct from the angled presets above — these look straight down an
 // axis so a wall or floor reads flat and can be measured without skew. Pairing

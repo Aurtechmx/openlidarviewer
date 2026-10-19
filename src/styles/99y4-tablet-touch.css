@@ -83,7 +83,7 @@
 }
 
 
-/* Portrait tablets narrower than 820 px (an iPad mini is 768 px): with every
+/* Portrait tablets narrower than 820 px (a small tablet is 768 px): with every
    header control at 44 px the right cluster is 589 px wide and the GitHub
    link sat past the right edge. It goes here; the Credits page in the same
    header links the source. 820 px and wider keep all three links. */

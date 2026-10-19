@@ -3,7 +3,7 @@
  *
  * On a touchscreen the browser's `dblclick` event does not reach a canvas that
  * carries `touch-action: none` and captures its pointers (the case on iOS/
- * WebKit, which is every browser on iPhone). So the double-tap that focuses the
+ * WebKit, which is every browser on iOS). So the double-tap that focuses the
  * camera on a point has to be recognised from the raw taps. This owns only that
  * decision — the time-and-distance test between two completed single taps — and
  * sees no DOM event, so it tests in Node.

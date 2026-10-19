@@ -2272,7 +2272,7 @@ function exportGeoContext(): GeoExportContext { return runExportGeoContext(repor
 const activeUpAxis = () => activeSpatialUpAxis({ activeCloud: () => scans.activeCloud(), streaming: () => !!viewer?.streamingCloud, crs: crsService });
 
 /**
- * The running-app seam the two Google Earth products write through (see
+ * The running-app seam the two KML products write through (see
  * `src/app/kmlActions.ts`). Accessors, not snapshots, so the lazily-bound Viewer
  * and the current CRS are read at call time.
  */

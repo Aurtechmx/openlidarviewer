@@ -2,7 +2,7 @@
  * changeRaster.ts
  *
  * Serialise a two-epoch elevation difference to an ESRI ASCII grid (`.asc`) —
- * the simplest georeferenced raster QGIS / ArcGIS read directly. The values are
+ * the simplest georeferenced raster GIS software read directly. The values are
  * the signed difference in metres (after − before; positive = gain); cells that
  * were empty in either epoch are written as NODATA, never as a real 0.
  *

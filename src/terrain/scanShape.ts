@@ -149,7 +149,7 @@ const OVERHANG_OBJECT = 0.2;
  * The load-bearing guard is OVERHANG_SOLID, NOT the aspect bar: a height field
  * reads ≈0% overhang however steep, so the AND can never promote a slope no
  * matter how low the aspect bar goes. The aspect bar only sets how COMPACT an
- * object must be. It was first tuned at 0.55 on one iPhone statue scan (Statue1:
+ * object must be. It was first tuned at 0.55 on one phone statue scan (Statue1:
  * aspect 0.64, 5.9% stacked) — but the SAME object captured with more ground
  * slab around it (Statue2: aspect 0.506, 4.4% stacked) widens the footprint and
  * slipped under 0.55, misrouting to terrain. Lowered to 0.45 so a moderately

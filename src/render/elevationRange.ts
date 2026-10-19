@@ -16,7 +16,7 @@
  * clip: returnNumber deliberately ranges on raw finite min/max (small
  * ordinals with no outlier failure mode — see its `colorForMode` case).
  *
- * The standard mitigation, used by CloudCompare, Potree, and the
+ * The standard mitigation, used by other point-cloud viewers and the
  * Entwine viewer: pick the [P, 100 - P] percentile band (defaults to
  * the 5th / 95th percentile) and map the colour ramp across that
  * band. Points above the upper percentile clamp to the top colour;

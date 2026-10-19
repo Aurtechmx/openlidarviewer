@@ -2,7 +2,7 @@
  * geojsonContours.ts
  *
  * the cheapest real downstream path. Emits the contour feature
- * model as GeoJSON that QGIS / Civil 3D (via QGIS) ingest directly. Each
+ * model as GeoJSON that GIS software ingest directly. Each
  * single-grade run becomes a LineString Feature carrying its elevation,
  * evidence grade, index flag, and confidence, so the recipient can style
  * or filter the uncertain spans rather than trusting one flat line.
@@ -18,7 +18,7 @@
  * CRS note (honest, documented): RFC 7946 assumes WGS84 lon/lat, but
  * LiDAR contours are in a projected CRS (UTM etc.). We emit the
  * coordinates in their native projected CRS and include the legacy
- * top-level `crs` member (the pre-RFC GeoJSON convention QGIS still
+ * top-level `crs` member (the pre-RFC GeoJSON convention GIS software still
  * reads) so the file is georeferenced in practice. When the CRS is
  * unknown we omit the member and the model warning explains the file is
  * not georeferenced.

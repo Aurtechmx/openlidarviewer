@@ -167,7 +167,7 @@ export function curatedUsageCategory(streamUrl: string): string {
  *
  * NL AHN4 was dropped: its open-data status could not be verified against
  * an authoritative AHN source, so the catalog no longer asserts it.
- * The S3 bucket is hosted by FLAI on AWS eu-central-1; CORS is open.
+ * The object-store bucket is hosted by FLAI in eu-central-1; CORS is open.
  * Bandwidth politeness: nothing preloads — user-initiated clicks only.
  */
 export const CURATED_LOCATIONS: readonly CuratedLocation[] = [

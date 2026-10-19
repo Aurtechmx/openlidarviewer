@@ -379,12 +379,12 @@ is not built.
 Chromium, Firefox, WebKit and Windows block a merge. The `e2e-firefox`,
 `e2e-webkit` and `windows` jobs run in `ci.yml` and are listed in `ci-green`'s
 `needs`, which the ruleset for `main` requires. Windows runs
-Chromium. The iPhone-shaped WebKit project runs in the cross-browser smoke
+Chromium. The phone-shaped WebKit project runs in the cross-browser smoke
 workflow, which sits outside `ci-green` and which no ruleset requires. Touch
-gestures run end to end on all three engines, and in the iPhone-shaped WebKit
+gestures run end to end on all three engines, and in the phone-shaped WebKit
 project, as synthesized pointer events. Multi-touch on a real device is
 unverified. An iOS simulator check drives real Mobile Safari on a pinned
-simulator (iOS 26.5, iPhone 17e) and has passed end to end, including a
+simulator (iOS 26.5, a pinned phone model) and has passed end to end, including a
 two-finger pinch. It runs when started by hand, and on a push that changes its
 own workflow or scripts, and is advisory until 20
 consecutive passes, counted by `scripts/ios-streak.mjs`.

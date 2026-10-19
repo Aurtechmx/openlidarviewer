@@ -89,8 +89,8 @@ precise reason rather than stalling: see the limitation below.
 
 - A remote host must be range- and CORS-capable. Streaming a COPC file
   from a URL needs the server to honour HTTP `Range:` requests *and* to allow
-  cross-origin requests (CORS). Most static hosts and object stores (S3, GCS,
-  and similar) do; an arbitrary web server may not. When a host cannot stream,
+  cross-origin requests (CORS). Most static hosts and object stores
+  do; an arbitrary web server may not. When a host cannot stream,
   the viewer says so plainly: a CORS-blocked or unreachable host, a host with
   no range support, or one that ignored the range and returned the whole file.
 - Remote URLs (COPC, EPT and 3D Tiles) must use a public host. Host names that
@@ -139,8 +139,7 @@ All three categories need the same CORS posture: a permissive `Access-Control-Al
 
 Pragmatic guidance:
 
-- Object stores: Amazon S3, Google Cloud Storage, Cloudflare R2, Backblaze B2 all serve EPT cleanly once CORS is configured on the bucket / origin.
-- Static hosts: any static host that passes the headers through (Netlify, Cloudflare Pages, GitHub Pages with CORS) works.
+- Object stores and static hosts that pass CORS headers through serve EPT cleanly once CORS is configured on the bucket or origin.
 - CDN caching: long-cache friendly. `ept.json` changes only when the dataset is rebuilt; hierarchy and tiles are immutable for a given dataset.
 
 ### Producing an EPT dataset

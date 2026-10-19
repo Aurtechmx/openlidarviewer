@@ -3,7 +3,7 @@
  *
  * The unified non-terrain panel, shown instead of the terrain Analyse panel
  * when a scan reads as a compact 3-D OBJECT or an INTERIOR space (a phone /
- * 360 / iPhone-LiDAR room) rather than a ground height field.
+ * 360 / phone-LiDAR room) rather than a ground height field.
  *
  *   - interior → a room report: dimensions, floor area, ceiling height,
  *     enclosed volume, floor/wall/ceiling planes, storeys, capture quality;

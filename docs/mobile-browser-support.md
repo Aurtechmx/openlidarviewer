@@ -9,7 +9,7 @@ OpenLiDARViewer supports mobile-friendly viewing and file loading for compatible
 Touch gestures are tested only as synthesized events, not on a real device.
 
 - Safari browser on iPhone devices
-- Chrome browser on iPhone devices (note that browsers on iOS use Apple's WebKit engine)
+- Chrome browser on iPhone devices (note that browsers on iOS use the WebKit engine)
 - Chrome browser on Android devices
 - Modern mobile browsers where WebGL 2 is available
 
@@ -19,7 +19,7 @@ WebGPU availability varies by browser and device. OpenLiDARViewer uses WebGPU wh
 
 To open a scan on an iPhone:
 
-1. Save a compatible file to device storage or iCloud Drive.
+1. Save a compatible file to device storage or a cloud storage provider.
 2. Open OpenLiDARViewer in a mobile browser.
 3. Tap "Open scan."
 4. Select the file in the native file picker.
@@ -35,9 +35,7 @@ OpenLiDARViewer can open compatible exports from mobile scanning apps. Useful fo
 - XYZ / CSV for raw point-coordinate workflows
 - LAS / LAZ, which are more common in drone and professional LiDAR workflows
 
-Several iPhone LiDAR scanning apps (such as Polycam, Scaniverse, or 3D Scanner App) can export scans in formats OpenLiDARViewer reads, including GLTF/GLB, OBJ, and PLY. Export formats, free-tier availability, and pricing differ between apps and can change over time, so check each app's current help documentation before relying on a particular export. Some formats may require a paid plan.
-
-OpenLiDARViewer is not affiliated with, endorsed by, or sponsored by Apple or any third-party scanning app, including those named above. Third-party product names are used only for descriptive compatibility and workflow documentation.
+Several phone LiDAR scanning apps can export scans in formats OpenLiDARViewer reads, including GLTF/GLB, OBJ, and PLY. Export formats, free-tier availability, and pricing differ between apps and can change over time, so check each app's current help documentation before relying on a particular export. Some formats may require a paid plan.
 
 ## The phone layout
 
@@ -45,7 +43,7 @@ The panels sit in a bottom sheet with Data, Tools, Analyse, Export and View tabs
 
 ## Tablets
 
-A tablet counts as a touch layout when it has a touch screen at least 768 px wide and 600 px tall, a coarse primary pointer and no hover. An iPad with a trackpad attached still counts. On such a tablet the controls outside the rails, dock and dialogs are 44 px targets, and panel close buttons and Frame all are 48 px. This covers the navigation card and its speed slider, the scan-state items, the empty state, the command palette, the shortcut sheet, the tour, the floating panels, the location bar buttons, the catalogue inputs, the View panel head, and checkbox labels in the rails, each of which is a 44 px box. The view cube grows to 144 px with 44 px circular buttons, a long label wraps instead of widening the button, and the cube moves to the right of the left rail while that rail is open. Mouse and phone layouts keep their sizes.
+A tablet counts as a touch layout when it has a touch screen at least 768 px wide and 600 px tall, a coarse primary pointer and no hover. A tablet with a trackpad attached still counts. On such a tablet the controls outside the rails, dock and dialogs are 44 px targets, and panel close buttons and Frame all are 48 px. This covers the navigation card and its speed slider, the scan-state items, the empty state, the command palette, the shortcut sheet, the tour, the floating panels, the location bar buttons, the catalogue inputs, the View panel head, and checkbox labels in the rails, each of which is a 44 px box. The view cube grows to 144 px with 44 px circular buttons, a long label wraps instead of widening the button, and the cube moves to the right of the left rail while that rail is open. Mouse and phone layouts keep their sizes.
 
 ## Touch navigation
 

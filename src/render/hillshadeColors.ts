@@ -22,7 +22,7 @@
  *
  * The sun direction is given as `(azimuth, altitude)` in degrees — the
  * convention every cartographer learns. Default `azimuth = 315°` (NW)
- * and `altitude = 45°` matches the QGIS / ArcMap default.
+ * and `altitude = 45°` matches the common GIS default.
  */
 
 /** A sun position over the scene, in cartographic convention. */
@@ -33,7 +33,7 @@ export interface SunPosition {
   altitudeDeg: number;
 }
 
-/** Default sun — NW direction, 45° above horizon (the QGIS / ArcMap baseline). */
+/** Default sun — NW direction, 45° above horizon (the common GIS baseline). */
 export const DEFAULT_SUN: SunPosition = {
   azimuthDeg: 315,
   altitudeDeg: 45,

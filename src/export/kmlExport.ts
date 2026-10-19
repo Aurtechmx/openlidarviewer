@@ -2,7 +2,7 @@
  * kmlExport.ts
  *
  * A pure serializer that lets placed annotations, measurements, and saved
- * viewpoints LEAVE the tool as a KML 2.2 document for Google Earth / QGIS, in
+ * viewpoints LEAVE the tool as a KML 2.2 document for KML viewers and GIS software, in
  * georeferenced lon/lat/alt. It mirrors the GeoJSON/CSV path in
  * `measurementExport.ts`: the same "not survey-grade" honesty caveat, a carried
  * CRS name + unit label, and a caller-injected coordinate transform.
@@ -333,7 +333,7 @@ function sourceElevationLine(input: KmlExportInput, sourceZ: number): string {
 
 function caveatBlock(input: KmlExportInput): string {
   // The altitude treatment belongs in the human-readable block too — a mode
-  // tag is invisible in Google Earth's UI, and a dropped height should not be
+  // tag is invisible in KML viewers, and a dropped height should not be
   // something the reader has to open the XML to discover.
   const crs = input.crsName ?? 'unknown CRS';
   return `CRS: ${crs}. Units: ${input.unitLabel}. ${altMode(input).reason} ${input.notSurveyGradeNote}`;
@@ -519,7 +519,7 @@ function viewpointPlacemark(v: KmlViewpoint, input: KmlExportInput): string {
  * volume measurement and the scan-area footprint.
  *
  * A `<Polygon>` with no `<PolyStyle>` is drawn with the reader's default, which
- * in Google Earth is an opaque white fill: it hides the map under a white
+ * in a KML viewer is an opaque white fill: it hides the map under a white
  * block and buries the outline. This declares an explicit outline with a light
  * translucent fill, so the region reads as a highlight over the imagery.
  *

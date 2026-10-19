@@ -75,13 +75,13 @@ export interface StageOptions {
 }
 
 /**
- * iPhone-Safari single-tab memory cap is empirically around 350-500 MB; LAS
+ * mobile Safari single-tab memory cap is empirically around 350-500 MB; LAS
  * captures above ~1.2 GB on disk routinely crash. Threshold deliberately
  * generous — we'd rather a borderline file pass than a real one block.
  */
 const MOBILE_MEMORY_WARN_BYTES = 1_200_000_000;
 /**
- * iPhone-Safari cellular streaming threshold. Above ~250 MB the user is
+ * mobile Safari cellular streaming threshold. Above ~250 MB the user is
  * almost certainly going to want the warning; below it, the request is
  * cheaper than a typical app update.
  */
@@ -568,7 +568,7 @@ export class Stage {
     // sentence that read as quaternary fine-print despite carrying
     // tertiary-level semantic information (what kinds of scans this
     // viewer accepts). Icon chips make the meaning instant — a user
-    // looking for "does this work with my iPhone scan?" sees the answer
+    // looking for "does this work with my phone scan?" sees the answer
     // without parsing prose.
     const captureKinds = el('div', { className: 'olv-empty-capture-kinds' });
     const KINDS: ReadonlyArray<{ icon: string; label: string }> = [
@@ -585,12 +585,12 @@ export class Stage {
         label: 'Drone LiDAR',
       },
       {
-        // iPhone: rounded body, screen rim, speaker slit + home indicator.
+        // phone: rounded body, screen rim, speaker slit + home indicator.
         icon: `<svg viewBox="0 0 16 16" aria-hidden="true" xmlns="http://www.w3.org/2000/svg">
 <rect x="4" y="1" width="8" height="14" rx="1.6" fill="none" stroke="currentColor" stroke-width="1.3"/>
 <rect x="6.6" y="2.4" width="2.8" height="0.7" rx="0.35" fill="currentColor"/>
 <rect x="6" y="12.6" width="4" height="0.6" rx="0.3" fill="currentColor" opacity="0.55"/></svg>`,
-        label: 'iPhone scans',
+        label: 'Phone scans',
       },
       {
         // Terrestrial laser scanner on tripod: scanner body + 3-leg tripod.
@@ -606,7 +606,7 @@ export class Stage {
     ];
     const CHIP_TITLES: Readonly<Record<string, string>> = {
       'Drone LiDAR': 'Drone and aircraft LiDAR surveys',
-      'iPhone scans': 'iPhone, iPad and handheld scanner captures',
+      'Phone scans': 'Phone, tablet and handheld scanner captures',
       'Terrestrial laser': 'Tripod-mounted terrestrial laser scanners',
     };
     for (const k of KINDS) {

@@ -79,7 +79,7 @@ export function renderProvenance(
     tip: 'Set how this scan was captured if the automatic guess is wrong.',
   });
   const options: Array<[CaptureType, string]> = [
-    ['iphone-lidar', 'iPhone / handheld'],
+    ['iphone-lidar', 'Phone / handheld'],
     ['drone-lidar', 'Drone / UAV ALS'],
     ['terrestrial', 'Terrestrial laser scan'],
     ['mobile-slam', 'Mobile SLAM'],

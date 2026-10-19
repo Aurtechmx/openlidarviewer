@@ -41,7 +41,7 @@ and the server has to support range requests and CORS:
 - CORS: `Access-Control-Allow-Origin` covering the viewer's origin
   (`*` works), since the viewer is a browser page fetching cross-origin.
 
-Public object stores (S3 and compatible) provide both when configured to.
+Public object stores provide both when configured to.
 The Open-from-URL section on the start screen states the same two
 requirements behind its "Connection requirements" disclosure.
 

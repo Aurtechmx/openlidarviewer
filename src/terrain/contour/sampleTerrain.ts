@@ -4,7 +4,7 @@
  * Read the analysed terrain at a single DTM cell — bare-earth elevation, slope,
  * and above-ground (canopy) height. The Analyse panel calls this when the user
  * clicks a preview raster, turning the static surface into a point-query tool
- * (the QGIS "Point Sampling Tool" idea, scoped to the grids we already hold).
+ * (a GIS point-sampling tool idea, scoped to the grids we already hold).
  *
  * Pure-data: takes the grids it needs structurally, so it is unit-testable with
  * tiny fixtures and works directly on an AnalyseContoursResult.

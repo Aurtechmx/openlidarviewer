@@ -127,7 +127,7 @@ const PRESETS: ReadonlyArray<RgbAppearancePreset> = [
   {
     id: 'mobile-lidar',
     label: 'Mobile LiDAR',
-    description: 'iPhone / SLAM indoor scans — stronger exposure compensates for low-light capture, gentler gamma rescues underexposed midtones.',
+    description: 'Phone / SLAM indoor scans: stronger exposure compensates for low-light capture, gentler gamma rescues underexposed midtones.',
     settings: { exposure: 1.2, contrast: 1.1, saturation: 1.0, gamma: 1.15, temperature: -0.05, tint: 0 },
   },
   {

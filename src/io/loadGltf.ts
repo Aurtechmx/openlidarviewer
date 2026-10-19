@@ -467,8 +467,8 @@ export async function loadGltf(
   const rawJson = (raw as {
     json?: { asset?: { generator?: string }; images?: unknown[]; materials?: unknown[] };
   }).json;
-  // The glTF `asset.generator` string (e.g. "Polycam", "Scaniverse",
-  // "RealityKit") is the capture app's stamp — the honest home for it is the
+  // The glTF `asset.generator` string (a capture app's name)
+  // is the capture app's stamp, and it belongs in the
   // same declared-software field a LAS "Generating Software" record uses. The
   // display profile reads it (via metadata.sourceSoftware) for high-confidence
   // handheld-capture identification. Many exports omit it, in which case the

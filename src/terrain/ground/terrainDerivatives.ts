@@ -2,7 +2,7 @@
  * terrainDerivatives.ts
  *
  * Pure-data leaf — first-order terrain derivatives (slope and
- * aspect) computed with Horn's 3x3 method, the same estimator ArcGIS and
+ * aspect) computed with Horn's 3x3 method, the same estimator GIS software and
  * GDAL use. It replaces the previous crude "largest absolute drop to a
  * 4-neighbour" slope, which was anisotropic (it over-reported slope along
  * the axes and under-reported it on the diagonals) and had no aspect.
@@ -22,7 +22,7 @@
  *
  * Aspect is the DOWNSLOPE direction −∇z = (−dz/dx, −dz/dy) expressed as a
  * math-frame angle (CCW from east; π/2 = north). Because dz/dy here is
- * +∂z/∂northing, BOTH components must be negated — the ESRI textbook form
+ * +∂z/∂northing, BOTH components must be negated — the textbook form
  * atan2(dz/dy, −dz/dx) assumes image rows (row+1 = south) and mirrored our
  * aspect north–south (v0.4.3 bug: hillshade lit the wrong flank).
  *
@@ -229,7 +229,7 @@ export function hornSlopeAspect(
       const dzdy = (g + 2 * h + ii - (a + 2 * b + c)) / (8 * cellMetresY);
       slope[i] = Math.hypot(dzdx, dzdy) * zs;
       // Aspect = downslope direction −∇z in the math frame: negate BOTH
-      // gradient components. atan2(+dzdy, −dzdx) (the image-row ESRI form)
+      // gradient components. atan2(+dzdy, −dzdx) (the image-row form)
       // mirrored aspect north–south on this northing-up grid.
       aspect[i] = dzdx === 0 && dzdy === 0 ? 0 : Math.atan2(-dzdy, -dzdx);
     }

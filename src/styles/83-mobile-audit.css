@@ -88,7 +88,7 @@
   /* Small, dim chevron — restraint on a chip. */
   .olv-collapsed .olv-chevron { font-size: var(--text-sm); }
 
-  /* ── Measure toolbar → vertical icon RAIL (Photoshop / Blender pattern) ──
+  /* ── Measure toolbar → vertical icon RAIL (common design-tool pattern) ──
      The top-stacked strip blanketed the scan on a phone. Here the toolbar
      becomes a slim glass rail pinned to the LEFT edge and centred vertically:
      a column of icon tools, a hairline divider, then the action
@@ -204,7 +204,7 @@
 body:not(.olv-has-scan) .olv-nav-prompt,
 body:not(.olv-has-scan) .olv-touch-hint { display: none !important; }
 
-/* Capture-kinds chip row — drone / iPhone / terrestrial laser. Each chip
+/* Capture-kinds chip row — drone / phone / terrestrial laser. Each chip
  * pairs a monoline brand-cyan icon with a label, so a first-time visitor
  * scanning the empty state recognises "my capture type works here"
  * instantly. Sits as tertiary visual weight: bigger and more confident

@@ -72,7 +72,7 @@ spatially-blocked or field checkpoint.
 Automated tests cover correctness against synthetic truth. Before a release
 that touches terrain export or georeferencing, also run these by hand:
 
-1. Open a DEM GeoTIFF in QGIS or GDAL and confirm it is georeferenced, the raster lands in the right place over a basemap, the cell size and
+1. Open a DEM GeoTIFF in a GIS or GDAL and confirm it is georeferenced, the raster lands in the right place over a basemap, the cell size and
    origin match the source, and `gdalinfo` reports the expected CRS/EPSG and
    value range (with NODATA honoured, not rendered as 0).
 2. Open the Esri ASCII Grid (`.asc`) in the same tool and confirm it

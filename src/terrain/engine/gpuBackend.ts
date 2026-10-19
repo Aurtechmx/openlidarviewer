@@ -3,7 +3,7 @@
  *
  * The WebGPU compute backend of the {@link TerrainRasterEngine}. Phase 1
  * scope (tech evaluation 2026-06 §1): the embarrassingly-parallel
- * DERIVATIVES kernels only — Horn slope/aspect and ESRI hillshade as WGSL
+ * DERIVATIVES kernels only — Horn slope/aspect and standard hillshade as WGSL
  * compute over a grid. Point→grid scatter (`gridFromPoints`) and the
  * ground filter (`groundFilterPass`) DELIBERATELY delegate to the same CPU
  * functions as the CPU backend: float-min scatter is atomics-bound on GPU
@@ -289,7 +289,7 @@ fn horn_main(@builtin(global_invocation_id) gid : vec3<u32>) {
 `;
 
 /**
- * ESRI hillshade from cached slope/aspect — the WGSL twin of
+ * Standard hillshade from cached slope/aspect — the WGSL twin of
  * `shadeFromSlopeAspect` (surface/hillshade.ts). Coverage AND finiteness
  * are pre-folded into `cov` on the CPU. floor(x + 0.5) reproduces JS
  * Math.round (half-up) — WGSL round() is half-to-even and would diverge.
