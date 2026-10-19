@@ -23,9 +23,11 @@ const HOST_PAGE = (viewerUrl: string): string => `<!doctype html><meta charset="
 
 test('a page that frames the viewer cannot authorise itself with ?embedParent', async ({ page, baseURL }) => {
   test.skip(!!process.env.OLV_DEPLOY_ROOT, 'the shipped headers already refuse cross-origin framing');
-  // Runs in every frame before its own scripts: records that a sentinel message arrived.
+  // Runs in every frame before its own scripts: records that a sentinel message
+  // arrived from the host page, which is served on 127.0.0.1 below.
   await page.addInitScript(() => {
     addEventListener('message', (e: MessageEvent) => {
+      if (!/^http:\/\/127\.0\.0\.1:\d+$/.test(e.origin)) return;
       if ((e.data as { sentinel?: number } | null)?.sentinel === 1) (window as unknown as { __sentinelSeen?: boolean }).__sentinelSeen = true;
     }, true);
   });
