@@ -56,9 +56,10 @@ prove the files arrived intact, and `release:verify` proves they belong to the
 release they claim. The release workflow attests build provenance for each
 archive and for the SBOM through Sigstore, so `gh attestation verify` shows
 that an archive came from that workflow at the tagged commit. `SHA256SUMS` and
-the release manifest carry no signature of their own. Release tags cannot be
-moved or deleted once published, so a published citation keeps pointing at the
-bytes it was issued against.
+the release manifest carry no signature of their own. A published citation
+keeps pointing at the bytes it was issued against only while its release tag
+stays where it is. Whether tags can be moved or deleted is a repository setting
+on GitHub, and this file cannot attest to it (see Release trust).
 
 ### Release trust
 

@@ -6,7 +6,7 @@
 import { fileURLToPath } from 'node:url';
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
-import { lintPages, readMirroredPolicy } from '../scripts/lint-csp-html.mjs';
+import { lintPages, policyFromHtaccess, readMirroredPolicy } from '../scripts/lint-csp-html.mjs';
 import { hashSource, inlineProblems } from '../scripts/lib/cspInline.mjs';
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
@@ -64,6 +64,36 @@ describe('inlineProblems', () => {
   it('flags inline event handlers and javascript: URLs under a policy with no unsafe-inline', () => {
     const problems = inlineProblems('p.html', page('<a href="javascript:void 0" onclick="x()">a</a>'), policy);
     expect(problems.map((p) => p.includes('event handler') || p.includes('javascript:'))).toEqual([true, true]);
+  });
+});
+
+describe('inline handlers that follow no whitespace', () => {
+  const strict = "default-src 'self'; script-src 'self'";
+  it.each([
+    ['a closing double quote', '<a href="x"onclick="go()">x</a>'],
+    ['a closing single quote', "<a href='x'onclick='go()'>x</a>"],
+    ['a slash', '<img/onerror=go()>'],
+    ['whitespace', '<a href="x" onclick="go()">x</a>'],
+  ])('flags a handler after %s', (_name, markup) => {
+    const problems = inlineProblems('p.html', page(markup), strict);
+    expect(problems.join('\n')).toMatch(/inline event handler/);
+  });
+
+  it('does not flag an attribute that merely starts with "on" inside a value or text', () => {
+    expect(inlineProblems('p.html', page('<p title="turn on">on = off</p><a href="x">session on</a>'), strict)).toEqual([]);
+  });
+});
+
+describe('the policy read from .htaccess', () => {
+  const live = 'Header always set Content-Security-Policy "default-src \'self\'; script-src \'self\'"';
+  const old = '#Header always set Content-Security-Policy "default-src \'none\'"';
+
+  it('skips a commented-out header, as check-built-csp does', () => {
+    expect(policyFromHtaccess(`${old}\n  # ${live}\n${live}\n`)).toBe("default-src 'self'; script-src 'self'");
+  });
+
+  it('is null when the only header is commented out', () => {
+    expect(policyFromHtaccess(`${old}\n`)).toBeNull();
   });
 });
 
