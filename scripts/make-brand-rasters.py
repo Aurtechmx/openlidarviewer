@@ -52,7 +52,8 @@ ICE = "#C9F6FF"
 WHITE = "#FFFFFF"
 
 WORDMARK = "OpenLiDARViewer"
-TAGLINE = "Open LAS, LAZ, E57, COPC and other point-cloud files in a browser tab. Files are read on your device and are not uploaded."
+# Set as separate lines; each is shrunk to fit if it would run past the edge.
+TAGLINE = ("LiDAR and point-cloud viewer that runs in the browser.", "Local files stay on your device.")
 
 # (centre offset, rx, ry) in a 100-unit box centred on the sphere.
 RINGS = [(-18, 30, 5.5), (-6.5, 44, 7.5), (5, 48, 8.5), (16, 46, 8.0)]
@@ -198,11 +199,22 @@ def text_path(font: TTFont, text: str, size: float, x: float, baseline: float, t
     return pen.getCommands(), cx * scale
 
 
+def tagline_paths(size: float, x: float, baseline: float, max_w: float, leading: float = 1.3) -> str:
+    """Path data for every TAGLINE line, one size for all lines, fitted to max_w."""
+    font = load_font("Regular")
+    widest = max(text_path(font, line, size, x, baseline)[1] for line in TAGLINE)
+    if widest > max_w:
+        size *= max_w / widest
+    return "".join(text_path(font, line, size, x, baseline + i * size * leading)[0] for i, line in enumerate(TAGLINE))
+
+
 def brand_logo_svg() -> str:
     """Horizontal lockup on the #030817 field, all vector."""
-    w, h = 1200, 360
-    word, _ = text_path(load_font("Medium"), WORDMARK, 118, 330, 190, -0.02)
-    tag, _ = text_path(load_font("Regular"), TAGLINE, 38, 334, 262)
+    h = 360
+    word, word_w = text_path(load_font("Medium"), WORDMARK, 118, 330, 190, -0.02)
+    # The canvas is as wide as the wordmark needs, so neither line is clipped.
+    w = math.ceil(330 + word_w + 50)
+    tag = tagline_paths(38, 334, 252, w - 334 - 50)
     return (
         f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {w} {h}" width="{w}" height="{h}">'
         f"<defs>{emblem_defs('l')}</defs>"
@@ -236,7 +248,7 @@ def terrain_dots(w: int, h: int) -> str:
 def og_card_svg() -> str:
     w, h = 1200, 630
     word, _ = text_path(load_font("Medium"), WORDMARK, 92, 392, 272, -0.02)
-    tag, _ = text_path(load_font("Regular"), TAGLINE, 31, 396, 330)
+    tag = tagline_paths(31, 396, 326, 1200 - 396 - 60)
     return (
         f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {w} {h}" width="{w}" height="{h}">'
         f"<defs>{emblem_defs('o')}"
