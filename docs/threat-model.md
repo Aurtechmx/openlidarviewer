@@ -35,9 +35,20 @@ is bounded by the browser (its CORS, Private Network Access controls, and the
 `connect-src` CSP) not by this client-side validation. OLV does not claim to be
 SSRF-proof or to guarantee a public destination.
 
-Cross-site scripting is handled by a strict Content-Security-Policy. The single
-`innerHTML` sink is enforced static-only by `lint:unsafe-html`, and there is no
-`eval` or `new Function`.
+Cross-site scripting is handled by a strict Content-Security-Policy, and there is
+no `eval` or `new Function`. The places where the app turns a string into markup
+are few and enumerated: the `unsafeHtml` prop of `el()` in `src/ui/dom.ts` (which
+assigns `innerHTML`), four direct `innerHTML` assignments (`NavBar.ts`,
+`FullscreenToggle.ts`, two in `AnalysePanel.ts`) and one `insertAdjacentHTML` in
+the profile chart of `MeasurePanel.ts`. Each is fed static markup or markup built
+from numbers. `tests/unsafeHtmlGuard.test.ts` holds the `unsafeHtml` and
+`innerHTML` sites to a one-to-one reviewed list, and `lint:unsafe-html` scans every
+file under `src/` for those sinks and for `outerHTML`, `insertAdjacentHTML`,
+`createContextualFragment`, `DOMParser` and `document.write`, with multi-line
+values included. It fails when a user-data identifier (a file name, CRS WKT,
+annotation text) appears in what reaches a sink, and when one of the last five
+appears anywhere that is not on its reviewed list. That is a heuristic backstop,
+not a proof; review is the primary control.
 
 Framing and the embed bridge. The viewer sets `frame-ancestors 'self'` through
 the headers in `public/_headers` and `public/.htaccess`, which keeps other sites
