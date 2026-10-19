@@ -132,4 +132,4 @@ maintained.
 | Version | Supported |
 |---|---|
 | Latest (`main`) | Yes |
-| Older versions | Best effort |
+| Older versions | No |

@@ -12,6 +12,8 @@ npm install
 npm run dev
 ```
 
+Node.js `^22.18.0` or `>=24.11.0` is required (the `engines` field in `package.json`).
+
 ## Reporting bugs
 
 Open a GitHub issue and include:
@@ -56,16 +58,13 @@ Cut every branch from current `main`. Branching from another open PR is
 sometimes the only sensible thing to do, and when you do it, say so on the
 `Stacked on:` line, because it changes how the branch has to be landed.
 
-The reason it matters is squash merging. When the parent PR is squashed, its
-commits are replaced by one new commit that your branch has never seen, so
-they never become ancestors of `main` and they keep showing up in your review
-surface. One branch here arrived at 103 commits and 56 files, of which 48 were
-byte-identical to `main`: eight files of work behind forty-eight files of
-noise. Rebasing onto current `main` removes them. `npm run lint:pr-hygiene`
-reports the count, and CI runs it on every PR.
+Branches are squash merged. When the parent PR is squashed, its commits are
+replaced by one new commit that your branch has never seen, so they never
+become ancestors of `main` and they keep showing up in your review surface.
+Rebasing onto current `main` removes them. `npm run lint:pr-hygiene` reports the
+count, and CI runs it on every PR.
 
-Two diffs answer two different questions, and mixing them up is how a healthy
-branch gets mistaken for a broken one:
+Two diffs answer two different questions:
 
 ```bash
 git diff --name-only origin/main...HEAD   # what a reviewer sees
@@ -83,9 +82,8 @@ behind. A file that appears in the three-dot diff while being identical between
 New functionality ships with automated tests covering it. This is a
 requirement of the project, not a preference. It applies to bug fixes too: a
 fix comes with a test that fails before the change and passes after. That
-second rule matters more than it sounds, because a fix without a failing test
-proves only that the code changed, not that the bug was understood, and the
-suite stayed green through all eighteen defects corrected in v0.6.2.
+second rule matters because a fix without a failing test proves only that the
+code changed, not that the bug was understood.
 
 The algorithmic core is test-first (Vitest); the renderer is covered by
 Playwright. Where a change corrects a published number or a declared unit,
@@ -101,11 +99,7 @@ Three things enforce this rather than trusting the author:
 - the release gate refuses to produce an evidence record if any mandatory
   stage did not run, which includes coverage and the unit suite.
 
-A change that genuinely cannot be tested should say so in the pull request and
-explain why. Reviewers usually read that as a design question rather than a
-testing one, because the parts of this codebase that resist testing are almost
-always the parts doing too much at once, and the fix is to split them before
-writing the test.
+A change that cannot be tested should say so in the pull request and explain why.
 
 ## Coding style
 
@@ -137,12 +131,11 @@ explains what is useful and what we can offer in return. Open an issue or a
 discussion to start, or email <info@aurtech.mx> for data you cannot post
 publicly.
 
-## A note on honesty
+## Describing features
 
 Do not describe a format, feature, or accuracy level as supported unless the
-code actually supports it. Anything still in progress should not be listed
-as a feature. Measurement is for visual inspection, so please do not
-describe it as survey-grade.
+code supports it. Do not list work in progress as a feature. Measurement is for
+visual inspection and is not survey-grade.
 
 ## Licensing of contributions
 

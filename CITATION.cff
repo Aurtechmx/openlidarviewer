@@ -50,7 +50,7 @@ identifiers:
     description: "Software Heritage snapshot of the repository, including its history"
 
 abstract: >-
-  OpenLiDARViewer is an open-source, local-first, browser-native platform
+  OpenLiDARViewer is an open-source, local-first, browser-native viewer
   for LiDAR and point-cloud inspection, streaming visualization,
   measurement, terrain analysis, validation, and reproducible reporting.
 

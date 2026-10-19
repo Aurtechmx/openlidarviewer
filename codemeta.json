@@ -6,7 +6,7 @@
     "https://archive.softwareheritage.org/swh:1:snp:7b496fd207adaae61d5add4137e7d4eb781a1f83"
   ],
   "name": "OpenLiDARViewer",
-  "description": "Browser-native, local-first platform for LiDAR and point-cloud inspection, streaming visualization, measurement, terrain analysis, validation, and reproducible reporting.",
+  "description": "Browser-native, local-first viewer for LiDAR and point-cloud inspection, streaming visualization, measurement, terrain analysis, validation, and reproducible reporting.",
   "version": "0.7.0",
   "softwareVersion": "0.7.0",
   "dateModified": "2026-10-18",
