@@ -22,6 +22,7 @@ import { epsgFieldProblem, geocentricReprojectProblem, parseEpsgField } from '..
 import { runBatch, summariseBatch, guardedBatchInput, type BatchInput, type BatchItemResult } from '../convert/convertRunner';
 import { conversionNotes } from './conversionNotes';
 import { memoryCeilingBytes } from '../io/loadPlan';
+import { loadLas14Availability } from '../lazyChunks';
 import { buildZip, assessZipDownload } from '../convert/zipStore';
 import {
   CONVERT_FORMATS,
@@ -85,6 +86,17 @@ export class BatchConverter {
   // class above 31 wraps and is refused unless opted in). LAS 1.2 stays
   // selectable for legacy-tool compatibility.
   private _format: ConvertFormat = 'las14';
+  /**
+   * Why LAS 1.4 cannot be written for the EPSG code an assign or reproject
+   * would write, or null. A kept CRS is known only once a file is decoded, so
+   * Keep is judged per file and its row says why.
+   */
+  private _las14Block: string | null = null;
+  /** True while LAS 1.2 stands in for the LAS 1.4 default; a pill click clears it. */
+  private _formatAutoSwitched = false;
+  private _las14Seq = 0;
+  /** The latest availability check, for callers that need to await it. */
+  private _las14Check: Promise<void> = Promise.resolve();
   private _allowClassWrap = false;
   private _allowReturnClamp = false;
   private readonly _returnRow: HTMLElement;
@@ -191,6 +203,11 @@ export class BatchConverter {
     this._renderCrsExtra();
     this._renderFileList();
     this._refresh();
+  }
+
+  /** Settles when the latest LAS 1.4 availability check has been applied. */
+  whenLas14Checked(): Promise<void> {
+    return this._las14Check;
   }
 
   open(): void {
@@ -304,9 +321,14 @@ export class BatchConverter {
         anyUnavailable = true;
         pill.disabled = true;
         pill.title = unavailableReason;
+      } else if (fmt === 'las14' && this._las14Block != null) {
+        pill.disabled = true;
+        pill.classList.add('is-disabled');
+        pill.title = this._las14Block;
       } else {
         pill.addEventListener('click', () => {
           this._format = fmt;
+          this._formatAutoSwitched = false;
           this._renderFormatPills();
           this._refresh();
         });
@@ -314,8 +336,10 @@ export class BatchConverter {
       this._formatRow.append(pill);
     });
     // Restate the gate reason visibly when a format is greyed out.
-    this._formatNote.textContent = anyUnavailable ? unavailableReason : '';
-    this._formatNote.classList.toggle('olv-bc-hidden', !anyUnavailable);
+    const las14Note = this._las14Block != null ? `${this._las14Block} LAS 1.2 is selected.` : '';
+    const note = [anyUnavailable ? unavailableReason : '', las14Note].filter(Boolean).join(' ');
+    this._formatNote.textContent = note;
+    this._formatNote.classList.toggle('olv-bc-hidden', note === '');
     // `olv-hidden`, not `olv-bc-hidden`: the reused row's own display rule
     // comes later in the stylesheet and would win over the latter.
     this._wrapRow.classList.toggle('olv-hidden', this._format !== 'las');
@@ -323,6 +347,42 @@ export class BatchConverter {
     this._acquisitionRow.classList.toggle('olv-hidden', this._format !== 'las');
     this._reinterpretationRow.classList.toggle('olv-hidden', this._format !== 'las');
     this._overlapRow.classList.toggle('olv-hidden', this._format !== 'las');
+  }
+
+  /**
+   * Check whether LAS 1.4 can carry the EPSG code an assign or reproject
+   * writes, and move to LAS 1.2 with the reason when it cannot. The check runs
+   * the writer's own CRS plan; a user's own pill choice is never undone.
+   */
+  private _syncLas14(): void {
+    const seq = ++this._las14Seq;
+    const targetEpsg = parseEpsg(this._targetEpsg);
+    if (this._crsMode === 'keep' || targetEpsg == null) {
+      this._applyLas14(null);
+      this._las14Check = Promise.resolve();
+      return;
+    }
+    this._las14Check = loadLas14Availability().then(({ las14Availability }) => {
+      if (seq !== this._las14Seq) return;
+      const a = las14Availability({ mode: this._crsMode, sourceEpsg: null, sourceWkt: null, targetEpsg });
+      this._applyLas14(a.ok ? null : a.message);
+    }, () => {
+      // The check is a convenience: if it cannot load, the file's row still gives the reason.
+      if (seq === this._las14Seq) this._applyLas14(null);
+    });
+  }
+
+  private _applyLas14(block: string | null): void {
+    this._las14Block = block;
+    if (block != null && this._format === 'las14') {
+      this._format = 'las';
+      this._formatAutoSwitched = true;
+    } else if (block == null && this._formatAutoSwitched && this._format === 'las') {
+      this._format = 'las14';
+      this._formatAutoSwitched = false;
+    }
+    this._renderFormatPills();
+    this._refresh();
   }
 
   private _renderCrsPills(): void {
@@ -343,6 +403,7 @@ export class BatchConverter {
         this._crsMode = mode;
         this._renderCrsPills();
         this._renderCrsExtra();
+        this._syncLas14();
         this._refresh();
       });
       this._crsRow.append(pill);
@@ -360,7 +421,7 @@ export class BatchConverter {
       );
     }
     this._crsExtra.append(
-      this._epsgField('Target EPSG (e.g. 32611)', this._targetEpsg, (v) => { this._targetEpsg = v; this._refresh(); }),
+      this._epsgField('Target EPSG (e.g. 32611)', this._targetEpsg, (v) => { this._targetEpsg = v; this._syncLas14(); this._refresh(); }),
     );
   }
 

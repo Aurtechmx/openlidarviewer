@@ -8,6 +8,8 @@ import type { GlobalPoints } from '../../src/convert/globalPoints';
  *   0.5 m pit, so its floor(min) origin is (500000, 4000000, 99).
  * - `geom-b`: a 10 x 10 m plane 100 m east of A at Z 50 (2,601 points).
  * - `geom-nocrs`: geom-a written with no CRS records.
+ * - `geom-plane`: a flat 40 x 30 m plane with no CRS records, whose surface leaves
+ *   a horizontal shift unconstrained (two epochs of it cannot be registered).
  * - `broken`: geom-b cut to its first 400 bytes, so the header declares 2,601
  *   points and the body holds 4.
  *
@@ -48,7 +50,7 @@ function grid(nx: number, ny: number, dx: number, z: (x: number, y: number) => n
 const pit = (x: number, y: number): number => (x >= 32 && x <= 35 && y >= 4 && y <= 7 ? -0.5 : 0);
 const UTM13N = { epsg: 32613, isGeographic: false, linearUnitCode: 9001 } as const;
 
-type Fixtures = Record<'geomA' | 'geomB' | 'geomAVert' | 'geomBVert' | 'geomNoCrs' | 'broken', Uint8Array>;
+type Fixtures = Record<'geomA' | 'geomB' | 'geomAVert' | 'geomBVert' | 'geomNoCrs' | 'geomPlane' | 'broken', Uint8Array>;
 let built: Promise<Fixtures> | null = null;
 
 /** The fixtures, written once per worker. */
@@ -69,6 +71,7 @@ async function buildFixtures(): Promise<Fixtures> {
     geomAVert: writeLas(a, { ...UTM13N, verticalEpsg: 5703, verticalUnitCode: 9001 }),
     geomBVert: writeLas(b, { ...UTM13N, verticalEpsg: 5703, verticalUnitCode: 9001 }),
     geomNoCrs: writeLas(a, {}),
+    geomPlane: writeLas(grid(200, 150, 0, () => 0), {}),
     broken: writeLas(b, { epsg: 32613 }).slice(0, 400),
   };
 }

@@ -50,10 +50,20 @@ export interface RegistrationArtifact {
   readonly refused: boolean;
   /** Which degrees of freedom the applied transform used. */
   readonly appliedDof: EpochAppliedDof;
-  /** RMS residual of the solver's yaw + x/y/z fit, in metres (not what was applied). */
-  readonly solverResidualM: number;
-  /** RMS residual re-measured at the pose actually applied (identity if none), in metres. */
-  readonly appliedTransformResidualM: number;
+  /**
+   * RMS residual of the solver's yaw + x/y/z fit, in metres (not what was
+   * applied). Null when no fit produced one, with the reason beside it.
+   */
+  readonly solverResidualM: number | null;
+  readonly solverResidualReason: string | null;
+  /**
+   * RMS residual re-measured at the pose actually applied (identity if none),
+   * in metres. Null when it cannot be measured, with the reason beside it: no
+   * sampled point has a partner within the correspondence distance when the
+   * real change is larger than that distance.
+   */
+  readonly appliedTransformResidualM: number | null;
+  readonly appliedTransformResidualReason: string | null;
   /** Solved yaw about vertical, in degrees. */
   readonly yawDeg: number;
   /** Solved translation (metres) mapping source onto target, yaw about the world origin. */
@@ -88,6 +98,31 @@ export interface RegistrationArtifact {
   readonly generatedAt: number;
 }
 
+/** A residual as a finite number, or null with the reason it has none. */
+function residualFields(
+  a: EpochAlignment,
+): Pick<RegistrationArtifact, 'solverResidualM' | 'solverResidualReason' | 'appliedTransformResidualM' | 'appliedTransformResidualReason'> {
+  const solverReason = a.frameKept
+    ? 'not computed: the supplied coordinates were kept and no fit ran'
+    : a.unobservable
+      ? 'not computed: the geometry does not determine the pose'
+      : !a.attempted || a.degenerate
+        ? 'not computed: not enough points to register'
+        : 'not computed: no fit residual was produced';
+  const appliedReason = !a.attempted || a.degenerate
+    ? 'not measured: no fit was attempted'
+    : 'not measurable: change exceeds the correspondence distance';
+  const finite = (v: number): number | null => (Number.isFinite(v) ? v : null);
+  const solver = finite(a.solverResidualM);
+  const applied = finite(a.appliedTransformResidualM);
+  return {
+    solverResidualM: solver,
+    solverResidualReason: solver === null ? solverReason : null,
+    appliedTransformResidualM: applied,
+    appliedTransformResidualReason: applied === null ? appliedReason : null,
+  };
+}
+
 /** Build the provenance record from a solved alignment and the scan identity. */
 export function buildRegistrationArtifact(
   alignment: EpochAlignment,
@@ -101,8 +136,7 @@ export function buildRegistrationArtifact(
     applied: alignment.applied,
     refused: alignment.refused,
     appliedDof: alignment.appliedDof,
-    solverResidualM: alignment.solverResidualM,
-    appliedTransformResidualM: alignment.appliedTransformResidualM,
+    ...residualFields(alignment),
     yawDeg: alignment.yawDeg,
     translation: alignment.translation,
     ...(alignment.centroidShiftM ? { centroidShiftM: alignment.centroidShiftM } : {}),
@@ -127,8 +161,8 @@ export function summarizeRegistration(a: RegistrationArtifact): string {
     return (
       `Registration: applied (${a.appliedDof}) — ` +
       (a.centroidShiftM ? `shift ${Math.hypot(a.centroidShiftM[0], a.centroidShiftM[1]).toFixed(3)} m at the centroid, ${a.yawDeg.toFixed(3)}° yaw, ` : '') +
-      `residual at applied pose ${a.appliedTransformResidualM.toFixed(3)} m, ` +
-      `solver fit residual ${a.solverResidualM.toFixed(3)} m, overlap ${Math.round(a.overlapFraction * 100)}%; ` +
+      `residual at applied pose ${a.appliedTransformResidualM !== null ? `${a.appliedTransformResidualM.toFixed(3)} m` : a.appliedTransformResidualReason}, ` +
+      `solver fit residual ${a.solverResidualM !== null ? `${a.solverResidualM.toFixed(3)} m` : a.solverResidualReason}, overlap ${Math.round(a.overlapFraction * 100)}%; ` +
       `registration uncertainty not quantified · ${m}`
     );
   }
@@ -139,7 +173,7 @@ export function summarizeRegistration(a: RegistrationArtifact): string {
     return `Registration: refused — the geometry does not constrain the pose (unobservable); epochs compared unshifted; registration uncertainty not quantified · ${m}`;
   }
   if (a.refused) {
-    return `Registration: refused — solver fit residual ${a.solverResidualM.toFixed(3)} m exceeded the gate; epochs compared unshifted · ${m}`;
+    return `Registration: refused — solver fit residual ${a.solverResidualM !== null ? `${a.solverResidualM.toFixed(3)} m` : a.solverResidualReason} exceeded the gate; epochs compared unshifted · ${m}`;
   }
   return `Registration: not applied — epochs compared in their own frames · ${m}`;
 }

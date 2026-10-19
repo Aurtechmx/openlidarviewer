@@ -33,8 +33,8 @@ export class LoadError extends Error {
    * user and is shown in place of the category message.
    */
   readonly report?: string;
-  constructor(category: LoadErrorCategory, message: string, report?: string) {
-    super(message);
+  constructor(category: LoadErrorCategory, message: string, report?: string, options?: { cause?: unknown }) {
+    super(message, options);
     this.name = 'LoadError';
     this.category = category;
     if (report !== undefined) this.report = report;

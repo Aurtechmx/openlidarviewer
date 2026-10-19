@@ -23,7 +23,10 @@ function embeddedTriangle(): ArrayBuffer {
   return gltfWithBufferUri(`data:application/octet-stream;base64,${b64}`);
 }
 
-afterEach(() => vi.unstubAllGlobals());
+afterEach(() => {
+  vi.unstubAllGlobals();
+  vi.restoreAllMocks();
+});
 
 describe('a local glTF never makes the browser fetch a URI it names', () => {
   it('refuses an absolute https buffer URI without requesting it', async () => {
@@ -44,5 +47,26 @@ describe('a local glTF never makes the browser fetch a URI it names', () => {
   it('still opens a self-contained glTF with a data: buffer', async () => {
     const cloud = await loadGltf(embeddedTriangle(), 'gltf');
     expect(cloud.pointCount).toBe(3);
+  });
+});
+
+describe('the glTF JSON is decoded and parsed once before loaders.gl sees the file', () => {
+  it('an opened file is parsed twice in all: once by our checks, once by loaders.gl', async () => {
+    const buffer = embeddedTriangle();
+    const text = new TextDecoder().decode(new Uint8Array(buffer));
+    const parse = vi.spyOn(JSON, 'parse');
+    const cloud = await loadGltf(buffer, 'gltf');
+    expect(cloud.pointCount).toBe(3);
+    // The external-URI and admission checks used to parse the text separately,
+    // which made three parses of one document.
+    expect(parse.mock.calls.filter(([arg]) => arg === text)).toHaveLength(2);
+  });
+
+  it('a refusal still happens before any loaders.gl work, from the same single parse', async () => {
+    const parse = vi.spyOn(JSON, 'parse');
+    const buffer = gltfWithBufferUri('https://tracker.example/t.bin');
+    const text = new TextDecoder().decode(new Uint8Array(buffer));
+    await expect(loadGltf(buffer, 'gltf')).rejects.toThrow(/external/i);
+    expect(parse.mock.calls.filter(([arg]) => arg === text)).toHaveLength(1);
   });
 });

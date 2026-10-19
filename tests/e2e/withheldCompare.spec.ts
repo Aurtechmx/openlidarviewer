@@ -102,6 +102,11 @@ test('a finished difference and its result hide when the pair changes', async ({
   await activate(compare);
   await expect(result).toContainText('site-one (before) → site-three (after)', { timeout: 20_000 });
   await expect(download).toBeVisible({ timeout: 20_000 });
+  // Two epochs in one declared CRS keep their supplied coordinates: the panel
+  // says no registration was estimated and states no shift.
+  await expect(result).toContainText('Registration: not estimated');
+  await expect(result).toContainText('Registration uncertainty is not quantified');
+  await expect(result).not.toContainText(/\d+\.\d+ m shift/);
 
   await after.selectOption(ids[1]);
   await expect(download).toBeHidden();
@@ -111,4 +116,26 @@ test('a finished difference and its result hide when the pair changes', async ({
   await after.selectOption(ids[2]);
   await expect(download).toBeHidden();
   await expect(result).toBeHidden();
+});
+
+test('a local-frame plane pair is refused as unobservable and compared as supplied', async ({ page }) => {
+  test.setTimeout(120_000);
+  // Two flat scans with no CRS: nothing in the surface fixes a horizontal shift.
+  const { geomPlane } = await geomFixtures();
+  await page.goto('/?test=1');
+  for (const [i, n] of ['plane-one.las', 'plane-two.las'].entries()) {
+    await dropBytes(page, geomPlane, n);
+    if (i === 0) await expect(page.locator('.olv-empty')).toBeHidden({ timeout: 20_000 });
+    await expect(page.locator('.olv-layer')).toHaveCount(i + 1, { timeout: 40_000 });
+    await railChromeSettled(page);
+  }
+  const compare = page.locator('.olv-layer-compare', { hasText: 'Compare elevation' });
+  const result = page.locator('.olv-layer-compare-result');
+  await compare.scrollIntoViewIfNeeded();
+  await activate(compare);
+  await expect(result).toContainText('plane-one (before) → plane-two (after)', { timeout: 60_000 });
+  await expect(result).toContainText('Alignment: refused as unobservable');
+  await expect(result).toContainText('a plane or a single slope cannot separate a horizontal shift from a height change');
+  await expect(result).toContainText('Registration: refused');
+  await expect(result).not.toContainText(/\d+\.\d+ m shift/);
 });

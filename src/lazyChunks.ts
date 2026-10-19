@@ -405,6 +405,13 @@ export const loadConvertEngine = () => import('./convert/convertCloud');
 export const loadLegacyClassGuard = () => import('./convert/legacyClassGuard');
 
 /**
+ * Load the LAS 1.4 availability check for the Export panel and the batch
+ * converter. It runs the writer's own CRS plan, which pulls in the WKT tables,
+ * so the panels fetch it only once a CRS with an EPSG code is in play.
+ */
+export const loadLas14Availability = () => import('./convert/las14Availability');
+
+/**
  * Load the streaming benchmark collector — used by both the overlay's live
  * readout and the `?benchmark=1` post-session report.
  */
@@ -557,6 +564,7 @@ export const loadSessionIo = () =>
 export const loadCompareEpochs = () => import('./terrain/change/compareEpochs');
 export const loadAlignEpochs = () => import('./terrain/change/alignEpochs');
 export const loadCompareDtms = () => import('./terrain/change/compareDtms');
+export const loadEpochComparison = () => import('./terrain/change/epochComparison');
 export const loadChangeRaster = () => import('./terrain/change/changeRaster');
 export const loadViewCube = () => import('./ui/viewCube');
 export const loadWorkflowConfigPanel = () => import('./ui/WorkflowConfigPanel');

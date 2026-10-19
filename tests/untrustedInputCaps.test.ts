@@ -29,6 +29,14 @@ function hierarchyEntry(depth: number, x: number, byteSize: number, pointCount: 
   return buf;
 }
 
+describe('the caps the release documents', () => {
+  it('pins the COPC data-node cap to its literal value', () => {
+    // Changed together with KNOWN_LIMITATIONS (tests/capsDocSync.test.ts).
+    expect(MAX_COPC_NODE_BYTES).toBe(134_217_728);
+    expect(MAX_COPC_NODE_BYTES).toBe(128 * 1024 * 1024);
+  });
+});
+
 describe('COPC hierarchy caps', () => {
   it('drops a child page reference larger than the page cap', () => {
     const page = parseHierarchyPage(hierarchyEntry(1, 0, MAX_COPC_HIERARCHY_PAGE_BYTES + 32, -1), CUBE, 1);

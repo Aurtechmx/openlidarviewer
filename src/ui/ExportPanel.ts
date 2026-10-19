@@ -23,7 +23,7 @@ import { classifyLoadError, OFFLINE_CHUNK_MESSAGE } from '../app/staleChunkReloa
 import { conversionNotes, exportedLine } from './conversionNotes';
 import { notableEntries, warningSummary } from '../convert/conversionEvents';
 import { downloadBytes } from '../io/download';
-import { loadConvertEngine, loadFindingsPanel, loadLegacyClassGuard, loadSessionFindings } from '../lazyChunks';
+import { loadConvertEngine, loadFindingsPanel, loadLas14Availability, loadLegacyClassGuard, loadSessionFindings } from '../lazyChunks';
 import {
   CONVERT_FORMATS,
   LEGACY_ACQUISITION_LOSS_HINT,
@@ -335,6 +335,17 @@ export class ExportPanel {
   // LAS 1.4 is the converter's lead format (see CONVERT_FORMATS ordering) —
   // default the panel to it so the pill selection matches the recommended choice.
   private _format: ConvertFormat = 'las14';
+  /**
+   * Why LAS 1.4 cannot be written for the CRS this export would carry, or null
+   * when it can. While set, the LAS 1.4 pill is disabled and LAS 1.2 is the
+   * format, so the default path does not fail after Export is pressed.
+   */
+  private _las14Block: string | null = null;
+  /** True while LAS 1.2 stands in for a LAS 1.4 default; a pill click clears it. */
+  private _formatAutoSwitched = false;
+  private _las14Seq = 0;
+  /** The latest availability check, for callers that need to await it. */
+  private _las14Check: Promise<void> = Promise.resolve();
   private _crsMode: CrsMode = 'keep';
   private _targetEpsg = '';
   private _sourceEpsg = '';
@@ -643,8 +654,60 @@ export class ExportPanel {
       this._renderCrsExtra();
     }
     this._renderCrsStep();
+    this._syncLas14();
     this._renderGzipRow();
     this._renderSummary();
+  }
+
+  /**
+   * Check whether LAS 1.4 can carry the CRS this export would write, and move
+   * the format to LAS 1.2 (with the reason shown) when it cannot. The check
+   * runs the writer's own CRS plan, loaded on demand, and only when an EPSG
+   * code is in play; a user's own pill choice is never undone.
+   */
+  private _syncLas14(): void {
+    const seq = ++this._las14Seq;
+    const mode = this._crsKnown ? this._crsMode : 'keep';
+    const resolved = this._cb.getResolvedSourceCrs?.() ?? null;
+    const request = {
+      mode,
+      sourceEpsg: resolved?.epsg ?? null,
+      sourceWkt: resolved?.wkt ?? null,
+      targetEpsg: parseEpsg(this._targetEpsg),
+    };
+    const outEpsg = mode === 'keep' ? request.sourceEpsg : request.targetEpsg;
+    if (outEpsg == null) {
+      this._applyLas14(null);
+      this._las14Check = Promise.resolve();
+      return;
+    }
+    this._las14Check = loadLas14Availability().then(({ las14Availability }) => {
+      if (seq !== this._las14Seq) return;
+      const a = las14Availability(request);
+      this._applyLas14(a.ok ? null : a.message);
+    }, () => {
+      // The check is a convenience: if it cannot load, Export still refuses with the reason.
+      if (seq === this._las14Seq) this._applyLas14(null);
+    });
+  }
+
+  private _applyLas14(block: string | null): void {
+    this._las14Block = block;
+    if (block != null && this._format === 'las14') {
+      this._format = 'las';
+      this._formatAutoSwitched = true;
+    } else if (block == null && this._formatAutoSwitched && this._format === 'las') {
+      this._format = 'las14';
+      this._formatAutoSwitched = false;
+    }
+    this._renderFormatPills();
+    this._renderGzipRow();
+    this._renderSummary();
+  }
+
+  /** Settles when the latest LAS 1.4 availability check has been applied. */
+  whenLas14Checked(): Promise<void> {
+    return this._las14Check;
   }
 
   /** Show or collapse the Coordinate-System step per the known-CRS signal. */
@@ -1303,9 +1366,15 @@ export class ExportPanel {
         pill.disabled = true;
         pill.title = LAZ_UNAVAILABLE;
         pill.setAttribute('aria-describedby', 'olv-export-laz-note');
+      } else if (fmt === 'las14' && this._las14Block != null) {
+        pill.disabled = true;
+        pill.classList.add('is-disabled');
+        pill.title = this._las14Block;
+        pill.setAttribute('aria-describedby', 'olv-export-las14-note');
       } else {
         pill.addEventListener('click', () => {
           this._format = fmt;
+          this._formatAutoSwitched = false;
           this._renderFormatPills();
           this._renderGzipRow();
           this._renderSummary();
@@ -1317,6 +1386,11 @@ export class ExportPanel {
     if ((Object.values(CONVERT_FORMATS) as { available: boolean }[]).some((f) => !f.available)) {
       const note = el('p', { className: 'olv-export-laz-note', text: LAZ_UNAVAILABLE });
       note.id = 'olv-export-laz-note';
+      this._formatRow.append(note);
+    }
+    if (this._las14Block != null) {
+      const note = el('p', { className: 'olv-export-laz-note', text: `${this._las14Block} LAS 1.2 is selected.` });
+      note.id = 'olv-export-las14-note';
       this._formatRow.append(note);
     }
   }
@@ -1340,6 +1414,7 @@ export class ExportPanel {
         this._crsMode = mode;
         this._renderCrsPills();
         this._renderCrsExtra();
+        this._syncLas14();
         this._renderSummary();
       });
       this._crsRow.append(pill);
@@ -1352,7 +1427,7 @@ export class ExportPanel {
     if (this._crsMode === 'reproject') {
       this._crsExtra.append(this._field('Source EPSG (optional)', this._sourceEpsg, (v) => { this._sourceEpsg = v; this._renderSummary(); }));
     }
-    this._crsExtra.append(this._field('Target EPSG', this._targetEpsg, (v) => { this._targetEpsg = v; this._renderSummary(); }));
+    this._crsExtra.append(this._field('Target EPSG', this._targetEpsg, (v) => { this._targetEpsg = v; this._syncLas14(); this._renderSummary(); }));
   }
 
   private _field(label: string, value: string, onInput: (v: string) => void): HTMLElement {

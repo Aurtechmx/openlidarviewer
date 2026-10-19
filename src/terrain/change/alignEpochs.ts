@@ -727,6 +727,18 @@ export function alignEpochClouds(
   };
 }
 
+/**
+ * The residual re-measured at a pose, worded for the readout. The residual is
+ * Infinity when no sampled point has a partner within the correspondence
+ * distance, which happens when the real change between the epochs is larger
+ * than that distance; "Infinity m" is not a measurement and is never printed.
+ */
+function residualClause(label: string, residualM: number, a: Pick<EpochAlignment, 'correspondenceDistanceM'>): string {
+  if (Number.isFinite(residualM)) return `${label} ${residualM.toFixed(2)} m`;
+  const distance = a.correspondenceDistanceM !== undefined ? ` (${a.correspondenceDistanceM.toFixed(2)} m)` : '';
+  return `${label} not measurable: change exceeds the correspondence distance${distance}`;
+}
+
 /** A one-line, human-readable summary of an alignment outcome for the UI. */
 export function summarizeAlignment(a: EpochAlignment): string {
   if (a.frameIncompatible) {
@@ -772,7 +784,7 @@ export function summarizeAlignment(a: EpochAlignment): string {
       : `Aligned the after cloud horizontally (${a.yawDeg.toFixed(2)}° yaw over ${a.sampleCount} sampled points); vertical change preserved. Note: ${unitNote}`;
   }
   if (a.refused) {
-    return `Alignment: refused — solver fit residual ${a.solverResidualM.toFixed(2)} m exceeds the limit; comparing as-is (residual at the unshifted pose ${a.appliedTransformResidualM.toFixed(2)} m).`;
+    return `Alignment: refused — solver fit residual ${a.solverResidualM.toFixed(2)} m exceeds the limit; comparing as-is (${residualClause('residual at the unshifted pose', a.appliedTransformResidualM, a)}).`;
   }
   if (a.lowOverlap) {
     return `Alignment: withheld — only ${(a.overlapFraction * 100).toFixed(0)}% of the sampled points registered (below ${(LOW_OVERLAP_FRACTION * 100).toFixed(0)}%), so the fit locked onto a subset; comparing as-is rather than shifting on a partial overlap.`;
@@ -788,7 +800,7 @@ export function summarizeAlignment(a: EpochAlignment): string {
   const base =
     `Aligned the after cloud (${applied}: ${shift.toFixed(2)} m shift at the before sample's centroid, ${a.yawDeg.toFixed(2)}° yaw; ` +
     `${(a.overlapFraction * 100).toFixed(0)}% overlap over ${a.sampleCount} sampled points). ` +
-    `Residual at the applied pose ${a.appliedTransformResidualM.toFixed(2)} m; solver fit residual ` +
+    `${residualClause('Residual at the applied pose', a.appliedTransformResidualM, a)}; solver fit residual ` +
     `(yaw + x/y/z, not what was applied) ${a.solverResidualM.toFixed(2)} m. Both are fit statistics, ` +
     `not a registration uncertainty, and a small fitting residual does not validate the alignment; ` +
     `registration uncertainty is not quantified.` +

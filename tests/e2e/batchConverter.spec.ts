@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs';
 import { test, expect } from '@playwright/test';
 
 /**
@@ -180,3 +181,77 @@ for (const c of [
     await expect(row.locator('.olv-bc-row-dl')).toBeVisible();
   });
 }
+
+test('the Y-up to Z-up option is offered in Keep only, and rotates a local Y-up PLY when ticked', async ({ page }) => {
+  // A local Y-up model: height runs along Y, depth along Z. No CRS in the file.
+  const ply = [
+    'ply', 'format ascii 1.0', 'element vertex 3',
+    'property float x', 'property float y', 'property float z', 'end_header',
+    '1 7 3', '2 8 4', '3 9 5', '',
+  ].join('\n');
+
+  await page.goto('/');
+  await page.locator('.olv-convert-chip').click();
+  const dialog = page.locator('.olv-bc-dialog');
+  await expect(dialog).toBeVisible();
+
+  const optIn = dialog.locator('.olv-export-fullres', { hasText: 'Rotate a local Y-up model to Z-up' });
+  // Offered under Keep, withdrawn under Assign and Reproject, off by default.
+  await expect(optIn).toBeVisible();
+  await expect(optIn.locator('input[type="checkbox"]')).not.toBeChecked();
+  await dialog.locator('.olv-bc-pill', { hasText: 'Assign EPSG' }).click();
+  await expect(optIn).toBeHidden();
+  await dialog.locator('.olv-bc-pill', { hasText: 'Reproject' }).click();
+  await expect(optIn).toBeHidden();
+  await dialog.locator('.olv-bc-pill', { hasText: 'Keep' }).click();
+  await expect(optIn).toBeVisible();
+
+  await dialog.locator('.olv-bc-pill', { hasText: 'XYZ' }).click();
+  await dialog.locator('.olv-file-input').setInputFiles({ name: 'model.ply', mimeType: 'application/octet-stream', buffer: Buffer.from(ply) });
+
+  // Unticked: written as stored.
+  await dialog.locator('.olv-bc-convert').click();
+  const row = dialog.locator('.olv-bc-row');
+  await expect(row).toHaveClass(/is-ok/, { timeout: 20_000 });
+  await expect(row.locator('.olv-bc-row-meta')).toContainText('coordinates unchanged');
+  const readFirstRow = async (): Promise<number[]> => {
+    const downloadPromise = page.waitForEvent('download');
+    await row.locator('.olv-bc-row-dl').click();
+    const download = await downloadPromise;
+    const text = readFileSync((await download.path())!, 'utf8');
+    const data = text.split('\n').filter((l) => l.trim() && !l.startsWith('#'));
+    return data[0].trim().split(/\s+/).map(Number);
+  };
+  expect(await readFirstRow()).toEqual([1, 7, 3]);
+
+  // Ticked: (x, y, z) is written as (x, -z, y), and the report line says so.
+  await optIn.locator('input[type="checkbox"]').check();
+  await dialog.locator('.olv-bc-convert').click();
+  await expect(row.locator('.olv-bc-row-meta')).toContainText('axes rotated Y-up to Z-up', { timeout: 20_000 });
+  await expect(row.locator('.olv-conv-note.is-warn')).toContainText('rotated into the Z-up frame');
+  expect(await readFirstRow()).toEqual([1, -3, 7]);
+});
+
+test('assigning a code LAS 1.4 cannot describe selects LAS 1.2 and says why before Convert is pressed', async ({ page }) => {
+  await page.goto('/');
+  await page.locator('.olv-convert-chip').click();
+  const dialog = page.locator('.olv-bc-dialog');
+  await expect(dialog).toBeVisible();
+  const las14 = dialog.locator('.olv-bc-pill', { hasText: 'LAS 1.4' });
+  const las12 = dialog.locator('.olv-bc-pill', { hasText: 'LAS 1.2' });
+  await expect(las14).toHaveClass(/is-active/);
+
+  // State Plane (California zone 5, US survey feet) has no stored WKT.
+  await dialog.locator('.olv-bc-pill', { hasText: 'Assign EPSG' }).click();
+  await dialog.locator('.olv-bc-input').fill('2229');
+  await expect(las14).toBeDisabled();
+  await expect(las14).toHaveAttribute('title', /no definition for EPSG:2229/);
+  await expect(las12).toHaveClass(/is-active/);
+  await expect(dialog.locator('.olv-bc-format-note')).toContainText('LAS 1.4 needs the CRS as WKT, and this build has no definition for EPSG:2229');
+  await expect(dialog.locator('.olv-bc-format-note')).toContainText('LAS 1.2 is selected.');
+
+  // A code it can write brings LAS 1.4 back.
+  await dialog.locator('.olv-bc-input').fill('32613');
+  await expect(las14).toBeEnabled();
+  await expect(las14).toHaveClass(/is-active/);
+});

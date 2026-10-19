@@ -455,8 +455,12 @@ export function convertCloud(
       });
       g = { ...g, classification: semantics.classification, classificationFlags: semantics.classificationFlags };
       record(...semantics.events);
+      // The same options writeLas14 passes, so the writer's own plan can never
+      // differ from this refusal: the horizontal unit decides whether a declared
+      // height unit with no vertical datum is one a WKT reader would assume.
       const crsPlan = planLas14Crs({
-        epsg: outEpsg, wkt: sourceWkt, verticalEpsg: vertical.verticalEpsg, verticalUnitCode: vertical.unitCode,
+        epsg: outEpsg, wkt: sourceWkt, isGeographic: geo, linearUnitCode,
+        verticalEpsg: vertical.verticalEpsg, verticalUnitCode: vertical.unitCode,
       });
       if (!crsPlan.ok) return fail(crsPlan.message, crsNote);
       if (byFactorUnit && crsPlan.origin !== 'source') {

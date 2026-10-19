@@ -14,14 +14,13 @@
  */
 import { describe, expect, test } from 'vitest';
 import {
-  alignEpochClouds,
   summarizeAlignment,
   buildRegistrationArtifact,
   summarizeRegistration,
 } from '../src/terrain/change/alignEpochs';
-import { buildSharedEpochDtms, type EpochCloud } from '../src/terrain/change/compareEpochs';
-import { compareDtms, summarizeChange } from '../src/terrain/change/compareDtms';
-import { propagatedLevelOfDetection } from '../src/terrain/change/propagatedLod';
+import { withheldEpochs, type EpochCloud } from '../src/terrain/change/compareEpochs';
+import { summarizeChange } from '../src/terrain/change/compareDtms';
+import { runEpochComparison } from '../src/terrain/change/epochComparison';
 import { packageChangeRaster } from '../src/terrain/change/changeRaster';
 
 type Surface = (x: number, y: number) => number;
@@ -72,19 +71,21 @@ const epoch = (positions: Float32Array, f: Frame): EpochCloud => ({
   verticalUnitToMetres: f.unitToMetres,
 });
 
-/** The live compare sequence (src/main.ts compareLoadedLayers), panel and raster. */
+/**
+ * The live compare sequence, panel and raster. The sequence itself is
+ * `runEpochComparison`, the function the app calls, with the span its residual
+ * gate is a share of taken the way the app takes it.
+ */
 function runCompare(before: EpochCloud, after: EpochCloud, f: Frame) {
   const h = f.unitToMetres;
-  const { after: aligned, alignment } = alignEpochClouds(before, after, { maxResidualM: 5, horizontalUnitKnown: true });
-  const dtms = buildSharedEpochDtms(before, aligned, { holdoutSigmaZ: true });
-  if (!dtms) throw new Error('no DTMs');
-  const lod = propagatedLevelOfDetection({
-    sigmaZBeforeM: dtms.sigmaZ?.before, sigmaZAfterM: dtms.sigmaZ?.after, sigmaRegM: null,
-    verticalUnitKnown: true, horizontalUnitKnown: true,
+  const { span } = withheldEpochs({ beforeCloud: before, afterCloud: after }, {}, {});
+  const run = runEpochComparison({
+    beforeCloud: before, afterCloud: after, span,
+    frames: { isGeographic: false, horizontalUnitKnown: true, horizontalUnitToMetres: h },
+    verticalUnitToMetres: h, verticalUnitKnown: true,
   });
-  const cmp = compareDtms(dtms.before, dtms.after, {
-    isGeographic: false, horizontalUnitKnown: true, horizontalUnitToMetres: h, verticalUnitToMetres: h, levelOfDetection: lod,
-  });
+  if (!run.ok) throw new Error('no DTMs');
+  const { alignment, alignedAfter: aligned, dtms, cmp } = run;
   const record = buildRegistrationArtifact(alignment, { targetId: 'a', targetName: 'a', sourceId: 'b', sourceName: 'b' }, 0);
   const panel = [
     summarizeAlignment(alignment),
@@ -177,13 +178,13 @@ describe('local-frame pairs: fitted only when the surface determines the pose', 
     }
   });
 
-  test('informative relief, no offset, +1 m uplift: no false shift and the full change', () => {
+  test('informative relief, no offset, +1 m uplift: the fit is applied with no false shift and the full change', () => {
     const r = runCompare(epoch(lattice(relief, 0), LOCAL), epoch(lattice(relief, 1), LOCAL), LOCAL);
     expect(r.alignment.observability?.observable).toBe(true);
-    if (r.alignment.applied) {
-      expect(Math.hypot(r.alignment.centroidShiftM![0], r.alignment.centroidShiftM![1])).toBeLessThan(0.02);
-      expect(Math.abs(r.alignment.yawDeg)).toBeLessThan(0.02);
-    }
+    expect(r.alignment.applied).toBe(true);
+    expect(r.alignment.appliedDof).toBe('yaw+xy');
+    expect(Math.hypot(r.alignment.centroidShiftM![0], r.alignment.centroidShiftM![1])).toBeLessThan(0.02);
+    expect(Math.abs(r.alignment.yawDeg)).toBeLessThan(0.02);
     expect(Math.abs(r.cmp.result.stats.meanAbsChangeM - 1)).toBeLessThan(0.01);
   });
 
@@ -227,17 +228,32 @@ describe('partial overlap', () => {
     expect(Math.abs(r.rasterMeanAbsM - r.cmp.result.stats.meanAbsChangeM)).toBeLessThan(1e-6);
   });
 
-  test('local frame, after extends 30 % past before with a known offset: recovered or withheld, never a large false shift', () => {
-    const truth: Pose = { dx: 0.5, dy: 0.3, yawDeg: 1 };
+  const truth: Pose = { dx: 0.5, dy: 0.3, yawDeg: 1 };
+
+  test('local frame, after extends 30 % past before with a known offset: the offset is recovered and the change kept', () => {
     const before = epoch(lattice(relief, 0, NO_POSE, 50, 50), LOCAL);
     const after = epoch(lattice(relief, 1, truth, 65, 50), LOCAL);
     const r = runCompare(before, after, LOCAL);
-    if (r.alignment.applied) {
-      const c = r.alignment.centroidShiftM!;
-      expect(Math.hypot(c[0], c[1])).toBeLessThan(1.5);
-      expect(Math.abs(r.cmp.result.stats.meanAbsChangeM - 1)).toBeLessThan(0.1);
-    } else {
-      expect(r.panel[0]).toMatch(/withheld|refused/i);
-    }
+    expect(r.alignment.applied).toBe(true);
+    expect(r.alignment.lowOverlap).not.toBe(true);
+    // 51 of 66 columns are shared: the overlap is measured at the pairing distance.
+    expect(r.alignment.overlapFraction).toBeGreaterThan(0.75);
+    expect(r.alignment.overlapFraction).toBeLessThan(0.9);
+    const c = r.alignment.centroidShiftM!;
+    expect(Math.hypot(c[0], c[1])).toBeGreaterThan(0.3);
+    expect(Math.hypot(c[0], c[1])).toBeLessThan(0.7);
+    expect(r.alignment.yawDeg).toBeCloseTo(-1, 1);
+    expect(Math.abs(r.cmp.result.stats.meanAbsChangeM - 1)).toBeLessThan(0.01);
+  });
+
+  test('local frame, after extends far past before: the fit is withheld, the epochs are compared as supplied', () => {
+    const before = epoch(lattice(relief, 0, NO_POSE, 50, 50), LOCAL);
+    const after = epoch(lattice(relief, 1, NO_POSE, 150, 50), LOCAL);
+    const r = runCompare(before, after, LOCAL);
+    expect(r.alignment.applied).toBe(false);
+    expect(r.alignment.lowOverlap).toBe(true);
+    expect(r.alignment.overlapFraction).toBeLessThan(0.5);
+    expect(r.aligned).toBe(after);
+    expect(r.panel[0]).toMatch(/Alignment: withheld — only \d+% of the sampled points registered/);
   });
 });

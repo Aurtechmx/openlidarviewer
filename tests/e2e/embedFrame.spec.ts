@@ -23,6 +23,12 @@ const HOST_PAGE = (viewerUrl: string): string => `<!doctype html><meta charset="
 
 test('a page that frames the viewer cannot authorise itself with ?embedParent', async ({ page, baseURL }) => {
   test.skip(!!process.env.OLV_DEPLOY_ROOT, 'the shipped headers already refuse cross-origin framing');
+  // Runs in every frame before its own scripts: records that a sentinel message arrived.
+  await page.addInitScript(() => {
+    addEventListener('message', (e: MessageEvent) => {
+      if ((e.data as { sentinel?: number } | null)?.sentinel === 1) (window as unknown as { __sentinelSeen?: boolean }).__sentinelSeen = true;
+    }, true);
+  });
   // A real second origin on the same machine (127.0.0.1 against localhost): a
   // fulfilled route is treated as a public page and cannot frame a loopback one.
   let server: Server | undefined;
@@ -45,11 +51,19 @@ test('a page that frames the viewer cannot authorise itself with ?embedParent', 
     await expect(viewer.locator('.olv-canvas')).toHaveCount(0);
 
     // It never announced itself, and a command from the framing page does nothing.
+    // Messages to one window are delivered in the order they were posted, and a
+    // capturing listener installed before the page's own scripts (see the init
+    // script above) sees each one first. So once it has seen a sentinel posted
+    // after the command, the command has already been delivered to, and ignored
+    // by, the viewer; no sleep is needed.
     await page.evaluate(() => {
-      const frame = document.getElementById('v') as HTMLIFrameElement;
-      frame.contentWindow?.postMessage({ type: 'load-file', name: 'x.ply', buffer: new ArrayBuffer(8) }, '*');
+      const target = (document.getElementById('v') as HTMLIFrameElement).contentWindow!;
+      target.postMessage({ type: 'load-file', name: 'x.ply', buffer: new ArrayBuffer(8) }, '*');
+      target.postMessage({ sentinel: 1 }, '*');
     });
-    await page.waitForTimeout(500);
+    await page.frames().find((f) => f !== page.mainFrame())!.waitForFunction(
+      () => (window as unknown as { __sentinelSeen?: boolean }).__sentinelSeen === true,
+    );
     expect(await page.evaluate(() => (window as unknown as { __msgs: unknown[] }).__msgs)).toEqual([]);
     await expect(viewer.locator('.olv-layer')).toHaveCount(0);
   } finally {

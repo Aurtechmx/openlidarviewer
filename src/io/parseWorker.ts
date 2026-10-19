@@ -128,11 +128,17 @@ ctx.onmessage = (event: MessageEvent): void => {
       // Carry the typed category across the thread boundary when the pipeline
       // knew it, so the main thread shows the exact failure message instead of
       // re-deriving the category from the message text (a lossy fallback).
-      const reply: { type: 'error'; error: string; category?: LoadErrorCategory } = {
+      const reply: { type: 'error'; error: string; category?: LoadErrorCategory; report?: string } = {
         type: 'error',
         error: err instanceof Error ? err.message : String(err),
       };
-      if (err instanceof LoadError) reply.category = err.category;
+      if (err instanceof LoadError) {
+        reply.category = err.category;
+        // A LoadError that carries a report wrote its message for the user; the
+        // report travels with it so the main thread shows that message, not the
+        // category's generic one.
+        if (err.report !== undefined) reply.report = err.report;
+      }
       ctx.postMessage(reply);
     }
   })();

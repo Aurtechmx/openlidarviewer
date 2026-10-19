@@ -117,9 +117,12 @@ export async function decodeLaz(
   const fileBytes = new Uint8Array(buffer);
 
   const filePtr = lazPerf._malloc(fileBytes.byteLength);
-  const reader = new lazPerf.LASZip();
+  // Created inside the try so a constructor that throws still frees the file
+  // copy above.
+  let reader: InstanceType<typeof lazPerf.LASZip> | undefined;
   let pointPtr = 0;
   try {
+    reader = new lazPerf.LASZip();
     lazPerf.HEAPU8.set(fileBytes, filePtr);
     reader.open(filePtr, fileBytes.byteLength);
 
@@ -155,16 +158,23 @@ export async function decodeLaz(
   } catch (err) {
     // laz-perf is compiled without exception catching: on a corrupt stream it
     // aborts by throwing a raw Emscripten value (a string such as "<address> -
-    // Exception catching is disabled…"), not an Error. Left alone, that reaches
-    // the caller as a non-Error with no category. A LoadError (the count guard
-    // above) and an allocation RangeError keep their own shape.
-    if (err instanceof LoadError || err instanceof RangeError) throw err;
-    throw new LoadError(
-      'malformed-file',
-      'malformed LAZ: decompression failed — the compressed point data is corrupt or truncated.',
-    );
+    // Exception catching is disabled…", or a bare number), or a WebAssembly
+    // trap, not an Error from our code. Left alone, that reaches the caller as
+    // a non-Error with no category. Only those are rewrapped, and the original
+    // stays as the cause. A LoadError (the count guard above), an allocation
+    // RangeError and any other Error, such as a TypeError from a bug here, keep
+    // their own shape instead of being reported as a corrupt file.
+    if (typeof err === 'string' || typeof err === 'number' || err instanceof WebAssembly.RuntimeError) {
+      throw new LoadError(
+        'malformed-file',
+        'malformed LAZ: decompression failed — the compressed point data is corrupt or truncated.',
+        undefined,
+        { cause: err },
+      );
+    }
+    throw err;
   } finally {
-    reader.delete();
+    reader?.delete();
     if (pointPtr) lazPerf._free(pointPtr);
     lazPerf._free(filePtr);
   }

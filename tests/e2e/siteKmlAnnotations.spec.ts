@@ -159,6 +159,8 @@ test('a mesh with no CRS is refused; once a CRS is chosen its X, Y, Z are eastin
   await expect(page.locator('.olv-empty')).toBeHidden({ timeout: 20_000 });
   let site = await siteKmlButton(page);
   await expect(site).toBeDisabled();
+  // The disabled button says why on hover.
+  await expect(site).toHaveAttribute('title', /KML needs a georeferenced scan/);
   await showWorkspaceMode(page, 'data');
   await page.locator('summary', { hasText: 'Coordinate system' }).first().click();
   await page.locator('.olv-crs-select').first().selectOption('32613');

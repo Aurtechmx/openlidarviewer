@@ -78,6 +78,14 @@ Converted XYZ, ASC and LAS files record the software and version, the source fil
 - A Studio card drawn from a display sample says so and gives the loaded and declared point counts.
 - The scan report's duplicate check reads "Not checked" on a voxel-reduced display sample instead of "None".
 
+### Security and untrusted input
+
+- **Embedding.** The viewer talks to a same-origin parent, or to a parent whose origin the deployer compiled in with `OLV_EMBED_ORIGINS` (empty by default). A page framed by anything else shows a notice with a link to open the viewer in its own tab, and the viewer does not start. This matters on hosts that cannot send `frame-ancestors`; a deployer who embeds cross-origin must list the parent at build time, and `?embedParent=` or `?embedOrigins=` can only narrow that list. Firefox does not report the framing page's origin, so there the check is made per message. `load-file` is capped at 256 MiB. See `docs/usage.md`.
+- **Session files.** A session with more than 512 frame layers or 20,000 measurements, or larger than 64 MiB, is refused with a message that names the limit; nothing is truncated. A session's coordinate system is restored only when the file records it as one its author confirmed, for the open scan and the app session, with a toast that names the CRS and its unit. It is saved on the device only if you choose Keep or confirm it in the Inspector. The analysis-history line reads "chain is self-consistent (unsigned, author not verified)".
+- **Measurement labels.** The overlay draws at most 400 labels per frame, the measurement being drawn first and then those nearest the screen centre, and says when some are left out.
+- **Draco.** A glTF or GLB that lists KHR_draco_mesh_compression is refused with a message that the decoder is not bundled.
+- **Build and deploy.** A live build never includes the Playwright test seam. `npm run package` and the deploy smoke check the seam, dev flags and CSP on the files that ship, and the credits page no longer needs an inline style.
+
 ### E57
 
 - The E57 reader refuses an XML section larger than 64 MiB, nested deeper than 256 levels, or holding more than 200,000 elements or 400,000 attributes, with a clear error that names the limit.
@@ -137,6 +145,7 @@ These change figures that earlier builds reported. Each one has a regression tes
 - LAS 1.2 and 1.4 export keeps the source file's scale and offset when the source is LAS or LAZ and its header is valid.
 - A georeferenced LAS 1.4 export always carries the coordinate system as OGC WKT with global encoding bit 4 set, as LAS 1.4 R15 requires for point formats 6 to 10. A scan georeferenced by GeoTIFF keys alone gets a WKT built from EPSG definitions checked against PROJ, with its vertical CRS as a compound when the vertical code is one OLV stores. A CRS with no stored definition is refused for LAS 1.4, and the message names the code and offers LAS 1.2, which records the code as GeoTIFF keys.
 - The vertical CRS of a LAS 1.4 export is in its WKT, so PDAL and GDAL read the height datum and unit: NAVD88 heights in US survey feet are no longer read as metres by tools that take the CRS from the WKT. A vertical code OLV cannot write into the WKT, or a height unit without a vertical datum that differs from the horizontal unit, is refused for LAS 1.4 and can be written as LAS 1.2.
+- LAS 1.4 export writes the coordinate system as OGC WKT only for a CRS whose definition OLV stores or a scan's own valid WKT. Any other EPSG code, including State Plane codes such as EPSG:2229 and codes such as 28992 and 3006, is refused for LAS 1.4 with the reason; write it as LAS 1.2, which carries GeoTIFF keys. The Export panel and the batch converter select LAS 1.2 and say why when the CRS an export writes is one of these, instead of failing after Export is pressed.
 - Assign EPSG looks up whether the code is geographic or projected, and its unit, in the EPSG v12.029 tables. A geographic code is written with geographic GeoKeys at 1e-7 degree steps; a code of unknown kind, or a compound, geocentric or vertical code, is refused and named instead of being written as projected.
 - Going offline after a scan was open no longer reloads the page into an error. A part of the app that fails to load says so and points to Make available offline.
 - Save session says when class edits are not stored in the session file.
@@ -170,6 +179,7 @@ These limits are stated in full in `KNOWN_LIMITATIONS_v0.7.0.md`. They apply to 
 - Withheld points are excluded from scientific products but not from registration, classification or measurement.
 - Class names are exact only when the point data record format is known, and class edits are not stored in a session file.
 - Only one streamed source is open at a time.
+- Embedding in a page on another origin works only for origins the deployer listed in `OLV_EMBED_ORIGINS` at build time; Firefox cannot report the framing page, so it is checked per message. A session with more than 512 frame layers or 20,000 measurements, or over 64 MiB, is refused, not truncated. The measurement overlay draws at most 400 labels.
 - Registration is not exposed in the interface.
 - Touch gestures run in CI as synthesized pointer events. Multi-touch on a real device is unverified.
 - An E57 is decoded whole in memory, so one of about 900 MB or more is refused before its points are read; convert larger E57 files to LAS, LAZ or COPC. A scan that stores only spherical coordinates is skipped with a warning.

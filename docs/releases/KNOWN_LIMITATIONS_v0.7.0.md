@@ -391,10 +391,11 @@ consecutive passes, counted by `scripts/ios-streak.mjs`.
 
 ## The two monoliths are still monoliths
 
-`src/main.ts` is 4,256 lines, after the Save view snapshot
+`src/main.ts` is 4,243 lines, after the Save view snapshot
 moved to its own lazy module, the Analyse panel's longitude and latitude
 wiring moved to the mapper module, the Planetary Computer CRS record moved to
-its own module and the view cube's wiring was condensed, and
+its own module, the view cube's wiring was condensed and the epoch comparison
+sequence moved to its own module (twelve lines), and
 `src/render/Viewer.ts` is 5,936, 287 lines below its v0.6.9 count of 6,223. Five getters collapsed to make room for a memory
 accessor and a size-mode call, and the streamed draw cull then paid for its own
 wiring by moving the pass onto the streaming renderer and collapsing two more
@@ -409,8 +410,15 @@ measurement controller, which took twenty-eight more. The draw precision bound's
 fails the build when either passes its recorded baseline, so a raise is a hand
 edit to `docs/validation/monolith-size-baseline.json` and always shows in the
 diff.
-Fan-out is 97 for the shell, 73 for the renderer and 29 for the Analyse panel,
-across 1160 modules with no dependency cycles.
+Fan-out is 97 for the shell, 73 for the renderer, across 1162 modules with no
+dependency cycles. Fan-out counts the distinct modules a file imports with a
+value import, source files and external packages alike; type-only and dynamic
+imports are not counted. The shell and the renderer figures are held
+shrink-only by `lint:module-graph`, which reads 1162 source files (every
+non-test `.ts` file under `src/`). The Analyse panel is watched, not held: it
+has 29 now, against 26 in `docs/validation/module-graph-baseline.json`, and the
+watch allows a rise of 10 % (at least 3) over the banked figure before it
+fails.
 
 ## The shell has little headroom
 
@@ -817,8 +825,11 @@ read only up to it, with the limit named.
   more than 200,000 elements or 400,000 attributes. The E57 files checked here
   hold 8 to 60 elements; a single file of about 8,000 scans fits.
 - PCD: a SIZE or COUNT entry that is not a positive whole number for a declared
-  field, a binary header with fewer SIZE entries than fields, and a binary
-  body shorter than POINTS records. An ascii body with a POINTS count above its
+  field, a binary header with fewer SIZE entries than fields, a binary
+  body shorter than POINTS records, and a header line that names a key but is
+  not written at the start of a line with one space after the key (indented, or
+  tab-separated), because the loader skips such a line and other readers may
+  take it. An ascii body with a POINTS count above its
   rows opens with the rows present.
 - EPT: a hierarchy of more than 2,000,000 nodes (the COPC ceiling) is read up
   to that point, the scene is missing the rest, and the open reports it. A
@@ -1085,6 +1096,13 @@ compared relief can still pull the fit. The fitting residual and the residual
 at the applied pose are reported separately; neither is a registration
 uncertainty, and a small fitting residual does not validate the alignment.
 
+The test that refuses an unobservable surface was validated on synthetic
+lattices. It can pass a sloped plane when the noise-to-spacing ratio is above
+about 0.3 and the shift is small, because noise then supplies the information
+the plane lacks. A fit accepted on noisy relief is therefore not evidence that
+the surface constrained the alignment; validate it against stable areas that
+were surveyed independently of the two epochs.
+
 ## The CRS override fingerprint samples a source, it does not hash it
 
 A remembered CRS override records a content fingerprint of its source so that
@@ -1122,3 +1140,52 @@ twice and so cannot be matched to one scan, stays held. In a session with no
 project frame, work marked as placed in a project frame is reported as not
 restored. Opening a streamed COPC or EPT scan does not trigger the restore;
 only a static scan open does.
+
+## Embedding needs headers, or a build-time allow-list, on every host
+
+The viewer decides for itself who may frame it, because a static host that
+cannot send `frame-ancestors` (GitHub Pages, a bucket host) cannot keep other
+sites from framing it. A parent on the viewer's own origin is trusted. A parent
+on any other origin is trusted only if the deployer listed it in
+`OLV_EMBED_ORIGINS` at build time (empty by default). A viewer framed by
+anything else does not start: it shows a notice with a link to open the viewer
+in its own tab, sends no `ready` message and ignores every message. A visitor's
+`?embedParent=` or `?embedOrigins=` can only narrow the list. A page that is
+not framed is unaffected.
+
+Firefox does not report the framing page's origin (`location.ancestorOrigins`
+is available in Chromium and Safari). Without it, a cross-origin parent can be
+told apart only by the origin of each message, so on Firefox the check is made
+per message, not once at start. A host that can send headers should still set
+`frame-ancestors`, which every browser enforces before the page loads. A
+`load-file` message is capped at 256 MiB. See `docs/usage.md`.
+
+## A session file is refused past fixed caps, not truncated
+
+Opening a session refuses a file that holds more than 512 frame layers or more
+than 20,000 measurements, or that is larger than 64 MiB, with a message that
+names the limit. Nothing is opened from a refused file and nothing is dropped
+to make it fit. A larger project has to be split into several sessions. The
+caps bound the work a crafted file can start; they are not measured limits of
+the viewer.
+
+## A session's coordinate system is restored only when its author confirmed it
+
+A session restores a coordinate system only when the file records it as a CRS
+the author confirmed. It is applied to the open scan for the rest of the app
+session, and a toast names the CRS and its unit. It is saved on the device only
+if you choose Keep, or confirm the CRS in the Inspector; closing the page
+before then leaves the scan as it was opened. A session that records a CRS the
+author did not confirm, or one whose units disagree with the scan, does not
+change the scan's coordinate system. The analysis-history line on import reads
+"chain is self-consistent (unsigned, author not verified)": the chain is an
+unkeyed SHA-256 fold, so a pass does not show that the file is unaltered or who
+wrote it.
+
+## The measurement overlay draws at most 400 labels
+
+The overlay draws at most 400 measurement labels per frame: the measurement
+being drawn first, then those nearest the screen centre, laid out on a spatial
+grid so they do not overlap. When some are left out, the overlay says so.
+The Measurements list, the CSV and the other exports are not limited by it.
+Zooming in or panning brings other labels into the 400.
