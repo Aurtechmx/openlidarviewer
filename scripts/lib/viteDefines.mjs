@@ -42,3 +42,34 @@ export function parseEmbedOrigins(raw) {
   }
   return { origins, dropped };
 }
+
+/** The meta tag name that records a non-empty embed allow-list in the built pages. */
+export const EMBED_ORIGINS_STAMP_NAME = 'olv-embed-origins';
+
+/**
+ * The attributes of the `<meta>` the build adds to every page when the embed
+ * allow-list is non-empty, or null for an empty list (the default, which adds
+ * nothing). The list is also compiled into the bundle, where a packaging check
+ * cannot tell it from any other string; this makes it findable in the output.
+ *
+ * @param {readonly string[]} origins
+ * @returns {{ name: string, content: string } | null}
+ */
+export function embedOriginsStamp(origins) {
+  return origins.length > 0 ? { name: EMBED_ORIGINS_STAMP_NAME, content: origins.join(',') } : null;
+}
+
+/**
+ * The origins a built page's stamp names, or null when it carries none.
+ *
+ * @param {string} html
+ * @returns {string[] | null}
+ */
+export function findEmbedOriginsStamp(html) {
+  for (const tag of html.match(/<meta\b[^>]*>/gi) ?? []) {
+    if (!new RegExp(`\\bname\\s*=\\s*["']${EMBED_ORIGINS_STAMP_NAME}["']`, 'i').test(tag)) continue;
+    const content = /\bcontent\s*=\s*["']([^"']*)["']/i.exec(tag)?.[1] ?? '';
+    return content.split(',').map((o) => o.trim()).filter(Boolean);
+  }
+  return null;
+}

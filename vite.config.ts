@@ -7,7 +7,7 @@ import { visualizer } from 'rollup-plugin-visualizer';
 import { requireBinaryOnPath } from './scripts/lib/binaryOnPath.mjs';
 import { buildSwPrecacheManifest } from './scripts/lib/swPrecacheManifest.mjs';
 import { stampSourceLinks } from './scripts/lib/sourceLink.mjs';
-import { parseEmbedOrigins, testSeamEnabled } from './scripts/lib/viteDefines.mjs';
+import { embedOriginsStamp, parseEmbedOrigins, testSeamEnabled } from './scripts/lib/viteDefines.mjs';
 import {
   workerExcludePatterns,
   workerChunkPins,
@@ -387,6 +387,24 @@ function fontPreload() {
   };
 }
 
+/**
+ * Records a non-empty embed allow-list in every built page as a `<meta>`, so a
+ * packaging check can see that `OLV_EMBED_ORIGINS` reached the build. Adds
+ * nothing when the list is empty, which is the default.
+ */
+function embedOriginsStampPlugin(origins: readonly string[]) {
+  const stamp = embedOriginsStamp(origins);
+  return {
+    name: 'olv-embed-origins-stamp',
+    transformIndexHtml: {
+      order: 'post' as const,
+      handler() {
+        return stamp ? [{ tag: 'meta', attrs: stamp, injectTo: 'head' as const }] : [];
+      },
+    },
+  };
+}
+
 function chunkEmissionGuard(devFlags: boolean, testSeam: boolean) {
   const required = [
     // Every lazyChunks.ts seam, derived from the module itself at config
@@ -702,6 +720,7 @@ export default defineConfig(({ mode }) => {
     thirdPartyNotices() as PluginOption,
     creditsSourceLink(buildIdentity) as PluginOption,
     fontPreload() as PluginOption,
+    embedOriginsStampPlugin(embedOrigins) as PluginOption,
     swPrecacheManifest() as PluginOption,
     ...(mode === 'live' ? [liveSourceTransformPlugin() as PluginOption] : []),
     bundleAnalyzer(),

@@ -39,8 +39,8 @@ function deployDir(extra: Record<string, string> = {}): string {
 const failing = (dir: string): string[] => runDeployChecks(dir).filter((r) => !r.ok).map((r) => r.name);
 
 describe('runDeployChecks', () => {
-  it('runs the seam, dev-flag and CSP checks', () => {
-    expect(DEPLOY_CHECKS.map((c) => c.name)).toEqual(['no-test-seam', 'no-dev-flags', 'built-csp']);
+  it('runs the seam, dev-flag, CSP and embed-origins checks', () => {
+    expect(DEPLOY_CHECKS.map((c) => c.name)).toEqual(['no-test-seam', 'no-dev-flags', 'built-csp', 'no-embed-origins']);
   });
 
   it('passes a clean deploy directory', () => {
@@ -70,7 +70,75 @@ describe('runDeployChecks', () => {
   it('fails every check on a directory that holds no build', () => {
     const dir = mkdtempSync(join(tmpdir(), 'olv-empty-'));
     dirs.push(dir);
-    expect(failing(dir)).toEqual(['no-test-seam', 'no-dev-flags', 'built-csp']);
+    expect(failing(dir)).toEqual(['no-test-seam', 'no-dev-flags', 'built-csp', 'no-embed-origins']);
+  });
+});
+
+describe('an embed allow-list left in the packaging shell', () => {
+  const STAMP = '<meta name="olv-embed-origins" content="https://portal.example.org,https://courses.example.edu">';
+  const stamped = (): string => deployDir({ 'index.html': read('index.html').replace('</head>', `${STAMP}</head>`) });
+  const withEnv = <T,>(value: string | undefined, run: () => T): T => {
+    const before = process.env.OLV_ALLOW_EMBED_ORIGINS;
+    if (value === undefined) delete process.env.OLV_ALLOW_EMBED_ORIGINS;
+    else process.env.OLV_ALLOW_EMBED_ORIGINS = value;
+    try {
+      return run();
+    } finally {
+      if (before === undefined) delete process.env.OLV_ALLOW_EMBED_ORIGINS;
+      else process.env.OLV_ALLOW_EMBED_ORIGINS = before;
+    }
+  };
+
+  it('fails packaging, naming the origins, unless the packager acknowledged them', () => {
+    const dir = stamped();
+    withEnv(undefined, () => {
+      const res = runDeployChecks(dir).find((r) => r.name === 'no-embed-origins')!;
+      expect(res.ok).toBe(false);
+      expect(res.output).toContain('https://portal.example.org, https://courses.example.edu');
+      expect(res.output).toContain('OLV_ALLOW_EMBED_ORIGINS=1');
+    });
+  });
+
+  it('passes with OLV_ALLOW_EMBED_ORIGINS=1, and says the list was acknowledged', () => {
+    const dir = stamped();
+    withEnv('1', () => {
+      const res = runDeployChecks(dir).find((r) => r.name === 'no-embed-origins')!;
+      expect(res.ok).toBe(true);
+    });
+  });
+
+  it('any other value does not acknowledge it', () => {
+    const dir = stamped();
+    withEnv('yes', () => expect(failing(dir)).toEqual(['no-embed-origins']));
+  });
+
+  it('a build with no list passes without the acknowledgement', () => {
+    withEnv(undefined, () => expect(failing(deployDir())).toEqual([]));
+  });
+
+  it('is found on any page of the build, not only the first', () => {
+    const dir = deployDir({ 'credits.html': read('public/credits.html').replace('</head>', `${STAMP}</head>`) });
+    withEnv(undefined, () => {
+      const res = runDeployChecks(dir).find((r) => r.name === 'no-embed-origins')!;
+      expect(res.ok).toBe(false);
+      expect(res.output).toContain('credits.html');
+    });
+  });
+});
+
+describe('the build stamp', () => {
+  it('is added only for a non-empty list, and parses back to the same origins', async () => {
+    const { embedOriginsStamp, findEmbedOriginsStamp } = await import('../scripts/lib/viteDefines.mjs');
+    expect(embedOriginsStamp([])).toBeNull();
+    const stamp = embedOriginsStamp(['https://a.example', 'https://b.example'])!;
+    const html = `<head><meta charset="utf-8"><meta name="${stamp.name}" content="${stamp.content}"></head>`;
+    expect(findEmbedOriginsStamp(html)).toEqual(['https://a.example', 'https://b.example']);
+    expect(findEmbedOriginsStamp('<head><meta name="viewport" content="width=device-width"></head>')).toBeNull();
+    expect(findEmbedOriginsStamp(`<meta content="https://a.example" name="olv-embed-origins">`)).toEqual(['https://a.example']);
+  });
+
+  it('is wired into the build as a plugin', () => {
+    expect(read('vite.config.ts')).toContain('embedOriginsStampPlugin(embedOrigins)');
   });
 });
 

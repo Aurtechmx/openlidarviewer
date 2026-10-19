@@ -178,7 +178,11 @@ Who may embed the viewer is decided in two places, and a host should set both.
   OLV_EMBED_ORIGINS=https://portal.example.org,https://courses.example.edu npm run build:live
   ```
 
-  The list is compiled into the build. A visitor's URL cannot add to it. Entries that are not `http` or `https` origins are dropped, and the build prints a warning for each.
+  The list is compiled into the build. A visitor's URL cannot add to it. Entries that are not `http` or `https` origins are dropped, and the build prints a warning for each. Packaging (`scripts/package.sh`) refuses a build that carries a list unless `OLV_ALLOW_EMBED_ORIGINS=1` is also set, so a list left exported in the shell does not reach a release archive by accident:
+
+  ```sh
+  OLV_EMBED_ORIGINS=https://portal.example.org OLV_ALLOW_EMBED_ORIGINS=1 scripts/package.sh
+  ```
 - `?embedParent=` and `?embedOrigins=` on the viewer URL are a request, not an authorisation. They can narrow the deployer's list to the origins that embed wants (`?embedParent=https://host.example.com`, or `?embedOrigins=https://a.example.com,https://b.example.com`); an origin they name that is not on the list is ignored.
 - Where the browser reports the framing page (`location.ancestorOrigins`: Chromium and Safari, not Firefox), the viewer checks that origin against the rules and talks to it alone. Without it, a cross-origin parent can be told apart only by the origin of each message, which must be on the list.
 

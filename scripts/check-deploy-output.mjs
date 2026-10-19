@@ -6,16 +6,18 @@
  *
  * The directory is the output of `vite build --mode live` as it will ship: the
  * staged copy that package.sh zips, or the extraction of the finished archive.
- * Three checks run on it, each a script of its own that can also be run alone:
+ * Four checks run on it, each a script of its own that can also be run alone:
  *
  *   check-no-test-seam    no Playwright seam in the bundle
  *   check-no-dev-flags    no maintainer A/B flag handling
  *   check-built-csp       every inline <script>/<style> in every HTML file is
  *                         named by the Content-Security-Policy that ships
+ *   check-no-embed-origins no embed allow-list was built in, unless
+ *                         OLV_ALLOW_EMBED_ORIGINS=1 says it is intended
  *
  * A `dist/` left over from an earlier build was once all that anything checked;
  * the bytes that get zipped or served are what must pass. The exit status is
- * non-zero when any check fails, and all three always run so one report lists
+ * non-zero when any check fails, and every check always runs so one report lists
  * everything wrong.
  */
 
@@ -33,6 +35,7 @@ export const DEPLOY_CHECKS = [
   { name: 'no-test-seam', script: 'check-no-test-seam.mjs' },
   { name: 'no-dev-flags', script: 'check-no-dev-flags.mjs' },
   { name: 'built-csp', script: 'check-built-csp.mjs' },
+  { name: 'no-embed-origins', script: 'check-no-embed-origins.mjs' },
 ];
 
 /**
