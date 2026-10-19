@@ -17,7 +17,7 @@ import { runFullCloudGrade } from '../src/render/streaming/runFullCloudGradeActi
 import { gradeSampleDensity, summarizeSampleGrade } from '../src/render/streaming/sampleGrade';
 import { classifierVerticalRefusal } from '../src/render/class/classifierCues';
 import { runDeriveClassification, runFillUnclassified, type ClassifyActionsDeps } from '../src/app/classifyActions';
-import { routeUnitFrame } from '../src/app/routeUnitFrame';
+import { routeUnitFrame } from '../src/app/scanRouteCoordinator';
 import { spaceMetrics } from '../src/terrain/spaceMetrics';
 import { spatialContextFrom } from '../src/geo/SpatialContext';
 import { PointCloud } from '../src/model/PointCloud';

@@ -17,12 +17,12 @@
  * abstraction for both COPC and EPT entries.
  *
  * Pure — unit-tested in Node. The one import below runs the frame policy when
- * the app starts (a no-op outside a browser); see `frameGuardBoot.ts`, which
- * `main.ts` also imports first.
+ * the app starts (a no-op outside a browser); see `frameGuardBoot.ts`. `main.ts`
+ * imports this module first.
  */
 
-// `main.ts` imports the guard first; this import keeps it ahead of the app's
-// own code for any module that reaches the config another way.
+// This module is the first import of `main.ts` and imports the guard before
+// anything else, so the guard runs ahead of the app's own code.
 import './frameGuardBoot';
 
 /** The viewer theme. Only `dark` exists; the type is the seam for future ones. */

@@ -1,7 +1,6 @@
 /**
- * frameGuardBoot.ts: the first import of `main.ts` (`embedConfig.ts` imports it
- * as well, for the modules that reach the config without going through
- * `main.ts`), so it runs before the app's own code. When the page is framed by
+ * frameGuardBoot.ts: imported first by `embedConfig.ts`, which is the first
+ * import of `main.ts`, so it runs before the app's own code. When the page is framed by
  * a site the embed policy does not trust, it shows the notice and throws, so
  * `main.ts` never evaluates and the app does not start. Everywhere else it is
  * a no-op.

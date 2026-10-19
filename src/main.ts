@@ -1,4 +1,4 @@
-import './ui/frameGuardBoot'; // First: a page framed by an untrusted site gets a notice and the app does not start.
+import { parseEmbedConfig } from './ui/embedConfig'; // First: it imports the frame guard, so a page framed by an untrusted site gets a notice and the app does not start.
 import '@fontsource/jetbrains-mono/latin-400.css';
 import '@fontsource/jetbrains-mono/latin-500.css';
 import './styles';
@@ -93,8 +93,7 @@ import type { ObjectPanel } from './ui/ObjectPanel';
 import type { MobileSheet } from './ui/MobileSheet';
 import type { WorkspaceMode } from './ui/workspace/DesktopWorkspace';
 import type { WorkspaceShell } from './app/workspace/workspaceShell';
-import { createScanRouteCoordinator, type SpaceExportContext } from './app/scanRouteCoordinator';
-import { routeUnitFrame } from './app/routeUnitFrame';
+import { createScanRouteCoordinator, routeUnitFrame, type SpaceExportContext } from './app/scanRouteCoordinator';
 import { TERRAIN_METRIC_VERSION } from './terrain/datasetIntelligence';
 import { ExportPanel, exportClassFacts, exportLayerHooks } from './ui/ExportPanel';
 import { lonLatMapContext } from './export/lonLatMapper';
@@ -127,7 +126,6 @@ import {
 import { LoadCancelledError } from './io/loadFile';
 import { LocalFileSource } from './io/LocalFileSource';
 import { deviceCaps } from './render/deviceProfile';
-import { parseEmbedConfig } from './ui/embedConfig';
 // `startEmbedBridge` is only wired in `?embed=1` mode.
 // Lazy-loaded so the bridge code never enters the bundle for the typical
 // non-iframe page load (the dominant traffic pattern).

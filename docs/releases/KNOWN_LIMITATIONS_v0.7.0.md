@@ -391,7 +391,7 @@ consecutive passes, counted by `scripts/ios-streak.mjs`.
 
 ## The two monoliths are still monoliths
 
-`src/main.ts` is 4,259 lines, after the Save view snapshot
+`src/main.ts` is 4,256 lines, after the Save view snapshot
 moved to its own lazy module, the Analyse panel's longitude and latitude
 wiring moved to the mapper module, the Planetary Computer CRS record moved to
 its own module and the view cube's wiring was condensed, and

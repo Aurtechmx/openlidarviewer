@@ -44,9 +44,11 @@ describe('frameGuardBoot', () => {
     await expect(import('../src/ui/frameGuardBoot')).resolves.toBeDefined();
   });
 
-  it('is the first import of main.ts, ahead of everything that could run before the guard', async () => {
+  it('runs ahead of the app: main.ts imports embedConfig first, and embedConfig imports the guard first', async () => {
     const { readFileSync } = await import('node:fs');
-    const main = readFileSync(new URL('../src/main.ts', import.meta.url), 'utf8');
-    expect(main.split('\n').find((l) => l.trim() !== '' && !l.trim().startsWith('//'))).toMatch(/^import '\.\/ui\/frameGuardBoot';/);
+    const firstImport = (file: string): string | undefined =>
+      readFileSync(new URL(file, import.meta.url), 'utf8').split('\n').find((l) => /^import\b/.test(l));
+    expect(firstImport('../src/main.ts')).toMatch(/from '\.\/ui\/embedConfig'/);
+    expect(firstImport('../src/ui/embedConfig.ts')).toMatch(/^import '\.\/frameGuardBoot';/);
   });
 });

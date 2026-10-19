@@ -2209,34 +2209,18 @@ export class MeasureController {
     }
   }
 
+  private _holds = 0;
+  private _owed = false;
+
   private _emitChange(): void {
-    if (this._changeHolds > 0) {
-      this._changePending = true;
-      return;
-    }
-    this._onChange?.();
+    if (this._holds > 0) this._owed = true;
+    else this._onChange?.();
   }
 
-  private _changeHolds = 0;
-  private _changePending = false;
-
-  /**
-   * Run `fn` with change notifications held, then notify once if any fired. A
-   * frame change is several writes (units, vertical unit, CRS flags, the layer
-   * up axis, the re-cut of derived results); a subscriber told after the first
-   * of them would read the new frame beside a profile or volume still cut along
-   * the old axis.
-   */
+  /** Run `fn` with change notifications held, then notify once if any fired: a frame change is several writes, and a subscriber must not see the first beside results still cut along the old axis. */
   holdChange<T>(fn: () => T): T {
-    this._changeHolds++;
-    try {
-      return fn();
-    } finally {
-      if (--this._changeHolds === 0 && this._changePending) {
-        this._changePending = false;
-        this._onChange?.();
-      }
-    }
+    this._holds++;
+    try { return fn(); } finally { if (--this._holds === 0 && this._owed) { this._owed = false; this._onChange?.(); } }
   }
 
   /** A pointerdown on a vertex handle begins an edit drag. */
