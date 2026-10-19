@@ -61,6 +61,13 @@ RINGS = [(-18, 30, 5.5), (-6.5, 44, 7.5), (5, 48, 8.5), (16, 46, 8.0)]
 # (offset from centre, radius), mirrored above and below the sphere.
 AXIS = [(19, 3.0), (28, 2.2), (37, 1.2), (44.5, 0.85)]
 
+# Spacing scale (8 px base). Every gap and margin in the lockup and the share
+# card is one of these steps.
+SPACE = {"xs": 4, "sm": 8, "md": 16, "lg": 24, "xl": 32, "2xl": 48, "3xl": 64, "4xl": 80}
+# Ink extents of the emblem in its 100-unit box: the widest ring (rx 48) and
+# the outermost axis dots (offset 44.5, radius 0.85).
+EMBLEM_INK = (2.0, 50 - 44.5 - 0.85, 98.0, 50 + 44.5 + 0.85)
+
 
 # The light-background lockup: the same emblem in deeper blues, so it holds on
 # near-white surfaces.
@@ -212,49 +219,66 @@ def ink_bounds(font: TTFont, text: str, size: float, x: float = 0.0, baseline: f
     return pen.bounds
 
 
-def lockup_text(left: float, centre_y: float, word_size: float, tag_size: float) -> tuple[str, str, float]:
+def lockup_text(left: float, right: float, centre_y: float, word_size: float, tag_size: float) -> tuple[str, str]:
     """Wordmark and tagline as one block, laid out from the outlines' ink bounds.
 
-    The block's ink starts at `left` and is centred on `centre_y` (the emblem's
-    centre), measured from the wordmark's cap top to the last tagline baseline
-    so descenders hang below as they do in set type. The gap from the
-    wordmark's lowest ink (the descender of "p") to the tagline is half the
-    tagline size, the tagline leading is 1.35, and the tagline is never wider
-    than the wordmark. Returns (wordmark path, tagline path, right ink edge).
+    Inline: the block's ink runs from `left` to `right`; the wordmark is scaled
+    to fill that width and the tagline is never wider than the wordmark.
+    Stack: the tagline's first line starts SPACE["md"] below the wordmark's
+    lowest ink (the descender of "p"), and tagline baselines are a whole number
+    of SPACE["sm"] steps apart, at least 1.3 x the tagline size.
+    The block is centred on `centre_y` (the emblem's centre), measured from the
+    wordmark's cap top to the last tagline baseline, so descenders hang below
+    as they do in set type. Returns (wordmark path, tagline path).
     """
     medium, regular = load_font("Medium"), load_font("Regular")
     tracking = -0.02
+    wl, _, wr, _ = ink_bounds(medium, WORDMARK, word_size, 0, 0, tracking)
+    word_size *= (right - left) / (wr - wl)
     wl, wt, wr, wb = ink_bounds(medium, WORDMARK, word_size, 0, 0, tracking)
-    widest = max(ink_bounds(regular, line, tag_size)[2] - ink_bounds(regular, line, tag_size)[0] for line in TAGLINE)
+    def width(line: str, size: float) -> float:
+        b = ink_bounds(regular, line, size)
+        return b[2] - b[0]
+    widest = max(width(line, tag_size) for line in TAGLINE)
     if widest > wr - wl:
         tag_size *= (wr - wl) / widest
-    leading = tag_size * 1.35
+    step = SPACE["sm"]
+    pitch = math.ceil(tag_size * 1.3 / step) * step
     tag_top = min(ink_bounds(regular, TAGLINE[0], tag_size)[1], 0.0)
-    first_base = wb + 0.5 * tag_size - tag_top
-    last_base = first_base + leading * (len(TAGLINE) - 1)
+    first_base = wb + SPACE["md"] - tag_top
+    last_base = first_base + pitch * (len(TAGLINE) - 1)
     shift = centre_y - (wt + last_base) / 2
     word, _ = text_path(medium, WORDMARK, word_size, left - wl, shift, tracking)
     tag = "".join(
-        text_path(regular, line, tag_size, left - ink_bounds(regular, line, tag_size)[0], shift + first_base + i * leading)[0]
+        text_path(regular, line, tag_size, left - ink_bounds(regular, line, tag_size)[0], shift + first_base + i * pitch)[0]
         for i, line in enumerate(TAGLINE)
     )
-    return word, tag, left + (wr - wl)
+    return word, tag
 
 
 def brand_logo_svg() -> str:
-    """Horizontal lockup on the #030817 field, all vector."""
-    h = 360
-    # Emblem: translate(40 30) scale(3), so its centre is y 180 and its widest
-    # ring spans x 46 to 334. The text starts 18.4 emblem units (55) past the
-    # rings, the same gap as the share card, and the canvas ends one emblem
-    # margin (46) past the text.
-    word, tag, right = lockup_text(389, 180, 118, 38)
-    w = math.ceil(right + 46)
+    """Horizontal lockup on the #030817 field, all vector.
+
+    Margins are SPACE["2xl"] on every side of the emblem and text ink; the text
+    starts SPACE["2xl"] past the emblem's widest ring. The canvas is as wide as
+    the wordmark at its set size needs.
+    """
+    scale = 3.0
+    margin = SPACE["2xl"]
+    ex0, ey0, ex1, ey1 = EMBLEM_INK
+    tx, ty = margin - ex0 * scale, margin - ey0 * scale
+    h = math.ceil(2 * margin + (ey1 - ey0) * scale)
+    left = margin + (ex1 - ex0) * scale + SPACE["2xl"]
+    medium = load_font("Medium")
+    wl, _, wr, _ = ink_bounds(medium, WORDMARK, 118, 0, 0, -0.02)
+    right = left + (wr - wl)
+    w = math.ceil(right + margin)
+    word, tag = lockup_text(left, right, h / 2, 118, 38)
     return (
         f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {w} {h}" width="{w}" height="{h}">'
         f"<defs>{emblem_defs('l')}</defs>"
         f'<rect width="{w}" height="{h}" fill="{NIGHT}"/>'
-        f'<g transform="translate(40 30) scale(3)">{emblem_body("l")}</g>'
+        f'<g transform="translate({tx:g} {ty:g}) scale({scale:g})">{emblem_body("l")}</g>'
         f'<path d="{word}" fill="{WHITE}"/><path d="{tag}" fill="{CYAN}"/></svg>\n'
     )
 
@@ -281,17 +305,28 @@ def terrain_dots(w: int, h: int) -> str:
 
 
 def og_card_svg() -> str:
+    """1200 x 630 share card.
+
+    Left and right margins are SPACE["4xl"] (80); the emblem's top is
+    SPACE["4xl"] + SPACE["2xl"] (128) from the top edge so the block sits
+    above the terrain field; the text starts SPACE["2xl"] past the widest ring
+    and the wordmark is sized to end at the right margin.
+    """
     w, h = 1200, 630
-    # Emblem: translate(70 115) scale(2.8), so its centre is y 255 and its
-    # widest ring ends at x 344; the text starts 52 past it.
-    word, tag, _ = lockup_text(396, 255, 92, 31)
+    scale = 2.8
+    margin = SPACE["4xl"]
+    ex0, ey0, ex1, ey1 = EMBLEM_INK
+    tx, ty = margin - ex0 * scale, SPACE["4xl"] + SPACE["2xl"] - ey0 * scale
+    centre_y = ty + 50 * scale
+    left = margin + (ex1 - ex0) * scale + SPACE["2xl"]
+    word, tag = lockup_text(left, w - margin, centre_y, 92, 31)
     return (
         f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {w} {h}" width="{w}" height="{h}">'
         f"<defs>{emblem_defs('o')}"
         f'<linearGradient id="bg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="{NIGHT}"/>'
         f'<stop offset="1" stop-color="{MIDNIGHT}"/></linearGradient></defs>'
         f'<rect width="{w}" height="{h}" fill="url(#bg)"/>{terrain_dots(w, h)}'
-        f'<g transform="translate(70 115) scale(2.8)">{emblem_body("o")}</g>'
+        f'<g transform="translate({tx:g} {ty:g}) scale({scale:g})">{emblem_body("o")}</g>'
         f'<path d="{word}" fill="{WHITE}"/><path d="{tag}" fill="{CYAN}"/></svg>\n'
     )
 
