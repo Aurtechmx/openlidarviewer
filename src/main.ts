@@ -94,6 +94,7 @@ import type { MobileSheet } from './ui/MobileSheet';
 import type { WorkspaceMode } from './ui/workspace/DesktopWorkspace';
 import type { WorkspaceShell } from './app/workspace/workspaceShell';
 import { createScanRouteCoordinator, type SpaceExportContext } from './app/scanRouteCoordinator';
+import { routeUnitFrame } from './app/routeUnitFrame';
 import { TERRAIN_METRIC_VERSION } from './terrain/datasetIntelligence';
 import { ExportPanel, exportClassFacts, exportLayerHooks } from './ui/ExportPanel';
 import { lonLatMapContext } from './export/lonLatMapper';
@@ -2540,9 +2541,7 @@ const routeCoordinator = createScanRouteCoordinator({
     },
   },
   frame: {
-    linearUnitToMetres: () => crsService.context().linearUnitToMetres,
-    verticalUnitToMetres: () => { const c = crsService.context(); return verticalMetresPerUnit(c, 'horizontal') ?? c.linearUnitToMetres; },
-    linearUnitKnown: () => crsService.context().linearUnitKnown,
+    ...routeUnitFrame(() => crsService.context()),
     exportTargetId: () => scans.activeExportTargetId(), crsRevision: () => crsService.crsRevision(),
     basename: () => lastCloudName, truncation: () => scans.activeCloud()?.metadata?.truncation ?? null,
   },

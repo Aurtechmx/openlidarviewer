@@ -265,26 +265,37 @@ export function gradeUnitSuffixes(unitConfirmed: boolean): GradeUnitSuffixes {
  * With the unit unconfirmed the spans are in raw source units: the tier verdict
  * is withheld and only the raw figures — labelled per source unit — are shown,
  * so a state-plane-FEET (or CRS-less) cloud is never reported in metres.
+ *
+ * `verticalUnitInvalid` is a vertical unit the source declares but that cannot
+ * be read. Every figure that depends on Z (the vertical extent, the volumetric
+ * density and any tier judged on it) is then withheld with that reason, rather
+ * than computed with the horizontal unit standing in.
  */
-export function summarizeSampleGrade(grade: SampleGrade, unitConfirmed = true): string[] {
+export const VERTICAL_UNIT_UNREADABLE = 'the height unit of the coordinate system could not be read';
+
+export function summarizeSampleGrade(grade: SampleGrade, unitConfirmed = true, verticalUnitInvalid = false): string[] {
   const units = gradeUnitSuffixes(unitConfirmed);
   const lines: string[] = [];
   // Headline tier, annotated with the density it was judged on (areal for flat
   // data, volumetric for tall) so the number and its unit always agree.
   let densityFigure = '';
+  const volumetricWithheld = verticalUnitInvalid && grade.bucketBasis === 'volumetric';
   if (grade.bucketBasis === 'areal' && grade.arealDensityPerM2 != null) {
     densityFigure = ` · ≈ ${formatDensity(grade.arealDensityPerM2)} ${units.areal}`;
-  } else if (grade.bucketBasis === 'volumetric' && grade.volumetricDensityPerM3 != null) {
+  } else if (!volumetricWithheld && grade.bucketBasis === 'volumetric' && grade.volumetricDensityPerM3 != null) {
     densityFigure = ` · ≈ ${formatDensity(grade.volumetricDensityPerM3)} ${units.volumetric}`;
   }
   // The tier word claims an absolute pts/m² band, so withhold it when the unit
   // is unconfirmed — the '—'/none case still reads '—'.
   let tier: string;
-  if (unitConfirmed) tier = grade.bucketLabel;
+  if (volumetricWithheld) tier = `not available: ${VERTICAL_UNIT_UNREADABLE}`;
+  else if (unitConfirmed) tier = grade.bucketLabel;
   else if (grade.bucketBasis === 'none') tier = grade.bucketLabel;
   else tier = 'units unknown';
   lines.push(`Density: ${tier}${densityFigure}`);
-  if (grade.verticalSpanM > 0) {
+  if (verticalUnitInvalid) {
+    lines.push(`Vertical extent: not available: ${VERTICAL_UNIT_UNREADABLE}`);
+  } else if (grade.verticalSpanM > 0) {
     lines.push(`Vertical extent: ${grade.verticalSpanM.toFixed(1)} ${units.vertical}`);
   }
   if (grade.occupancyRatio != null) {

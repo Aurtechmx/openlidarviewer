@@ -13,7 +13,7 @@
  */
 
 import { deriveClassificationAsync } from '../render/class/deriveClassificationAsync';
-import { classifierOptions } from '../render/class/classifierCues';
+import { classifierOptions, classifierVerticalRefusal } from '../render/class/classifierCues';
 import { classificationCoverage } from '../render/class/classificationCoverage';
 import type { DeriveClassificationOptions } from '../render/class/deriveClassification';
 import { countClasses } from '../render/class/classHistogram';
@@ -134,6 +134,11 @@ export async function runDeriveClassification(d: ClassifyActionsDeps): Promise<v
   }
   // RGB (when present) sharpens vegetation on photogrammetry, where geometry
   // alone is noisy — a green, locally-smooth canopy isn't mistaken for a roof.
+  const heightRefusal = classifierVerticalRefusal(d.crsService.context());
+  if (heightRefusal) {
+    d.toast(`Classify · not run: ${heightRefusal}`);
+    return;
+  }
   const deriveOptions = classifierOptions(cloud, d.crsService.context());
 
   classifyRunning = true;
@@ -184,6 +189,11 @@ export async function runFillUnclassified(d: ClassifyActionsDeps): Promise<void>
   }
   if (cov.unclassified === 0) {
     d.toast('Fill unclassified · every point already carries a class — nothing to fill.');
+    return;
+  }
+  const heightRefusal = classifierVerticalRefusal(d.crsService.context());
+  if (heightRefusal) {
+    d.toast(`Fill unclassified · not run: ${heightRefusal}`);
     return;
   }
   // Preserve the producer classes; RGB (when present) sharpens the filled gaps.
