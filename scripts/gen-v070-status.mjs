@@ -20,12 +20,18 @@
  *
  * The check is what the gate runs. A generated document nobody regenerates is
  * a document that lies, and the failure names the command that fixes it.
+ *
+ * Both the ledger and this document are repository-only: the source archive
+ * does not ship them. In a git checkout a missing ledger is an error. In an
+ * extracted archive (no `.git`) there is nothing to derive from or compare, so
+ * the run prints a SKIPPED notice and exits 0.
  */
-import { readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { isCliEntry } from './lib/isCliEntry.mjs';
+import { LEDGER_PATH, isGitCheckout, ledgerSkipNotice } from './lib/repoOnlyDocs.mjs';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const LEDGER = join(ROOT, 'docs/releases/V070_IMPLEMENTATION_LEDGER.md');
@@ -179,6 +185,16 @@ if (isCliEntry(import.meta.url)) main();
 
 /** Write the document, or check it, depending on the flag. */
 function main() {
+  if (!existsSync(LEDGER)) {
+    if (!isGitCheckout(ROOT)) {
+      console.log(ledgerSkipNotice('lint:v070-status'));
+      return;
+    }
+    console.error('lint:v070-status FAILED');
+    console.error('');
+    console.error(`  • ${LEDGER_PATH} is missing from a git checkout.`);
+    process.exit(1);
+  }
   const wanted = renderStatus(readCurrentStatus());
   if (process.argv.includes('--check')) {
     let actual = null;

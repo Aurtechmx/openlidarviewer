@@ -84,6 +84,15 @@ docs-site/releases/v0.5.*.md export-ignore
 # The release checklist is an internal process aid, not scholarly content.
 docs/project/RELEASE_CHECKLIST.md export-ignore
 
+# The v0.7 implementation ledger is an internal chronological log of every
+# defect and item of the release, one account per revisit. V070_CURRENT_STATUS.md
+# is generated from it (scripts/gen-v070-status.mjs) and means nothing without
+# it. Both stay in the repository and in history, and out of the source archive.
+# The checks that read them (lint:known-limitations, lint:v070-status) skip with
+# a printed notice when run from an archive, and still fail in a git checkout.
+docs/releases/V070_IMPLEMENTATION_LEDGER.md export-ignore
+docs/releases/V070_CURRENT_STATUS.md export-ignore
+
 # Keep TypeScript/source as text so a stray byte never flips a diff to binary
 *.ts text
 *.tsx text

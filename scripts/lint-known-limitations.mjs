@@ -15,6 +15,11 @@
  *       must not read FIXED in the ledger table, and each phrase in
  *       PHRASE_GUARDS must not appear while its ledger id reads FIXED.
  *
+ * The ledger is repository-only: the source archive does not ship it. In a git
+ * checkout a missing ledger is a problem. In an extracted archive (no `.git`)
+ * part (c) is skipped with an explicit notice, because there is nothing to
+ * compare against; (a) and (b) still run.
+ *
  * The rule logic is a pure function of a `read(path)` accessor, so
  * tests/knownLimitationsLint.test.ts can feed it stale text without touching
  * the tree. `read(path)` returns the file text, or null if absent.
@@ -27,6 +32,7 @@ import { readFileSync, existsSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, resolve } from 'node:path';
 import { isCliEntry } from './lib/isCliEntry.mjs';
+import { LEDGER_PATH, isGitCheckout, ledgerSkipNotice } from './lib/repoOnlyDocs.mjs';
 
 export const BUNDLE_TOLERANCE_KIB = 2;
 
@@ -82,14 +88,21 @@ function clauses(text) {
   return text.split(/(?<=[.;])\s+|;\s*/).map((c) => c.trim()).filter(Boolean);
 }
 
-export function collectKnownLimitationsProblems(read) {
+/**
+ * @param {(path: string) => string | null} read
+ * @param {{ archive?: boolean }} [options] `archive: true` when running from an
+ *   extracted source archive, where the ledger is absent by design. Defaults
+ *   to false, so a missing ledger is an error unless the caller says otherwise.
+ */
+export function collectKnownLimitationsProblems(read, { archive = false } = {}) {
   const problems = [];
+  const notices = [];
   const pkgText = read('package.json');
-  if (pkgText == null) return { problems: ['package.json is missing.'], doc: null };
+  if (pkgText == null) return { problems: ['package.json is missing.'], notices, doc: null };
   const version = JSON.parse(pkgText).version;
   const DOC = `docs/releases/KNOWN_LIMITATIONS_v${version}.md`;
   const raw = read(DOC);
-  if (raw == null) return { problems, doc: null };
+  if (raw == null) return { problems, notices, doc: null };
   // Headings count as sentences of their own.
   const text = raw.replace(/^#+\s*(.*)$/gm, '$1.').replace(/\s+/g, ' ');
 
@@ -138,9 +151,10 @@ export function collectKnownLimitationsProblems(read) {
   }
 
   // ── (c) ledger ids and phrase guards ─────────────────────────────────────
-  const ledgerText = read('docs/releases/V070_IMPLEMENTATION_LEDGER.md');
+  const ledgerText = read(LEDGER_PATH);
   if (ledgerText == null) {
-    problems.push('docs/releases/V070_IMPLEMENTATION_LEDGER.md is missing.');
+    if (archive) notices.push(ledgerSkipNotice('lint:known-limitations (c) ledger ids and phrase guards'));
+    else problems.push(`${LEDGER_PATH} is missing.`);
   } else {
     const status = ledgerStatuses(ledgerText);
     for (const clause of clauses(text)) {
@@ -158,15 +172,20 @@ export function collectKnownLimitationsProblems(read) {
     }
   }
 
-  return { problems, doc: DOC };
+  return { problems, notices, doc: DOC };
 }
 
 if (isCliEntry(import.meta.url)) {
   const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
   const read = (p) => (existsSync(resolve(ROOT, p)) ? readFileSync(resolve(ROOT, p), 'utf8') : null);
-  const { problems, doc } = collectKnownLimitationsProblems(read);
+  const archive = !isGitCheckout(ROOT);
+  const { problems, notices, doc } = collectKnownLimitationsProblems(read, { archive });
+  for (const n of notices) console.log(n);
   if (problems.length === 0) {
-    console.log(`lint:known-limitations OK: ${doc ?? 'no limitations document for this version'} agrees with the bundle ceiling, the evidence record, ci-green and the ledger.`);
+    const against = notices.length > 0
+      ? 'the bundle ceiling, the evidence record and ci-green (the ledger check was skipped)'
+      : 'the bundle ceiling, the evidence record, ci-green and the ledger';
+    console.log(`lint:known-limitations OK: ${doc ?? 'no limitations document for this version'} agrees with ${against}.`);
     process.exit(0);
   }
   console.error('lint:known-limitations FAILED');
