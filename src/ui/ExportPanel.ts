@@ -23,7 +23,8 @@ import { classifyLoadError, OFFLINE_CHUNK_MESSAGE } from '../app/staleChunkReloa
 import { conversionNotes, exportedLine } from './conversionNotes';
 import { notableEntries, warningSummary } from '../convert/conversionEvents';
 import { downloadBytes } from '../io/download';
-import { loadConvertEngine, loadFindingsPanel, loadLas14Availability, loadLegacyClassGuard, loadSessionFindings } from '../lazyChunks';
+import { loadConvertEngine, loadFindingsPanel, loadLegacyClassGuard, loadSessionFindings } from '../lazyChunks';
+import { createLas14Check, formatAfterLas14Block } from './las14Check';
 import {
   CONVERT_FORMATS,
   LEGACY_ACQUISITION_LOSS_HINT,
@@ -343,9 +344,7 @@ export class ExportPanel {
   private _las14Block: string | null = null;
   /** True while LAS 1.2 stands in for a LAS 1.4 default; a pill click clears it. */
   private _formatAutoSwitched = false;
-  private _las14Seq = 0;
-  /** The latest availability check, for callers that need to await it. */
-  private _las14Check: Promise<void> = Promise.resolve();
+  private readonly _las14 = createLas14Check((block) => this._applyLas14(block));
   private _crsMode: CrsMode = 'keep';
   private _targetEpsg = '';
   private _sourceEpsg = '';
@@ -666,7 +665,6 @@ export class ExportPanel {
    * code is in play; a user's own pill choice is never undone.
    */
   private _syncLas14(): void {
-    const seq = ++this._las14Seq;
     const mode = this._crsKnown ? this._crsMode : 'keep';
     const resolved = this._cb.getResolvedSourceCrs?.() ?? null;
     const request = {
@@ -676,30 +674,12 @@ export class ExportPanel {
       targetEpsg: parseEpsg(this._targetEpsg),
     };
     const outEpsg = mode === 'keep' ? request.sourceEpsg : request.targetEpsg;
-    if (outEpsg == null) {
-      this._applyLas14(null);
-      this._las14Check = Promise.resolve();
-      return;
-    }
-    this._las14Check = loadLas14Availability().then(({ las14Availability }) => {
-      if (seq !== this._las14Seq) return;
-      const a = las14Availability(request);
-      this._applyLas14(a.ok ? null : a.message);
-    }, () => {
-      // The check is a convenience: if it cannot load, Export still refuses with the reason.
-      if (seq === this._las14Seq) this._applyLas14(null);
-    });
+    this._las14.run(outEpsg == null ? null : request);
   }
 
   private _applyLas14(block: string | null): void {
     this._las14Block = block;
-    if (block != null && this._format === 'las14') {
-      this._format = 'las';
-      this._formatAutoSwitched = true;
-    } else if (block == null && this._formatAutoSwitched && this._format === 'las') {
-      this._format = 'las14';
-      this._formatAutoSwitched = false;
-    }
+    ({ format: this._format, autoSwitched: this._formatAutoSwitched } = formatAfterLas14Block(this._format, block, this._formatAutoSwitched));
     this._renderFormatPills();
     this._renderGzipRow();
     this._renderSummary();
@@ -707,7 +687,7 @@ export class ExportPanel {
 
   /** Settles when the latest LAS 1.4 availability check has been applied. */
   whenLas14Checked(): Promise<void> {
-    return this._las14Check;
+    return this._las14.settled();
   }
 
   /** Show or collapse the Coordinate-System step per the known-CRS signal. */

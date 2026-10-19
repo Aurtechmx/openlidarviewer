@@ -22,7 +22,7 @@ import { epsgFieldProblem, geocentricReprojectProblem, parseEpsgField } from '..
 import { runBatch, summariseBatch, guardedBatchInput, type BatchInput, type BatchItemResult } from '../convert/convertRunner';
 import { conversionNotes } from './conversionNotes';
 import { memoryCeilingBytes } from '../io/loadPlan';
-import { loadLas14Availability } from '../lazyChunks';
+import { createLas14Check, formatAfterLas14Block } from './las14Check';
 import { buildZip, assessZipDownload } from '../convert/zipStore';
 import {
   CONVERT_FORMATS,
@@ -94,9 +94,7 @@ export class BatchConverter {
   private _las14Block: string | null = null;
   /** True while LAS 1.2 stands in for the LAS 1.4 default; a pill click clears it. */
   private _formatAutoSwitched = false;
-  private _las14Seq = 0;
-  /** The latest availability check, for callers that need to await it. */
-  private _las14Check: Promise<void> = Promise.resolve();
+  private readonly _las14 = createLas14Check((block) => this._applyLas14(block));
   private _allowClassWrap = false;
   private _allowReturnClamp = false;
   private readonly _returnRow: HTMLElement;
@@ -207,7 +205,7 @@ export class BatchConverter {
 
   /** Settles when the latest LAS 1.4 availability check has been applied. */
   whenLas14Checked(): Promise<void> {
-    return this._las14Check;
+    return this._las14.settled();
   }
 
   open(): void {
@@ -355,32 +353,14 @@ export class BatchConverter {
    * the writer's own CRS plan; a user's own pill choice is never undone.
    */
   private _syncLas14(): void {
-    const seq = ++this._las14Seq;
     const targetEpsg = parseEpsg(this._targetEpsg);
-    if (this._crsMode === 'keep' || targetEpsg == null) {
-      this._applyLas14(null);
-      this._las14Check = Promise.resolve();
-      return;
-    }
-    this._las14Check = loadLas14Availability().then(({ las14Availability }) => {
-      if (seq !== this._las14Seq) return;
-      const a = las14Availability({ mode: this._crsMode, sourceEpsg: null, sourceWkt: null, targetEpsg });
-      this._applyLas14(a.ok ? null : a.message);
-    }, () => {
-      // The check is a convenience: if it cannot load, the file's row still gives the reason.
-      if (seq === this._las14Seq) this._applyLas14(null);
-    });
+    const keep = this._crsMode === 'keep' || targetEpsg == null;
+    this._las14.run(keep ? null : { mode: this._crsMode, sourceEpsg: null, sourceWkt: null, targetEpsg });
   }
 
   private _applyLas14(block: string | null): void {
     this._las14Block = block;
-    if (block != null && this._format === 'las14') {
-      this._format = 'las';
-      this._formatAutoSwitched = true;
-    } else if (block == null && this._formatAutoSwitched && this._format === 'las') {
-      this._format = 'las14';
-      this._formatAutoSwitched = false;
-    }
+    ({ format: this._format, autoSwitched: this._formatAutoSwitched } = formatAfterLas14Block(this._format, block, this._formatAutoSwitched));
     this._renderFormatPills();
     this._refresh();
   }
