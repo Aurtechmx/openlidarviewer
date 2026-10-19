@@ -26,7 +26,8 @@ import { readFileSync, readdirSync, existsSync } from 'node:fs';
 import { resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { matchesOutsideComments } from './lib/htmlComments.mjs';
+import { inlineProblems } from './lib/cspInline.mjs';
+import { isCliEntry } from './lib/isCliEntry.mjs';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const HTACCESS = resolve(ROOT, 'public/.htaccess');
@@ -44,30 +45,6 @@ function readPolicy() {
   return value ? value[1] : null;
 }
 
-/** Directive name to its source list. */
-function parsePolicy(policy) {
-  const directives = new Map();
-  for (const part of policy.split(';')) {
-    const [name, ...sources] = part.trim().split(/\s+/);
-    if (name) directives.set(name.toLowerCase(), sources);
-  }
-  return directives;
-}
-
-/**
- * Whether the policy permits inline content of a kind.
- *
- * A nonce or hash counts: both are legitimate ways to allow one specific inline
- * block, and treating them as failures would push people toward 'unsafe-inline'
- * instead, which is worse.
- */
-function allowsInline(directives, directive) {
-  const sources = directives.get(directive) ?? directives.get('default-src') ?? [];
-  return sources.some(
-    (s) => s === "'unsafe-inline'" || s.startsWith("'nonce-") || s.startsWith("'sha256-"),
-  );
-}
-
 /** Every HTML file the site serves. */
 function shippedHtml() {
   const files = [];
@@ -82,50 +59,6 @@ function shippedHtml() {
 }
 
 /**
- * Commented-out markup is ignored by offset, never by deleting it. Deleting can
- * expose markup that was not previously there, which would let a page hide an
- * inline script from this count. See scripts/lib/htmlComments.mjs.
- */
-function inlineScriptCount(html) {
-  return matchesOutsideComments(html, /<script\b[^>]*>/gi).filter(
-    (m) => !/\bsrc\s*=/i.test(m[0]),
-  ).length;
-}
-
-/**
- * Inline event handler attributes, by shape rather than by name.
- *
- * A fixed list of handler names passes anything left off it: onmousedown,
- * onpointerdown, ontoggle and onpaste all reached this file's OK line while the
- * policy refused them in the browser, which is the failure described at the top.
- * So the match is any attribute whose name is `on` followed by letters.
- *
- * The tag-open anchor is `<` plus a name character, and `[^>]*?` cannot cross a
- * `>`, so text between tags is never matched.
- */
-function inlineHandlerCount(html) {
-  return matchesOutsideComments(html, /<[a-z][^>]*?\son[a-z]+\s*=/gi).length;
-}
-
-/**
- * `javascript:` URLs in src or href.
- *
- * script-src governs these as well, so they fail the same silent way as an
- * inline handler: the link is there, the click does nothing. Every quoting form
- * counts, including none.
- */
-function javascriptUrlCount(html) {
-  return matchesOutsideComments(
-    html,
-    /\b(?:src|href)\s*=\s*(?:"\s*javascript:|'\s*javascript:|javascript:)/gi,
-  ).length;
-}
-
-function hasInlineStyle(html) {
-  return matchesOutsideComments(html, /<style\b/gi).length > 0;
-}
-
-/**
  * The policy is written twice, once per host: .htaccess for Apache, _headers
  * for Netlify-style hosts. A comment in _headers says it matches .htaccess,
  * which was true when written and is exactly the kind of claim that quietly
@@ -135,7 +68,7 @@ function hasInlineStyle(html) {
  * wrong only misbehaves on the host that reads it. The check below would keep
  * passing against .htaccess while the deployed pages broke somewhere else.
  */
-function readMirroredPolicy() {
+export function readMirroredPolicy() {
   const file = resolve(ROOT, 'public/_headers');
   if (!existsSync(file)) return { present: false, policy: null };
   const line = readFileSync(file, 'utf8')
@@ -145,79 +78,54 @@ function readMirroredPolicy() {
   return { present: true, policy: line.replace(/^\s*Content-Security-Policy:\s*/i, '').trim() };
 }
 
-const policy = readPolicy();
-if (!policy) {
-  console.error('lint:csp-html FAILED\n');
-  console.error('  • No enforcing Content-Security-Policy found in public/.htaccess.');
-  console.error('\nThis check exists because the policy and the pages drift apart.');
-  console.error('If the policy was removed on purpose, remove this check too and say why.');
-  process.exit(1);
-}
-
-const directives = parsePolicy(policy);
-const scriptInlineOk = allowsInline(directives, 'script-src');
-const styleInlineOk = allowsInline(directives, 'style-src');
-
-const problems = [];
-
-const mirrored = readMirroredPolicy();
-if (mirrored.present && mirrored.policy === null) {
-  problems.push('public/_headers exists but sets no Content-Security-Policy.');
-} else if (mirrored.present && mirrored.policy !== policy) {
-  problems.push(
-    'public/.htaccess and public/_headers send different policies. Whichever is ' +
-      'wrong only misbehaves on the host that reads it.\n' +
-      `      .htaccess: ${policy}\n` +
-      `      _headers:  ${mirrored.policy}`,
-  );
-}
-
-for (const file of shippedHtml()) {
-  const html = readFileSync(resolve(ROOT, file), 'utf8');
-
-  if (!scriptInlineOk) {
-    const inline = inlineScriptCount(html);
-    if (inline > 0) {
-      problems.push(
-        `${file}: ${inline} inline <script> block(s), which script-src refuses. ` +
-          'Move the code to its own file and load it with src.',
-      );
-    }
-    const handlers = inlineHandlerCount(html);
-    if (handlers > 0) {
-      problems.push(
-        `${file}: ${handlers} inline event handler attribute(s), which script-src refuses. ` +
-          'Attach the listener from the external script instead.',
-      );
-    }
-    const jsUrls = javascriptUrlCount(html);
-    if (jsUrls > 0) {
-      problems.push(
-        `${file}: ${jsUrls} javascript: URL(s) in src or href, which script-src refuses. ` +
-          'Use a real URL and handle the click from the external script.',
-      );
-    }
-  }
-
-  if (!styleInlineOk && hasInlineStyle(html)) {
+/**
+ * Every problem with the shipped pages and the two copies of the policy, as one
+ * line each. Pure: `pages` maps a file name to its HTML.
+ */
+export function lintPages(policy, mirrored, pages) {
+  const problems = [];
+  if (mirrored.present && mirrored.policy === null) {
+    problems.push('public/_headers exists but sets no Content-Security-Policy.');
+  } else if (mirrored.present && mirrored.policy !== policy) {
     problems.push(
-      `${file}: inline <style>, which style-src refuses. Move it to a stylesheet.`,
+      'public/.htaccess and public/_headers send different policies. Whichever is ' +
+        'wrong only misbehaves on the host that reads it.\n' +
+        `      .htaccess: ${policy}\n` +
+        `      _headers:  ${mirrored.policy}`,
     );
   }
+  for (const [file, html] of Object.entries(pages)) problems.push(...inlineProblems(file, html, policy));
+  return problems;
 }
 
-if (problems.length > 0) {
-  console.error('lint:csp-html FAILED\n');
-  for (const p of problems) console.error(`  • ${p}`);
-  console.error('\nThese pages load without complaint from disk and break once deployed.');
-  console.error(`Enforced policy: ${policy}`);
-  process.exit(1);
-}
+if (isCliEntry(import.meta.url)) {
+  const policy = readPolicy();
+  if (!policy) {
+    console.error('lint:csp-html FAILED\n');
+    console.error('  • No enforcing Content-Security-Policy found in public/.htaccess.');
+    console.error('\nThis check exists because the policy and the pages drift apart.');
+    console.error('If the policy was removed on purpose, remove this check too and say why.');
+    process.exit(1);
+  }
 
-const checked = shippedHtml();
-console.log(
-  `lint:csp-html OK — ${checked.length} shipped page(s) match the enforced policy ` +
-    `(script inline ${scriptInlineOk ? 'allowed' : 'refused'}, ` +
-    `style inline ${styleInlineOk ? 'allowed' : 'refused'})` +
-    `${mirrored.present ? ', and .htaccess matches _headers' : ''}.`,
-);
+  const checked = shippedHtml();
+  const mirrored = readMirroredPolicy();
+  const problems = lintPages(
+    policy,
+    mirrored,
+    Object.fromEntries(checked.map((file) => [file, readFileSync(resolve(ROOT, file), 'utf8')])),
+  );
+
+  if (problems.length > 0) {
+    console.error('lint:csp-html FAILED\n');
+    for (const p of problems) console.error(`  • ${p}`);
+    console.error('\nThese pages load without complaint from disk and break once deployed.');
+    console.error(`Enforced policy: ${policy}`);
+    process.exit(1);
+  }
+
+  console.log(
+    `lint:csp-html OK — ${checked.length} shipped page(s): every inline <script> and <style> ` +
+      `is named by the enforced policy by hash${mirrored.present ? ', and .htaccess matches _headers' : ''}.`,
+  );
+}

@@ -1,21 +1,27 @@
 #!/usr/bin/env node
 /**
  * check-built-csp.mjs: every inline <style> in the built index.html has its
- * sha256 in the CSP of index.html, public/_headers and public/.htaccess.
+ * sha256 in the CSP of index.html, public/_headers and public/.htaccess, and
+ * every other inline <script> or <style> in any HTML file of the build is named
+ * by the policies that ship with it.
  *
  * The hashes are taken from the source index.html. A build step that rewrites
  * the style text (a minifier, a whitespace change) changes the hash, and the
- * browser then drops the style with no error in the build.
+ * browser then drops the style with no error in the build. A static page such as
+ * credits.html carries no policy of its own, so the same holds for it under the
+ * policy the host sends.
  *
  *   node scripts/check-built-csp.mjs [distDir]   (default: dist)
  *
- * Run it after `npm run build:live`.
+ * Run it after `npm run build:live`, and on the staged or extracted deploy
+ * directory before it is zipped or served.
  */
 import { createHash } from 'node:crypto';
-import { existsSync, readFileSync } from 'node:fs';
-import { join, resolve, dirname } from 'node:path';
+import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
+import { join, relative, resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+import { inlineProblems } from './lib/cspInline.mjs';
 import { isCliEntry } from './lib/isCliEntry.mjs';
 
 /** The text of each inline <style> block, as the browser hashes it. */
@@ -61,6 +67,47 @@ export function cspStyleProblems(builtHtml, sourceHtml, policies) {
   return problems;
 }
 
+/** The value of every enforcing Content-Security-Policy in `text` (a header file or an HTML page). */
+export function policyValues(text) {
+  const values = [];
+  for (const line of text.split('\n')) {
+    if (/^\s*#/.test(line) || /Report-Only/i.test(line) || !/Content-Security-Policy/i.test(line)) continue;
+    const header = /Content-Security-Policy:\s*(.+)$/i.exec(line);
+    const htaccess = /Content-Security-Policy\s+"([^"]+)"/i.exec(line);
+    const meta = /<meta[^>]*http-equiv\s*=\s*["']Content-Security-Policy["'][^>]*\scontent\s*=\s*"([^"]+)"/i.exec(line);
+    const value = meta?.[1] ?? htaccess?.[1] ?? header?.[1];
+    if (value && /default-src/.test(value)) values.push(value.trim());
+  }
+  return values;
+}
+
+/**
+ * One line per inline <script> or <style> in `pages` (file name to HTML) that a
+ * policy does not name. A page is held to the policies in `policies` (file name
+ * to text), plus any its own <meta> sets.
+ */
+export function builtHtmlProblems(pages, policies) {
+  const problems = [];
+  for (const [file, html] of Object.entries(pages)) {
+    const own = policyValues(html).map((v) => [`${file} (meta)`, v]);
+    const shipped = Object.entries(policies).flatMap(([name, text]) =>
+      policyValues(text).map((v, i) => [policyValues(text).length > 1 ? `${name} policy ${i + 1}` : name, v]),
+    );
+    for (const [name, value] of [...own, ...shipped]) {
+      for (const p of inlineProblems(file, html, value)) problems.push(`${p} [${name}]`);
+    }
+  }
+  return problems;
+}
+
+function* htmlFiles(dir) {
+  for (const name of readdirSync(dir)) {
+    const p = join(dir, name);
+    if (statSync(p).isDirectory()) yield* htmlFiles(p);
+    else if (/\.html?$/i.test(name)) yield p;
+  }
+}
+
 if (isCliEntry(import.meta.url)) {
   const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
   const dist = resolve(root, process.argv[2] ?? 'dist');
@@ -76,9 +123,24 @@ if (isCliEntry(import.meta.url)) {
     'public/_headers': read(join(root, 'public/_headers')),
     'public/.htaccess': read(join(root, 'public/.htaccess')),
   });
+  // Every HTML file of the build, under the policies the build itself ships (its
+  // own _headers and .htaccess), falling back to the repository's when the
+  // directory holds none.
+  const policyFile = (name) => {
+    const shipped = join(dist, name);
+    return existsSync(shipped) ? read(shipped) : read(join(root, 'public', name));
+  };
+  const pages = {};
+  for (const file of htmlFiles(dist)) pages[relative(dist, file)] = read(file);
+  problems.push(
+    ...builtHtmlProblems(pages, { _headers: policyFile('_headers'), '.htaccess': policyFile('.htaccess') }),
+  );
   if (problems.length) {
     for (const p of problems) console.error(`[check-built-csp] ${p}`);
     process.exit(1);
   }
-  console.log(`[check-built-csp] OK: ${inlineStyles(built).length} inline style block(s) match the CSP in 3 files`);
+  console.log(
+    `[check-built-csp] OK: ${inlineStyles(built).length} inline style block(s) match the CSP in 3 files; ` +
+      `${Object.keys(pages).length} HTML file(s) in the build checked against the shipped policies`,
+  );
 }
