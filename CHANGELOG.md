@@ -4,6 +4,16 @@ The format is based on Keep a Changelog and the project follows Semantic Version
 
 ## [Unreleased]
 
+### Security
+
+- Opening a session file no longer stalls the tab on a crafted file. Pick layers are resolved through a set, a project frame is limited to 512 layers, a session to 20,000 measurements (a larger one is refused with a message, not truncated) and a `.olvsession` to 64 MiB.
+- A session's coordinate system is restored only when the file records it as a CRS the author confirmed. It applies to the open scan for the app session, a toast names the CRS and its unit, and it is saved on the device only if you choose Keep or confirm it in the Inspector.
+- The analysis-history line on import now reads "chain is self-consistent (unsigned, author not verified)". The chain is an unkeyed SHA-256 fold, so a pass never meant the file was untouched or who wrote it.
+- The measurement overlay draws at most 400 labels per frame (the measurement being drawn first, then those nearest the screen centre), lays them out on a spatial grid, and says when some are left out.
+- Embedding: `?embedParent=` and `?embedOrigins=` only request an origin. The viewer talks to a same-origin parent, or to a parent whose origin the deployer compiled in with `OLV_EMBED_ORIGINS` (empty by default). A page framed by anything else shows a notice with a link to open the viewer in its own tab and does not start. This matters on hosts that cannot send `frame-ancestors`. `load-file` is capped at 256 MiB. See docs/usage.md.
+- A live build never includes the Playwright test seam, even with `OLV_TEST_SEAM=1` exported. `npm run package` and the deploy smoke run the seam, dev-flag and CSP checks on the files that ship.
+- The credits page loads its styles from `credits.css` instead of an inline style the policy did not name, and `lint:csp-html` and `check:built-csp` now check every page's inline script and style hashes against the policy. `brand-mark-light.svg` is no longer cached as immutable. `lint:unsafe-html` covers `insertAdjacentHTML`, `outerHTML`, `createContextualFragment`, `DOMParser`, `document.write` and multi-line values.
+
 ## [0.7.0] - 2026-10-18
 
 ### Added

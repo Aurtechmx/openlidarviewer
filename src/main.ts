@@ -1,5 +1,3 @@
-// Stops here, before anything else loads, when framed by a site the embed policy does not trust.
-import './ui/frameGuardBoot';
 // Self-hosted type: Olv Font (@font-face in styles/01-tokens.css) + JetBrains Mono.
 import '@fontsource/jetbrains-mono/latin-400.css';
 import '@fontsource/jetbrains-mono/latin-500.css';
@@ -2977,13 +2975,15 @@ void viewerLoaded.then(() => {
   }
 });
 
-// The cross-frame bridge is lazy-loaded: `?embed=1` is a minority of traffic.
+// the cross-frame control bridge is now lazy-loaded.
+// `?embed=1` is a minority of traffic; non-embed loads should not pay
+// the ~5 KB embed-bridge cost.
 async function startEmbedBridgeLazy(): Promise<typeof import('./ui/embedBridge')> {
   return loadEmbedBridge();
 }
 
 if (embed) {
-  // Commands come from the actual parent when it is same-origin or on the deployer's list (embedPolicy.ts).
+  // Commands come from a same-origin or deployer-listed parent only (src/ui/embedPolicy.ts).
   startEmbedBridgeLazy().then((m) => m.startEmbedBridge({
     onLoadFile: (buffer, fileName) => void handleFile(new File([buffer], fileName)),
     onJumpCamera: (camera) => viewer.applyCameraState(camera),
