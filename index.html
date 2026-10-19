@@ -4,17 +4,21 @@
     <meta charset="UTF-8" />
     <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; worker-src 'self' blob:; connect-src 'self' https:; img-src 'self' blob: data:; style-src 'self' 'sha256-ShrcU9kMa0tV1vNe5uQDsOz8tiOrPwVCvPtdLjMn19Q='; base-uri 'self'; form-action 'self'; object-src 'none'" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-    <meta name="description" content="Local-first browser-based point-cloud exploration" />
+    <meta name="description" content="Open LAS, LAZ, E57, COPC and other point-cloud files in a browser tab. Files are read on your device and are not uploaded." />
     <meta name="theme-color" content="#030817" />
 
     <!-- Share metadata: Open Graph (also read by most chat apps) + Twitter card. -->
-    <meta property="og:title" content="OpenLiDARViewer" />
-    <meta property="og:description" content="Local-first browser-based point-cloud exploration" />
+    <meta property="og:title" content="OpenLiDARViewer: LiDAR and point-cloud viewer in your browser" />
+    <meta property="og:site_name" content="OpenLiDARViewer" />
+    <meta property="og:description" content="Open LAS, LAZ, E57, COPC and other point-cloud files in a browser tab. Files are read on your device and are not uploaded." />
     <meta property="og:type" content="website" />
     <meta property="og:url" content="https://app.openlidarviewer.org/" />
     <link rel="canonical" href="https://app.openlidarviewer.org/" />
     <meta property="og:image" content="https://app.openlidarviewer.org/og-card.jpg" />
     <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="OpenLiDARViewer: LiDAR and point-cloud viewer in your browser" />
+    <meta name="twitter:description" content="Open LAS, LAZ, E57, COPC and other point-cloud files in a browser tab. Files are read on your device and are not uploaded." />
+    <meta name="twitter:image" content="https://app.openlidarviewer.org/og-card.jpg" />
 
     <!-- Icons + PWA manifest (served from public/, copied to the dist root). -->
     <!-- Olv Font 400/500 preloads are injected by the fontPreload plugin in
@@ -26,10 +30,11 @@
     <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
     <link rel="manifest" href="/manifest.webmanifest" />
 
-    <title>OpenLiDARViewer</title>
+    <title>OpenLiDARViewer: LiDAR and point-cloud viewer in your browser</title>
     <style>html,body{background:#030817}</style>
   </head>
   <body>
+    <noscript>OpenLiDARViewer is a LiDAR and point-cloud viewer that runs in the browser and needs JavaScript. Documentation: <a href="https://openlidarviewer.org/">openlidarviewer.org</a>.</noscript>
     <div id="app"></div>
     <script type="module" src="/src/main.ts"></script>
   </body>

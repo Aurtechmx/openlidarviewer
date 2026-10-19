@@ -180,7 +180,7 @@ export const CURATED_LOCATIONS: readonly CuratedLocation[] = [
   // see how fast it loads 1 MB.
   {
     id: 'flai-ch-swisssurface3d-2022',
-    label: 'Switzerland — swisssurface3D (2022)',
+    label: 'Switzerland: swisssurface3D (2022)',
     sizeLabel: '83.8 MB',
     hint: 'FLAI Open LiDAR Data · swissSURFACE3D · © swisstopo, free geodata terms.',
     bbox: [5.9506, 46.1226, 5.9638, 46.1319],
@@ -204,7 +204,7 @@ export const CURATED_LOCATIONS: readonly CuratedLocation[] = [
   },
   {
     id: 'flai-si-clss-2023',
-    label: 'Slovenia — GURS CLSS (2023)',
+    label: 'Slovenia: GURS CLSS (2023)',
     sizeLabel: '202 MB',
     hint: 'FLAI Open LiDAR Data · Slovenian GURS national classified · CC BY 4.0.',
     bbox: [14.1342, 46.0365, 14.1474, 46.0457],

@@ -107,6 +107,22 @@ function brandMarkImg(className: string, alt = ''): HTMLImageElement {
 
 
 /**
+ * Cosmetic heuristic for the URL field's blur hint: true for a URL that looks
+ * like a COPC file, an EPT `ept.json` or a 3D Tiles `tileset.json`.
+ */
+export function looksLikeRemoteDataset(url: string): boolean {
+  const lower = url.toLowerCase();
+  return (
+    lower.includes('.copc.laz') ||
+    lower.includes('.copc.las') ||
+    lower.endsWith('/ept.json') ||
+    lower.includes('/ept.json?') ||
+    lower.endsWith('/tileset.json') ||
+    lower.includes('/tileset.json?')
+  );
+}
+
+/**
  * Best-effort cellular detection. The Network Information API ships on
  * Chrome / Edge / Samsung — Safari and Firefox don't expose it, so this
  * returns null when the API is missing (caller should treat null as "can't
@@ -511,8 +527,8 @@ export class Stage {
           // The provider stays IN the label: naming swisstopo on the button
           // is the courtesy attribution their open-data terms ask for, and
           // docs/credits.md records the exact object behind it.
-          text: `Launch a sample — ${demoSample.label}`,
-          title: `Open ${demoSample.label.toLowerCase()} — streams over your network, nothing uploaded`,
+          text: `Launch a sample: ${demoSample.label}`,
+          title: `Open ${demoSample.label}. Streams over your network, nothing uploaded.`,
         })
       : null;
     if (tryButton && demoSample) {
@@ -536,7 +552,7 @@ export class Stage {
     // the story, while the count stays machine-derived.
     const formatsSummary = el('summary', {
       className: 'olv-empty-formats-summary',
-      text: `Compatible data — ${SOURCE_FORMATS.length} file formats · COPC & EPT streaming`,
+      text: `Compatible data: ${SOURCE_FORMATS.length} file formats · COPC, EPT and 3D Tiles streaming`,
     });
     const xyzAliases = XYZ_ALIAS_EXTENSIONS.map((e) => `.${e}`).join('/');
     const formatsFull = el('p', {
@@ -619,8 +635,8 @@ export class Stage {
         type: 'button',
         title:
           s.url.startsWith('http')
-            ? `Open ${s.label.toLowerCase()} — streams over your network, nothing uploaded`
-            : `Open ${s.label.toLowerCase()} — bundled fixture`,
+            ? `Open ${s.label}. Streams over your network, nothing uploaded.`
+            : `Open ${s.label}. Bundled fixture.`,
       }, [
         el('span', { className: 'olv-sample-label', text: s.label }),
         el('span', { className: 'olv-sample-detail', text: detail }),
@@ -676,7 +692,7 @@ export class Stage {
       className: 'olv-convert-chip',
       type: 'button',
       text: 'Convert file formats',
-      title: 'Convert LAS / LAZ / XYZ / ASC files between formats — batch, no scan needs to load',
+      title: 'Convert LAS, LAZ, XYZ and ASC files between formats in a batch. No scan needs to be loaded.',
     });
     convertChip.addEventListener('click', () => options.onBatchConvert?.());
 
@@ -697,7 +713,7 @@ export class Stage {
       ? el('button', {
           className: 'olv-tour-chip',
           type: 'button',
-          text: 'Take the 30-second tour',
+          text: 'Take the tour',
           title: 'A quick guided tour of the main tools',
         })
       : null;
@@ -759,17 +775,18 @@ export class Stage {
     const bullets = el('details', { className: 'olv-url-reqs' }, [
       el('summary', { className: 'olv-url-reqs-summary', text: 'Connection requirements' }),
       el('ul', { className: 'olv-url-rules' }, [
-        el('li', { text: 'File must be in COPC format (.copc.laz)' }),
+        el('li', { text: 'COPC (.copc.laz), EPT (ept.json) or 3D Tiles (tileset.json)' }),
         el('li', { text: 'Server must allow CORS range requests' }),
+        el('li', { text: 'Hosts on a local or private network are refused' }),
       ]),
     ]);
 
     const input = el('input', {
       className: 'olv-url-input',
       type: 'url',
-      ariaLabel: 'COPC file URL',
+      ariaLabel: 'Remote dataset URL',
     });
-    input.placeholder = 'https://host/scan.copc.laz';
+    input.placeholder = 'https://host/scan.copc.laz, ept.json or tileset.json';
     this._urlInput = input;
 
     // Inline validation on blur (E3) — soft warning, not a blocker.
@@ -779,9 +796,9 @@ export class Stage {
         this._clearUrlError();
         return;
       }
-      if (!this._looksLikeCopc(url)) {
+      if (!looksLikeRemoteDataset(url)) {
         this._showUrlError(
-          'This URL doesn\'t look like a COPC file. You can still try to open it.',
+          'This URL doesn\'t look like a COPC, EPT or 3D Tiles dataset. You can still try to open it.',
           'warning',
         );
       } else {
@@ -796,7 +813,7 @@ export class Stage {
     const submit = el('button', {
       className: 'olv-url-btn',
       text: 'Open',
-      title: 'Stream a Cloud Optimized Point Cloud from this URL',
+      title: 'Stream a COPC, EPT or 3D Tiles dataset from this URL',
     });
     submit.type = 'submit';
     this._urlSubmit = submit;
@@ -848,13 +865,13 @@ export class Stage {
     const cellular = isCellularConnection();
     if (cellular && size >= CELLULAR_WARN_BYTES) {
       reasons.push(
-        `You're on a cellular connection — ${formatBytes(size)} of data ` +
+        `You're on a cellular connection. ${formatBytes(size)} of data ` +
         `may use your mobile-data quota.`,
       );
     }
     if (isMobileDevice() && size >= MOBILE_MEMORY_WARN_BYTES) {
       reasons.push(
-        `This sample is ${formatBytes(size)} — on phones it may exceed the ` +
+        `This sample is ${formatBytes(size)}. On phones it may exceed the ` +
         `tab's memory.`,
       );
     }
@@ -964,17 +981,6 @@ export class Stage {
       return 'Cancelled.';
     }
     return raw || 'Couldn\'t open this URL. Try downloading the file and opening it from your device.';
-  }
-
-  /** Cosmetic heuristic — true for things that look like a COPC URL. */
-  private _looksLikeCopc(url: string): boolean {
-    const lower = url.toLowerCase();
-    return (
-      lower.includes('.copc.laz') ||
-      lower.includes('.copc.las') ||
-      lower.endsWith('/ept.json') ||
-      lower.includes('/ept.json?')
-    );
   }
 
   /**
@@ -1097,8 +1103,8 @@ export class Stage {
       this._statusBanner.append(
         el('span', {
           text:
-            'You\'re offline. Open a file from your device to keep working — ' +
-            'streaming will resume when you reconnect.',
+            'You\'re offline. Open a file from your device to keep working. ' +
+            'Streaming will resume when you reconnect.',
         }),
       );
     } else if (this._statusBanner.classList.contains('olv-empty-status-offline')) {

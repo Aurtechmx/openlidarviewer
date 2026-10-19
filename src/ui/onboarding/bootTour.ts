@@ -7,7 +7,7 @@
  * The tour does NOT auto-start. It used to launch itself on the first visit,
  * which put a modal over the product before the visitor had seen anything —
  * the worst possible first moment. It is now offered twice and imposed never:
- * the splash's quiet "Take the 30-second tour" chip calls `start`, and the
+ * the splash's quiet "Take the tour" chip calls `start`, and the
  * command palette's "Replay onboarding tour" calls `replay`.
  */
 import { TourOverlay } from './TourOverlay';
