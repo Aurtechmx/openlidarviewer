@@ -5,7 +5,7 @@
  * orthographic PNG rasters (height / intensity / classification / normal /
  * ortho-RGB framed from above): an ESRI world file (`.pgw`) plus an optional
  * `.prj` (CRS WKT), bundled with the PNG into one store-only ZIP so the
- * download drops straight into QGIS / ArcGIS as a placed raster.
+ * download drops straight into GIS software as a placed raster.
  *
  * Before v0.4.5 the Studio shipped bare PNGs with no world file anywhere, so
  * a GIS could not place them despite the exporter knowing the exact world
@@ -74,7 +74,7 @@ export function buildWorldFileText(params: WorldFileParams): string | null {
   // World-file C/F reference the CENTRE of the top-left pixel, not its corner.
   const cx = ox + extent.minX + pixelW / 2;
   const cy = oy + extent.maxY - pixelH / 2;
-  // One value per line, trailing newline — the format GDAL/QGIS write & read.
+  // One value per line, trailing newline — the format GDAL and GIS software write & read.
   return [pixelW, 0, 0, -pixelH, cx, cy].map(String).join('\n') + '\n';
 }
 

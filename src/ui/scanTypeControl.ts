@@ -7,7 +7,7 @@
  * rather than duplicating the markup and listeners.
  *
  * Rendered as a VISIBLE segmented selector — Terrain · Object · Interior · Auto
- * — not a buried dropdown, so correcting a misdetected scan (common with iPhone
+ * — not a buried dropdown, so correcting a misdetected scan (common with phone
  * LiDAR and mixed datasets) is one obvious click. It is honest about what it
  * does: when an override is active it shows a subtle "(manual)" note so it's
  * clear auto-detection was overridden.

@@ -143,8 +143,23 @@ const STATIC_CODES = [
 ];
 
 const demSrc = readFileSync(join(ROOT, 'src/terrain/export/demGeoTiff.ts'), 'utf8');
-const vtable = demSrc.slice(demSrc.indexOf('export const VERTICAL_CRS_UNITS'));
-const verticalCodes = [...vtable.slice(0, vtable.indexOf('};')).matchAll(/^\s+(\d+): \{/gm)].map((m) => Number(m[1]));
+// indexOf returns -1 for a marker that is gone, and slice(-1) would then read the
+// last character of the file and yield no codes. Fail loudly instead of
+// generating a table with no vertical CRS.
+const VERTICAL_MARKER = 'export const VERTICAL_CRS_UNITS';
+const verticalStart = demSrc.indexOf(VERTICAL_MARKER);
+if (verticalStart === -1) {
+  throw new Error(`src/terrain/export/demGeoTiff.ts no longer contains "${VERTICAL_MARKER}"; update the vertical code scan.`);
+}
+const vtable = demSrc.slice(verticalStart);
+const verticalEnd = vtable.indexOf('};');
+if (verticalEnd === -1) {
+  throw new Error(`The ${VERTICAL_MARKER} table in src/terrain/export/demGeoTiff.ts has no closing "};".`);
+}
+const verticalCodes = [...vtable.slice(0, verticalEnd).matchAll(/^\s+(\d+): \{/gm)].map((m) => Number(m[1]));
+if (verticalCodes.length === 0) {
+  throw new Error(`No vertical CRS codes were read from ${VERTICAL_MARKER}; the table layout changed.`);
+}
 
 const staticWkt = Object.fromEntries(STATIC_CODES.map((c) => [c, projWkt(`EPSG:${c}`)]));
 const vertWkt = Object.fromEntries(verticalCodes.map((c) => [c, projWkt(`EPSG:${c}`)]));

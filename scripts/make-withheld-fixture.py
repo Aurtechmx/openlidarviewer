@@ -2,10 +2,10 @@
 """Write the one LAS fixture that carries classification flags.
 
 Every other LAS fixture in this repository leaves the flag byte at zero. That
-is why `V070_IMPLEMENTATION_LEDGER.md` entry L26 records the Withheld policy
-as written but its consequence as unmeasured: there was no file in the tree on
-which excluding Withheld points would change any number, so no test could
-show what the exclusion costs or spares.
+is why the Withheld policy was written down but its consequence stayed
+unmeasured: there was no file in the tree on which excluding Withheld points
+would change any number, so no test could show what the exclusion costs or
+spares.
 
 This writes such a file. It does NOT apply the policy anywhere; it gives the
 policy something to be measured against.

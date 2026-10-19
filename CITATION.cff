@@ -50,9 +50,12 @@ identifiers:
     description: "Software Heritage snapshot of the repository, including its history"
 
 abstract: >-
-  OpenLiDARViewer is an open-source, local-first, browser-native platform
-  for LiDAR and point-cloud inspection, streaming visualization,
-  measurement, terrain analysis, validation, and reproducible reporting.
+  OpenLiDARViewer is an open-source LiDAR and point-cloud viewer that
+  runs in the browser. It opens LAS, LAZ, E57, PLY, OBJ, glTF and PCD
+  files and streams COPC, EPT and 3D Tiles; it measures, classifies,
+  cuts profiles, builds terrain models and contours, compares epochs and
+  exports reports. It renders on WebGPU with a WebGL 2 fallback, and
+  local files stay on the device.
 
 keywords:
   - LiDAR

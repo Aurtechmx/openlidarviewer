@@ -1363,6 +1363,13 @@ describe('session resource ceilings (hostile / corrupt input)', () => {
     expect(MAX_FRAME_LAYERS).toBeGreaterThanOrEqual(64);
   });
 
+  it('pins the caps the release documents to their literal values', () => {
+    // A change to a cap must change these literals and the documented figures
+    // together (tests/capsDocSync.test.ts reads the documents).
+    expect(MAX_FRAME_LAYERS).toBe(512);
+    expect(MAX_SESSION_MEASUREMENTS).toBe(20_000);
+  });
+
   it('parses a full-cap frame with 10,000 pick-bearing measurements in bounded time', () => {
     const text = JSON.stringify(frameDoc(MAX_FRAME_LAYERS, 10_000));
     const t0 = performance.now();

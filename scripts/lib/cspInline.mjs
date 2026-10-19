@@ -77,7 +77,9 @@ export function blockVerdict(sources, block) {
   return { ok: false, hash: hashes[0] };
 }
 
-const HANDLER = /<[a-z][^>]*?\son[a-z]+\s*=/gi;
+// An event-handler attribute follows whitespace, or a closing quote, or a slash:
+// `<a href="x"onclick=...>` and `<img/onerror=...>` both parse as handlers.
+const HANDLER = /<[a-z][^>]*?(?:\s|["'/])on[a-z]+\s*=/gi;
 const JAVASCRIPT_URL = /\b(?:src|href)\s*=\s*(?:"\s*javascript:|'\s*javascript:|javascript:)/gi;
 
 /**

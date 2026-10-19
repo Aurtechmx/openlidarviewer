@@ -255,7 +255,7 @@ export interface ExportSceneAdapter {
   crsLabel(): { name: string; unit: string; epsg?: number } | null;
   /**
    * Capture-type label from the provenance classifier — e.g.
-   * "Aerial / airborne LiDAR" or "iPhone / handheld LiDAR", paired with
+   * "Aerial / airborne LiDAR" or "phone / handheld LiDAR", paired with
    * the confidence band the classifier emitted. Returns `null` when no
    * cloud is loaded or the classifier produced no verdict. Surfaced in
    * the scan-report card so the exported PNG records what kind of scan

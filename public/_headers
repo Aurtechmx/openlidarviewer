@@ -1,5 +1,5 @@
-# _headers — security + caching for static hosts that read this format
-# (Netlify, Cloudflare Pages, etc.). The Apache/LiteSpeed equivalent lives in
+# _headers: security + caching for static hosts that read this format.
+# The Apache/LiteSpeed equivalent lives in
 # .htaccess; this file is the portable counterpart so the same deploy bundle is
 # hardened on any of the common static hosts, not only Apache-family ones.
 #

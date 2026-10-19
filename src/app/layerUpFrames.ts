@@ -14,22 +14,16 @@ import type { PointCloud } from '../model/PointCloud';
 import type { CrsService } from '../geo/CrsService';
 import type { ResolvedCrs } from '../geo/CoordinateTypes';
 import { datasetIdentity } from '../geo/CrsService';
-import type { SpatialContext } from '../geo/SpatialContext';
-import { resolveLayerUpFrame, spatialUpAxisOf, upFrameRefusal, upVectorOf, type LayerCrs, type LayerUpFrame } from '../geo/frame/layerUpFrame';
+import { layerCrsFromContext, resolveLayerUpFrame, spatialUpAxisOf, upFrameRefusal, upVectorOf, type LayerCrs, type LayerUpFrame } from '../geo/frame/layerUpFrame';
 import type { MeasureUnitFrame } from '../render/measure/types';
 import type { SpatialUpAxis } from '../geo/SpatialContext';
 
 /** The CRS reads a layer's frame needs. `current` is optional for narrow test seams. */
 export type LayerFrameCrs = Pick<CrsService, 'context' | 'resolveFor'> & Partial<Pick<CrsService, 'current'>>;
 
-/** The CRS facts of the active scan's live context, when no resolved CRS object is at hand. */
-function contextCrs(ctx: SpatialContext): LayerCrs {
-  return { kind: ctx.kind, name: ctx.crsName, ...(ctx.epsg != null ? { epsg: ctx.epsg } : {}) } as LayerCrs;
-}
-
 /** A layer's own resolved CRS: the live one when it is the active scan. */
 export function layerCrsOf(crs: LayerFrameCrs, cloud: PointCloud, active: boolean): LayerCrs | null {
-  if (active) return crs.current ? crs.current() : contextCrs(crs.context());
+  if (active) return crs.current ? crs.current() : layerCrsFromContext(crs.context());
   return crs.resolveFor({ name: cloud.name, detected: cloud.metadata?.crs ?? undefined, source: 'las-vlr', identity: datasetIdentity(cloud) }) as ResolvedCrs;
 }
 

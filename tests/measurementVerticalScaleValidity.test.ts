@@ -271,7 +271,8 @@ describe('another layer\'s frame never authorises a height', () => {
   it('a measurement spanning both layers is not given either frame', async () => {
     const w = await world([A, B], 'a');
     w.measure.loadMeasurements([m('both', 'height', [[0, 0, 0], [0, 0, 100]], 'layer-a', { pickLayers: ['layer-a', 'layer-b'] })]);
-    expect(w.measure.getSummaries()[0]!.value).not.toBe('100.00 m');
+    // Neither layer's metre scale applies, so the figure is the stored 100 units, labelled as such.
+    expect(w.measure.getSummaries()[0]!.value).toBe('100 (unit unverified)');
   });
 });
 

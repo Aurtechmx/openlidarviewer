@@ -35,6 +35,12 @@ describe('LAZ decode of a corrupt stream', () => {
         expect(e).toBeInstanceOf(Error);
         expect(e).toBeInstanceOf(LoadError);
         expect((e as LoadError).category).toBe('malformed-file');
+        // The message is ours, not an Emscripten address-and-text string, and
+        // the raw value that was thrown stays reachable as the cause.
+        expect((e as LoadError).message).toMatch(/^malformed LAZ: decompression failed/);
+        expect((e as LoadError).message).not.toMatch(/Exception catching|^\d+\b/);
+        const cause = (e as LoadError).cause;
+        expect(typeof cause === 'string' || typeof cause === 'number' || cause instanceof WebAssembly.RuntimeError).toBe(true);
       }
     }
     // The mutations must actually break some streams, or the loop proves nothing.

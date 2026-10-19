@@ -39,15 +39,32 @@ export function cloudUpAxisIndex(cloud: PointCloud): 1 | 2 {
 }
 
 /**
+ * Which component of `cloud` is up right now, without recording it as the one
+ * the cloud was coloured by. For a reader that is not a colouring pass (an
+ * acquisition-coverage fit), so it cannot hide a move from {@link cloudUpAxisMoved}.
+ */
+export function peekCloudUpAxisIndex(cloud: PointCloud): 1 | 2 {
+  return resolveIndex(cloud);
+}
+
+/**
  * Whether any of `clouds` now resolves to a different up component than the
  * one it was last coloured or scaled by (a CRS assigned, replaced or cleared),
  * so its colours and the legend must be rebuilt.
  */
 export function cloudUpAxisMoved(clouds: Iterable<PointCloud | undefined>): boolean {
+  let moved = false;
   for (const c of clouds) {
     if (!c) continue;
     const was = lastUsed.get(c);
-    if (was !== undefined && was !== resolveIndex(c)) return true;
+    if (was === undefined) continue;
+    const now = resolveIndex(c);
+    if (was === now) continue;
+    // A move is reported once. A cloud shown in an RGB or intensity mode is not
+    // coloured by height, so no colouring pass would record its new axis, and it
+    // would otherwise report a move on every later call.
+    lastUsed.set(c, now);
+    moved = true;
   }
-  return false;
+  return moved;
 }

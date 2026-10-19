@@ -27,7 +27,7 @@
  */
 
 import type { PointCloud } from '../model/PointCloud';
-import { isZUpFormat } from '../io/sniffFormat';
+import { peekCloudUpAxisIndex } from './layerUpRegistry';
 import {
   forgetOrganizedRange,
   publishOrganizedPick,
@@ -88,7 +88,9 @@ export function bindOrganizedRangeLink(host: OrganizedLinkHost): OrganizedLinkBr
             ? [cloud.positions[i], cloud.positions[i + 1], cloud.positions[i + 2]]
             : null;
         },
-        isZUpFormat(cloud.sourceFormat) ? 'z' : 'y',
+        // The layer's own up axis, read when the coverage fit runs so a CRS
+        // assigned after the layer loaded is honoured (`layerUpRegistry.ts`).
+        () => (peekCloudUpAxisIndex(cloud) === 2 ? 'z' : 'y'),
       ),
     forget: (layerId) => forgetOrganizedRange(layerId),
     layerIdOf: (cloud) => {

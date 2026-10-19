@@ -178,7 +178,7 @@ export class HttpRangeSource implements RangeSource {
 
       if (acceptRanges !== 'bytes') {
         // Header is missing or unreadable. The likeliest cause is a
-        // CORS-restricted bucket — S3 (data.entwine.io, hobu-lidar,
+        // CORS-restricted object-store bucket (data.entwine.io, hobu-lidar,
         // many other LiDAR hosts) supports range requests but does not
         // expose the `Accept-Ranges` header to cross-origin responses
         // unless the bucket's CORS configuration adds it to
@@ -250,7 +250,7 @@ export class HttpRangeSource implements RangeSource {
       );
     }
     // Content-Range validation. A 206 normally carries a Content-Range
-    // header identifying the served bytes. S3-style buckets with default
+    // header identifying the served bytes. Object-store buckets with default
     // CORS hide this header from cross-origin responses — when it's
     // entirely missing, fall back to validating the body byte length
     // against the requested span (the 206 status already guarantees the
@@ -291,7 +291,7 @@ export class HttpRangeSource implements RangeSource {
    * Discover size via a `Range: bytes=0-0` GET when HEAD is unusable.
    * Reads the one byte and parses the response's `Content-Range:` to
    * extract the total size. When the server's CORS configuration hides
-   * `Content-Range` (the common S3-default case), an optional
+   * `Content-Range` (the common default case), an optional
    * `sizeHint` captured from a successful HEAD's `Content-Length` is
    * accepted as a fallback — the 206 status alone proves range support,
    * so trusting HEAD's size is safe.
@@ -338,7 +338,7 @@ export class HttpRangeSource implements RangeSource {
       this._size = total;
       return total;
     }
-    // Content-Range was missing or unparseable. S3-style buckets hide it
+    // Content-Range was missing or unparseable. Object-store buckets hide it
     // from cross-origin responses by default; fall back to the HEAD-derived
     // Content-Length when the caller captured one. Range support is already
     // confirmed by the 206 status above.

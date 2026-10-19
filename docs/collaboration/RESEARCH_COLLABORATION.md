@@ -16,7 +16,7 @@ could fold into it.
   cloud with a declared coordinate system let the tool be tested against ground
   truth instead of against itself. Only send data you are free to redistribute.
 - Cross-check a method. Compare a DTM/DSM, contours, slope, or a measurement
-  against ArcGIS, CloudCompare, PDAL, or GDAL, and report both the agreement and
+  against PDAL, GDAL or another reference tool, and report both the agreement and
   the disagreement.
 - Review the methodology. Read the validation reports and the method notes and
   say what is under-specified, unconvincing, or wrong.

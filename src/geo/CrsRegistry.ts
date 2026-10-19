@@ -88,7 +88,7 @@ const ENTRIES: readonly CrsRegistryEntry[] = [
     worldwide: true,
     region: 'global',
     note:
-      'Web Mercator / Google / Bing / OSM tile projection. ' +
+      'Web Mercator tile projection used by web map services. ' +
       'Distances are unreliable away from the equator.',
     datum: 'WGS 84',
   },

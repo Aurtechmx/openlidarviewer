@@ -77,8 +77,11 @@ describe('the co-registration verdict covers every case the summary refuses', ()
 describe('main.ts gates the difference raster on that whole verdict', () => {
   it('withholds the export on anything short of co-registered', () => {
     const main = readFileSync(resolve(__dirname, '..', 'src', 'main.ts'), 'utf8');
-    const start = main.indexOf('const cmp = compareDtms(');
-    expect(start, 'the compare handler no longer calls compareDtms').toBeGreaterThan(0);
+    // The comparison itself runs in epochComparison.ts (runEpochComparison),
+    // which compareDtms feeds; the handler takes `cmp` from that run.
+    expect(main).toContain('runEpochComparison(');
+    const start = main.indexOf('const { alignment, dtms, cmp } = run;');
+    expect(start, 'the compare handler no longer takes its comparison from runEpochComparison').toBeGreaterThan(0);
     const offer = main.indexOf('inspector.setDifferenceAvailable(true)', start);
     expect(offer, 'the compare handler no longer offers the difference raster')
       .toBeGreaterThan(start);

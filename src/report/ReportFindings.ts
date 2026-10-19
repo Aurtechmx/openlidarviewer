@@ -170,9 +170,11 @@ function densityFinding(
       label: DENSITY_LABEL,
       value: '—',
       detail:
-        metadata.extentUnitStatus === 'unknown'
-          ? 'Not reported: the linear unit is unconfirmed, so a per-square-metre figure cannot be stated.'
-          : 'Not reported for this source.',
+        metadata.upAxisRefusal
+          ? `Not reported: ${metadata.upAxisRefusal}`
+          : metadata.extentUnitStatus === 'unknown'
+            ? 'Not reported: the linear unit is unconfirmed, so a per-square-metre figure cannot be stated.'
+            : 'Not reported for this source.',
       tier: 'unknown',
     };
   }

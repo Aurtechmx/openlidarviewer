@@ -454,7 +454,7 @@ export class NavBar {
     // and the same toggle still listens to the H key (and the Help
     // button in the dock surfaces the shortcut).
     // Six standard axis-aligned views (Top / Bottom / Front / Back / Left /
-    // Right) + a orthographic toggle — the Polycam-style "look straight
+    // Right) + an orthographic toggle — the "look straight
     // at a face to measure it flat" controls. Sits under the angled Camera
     // presets (Gestalt proximity: both are "ways to aim the camera"), but in
     // its own labelled row so the two intents stay distinct.

@@ -13,8 +13,11 @@
  * emptied at the start of each run, so its files always describe the last run.
  */
 
-import { mkdirSync, rmSync, writeFileSync } from 'node:fs';
-import { join, relative } from 'node:path';
+import { existsSync, mkdirSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
+import { dirname, isAbsolute, join, relative, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..');
 
 /** Where the step logs go, relative to the repository root. */
 export const DEFAULT_STEP_LOG_DIR = 'release/gate-steps';
@@ -24,8 +27,40 @@ export function stepLogName(script) {
   return `${String(script).replace(/[^A-Za-z0-9._-]+/g, '_')}.log`;
 }
 
-/** Empty (or create) the log directory before a run. */
-export function prepareStepLogDir(dir) {
+/** A path with symlinks resolved as far as it exists, so a link cannot point the check somewhere else. */
+function resolvedPath(p) {
+  const abs = resolve(p);
+  let existing = abs;
+  const tail = [];
+  while (!existsSync(existing) && dirname(existing) !== existing) {
+    tail.unshift(existing.slice(dirname(existing).length + 1));
+    existing = dirname(existing);
+  }
+  return join(realpathSync(existing), ...tail);
+}
+
+/**
+ * Throw unless `dir` is a directory the runner may empty: strictly inside the
+ * repository's `release/` directory. `OLV_GATE_STEP_LOG_DIR` moves the logs,
+ * and the runner deletes whatever it names, so a value that is the repository
+ * root, one of its ancestors, `release/` itself or anything outside `release/`
+ * is refused rather than wiped.
+ */
+export function assertStepLogDirSafe(dir, root = REPO_ROOT) {
+  const target = resolvedPath(dir);
+  const release = resolvedPath(join(root, 'release'));
+  const rel = relative(release, target);
+  if (rel === '' || rel.startsWith('..') || isAbsolute(rel)) {
+    throw new Error(
+      `Refusing to empty ${target} as the gate step log directory: it must be a directory inside ${release}. ` +
+        'Unset OLV_GATE_STEP_LOG_DIR, or point it at a folder under release/.',
+    );
+  }
+}
+
+/** Empty (or create) the log directory before a run. Refuses a directory outside release/. */
+export function prepareStepLogDir(dir, root = REPO_ROOT) {
+  assertStepLogDirSafe(dir, root);
   rmSync(dir, { recursive: true, force: true });
   mkdirSync(dir, { recursive: true });
 }

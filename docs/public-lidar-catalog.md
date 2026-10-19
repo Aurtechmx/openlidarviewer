@@ -37,7 +37,7 @@ to any OpenLiDARViewer-operated server. The lazy-loaded client lives in
 
 The shipped list currently holds 12 entries. Two European national programmes
 come from FLAI's Open LiDAR Data (Switzerland's swissSURFACE3D and Slovenia's
-GURS, each on a verified open licence) on a public EU S3 bucket. The US datasets
+GURS, each on a verified open licence) on a public EU object-store bucket. The US datasets
 (San Francisco, Los Angeles, Denver Metro, Grand Canyon) sit on the USGS and Hobu
 west-coast buckets. Sizes run from an 84 MB single COPC file up to
 multi-billion-point EPT scans.

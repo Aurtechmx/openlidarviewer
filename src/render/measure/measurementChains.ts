@@ -4,7 +4,7 @@
  * Aggregate operations across a selection of placed measurements —
  * the "give me the sum of these distances" / "average grade across
  * these slopes" / "total cut+fill across the levee" workflow that
- * surveyors expect after years of using AutoCAD / TBC. Without this
+ * surveyors expect after years of using CAD and survey software. Without this
  * the user has to read N rows and tap a calculator.
  *
  * The module is pure data — no DOM, no three.js. Routing rules:

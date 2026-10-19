@@ -160,13 +160,39 @@ describe('alignEpochClouds', () => {
     );
     const r = alignEpochClouds(cloudFrom(base), after, { trimFraction: 0.3, maxResidualM: 1 });
     expect(r.alignment.attempted).toBe(true);
-    // Either gate may stop it first: the trimmed subset is too poor to
-    // determine the pose (unobservable), or the overlap is too low.
-    expect(r.alignment.lowOverlap === true || r.alignment.unobservable === true).toBe(true);
+    // On this data the observability gate stops it first: the trimmed subset
+    // is too poor to determine the pose. The low-overlap gate is pinned by its
+    // own case below, so neither outcome can stand in for the other.
+    expect(r.alignment.unobservable).toBe(true);
+    expect(r.alignment.lowOverlap).not.toBe(true);
     expect(r.alignment.overlapFraction).toBeLessThan(0.5);
+    expect(summarizeAlignment(r.alignment)).toMatch(/refused as unobservable/);
     expect(r.alignment.applied).toBe(false);
     expect(r.alignment.appliedDof).toBe('none');
     expect(r.after).toBe(after); // unchanged reference — compared as-is
+  });
+
+  test('withholds a fit on relief that is observable when under half the after sample has a partner', () => {
+    // The before epoch covers 40 % of the after epoch's footprint over relief
+    // that varies along both axes, so the pose is determined (observable) and
+    // only the overlap gate can stop the fit.
+    const surf = (x: number, y: number): number => 3 * Math.sin(x / 9) + 2 * Math.cos(y / 7) + 0.02 * x;
+    const lattice = (x1: number): EpochCloud => {
+      const pts: P[] = [];
+      for (let x = 0; x <= x1; x++) for (let y = 0; y <= 100; y++) pts.push([x, y, surf(x, y)]);
+      return { ...cloudFrom(pts), crs: 'EPSG:32612', verticalDatum: 'NAVD88', linearUnitToMetres: 1 };
+    };
+    const after = lattice(100);
+    const r = alignEpochClouds(lattice(40), after, { maxResidualM: 10, horizontalUnitKnown: true, commonFrame: 'estimate' });
+    expect(r.alignment.attempted).toBe(true);
+    expect(r.alignment.lowOverlap).toBe(true);
+    expect(r.alignment.unobservable).not.toBe(true);
+    expect(r.alignment.overlapFraction).toBeGreaterThan(0.35);
+    expect(r.alignment.overlapFraction).toBeLessThan(0.5);
+    expect(r.alignment.applied).toBe(false);
+    expect(r.alignment.appliedDof).toBe('none');
+    expect(r.after).toBe(after);
+    expect(summarizeAlignment(r.alignment)).toMatch(/only \d+% of the sampled points registered/);
   });
 
   test('a georeferenced (UTM-scale origin) cloud keeps centimetre precision through alignment', () => {

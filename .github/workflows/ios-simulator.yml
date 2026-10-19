@@ -11,15 +11,15 @@
 # ADVISORY, AND MANUAL. This is `workflow_dispatch` only. It is a new leg with
 # moving parts outside this repository's control — an Appium driver, a
 # simulator runtime, a WebDriverAgent build — and a leg like that must earn
-# trust before it can block a merge. `L13` records the browser matrix as
-# advisory; this joins it on those terms rather than as a required check.
+# trust before it can block a merge. The browser matrix is advisory;
+# this joins it on those terms rather than as a required check.
 # It becomes eligible to block after 20 consecutive passes, counted by
-# `node scripts/ios-streak.mjs` with the classification rule in ledger L13.
+# `node scripts/ios-streak.mjs` with the classification rule in scripts/lib/iosRunClassifier.mjs.
 #
 # PINNED TO macos-26-intel WITH iOS 26.5 / iPhone 17e. On the arm64 images
 # that `macos-latest` maps to, the host's paravirtual GPU service
 # (SimMetalHost) crash-loops seconds after the two-finger pinch and takes
-# Mobile Safari down with it (ledger L13). The Intel image with this pairing
+# Mobile Safari down with it. The Intel image with this pairing
 # passes every assertion. scripts/pin-ios-simulator.mjs resolves the pair by
 # exact name and refuses to fall back to another runtime or device, and
 # ios-streak.mjs counts only runs on this runner.

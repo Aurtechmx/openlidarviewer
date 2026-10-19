@@ -427,7 +427,7 @@ timing measurement.
 ### Recorded runs
 
 Headless Chromium exposes `navigator.gpu` but returns no adapter, so
-`benchmark:backends:gpu` runs headed. On an Apple Metal-3 adapter, with the CPU
+`benchmark:backends:gpu` runs headed. On a Metal-3 adapter, with the CPU
 control at zero on every quantity:
 
 | quantity | max observed | gate | cells |
@@ -795,7 +795,7 @@ into the initial bundle fails the live build.
 
 ## Test machine
 
-Apple MacBook Pro, M3 Max, 16-inch, built-in Retina XDR display, macOS 26.5.
+Laptop, M3 Max, 16-inch, built-in display, macOS 26.5.
 Browser: Brave. Rendering backend: WebGPU.
 
 ## Test 1: Drone LiDAR survey (LAZ)
@@ -829,7 +829,7 @@ the Scan Report shows no capture-sensor row. The sensor noted above comes from
 the flight record, not from the file: many LiDAR exports leave those header
 fields blank.
 
-## Test 2: iPhone LiDAR scan (glTF)
+## Test 2: phone LiDAR scan (glTF)
 
 A phone scan: the other half of the project's audience, and a format most
 LiDAR tools handle poorly.
@@ -840,7 +840,7 @@ LiDAR tools handle poorly.
 | Size | 8.7 MB |
 | Points | 55,288 |
 | Format | glTF binary (`.glb`) |
-| Capture | iPhone 15 Pro, scanned with Polycam, exported free as `.glb` |
+| Capture | Phone with a LiDAR sensor, scanned with a phone scanning app, exported as `.glb` |
 | Extent | 0.6 × 0.4 × 0.5 m |
 | Density | 234,064 pts/m² |
 | Spacing | 0.2 cm |
@@ -849,11 +849,11 @@ LiDAR tools handle poorly.
 The scan (a small statue and its base) opened instantly and rendered
 immediately on the WebGPU backend, well under the point budget so no
 downsampling was needed. glTF and OBJ meshes are shown as their vertices
-(faces and materials are not rendered); for a dense Polycam capture that vertex
+(faces and materials are not rendered); for a dense phone capture that vertex
 cloud is detailed enough to read clearly. The file carries no RGB, intensity,
 or classification, so those Scan Report rows read "No".
 
-This matters because it took no conversion step: Polycam's free `.glb` export
+This matters because it took no conversion step: the app's `.glb` export
 opened directly, with nothing uploaded anywhere.
 
 ## Test 3: Multi-gigabyte local LAZ (out-of-core path)
@@ -882,7 +882,7 @@ directional rather than a fixed figure.
 ## Takeaway
 
 Three scans of very different scale (a 9.6M-point georeferenced drone survey, a
-55K-point iPhone capture, and a 1.74 GB out-of-core LAZ) all open from a single
+55K-point phone capture, and a 1.74 GB out-of-core LAZ) all open from a single
 drag-and-drop, in a browser tab, with no install and no conversion. That is the
 whole point of the project.
 
@@ -1146,7 +1146,7 @@ chainage reject.
 
 ### What was measured
 
-One warm-up and five recorded runs per series, on an Apple M3 Max under Node
+One warm-up and five recorded runs per series, on an M3 Max under Node
 v26.7.0, darwin 25.5.0, at revision 3565dbd5 with the selection's yield seam in
 the working tree. The durations below are wall-clock on that host and will
 differ on another one. The counts, the accepted totals and the derived

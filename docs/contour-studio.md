@@ -1,6 +1,6 @@
 # Contour Studio
 
-Contour Studio turns a correctly analyzed LiDAR scan into a clear, evidence-aware contour deliverable, without crowding the analysis panel. This page describes the workflow, the honesty model, and where each piece lives in the source.
+Contour Studio turns a correctly analyzed LiDAR scan into a clear, evidence-aware contour deliverable, without crowding the analysis panel. This page describes the workflow, the evidence handling, and where each piece lives in the source.
 
 ## The workflow
 
@@ -11,9 +11,7 @@ Load scan → analyze → see terrain readiness → Create Contour Deliverable
 
 After analysis, a Terrain Products launcher leads the results. Its state (hidden, unavailable, exploratory, or available) is computed from the analysis result and the reference frame. Opening it reveals the Contour Studio workspace: purpose cards, a review bar of recommendations, an evidence ladder, and an export bar. The Analyse panel keeps its own Export Contours, DEM (ZIP) and Intelligence report (PDF) buttons; the Studio adds the purpose cards, the review bar and the complete export bar.
 
-## Honesty model
-
-The science stays stricter than the UI looks:
+## Evidence handling
 
 - Unknown vertical units or a geographic CRS cap the output to cartographic-only; metric contour support is claimed only on a projected metre-based frame, and a source-unit number is never presented as metres.
 - Analytical contours are exact isolines of the grid; cartographic contours are generalized for legibility, reference the analytical geometry's hash, and are never labelled exact.
@@ -37,7 +35,7 @@ Pure cores under `src/terrain/contourStudio/`:
 - `contourAdaptiveGeneralize.ts`: terrain-aware per-feature generalization.
 - `contourLabelEngine.ts`: print-aware label placement with a suppression audit.
 - `contourDeliverablePdfModel.ts`: the multipage PDF content model.
-- `contourPackageManifest.ts`: the complete-package manifest and the §21.1 vector attributes.
+- `contourPackageManifest.ts`: the complete-package manifest and the vector attributes.
 
 UI (vanilla-TS DOM builders) under `src/ui/`: `contourStudioLauncher.ts`, `contourStudioWorkspace.ts`, mounted lazily via `contourStudioMount.ts`. The evidence gate manifest is `src/export/exportManifest.ts`.
 
@@ -47,4 +45,4 @@ The Studio's export bar writes the contour vectors (GeoJSON, DXF and SVG), the m
 
 When the analysis was built from a display sample or a resident streaming set, the map sheet says so under the accuracy heading and prints the analysed basis. It leaves out the USGS density reference, and it titles the accuracy block "Hold-out accuracy (preview)". On a placed scan the sheet's orientation arrow reads "Grid N", and its timestamps are in UTC with the zone named. The WGS 84 contour GeoJSON is refused for a scan on NAD27 or on a datum the viewer cannot confirm, because OLV applies no datum shift; the button shows the reason.
 
-Since the first Studio release, every export product (including the DEM raster package and the terrain intelligence report, which shipped in 0.5.9 with their own product-specific gates) has been folded under the single central evidence resolver. See `docs/releases/VALIDATION_REPORT_v0.5.9.md` and `docs/validation/THREATS_TO_VALIDITY.md` for the evidence scope.
+See `docs/validation/THREATS_TO_VALIDITY.md` for the evidence scope.

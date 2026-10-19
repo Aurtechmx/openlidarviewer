@@ -43,7 +43,7 @@ If you cannot find something below, the directory listing is still the full pict
 | Document | What it covers |
 | --- | --- |
 | [analysis-architecture.md](analysis-architecture.md) | How the analysis stack is layered, and what each layer is allowed to assume. |
-| [coordinate-precision.md](coordinate-precision.md) | The precision contract on georeferenced scans, audited against real data. |
+| [coordinate-precision.md](coordinate-precision.md) | The precision contract on georeferenced scans, checked against real data. |
 | [science/METHOD_REGISTRY.md](science/METHOD_REGISTRY.md) | Every analytical method, with its definition and its reference. |
 | [architecture/project-spatial-frame.md](architecture/project-spatial-frame.md) | The authoritative frame that measurements are expressed in. |
 
@@ -52,7 +52,7 @@ If you cannot find something below, the directory listing is still the full pict
 | Document | What it covers |
 | --- | --- |
 | [terrain-intelligence.md](terrain-intelligence.md) | The confidence-aware DTM and contour pipeline under `src/terrain/`. |
-| [contour-studio.md](contour-studio.md) | Turning an analysed scan into a contour deliverable, and the honesty model behind it. |
+| [contour-studio.md](contour-studio.md) | Turning an analysed scan into a contour deliverable, and how its exports are gated. |
 | [acquisition-grid.md](acquisition-grid.md) | The scanner grid kept beside the cloud, what each cell state means, and when the link between them is broken. |
 | [validation/terrain-validation-matrix.md](validation/terrain-validation-matrix.md) | Which terrain products are validated, against what, to what tolerance. |
 

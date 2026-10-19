@@ -20,6 +20,7 @@
  * against fakes.
  */
 import { truncationOf, truncationText, type Truncation } from '../io/truncation';
+import { verticalMetresPerUnit, type SpatialContext } from '../geo/SpatialContext';
 import { classifyScanShape, type ScanShape, type SpaceKind } from '../terrain/scanShape';
 import {
   planScanRoute,
@@ -59,6 +60,32 @@ export interface ScanRouteGeometryPort {
   residentPointTotal(): number;
   /** Whether the scan carries RGB, asked of the streaming cloud first. */
   hasRgb(): boolean;
+}
+
+/**
+ * The unit facts routing reads from the resolved frame.
+ *
+ * Space and object metrics scale the vertical axis by the vertical unit, which a
+ * compound CRS states separately, and fall back to the horizontal factor when
+ * none is declared. A vertical unit that IS declared but cannot be read is a
+ * different case: the horizontal factor is not evidence about Z. The metrics
+ * then run as for an unconfirmed unit, in source units and labelled so, rather
+ * than printing metres that nothing established.
+ */
+export function routeUnitFrame(
+  context: () => SpatialContext,
+): Pick<ScanRouteFramePort, 'linearUnitToMetres' | 'verticalUnitToMetres' | 'linearUnitKnown'> {
+  return {
+    linearUnitToMetres: () => context().linearUnitToMetres,
+    verticalUnitToMetres: () => {
+      const c = context();
+      return verticalMetresPerUnit(c, 'horizontal') ?? c.linearUnitToMetres;
+    },
+    linearUnitKnown: () => {
+      const c = context();
+      return c.linearUnitKnown && c.verticalScaleState !== 'invalid';
+    },
+  };
 }
 
 export interface ScanRouteFramePort {

@@ -394,7 +394,7 @@ export function buildDtmGrid(raster: DemRaster, params: CellConfidenceParams = {
   const guardPenalty = clamp01(params.extrapolationGuard?.penalty ?? 0.5);
   const guardDrop = params.extrapolationGuard?.dropSingleDirection ?? false;
 
-  // Horn 3x3 slope — isotropic, the same estimator GDAL/ArcGIS use —
+  // Horn 3x3 slope — isotropic, the same estimator GDAL and other GIS software use —
   // drives the interpolation roughness penalty. (v0.4.0 — was a crude
   // max-neighbour difference.) Reuses the `cellM` derived above the fill.
   const slope = hornSlope(z, cols, rows, cellM.x, cellM.y, params.verticalUnitToMetres ?? 1);

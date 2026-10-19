@@ -3,7 +3,7 @@
 ## Our pledge
 
 We want OpenLiDARViewer to be a welcoming, harassment-free project for
-everyone — regardless of background, identity, or experience level.
+everyone, regardless of background, identity, or experience level.
 
 ## Expected behavior
 
@@ -21,8 +21,8 @@ everyone — regardless of background, identity, or experience level.
 
 ## Scope
 
-This Code of Conduct applies in all project spaces — the repository, issues,
-pull requests, and discussions — and whenever someone is representing the
+This Code of Conduct applies in all project spaces (the repository, issues,
+pull requests, and discussions) and whenever someone is representing the
 project in public spaces.
 
 ## Enforcement

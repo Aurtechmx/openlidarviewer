@@ -91,6 +91,9 @@ export interface ProjectSize {
  * height, so a Y-up scan reports its vertical extent as height rather than a
  * horizontal axis. `maxPhysicalDimM` is null when the scale is unknown, so a
  * caller does not map an unknown-unit size onto metre navigation thresholds.
+ * A declared vertical unit that cannot be read (`verticalUnitInvalid`) also
+ * keeps every extent in source units: the height has no metre factor, and the
+ * horizontal one is not borrowed for it.
  */
 export function describeProjectSize(
   min: readonly [number, number, number],
@@ -100,6 +103,7 @@ export function describeProjectSize(
     readonly linearUnitKnown: boolean;
     readonly linearUnitToMetres: number;
     readonly verticalUnitToMetres?: number;
+    readonly verticalUnitInvalid?: boolean;
   },
 ): ProjectSize {
   const ext = [max[0] - min[0], max[1] - min[1], max[2] - min[2]];
@@ -108,7 +112,7 @@ export function describeProjectSize(
   const rawW = ext[hA];
   const rawD = ext[hB];
   const rawH = ext[upIdx];
-  if (!frame.linearUnitKnown || !(frame.linearUnitToMetres > 0)) {
+  if (!frame.linearUnitKnown || !(frame.linearUnitToMetres > 0) || frame.verticalUnitInvalid === true) {
     return { width: rawW, depth: rawD, height: rawH, sizeUnit: 'source units', maxPhysicalDimM: null };
   }
   const hz = frame.linearUnitToMetres;

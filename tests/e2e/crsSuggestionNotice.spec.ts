@@ -1,7 +1,7 @@
 import { test, expect, type Page } from '@playwright/test';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import { suppressOnboardingTour } from './helpers';
+import { suppressOnboardingTour, waitForLoadIdle } from './helpers';
 
 /**
  * crsSuggestionNotice.spec.ts
@@ -39,6 +39,7 @@ async function dropFixture(page: Page): Promise<void> {
     },
     [[...bytes], FIXTURE] as const,
   );
+  await waitForLoadIdle(page);
   await page.dispatchEvent('body', 'drop', { dataTransfer });
 }
 

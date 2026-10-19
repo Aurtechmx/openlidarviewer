@@ -141,7 +141,7 @@ class Page {
       refreshMeasurePanel: () => {},
       refreshAnnotationPanel: () => {},
       applyViewState: () => {},
-      setCrsOverride: () => {},
+      setCrsOverride: () => null,
       showToast: (m) => { this.toasts.push(m); },
       setDropError: (m) => { throw new Error(`drop error: ${m}`); },
     };

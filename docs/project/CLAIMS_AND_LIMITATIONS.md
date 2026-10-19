@@ -113,7 +113,7 @@ Marketing superlatives, "best", "industry-leading", "most accurate",
   of a public CC-BY terrestrial scan agreed exactly with PDAL 2.10.2
   `readers.e57` over all 1,788,994 points and nine dimensions, compared as an
   exact quantised integer sum at a 1×10⁻⁶ quantum under a tolerance registered
-  before the reference existed. The scan is a CloudCompare re-export rather than
+  before the reference existed. The scan is a desktop-software re-export rather than
   a scanner-native write, so vendor extension blocks, multi-scan files and
   spherical coordinates are untested. Intensity sits outside the comparison
   because PDAL rescales it by 65535/(max − min) without subtracting the minimum.

@@ -1,6 +1,6 @@
 # OpenLiDARViewer: User Guide
 
-Open any 3D scan (drone LiDAR, terrestrial laser scan, or phone scan) in a browser tab. Nothing to install, and nothing is uploaded: your files are read and rendered on your own machine, so there is no server to send them to.
+Open drone LiDAR, terrestrial laser scans and phone scans in a browser tab. Nothing to install. Local files are read and rendered on your own machine and are not uploaded.
 
 This guide walks through opening a scan and finding your way around it. Then measuring, terrain analysis, comparing two scans, and sharing what you found. It assumes no GIS background.
 
@@ -18,7 +18,7 @@ You can open:
 - 3D Tiles: a single `.pnts` tile, or a whole tileset
 - Plain points: XYZ, CSV, ASC, TXT
 
-COPC, EPT and 3D Tiles tilesets usually live on a web server rather than on your disk. Paste the address into the URL field beside the open button and press Open.
+COPC, EPT and 3D Tiles tilesets usually live on a web server rather than on your disk. Enter the address in the Open from URL field and press Open.
 
 Static scans stack. Each file you open joins the scene as its own layer, and many can be open at once. A streamed COPC, EPT or 3D Tiles tileset source is open one at a time. Opening one closes the stream already open and every static layer, and opening a static file while a stream is open closes the stream. A local file too heavy for memory streams from disk: it replaces an open stream and keeps the static layers.
 
@@ -121,7 +121,7 @@ Snapping is off until you turn it on. The snap button in the toolbar cycles thre
 
 ### The trust badge
 
-A measurement on a fully loaded scan carries a small red / yellow / green dot next to its value. This is the part most viewers leave out: a number is only as good as the points under its ends, so each measurement is graded on whether its endpoints landed on real returns and how dense the surrounding data is. A streaming COPC or EPT scan holds no resident points to grade against, so measurements taken on one carry no dot.
+A measurement on a fully loaded scan carries a small red / yellow / green dot next to its value. Each measurement is graded on whether its endpoints landed on real returns and how dense the surrounding data is. A streaming COPC or EPT scan holds no resident points to grade against, so measurements taken on one carry no dot.
 
 - Green: supported, with measured points close to the endpoints. This says nothing about how accurate the figure is
 - Yellow: loosely supported, or the scan has no coordinate system so the scale cannot be confirmed as metres
@@ -154,7 +154,7 @@ Choose Terrain and run the analysis. After a run, Create contours opens the Cont
 - Contours, drawn into the scene as their own layer, at the interval the analysis judges this surface can support. Contours has its own page under Terrain, with Contour Studio and the layer controls; Back returns to Terrain, then to the Analyse home.
 - The Coverage and Confidence colour modes, which grade the surface in three bands: measured, where a ground return landed in that cell; interpolated, where the height was filled in from nearby data; and extrapolated or gap, where it is a guess or there is no reliable surface at all. Coverage uses green, yellow and red. Confidence says the same thing on a colourblind-safe ramp.
 
-The grade is honest about gaps. A scan that only measured part of the ground will say so rather than pretend the filled-in areas are survey-quality.
+The grade reports gaps. A scan that only measured part of the ground says so, and the filled-in areas are not graded as survey quality.
 
 ### What the analysis was built from
 
@@ -260,7 +260,7 @@ Point cloud. Re-save the points as LAS 1.4, LAS 1.2, XYZ or ASC. Either LAS can 
 
 LAS 1.4 records the coordinate system as OGC WKT, as the format requires. When the scan carries its own valid WKT that is written; otherwise OLV writes the WKT for the EPSG code, for the codes whose definition it stores: WGS 84, NAD83, NAD83(2011), NAD27 and ETRS89 UTM zones, GDA94 and GDA2020 MGA zones, and the national grids and geographic CRS in its built-in list. For any other code a LAS 1.4 export is refused with a message naming the code; LAS 1.2 records that code as GeoTIFF keys instead. A vertical datum goes into the same WKT, in the unit of the heights (NAVD88 in US survey feet is written as NAVD88 height (ftUS)), so other tools read the heights in the right unit. If the vertical datum cannot be written there, or the heights have a unit but no datum and that unit differs from the horizontal one, LAS 1.4 is refused and LAS 1.2 is offered. Assign EPSG checks what kind of CRS the code names. A geographic code is written as longitude and latitude at 1e-7 degree steps, a projected code at 1 mm steps, and a code OLV cannot identify, or a compound, geocentric or vertical code, is refused with its number in the message.
 
-Products. The things you make *from* the scan: your measurements as GeoJSON or CSV, an integrity report that pairs them with a checksum (and, if you turn on Sign this report, a signature from a key kept in this browser), and a Site KML and scan-area polygon for Google Earth. After a terrain run it also lists the DEM package (ZIP) and the Contour map sheet (PDF).
+Products. The things you make *from* the scan: your measurements as GeoJSON or CSV, an integrity report that pairs them with a checksum (and, if you turn on Sign this report, a signature from a key kept in this browser), and a Site KML and scan-area polygon for KML viewers. After a terrain run it also lists the DEM package (ZIP) and the Contour map sheet (PDF).
 
 The Export tab also has quick buttons that write the loaded cloud as PLY, OBJ, XYZ or CSV (only the points an active clip keeps), an Image export section, and a Report PDF section. The images are Height map, Intensity, Class map, Normal map and View capture. A view capture comes out as a georeferenced top-down image with world file and projection sidecars when the scan is georeferenced. Its pixels with no drawn point are transparent, so it overlays other layers in a GIS; gaps between the points of a sparse cloud are transparent too. The view flashes black and white while it is captured. The Report PDF section has a template list (Survey Summary, Technical Report and Scan QA) and a Report PDF button. Survey Summary is a compact handover, Technical Report adds the full provenance, annotations and visuals, and Scan QA is a data-quality summary. The report follows the Measurements panel's metric or imperial setting. In the dataset summary, Height follows the vertical unit: it reads in source units with "(vertical unit not declared)" when the file declares none, and "(declared vertical unit is invalid)" when the declared factor is zero, negative or not a number. Width and Depth follow the horizontal unit. The Exported stamp prints UTC with the zone named. The terrain products can also be downloaded from Analyse, on the Contours page under Terrain.
 
@@ -305,9 +305,15 @@ A session is a shareable record of what you measured and how much to trust it, y
 
 ## Privacy
 
-Files are read and rendered in your browser, with no upload. There is no account, no server for your data, and no telemetry. Opening, analysing, measuring, comparing and exporting all happen on your machine.
+Files you open from your device are read and rendered in your browser and are not uploaded. There is no account and no telemetry. Opening, analysing, measuring, comparing and exporting all happen on your machine.
 
-The network is reached only when you ask for it. Opening a COPC, EPT or 3D Tiles address fetches from that server, and searching the public dataset catalogue by location asks Microsoft's Planetary Computer for matching datasets. Neither sends your scan or your measurements anywhere.
+The network requests the app makes are these:
+
+- the app's own files, from the site that serves it, and the full offline copy if you ask for one;
+- a remote dataset or sample you open, from the server that hosts it;
+- a location search in the public LiDAR catalogue, sent to Microsoft Planetary Computer, only when you run one, and, when you open a result, a request to its signing service carrying that tile's address.
+
+None of these sends your scan or your measurements anywhere. See [PRIVACY.md](../PRIVACY.md).
 
 A scan too large to hold in memory is indexed into private browser storage on your own device so it can be streamed from disk. That store stays on the machine, is capped in size, and is cleared with your browser's site data.
 

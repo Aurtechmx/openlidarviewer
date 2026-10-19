@@ -13,7 +13,7 @@
 
 import * as THREE from 'three/webgpu';
 import type { Vec3 } from '../navMath';
-import { layoutLabels, MAX_DRAWN_LABELS, selectLabelsToDraw } from './labelLayout';
+import { isLabelCoordDrawable, layoutLabels, MAX_DRAWN_LABELS, selectLabelsToDraw } from './labelLayout';
 import type { LabelBox } from './labelLayout';
 import { standaloneSvg, viewBoxSize } from '../snapshotSvg';
 
@@ -228,7 +228,8 @@ export class MeasureOverlay {
     // per label per frame is otherwise unbounded in the number of measurements.
     const visibleLabels = model.labels
       .map((l) => ({ l, p: this.project(l.anchor, camera, w, h) }))
-      .filter((x) => x.p.visible);
+      // A label far off screen (or non-finite) is not drawn, and is never laid out.
+      .filter((x) => x.p.visible && isLabelCoordDrawable(x.p.x, x.p.y));
     const keep = selectLabelsToDraw(
       visibleLabels.map((x) => ({ x: x.p.x, y: x.p.y, priority: x.l.priority === true })),
       MAX_DRAWN_LABELS,

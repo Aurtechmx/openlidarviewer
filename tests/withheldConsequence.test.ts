@@ -1,8 +1,8 @@
 /**
  * withheldConsequence.test.ts: what the Withheld policy would actually cost.
  *
- * Ledger entry L26 records the Withheld policy as written and its consequence
- * as unmeasured, for a concrete reason: every LAS fixture in this repository
+ * The Withheld policy was written down with its consequence unmeasured, for a
+ * concrete reason: every LAS fixture in this repository
  * left the flag byte at zero, so excluding Withheld points changed no number
  * anywhere and no test could show what the exclusion spares or costs.
  *

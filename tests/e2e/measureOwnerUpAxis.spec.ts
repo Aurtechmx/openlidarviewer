@@ -313,3 +313,90 @@ test.describe('a PLY under a projected CRS measures, exports and navigates along
     await expect(row).toContainText('Y up (PLY with no coordinate system is read Y-up');
   });
 });
+
+/** The cells of one CSV column, as written (an empty cell stays an empty string). */
+async function csvCells(page: Page, column: string): Promise<string[]> {
+  await showWorkspaceMode(page, 'output');
+  const p = page.locator('.olv-export-panel');
+  if (await p.evaluate((e) => e.classList.contains('olv-collapsed'))) await p.locator('.olv-panel-head').click();
+  const h = p.locator('.olv-export-products-head');
+  if ((await h.getAttribute('aria-expanded')) === 'false') await h.click();
+  const w = page.waitForEvent('download');
+  await p.locator('.olv-export-product-actions button', { hasText: /^CSV$/ }).click();
+  const text = readFileSync((await (await w).path())!, 'utf8');
+  const [head, ...rows] = text.trim().split(/\r?\n/);
+  const i = head!.split(',').indexOf(column);
+  expect(i).toBeGreaterThanOrEqual(0);
+  return rows.map((r) => r.split(',')[i] ?? '');
+}
+
+/** Four UTM 13N points 100 vertical units apart, with the vertical unit given by `kind`. */
+async function verticalUnitLas(kind: 'angular' | 'centimetre'): Promise<Uint8Array> {
+  await geomFixtures();
+  const { writeLas, writeLas14 } = await import('../../src/convert/writeLas');
+  const { wktForEpsg } = await import('../../src/io/epsgWkt');
+  const g = {
+    count: 4,
+    x: Float64Array.from([500000, 500001, 500000, 500001]),
+    y: Float64Array.from([4000000, 4000000, 4000001, 4000001]),
+    z: Float64Array.from([100, 100, 200, 200]),
+  };
+  if (kind === 'angular') {
+    // NAVD88 beside an angular VerticalUnitsGeoKey: a vertical unit that cannot be read.
+    return writeLas(g, { epsg: 32613, linearUnitCode: 9001, verticalEpsg: 5703, verticalUnitCode: 9102 });
+  }
+  return writeLas14(g, {
+    wkt: `COMPD_CS["UTM and local height",${wktForEpsg(32613)},VERT_CS["Local height",VERT_DATUM["Local datum",2005],UNIT["centimetre",0.01],AXIS["Up",UP]]]`,
+  });
+}
+
+test.describe('a scan whose vertical unit is declared', () => {
+  test.describe.configure({ timeout: 90_000 });
+
+  test('an unreadable unit withholds the height in the panel and leaves vertical_m empty in the CSV', async ({ page }) => {
+    await page.goto('/?test=1');
+    await dropBytes(page, await verticalUnitLas('angular'), 'angular-z.las');
+    await opened(page, 1, 'angular-z.las');
+    await measure(page, 'height', [[0, 0, 0], [0, 0, 100]]);
+    await expect(page.locator('.olv-mp-value')).toContainText('height unit could not be interpreted');
+    await expect(page.locator('.olv-mp-value')).not.toContainText('100');
+    expect(await csvCells(page, 'vertical_m')).toEqual(['']);
+  });
+
+  test('a centimetre unit is read by its factor: a 100-unit rise is 1 m, not 100 m', async ({ page }) => {
+    await page.goto('/?test=1');
+    await dropBytes(page, await verticalUnitLas('centimetre'), 'cm-z.las');
+    await opened(page, 1, 'cm-z.las');
+    await measure(page, 'height', [[0, 0, 0], [0, 0, 100]]);
+    await expect(page.locator('.olv-mp-value')).toHaveText(/^1\.0000 m/);
+    await expect(page.locator('.olv-mp-value')).not.toContainText('could not be interpreted');
+    expect(await csvCells(page, 'vertical_m')).toEqual(['1']);
+  });
+});
+
+test.describe('the elevation filter follows a layer whose up axis moves', () => {
+  test.describe.configure({ timeout: 90_000 });
+
+  test('assigning a CRS to a PLY clears a height window set along the old axis and says so', async ({ page }) => {
+    await page.goto('/?test=1');
+    await dropBytes(page, surveyPly(), 'survey.ply');
+    await opened(page, 1, 'survey.ply');
+    // The elevation filter is an Advanced inspector section.
+    await page.locator('.olv-inspector .olv-detail-mode').getByRole('button', { name: 'Advanced' }).click();
+    const min = page.getByLabel('Minimum elevation');
+    const max = page.getByLabel('Maximum elevation');
+    // A PLY with no CRS is read Y-up: the window is a range of northings.
+    await expect(min).toHaveValue('4000000');
+    await expect(max).toHaveValue('4000100');
+    await min.fill('4000040');
+    await expect(page.locator('.olv-filter-active')).toHaveCount(1);
+
+    await assignCrs(page, '32613');
+    await expect.poll(() => sceneUp(page)).toEqual(Z_UP);
+    // The window is gone, the control is re-seeded along Z, and the user is told.
+    await expect(page.getByText("Elevation filter cleared: a layer's up axis changed with its coordinate system")).toBeVisible();
+    await expect(page.locator('.olv-filter-active')).toHaveCount(0);
+    await expect(min).toHaveValue('100');
+    await expect(max).toHaveValue('200');
+  });
+});

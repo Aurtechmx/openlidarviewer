@@ -24,6 +24,7 @@ import { conversionNotes, exportedLine } from './conversionNotes';
 import { notableEntries, warningSummary } from '../convert/conversionEvents';
 import { downloadBytes } from '../io/download';
 import { loadConvertEngine, loadFindingsPanel, loadLegacyClassGuard, loadSessionFindings } from '../lazyChunks';
+import { createLas14Check, formatAfterLas14Block } from './las14Check';
 import {
   CONVERT_FORMATS,
   LEGACY_ACQUISITION_LOSS_HINT,
@@ -217,8 +218,8 @@ export interface ExportPanelCallbacks {
     isCurrent: () => boolean,
   ) => Promise<'done' | 'stale'>;
   /**
-   * Export a site KML (annotations + measurements + viewpoints) for Google
-   * Earth / QGIS. Wired only when the host can supply a lat/lon transform.
+   * Export a site KML (annotations + measurements + viewpoints) for
+   * a KML viewer or GIS software. Wired only when the host can supply a lat/lon transform.
    */
   exportKml?: () => void;
   /**
@@ -335,6 +336,15 @@ export class ExportPanel {
   // LAS 1.4 is the converter's lead format (see CONVERT_FORMATS ordering) —
   // default the panel to it so the pill selection matches the recommended choice.
   private _format: ConvertFormat = 'las14';
+  /**
+   * Why LAS 1.4 cannot be written for the CRS this export would carry, or null
+   * when it can. While set, the LAS 1.4 pill is disabled and LAS 1.2 is the
+   * format, so the default path does not fail after Export is pressed.
+   */
+  private _las14Block: string | null = null;
+  /** True while LAS 1.2 stands in for a LAS 1.4 default; a pill click clears it. */
+  private _formatAutoSwitched = false;
+  private readonly _las14 = createLas14Check((block) => this._applyLas14(block));
   private _crsMode: CrsMode = 'keep';
   private _targetEpsg = '';
   private _sourceEpsg = '';
@@ -643,8 +653,41 @@ export class ExportPanel {
       this._renderCrsExtra();
     }
     this._renderCrsStep();
+    this._syncLas14();
     this._renderGzipRow();
     this._renderSummary();
+  }
+
+  /**
+   * Check whether LAS 1.4 can carry the CRS this export would write, and move
+   * the format to LAS 1.2 (with the reason shown) when it cannot. The check
+   * runs the writer's own CRS plan, loaded on demand, and only when an EPSG
+   * code is in play; a user's own pill choice is never undone.
+   */
+  private _syncLas14(): void {
+    const mode = this._crsKnown ? this._crsMode : 'keep';
+    const resolved = this._cb.getResolvedSourceCrs?.() ?? null;
+    const request = {
+      mode,
+      sourceEpsg: resolved?.epsg ?? null,
+      sourceWkt: resolved?.wkt ?? null,
+      targetEpsg: parseEpsg(this._targetEpsg),
+    };
+    const outEpsg = mode === 'keep' ? request.sourceEpsg : request.targetEpsg;
+    this._las14.run(outEpsg == null ? null : request);
+  }
+
+  private _applyLas14(block: string | null): void {
+    this._las14Block = block;
+    ({ format: this._format, autoSwitched: this._formatAutoSwitched } = formatAfterLas14Block(this._format, block, this._formatAutoSwitched));
+    this._renderFormatPills();
+    this._renderGzipRow();
+    this._renderSummary();
+  }
+
+  /** Settles when the latest LAS 1.4 availability check has been applied. */
+  whenLas14Checked(): Promise<void> {
+    return this._las14.settled();
   }
 
   /** Show or collapse the Coordinate-System step per the known-CRS signal. */
@@ -966,7 +1009,7 @@ export class ExportPanel {
       }
     }
 
-    // The map lane: everything that lands in Google Earth / QGIS as lon/lat.
+    // The map lane: everything that lands in KML viewers and GIS software as lon/lat.
     // Each entry is offered only when the host wires it, and each carries its
     // own readiness because they gate on different things: the site file needs
     // features to place, the outline needs only a known coordinate system.
@@ -1303,9 +1346,15 @@ export class ExportPanel {
         pill.disabled = true;
         pill.title = LAZ_UNAVAILABLE;
         pill.setAttribute('aria-describedby', 'olv-export-laz-note');
+      } else if (fmt === 'las14' && this._las14Block != null) {
+        pill.disabled = true;
+        pill.classList.add('is-disabled');
+        pill.title = this._las14Block;
+        pill.setAttribute('aria-describedby', 'olv-export-las14-note');
       } else {
         pill.addEventListener('click', () => {
           this._format = fmt;
+          this._formatAutoSwitched = false;
           this._renderFormatPills();
           this._renderGzipRow();
           this._renderSummary();
@@ -1317,6 +1366,11 @@ export class ExportPanel {
     if ((Object.values(CONVERT_FORMATS) as { available: boolean }[]).some((f) => !f.available)) {
       const note = el('p', { className: 'olv-export-laz-note', text: LAZ_UNAVAILABLE });
       note.id = 'olv-export-laz-note';
+      this._formatRow.append(note);
+    }
+    if (this._las14Block != null) {
+      const note = el('p', { className: 'olv-export-laz-note', text: `${this._las14Block} LAS 1.2 is selected.` });
+      note.id = 'olv-export-las14-note';
       this._formatRow.append(note);
     }
   }
@@ -1340,6 +1394,7 @@ export class ExportPanel {
         this._crsMode = mode;
         this._renderCrsPills();
         this._renderCrsExtra();
+        this._syncLas14();
         this._renderSummary();
       });
       this._crsRow.append(pill);
@@ -1352,7 +1407,7 @@ export class ExportPanel {
     if (this._crsMode === 'reproject') {
       this._crsExtra.append(this._field('Source EPSG (optional)', this._sourceEpsg, (v) => { this._sourceEpsg = v; this._renderSummary(); }));
     }
-    this._crsExtra.append(this._field('Target EPSG', this._targetEpsg, (v) => { this._targetEpsg = v; this._renderSummary(); }));
+    this._crsExtra.append(this._field('Target EPSG', this._targetEpsg, (v) => { this._targetEpsg = v; this._syncLas14(); this._renderSummary(); }));
   }
 
   private _field(label: string, value: string, onInput: (v: string) => void): HTMLElement {

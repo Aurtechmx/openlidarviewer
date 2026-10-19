@@ -1,7 +1,7 @@
 {
   "name": "openlidarviewer",
   "version": "0.7.0",
-  "description": "View supported LiDAR and point-cloud datasets locally in a browser. No installation or account required; local files are not uploaded.",
+  "description": "LiDAR and point-cloud viewer that runs in the browser. Open LAS, LAZ, E57, PLY, OBJ, glTF and PCD files, or stream COPC, EPT and 3D Tiles. Measure, classify, cut profiles, build terrain models and contours, compare epochs and export reports. Renders on WebGPU with a WebGL 2 fallback. Local files stay on your device.",
   "license": "AGPL-3.0-only",
   "author": "A. Urias",
   "homepage": "https://openlidarviewer.org/",
@@ -38,6 +38,7 @@
     "check:no-test-seam": "node scripts/check-no-test-seam.mjs",
     "check:no-dev-flags": "node scripts/check-no-dev-flags.mjs",
     "check:built-csp": "node scripts/check-built-csp.mjs",
+    "check:no-embed-origins": "node scripts/check-no-embed-origins.mjs",
     "check:deps": "node scripts/check-dep-singletons.mjs",
     "preview": "vite preview",
     "typecheck": "tsc --noEmit",

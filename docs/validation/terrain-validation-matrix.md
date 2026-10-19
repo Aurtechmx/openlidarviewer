@@ -1,9 +1,9 @@
 # Terrain Validation Matrix
 
 This page maps each terrain product to how it is validated and to the
-test that proves it. The goal is honesty: every claim about a terrain
-product is backed by a deterministic, pure-data test against a known answer,
-an interoperability check, or a documented manual step.
+test that proves it. Every claim about a terrain product is backed by a
+deterministic, pure-data test against a known answer, an interoperability
+check, or a documented manual step.
 
 Validation methods used below:
 
@@ -22,17 +22,15 @@ Validation methods used below:
 All terrain tests are pure-data (no DOM, no three.js, no I/O) and
 deterministic. Run them with `npx vitest run`.
 
-The Status column has been replaced by an evidence level per
+Each product carries an evidence level per
 [`EVIDENCE_MODEL.md`](./EVIDENCE_MODEL.md) and the machine-readable
-[`claim-register.yaml`](./claim-register.yaml). "Production" is no longer used as
-a scientific-validation status, it conflated "the code works" with "the science
-is validated". Slope, aspect, hillshade, contours, the DSM, the DTM, the CHM and the cross-section profile are the products at E4+ in this matrix (slope, aspect and hillshade each
+[`claim-register.yaml`](./claim-register.yaml). Slope, aspect, hillshade, contours, the DSM, the DTM, the CHM and the cross-section profile are the products at E4+ in this matrix (slope, aspect and hillshade each
 independently cross-implemented against GDAL 3.13.1 on the same analytic fixture, contours against GDAL `gdal_contour`
 on a frozen analytic tilted plane, the DSM, DTM and CHM grids against PDAL 2.10.2 `writers.gdal` on seeded synthetic clouds where the
 reference radius is below half a cell, covering the cell gridding rather than ground classification, and the profile against OGR/SpatiaLite chainage reduced by R's type-7 quantile); every other product tops out at E3 synthetic known-truth,
 with analytic checks E2 and interop/unit checks E1. Held-out RMSE is an INTERNAL diagnostic (points withheld from the same
 scan), not independent checkpoint accuracy, optimistic relative to a
-spatially-blocked or field checkpoint (research-hardening Phases 4 to 5).
+spatially-blocked or field checkpoint.
 
 ## Matrix
 
@@ -74,7 +72,7 @@ spatially-blocked or field checkpoint (research-hardening Phases 4 to 5).
 Automated tests cover correctness against synthetic truth. Before a release
 that touches terrain export or georeferencing, also run these by hand:
 
-1. Open a DEM GeoTIFF in QGIS or GDAL and confirm it is georeferenced, the raster lands in the right place over a basemap, the cell size and
+1. Open a DEM GeoTIFF in a GIS or GDAL and confirm it is georeferenced, the raster lands in the right place over a basemap, the cell size and
    origin match the source, and `gdalinfo` reports the expected CRS/EPSG and
    value range (with NODATA honoured, not rendered as 0).
 2. Open the Esri ASCII Grid (`.asc`) in the same tool and confirm it

@@ -16,7 +16,7 @@
  *     log. A step whose `needs` failed is reported as skipped and counts as a
  *     failure;
  *   - every step's whole output is written to release/gate-steps/<step>.log
- *     (`OLV_GATE_STEP_LOG_DIR` moves it), emptied at the start of each run.
+ *     (`OLV_GATE_STEP_LOG_DIR` moves it, to a folder inside release/ only), emptied at the start of each run.
  *     release/ is git-ignored and is not packaged (scripts/lib/gateStepLogs.mjs).
  *
  * Usage:

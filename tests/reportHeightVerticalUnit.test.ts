@@ -156,14 +156,30 @@ describe('PDF Height follows the vertical unit (real report export wiring)', () 
     expect(m.get('Height')).toBe(onScreenHeight(null, 15.7));
   });
 
-  it('Y-up mesh: Height is the Y span, still in source units without a vertical unit', async () => {
-    // PLY loads Y-up: Y carries the height and Z the depth.
+  it('Y-up mesh with no CRS: Height is the Y span and depth the Z span', async () => {
+    // A local PLY is read Y-up: Y carries the height and Z the depth.
+    const m = await pdfRows(null, { kind: 'static', format: 'ply', span: [30, 8, 40] });
+    expect(m.get('Width')).toBe('30.0 (source units)');
+    expect(m.get('Depth')).toBe('40.0 (source units)');
+    expect(m.get('Height')).toBe('8.0 (source units)');
+  });
+
+  it('PLY under a projected CRS: Z is the height and Y the northing, as the Scan Report reads it', async () => {
+    // Easting, northing and height in X, Y and Z: footprint 30 by 8, height 40.
     const crs = resolved(CS92);
     const m = await pdfRows(crs, { kind: 'static', format: 'ply', span: [30, 8, 40] });
     expect(m.get('Width')).toBe('30.0 m');
-    expect(m.get('Depth')).toBe('40.0 m');
-    expect(m.get('Height')).toBe('8.0 source units (vertical unit not declared)');
-    expect(m.get('Height')).toBe(onScreenHeight(crs, 8));
+    expect(m.get('Depth')).toBe('8.0 m');
+    expect(m.get('Height')).toBe('40.0 source units (vertical unit not declared)');
+    expect(m.get('Height')).toBe(onScreenHeight(crs, 40));
+  });
+
+  it('glTF under a projected CRS: no depth, height or density, and the reason is printed', async () => {
+    const m = await pdfRows(resolved(CS92), { kind: 'static', format: 'gltf', span: [30, 8, 40] });
+    expect(m.get('Depth')).toBe('unknown');
+    expect(m.get('Height')).toBe('unknown');
+    expect(m.has('Density')).toBe(false);
+    expect(m.get('Up axis')).toMatch(/^not available: no up axis; glTF stores Y as the up axis/);
   });
 
   it('streaming COPC: the PDF Height matches the streamed extent rows', async () => {

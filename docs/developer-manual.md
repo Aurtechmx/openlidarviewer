@@ -31,7 +31,7 @@ Scan Intelligence report describes the dataset, and the result can be exported.
 | FR-3 | Detect format from magic bytes first, file extension second. |
 | FR-4 | Parse and downsample off the main thread, in a Web Worker. |
 | FR-5 | Recenter georeferenced clouds to a shared local origin, doing the subtraction in float64 before the float32 downcast, within a small bounded error. |
-| FR-6 | Keep clouds within a point budget (voxel-downsampling, or stride decoding when far over budget) and always display the honest `shown / total` count. |
+| FR-6 | Keep clouds within a point budget (voxel-downsampling, or stride decoding when far over budget) and always display the `shown / total` count. |
 | FR-7 | Render with three.js using WebGPU, with an automatic WebGL 2 fallback. |
 | FR-8 | Color by RGB, height, intensity, classification, or surface normal; auto-select the best mode on load; offer only the modes the file actually contains. |
 | FR-9 | Hold multiple clouds in one scene, rebased onto a shared origin. |
@@ -80,7 +80,7 @@ Scan Intelligence report describes the dataset, and the result can be exported.
 
 ## 4. Prerequisites
 
-- Node.js 22+ and npm 10+.
+- Node.js `^22.18.0` or `>=24.11.0` (the `engines` field in `package.json`) and npm 10 or later.
 - A modern browser for development (Chrome or Edge recommended for WebGPU).
 
 ### 4.1 Windows
@@ -170,7 +170,7 @@ npm install
 npm run dev
 ```
 
-Open the printed local URL and drop a scan, or click a built-in sample.
+Open the printed local URL and drop a scan, or press "Launch a sample", which streams the swissSURFACE3D sample (83.8 MB) over the network.
 
 ---
 
@@ -292,7 +292,7 @@ See [`architecture.md`](architecture.md) for the full map.
 | `npm run test:watch` | Vitest in watch mode. |
 | `npm run test:e2e` | Playwright end-to-end tests (run `npx playwright install --with-deps chromium` first). |
 | `npm run test:smoke:widths` | The startup smoke spec at five viewport widths: 320, 375, 767, 768, 1440. One build and one preview server serve all five. |
-| `npm run test:e2e:devices` | Opt-in, not run in CI: the phone, tablet and device-agnostic specs under iPhone SE, iPhone 15 Pro Max, iPad Pro 11 and Pixel 7 emulation (`playwright.devices.config.ts`). Cases pinned to a desktop viewport carry the `@desktop-only` tag and are excluded. Emulation is not a device: a pass speaks to layout and touch, not to the renderer on real hardware. |
+| `npm run test:e2e:devices` | Opt-in, not run in CI: the phone, tablet and device-agnostic specs under phone and tablet device emulation (`playwright.devices.config.ts`). Cases pinned to a desktop viewport carry the `@desktop-only` tag and are excluded. Emulation is not a device: a pass speaks to layout and touch, not to the renderer on real hardware. |
 
 A `?debug=1` URL parameter logs a per-stage load-timing breakdown (read, decode, downsample, GPU upload, total) to the browser console. It is useful when profiling the load pipeline and is off in normal use.
 
@@ -428,7 +428,7 @@ matching `tests/myModule.test.ts`.
 | Browser | WebGPU | WebGL 2 fallback |
 |---------|--------|------------------|
 | Chrome / Edge | Default | Yes |
-| Firefox | Windows; macOS on Apple Silicon | Yes |
+| Firefox | Windows; macOS on arm64 | Yes |
 | Safari | iOS / macOS 26+ | Yes |
 
 Where WebGPU is unavailable the viewer automatically uses WebGL 2. The active backend is shown in the UI.
@@ -477,7 +477,7 @@ off under the other two. Specs must not assume either starting state.
 ## 15. Deployment
 
 `npm run build` emits static files in `dist/`. Host them on any static host
-(GitHub Pages, Netlify, S3/CloudFront, any CDN): there is no server
+(any static host, object store or CDN): there is no server
 component. For embedding, serve the same build and link with `?embed=1`.
 
 Embedding from another origin needs two settings. A host that can send headers
@@ -490,7 +490,7 @@ viewer's own origin is always trusted, and `?embedParent=` / `?embedOrigins=` in
 the URL can only narrow the list. A framed page that no rule allows shows a
 notice instead of starting. The policy lives in `src/ui/embedPolicy.ts` (pure,
 unit-tested in `tests/embedPolicy.test.ts`), the notice in `src/ui/frameGuard.ts`,
-and `src/ui/frameGuardBoot.ts` is the first import of `src/main.ts`. See
+and `src/ui/frameGuardBoot.ts` runs first: `src/main.ts` imports `src/ui/embedConfig.ts` before anything else, and that module imports the guard before anything else. If the policy cannot be evaluated the guard fails closed for a framed page. See
 [usage.md](usage.md#embedding-origin-and-security).
 
 ---

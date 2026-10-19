@@ -13,7 +13,6 @@
 
 import { describe, it, expect } from 'vitest';
 import {
-  overlayVerticalAxisFor,
   overlayBufferParamsFor,
   overlayScenePosition,
   overlayHeightOffsetVector,
@@ -45,24 +44,13 @@ function model(): ContourFeatureModel {
   } as unknown as ContourFeatureModel;
 }
 
-describe('overlayVerticalAxisFor', () => {
-  it('survey formats draw Z-up; mesh formats draw Y-up', () => {
-    for (const f of ['las', 'laz', 'e57', 'xyz', 'pcd', 'ptx', 'pts'] as const) {
-      expect(overlayVerticalAxisFor(f)).toBe('z');
-    }
-    for (const f of ['gltf', 'obj', 'ply'] as const) {
-      expect(overlayVerticalAxisFor(f)).toBe('y');
-    }
-  });
-});
-
 describe('overlayBufferParamsFor — the axis and the sign travel together', () => {
   it('Z-up: no negation (the northing keeps its own axis)', () => {
-    expect(overlayBufferParamsFor('las')).toEqual({ verticalAxis: 'z', negateNorthing: false });
+    expect(overlayBufferParamsFor('z')).toEqual({ verticalAxis: 'z', negateNorthing: false });
   });
 
   it('Y-up: negation is REQUIRED, so the placement is a rotation not a mirror', () => {
-    expect(overlayBufferParamsFor('gltf')).toEqual({ verticalAxis: 'y', negateNorthing: true });
+    expect(overlayBufferParamsFor('y')).toEqual({ verticalAxis: 'y', negateNorthing: true });
   });
 });
 
@@ -70,7 +58,7 @@ describe('the Y-up overlay build IS the canonical inverse rotation', () => {
   it('equals canonicalZUpToYUp applied to the Z-up build, vertex for vertex', () => {
     const m = model();
     const zUp = buildContourOverlayBuffers(m, { verticalAxis: 'z' });
-    const yUp = buildContourOverlayBuffers(m, overlayBufferParamsFor('gltf'));
+    const yUp = buildContourOverlayBuffers(m, overlayBufferParamsFor('y'));
 
     // The reference: rotate the Z-up buffer with the shared inverse transform.
     const expected = canonicalZUpToYUp(Float32Array.from(zUp.positions));

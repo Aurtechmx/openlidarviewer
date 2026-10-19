@@ -38,11 +38,11 @@ import { groupBySection, rankActions, type Action } from './actionRegistry';
  */
 export function formatShortcutKeys(keys: string | undefined): string {
   if (!keys) return '';
-  // ⇧ and ⌥ are Apple's glyphs. Rendering them everywhere put a macOS Option
+  // ⇧ and ⌥ are the macOS key glyphs. Rendering them everywhere put a macOS Option
   // symbol in front of a Windows shortcut, so "Cmd-Shift-U" read as "Ctrl ⇧ U"
   // on Windows for a chord that is written Ctrl+Shift+U there. Each platform
   // gets the notation its own users read.
-  if (isApplePlatform()) {
+  if (isMacOrIosPlatform()) {
     return keys
       .replace(/\bCmd\b/g, '⌘')
       .replace(/\bShift\b/g, '⇧')
@@ -53,13 +53,13 @@ export function formatShortcutKeys(keys: string | undefined): string {
 }
 
 /**
- * Whether this is an Apple platform, for notation only.
+ * Whether this is a macOS or iOS platform, for notation only.
  *
  * `navigator.platform` is deprecated and frozen in some engines, so
  * `userAgentData.platform` is preferred where present and the old property is
  * the fallback rather than the source.
  */
-function isApplePlatform(): boolean {
+function isMacOrIosPlatform(): boolean {
   if (typeof navigator === 'undefined') return false;
   const withData = navigator as Navigator & { userAgentData?: { platform?: string } };
   const modern = withData.userAgentData?.platform;

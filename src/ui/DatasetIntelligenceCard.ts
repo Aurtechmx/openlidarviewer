@@ -91,7 +91,7 @@ export const DENSITY_ROW = {
 } as const;
 
 /**
- * v0.3.10 trust-pass — "Terrain Confidence" can be misread as
+ * "Terrain Confidence" can be misread as
  * ground-classification accuracy by an analyst skimming the panel.
  * Renamed to "Metric Stability" so the row reads as what it actually
  * measures: how stable the underlying terrain signals are given the
@@ -185,7 +185,7 @@ export class DatasetIntelligenceCard {
     this._coverageWarning = el('div', { className: 'olv-di-warning olv-hidden' });
     this._coverageWarning.setAttribute('role', 'note');
 
-    // v0.3.10 trust-pass — every row gets a "what this means" tooltip
+    // Every row gets a "what this means" tooltip
     // attached to the term (<dt>) so a hover lookup explains the
     // bucket vocabulary. The five rows describe technical signals
     // that are obvious to a survey/civil analyst but read as jargon
@@ -343,7 +343,7 @@ export class DatasetIntelligenceCard {
    * working unchanged while still surfacing the semantic
    * relationship to assistive tech.
    *
-   * v0.3.10 trust-pass — accepts an optional `tooltip` that becomes
+   * Accepts an optional `tooltip` that becomes
    * the `title` attribute on the `<dt>` (the term, not the value)
    * so a hover lookup explains what the bucket label actually means.
    * The cursor on `<dt>` becomes `help` when a tooltip is present

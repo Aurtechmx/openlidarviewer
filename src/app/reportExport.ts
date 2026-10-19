@@ -37,7 +37,7 @@ import { footprintMetres } from '../report/reportFootprint';
 import type { Footprint } from '../report/reportFootprint';
 import { horizontalGroundRefusal, spatialContextFrom } from '../geo/SpatialContext';
 import { hasNoiseClassPoints } from '../geo/height';
-import { isZUpFormat } from '../io/sniffFormat';
+import { layerUpFrameFromContext, upFrameRefusal } from '../geo/frame/layerUpFrame';
 import { increment as recordUsage } from '../diagnostics/usageCounters';
 import { captureProvenance, isNonTerrainVerdict } from '../diagnostics/captureProvenance';
 import { triggerDownload } from '../io/download';
@@ -163,6 +163,52 @@ export function sourceElevationRange(
   if (!Number.isFinite(min) || !Number.isFinite(max)) return undefined;
   const toMetres = fp.unitStatus === 'confirmed' && fp.heightUnitGap === null ? (verticalUnitToMetres as number) : 1;
   return { min: min * toMetres, max: max * toMetres };
+}
+
+/**
+ * The extent block of the PDF's scan metadata for one static cloud: footprint,
+ * height and elevation range along the layer's own up axis.
+ *
+ * The axis comes from the per-layer rule (`geo/frame/layerUpFrame.ts`) with the
+ * layer's RESOLVED CRS, not from the source format: a PLY or OBJ under a
+ * horizontal CRS stores easting, northing and height in X, Y and Z, so its
+ * footprint is X by Y and its height the Z span, where a local mesh keeps the
+ * Y-up reading. A layer with no up axis (glTF under a CRS) states no depth,
+ * height, density or elevation, and carries the reason instead.
+ */
+export function staticScanExtent(
+  cloud: Pick<PointCloud, 'sourceFormat' | 'sourceOrigin'>,
+  crs: ResolvedCrs | null,
+  fileN: number | null,
+  bounds: { readonly min: readonly number[]; readonly max: readonly number[] },
+): {
+  extent: ReturnType<typeof footprintToMetadataExtent>;
+  elevationRange: { min: number; max: number } | undefined;
+  upAxisRefusal: string | undefined;
+} {
+  const ctx = spatialContextFrom(crs);
+  const upFrame = layerUpFrameFromContext(cloud.sourceFormat, ctx);
+  const upAxisRefusal = upFrameRefusal(upFrame) ?? undefined;
+  const zUp = upFrame.ok && upFrame.axis === 'z';
+  const b = bounds;
+  const fp = footprintMetres({
+    extentX: b.max[0] - b.min[0], extentY: b.max[1] - b.min[1], extentZ: b.max[2] - b.min[2],
+    pointCount: fileN,
+    linearUnitToMetres: ctx.linearUnitToMetres,
+    verticalUnitToMetres: ctx.verticalUnitToMetres,
+    linearUnitKnown: ctx.linearUnitKnown,
+    horizontalRefusal: horizontalGroundRefusal(ctx) ?? undefined,
+    zUp,
+  });
+  const extent = footprintToMetadataExtent(fp);
+  if (upAxisRefusal) {
+    return { extent: { ...extent, depth: Number.NaN, height: Number.NaN, density: Number.NaN }, elevationRange: undefined, upAxisRefusal };
+  }
+  return {
+    extent,
+    elevationRange: sourceElevationRange(b, cloud.sourceOrigin, zUp, fp, ctx.verticalUnitToMetres),
+    upAxisRefusal: undefined,
+  };
 }
 
 /**
@@ -408,20 +454,7 @@ export async function generateReportPdf(templateId: string, deps: ReportExportDe
     // scan would otherwise overstate area ~10.76× and be graded against the
     // wrong USGS Quality Level. FAIL CLOSED on an unconfirmed unit — see the
     // streaming path above.
-    const ctx = spatialContextFrom(activeCrs);
-    const fp = footprintMetres({
-      extentX: b.max[0] - b.min[0], extentY: b.max[1] - b.min[1], extentZ: b.max[2] - b.min[2],
-      pointCount: fileN,
-      linearUnitToMetres: ctx.linearUnitToMetres,
-      verticalUnitToMetres: ctx.verticalUnitToMetres,
-      linearUnitKnown: ctx.linearUnitKnown,
-      horizontalRefusal: horizontalGroundRefusal(ctx) ?? undefined,
-      // Mesh formats load Y-up, so the PDF reads the same axes as the
-      // on-screen Scan Report rather than assuming Z.
-      zUp: isZUpFormat(staticCloud.sourceFormat),
-    });
-    const ext = footprintToMetadataExtent(fp);
-    const elevationRange = sourceElevationRange(b, staticCloud.sourceOrigin, isZUpFormat(staticCloud.sourceFormat), fp, ctx.verticalUnitToMetres);
+    const { extent: ext, elevationRange, upAxisRefusal } = staticScanExtent(staticCloud, activeCrs, fileN, b);
     metadata = {
       fileName: staticCloud.name,
       format: staticCloud.metadata?.interpretationLevel
@@ -435,6 +468,7 @@ export async function generateReportPdf(templateId: string, deps: ReportExportDe
       ...classificationShare(staticCloud),
       ...(staticCloud.classification && hasNoiseClassPoints(staticCloud.classification, staticCloud.pointCount) ? { heightIncludesNoise: true } : {}),
       ...(elevationRange ? { elevationRange } : {}),
+      ...(upAxisRefusal ? { upAxisRefusal } : {}),
       ...(activeCrsLabel ? { crsName: activeCrsLabel, crsUnit: activeCrs?.linearUnit } : {}),
       // Class-filter honesty — when a filter narrows the live view, disclose
       // it so the PDF's full-cloud figures aren't read as filter-scoped.

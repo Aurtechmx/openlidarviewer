@@ -3,7 +3,7 @@
  *
  * the CAD path, done last because DXF is the format tax. Each
  * contour run is emitted as an LWPOLYLINE with its elevation carried in
- * group code 38 (constant elevation), which AutoCAD / Civil 3D import as
+ * group code 38 (constant elevation), which CAD software imports as
  * the polyline's Z — so contours arrive at the right height without the
  * 3D-POLYLINE/VERTEX verbosity.
  *
@@ -23,7 +23,7 @@
  * accepted ASCII DXF (HEADER + TABLES + ENTITIES; LWPOLYLINE + TEXT
  * entities). It does not emit linetype definitions or extended data. That
  * is sufficient for contour interchange; richer DXF is a later cycle if
- * a real Civil 3D round-trip demands it.
+ * a real CAD round-trip demands it.
  *
  * Pure data: no DOM, no three.js, no I/O. Returns a DXF string.
  */

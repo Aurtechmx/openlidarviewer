@@ -974,7 +974,7 @@ export function colorForMode(
       // line, a flag-mast) compress the entire field of points into
       // one colour stop. The 2nd / 98th percentile band keeps the
       // ramp meaningful on outlier-heavy clouds and matches what
-      // CloudCompare / Potree / Entwine viewers do. Routed through the
+      // other point-cloud viewers do. Routed through the
       // shared legend seam (which owns the trim clamp + percentile band) so
       // the colorbar labels exactly the window these colours ramp across.
       const upAxis = opts?.upAxis ?? 2;

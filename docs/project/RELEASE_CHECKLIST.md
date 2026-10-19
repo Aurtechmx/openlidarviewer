@@ -50,6 +50,7 @@ assuming the working tree is right: `package.sh` builds the archive from
 - [ ] `npm run test:unit && npm run test:export && npm run test:terrain && npm run test:ui && npm run test:slow`
 - [ ] `npm run test:smoke`, then `npm run test:smoke:live` (boots the obfuscated artifact users actually get), and `npm run test:e2e` (need a browser/GPU; run where available)
 - [ ] `npm audit --omit=dev --audit-level=high` clean
+- [ ] No embed allow-list in the archive. `OLV_EMBED_ORIGINS` is compiled into the build, so one left exported in the packaging shell would make every archive trust those origins to frame the viewer. `scripts/package.sh` and `scripts/smoke-deploy-zip.mjs` fail when the pages carry a list; `OLV_ALLOW_EMBED_ORIGINS=1` acknowledges a list that is intended (a host that cannot send `frame-ancestors`). Unset `OLV_EMBED_ORIGINS` for a general release.
 
 ## 3. Local-first / security gates
 

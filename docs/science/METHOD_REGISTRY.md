@@ -63,27 +63,23 @@ the paper that specifies it.
 | `olv.simulation.terrain-access.cost-map` | 3 | Terrain access hard eligibility (node/edge split) and soft traversability cost; v3 adds the evidence-gap policy (conservative blocks cells whose slope used a synthesised Horn neighbour and, under an evaluated obstruction limit, cells with no above-ground return; exploratory allows them and reports their route share); v2 gates and costs an edge on the largest of the directional Horn grade at either endpoint and the edge's own rise/run, and the larger endpoint cross slope | internal (declared multi-term utilization cost) |
 | `olv.simulation.terrain-access.astar` | 2 | Deterministic 8-connected A* over eligible terrain cells; v2 takes moves through the cost map's transition rule, which refuses a diagonal that cuts an unsupported corner or sweeps the declared width over unsupported area, with width clearance measured to cell rectangles | Hart, Nilsson & Raphael (1968) |
 
-### Observatory (reserved v0.7, docs/observatory/SPEC.md)
+### Observatory
 
-Registered early, ahead of the code, under the decision rules
-(`docs/observatory/SPEC.md` §4 OB-INT-04). Every row below except
-`olv.observation.states` names a method with no implementation in the tree;
-the id and version are reserved so a later phase's first commit cannot
-collide with a name someone already used informally. Full status,
-assumptions and the implementing phase are in `docs/observatory/methods.md`,
-one section per id.
+The `olv.observation.*` ids are registered in `src/science/methodRegistry.ts`.
+Assumptions and status for each are in `docs/observatory/methods.md`, one section
+per id.
 
 | Id | Ver | Method | Citation |
 |---|---|---|---|
-| `olv.observation.rays` | 1 | Observation ray builder, not implemented, planned for phase O3 | internal (grid and posed-ray parameterisation) |
-| `olv.observation.ledger` | 1 | Voxel evidence ledger and traversal, not implemented, planned for phase O4 | Amanatides & Woo (1987) |
-| `olv.observation.states` | 1 | Observation state table; the pure decision function is implemented and tested (O1), not yet wired to a live ledger | internal (state-transition rules, SPEC §2.2-§2.4) |
-| `olv.observation.strength` | 1 | Observation strength components, not implemented, planned for phase O6 | internal (strength components, SPEC §2.5) |
-| `olv.observation.shadow-frontier` | 1 | Shadow frontier, not implemented, planned for phase O5 | Curless & Levoy (1996) |
-| `olv.observation.coverage-gain` | 1 | Coverage Gain over candidate stations, with every term reported (O10) | Scott, Roth & Rivest (2003) |
-| `olv.observation.station-suggestion` | 1 | Next-station suggestion by greedy selection against a hypothetical ledger copy (O10) | Scott, Roth & Rivest (2003) |
+| `olv.observation.rays` | 1 | Observation ray builder | internal (grid and posed-ray parameterisation) |
+| `olv.observation.ledger` | 1 | Voxel evidence ledger and traversal | Amanatides & Woo (1987) |
+| `olv.observation.states` | 1 | Observation state table | internal (state-transition rules) |
+| `olv.observation.strength` | 1 | Observation strength components | internal (strength components) |
+| `olv.observation.shadow-frontier` | 1 | Shadow frontier | Curless & Levoy (1996) |
+| `olv.observation.coverage-gain` | 1 | Coverage Gain over candidate stations, with every term reported | Scott, Roth & Rivest (2003) |
+| `olv.observation.station-suggestion` | 1 | Next-station suggestion by greedy selection against a hypothetical ledger copy | Scott, Roth & Rivest (2003) |
 
-## Honesty boundary
+## Scope of registration
 
 Registering a method names the algorithm; it does not upgrade the evidence
 behind its output. The hold-out vertical accuracy uses the ASPRS 2014 formulas

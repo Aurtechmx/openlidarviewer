@@ -17,6 +17,7 @@ import {
 } from '../src/io/session';
 import type { InspectionSession, SessionScanSummary } from '../src/io/session';
 import type { ResolvedCrs } from '../src/geo/CoordinateTypes';
+import { CrsService, type CrsOverridePort } from '../src/geo/CrsService';
 import type { Viewer } from '../src/render/Viewer';
 import type { Measurement, Vec3 } from '../src/render/measure/types';
 
@@ -77,7 +78,18 @@ function makeDeps(
   const refreshMeasurePanel = vi.fn();
   const refreshAnnotationPanel = vi.fn();
   const applyViewState = vi.fn();
-  const setCrsOverride = vi.fn();
+  // The real service, so the CRS a restore reports is the one actually applied.
+  const overrides = new Map<string, unknown>();
+  const crsService = new CrsService({
+    get: (k) => overrides.get(k) as never,
+    set: (k, v) => void overrides.set(k, { ...v, updatedAt: 0 }),
+    clear: (k) => void overrides.delete(k),
+  } as CrsOverridePort);
+  // With no scan open the service has no dataset to apply an override to, and returns null.
+  if (over.streaming || over.static) {
+    crsService.resolveForScan({ name: over.streaming?.name ?? over.static?.name ?? 'scan', detected: undefined, source: 'las-vlr' });
+  }
+  const setCrsOverride = vi.fn((args: Parameters<CrsService['setOverride']>[0]) => crsService.setOverride(args));
   const showToast = vi.fn();
   const setDropError = vi.fn();
 
@@ -762,6 +774,7 @@ describe('importSession — persisted user CRS override round-trip (FIX 2)', () 
 
     it('applies a confirmed override for this session only and names the CRS and unit in a toast', async () => {
       const { deps, calls } = makeDeps({ streaming: loaded() });
+      calls.setCrsOverride.mockReturnValueOnce(foot({ source: 'user-override' }));
       await importSession(asFile(sessionJson({ crs: foot({ source: 'user-override', userConfirmed: true }), scanSummary: strongSummary() })), {}, deps);
       expect(calls.setCrsOverride).toHaveBeenCalledTimes(1);
       const arg = calls.setCrsOverride.mock.calls[0][0];
@@ -769,7 +782,42 @@ describe('importSession — persisted user CRS override round-trip (FIX 2)', () 
       expect(arg.persist).toBe(false);
       const toast = calls.showToast.mock.calls.map((c) => c[0] as string).find((m) => /coordinate system/.test(m));
       expect(toast).toContain('NAD83 / California zone 1 (ftUS)');
-      expect(toast).toContain('us-survey-foot');
+      expect(toast).toContain('US survey feet');
+    });
+
+    it('names the CRS the service applied, not the one the file claims', async () => {
+      const { deps, calls } = makeDeps({ streaming: loaded() });
+      // The file claims US survey feet; the service resolved metres.
+      calls.setCrsOverride.mockReturnValueOnce(baseCrs({ epsg: 2225, name: 'EPSG:2225', source: 'user-override' }));
+      await importSession(asFile(sessionJson({ crs: foot({ source: 'user-override', userConfirmed: true }), scanSummary: strongSummary() })), {}, deps);
+      const toast = calls.showToast.mock.calls.map((c) => c[0] as string).find((m) => /coordinate system/.test(m));
+      expect(toast).toContain('EPSG:2225 (metres)');
+      expect(toast).not.toContain('US survey feet');
+    });
+
+    it('says nothing about a coordinate system when the service applied none', async () => {
+      const { deps, calls } = makeDeps({ streaming: loaded() });
+      calls.setCrsOverride.mockReturnValueOnce(null);
+      await importSession(asFile(sessionJson({ crs: foot({ source: 'user-override', userConfirmed: true }), scanSummary: strongSummary() })), {}, deps);
+      expect(calls.showToast.mock.calls.every((c) => !/coordinate system/.test(c[0] as string))).toBe(true);
+    });
+
+    it('caps a long CRS name in the notice', async () => {
+      const { deps, calls } = makeDeps({ streaming: loaded() });
+      calls.setCrsOverride.mockReturnValueOnce(foot({ source: 'user-override', name: 'N'.repeat(5000) }));
+      await importSession(asFile(sessionJson({ crs: foot({ source: 'user-override', userConfirmed: true }), scanSummary: strongSummary() })), {}, deps);
+      const toast = calls.showToast.mock.calls.map((c) => c[0] as string).find((m) => /coordinate system/.test(m))!;
+      expect(toast.length).toBeLessThan(600);
+    });
+
+    it('discloses a local choice over a file that declares a unit but no EPSG', async () => {
+      const { deps, calls } = makeDeps({ streaming: loaded({ linearUnit: 'foot' }) });
+      await importSession(asFile(sessionJson({
+        crs: userOverride({ kind: 'local', epsg: undefined, linearUnit: 'unknown', name: 'Local coordinates (no CRS)' }),
+        scanSummary: strongSummary(),
+      })), {}, deps);
+      const toast = calls.showToast.mock.calls.map((c) => c[0] as string).find((m) => /coordinate system/.test(m));
+      expect(toast).toMatch(/Local coordinates \(no CRS\) \(no EPSG code; linear unit not declared\)/);
     });
 
     it('keeps the override on this device only when the user chooses Keep', async () => {

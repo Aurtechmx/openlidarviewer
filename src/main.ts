@@ -1,4 +1,4 @@
-// Self-hosted type: Olv Font (@font-face in styles/01-tokens.css) + JetBrains Mono.
+import { parseEmbedConfig } from './ui/embedConfig'; // First: it imports the frame guard, so a page framed by an untrusted site gets a notice and the app does not start.
 import '@fontsource/jetbrains-mono/latin-400.css';
 import '@fontsource/jetbrains-mono/latin-500.css';
 import './styles';
@@ -93,7 +93,7 @@ import type { ObjectPanel } from './ui/ObjectPanel';
 import type { MobileSheet } from './ui/MobileSheet';
 import type { WorkspaceMode } from './ui/workspace/DesktopWorkspace';
 import type { WorkspaceShell } from './app/workspace/workspaceShell';
-import { createScanRouteCoordinator, type SpaceExportContext } from './app/scanRouteCoordinator';
+import { createScanRouteCoordinator, routeUnitFrame, type SpaceExportContext } from './app/scanRouteCoordinator';
 import { TERRAIN_METRIC_VERSION } from './terrain/datasetIntelligence';
 import { ExportPanel, exportClassFacts, exportLayerHooks } from './ui/ExportPanel';
 import { lonLatMapContext } from './export/lonLatMapper';
@@ -126,7 +126,6 @@ import {
 import { LoadCancelledError } from './io/loadFile';
 import { LocalFileSource } from './io/LocalFileSource';
 import { deviceCaps } from './render/deviceProfile';
-import { parseEmbedConfig } from './ui/embedConfig';
 // `startEmbedBridge` is only wired in `?embed=1` mode.
 // Lazy-loaded so the bridge code never enters the bundle for the typical
 // non-iframe page load (the dominant traffic pattern).
@@ -142,7 +141,7 @@ import type { DebugOverlay, StreamingDebugStats } from './ui/DebugOverlay';
 import type { ColorbarOverlay } from './ui/ColorbarOverlay';
 import { estimateDecodedBytes, estimateGpuBytes } from './render/streaming/streamingBudget';
 import { streamingHasGpsTime } from './render/streaming/StreamingSource';
-import { activeSpatialUpAxis, reexpressElevationFilter } from './app/layerUpFrames';
+import { activeSpatialUpAxis, layerUpFrameOf, reexpressElevationFilter } from './app/layerUpFrames';
 // The PLY/OBJ/XYZ/CSV encoders load on first export (`loadExporters`).
 // Only the tiny file-router predicate is eager; the (large) serializer/parser
 // is dynamically imported in exportSession/importSession so it stays off the
@@ -213,6 +212,7 @@ import {
   loadCompareEpochs,
   loadAlignEpochs,
   loadCompareDtms,
+  loadEpochComparison,
   loadChangeRaster,
   loadApplyDisplayProfile,
   loadColorbarOverlay,
@@ -330,7 +330,7 @@ const debug = urlParams.has('debug');
 const benchmark = urlParams.has('benchmark');
 /**
  * `?test=1` opens `window.__OLV_TEST_API__`, a programmatic seam for
- * Playwright. v0.3.10 trust-pass: the canvas → raycast → measurement
+ * Playwright. The canvas → raycast → measurement
  * commit path is flaky in headless CI (WebGL 2 fallback, no real
  * picking precision), which is why `measure.spec.ts` has had a
  * `test.fixme` annotation for several releases. The seam exposes a
@@ -1782,7 +1782,7 @@ function newAnalysePanel(
           : null,
         title: `${lastCloudName} — Contours`,
         sheet: 'letter',
-        isGeographic: ctx.isGeographic, sceneUpAxis: upAxis,
+        isGeographic: ctx.isGeographic, sceneUpAxis: upAxis, layerUpFrame: cloud ? layerUpFrameOf(crsService, cloud, true) : null,
         crs: cur, wkt: cur?.wkt ?? null, // ACTIVE resolved CRS (override applied); Local → no WKT, never the rejected declared one (1A)
         // The resolved CRS's linear unit (same seam every other unit consumer
         // reads) so a foot-based CRS stamps DXF $INSUNITS = feet and the SVG
@@ -2272,7 +2272,7 @@ function exportGeoContext(): GeoExportContext { return runExportGeoContext(repor
 const activeUpAxis = () => activeSpatialUpAxis({ activeCloud: () => scans.activeCloud(), streaming: () => !!viewer?.streamingCloud, crs: crsService });
 
 /**
- * The running-app seam the two Google Earth products write through (see
+ * The running-app seam the two KML products write through (see
  * `src/app/kmlActions.ts`). Accessors, not snapshots, so the lazily-bound Viewer
  * and the current CRS are read at call time.
  */
@@ -2540,9 +2540,7 @@ const routeCoordinator = createScanRouteCoordinator({
     },
   },
   frame: {
-    linearUnitToMetres: () => crsService.context().linearUnitToMetres,
-    verticalUnitToMetres: () => { const c = crsService.context(); return verticalMetresPerUnit(c, 'horizontal') ?? c.linearUnitToMetres; },
-    linearUnitKnown: () => crsService.context().linearUnitKnown,
+    ...routeUnitFrame(() => crsService.context()),
     exportTargetId: () => scans.activeExportTargetId(), crsRevision: () => crsService.crsRevision(),
     basename: () => lastCloudName, truncation: () => scans.activeCloud()?.metadata?.truncation ?? null,
   },
@@ -2827,7 +2825,7 @@ stage.overlay.append(dropZone.toast);
 if (__OLV_TEST_SEAM__ && testApi) {
   void loadTestSeamMount().then(({ mountTestSeam }) => mountTestSeam({
     getViewer: ensureViewer,
-    getActiveScanId: () => scans.activeId,
+    getActiveScanId: () => scans.activeId, isLoading: () => loading,
     showReclassify: () => showReclassifyUi(),
     refreshReclassify: () => reclassifyUi?.refresh(), activeGeo: () => ({ ...exportGeoContext(), epsg: crsService.context().epsg ?? null }), reloadLayer: (id, budget) => exportPanel.reloadLayer(id, budget),
   }));
@@ -3516,7 +3514,7 @@ const sessionIoDeps: SessionIoDeps = {
   refreshAnnotationPanel,
   applyViewState,
   restoreReferencePlane: (settings) => void inspector.referencePlane?.restore(settings),
-  setCrsOverride: (args) => { crsService.setOverride(args); },
+  setCrsOverride: (args) => crsService.setOverride(args),
   showToast: showLassoToast,
   setDropError: (message) => dropZone.setError(message), confirmReplace: (req) => requestReplace(req), currentViews: () => viewBookmarks.savedViews,
 };
@@ -3927,7 +3925,7 @@ function showProjectCard(cloud: PointCloud, totalCount: number): void {
     format: cloud.sourceFormat, interpretationLevel: cloud.metadata?.interpretationLevel, truncation: cloud.metadata?.truncation,
     shownCount: cloud.pointCount,
     totalCount,
-    ...describeProjectSize(b.min, b.max, { upAxis: c.upAxis, linearUnitKnown: groundMetresPermitted(c), linearUnitToMetres: c.linearUnitToMetres, verticalUnitToMetres: verticalMetresPerUnit(c, 'horizontal') ?? undefined }),
+    ...describeProjectSize(b.min, b.max, { upAxis: c.upAxis, linearUnitKnown: groundMetresPermitted(c), linearUnitToMetres: c.linearUnitToMetres, verticalUnitToMetres: verticalMetresPerUnit(c, 'horizontal') ?? undefined, verticalUnitInvalid: c.verticalScaleState === 'invalid' }),
     hasRgb: cloud.colors !== undefined,
     hasIntensity: cloud.intensity !== undefined,
     hasClassification: cloud.classification !== undefined,
@@ -4100,12 +4098,13 @@ function compareLoadedLayers(): void {
   void (async () => {
     // Load the change-detection code on demand, then yield a frame so the
     // "working" line paints before the synchronous ground-filter compute.
-    const [{ buildSharedEpochDtms, withheldEpochs }, { alignEpochClouds, summarizeAlignment, buildRegistrationArtifact, summarizeRegistration }, { compareDtms, summarizeChange, propagatedLevelOfDetection }, { packageChangeRaster, ChangeRasterRefusal }] =
+    const [{ withheldEpochs }, { summarizeAlignment, buildRegistrationArtifact, summarizeRegistration }, { summarizeChange }, { packageChangeRaster, ChangeRasterRefusal }, { runEpochComparison }] =
       await Promise.all([
         loadCompareEpochs(),
         loadAlignEpochs(),
         loadCompareDtms(),
         loadChangeRaster(),
+        loadEpochComparison(),
       ]);
     await new Promise((resolve) => setTimeout(resolve, 16));
     if (!current()) return;
@@ -4118,27 +4117,13 @@ function compareLoadedLayers(): void {
         inspector.setDifferenceAvailable(false);
         return;
       }
-      // Epochs in one declared CRS keep their supplied coordinates (no fit: a slope
-      // cannot separate a horizontal shift from a real height change). Local-frame
-      // pairs get the yaw + x/y fit, refused when the surface leaves the pose
-      // unobservable or the residual exceeds 10% of the scene span.
-      // `span` is the before epoch's in SOURCE units; the gate is metres.
-      const spanUnitToM = frames.horizontalUnitToMetres ?? 1;
-      const { after: alignedAfter, alignment } = alignEpochClouds(beforeCloud, afterCloud, {
-        maxResidualM: span > 0 ? span * 0.1 * spanUnitToM : undefined, horizontalUnitKnown: frames.horizontalUnitKnown, // one shared verdict: the alignment and the difference below read the SAME frame facts, so a shift reported in metres is never followed by a difference that refuses metres
-      });
-      const dtms = buildSharedEpochDtms(beforeCloud, alignedAfter, { holdoutSigmaZ: true });
-      if (!dtms) {
+      // The sequence lives in terrain/change/epochComparison.ts, which the tests run too. Z keeps its OWN declared scale.
+      const run = runEpochComparison({ beforeCloud, afterCloud, span, frames, verticalUnitToMetres: ctxA.verticalUnitToMetres, verticalUnitKnown: verticalMetresPerUnit(ctxA, 'horizontal-when-known') !== undefined });
+      if (!run.ok) {
         inspector.setCompareResult([...lines, 'Could not compare — a layer has no ground points.']);
         return;
       }
-      // Unit factors so cut/fill is m³ and Δz/LoD metres, not source units; a
-      // geographic frame has no such factor at all, which `frames` flags so the
-      // comparison refuses volumes rather than printing degree² figures as m³.
-      const cmp = compareDtms(dtms.before, dtms.after, {
-        ...frames, // isGeographic + horizontalUnitKnown + horizontalUnitToMetres, from the two contexts
-        verticalUnitToMetres: ctxA.verticalUnitToMetres, levelOfDetection: propagatedLevelOfDetection({ sigmaZBeforeM: dtms.sigmaZ?.before, sigmaZAfterM: dtms.sigmaZ?.after, sigmaRegM: null, verticalUnitKnown: verticalMetresPerUnit(ctxA, 'horizontal-when-known') !== undefined, horizontalUnitKnown: frames.horizontalUnitKnown }), // Z keeps its OWN declared scale; LoD per Wheaton et al. (2010) in metres, like the DoD it thresholds; σreg needs a stable-area assessment (none yet), never a fit residual
-      });
+      const { alignment, dtms, cmp } = run;
       if (!current()) return;
       const header = `${baseName(a.name)} (before) → ${baseName(b.name)} (after)`;
       const resultLines = [header, summarizeAlignment(alignment), summarizeRegistration(buildRegistrationArtifact(alignment, { targetId: ids[0], targetName: a.name, sourceId: ids[1], sourceName: b.name }, Date.now())), ...lines, ...summarizeChange(cmp, { registrationSigmaM: 0, horizontalUnitToMetres: frames.horizontalUnitToMetres })];

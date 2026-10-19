@@ -72,7 +72,7 @@ test('the units toggle flips between metric and imperial', async ({ page }) => {
   await expect(toggle).toHaveText('Metric');
 });
 
-// v0.3.10 trust-pass — the canvas-click → ray-pick → measurement-commit path is
+// The canvas-click → ray-pick → measurement-commit path is
 // flaky on headless WebGL 2, which is why this used to be `test.fixme`. The fix
 // is a programmatic placement seam: `window.__OLV_TEST_API__.placeMeasurementPoint`
 // is mounted when the page is opened with `?test=1` and bypasses the raycast,

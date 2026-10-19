@@ -48,11 +48,26 @@ export function classifierCues(
 }
 
 /**
+ * Why the height bands cannot be applied in this frame, or null. The classifier
+ * states its height thresholds in metres and restates them in the cloud's
+ * vertical unit; a vertical unit the source declares but that cannot be read
+ * has no such restatement, and the horizontal unit is not evidence about Z.
+ */
+export function classifierVerticalRefusal(ctx: SpatialContext): string | null {
+  return ctx.verticalScaleState === 'invalid'
+    ? 'the height unit of this scan\u2019s coordinate system could not be read, so the metre height bands cannot be applied. Correct the vertical unit of the CRS first.'
+    : null;
+}
+
+/**
  * The full classifier options for a cloud in its resolved CRS frame: the optional
  * cues plus the physical (metre) parameters restated in the cloud's SOURCE units
  * (see {@link classifierParamsForFrame}). Production MUST pass this so a foot or
  * mixed-unit cloud classifies the same physical terrain as a metre one; passing
  * the bare cues would run the metre defaults against foot coordinates.
+ *
+ * A frame with an unreadable vertical unit (see {@link classifierVerticalRefusal})
+ * must not reach this function: callers refuse first.
  */
 export function classifierOptions(
   cloud: ClassifierCueSource,

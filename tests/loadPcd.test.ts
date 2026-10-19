@@ -352,3 +352,61 @@ describe('loadPcd — header sizes that would defeat the allocation guard', () =
     expect(pc.pointCount).toBe(2);
   });
 });
+
+describe('loadPcd — the header guard reads the facts PCDLoader reads', () => {
+  /** A binary PCD whose header lines are given verbatim, with a 48-byte body. */
+  function withHeader(lines: readonly string[], bodyBytes = 48): ArrayBuffer {
+    const head = new TextEncoder().encode(`${lines.join('\n')}\nDATA binary\n`);
+    const out = new Uint8Array(head.length + bodyBytes);
+    out.set(head);
+    return out.buffer;
+  }
+  const base = ['# .PCD v0.7', 'VERSION 0.7', 'FIELDS x y z', 'SIZE 4 4 4', 'TYPE F F F', 'COUNT 1 1 1', 'WIDTH 4', 'HEIGHT 1'];
+
+  test.each([
+    ['an indented POINTS line before the real one', [' POINTS 1', 'POINTS 2000000000']],
+    ['a tab-separated POINTS line before the real one', ['POINTS\t1', 'POINTS 2000000000']],
+    ['an indented POINTS line after the real one', ['POINTS 2000000000', '  POINTS 1']],
+    ['a lone indented POINTS line', [' POINTS 4']],
+  ])('refuses %s, naming the key', async (_label, pointsLines) => {
+    const buf = withHeader([...base, ...pointsLines]);
+    await expect(loadPcd(buf, 'x.pcd')).rejects.toMatchObject({
+      name: 'LoadError',
+      category: 'malformed-file',
+      message: expect.stringContaining('a POINTS line is not written as "POINTS <value>"'),
+    });
+  });
+
+  test.each([
+    ['SIZE', ['FIELDS x y z', ' SIZE 4 4 4', 'SIZE 0 0 0']],
+    ['COUNT', ['FIELDS x y z', 'COUNT\t1 1 1', 'COUNT 0 0 0']],
+  ])('refuses an alternative spelling of %s', async (key, lines) => {
+    const header = base.filter((l) => !/^(FIELDS|SIZE|COUNT)/.test(l));
+    const buf = withHeader([...header, ...lines, 'POINTS 5000000']);
+    await expect(loadPcd(buf, 'x.pcd')).rejects.toMatchObject({
+      name: 'LoadError',
+      message: expect.stringContaining(`a ${key} line is not written as`),
+    });
+  });
+
+  test('a repeated well-formed POINTS line is read the way the loader reads it: the first wins', async () => {
+    // First line 5,000,000 records of 12 bytes in a 48-byte body: refused on size.
+    await expect(loadPcd(withHeader([...base, 'POINTS 5000000', 'POINTS 4']), 'x.pcd')).rejects.toMatchObject({
+      message: expect.stringContaining('POINTS 5000000'),
+    });
+  });
+
+  test('a commented-out POINTS line is not a POINTS line', async () => {
+    const buf = withHeader([...base, '# POINTS 5000000', 'POINTS 4']);
+    const pc = await loadPcd(buf, 'ok.pcd');
+    expect(pc.pointCount).toBe(4);
+  });
+
+  test('CRLF line endings and trailing spaces still load', async () => {
+    const head = new TextEncoder().encode([...base, 'POINTS 4 '].join('\r\n') + '\r\nDATA binary\r\n');
+    const out = new Uint8Array(head.length + 48);
+    out.set(head);
+    const pc = await loadPcd(out.buffer, 'crlf.pcd');
+    expect(pc.pointCount).toBe(4);
+  });
+});

@@ -960,7 +960,7 @@ export class Viewer {
   private readonly _tapGate = new TouchTapGate();
   /**
    * If true, the multi-touch recogniser will route 2-pointer gestures to
-   * twist + pinch + pan decomposition (Maps / Procreate model). Defaults
+   * twist + pinch + pan decomposition (common map and drawing apps). Defaults
    * to true; an Inspector toggle (D.7.3) can flip it for the advanced
    * "3-finger zoom" model.
    */
@@ -2431,7 +2431,7 @@ export class Viewer {
    * Apply an RGB appearance bundle to every RGB-mode cloud in place.
    * Source colours come from `cloud.colors` (sRGB Uint8 the loader
    * recorded); the bundle's gamma / contrast / saturation maths runs in
-   * sRGB space so the sliders feel like Lightroom / Photoshop. After
+   * sRGB space so the sliders feel like common photo editors. After
    * the appearance is applied, the result is linearised via the same
    * piecewise sRGB EOTF that `toFloatColors` uses, then uploaded. The
    * v0.3.7 sRGB-correct round trip is preserved.

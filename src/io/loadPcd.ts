@@ -97,7 +97,12 @@ interface PcdHeaderFacts {
   viewpoint?: PcdViewpoint;
   /** Offset of the first body byte (matches PCDLoader's `headerLen`). */
   bodyOffset: number;
+  /** Why the header cannot be read the same way by every reader, or undefined. */
+  ambiguity?: string;
 }
+
+/** The header keys PCDLoader reads, each by an anchored regex. */
+const HEADER_KEYS = ['VERSION', 'FIELDS', 'SIZE', 'TYPE', 'COUNT', 'WIDTH', 'HEIGHT', 'VIEWPOINT', 'POINTS'] as const;
 
 /**
  * Byte length of the PCD header — the offset just past the newline that closes
@@ -166,39 +171,65 @@ function parsePcdHeaderFacts(buffer: ArrayBuffer): PcdHeaderFacts | null {
     height: 0,
     bodyOffset: m.index + m[0].length,
   };
-  const seen = new Set<string>();
-  for (const raw of probe.slice(0, m.index).split(/\r?\n/)) {
-    const line = raw.trim();
-    if (line === '' || line.startsWith('#')) continue;
-    const tok = line.split(/\s+/);
-    const key = tok[0].toUpperCase();
-    // PCDLoader reads the FIRST line for each key (its regexes are not global),
-    // so the first occurrence wins here too. A repeated POINTS or SIZE line must
-    // not let this guard validate one value while the loader walks another.
-    if (seen.has(key)) continue;
-    seen.add(key);
-    if (key === 'FIELDS') facts.fields = tok.slice(1).map((f) => f.toLowerCase());
-    else if (key === 'SIZE') facts.sizes = tok.slice(1).map(Number);
-    else if (key === 'TYPE') facts.types = tok.slice(1).map((t) => t.toUpperCase());
-    else if (key === 'COUNT') facts.counts = tok.slice(1).map(Number);
-    else if (key === 'POINTS') facts.points = Number(tok[1]);
-    else if (key === 'WIDTH') facts.width = Number(tok[1]);
-    else if (key === 'HEIGHT') facts.height = Number(tok[1]);
-    else if (key === 'VIEWPOINT') {
-      const v = tok.slice(1, 8).map(Number);
-      // A partial or non-numeric VIEWPOINT is not a viewpoint. Reading it as
-      // one would place the sensor at a position the file never gave.
-      if (v.length === 7 && v.every((n) => Number.isFinite(n))) {
-        facts.viewpoint = {
-          translation: [v[0], v[1], v[2]],
-          rotation: { w: v[3], x: v[4], y: v[5], z: v[6] },
-        };
-      }
+  // Read the header with PCDLoader's own rules. Its header string runs through
+  // the DATA line, has the lines that start with `#` blanked, and each key is
+  // found by an anchored, case-insensitive, non-global regex: the key at the
+  // start of a line, ONE space, then the rest of the line. Only the first such
+  // line counts, and a value is split on single spaces and read with parseInt.
+  // Reading the same facts the same way is what keeps this guard and the loader
+  // looking at one POINTS, SIZE and COUNT.
+  const header = probe.slice(0, m.index + m[0].length).replace(/^#.*/gm, '');
+  const value = (key: string): string | null => new RegExp(`^${key} (.*)`, 'im').exec(header)?.[1] ?? null;
+  const ints = (v: string, radix?: number): number[] => v.split(' ').map((x) => parseInt(x, radix ?? 10));
+
+  const fields = value('FIELDS');
+  const sizes = value('SIZE');
+  const types = value('TYPE');
+  const counts = value('COUNT');
+  const points = value('POINTS');
+  const width = value('WIDTH');
+  const height = value('HEIGHT');
+  const viewpoint = value('VIEWPOINT');
+  if (fields !== null) facts.fields = fields.split(' ').map((f) => f.toLowerCase());
+  if (sizes !== null) facts.sizes = ints(sizes);
+  if (types !== null) facts.types = types.split(' ').map((t) => t.toUpperCase());
+  if (counts !== null) facts.counts = ints(counts);
+  if (points !== null) facts.points = parseInt(points, 10);
+  if (width !== null) facts.width = parseInt(width);
+  if (height !== null) facts.height = parseInt(height);
+  if (viewpoint !== null) {
+    const v = viewpoint.trim().split(/\s+/).map(Number);
+    // A partial or non-numeric VIEWPOINT is not a viewpoint. Reading it as
+    // one would place the sensor at a position the file never gave.
+    if (v.length === 7 && v.every((n) => Number.isFinite(n))) {
+      facts.viewpoint = {
+        translation: [v[0], v[1], v[2]],
+        rotation: { w: v[3], x: v[4], y: v[5], z: v[6] },
+      };
+    }
+  }
+  // A line that names a key but is not in the form the loader reads (indented,
+  // or tab-separated from its value) is skipped by PCDLoader and may be read by
+  // another reader, so two readers would take two values for one fact. Refuse
+  // it rather than choose between them.
+  for (const key of HEADER_KEYS) {
+    const strict = new RegExp(`^${key} `, 'i');
+    let spelled = 0;
+    let read = 0;
+    for (const line of header.split(/[\r\n]+/)) {
+      if (line.trim().split(/\s+/)[0].toUpperCase() !== key) continue;
+      spelled++;
+      if (strict.test(line)) read++;
+    }
+    if (spelled !== read) {
+      facts.ambiguity =
+        `a ${key} line is not written as "${key} <value>" at the start of a line with one space, so readers would take different values for it.`;
+      break;
     }
   }
   // COUNT is optional and defaults to 1 per field; POINTS to WIDTH × HEIGHT.
   if (facts.counts.length === 0) facts.counts = facts.fields.map(() => 1);
-  if (!(facts.points > 0)) facts.points = facts.width * facts.height;
+  if (points === null) facts.points = facts.width * facts.height;
   return facts;
 }
 
@@ -462,6 +493,7 @@ function assertPcdSizesPlausible(buffer: ArrayBuffer, facts: PcdHeaderFacts | nu
   const fail = (why: string): never => {
     throw new LoadError('malformed-file', `malformed PCD: ${why}`);
   };
+  if (facts.ambiguity) fail(facts.ambiguity);
   const points = facts.points;
   if (!Number.isSafeInteger(points) || points < 0) fail(`invalid POINTS ${points}.`);
   const remaining = Math.max(0, buffer.byteLength - facts.bodyOffset);

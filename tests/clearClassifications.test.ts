@@ -353,7 +353,7 @@ describe('terrain never reads cleared or derived ground as producer ground', () 
 
 const derive = vi.hoisted(() => vi.fn());
 vi.mock('../src/render/class/deriveClassificationAsync', () => ({ deriveClassificationAsync: derive }));
-vi.mock('../src/render/class/classifierCues', () => ({ classifierOptions: () => ({}) }));
+vi.mock('../src/render/class/classifierCues', () => ({ classifierOptions: () => ({}), classifierVerticalRefusal: () => null }));
 
 describe('runDeriveClassification', () => {
   beforeEach(() => derive.mockReset());

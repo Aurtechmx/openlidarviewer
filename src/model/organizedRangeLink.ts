@@ -62,14 +62,19 @@ export function registerOrganizedRange(
   name: string,
   set: OrganizedRangeSet | undefined,
   recordPosition?: RecordPosition,
-  upAxis?: UpAxis,
+  upAxis?: UpAxis | (() => UpAxis),
 ): void {
   const had = entries.has(layerId);
   if (!set || set.frames.length === 0) {
     if (!had) return;
     entries.delete(layerId);
   } else {
-    entries.set(layerId, { layerId, name, set, recordPosition, upAxis });
+    // A function is read each time the entry's axis is, so the axis follows a
+    // CRS assigned or cleared after the layer loaded.
+    entries.set(layerId, {
+      layerId, name, set, recordPosition,
+      get upAxis(): UpAxis | undefined { return typeof upAxis === 'function' ? upAxis() : upAxis; },
+    });
   }
   notifyRegistry();
 }

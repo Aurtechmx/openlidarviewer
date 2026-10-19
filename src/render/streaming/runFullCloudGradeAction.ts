@@ -83,7 +83,11 @@ export async function runFullCloudGrade(deps: {
   const metresPerUnit = unitConfirmed ? ctx.linearUnitToMetres : 1;
   // Z gets the vertical unit when the CRS declares one separately (e.g. NAVD88
   // feet over a metre grid); otherwise it follows the horizontal factor.
-  const verticalMpu = unitConfirmed
+  // A vertical unit the source declares but that cannot be read is not borrowed
+  // from the horizontal one: the figures that depend on Z are withheld in the
+  // summary, so the factor here only has to keep the grade finite.
+  const verticalInvalid = ctx.verticalScaleState === 'invalid';
+  const verticalMpu = unitConfirmed && !verticalInvalid
     ? (verticalMetresPerUnit(ctx, 'horizontal') ?? metresPerUnit)
     : 1;
   try {
@@ -120,7 +124,7 @@ export async function runFullCloudGrade(deps: {
     const run = outcome.run;
     panel.setGradeResult(
       run.coverage.label,
-      summarizeSampleGrade(run.grade, unitConfirmed),
+      summarizeSampleGrade(run.grade, unitConfirmed, verticalInvalid),
       run.coverage.note,
     );
   } catch (err) {

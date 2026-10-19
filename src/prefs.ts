@@ -33,7 +33,7 @@ import {
  * The user's choice of mobile multi-touch model.
  *
  *  - **standard** — the v0.3.7 simultaneous-decomposition recogniser
- *    (Maps / Procreate model). Two fingers do twist + pinch + pan at
+ *    (common map and drawing apps). Two fingers do twist + pinch + pan at
  *    once, each above its own dead-zone. The default.
  *  - **advanced** — the CAD-style "3-finger zoom" reassignment. Two
  *    fingers do twist + pan only (no pinch-zoom); three-finger vertical

@@ -1778,7 +1778,7 @@ export class Inspector {
       className: 'olv-bc-pill olv-layer-compare',
       type: 'button',
       text: 'Download difference (.asc)',
-      title: 'Save the signed elevation difference as a georeferenced ESRI ASCII grid for QGIS / ArcGIS',
+      title: 'Save the signed elevation difference as a georeferenced ESRI ASCII grid for GIS software',
     }) as HTMLButtonElement;
     diff.style.display = 'none';
     diff.addEventListener('click', () => this._cb.onExportDifference?.());
@@ -2431,7 +2431,7 @@ export class Inspector {
     this._showReportPlaceholder();
     this._detailMode.setNotice('report', null, this._reportSection);
     this._showViewsPlaceholder();
-    // v0.3.10 trust-pass — scan-close used to leave the Dataset
+    // Closing a scan used to leave the Dataset
     // Intelligence card showing the previous scan's intel (density
     // bucket, coverage band, metric stability). Empty-state reset
     // should drop the card back to its hidden state so a fresh

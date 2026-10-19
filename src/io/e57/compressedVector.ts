@@ -3,7 +3,7 @@
  *
  * Decodes an E57 CompressedVector binary section into per-field columns.
  *
- * Layout (validated against real Trimble and reference E57 files): the section
+ * Layout (validated against real scanner-vendor and reference E57 files): the section
  * begins with a 32-byte header pointing at the first data packet. Each data
  * packet holds a 6-byte header, a `uint16` length per bytestream, then the
  * bytestream buffers. Every prototype field has one bytestream per packet —

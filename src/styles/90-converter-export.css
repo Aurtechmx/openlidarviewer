@@ -242,7 +242,7 @@
 .olv-export-summary-note.is-error { color: var(--rating-weak); }
 /*
  * "Products" section: the artifacts derived FROM a scan (measurement vectors,
- * the integrity report, the Google Earth outlines), as opposed to the point
+ * the integrity report, the KML outlines), as opposed to the point
  * cloud the panel's primary flow converts.
  *
  * It read as an afterthought: a --text-xs text toggle, collapsed by default,

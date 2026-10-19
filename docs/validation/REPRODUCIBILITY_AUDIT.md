@@ -2,7 +2,6 @@
 
 This audit lists every export path and records which provenance fields the
 output carries, in the file itself or in a sidecar inside the same download.
-Ledger entry: L181.
 
 ## Fields
 

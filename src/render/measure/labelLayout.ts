@@ -47,6 +47,29 @@ const MAX_PASSES = 64;
 const CELL_W = 64;
 const CELL_H = 24;
 
+/**
+ * How far off screen an anchor may be and still be laid out, in pixels. A
+ * projected vertex can be finite and astronomically far away (a crafted camera
+ * pose or vertex), and a label there is not on screen in any frame. Cell loops
+ * over such a box never finish: past 2^53 a counter stops changing when it is
+ * incremented. 1e6 px is hundreds of viewports, far beyond anything drawn.
+ */
+export const LABEL_COORD_LIMIT = 1e6;
+/** The largest label box laid out; a box beyond it is not a label. */
+const LABEL_SIZE_LIMIT = 8192;
+/** Cell indices are clamped here, so the loops are bounded whatever reaches them. */
+const MAX_CELL = 1 << 20;
+
+/** Whether an anchor is within the range the layout works in. False for NaN and Infinity. */
+export function isLabelCoordDrawable(x: number, y: number): boolean {
+  return Math.abs(x) <= LABEL_COORD_LIMIT && Math.abs(y) <= LABEL_COORD_LIMIT;
+}
+
+function cellIndex(v: number, size: number): number {
+  const c = Math.floor(v / size);
+  return c < -MAX_CELL ? -MAX_CELL : c > MAX_CELL ? MAX_CELL : c === c ? c : 0;
+}
+
 /** A placed label, as the collision test sees it. */
 interface Occupied {
   /** Insertion order: the test visits candidates in this order, as a linear scan would. */
@@ -64,12 +87,13 @@ interface Occupied {
  * in the cells it overlaps, rather than against every label placed so far.
  */
 class OccupiedGrid {
-  private readonly cells = new Map<string, Occupied[]>();
+  private readonly cells = new Map<number, Occupied[]>();
   private seq = 0;
   private stamp = 0;
 
-  private static key(cx: number, cy: number): string {
-    return `${cx},${cy}`;
+  /** One number per cell, so a visit allocates nothing. Indices are clamped to +/-MAX_CELL. */
+  private static key(cx: number, cy: number): number {
+    return (cx + MAX_CELL) * (2 * MAX_CELL + 1) + (cy + MAX_CELL);
   }
 
   add(top: number, bottom: number, x: number, halfW: number): void {
@@ -121,10 +145,10 @@ class OccupiedGrid {
 
   private static span(left: number, right: number, top: number, bottom: number): [number, number, number, number] {
     return [
-      Math.floor(left / CELL_W),
-      Math.floor(right / CELL_W),
-      Math.floor(top / CELL_H),
-      Math.floor(bottom / CELL_H),
+      cellIndex(left, CELL_W),
+      cellIndex(right, CELL_W),
+      cellIndex(top, CELL_H),
+      cellIndex(bottom, CELL_H),
     ];
   }
 }
@@ -134,8 +158,9 @@ class OccupiedGrid {
  * would overlap one already placed is pushed straight down until it is clear.
  * The input order is preserved in the returned array.
  *
- * Bounded by construction: non-finite boxes keep their preferred anchor and
- * never join the occupied set (NaN/Infinity cannot meaningfully collide), a
+ * Bounded by construction: boxes that are non-finite or lie farther than
+ * `LABEL_COORD_LIMIT` off screen keep their preferred anchor and never join the
+ * occupied set (they cannot meaningfully collide), cell indices are clamped, a
  * move must STRICTLY increase `y` to count (so a float boundary can never
  * re-trigger forever), and `MAX_PASSES` caps the work per label regardless.
  * Each box is tested only against the placed labels in the grid cells it
@@ -156,11 +181,12 @@ export function layoutLabels(boxes: LabelBox[]): PlacedLabel[] {
     // Degenerate box — a vertex projected at/behind the camera plane can
     // yield a non-finite anchor. Leave it at its preferred spot and keep it
     // OUT of the occupied set so it can't poison later collision tests.
+    // A finite anchor or size that is absurdly large is the same case: it is
+    // not on screen, and a cell loop over it would not finish.
     const finite =
-      Number.isFinite(box.x) &&
-      Number.isFinite(box.y) &&
-      Number.isFinite(halfW) &&
-      Number.isFinite(halfH);
+      isLabelCoordDrawable(box.x, box.y) &&
+      halfW >= 0 && halfW <= LABEL_SIZE_LIMIT / 2 &&
+      halfH >= 0 && halfH <= LABEL_SIZE_LIMIT / 2;
     if (!finite) {
       placed[i] = { x: box.x, y, displaced: false };
       continue;

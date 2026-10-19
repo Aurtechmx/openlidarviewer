@@ -34,12 +34,23 @@ const HTACCESS = resolve(ROOT, 'public/.htaccess');
 
 /** Pull the enforced policy out of the deployed .htaccess. */
 function readPolicy() {
-  const text = readFileSync(HTACCESS, 'utf8');
+  return policyFromHtaccess(readFileSync(HTACCESS, 'utf8'));
+}
+
+/**
+ * The enforcing policy in an .htaccess text, or null. A commented-out line is
+ * not a policy, the same rule `check-built-csp` applies (`policyValues`): an
+ * old header left in a comment above the live one must not be the one linted.
+ *
+ * @param {string} text
+ * @returns {string | null}
+ */
+export function policyFromHtaccess(text) {
   // Only the enforcing header. A Report-Only header, if one is ever added,
   // breaks nothing and must not be read as a constraint.
   const line = text
     .split('\n')
-    .find((l) => /Header\s+always\s+set\s+Content-Security-Policy\s+"/i.test(l));
+    .find((l) => !/^\s*#/.test(l) && /Header\s+always\s+set\s+Content-Security-Policy\s+"/i.test(l));
   if (!line) return null;
   const value = /Content-Security-Policy\s+"([^"]+)"/i.exec(line);
   return value ? value[1] : null;

@@ -149,7 +149,7 @@ const MALFORMED_REPLY = 'Parse worker sent a malformed reply.';
 type WorkerReply =
   | ({ type: 'progress' } & ProgressUpdate)
   | ({ type: 'previewChunk' } & PreviewChunk)
-  | { type: 'error'; error: string; category?: LoadErrorCategory }
+  | { type: 'error'; error: string; category?: LoadErrorCategory; report?: string }
   | {
       type: 'done';
       cloud: CloudPayload;
@@ -778,7 +778,7 @@ export async function loadFile(
         // the toast shows the precise message rather than a text-classified
         // guess. Falls back to a plain Error for untyped worker failures.
         reject(
-          msg.category ? new LoadError(msg.category, msg.error) : new Error(msg.error),
+          msg.category ? new LoadError(msg.category, msg.error, msg.report) : new Error(msg.error),
         );
         return;
       }
@@ -959,7 +959,7 @@ export async function decodeFullViaWorker(
         detach();
         if (msg.type === 'error') {
           reject(
-            msg.category ? new LoadError(msg.category, msg.error) : new Error(msg.error),
+            msg.category ? new LoadError(msg.category, msg.error, msg.report) : new Error(msg.error),
           );
           return;
         }

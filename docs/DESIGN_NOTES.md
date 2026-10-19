@@ -6,7 +6,7 @@ Why OpenLiDARViewer behaves the way it does. Each decision below ties to a user 
 
 Files are read and rendered in the browser, and nothing is sent to a server. Scan data is often sensitive (private sites, client work) and large, so an upload would be slow and would put that data at risk; reading locally removes both problems. The cost is that the point cloud can't travel inside a shared session file. A session carries the analysis without the scan, so a recipient has to open it alongside the same scan.
 
-## Honest about uncertainty
+## Trust signals
 
 Measurements, terrain surfaces and derived classes each carry a visible trust signal, and the app declines to present a confident number the data can't support. A viewer that prints a clean number over thin or missing data invites a wrong decision, and survey work needs to know how far to trust a value as well as the value itself.
 

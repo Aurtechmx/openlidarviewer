@@ -270,7 +270,7 @@ export function is3dTilesName(filename: string): boolean {
  *
  * `'detect'` — at least one mesh-format contributor. PLY/OBJ/glTF carry no
  * mandated up-axis in practice: photogrammetry pipelines write Y-up, while
- * CloudCompare/PDAL-style tools write Z-up PLYs routinely. A format table
+ * point-cloud tools write Z-up PLYs routinely. A format table
  * cannot answer this — an earlier revision hard-classified PLY as Y-up and
  * rotated genuinely Z-up test and tool output into a vertical wall — so the
  * caller must run up-axis DETECTION on the actual points and rotate only when

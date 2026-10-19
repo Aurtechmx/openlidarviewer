@@ -1,5 +1,5 @@
 /**
- * kmlActions.ts: the Products lane's two Google Earth exports, lifted out of
+ * kmlActions.ts: the Products lane's two KML exports, lifted out of
  * `main.ts`.
  *
  * Both write KML, both place local render-space coordinates through the same
@@ -428,7 +428,7 @@ export async function exportScanFootprintKml(deps: KmlActionDeps): Promise<void>
   // Re-checked here for the same reason the CRS gate is: the active scan can
   // change between the render that enabled the control and the click that uses
   // it, and a Y-up scan's X/Y rectangle is exactly the kind of wrong answer
-  // that still looks right in Google Earth.
+  // that still looks right in KML viewers.
   const axisRefusal = footprintUpAxisRefusal(reading.upAxis);
   if (axisRefusal) {
     deps.setError(`Scan area export stopped. ${axisRefusal}`);

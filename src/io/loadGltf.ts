@@ -297,10 +297,10 @@ function gltfJson(buffer: ArrayBuffer, sourceFormat: 'glb' | 'gltf'): unknown {
  * URIs in `buffers` and `images` that point outside the file. A local open
  * resolves nothing outside the file: loaders.gl would otherwise fetch an
  * absolute http(s) URI, which sends a request to a host the file names
- * without the user asking.
+ * without the user asking. Takes the parsed glTF document (see `gltfJson`).
  */
-export function externalGltfUris(buffer: ArrayBuffer, sourceFormat: 'glb' | 'gltf'): string[] {
-  const doc = gltfJson(buffer, sourceFormat) as { buffers?: unknown; images?: unknown } | null;
+export function externalGltfUris(document: unknown): string[] {
+  const doc = document as { buffers?: unknown; images?: unknown } | null;
   if (!doc || typeof doc !== 'object') return [];
   const out: string[] = [];
   for (const list of [doc.buffers, doc.images]) {
@@ -345,8 +345,8 @@ const GLTF_TYPE_COMPONENTS: Readonly<Record<string, number>> = {
  * open could emit. Draco-compressed meshes are refused here too: the decoder is
  * not bundled and loaders.gl would otherwise fetch it from a CDN.
  */
-function assertGltfJsonAdmissible(buffer: ArrayBuffer, sourceFormat: 'glb' | 'gltf', maxVertices: number): void {
-  const doc = gltfJson(buffer, sourceFormat) as {
+function assertGltfJsonAdmissible(document: unknown, maxVertices: number): void {
+  const doc = document as {
     extensionsUsed?: unknown;
     extensionsRequired?: unknown;
     accessors?: unknown;
@@ -418,8 +418,10 @@ export async function loadGltf(
   // browser image support by building an `Image` even when the asset has no
   // textures (loaders.gl excludes an extension whose key maps to `false`).
   // Refuse before parsing: nothing outside the file is requested.
-  if (externalGltfUris(buffer, sourceFormat).length > 0) throw new Error(EXTERNAL_GLTF_MESSAGE);
-  assertGltfJsonAdmissible(buffer, sourceFormat, options.maxVertices ?? MAX_GLTF_VERTICES);
+  // The JSON is decoded and parsed once; both checks read the same document.
+  const document = gltfJson(buffer, sourceFormat);
+  if (externalGltfUris(document).length > 0) throw new Error(EXTERNAL_GLTF_MESSAGE);
+  assertGltfJsonAdmissible(document, options.maxVertices ?? MAX_GLTF_VERTICES);
   const raw = await parse(buffer, GLTFLoader, {
     ...LOCAL_ONLY_LOADER_OPTIONS,
     gltf: {
@@ -465,8 +467,8 @@ export async function loadGltf(
   const rawJson = (raw as {
     json?: { asset?: { generator?: string }; images?: unknown[]; materials?: unknown[] };
   }).json;
-  // The glTF `asset.generator` string (e.g. "Polycam", "Scaniverse",
-  // "RealityKit") is the capture app's stamp — the honest home for it is the
+  // The glTF `asset.generator` string (a capture app's name)
+  // is the capture app's stamp, and it belongs in the
   // same declared-software field a LAS "Generating Software" record uses. The
   // display profile reads it (via metadata.sourceSoftware) for high-confidence
   // handheld-capture identification. Many exports omit it, in which case the

@@ -88,20 +88,25 @@ export function bindMeasureUnitFrames(measure: MeasureController, src: LayerUnit
     onCrsChange() {
       memo.clear();
       const f = measureUnitFrameOf(src.crs.context());
-      measure.setUnitToMetres(f.unitToMetres);
-      // An unreadable vertical unit reaches the controller as an invalid
-      // factor, so it withholds every height rather than riding the horizontal.
-      measure.setVerticalUnitToMetres(f.verticalUnitInvalid ? Number.NaN : f.verticalUnitToMetres ?? 1);
-      measure.setVerticalUnitKnown(f.verticalUnitKnown);
-      measure.setCrsKnown(f.crsKnown);
-      measure.setGeographicCrs(f.geographic, f.verticalRefused);
-      measure.setProjectedCrs(f.projected);
-      // Owned work re-reads its layer's frame (a late resolve or an override
-      // on another layer); the setters above only re-emit when a value moved.
-      // A CRS assigned, replaced or cleared can move a layer's up axis, so
-      // navigation re-aligns first and the cached frames above are dropped.
-      src.realignUp?.();
-      measure.refreshUnitFrames();
+      // One notification, after the frame, the layer up axis and the re-cut of
+      // results derived along the old axis have all settled: a subscriber is
+      // never told about the new frame while a profile or volume still holds
+      // the old cut.
+      measure.holdChange(() => {
+        measure.setUnitToMetres(f.unitToMetres);
+        // An unreadable vertical unit reaches the controller as an invalid
+        // factor, so it withholds every height rather than riding the horizontal.
+        measure.setVerticalUnitToMetres(f.verticalUnitInvalid ? Number.NaN : f.verticalUnitToMetres ?? 1);
+        measure.setVerticalUnitKnown(f.verticalUnitKnown);
+        measure.setCrsKnown(f.crsKnown);
+        measure.setGeographicCrs(f.geographic, f.verticalRefused);
+        measure.setProjectedCrs(f.projected);
+        // A CRS assigned, replaced or cleared can move a layer's up axis, so
+        // navigation re-aligns first and the cached frames above are dropped;
+        // owned work then re-reads its layer's frame and re-cuts what moved.
+        src.realignUp?.();
+        measure.refreshUnitFrames();
+      });
     },
   };
 }

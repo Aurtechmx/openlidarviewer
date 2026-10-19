@@ -67,8 +67,11 @@ const CANONICAL_LINKS: Record<string, string> = {
   // canonical file.
   'benchmarks.md': `${GITHUB}/blob/main/docs/benchmarks.md`,
   'developer-manual.md': `${GITHUB}/blob/main/docs/developer-manual.md`,
-  'CONTRIBUTING.md': `${GITHUB}/blob/main/CONTRIBUTING.md`,
-  'SECURITY.md': `${GITHUB}/blob/main/SECURITY.md`,
+  'CONTRIBUTING.md': `${GITHUB}/blob/main/.github/CONTRIBUTING.md`,
+  'SECURITY.md': `${GITHUB}/blob/main/.github/SECURITY.md`,
+  'PRIVACY.md': `${GITHUB}/blob/main/PRIVACY.md`,
+  'coordinate-precision.md': `${GITHUB}/blob/main/docs/coordinate-precision.md`,
+  'KNOWN_LIMITATIONS_v0.7.0.md': `${GITHUB}/blob/main/docs/releases/KNOWN_LIMITATIONS_v0.7.0.md`,
   'claim-register.yaml': `${GITHUB}/blob/main/docs/validation/claim-register.yaml`,
 };
 
@@ -225,8 +228,8 @@ export default defineConfig({
     socialLinks: [{ icon: 'github', link: GITHUB }],
 
     footer: {
-      message: 'AGPL-3.0-only licensed. Local-first: the viewer never uploads your data.',
-      copyright: `© Aurtech — OpenLiDARViewer v${pkg.version}`,
+      message: 'AGPL-3.0-only licensed. Local files are not uploaded.',
+      copyright: `© Aur Technologies. OpenLiDARViewer v${pkg.version}`,
     },
 
     search: { provider: 'local' },

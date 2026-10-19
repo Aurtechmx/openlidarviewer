@@ -569,12 +569,18 @@ export function sameUp(a: Vec3, b: Vec3): boolean {
   return a[0] === b[0] && a[1] === b[1] && a[2] === b[2];
 }
 
+/** Why a figure that needs an up axis is withheld when its owner layer cannot be found. */
+export const OWNER_LAYER_NOT_OPEN = 'owner layer not open, or more than one open layer matches it';
+
 /**
  * The frame of work whose units cannot be resolved: it names a layer that is
  * not open (or that several open layers carry), or it spans layers with
  * different units. No factor applies, so its values read as unverified.
  */
 export const UNRESOLVED_UNIT_FRAME: MeasureUnitFrame = Object.freeze({
+  // No layer, so no axis: without this a height on a closed layer was read
+  // along whichever scan happens to be active.
+  upRefusal: `not available: no up axis; ${OWNER_LAYER_NOT_OPEN}`,
   unitToMetres: 1,
   verticalUnitToMetres: null,
   verticalUnitKnown: false,

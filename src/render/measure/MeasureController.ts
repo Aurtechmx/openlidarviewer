@@ -2209,8 +2209,18 @@ export class MeasureController {
     }
   }
 
+  private _holds = 0;
+  private _owed = false;
+
   private _emitChange(): void {
-    this._onChange?.();
+    if (this._holds > 0) this._owed = true;
+    else this._onChange?.();
+  }
+
+  /** Run `fn` with change notifications held, then notify once if any fired: a frame change is several writes, and a subscriber must not see the first beside results still cut along the old axis. */
+  holdChange<T>(fn: () => T): T {
+    this._holds++;
+    try { return fn(); } finally { if (--this._holds === 0 && this._owed) { this._owed = false; this._onChange?.(); } }
   }
 
   /** A pointerdown on a vertex handle begins an edit drag. */

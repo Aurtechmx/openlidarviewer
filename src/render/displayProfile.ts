@@ -120,7 +120,7 @@ const MESH_CONTAINER_FORMATS: ReadonlySet<SourceFormat> = new Set(['obj', 'glb',
  * Upper bound (metres) on the largest extent axis for the geometry-only
  * handheld signal. A room or object is single-digit to low-tens of metres;
  * anything larger is a site/terrain mesh and stays in the `mesh` profile. A
- * generator match overrides this (a large Polycam scan is still handheld).
+ * generator match overrides this (a large phone-app scan is still handheld).
  */
 export const HANDHELD_MAX_EXTENT_M = 50;
 

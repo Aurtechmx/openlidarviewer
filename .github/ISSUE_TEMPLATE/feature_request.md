@@ -19,10 +19,11 @@ Other approaches you considered, or how you work around this now.
 
 **Scope check**
 
-OpenLiDARViewer is a lightweight, local-first viewer, not a full GIS or
-survey-grade processing suite. Requests that fit that scope are easiest to
-land. See the [CHANGELOG](../../CHANGELOG.md) for what has shipped and
-[limitations](../../docs/limitations.md) for what is deliberately out of scope.
+OpenLiDARViewer is a viewer, not a full GIS or survey-grade processing suite.
+See the [CHANGELOG](https://github.com/Aurtechmx/openlidarviewer/blob/main/CHANGELOG.md)
+for what has shipped and
+[limitations](https://github.com/Aurtechmx/openlidarviewer/blob/main/docs/limitations.md)
+for what is out of scope.
 
 **Anything else**
 

@@ -75,4 +75,17 @@ describe('describeProjectSize', () => {
     expect(s.width).toBe(300); // horizontal unchanged
     expect(s.height).toBeCloseTo(25 * FOOT, 6); // vertical scaled
   });
+
+  it('an unreadable vertical unit keeps every extent in source units instead of borrowing the horizontal factor', () => {
+    const s = describeProjectSize(MIN, MAX, {
+      upAxis: 'z',
+      linearUnitKnown: true,
+      linearUnitToMetres: FOOT,
+      verticalUnitInvalid: true,
+    });
+    expect(s.width).toBe(300);
+    expect(s.height).toBe(25);
+    expect(s.sizeUnit).toBe('source units');
+    expect(s.maxPhysicalDimM).toBeNull();
+  });
 });

@@ -32,7 +32,7 @@
  * send `If-Match` / compare on every derived request, reject on mismatch) is the
  * natural fix, but it has to thread a validator from the manifest fetch through
  * `EptStreamingPointCloud` into every hierarchy + tile request and depends on
- * the host emitting stable validators (many CDNs and S3-compatible stores vary
+ * the host emitting stable validators (many CDNs and object stores vary
  * them per node) — a real change, deferred rather than half-built here. Until
  * then the practical guard is operational: treat a published EPT as immutable
  * for the duration of a session, and re-open the scan after a republish. The

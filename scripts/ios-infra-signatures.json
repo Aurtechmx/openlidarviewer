@@ -1,5 +1,5 @@
 {
-  "comment": "Infrastructure signatures for the iOS simulator leg (.github/workflows/ios-simulator.yml). Rule: docs/releases/V070_IMPLEMENTATION_LEDGER.md, L13. A failed run is INFRASTRUCTURE only when its first failing step precedes the first app assertion AND the pre-assertion log matches one of these. `pattern` is a case-insensitive JavaScript regex. `steps`, when present, limits the signature to failing steps whose name matches that regex. `before`, when present, limits the match to log text preceding the first occurrence of that string. Add a signature only by commit, never while classifying a specific run.",
+  "comment": "Infrastructure signatures for the iOS simulator leg (.github/workflows/ios-simulator.yml). A failed run is INFRASTRUCTURE only when its first failing step precedes the first app assertion AND the pre-assertion log matches one of these. `pattern` is a case-insensitive JavaScript regex. `steps`, when present, limits the signature to failing steps whose name matches that regex. `before`, when present, limits the match to log text preceding the first occurrence of that string. Add a signature only by commit, never while classifying a specific run.",
   "firstAssertionStep": "Drive the touch model in Mobile Safari",
   "signatures": [
     {

@@ -17,6 +17,7 @@ import {
   ledgerStatuses,
   // @ts-expect-error — plain .mjs script, no types
 } from '../scripts/lint-known-limitations.mjs';
+import { isGitCheckout } from '../scripts/lib/repoOnlyDocs.mjs';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const realRead = (p: string): string | null =>
@@ -29,8 +30,13 @@ const CI = '.github/workflows/ci.yml';
 
 const withOverride = (path: string, text: string) =>
   (p: string): string | null => (p === path ? text : realRead(p));
+// The ledger is not shipped in the source archive. In an extracted archive the
+// real-tree run skips the ledger check (as the CLI does) and the ledger-reading
+// cases below are skipped, visibly, because they have nothing to read.
+const HAS_LEDGER = realRead(LEDGER) !== null;
+const ARCHIVE = !isGitCheckout(ROOT);
 const problemsFor = (read: (p: string) => string | null) =>
-  collectKnownLimitationsProblems(read).problems as string[];
+  collectKnownLimitationsProblems(read, { archive: ARCHIVE }).problems as string[];
 const withDocAppended = (extra: string) => withOverride(DOC, `${realRead(DOC)}\n\n${extra}\n`);
 
 const live = JSON.parse(realRead('docs/validation/test-evidence.json')!).bundle.liveEntryKiB as number;
@@ -44,6 +50,9 @@ describe('lint:known-limitations', () => {
   it('reads the machine files it compares against', () => {
     expect(ceiling).toBeGreaterThan(0);
     expect(ciGreenNeeds(realRead(CI)!)).toEqual(expect.arrayContaining(['e2e-firefox', 'e2e-webkit', 'windows']));
+  });
+
+  it.skipIf(!HAS_LEDGER)('reads the ledger table it compares against (repository only)', () => {
     expect(ledgerStatuses(realRead(LEDGER)!).get('L13')).toBe('FIXED');
   });
 
@@ -76,7 +85,7 @@ describe('lint:known-limitations', () => {
     });
   });
 
-  describe('(c) ledger citations and phrase guards', () => {
+  describe.skipIf(!HAS_LEDGER)('(c) ledger citations and phrase guards (repository only: the ledger is not in the archive)', () => {
     it('fails on an id cited as open that the ledger records FIXED', () => {
       const p = problemsFor(withDocAppended('The cross-browser gap stays open under ledger L13.'));
       expect(p.some((x) => x.includes('cites L13 as open'))).toBe(true);

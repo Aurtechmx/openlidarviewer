@@ -2,11 +2,11 @@
  * spaceMetrics.ts
  *
  * Measurements for a NON-TERRAIN scan — an interior space (a room / 360 /
- * iPhone-LiDAR capture with a floor + ceiling) or a compact object — computed
+ * phone-LiDAR capture with a floor + ceiling) or a compact object — computed
  * in the detected up-frame. This is the space/object-appropriate analysis that
  * replaces terrain contours for scans `classifyScanShape` flags `nonTerrain`.
  *
- * Grounded in what phone capture apps (Polycam Space Mode, Apple RoomPlan)
+ * Grounded in what phone room-scanning apps
  * surface: room dimensions, floor area, ceiling height, enclosed volume,
  * floor/wall/ceiling presence, storey count, and capture quality.
  *

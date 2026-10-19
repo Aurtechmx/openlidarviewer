@@ -13,7 +13,7 @@ export interface NavJankEnv {
   commit: string;
   browser: string;
   os: string;
-  /** Backend and renderer string, e.g. "webgpu / ANGLE (Apple M2)". */
+  /** Backend and renderer string, e.g. "webgpu / ANGLE (M2)". */
   renderer: string;
   dpr: number;
   refreshEstimateHz: number;

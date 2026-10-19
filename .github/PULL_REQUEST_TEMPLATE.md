@@ -1,10 +1,8 @@
 ## What this changes
 
 A short description of the change and why it is needed. Link any related issue
-(for example, `Closes #12`). If the why is obvious from the title, say what a
-reviewer would otherwise have to reconstruct: what was wrong before, what made
-it wrong, and what convinced you this is the fix rather than a workaround that
-happens to move the symptom.
+(for example, `Closes #12`). Say what was wrong before, what caused it, and why
+this is the fix.
 
 ## Scope
 
@@ -12,9 +10,8 @@ What this PR does not touch, so a reviewer knows where to stop reading.
 
 ## Dependencies
 
-Delete the lines that do not apply. A dependency on evidence is not the same as
-a dependency on code: a dataset record that a claim cites has to land first even
-when no source file connects them.
+Delete the lines that do not apply. A dataset record that a claim cites has to
+land before the claim, even when no source file connects them.
 
 - Depends on: #NNN (code)
 - Depends on: #NNN (evidence: cites a record that PR adds)
@@ -38,24 +35,16 @@ An empty list means this branch was cut from current `main`.
 - [ ] S3: changes a claim, tolerance, evidence level, or an algorithm default
 
 S2 ships with a test that fails before the change and passes after. S3 needs an
-evidence review before merge, because the author's own tests were written
-against the same understanding that produced the change, so they agree with it
-by construction; the question a reviewer answers is whether that understanding
-is right.
+evidence review before merge.
 
 ## Evidence
 
-What you ran and what it said. Paste the numbers, not a summary of them. A gate
-you did not run is not a gate that passed, and a reviewer cannot tell the two
-apart from prose alone. Exit codes are worth quoting where a command is easy to
-misread as green. If a number moved, say by how much and against what. This
-section is the part of the PR a future reader trusts when the code has changed
-underneath it and the description no longer matches.
+List the commands you ran with their results and exit codes. If a number moved,
+say by how much and against what.
 
 - [ ] No tracked baseline, reference run, evidence level, tolerance, or
       registered study result changed.
-- [ ] A tracked baseline did change. Which, and why the new value is the
-      correct one rather than the one that makes CI pass:
+- [ ] A tracked baseline did change. Which, and why the new value is correct:
 
 ## How it was tested
 

@@ -28,11 +28,11 @@ from the tree and fails when a cell drifts.
 | Geo | `src/geo` | ~6.1k | CRS math, `ProjectSpatialFrame`, transforms. |
 | Science domain | `src/terrain`, `src/validation`, `src/analysis`, `src/science` | ~53k | Ground filtering, DTM, contours, derivatives, hold-out RMSE, evidence model. UI-free by lint. |
 | I/O | `src/io` | ~42k | Format loaders (LAS/LAZ/PLY/PCD/PTX/E57/…), COPC + EPT streaming sources, range transports, session. |
-| Render | `src/render` | ~82k | three.js/WebGPU scene, streaming scheduler, measurement tools, colour modes. |
+| Render | `src/render` | ~83k | three.js/WebGPU scene, streaming scheduler, measurement tools, colour modes. |
 | Export / report | `src/export`, `src/report`, `src/convert` | ~20k | Studio exporters, PDF/report builders, batch conversion. |
 | Application services | `src/app` | ~31k | Composition root and the services that own shared state. |
 | UI | `src/ui` | ~45k | Panels, Inspector, Studio surfaces, onboarding. |
-| Shell | `src/main.ts` | 4,259 | Wiring. A monolith under decomposition. |
+| Shell | `src/main.ts` | 4,244 | Wiring. A monolith under decomposition. |
 
 ## Composition root
 
@@ -102,7 +102,7 @@ Recorded so the next pass does not re-derive them:
   `applyPolygonReclassify`) is ALREADY extracted and tested. What remains on the
   Viewer is a thin GPU-upload wrapper.
 
-`src/main.ts` (4,259): the largest blocks, which are the extraction
+`src/main.ts` (4,244): the largest blocks, which are the extraction
 candidates:
 
 `buildActionRegistry` is a thin assembler in `src/app/actionDefinitions.ts` over
@@ -216,7 +216,7 @@ alongside `exportGeoContext`'s static → streaming → zero frame resolution
 
 Done: `exportKml` / `kmlStatus` (~83 lines) now live in `src/app/kmlActions.ts`
 alongside the new scan-area export, driven through a `KmlActionDeps` object of
-accessor functions. Keeping the two Google Earth products together puts each
+accessor functions. Keeping the two KML products together puts each
 one's readiness rule next to its export path, so a button cannot report ready for
 a reason the exporter does not honour. The polygon geometry and its fail-closed
 CRS gate are a separate pure module, `src/export/scanFootprint.ts`, testable with

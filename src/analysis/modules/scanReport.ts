@@ -4,7 +4,7 @@ import { sourcePositions } from '../../model/pointFrames';
 import type { ClassScope } from '../../render/class/classScope';
 import type { SpatialContext } from '../../geo/SpatialContext';
 import { groundMetresPermitted, heightScale, heightUnitsPermitted, horizontalGroundRefusal, spatialContextFrom } from '../../geo/SpatialContext';
-import { isZUpFormat } from '../../io/sniffFormat';
+import { layerUpFrameFromContext, upFrameRefusal } from '../../geo/frame/layerUpFrame';
 import { heightLabel, HEIGHT_INCLUDES_NOISE_SUFFIX } from '../../geo/height';
 import { estimateInMemoryPrecision } from '../../geo/inMemoryPrecision';
 import { inMemoryPrecisionRows } from '../inMemoryPrecisionRows';
@@ -252,23 +252,31 @@ export const scanReport: AnalysisModule = {
     const ctx = options?.spatialContext ?? spatialContextFrom(cloud.metadata?.crs);
     const basis = scanReportUnitBasis(ctx);
     const { mpu, vmpu } = basis;
-    // Footprint and height are axis-aware. LAS-family (and COPC/EPT) are Z-up
-    // by spec, so the ground footprint is X·Y and height is Z. Mesh formats
-    // (PLY/OBJ/GLB/GLTF) load in their native Y-up frame — the same up-axis
-    // the renderer and elevation filter honour — so their footprint is X·Z and
-    // height is Y. Assuming Z-up for a Y-up façade scan put the building height
-    // into "Depth" and computed density/spacing over the vertical cross-section.
+    // Footprint and height are axis-aware, and the axis is the layer's own
+    // (`geo/frame/layerUpFrame.ts`), not the format's: a PLY or OBJ under a
+    // horizontal CRS stores easting, northing and height in X, Y and Z, so its
+    // footprint is X by Y and its height is Z, where a local mesh keeps the
+    // Y-up reading (footprint X by Z, height Y). Reading the format alone put a
+    // georeferenced PLY's height into "Depth" and computed density and spacing
+    // over a vertical cross-section. A frame with no up axis (glTF under a CRS)
+    // withholds every axis-dependent figure with the reason; Width is X for all.
+    const upFrame = layerUpFrameFromContext(cloud.sourceFormat, ctx);
+    const upRefusal = upFrameRefusal(upFrame);
+    const zUp = upFrame.ok && upFrame.axis === 'z';
     const spanX = maxX - minX, spanY = maxY - minY, spanZ = maxZ - minZ;
-    const zUp = isZUpFormat(cloud.sourceFormat);
     const width = spanX * mpu;
     const depth = (zUp ? spanY : spanZ) * mpu;
     const height = (zUp ? spanZ : spanY) * vmpu;
     if (basis.refusalReason) rows.push(rowWarn('Units', `Not ground metres: ${basis.refusalReason}`));
-    rows.push(
-      withScope(rowInfo('Width', `${width.toFixed(1)}${basis.lengthUnit}`), scope),
-      withScope(rowInfo('Depth', `${depth.toFixed(1)}${basis.lengthUnit}`), scope),
-      withScope(rowInfo('Height', `${height.toFixed(1)}${basis.heightUnit}${hasNoise ? HEIGHT_INCLUDES_NOISE_SUFFIX : ''}`), scope),
-    );
+    rows.push(withScope(rowInfo('Width', `${width.toFixed(1)}${basis.lengthUnit}`), scope));
+    if (upRefusal) {
+      rows.push(withScope(rowWarn('Depth', upRefusal), scope), withScope(rowWarn('Height', upRefusal), scope));
+    } else {
+      rows.push(
+        withScope(rowInfo('Depth', `${depth.toFixed(1)}${basis.lengthUnit}`), scope),
+        withScope(rowInfo('Height', `${height.toFixed(1)}${basis.heightUnit}${hasNoise ? HEIGHT_INCLUDES_NOISE_SUFFIX : ''}`), scope),
+      );
+    }
 
     const footprintArea = width * depth;
 
@@ -283,7 +291,9 @@ export const scanReport: AnalysisModule = {
     // load they mix bases — the header's count over the SAMPLE's footprint —
     // so the row says so rather than reading as a measured density.
     const mixedBasis = strided ? ' (mean: declared count over the display-sample footprint)' : '';
-    if (footprintArea <= 0 || densityN === 0) {
+    if (upRefusal) {
+      rows.push(withScope(rowWarn('Density', upRefusal), scope));
+    } else if (footprintArea <= 0 || densityN === 0) {
       rows.push(withScope(rowWarn('Density', 'N/A (degenerate footprint)'), scope));
     } else {
       rows.push(withScope(rowInfo('Density', `${(densityN / footprintArea).toFixed(1)}${basis.densityUnit}${mixedBasis}`), scope));
@@ -292,7 +302,9 @@ export const scanReport: AnalysisModule = {
     // Estimated point spacing. The cm/m formatter assumes metres, so it is used
     // only when the unit is confirmed; an unconfirmed scan shows the raw source
     // spacing without a metre label.
-    if (footprintArea <= 0 || densityN === 0) {
+    if (upRefusal) {
+      rows.push(withScope(rowWarn('Spacing', upRefusal), scope));
+    } else if (footprintArea <= 0 || densityN === 0) {
       rows.push(withScope(rowWarn('Spacing', 'N/A (degenerate footprint)'), scope));
     } else {
       const spacing = Math.sqrt(footprintArea / densityN);

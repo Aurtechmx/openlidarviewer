@@ -187,7 +187,7 @@ export class EptOctree implements StreamingOctreeView {
    * Concurrency: the original walk fetched each file serially with `await`; a
    * deep public EPT (Grand Canyon 22B pts, LA 75B pts) carries 8–32 files in a
    * wave, so serialising dominated first paint. Fetching a wave 8 at a time
-   * (the USGS S3 endpoints speak HTTP/2) brings each wave to roughly one RTT.
+   * (the USGS object-store endpoints speak HTTP/2) brings each wave to roughly one RTT.
    */
   private async _walkHierarchy(fileBudget: number, signal?: AbortSignal): Promise<void> {
     if (this._fullyLoaded) return;
