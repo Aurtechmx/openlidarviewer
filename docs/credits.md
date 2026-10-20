@@ -8,9 +8,14 @@ below. To change or remove a dataset, email info@aurtech.mx.
 
 | Dataset | Provider | Terms |
 | --- | --- | --- |
-| SF Coast · Los Angeles · Denver · Golden Gate · Grand Canyon NP · San Francisco · Denver Metro (DRCOG) | USGS 3DEP | Public domain |
+| San Francisco · Los Angeles block 2 · Denver Metro (DRCOG) · Grand Canyon NP | USGS 3DEP | Public domain |
 | Switzerland: swisssurface3D (2022) | swisstopo, via FLAI | [swisstopo free geodata terms](https://www.swisstopo.admin.ch/en/terms-of-use-free-geodata-and-geoservices), © swisstopo |
 | Slovenia: GURS CLSS (2023) | GURS, via FLAI | CC BY 4.0 (© GURS) |
+
+The sample datasets are shown for demonstration. They are the publishers' data as
+published, with no warranty from OpenLiDARViewer of their accuracy, completeness
+or availability, and they are not survey evidence for any purpose. A provider can
+move or withdraw a file at any time.
 
 USGS 3DEP streams from the AWS Registry of Open Data bucket and asks for the
 courtesy citation: "Data available from U.S. Geological Survey, National
