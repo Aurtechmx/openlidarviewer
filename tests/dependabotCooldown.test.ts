@@ -27,4 +27,13 @@ describe('.github/dependabot.yml', () => {
     expect(entry).toMatch(/cooldown:\s*\n\s*default-days: 7\s*\n/);
     expect(entry).not.toMatch(/semver-(major|minor|patch)-days/);
   });
+
+  // The loaders.gl packages must move together. @loaders.gl/las is a development
+  // dependency, so without this exclusion the dev-tooling group took it alone.
+  it('keeps every @loaders.gl package out of the dev-tooling group', () => {
+    const npm = named.find(([name, e]) => name === 'npm' && /directory: "\/"\n/.test(e))?.[1] ?? '';
+    const devTooling = /dev-tooling:\n([\s\S]*?)\n      [a-z-]+:\n/.exec(npm)?.[1] ?? '';
+    expect(devTooling).toMatch(/exclude-patterns:\s*\n\s*- "@loaders\.gl\/\*"/);
+    expect(npm).toMatch(/loaders-gl:\s*\n\s*patterns:\s*\n\s*- "@loaders\.gl\/\*"/);
+  });
 });
