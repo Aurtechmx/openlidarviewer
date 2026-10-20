@@ -10,7 +10,7 @@ authors:
     orcid: "https://orcid.org/0009-0007-3147-323X"
 
 version: "0.7.0"
-date-released: "2026-10-19"
+date-released: "2026-10-20"
 license: AGPL-3.0-only
 repository-code: "https://github.com/Aurtechmx/openlidarviewer"
 url: "https://openlidarviewer.org/"

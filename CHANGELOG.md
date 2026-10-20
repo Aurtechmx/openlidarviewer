@@ -4,7 +4,7 @@ The format is based on Keep a Changelog and the project follows Semantic Version
 
 ## [Unreleased]
 
-## [0.7.0] - 2026-10-19
+## [0.7.0] - 2026-10-20
 
 ### Added
 

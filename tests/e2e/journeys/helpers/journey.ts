@@ -36,6 +36,12 @@ export const ERROR_ALLOWLIST: ReadonlyArray<{ pattern: RegExp; reason: string }>
     pattern: /GL Driver Message|GPU stall due to ReadPixels/,
     reason: 'Chromium driver performance note emitted when a spec reads pixels back; not raised by the app.',
   },
+  {
+    pattern: /NS_BINDING_ABORTED[\s\S]*chrome:\/\/juggler\//,
+    reason:
+      "Firefox only: Playwright's own instrumentation (chrome://juggler) logs this when a reload aborts a worker script it was tracking. " +
+      'Only messages from that source match; an NS_BINDING_ABORTED raised by app code still fails the step.',
+  },
 ];
 
 /** Allowlist entries a single journey adds for a step that causes them on purpose. */
