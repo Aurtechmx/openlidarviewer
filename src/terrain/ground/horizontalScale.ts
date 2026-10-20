@@ -74,8 +74,16 @@ export function metresPerDegreeLongitude(latitudeDeg: number | null | undefined)
  */
 export const MAX_GEOGRAPHIC_LATITUDE_DEG = 89;
 
+/** A terrain run refused for its frame or scale: the panel states it as "did not run", not as a failure. */
+export class TerrainRefusalError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'TerrainRefusalError';
+  }
+}
+
 /** A geographic grid beyond {@link MAX_GEOGRAPHIC_LATITUDE_DEG}: its metric derivatives are withheld. */
-export class GeographicLatitudeError extends Error {
+export class GeographicLatitudeError extends TerrainRefusalError {
   constructor(message: string) {
     super(message);
     this.name = 'GeographicLatitudeError';
@@ -189,4 +197,100 @@ export function horizontalCellMetresXY(
       : 1;
   const m = cellSizeM * scale;
   return { x: m, y: m };
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Web Mercator ground scale
+// ─────────────────────────────────────────────────────────────────────────────
+//
+// EPSG:3857 takes WGS 84 geodetic longitude λ and latitude φ and maps them on a
+// SPHERE of radius a: x = a·λ, y = a·ln tan(π/4 + φ/2). Metres of grid are
+// therefore not metres on the ground, and the factor depends on latitude and,
+// slightly, on direction, because the sphere is not the ellipsoid. On the WGS 84
+// ellipsoid (semi-major a, first eccentricity e), with N the prime-vertical and
+// M the meridional radius of curvature:
+//
+//   east–west:    ground/grid = N·cos φ / a            = cos φ / √(1 − e² sin² φ)
+//   north–south:  ground/grid = M·cos φ / a            = (1 − e²) cos φ / (1 − e² sin² φ)^(3/2)
+//
+// Both are exact at φ. Across a footprint φ changes, so one factor is an
+// approximation whose size {@link webMercatorScaleBound} states and the terrain
+// runner refuses beyond {@link WEB_MERCATOR_MAX_SCALE_ERROR}. Coordinates and
+// georeferencing stay in EPSG:3857; only the metric derivatives (slope, areas,
+// densities) use the factor.
+
+const WGS84_A_M = 6_378_137;
+const WGS84_E2 = 0.006_694_379_990_14;
+
+/** Largest relative error in a ground length accepted from one Web Mercator factor. */
+export const WEB_MERCATOR_MAX_SCALE_ERROR = 0.01;
+
+/** Geodetic latitude of a Web Mercator northing, degrees (the inverse of y = a·ln tan(π/4 + φ/2)). */
+export function webMercatorLatitudeOfY(yMetres: number): number {
+  return ((2 * Math.atan(Math.exp(yMetres / WGS84_A_M)) - Math.PI / 2) * 180) / Math.PI;
+}
+
+/** Ground metres per Web Mercator grid metre at latitude `latitudeDeg`: east–west, north–south and their geometric mean. */
+export function webMercatorGroundScale(latitudeDeg: number): { readonly x: number; readonly y: number; readonly mean: number } {
+  const phi = (latitudeDeg * Math.PI) / 180;
+  const s = Math.sin(phi);
+  const w = 1 - WGS84_E2 * s * s;
+  const x = Math.cos(phi) / Math.sqrt(w);
+  const y = ((1 - WGS84_E2) * Math.cos(phi)) / (w * Math.sqrt(w));
+  return { x, y, mean: Math.sqrt(x * y) };
+}
+
+/** What one Web Mercator factor stands for over a northing range. */
+export interface WebMercatorScaleBound {
+  /** Latitude of the factor, degrees: the middle of the northing range. */
+  readonly latitudeDeg: number;
+  /** The factor: ground metres per grid metre, the geometric mean of the two axes. */
+  readonly groundPerGrid: number;
+  /** Largest relative error of a ground length from using the factor over the range: either axis, at the ends, the centre and the equator. */
+  readonly maxRelativeError: number;
+}
+
+/**
+ * The factor for a northing range [yMinMetres, yMaxMetres] and the largest
+ * relative error it leaves: the greatest distance of either axis's scale from
+ * the factor, over the range's two ends, its centre, and the equator when the
+ * range crosses it (the scale is largest there). Each axis is compared with
+ * the factor itself, so the axis difference at the centre and the change with
+ * latitude are counted together, products included.
+ */
+export function webMercatorScaleBound(yMinMetres: number, yMaxMetres: number): WebMercatorScaleBound {
+  const lo = Math.min(yMinMetres, yMaxMetres);
+  const hi = Math.max(yMinMetres, yMaxMetres);
+  const centre = webMercatorLatitudeOfY((lo + hi) / 2);
+  const at = webMercatorGroundScale(centre);
+  const samples = [lo, hi, (lo + hi) / 2, ...(lo < 0 && hi > 0 ? [0] : [])];
+  let worst = 0;
+  for (const y of samples) {
+    const e = webMercatorGroundScale(webMercatorLatitudeOfY(y));
+    worst = Math.max(worst, Math.abs(e.x / at.mean - 1), Math.abs(e.y / at.mean - 1));
+  }
+  return { latitudeDeg: centre, groundPerGrid: at.mean, maxRelativeError: worst };
+}
+
+/** Why a Web Mercator scan cannot be analysed over this northing range, or null. */
+export function webMercatorRefusal(bound: WebMercatorScaleBound): string | null {
+  if (!Number.isFinite(bound.groundPerGrid) || !(bound.groundPerGrid > 0)) {
+    return 'This scan is Web Mercator and its latitude cannot be read, so its ground scale is unknown.';
+  }
+  if (bound.maxRelativeError <= WEB_MERCATOR_MAX_SCALE_ERROR) return null;
+  return (
+    `This scan is Web Mercator, whose scale changes with latitude, and it spans ${(bound.maxRelativeError * 100).toFixed(1)}% ` +
+    `of scale error about latitude ${bound.latitudeDeg.toFixed(2)}°, more than the ${(WEB_MERCATOR_MAX_SCALE_ERROR * 100).toFixed(0)}% ` +
+    'one ground factor can stand for. Zoom in so less of it is loaded, or reproject it to a local metric CRS such as UTM.'
+  );
+}
+
+/** The line the Analyse panel adds to a Web Mercator run: how its ground figures were scaled. Null for any other frame. */
+export function webMercatorNote(bound: WebMercatorScaleBound | undefined): string | null {
+  if (!bound) return null;
+  return (
+    `Web Mercator grid: lengths, slopes and areas use the ground scale at latitude ${bound.latitudeDeg.toFixed(2)}° ` +
+    `(${bound.groundPerGrid.toFixed(4)} m per grid metre), which leaves at most ${(bound.maxRelativeError * 100).toFixed(2)}% error across this scan. ` +
+    'The coordinates and the exported georeference stay in Web Mercator.'
+  );
 }

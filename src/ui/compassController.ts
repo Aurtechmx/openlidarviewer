@@ -31,8 +31,10 @@ import type { ViewCubeHandle, ViewCubeOptions } from './viewCube';
 
 /** The slice of the Viewer the compass reads. */
 export interface CompassViewer {
-  /** Open clouds — the compass stays down while this is empty. */
+  /** Open static layers. */
   clouds(): { readonly length: number };
+  /** Whether a streamed scan is open: it is not among `clouds()`, and the compass follows it too. */
+  readonly hasStreamingCloud?: boolean;
   /** Camera orientation in the scene basis (scene up axis), read once per drawn frame. */
   cameraOrientation(): CameraOrientation;
   /**
@@ -129,6 +131,11 @@ export function browserCompassPlatform(): CompassPlatform {
   };
 }
 
+/** A scan is open when a static layer or a streamed scan is. */
+function hasScan(v: CompassViewer): boolean {
+  return v.clouds().length > 0 || v.hasStreamingCloud === true;
+}
+
 /**
  * Build the compass controller. Nothing mounts until `attachViewer` has run,
  * a scan is open and the preference is on.
@@ -158,14 +165,14 @@ export function createCompassController(opts: CompassControllerOptions): Compass
     if (!enabled || handle || !viewer) return;
     // Nothing to orient until a scan is open — don't float the compass over the
     // empty drop state.
-    if (viewer.clouds().length === 0) return;
+    if (!hasScan(viewer)) return;
     const v = viewer;
     void loadCube().then((mountViewCube) => {
       // Re-validate at mount time: the lazy chunk load is async, so the scan may
       // have been closed (or the compass toggled off, or one already mounted)
       // while it loaded. Without the clouds() recheck the compass would mount over
       // the empty state after a fast open-then-close.
-      if (!enabled || handle || v.clouds().length === 0) return;
+      if (!enabled || handle || !hasScan(v)) return;
       const cube = mountViewCube({
         host: opts.host(),
         getOrientation: () => v.cameraOrientation(),
@@ -193,7 +200,7 @@ export function createCompassController(opts: CompassControllerOptions): Compass
   }
 
   function refresh(): void {
-    if (enabled && viewer && viewer.clouds().length > 0) start();
+    if (enabled && viewer && hasScan(viewer)) start();
     else stop();
   }
 

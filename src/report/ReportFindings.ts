@@ -270,7 +270,14 @@ export function buildInspectionSummary(
     findings.push({
       label: 'Georeference',
       value: metadata.crsName,
-      detail: metadata.crsUnit ? `Linear unit: ${metadata.crsUnit}.` : undefined,
+      // The CRS's axis unit is not a ground unit when the extents are marked
+      // unconfirmed (Web Mercator's "metre" is a grid unit): saying "metre" here
+      // beside "not ground metres" below contradicted the report.
+      detail: metadata.crsUnit
+        ? metadata.extentUnitStatus === 'unknown'
+          ? `Declared axis unit: ${metadata.crsUnit}; not confirmed as a ground unit (see Units).`
+          : `Linear unit: ${metadata.crsUnit}.`
+        : undefined,
       tier: 'info',
     });
   } else {

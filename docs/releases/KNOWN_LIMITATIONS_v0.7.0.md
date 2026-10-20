@@ -667,7 +667,7 @@ output keeps the source WKT that states it, and the contour DXF, contour SVG
 and map sheet label its coordinates as unitless source units rather than
 naming the unit.
 
-## Depth references, geocentric frames and Web Mercator are refused, not converted
+## Depth references and geocentric frames are refused; Web Mercator is scaled by latitude in terrain analysis only
 
 Terrain analysis, contours, DEM export, Flow Pulse, Terrain Access and change
 detection refuse a depth-positive-down vertical reference on either epoch
@@ -675,9 +675,21 @@ detection refuse a depth-positive-down vertical reference on either epoch
 normalisation is supported."). Depths are not negated into heights. A
 geocentric CRS (EPSG:4978 and similar) is refused by every metric, terrain and
 elevation workflow; it is not converted to geographic or projected
-coordinates. Web Mercator is treated as grid units only: horizontal lengths,
-areas, grades, slopes and volumes are withheld and heights are kept; no
-scale-factor correction is applied. A geocentric code outside the built-in
+coordinates. Web Mercator is treated as grid units by the Measure tool, the
+scan report and change detection: horizontal lengths, areas, grades, slopes
+and volumes are withheld there and heights are kept. Terrain analysis, and the
+contours, DEM export, Flow Pulse and Terrain Access built from it, convert a
+Web Mercator grid with the WGS 84 ground scale at the scan's latitude: east–west
+cos φ / √(1 − e² sin² φ) and north–south (1 − e²) cos φ / (1 − e² sin² φ)^(3/2),
+whose geometric mean is the one factor used (0.77 at Denver). The coordinates
+and the DEM's georeference stay in Web Mercator. The factor is exact at the
+scan's centre latitude and changes across the scan, so a run states the
+largest relative error it leaves (0.5% for a 0.4° tall scan about 40° N) and is
+refused above 1%, for example a whole regional dataset, with the reason:
+zoom in so less is loaded, or reproject to UTM. A Web Mercator scan whose
+position is unknown (several layers, or a moved layer) is refused. Streamed
+USGS EPT datasets are in Web Mercator, so this is what lets them be
+analysed. A geocentric code outside the built-in
 list is recognised only from its WKT or GeoTIFF model type. A WKT
 engineering CRS (ENGCRS, LOCAL_CS) is not yet classified as local and keeps
 its current handling. Reproject refuses a geocentric source or target, because

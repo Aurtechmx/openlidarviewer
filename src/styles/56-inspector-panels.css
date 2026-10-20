@@ -54,7 +54,10 @@
  * existing `.olv-export` flex idiom. Picker takes the elastic share so
  * a long template label doesn't push the button off the row. */
 .olv-report-row { display: flex; gap: var(--space-sm); align-items: stretch; }
-.olv-report-row .olv-export-btn { flex: 0 0 auto; }
+/* `width: auto` and no top margin: the generic `.olv-export-btn` (90-converter-export.css)
+ * is `width: 100%` with a top margin for a button on its own row; here it sat beside
+ * the picker at the full row width, squeezed the picker to 13px and ran off the panel. */
+.olv-report-row .olv-export-btn { flex: 0 0 auto; width: auto; margin-top: 0; }
 .olv-report-select {
   flex: 1; min-width: 0;
   font-size: var(--text-xs); color: var(--text-dim);
