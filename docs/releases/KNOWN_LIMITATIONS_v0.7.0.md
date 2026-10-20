@@ -551,12 +551,14 @@ gives the reason. The scale widens on an axis whose extent would need more than
   built from it, take the up axis from metadata by the same rule. A PLY or
   OBJ under a CRS (the file's, or one assigned in the app) is analysed as
   stored and is never rotated because of its shape. A glTF or GLB under a CRS
-  is not analysed, and the Analyse panel says how to reconcile its axes. Only
-  a PLY, OBJ or glTF model with no CRS, or one set to Local, has its up axis
-  detected from the point layout; the panel states the detected axis and,
-  for Y-up, that the points were rotated to Z-up as (x, -z, y). A detected
-  Y-up model is not analysed together with Z-up layers. The detected axis is
-  shown in the panel only and is not recorded in the exported provenance.
+  is not analysed, and the Analyse panel says how to reconcile its axes. A
+  glTF or GLB with no CRS is Y-up by its specification and is rotated to Z-up
+  as (x, -z, y) for the analysis; its point layout is not consulted. Only a
+  PLY or OBJ with no CRS, or one set to Local, has its up axis detected, from
+  its own point layout; the panel states the detected axis and, for Y-up, that
+  the points were rotated. Each layer's axis is settled on its own, and layers
+  whose up axes differ are not analysed together. The axis and its basis are
+  shown in the panel only and are not recorded in the exported provenance.
 - Measurement, navigation, the Layer Health card and the measurement and map
   exports (CSV, GeoJSON, KML, integrity report, PDF) read a layer's up axis by
   the same rule as terrain and conversion. A PLY or OBJ under a CRS is

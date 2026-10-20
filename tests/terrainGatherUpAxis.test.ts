@@ -9,8 +9,10 @@
  *
  * Pinned here: a georeferenced PLY or OBJ passes through unrotated with
  * sourceUpAxis 'z'; the same geometry with no CRS still gets detection; a glTF
- * under a CRS is declined with a stated reason; a horizontal terrain control is
- * unchanged. The gather itself runs on a fake `this` holding real clouds.
+ * under a CRS is declined with a stated reason, and a glTF with no CRS is Y-up
+ * by specification (see gltfTerrainUpAxis.test.ts); a horizontal terrain
+ * control is unchanged. The gather itself runs on a fake `this` holding real
+ * clouds.
  */
 
 import { describe, it, expect, vi } from 'vitest';
@@ -24,7 +26,7 @@ import type { ExportCloudCrs } from '../src/render/exportAdapter';
 import { classifyScanShape } from '../src/terrain/scanShape';
 import { yUpToCanonicalZUp } from '../src/terrain/canonicalFrame';
 import {
-  detectedUpAxisNote,
+  gatherUpAxisNote,
   hasHorizontalCrs,
   MIXED_FRAME_REASON,
   settleTerrainGatherFrame,
@@ -149,8 +151,14 @@ describe('settleTerrainGatherFrame', () => {
     }
   });
 
-  it('keeps detection for a glTF with no CRS', () => {
-    expect(settleTerrainGatherFrame([{ format: 'glb', crs: null }], false, facade())).toMatchObject({ ok: true, up: 'y', basis: 'detected' });
+  it('gathers a glTF or GLB with no CRS Y-up by specification, not by its layout', () => {
+    // The terrain patch reads as Z-up to the shape detector; as a glTF it is Y-up regardless.
+    for (const format of ['gltf', 'glb'] as SourceFormat[]) {
+      const p = terrain();
+      const expected = yUpToCanonicalZUp(Float32Array.from(p));
+      expect(settleTerrainGatherFrame([{ format, crs: null }], false, p)).toEqual({ ok: true, up: 'y', basis: 'specification' });
+      expect(p).toEqual(expected);
+    }
   });
 
   it('leaves a horizontal terrain unchanged under every basis', () => {
@@ -180,13 +188,14 @@ describe('settleTerrainGatherFrame', () => {
   });
 });
 
-describe('detectedUpAxisNote', () => {
-  it('states a detected axis and says nothing for a specification or a CRS', () => {
-    expect(detectedUpAxisNote('detected', 'y')).toMatch(/read from the point layout: it reads as Y-up and was rotated to Z-up/);
-    expect(detectedUpAxisNote('detected', 'z')).toMatch(/reads as Z-up and was analysed as stored/);
-    expect(detectedUpAxisNote('crs', 'z')).toBeNull();
-    expect(detectedUpAxisNote('specification', 'z')).toBeNull();
-    expect(detectedUpAxisNote(undefined, undefined)).toBeNull();
+describe('gatherUpAxisNote', () => {
+  it('states a detected axis and a glTF rotation, and says nothing for a Z-up specification or a CRS', () => {
+    expect(gatherUpAxisNote('detected', 'y')).toMatch(/read from the point layout: it reads as Y-up and was rotated to Z-up/);
+    expect(gatherUpAxisNote('detected', 'z')).toMatch(/reads as Z-up and was analysed as stored/);
+    expect(gatherUpAxisNote('specification', 'y')).toMatch(/glTF is Y-up by specification, so this mesh was rotated to Z-up/);
+    expect(gatherUpAxisNote('crs', 'z')).toBeNull();
+    expect(gatherUpAxisNote('specification', 'z')).toBeNull();
+    expect(gatherUpAxisNote(undefined, undefined)).toBeNull();
   });
 });
 
