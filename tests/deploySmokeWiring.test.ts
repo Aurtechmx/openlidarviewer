@@ -182,7 +182,7 @@ describe('smoke-deploy-zip leaves no stale success', () => {
     // The checks it runs on the extracted archive, and what they read from the repository.
     for (const f of [
       'check-deploy-output.mjs', 'check-no-test-seam.mjs', 'check-no-dev-flags.mjs', 'check-built-csp.mjs',
-      'lib/isCliEntry.mjs', 'lib/cspInline.mjs', 'lib/htmlComments.mjs',
+      'lib/isCliEntry.mjs', 'lib/cspInline.mjs', 'lib/htmlComments.mjs', 'lib/confineGit.mjs',
     ]) {
       cpSync(join(ROOT, 'scripts', f), join(dir, 'scripts', f));
     }

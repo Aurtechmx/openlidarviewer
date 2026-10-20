@@ -6,7 +6,8 @@
  */
 import { afterAll, describe, expect, it } from 'vitest';
 import { execFileSync } from 'node:child_process';
-import { mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readdirSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 // @ts-expect-error — plain .mjs module, no types
@@ -90,11 +91,13 @@ describe('confineGitToProject', () => {
 });
 
 describe('every script that runs git confines it first', () => {
-  const root = join(dirname(new URL(import.meta.url).pathname), '..');
+  // Read from the tree, not from git, so this runs in an extracted source archive too.
+  const root = join(dirname(fileURLToPath(import.meta.url)), '..');
   const RUNS_GIT = /execFileSync\((GIT|'git'|gitPath)|spawnSync\((GIT|'git')|execSync\(['`"]git /;
-  const scripts = execFileSync('git', ['ls-files', 'scripts/*.mjs', 'vite.config.ts'], { cwd: root, encoding: 'utf8' })
-    .split('\n')
-    .filter((f) => f && !f.startsWith('scripts/lib/'));
+  const scripts = [
+    'vite.config.ts',
+    ...readdirSync(join(root, 'scripts')).filter((f) => f.endsWith('.mjs')).map((f) => `scripts/${f}`),
+  ];
 
   it.each(scripts.filter((f) => f === 'vite.config.ts' || RUNS_GIT.test(readFileSync(join(root, f), 'utf8'))))('%s', (f) => {
     const text = readFileSync(join(root, f), 'utf8');
