@@ -296,6 +296,9 @@
 /* Progress toast */
 .olv-toast {
   position: absolute; top: var(--olv-lane-top); left: 50%; transform: translateX(-50%);
+  /* Above the start screen, its sibling in the overlay: with no stacking order
+   * the start screen, later in the document, painted its title over a refusal. */
+  z-index: var(--z-raised);
   display: flex; flex-direction: column; gap: var(--space-md);
   background: var(--panel); border: 0.5px solid var(--hairline);
   border-radius: var(--radius-md); padding: var(--space-md) var(--space-2xl);

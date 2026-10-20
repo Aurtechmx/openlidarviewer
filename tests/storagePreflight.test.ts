@@ -18,6 +18,7 @@ import {
   decideStoragePreflight,
   storagePreflight,
   storagePreflightRefusal,
+  storagePreflightSummary,
   readStorageEstimate,
   STORAGE_HEADROOM_FRACTION,
   STORAGE_HEADROOM_FLOOR_BYTES,
@@ -223,6 +224,21 @@ describe('the refusal names numbers a user can act on', () => {
     expect(err?.message).toContain('big.laz');
     expect(err?.message).toContain(formatByteSize(verdict.requiredBytes));
     expect(err?.message).toContain(formatByteSize(verdict.availableBytes));
+    // The full account goes in the report, not on screen.
+    expect(err?.report).toContain(verdict.message);
+    expect(err?.message).not.toContain('bytes per point');
+  });
+
+  it('states each refusal in a short message with the remedy, and keeps the details for the report', () => {
+    const big = decideStoragePreflight(demand, reads(4 * GB));
+    const msg = storagePreflightSummary(big, 'big.laz');
+    expect(msg).toMatch(/^big\.laz is too large to open in this browser\. Its 200\.0 million points need about /);
+    expect(msg).toContain('Convert it to COPC with PDAL or untwine');
+    expect(msg.length).toBeLessThan(420);
+    const none = decideStoragePreflight(demand, { available: true, quotaBytes: 0, usageBytes: 0 });
+    expect(storagePreflightSummary(none, 'big.laz')).toMatch(/private window/);
+    const unknown = decideStoragePreflight(demand, { available: false, reason: 'no API' });
+    expect(storagePreflightSummary(unknown, 'big.laz')).toMatch(/does not report how much storage is available/);
   });
 
   it('raises nothing when the verdict proceeds', () => {
