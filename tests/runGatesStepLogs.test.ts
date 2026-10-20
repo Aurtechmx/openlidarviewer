@@ -99,7 +99,12 @@ describe('gate step logs', () => {
   });
 
   it('the logs are git-ignored and never staged, packaged or shipped', () => {
-    const ignored = execFileSync('git', ['check-ignore', 'release/gate-steps/test_unit.log'], { cwd: ROOT, encoding: 'utf8' }).trim();
+    // The rule is read from the shipped .gitignore in a throwaway repository,
+    // so this runs in an extracted source archive (no .git) as in a checkout.
+    const repo = mkdtempSync(join(tmpdir(), 'olv-gitignore-'));
+    writeFileSync(join(repo, '.gitignore'), readFileSync(join(ROOT, '.gitignore'), 'utf8'));
+    execFileSync('git', ['init', '-q'], { cwd: repo });
+    const ignored = execFileSync('git', ['check-ignore', 'release/gate-steps/test_unit.log'], { cwd: repo, encoding: 'utf8' }).trim();
     expect(ignored).toBe('release/gate-steps/test_unit.log');
     // The source archive is copied with the generated release/ tree and every *.log excluded.
     const pkg = readFileSync(join(ROOT, 'scripts/package.sh'), 'utf8');

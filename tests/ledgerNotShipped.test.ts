@@ -123,11 +123,14 @@ describe('scripts/lint-known-limitations.mjs without the ledger', () => {
   });
 
   it('with the ledger present, runs the check in either mode (no skip notice)', () => {
+    // A minimal ledger, written here: the real one is not in the source archive,
+    // and the document under test cites no ledger id.
+    const ledger = '# Implementation ledger\n\n| Id | Area | Item | Note | Status |\n|---|---|---|---|---|\n| L01 | test | entry | none | OPEN |\n';
     for (const dotGit of [false, true]) {
       const dir = build(dotGit);
       try {
         mkdirSync(join(dir, 'docs/releases'), { recursive: true });
-        cpSync(join(ROOT, LEDGER_PATH), join(dir, LEDGER_PATH));
+        writeFileSync(join(dir, LEDGER_PATH), ledger);
         const r = run(dir, 'scripts/lint-known-limitations.mjs');
         expect(r.status, r.stderr).toBe(0);
         expect(r.stdout).not.toContain('SKIPPED');

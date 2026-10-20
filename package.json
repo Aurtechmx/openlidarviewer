@@ -157,6 +157,7 @@
     "lint:capability-manifest": "node scripts/lint-capability-manifest.mjs",
     "lint:architecture-truth": "node scripts/lint-architecture-truth.mjs",
     "verify:archive-gate": "node scripts/verify-archive-gate.mjs",
+    "verify:archive-tests": "node scripts/verify-archive-tests.mjs",
     "verify:renderer-benchmark": "node scripts/verify-renderer-benchmark.mjs",
     "lint:claims-language": "node scripts/lint-claims-language.mjs",
     "lint:archive-vocab": "node scripts/lint-archive-vocab.mjs",

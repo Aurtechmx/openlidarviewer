@@ -2094,8 +2094,8 @@ export class Viewer {
         }
         staticBuffers.push({ pos: cloud.positions, cls, flags: cloud.classificationFlags, placement });
         staticPoints += cloud.positions.length / 3;
-        // The app's resolved CRS (override applied) when wired, else the file's declared one.
-        staticSources.push({ format: cloud.sourceFormat, crs: this._exportCrsResolver?.(cloud).resolved ?? cloud.metadata?.crs });
+        // Resolved CRS (override applied) when wired, else the declared one; layerPoints reads a local PLY/OBJ's own axis.
+        staticSources.push({ format: cloud.sourceFormat, crs: this._exportCrsResolver?.(cloud).resolved ?? cloud.metadata?.crs, layerPoints: cloud.positions });
       }
     }
     // Terrain is the estimator with the most to lose from a frame it cannot
@@ -2144,9 +2144,9 @@ export class Viewer {
     // horizontal, Z elevation, and rotating once here keeps the analysis, the
     // core-cache fingerprints and the exporters correct with no changes of
     // their own. Metadata decides the axis (a format specification, else the
-    // CRS); only a mesh with no CRS is decided by detection. A frame that
-    // cannot be settled (glTF under a CRS, a Y-up mesh beside Z-up layers)
-    // declines with the reason the runner shows.
+    // CRS); only a PLY or OBJ with no CRS is decided by detection, on its own
+    // points. A frame that cannot be settled (glTF under a CRS, a Y-up layer
+    // beside Z-up layers) declines with the reason the runner shows.
     const frame = settleTerrainGatherFrame(staticSources, streamingPoints > 0, sample.positions);
     if (frame && !frame.ok) this.terrainGatherDecline = frame.reason;
     if (!frame?.ok) return null;

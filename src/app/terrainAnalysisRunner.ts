@@ -23,7 +23,7 @@ import { ProcessService } from '../process/ProcessService';
 import type { ProductId, ScanFacts } from '../process/ProcessPlan';
 import type { AuthorizationCheck } from '../process/ProcessService';
 import { yUpOriginToCanonicalZUp } from '../terrain/canonicalFrame';
-import { detectedUpAxisNote } from '../terrain/gatherUpAxis';
+import { gatherUpAxisNote } from '../terrain/gatherUpAxis';
 import type { AnalysePanel } from '../ui/AnalysePanel';
 // Shell-resident already (ExportPanel renders Export Health, main builds the
 // story inputs), so reading the Dataset Story here adds no chunk weight.
@@ -891,9 +891,9 @@ export function createTerrainAnalysisRunner(
       // and can never hit a recovered core's different ones.
       lastCommittedCore = { core, datasetId: runDatasetId, crsRevision: runCrsRevision };
       refreshDatasetStory(analysePanel);
-      // A mesh with no CRS had its up axis read from the point layout; that is
-      // stated beside whatever else the status line says about this run.
-      const upAxisNote = detectedUpAxisNote(gathered.upAxisBasis, gathered.sourceUpAxis);
+      // A rotated glTF, or a mesh whose up axis was read from the point layout,
+      // is stated beside whatever else the status line says about this run.
+      const upAxisNote = gatherUpAxisNote(gathered.upAxisBasis, gathered.sourceUpAxis);
       const status = (text: string | null): void => {
         const line = [text, upAxisNote].filter((t): t is string => t !== null).join(' ');
         if (line !== '') analysePanel.setStatus(line);

@@ -18,10 +18,12 @@
  * - A glTF or GLB under a CRS is unresolved. glTF is Y-up by specification, so
  *   its Y cannot also be a northing; every axis-dependent figure is withheld
  *   with the reason.
- * - A mesh with no CRS keeps its format rule: when the caller read the up axis
- *   from the point layout (the terrain gather) that reading is used
- *   (`detected`); otherwise glTF/GLB are Y-up by specification and PLY/OBJ are
- *   read Y-up by the app's stated rule for those formats (`explicit`).
+ * - A glTF or GLB with no CRS is Y-up by specification. A reading of the
+ *   point layout does not change that: a wall stored Y-up is still Y-up.
+ * - A PLY or OBJ with no CRS has no specified axis: when the caller read the up
+ *   axis from the point layout (the terrain gather) that reading is used
+ *   (`detected`); otherwise it is read Y-up by the app's stated rule for those
+ *   formats (`explicit`).
  *
  * Nothing here moves a coordinate. Pure: no DOM, no three.js.
  */
@@ -67,7 +69,11 @@ export interface LayerUpFrameInput {
   readonly crsInPlay?: boolean;
   /** Names the CRS in a refusal; defaults to the code or name of {@link crs}. */
   readonly crsLabel?: string;
-  /** The up axis read from the point layout, when the caller ran that reading. */
+  /**
+   * The up axis read from the point layout, when the caller ran that reading.
+   * Used only for a PLY or OBJ with no CRS; every other case has an axis from
+   * its format or its CRS.
+   */
   readonly detected?: LayerUpAxis;
 }
 
@@ -119,8 +125,9 @@ export function resolveLayerUpFrame(input: LayerUpFrameInput): LayerUpFrame {
     }
     return { ok: true, axis: 'z', basis: 'crs' };
   }
+  if (isYUpBySpec(format)) return { ok: true, axis: 'y', basis: 'specification' };
   if (input.detected) return { ok: true, axis: input.detected, basis: 'detected' };
-  return { ok: true, axis: 'y', basis: isYUpBySpec(format) ? 'specification' : 'explicit' };
+  return { ok: true, axis: 'y', basis: 'explicit' };
 }
 
 /**
