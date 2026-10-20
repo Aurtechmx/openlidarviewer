@@ -19,6 +19,10 @@ updates:
     groups:
       dev-tooling:
         dependency-type: "development"
+        # @loaders.gl/las is a development dependency, so this group took it
+        # first and moved it apart from the rest of the set below.
+        exclude-patterns:
+          - "@loaders.gl/*"
       # The loaders.gl packages must move as a set: every 4.5.x loader declares a
       # peer dependency on @loaders.gl/core ~4.4.0, so a bump that moves core on
       # its own cannot install. One grouped PR shows that conflict in a single
