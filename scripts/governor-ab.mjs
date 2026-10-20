@@ -21,6 +21,7 @@
  * validation/performance/governor-ab/<date>-<sha>-<machine>-v3-<A|B>.json (never overwritten) with the raw
  * runs, the per-criterion values and the verdict. Exit 0 on PASS, 1 on FAIL.
  */
+import './lib/confineGit.mjs';
 import { execFileSync, spawnSync } from 'node:child_process';
 import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';

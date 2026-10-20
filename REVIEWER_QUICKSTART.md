@@ -24,7 +24,7 @@ analytic ground truth and writes:
 - `benchmarks/out/metrics.md`: the evaluation table
 - `benchmarks/out/metrics.json`: the raw numbers
 - `benchmarks/out/registration_bias.{png,pdf}`: vertical-change preservation
-- `benchmarks/out/calibration.{png,pdf}`: uncertainty-band coverage
+- `benchmarks/out/calibration.{png,pdf}`: model-band coverage, nominal against measured
 
 The metrics and the figures are separable, so a missing Python environment never
 fails the numbers:
@@ -45,9 +45,11 @@ The four metrics measure the following.
   horizontal-only constraint preserves it (≈ 0 error). M1 measures the effect of
   the horizontal-only design choice in change detection.
 - M2: planar alignment recovers a known horizontal misregistration.
-- M3: over seeded noise realisations the reported stockpile ±1σ band reaches
-  empirical coverage near its nominal 0.68. The coverage is measured against a
-  known synthetic noise model; M3 does not calibrate against field data.
+- M3: over 400 seeded noise realisations the stockpile model band covers the
+  true volume in 60.5% of trials (95% Wilson interval 55.6–65.2%), below its
+  nominal 0.68, so the band is an uncalibrated surface-spread diagnostic, not a
+  confidence interval. The coverage is measured against a known synthetic noise
+  model, not field data.
 - M4: the integrity-report digest is deterministic and tamper-evident.
 
 ## 3. Run the application

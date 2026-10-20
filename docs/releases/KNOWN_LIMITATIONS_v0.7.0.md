@@ -144,6 +144,18 @@ on lattice points; which cell such a point joins is then decided by
 floating-point rounding, and a very small selection can move by a cell's worth
 under translation.
 
+Area weighting removes unequal weighting between cells; it does not make a
+cell's median equal the cell's area-average height. Where the surface varies
+inside a cell, where in the cell the points fall moves the figure: on a 16 m
+ramp (exact 2,048 m³) with four points per 2 m cell, the same number of points
+shifted toward each cell's low side gives 1,920 m³ (−6.25%), and a smooth
+density gradient also biases it
+(`tests/stockpileWithinCellSampling.test.ts`). The ± model band is an
+uncalibrated surface-spread diagnostic, not a confidence interval: its spread
+term applies a mean's standard-error form, NMAD/√n, to a cell median, and over
+400 synthetic trials it covers the true volume in 60.5% of them (95% interval
+55.6–65.2%) against a nominal 68% (`benchmarks/out/metrics.md`, M3).
+
 ## Two densities, each stating its basis
 
 Analyse reads the resident gather and the Scan Report divides the declared count
@@ -670,6 +682,14 @@ list is recognised only from its WKT or GeoTIFF model type. A WKT
 engineering CRS (ENGCRS, LOCAL_CS) is not yet classified as local and keeps
 its current handling. Reproject refuses a geocentric source or target, because
 it maps only horizontal X and Y.
+
+A geographic (degree) scan beyond ±89° latitude is refused by terrain analysis
+and everything built on its cell sizes (slope, aspect, hillshade, DEM export,
+Flow Pulse, Terrain Access) with the reason: a degree of longitude shrinks too
+fast near a pole for one representative latitude to stand for the grid.
+Reprojecting the scan to a polar projected CRS such as EPSG:3413 or EPSG:3031
+lets it run. Within ±89° the east–west scale is the ellipsoid's at the grid
+latitude.
 
 ## Exports carry the geographic refusal, not the endpoint grade
 

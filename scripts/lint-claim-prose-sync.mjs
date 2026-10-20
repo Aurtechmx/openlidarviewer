@@ -27,6 +27,7 @@
  * Exit 0 = clean; exit 1 = a contradiction (prints each).
  */
 
+import './lib/confineGit.mjs';
 import { readFileSync, existsSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { resolve, dirname } from 'node:path';

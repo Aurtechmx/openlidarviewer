@@ -32,6 +32,7 @@
  * — and the success path emits a dev-only `console.info` gated behind `?debug`.
  */
 
+import { assertGeographicLatitudeSupported } from '../ground/horizontalScale';
 import {
   computeTerrainCore,
   type TerrainCore,
@@ -215,6 +216,10 @@ export async function computeTerrainCoreAsync(
   if (signal?.aborted) {
     throw new DOMException('Terrain analysis aborted', 'AbortError');
   }
+  // A refusal is decided here, before the worker: a worker error is otherwise
+  // read as a worker failure and retried on the main thread, where a large
+  // scan's size refusal would replace the reason.
+  assertGeographicLatitudeSupported(coreParams.isGeographic, coreParams.latitudeDeg);
   const effectiveClassification = classification ?? coreParams.classification;
   // Keep classification ON the params for the fallback path (the synchronous
   // core reads coreParams.classification directly).

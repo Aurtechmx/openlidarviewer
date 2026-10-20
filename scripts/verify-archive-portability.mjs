@@ -38,6 +38,7 @@
  * release/archive-portability.json by default.
  */
 
+import './lib/confineGit.mjs';
 import { readFileSync, writeFileSync, readdirSync, existsSync, statSync, mkdirSync, rmSync, mkdtempSync } from 'node:fs';
 import { escapeRegExp } from './regex-escape.mjs';
 import { compareCodeUnits } from './lib/codeUnitOrder.mjs';

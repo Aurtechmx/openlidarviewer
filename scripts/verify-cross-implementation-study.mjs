@@ -37,6 +37,7 @@
  * Exit 0 when every manifest verifies, 1 when any is rejected, 2 on a usage,
  * read or parse error.
  */
+import './lib/confineGit.mjs';
 import { createHash } from 'node:crypto';
 import { execFileSync } from 'node:child_process';
 import { readFileSync, readdirSync, existsSync } from 'node:fs';

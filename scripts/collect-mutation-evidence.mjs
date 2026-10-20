@@ -19,6 +19,7 @@
  *     --output docs/validation/mutation-evidence.json
  */
 
+import './lib/confineGit.mjs';
 import { readFileSync, writeFileSync, mkdirSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
 import { resolve, dirname } from 'node:path';

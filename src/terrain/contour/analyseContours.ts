@@ -72,7 +72,7 @@ import {
   horizontalCellMetresXY,
   METRES_PER_DEGREE,
   metresPerDegreeLatitude,
-  metresPerDegreeLongitude,
+  metresPerDegreeLongitude, assertGeographicLatitudeSupported,
 } from '../ground/horizontalScale';
 import { alignedClasses, excludeNonGroundClasses, isNoiseClass, NOISE_CLASSES } from '../ground/classificationFilter';
 import { holdoutValidateDtm } from '../validate/holdoutRmse';
@@ -972,6 +972,7 @@ export function computeTerrainCore(
   // horizontalCellMetresXY, but one the user must SEE: away from the equator
   // the E–W cell span is overstated by 1/cos φ, skewing slope, aspect, area
   // and density. Push it into result.warnings instead of degrading silently.
+  assertGeographicLatitudeSupported(params.isGeographic, params.latitudeDeg); // beyond ±89° the degree length cannot hold across the grid
   if (params.isGeographic && (params.latitudeDeg == null || !Number.isFinite(params.latitudeDeg))) {
     warnings.push(
       'Geographic frame with latitude unknown — the east–west scale is ' +

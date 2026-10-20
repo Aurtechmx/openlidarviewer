@@ -36,6 +36,7 @@
  * pin available when a container is not.
  */
 
+import './lib/confineGit.mjs';
 import { execFileSync } from 'node:child_process';
 import { readFileSync, readdirSync } from 'node:fs';
 import { homedir, tmpdir } from 'node:os';

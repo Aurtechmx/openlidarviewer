@@ -27,6 +27,9 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+# git answers for this project only, never for a repository above it
+# (see scripts/lib/confineGit.mjs).
+export GIT_CEILING_DIRECTORIES="$(cd "$ROOT/.." && pwd -P)${GIT_CEILING_DIRECTORIES:+:$GIT_CEILING_DIRECTORIES}"
 cd "$ROOT"
 
 # `--source-only` is stripped here, before the positional OUT_DIR is read —

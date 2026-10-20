@@ -22,6 +22,7 @@
  *
  * Exit 0 on success, 1 on a stale --check, 2 on a read, parse or git error.
  */
+import './lib/confineGit.mjs';
 import { readFileSync, writeFileSync, readdirSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';

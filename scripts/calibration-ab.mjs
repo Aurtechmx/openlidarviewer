@@ -17,6 +17,7 @@
  * validation/performance/render-budget-calibration/<date>-<sha>-<machine>-v1-<key>.json
  * (never overwritten), PASS or FAIL. Exit 0 on PASS, 1 on FAIL.
  */
+import './lib/confineGit.mjs';
 import { execFileSync, spawnSync } from 'node:child_process';
 import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';

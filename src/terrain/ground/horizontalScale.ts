@@ -51,36 +51,72 @@ export function metresPerDegreeLatitude(latitudeDeg: number | null | undefined):
  * Metres per degree of LONGITUDE (east–west) on the WGS84 ellipsoid at
  * geodetic latitude φ, from the standard series
  * `111412.84 cos φ − 93.5 cos 3φ + 0.118 cos 5φ`
- * (≈ 111 319 m at the equator). φ is clamped to ±89° like {@link cosLatitude}
- * so the scale never collapses to zero. A null or non-finite latitude returns
- * the mean {@link METRES_PER_DEGREE}, the isotropic fallback (no E–W
- * correction) the per-axis helpers have always used when φ is unknown.
+ * (≈ 111 319 m at the equator, 194.9 m at 89.9°). It is the scale at φ itself:
+ * φ is limited only to the valid range ±90°, never moved to another latitude.
+ * Products that divide by a cell's east–west size check the latitude against
+ * {@link MAX_GEOGRAPHIC_LATITUDE_DEG} first ({@link geographicLatitudeRefusal}).
+ * A null or non-finite latitude returns the mean {@link METRES_PER_DEGREE},
+ * the isotropic fallback (no E–W correction) used when φ is unknown.
  */
 export function metresPerDegreeLongitude(latitudeDeg: number | null | undefined): number {
   if (latitudeDeg == null || !Number.isFinite(latitudeDeg)) return METRES_PER_DEGREE;
-  const lat = Math.max(-MAX_ABS_LATITUDE_DEG, Math.min(MAX_ABS_LATITUDE_DEG, latitudeDeg));
-  const phi = (lat * Math.PI) / 180;
+  const phi = (Math.max(-90, Math.min(90, latitudeDeg)) * Math.PI) / 180;
   return 111_412.84 * Math.cos(phi) - 93.5 * Math.cos(3 * phi) + 0.118 * Math.cos(5 * phi);
 }
 
 /**
- * Latitude clamp for the cos φ east–west scale. Beyond ~±89° a degree of
- * longitude collapses toward zero and the plate-carrée cell model this module
- * implements stops being meaningful (a pole-crossing scan needs a projected
- * CRS, not a cos-φ correction). Clamping keeps the E–W scale finite and
- * non-zero — cos 89° ≈ 0.0175 — instead of dividing derivatives by ~0.
+ * Highest absolute latitude at which a geographic grid's slope, aspect,
+ * hillshade, cell sizes and the products built on them are computed. Above it
+ * a degree of longitude shrinks so fast across a footprint that one
+ * representative latitude cannot stand for the grid (at 89.9° the E–W scale
+ * changes by 1 % over 0.0006° of latitude), and the scan needs a polar
+ * projected CRS instead.
  */
-const MAX_ABS_LATITUDE_DEG = 89;
+export const MAX_GEOGRAPHIC_LATITUDE_DEG = 89;
+
+/** A geographic grid beyond {@link MAX_GEOGRAPHIC_LATITUDE_DEG}: its metric derivatives are withheld. */
+export class GeographicLatitudeError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'GeographicLatitudeError';
+  }
+}
 
 /**
- * cos(latitude) for the east–west metres-per-degree scale. Non-finite
- * latitudes return 1 (no correction — the honest isotropic fallback), so a
- * caller that cannot resolve a representative latitude degrades gracefully
- * instead of guessing one (or poisoning the scale with NaN).
+ * Why metric derivatives of a geographic grid at `latitudeDeg` are withheld, or
+ * null when the latitude is within the supported domain (or unknown, which has
+ * its own isotropic fallback and warning).
+ */
+export function geographicLatitudeRefusal(latitudeDeg: number | null | undefined): string | null {
+  if (latitudeDeg == null || !Number.isFinite(latitudeDeg)) return null;
+  if (Math.abs(latitudeDeg) <= MAX_GEOGRAPHIC_LATITUDE_DEG) return null;
+  return (
+    `This scan's coordinates are geographic (degrees) at latitude ${latitudeDeg.toFixed(3)}°, beyond the ±${MAX_GEOGRAPHIC_LATITUDE_DEG}° ` +
+    'within which a degree of longitude can be converted to metres for one representative latitude. Slope, aspect, ' +
+    'cell sizes and the products built on them are withheld. Reproject the scan to a polar projected CRS ' +
+    '(for example EPSG:3413 or EPSG:3031) and open it again.'
+  );
+}
+
+/**
+ * Throw {@link GeographicLatitudeError} for a geographic grid beyond the
+ * supported latitude. Called before any work that divides by a cell size.
+ */
+export function assertGeographicLatitudeSupported(isGeographic: boolean | undefined, latitudeDeg: number | null | undefined): void {
+  const refusal = isGeographic ? geographicLatitudeRefusal(latitudeDeg) : null;
+  if (refusal) throw new GeographicLatitudeError(refusal);
+}
+
+/**
+ * cos(latitude) for the east–west metres-per-degree scale, at φ itself (limited
+ * only to ±90°). Non-finite latitudes return 1 (no correction — the honest
+ * isotropic fallback), so a caller that cannot resolve a representative
+ * latitude degrades gracefully instead of guessing one (or poisoning the scale
+ * with NaN).
  */
 export function cosLatitude(latitudeDeg: number | null | undefined): number {
   if (latitudeDeg == null || !Number.isFinite(latitudeDeg)) return 1;
-  const lat = Math.max(-MAX_ABS_LATITUDE_DEG, Math.min(MAX_ABS_LATITUDE_DEG, latitudeDeg));
+  const lat = Math.max(-90, Math.min(90, latitudeDeg));
   return Math.cos((lat * Math.PI) / 180);
 }
 
@@ -136,9 +172,12 @@ export function horizontalCellMetresXY(
 ): CellMetresXY {
   if (isGeographic) {
     // Ellipsoidal degree lengths at the grid latitude: the meridional degree
-    // for N–S, the parallel degree for E–W (clamped at ±89° so it never
-    // collapses to 0). A non-finite latitude falls back to the isotropic mean
-    // instead of poisoning every derivative with NaN.
+    // for N–S, the parallel degree for E–W. Beyond the supported latitude no
+    // length is returned: substituting another latitude would change every
+    // slope. A non-finite latitude falls back to the isotropic mean instead of
+    // poisoning every derivative with NaN.
+    const refusal = geographicLatitudeRefusal(latitudeDeg);
+    if (refusal) throw new GeographicLatitudeError(refusal);
     return {
       x: cellSizeM * metresPerDegreeLongitude(latitudeDeg),
       y: cellSizeM * metresPerDegreeLatitude(latitudeDeg),

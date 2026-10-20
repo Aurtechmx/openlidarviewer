@@ -103,7 +103,7 @@ describe('stockpileAreaGrid — analytic shapes', () => {
 });
 
 describe('stockpileAreaGrid — the anti-bias property', () => {
-  it('is invariant to a density gradient (the whole point of area weighting)', () => {
+  it('is invariant to a density difference between cells on a surface flat within each cell (see stockpileWithinCellSampling.test.ts for what it is not)', () => {
     const S = 10, h = 4;
     const uniform = sample(S, 40, () => h);
     // The same flat surface, but 10× denser on the right half.

@@ -42,6 +42,7 @@
  * Exit 0 when every run completed and the comparison files were written, 1 when
  * a run could not be launched, 2 on a usage, read or setup error.
  */
+import './lib/confineGit.mjs';
 import { readFileSync, writeFileSync, mkdirSync, rmSync, existsSync, cpSync, statSync, readdirSync } from 'node:fs';
 import { execFileSync, spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';

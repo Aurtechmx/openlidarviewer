@@ -13,6 +13,7 @@
  * Runs headed Chromium through Playwright against a Vite dev server of the
  * benchmark page (scripts/bench/observatory-o11/), never the app build.
  */
+import './lib/confineGit.mjs';
 import { execFileSync } from 'node:child_process';
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { release } from 'node:os';
