@@ -126,3 +126,20 @@ describe('lint-unsafe-html — wider sinks and multi-line values', () => {
     expect(offenders).toEqual([]);
   });
 });
+
+describe('file-header text reaching a markup sink', () => {
+  it.each([
+    'el.innerHTML = vlr.description;',
+    'el.innerHTML = `<b>${header.comments.join()}</b>`;',
+    'el.innerHTML = node.name;',
+    'el.innerHTML = layer.name;',
+    'el.innerHTML = source.url;',
+    'el.innerHTML = streamUrl;',
+  ])('flags %s', (code) => {
+    expect(scanSource(code).length).toBe(1);
+  });
+
+  it('leaves a constant icon alone', () => {
+    expect(scanSource("el.innerHTML = '<svg></svg>';")).toEqual([]);
+  });
+});

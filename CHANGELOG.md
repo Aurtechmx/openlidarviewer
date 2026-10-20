@@ -61,6 +61,7 @@ The format is based on Keep a Changelog and the project follows Semantic Version
 
 ### Fixed
 
+- An E57 file can no longer make the reader allocate columns far beyond its size. Integer fields declared with a zero bit width add nothing to the minimum record size yet each decoded to 8 bytes per record, so a 64 MB file with 100 such fields asked for about 51 GB. A point prototype is now limited to 64 fields, a record whose fields hold no stored bits is refused, and the decoded columns are limited to 4 GB before any is allocated. The E57 XML depth limit is reported as a malformed file, like the other XML limits, and attribute text is read in linear time.
 - In Safari, a file a loader refuses shows the loader's reason, such as the Draco refusal, instead of the generic decoding-failure message. The parse worker could hold two copies of the error class, and the copy it checked did not match the one the loader threw.
 - Contours drawn over a georeferenced PLY or OBJ are no longer rotated and mirrored; the overlay follows the terrain gather's up axis.
 - The Scan Report, PDF scan metadata, feature candidates and acquisition-coverage fit read each layer's up axis, so a PLY under a CRS reports footprint X by Y and height as the Z span. A glTF under a CRS withholds those figures.

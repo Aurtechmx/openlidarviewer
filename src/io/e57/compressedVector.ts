@@ -15,6 +15,7 @@
 import type { E57Field } from './schema';
 import { physicalToLogical } from './depage';
 import { validateDeclaredPointCount } from '../validateCount';
+import { LoadError } from '../loadErrors';
 import { makePrng, pickInBucket, STRIDE_SAMPLE_SEED } from '../strideSample';
 
 /** Decoded point data — one Float64 column per prototype field, by field name. */
@@ -117,6 +118,21 @@ export interface DecodeCompressedVectorOptions {
 }
 
 /**
+ * Most fields a CompressedVector prototype may declare. The E57 point record
+ * standard names about two dozen; a prototype far beyond that is not a scan.
+ */
+export const MAX_E57_PROTOTYPE_FIELDS = 64;
+
+/**
+ * Most bytes the decoded columns of one CompressedVector may take. Each kept
+ * field becomes one Float64Array, so the total is 8 bytes per value per field.
+ * The record count is bounded by the section's bytes at the prototype's
+ * minimal record size, but integer fields declared with a zero bit width add
+ * nothing to that size and still cost 8 bytes per record each.
+ */
+export const MAX_E57_COLUMN_BYTES = 4 * 1024 ** 3;
+
+/**
  * Decode a scan's CompressedVector into per-field columns.
  *
  * With `options.stride > 1` the columns hold a stratified sample of the records
@@ -175,6 +191,30 @@ export function decodeCompressedVector(
     minBytesPerRecord,
     'E57 CompressedVector',
   );
+
+  if (prototype.length > MAX_E57_PROTOTYPE_FIELDS) {
+    throw new LoadError(
+      'malformed-file',
+      `E57 file is malformed or too complex: a point prototype declares ${prototype.length} fields, ` +
+        `more than the ${MAX_E57_PROTOTYPE_FIELDS} this reader accepts.`,
+    );
+  }
+  // A record whose every field is zero bits wide carries no data at all.
+  if (count > 0 && minBitsPerRecord === 0) {
+    throw new LoadError('malformed-file', 'E57 file is malformed: its point records declare no stored bits.');
+  }
+  // The columns about to be allocated, before any of them is.
+  const outCount = stride === 1 ? count : Math.ceil(count / stride);
+  // The predicate is asked once per field; the decode below reuses the answer.
+  const kept = prototype.map((f) => !keepField || keepField(f.name));
+  const keptFields = kept.filter(Boolean).length;
+  if (outCount * keptFields * 8 > MAX_E57_COLUMN_BYTES) {
+    throw new LoadError(
+      'memory-constraint',
+      `E57 point data would need ${Math.ceil((outCount * keptFields * 8) / 1024 ** 3)} GB of columns ` +
+        `(${outCount} records x ${keptFields} fields), more than this reader allocates.`,
+    );
+  }
 
   // Collect each field's per-packet bytestream chunks.
   const fieldCount = prototype.length;
@@ -238,7 +278,7 @@ export function decodeCompressedVector(
     if (request && structured) {
       decodeStructuredField(concat(chunks[f]), field, count, stride, request, structured.sink);
     }
-    if (keepField && !keepField(field.name)) return; // unconsumed column — skip decode
+    if (!kept[f]) return; // unconsumed column — skip decode
     columns[field.name] = decodeField(concat(chunks[f]), field, count, stride);
   });
   return columns;

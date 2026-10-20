@@ -5,7 +5,7 @@
  */
 
 import { describe, it, expect } from 'vitest';
-import { mkdirSync, mkdtempSync, readFileSync, readdirSync, symlinkSync, writeFileSync, existsSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, symlinkSync, writeFileSync, existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { execFileSync } from 'node:child_process';
@@ -102,10 +102,14 @@ describe('gate step logs', () => {
     // The rule is read from the shipped .gitignore in a throwaway repository,
     // so this runs in an extracted source archive (no .git) as in a checkout.
     const repo = mkdtempSync(join(tmpdir(), 'olv-gitignore-'));
-    writeFileSync(join(repo, '.gitignore'), readFileSync(join(ROOT, '.gitignore'), 'utf8'));
-    execFileSync('git', ['init', '-q'], { cwd: repo });
-    const ignored = execFileSync('git', ['check-ignore', 'release/gate-steps/test_unit.log'], { cwd: repo, encoding: 'utf8' }).trim();
-    expect(ignored).toBe('release/gate-steps/test_unit.log');
+    try {
+      writeFileSync(join(repo, '.gitignore'), readFileSync(join(ROOT, '.gitignore'), 'utf8'));
+      execFileSync('git', ['init', '-q'], { cwd: repo });
+      const ignored = execFileSync('git', ['check-ignore', 'release/gate-steps/test_unit.log'], { cwd: repo, encoding: 'utf8' }).trim();
+      expect(ignored).toBe('release/gate-steps/test_unit.log');
+    } finally {
+      rmSync(repo, { recursive: true, force: true });
+    }
     // The source archive is copied with the generated release/ tree and every *.log excluded.
     const pkg = readFileSync(join(ROOT, 'scripts/package.sh'), 'utf8');
     expect(pkg).toContain("--exclude '/release/' --exclude '*.log'");

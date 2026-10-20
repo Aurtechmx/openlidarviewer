@@ -53,6 +53,15 @@ const USER_DATA = [
   /\.caption\b/i,
   /\.crs\b/,
   /metadata\.crs/i,
+  // Text read from file headers and documents: LAS VLR descriptions, PLY and
+  // PCD comments, glTF and E57 node names, remote and source URLs.
+  /\bvlrs?\b/i,
+  /\.description\b/,
+  /\bcomments?\b/i,
+  /\bnode\.name\b/,
+  /\blayer\.name\b/,
+  /\b(source|stream|remote)Url\b/i,
+  /\.url\b/,
 ];
 
 /**

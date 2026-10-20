@@ -653,7 +653,9 @@ jobs:
           - { bucket: terrain, shard: "2/2" }
           - { bucket: slow, shard: "1/2" }
           - { bucket: slow, shard: "2/2" }
-          - { bucket: export, shard: "1/1" }
+          # This shard installs from the archive's own lockfile instead of
+          # borrowing the checkout's node_modules, so the lockfile is tested too.
+          - { bucket: export, shard: "1/1", install: true }
           - { bucket: ui, shard: "1/1" }
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -665,7 +667,7 @@ jobs:
           cache: npm
       - run: npm ci --ignore-scripts
       - name: Test bucket in the published tree — ${{ matrix.bucket }} (shard ${{ matrix.shard }})
-        run: npm run verify:archive-tests -- ${{ matrix.bucket }} -- --shard=${{ matrix.shard }} --reporter=dot
+        run: npm run verify:archive-tests -- ${{ matrix.install && '--install' || '' }} ${{ matrix.bucket }} -- --shard=${{ matrix.shard }} --reporter=dot
 
   ci-green:
     runs-on: ubuntu-latest

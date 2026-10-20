@@ -62,18 +62,18 @@ export function parseXml(source: string): XmlNode {
       skipSpace();
       const c = source[i];
       if (i >= n || c === '>' || c === '/') break;
-      let key = '';
-      while (i < n && !isSpace(source[i]) && !'=>/'.includes(source[i])) {
-        key += source[i++];
-      }
+      const keyStart = i;
+      while (i < n && !isSpace(source[i]) && !'=>/'.includes(source[i])) i++;
+      const key = source.slice(keyStart, i);
       skipSpace();
       if (source[i] === '=') {
         i++;
         skipSpace();
         const quote = source[i++];
-        let value = '';
-        while (i < n && source[i] !== quote) value += source[i++];
-        i++; // closing quote
+        const close = quote === undefined ? -1 : source.indexOf(quote, i);
+        const end = close === -1 ? n : close;
+        const value = source.slice(i, end);
+        i = end + 1; // closing quote
         attrs[key] = value;
       } else {
         attrs[key] = '';
@@ -93,7 +93,12 @@ export function parseXml(source: string): XmlNode {
   // into a clear error instead of exhausting the call stack.
   let depth = 0;
   const parseElement = (): XmlNode => {
-    if (++depth > MAX_XML_DEPTH) throw new Error(`Invalid XML: nesting deeper than ${MAX_XML_DEPTH} levels.`);
+    if (++depth > MAX_XML_DEPTH) {
+      throw new LoadError(
+        'malformed-file',
+        `E57 file is malformed or too complex: its XML section nests deeper than ${MAX_XML_DEPTH} levels.`,
+      );
+    }
     if (++nodeCount > MAX_XML_NODES) {
       throw new LoadError(
         'malformed-file',
