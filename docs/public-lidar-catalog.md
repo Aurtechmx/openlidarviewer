@@ -35,7 +35,7 @@ to any OpenLiDARViewer-operated server. The lazy-loaded client lives in
 
 ## Datasets in the curated list
 
-The shipped list currently holds 12 entries. Two European national programmes
+The shipped list currently holds 6 entries. Two European national programmes
 come from FLAI's Open LiDAR Data (Switzerland's swissSURFACE3D and Slovenia's
 GURS, each on a verified open licence) on a public EU object-store bucket. The US datasets
 (San Francisco, Los Angeles, Denver Metro, Grand Canyon) sit on the USGS and Hobu

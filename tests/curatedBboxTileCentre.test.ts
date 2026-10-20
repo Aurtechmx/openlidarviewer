@@ -25,8 +25,6 @@ const TILE_EXTENTS: Record<string, readonly [number, number, number, number]> = 
   'flai-ch-swisssurface3d-2022': [2_485_000, 1_109_000, 2_486_000, 1_110_000],
   // GURS tile GKOT_433_100: 1 km square, lower-left corner in km.
   'flai-si-clss-2023': [433_000, 100_000, 434_000, 101_000],
-  // boundsConforming from the EPT manifest.
-  'golden-gate-ca': [-13_695_469, 4_498_166, -13_610_476, 4_633_230],
 };
 
 describe('curated bbox contains the projected tile centre', () => {

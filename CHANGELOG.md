@@ -4,7 +4,7 @@ The format is based on Keep a Changelog and the project follows Semantic Version
 
 ## [Unreleased]
 
-## [0.7.0] - 2026-10-19
+## [0.7.0] - 2026-10-20
 
 ### Added
 
@@ -32,6 +32,7 @@ The format is based on Keep a Changelog and the project follows Semantic Version
 
 ### Changed
 
+- The curated dataset list holds six entries instead of twelve. Dropped: the 2010 San Francisco Coast and Golden Gate surveys, whose extents are mostly open water; Los Angeles 2016, superseded by Los Angeles block 2; and the second and third Denver DRCOG and the second Grand Canyon entries, which duplicated a denser one. All six were re-checked on 2026-10-19 (range request, CORS from the app origin, first data tile) and carry that date. The credits page states that sample data comes with no warranty and can be withdrawn by its provider.
 - The v0.7 implementation ledger and its generated status table are no longer in the source archive; they stay in the repository. lint:known-limitations and lint:v070-status skip with a printed notice when run from an archive, and still fail in a git checkout when the ledger is missing.
 - The georeferenced orthographic PNG (PNG + .pgw + .prj) now has transparent no-data: pixels with no points have alpha 0 and pixels with points have alpha 255, with no partly transparent pixels. The PNG carries an `olv:nodata` text chunk that says so. The world file, the raster size and the colours of fully covered pixels are unchanged; a pixel at least half covered is written opaque with its point colour. Screen rendering and every other snapshot or export stay opaque.
 - The Data › Classes and Analyse › Terrain pages use the View panel's chips, section labels, rows and notes. The header Back shows only its arrow where the next crumb already names the page, and the left panel's card edge sits on its scroller, so content no longer runs under the Results bar or the page title.
