@@ -27,10 +27,10 @@ only the direct entry points.
 | Package | Declared range | Resolved | License | Upstream |
 | --- | --- | --- | --- | --- |
 | three | ^0.186.1 | 0.186.1 | MIT | https://github.com/mrdoob/three.js |
-| @loaders.gl/core | ^4.5.2 | 4.5.2 | MIT | https://github.com/visgl/loaders.gl |
-| @loaders.gl/gltf | ^4.5.2 | 4.5.2 | MIT | https://github.com/visgl/loaders.gl |
-| @loaders.gl/obj | ^4.5.2 | 4.5.2 | MIT | https://github.com/visgl/loaders.gl |
-| @loaders.gl/ply | ^4.5.2 | 4.5.2 | MIT | https://github.com/visgl/loaders.gl |
+| @loaders.gl/core | ^4.5.4 | 4.5.4 | MIT | https://github.com/visgl/loaders.gl |
+| @loaders.gl/gltf | ^4.5.4 | 4.5.4 | MIT | https://github.com/visgl/loaders.gl |
+| @loaders.gl/obj | ^4.5.4 | 4.5.4 | MIT | https://github.com/visgl/loaders.gl |
+| @loaders.gl/ply | ^4.5.4 | 4.5.4 | MIT | https://github.com/visgl/loaders.gl |
 | laz-perf | ^0.0.7 | 0.0.7 | Apache-2.0 | https://github.com/hobuinc/laz-perf |
 | pdf-lib | ^1.17.1 | 1.17.1 | MIT | https://github.com/Hopding/pdf-lib |
 | proj4 | ^2.22.0 | 2.22.0 | MIT | https://github.com/proj4js/proj4js |
@@ -145,7 +145,7 @@ here for transparency.
 | @stryker-mutator/core | ^10.0.0 | 10.0.0 | Apache-2.0 | https://github.com/stryker-mutator/stryker-js |
 | @stryker-mutator/vitest-runner | ^10.0.0 | 10.0.0 | Apache-2.0 | https://github.com/stryker-mutator/stryker-js |
 | @types/proj4 | ^2.19.0 | 2.19.0 | MIT | https://github.com/DefinitelyTyped/DefinitelyTyped |
-| @loaders.gl/las | ^4.5.2 | 4.5.2 | MIT | https://github.com/visgl/loaders.gl |
+| @loaders.gl/las | ^4.5.4 | 4.5.4 | MIT | https://github.com/visgl/loaders.gl |
 | @axe-core/playwright | 4.13.0 | 4.13.0 | MPL-2.0 | https://github.com/dequelabs/axe-core-npm |
 
 ## License texts
@@ -400,7 +400,7 @@ Licence: OFL-1.1. Text: T2.
 
 - Copyright 2020 The JetBrains Mono Project Authors (https://github.com/JetBrains/JetBrainsMono) JetBrainsMono-Italic[wght].ttf: Copyright 2020 The JetBrains Mono Project Authors (https://github.com/JetBrains/JetBrainsMono)
 
-#### @loaders.gl/core 4.5.2
+#### @loaders.gl/core 4.5.4
 
 Licence: MIT. Text: T3.
 
@@ -408,7 +408,7 @@ Licence: MIT. Text: T3.
 - Copyright (c) 2015 Uber Technologies, Inc.
 - Copyright 2011-2018 CesiumJS Contributors
 
-#### @loaders.gl/draco 4.5.2
+#### @loaders.gl/draco 4.5.4
 
 Licence: MIT. Text: T3.
 
@@ -416,7 +416,7 @@ Licence: MIT. Text: T3.
 - Copyright (c) 2015 Uber Technologies, Inc.
 - Copyright 2011-2018 CesiumJS Contributors
 
-#### @loaders.gl/gltf 4.5.2
+#### @loaders.gl/gltf 4.5.4
 
 Licence: MIT. Text: T3.
 
@@ -424,7 +424,7 @@ Licence: MIT. Text: T3.
 - Copyright (c) 2015 Uber Technologies, Inc.
 - Copyright 2011-2018 CesiumJS Contributors
 
-#### @loaders.gl/images 4.5.2
+#### @loaders.gl/images 4.5.4
 
 Licence: MIT. Text: T3.
 
@@ -432,7 +432,7 @@ Licence: MIT. Text: T3.
 - Copyright (c) 2015 Uber Technologies, Inc.
 - Copyright 2011-2018 CesiumJS Contributors
 
-#### @loaders.gl/loader-utils 4.5.2
+#### @loaders.gl/loader-utils 4.5.4
 
 Licence: MIT. Text: T3.
 
@@ -440,7 +440,7 @@ Licence: MIT. Text: T3.
 - Copyright (c) 2015 Uber Technologies, Inc.
 - Copyright 2011-2018 CesiumJS Contributors
 
-#### @loaders.gl/obj 4.5.2
+#### @loaders.gl/obj 4.5.4
 
 Licence: MIT. Text: T3.
 
@@ -448,7 +448,7 @@ Licence: MIT. Text: T3.
 - Copyright (c) 2015 Uber Technologies, Inc.
 - Copyright 2011-2018 CesiumJS Contributors
 
-#### @loaders.gl/ply 4.5.2
+#### @loaders.gl/ply 4.5.4
 
 Licence: MIT. Text: T3.
 
@@ -456,7 +456,7 @@ Licence: MIT. Text: T3.
 - Copyright (c) 2015 Uber Technologies, Inc.
 - Copyright 2011-2018 CesiumJS Contributors
 
-#### @loaders.gl/schema 4.5.1
+#### @loaders.gl/schema 4.5.4
 
 Licence: MIT. Text: T3.
 
@@ -464,7 +464,7 @@ Licence: MIT. Text: T3.
 - Copyright (c) 2015 Uber Technologies, Inc.
 - Copyright 2011-2018 CesiumJS Contributors
 
-#### @loaders.gl/schema-utils 4.5.2
+#### @loaders.gl/schema-utils 4.5.4
 
 Licence: MIT. Text: T3.
 
@@ -472,7 +472,7 @@ Licence: MIT. Text: T3.
 - Copyright (c) 2015 Uber Technologies, Inc.
 - Copyright 2011-2018 CesiumJS Contributors
 
-#### @loaders.gl/textures 4.5.2
+#### @loaders.gl/textures 4.5.4
 
 Licence: MIT. Text: T3.
 
@@ -480,7 +480,7 @@ Licence: MIT. Text: T3.
 - Copyright (c) 2015 Uber Technologies, Inc.
 - Copyright 2011-2018 CesiumJS Contributors
 
-#### @loaders.gl/worker-utils 4.5.2
+#### @loaders.gl/worker-utils 4.5.4
 
 Licence: MIT. Text: T3.
 
@@ -863,7 +863,7 @@ OTHER DEALINGS IN THE FONT SOFTWARE.
 
 #### T3: MIT
 
-Applies to: @loaders.gl/core 4.5.2, @loaders.gl/draco 4.5.2, @loaders.gl/gltf 4.5.2, @loaders.gl/images 4.5.2, @loaders.gl/loader-utils 4.5.2, @loaders.gl/obj 4.5.2, @loaders.gl/ply 4.5.2, @loaders.gl/schema 4.5.1, @loaders.gl/schema-utils 4.5.2, @loaders.gl/textures 4.5.2, @loaders.gl/worker-utils 4.5.2.
+Applies to: @loaders.gl/core 4.5.4, @loaders.gl/draco 4.5.4, @loaders.gl/gltf 4.5.4, @loaders.gl/images 4.5.4, @loaders.gl/loader-utils 4.5.4, @loaders.gl/obj 4.5.4, @loaders.gl/ply 4.5.4, @loaders.gl/schema 4.5.4, @loaders.gl/schema-utils 4.5.4, @loaders.gl/textures 4.5.4, @loaders.gl/worker-utils 4.5.4.
 
 ```
 loaders.gl is licensed under the MIT license

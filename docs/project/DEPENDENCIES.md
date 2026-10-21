@@ -50,10 +50,10 @@ These ship in the deploy archive.
 |---|---|---|---|
 | @fontsource-variable/inter | ^5.3.0 | 5.3.0 | OFL-1.1 |
 | @fontsource/jetbrains-mono | ^5.3.0 | 5.3.0 | OFL-1.1 |
-| @loaders.gl/core | ^4.5.2 | 4.5.2 | MIT |
-| @loaders.gl/gltf | ^4.5.2 | 4.5.2 | MIT |
-| @loaders.gl/obj | ^4.5.2 | 4.5.2 | MIT |
-| @loaders.gl/ply | ^4.5.2 | 4.5.2 | MIT |
+| @loaders.gl/core | ^4.5.4 | 4.5.4 | MIT |
+| @loaders.gl/gltf | ^4.5.4 | 4.5.4 | MIT |
+| @loaders.gl/obj | ^4.5.4 | 4.5.4 | MIT |
+| @loaders.gl/ply | ^4.5.4 | 4.5.4 | MIT |
 | laz-perf | ^0.0.7 | 0.0.7 | Apache-2.0 |
 | pdf-lib | ^1.17.1 | 1.17.1 | MIT |
 | proj4 | ^2.22.0 | 2.22.0 | MIT |
@@ -66,7 +66,7 @@ Build, test, docs, and mutation tooling. None reaches the deployed app.
 | Package | Declared range | Resolved | License |
 |---|---|---|---|
 | @axe-core/playwright | 4.13.0 | 4.13.0 | MPL-2.0 |
-| @loaders.gl/las | ^4.5.2 | 4.5.2 | MIT |
+| @loaders.gl/las | ^4.5.4 | 4.5.4 | MIT |
 | @playwright/test | ^1.63.0 | 1.63.0 | Apache-2.0 |
 | @stryker-mutator/core | ^10.0.0 | 10.0.0 | Apache-2.0 |
 | @stryker-mutator/vitest-runner | ^10.0.0 | 10.0.0 | Apache-2.0 |
