@@ -653,3 +653,17 @@ describe('provenance consistency — un-georeferenced (Preview) run', () => {
     expect(geojson.metadata.crsKnown).toBe(false);
   });
 });
+
+describe('DXF provenance comments stay on one line', () => {
+  it('a source name with line breaks cannot add DXF group codes', () => {
+    const forged = 'scan\n0\nLINE\n8\n0';
+    const prov = buildExportProvenance(readyResult(), { ...OPTS, basename: forged });
+    const dxf = serializeContours(contourModel('EPSG:32610', 'EPSG:5703'), 'dxf', { basename: forged, provenance: prov }).content;
+    const lines = dxf.split(/\r?\n/);
+    for (let i = 0; i < lines.length - 1; i += 2) {
+      if (lines[i].trim() === '999') expect(lines[i + 1]).not.toMatch(/^(0|LINE|8)$/);
+    }
+    expect(dxf).not.toMatch(/\n0\r?\nLINE\r?\n8\r?\n0\r?\n/);
+    expect(dxf).toContain('scan 0 LINE 8 0');
+  });
+});
