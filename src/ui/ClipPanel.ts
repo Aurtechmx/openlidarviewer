@@ -16,6 +16,8 @@ import type { ClipBox, ClipMode } from '../render/clip/clipBox';
 import type { BoxBounds } from '../render/measure/geometry';
 import { setClipScope } from '../render/clip/clipScope';
 
+export { fitBoundsInProject } from '../render/clip/fitBoundsInProject';
+
 export interface ClipPanelCallbacks {
   /** Apply the clip (or `null`/disabled to clear it) to the viewer. */
   onApply: (clip: ClipBox | null) => void;
@@ -54,6 +56,9 @@ export class ClipPanel {
   private readonly _enableBox: HTMLInputElement;
   private readonly _modeBtns = new Map<ClipMode, HTMLButtonElement>();
   private readonly _readout: HTMLElement;
+  /** Inline message for numeric edits that were not applied. */
+  private readonly _error: HTMLElement;
+  private readonly _fieldErrors = new Map<Axis, string>();
   private readonly _listeners = new Set<() => void>();
   private readonly _advanced: HTMLElement;
   private readonly _draw: HTMLButtonElement;
@@ -102,8 +107,8 @@ export class ClipPanel {
     // Extents grid
     const grid = el('div', { className: 'olv-clip-grid' });
     for (const { axis, label } of AXES) {
-      const mn = this._numInput((v) => { this._min[axis] = v; this._apply(); });
-      const mx = this._numInput((v) => { this._max[axis] = v; this._apply(); });
+      const mn = this._numInput(axis);
+      const mx = this._numInput(axis);
       this._minInputs[axis] = mn;
       this._maxInputs[axis] = mx;
       mn.setAttribute('aria-label', `${label} min`);
@@ -147,6 +152,8 @@ export class ClipPanel {
     this._readout = el('p', { className: 'olv-export-fullres-hint', text: '' });
     this._readout.setAttribute('role', 'status');
     this._readout.setAttribute('aria-live', 'polite');
+    this._error = el('p', { className: 'olv-export-fullres-hint olv-clip-error', text: '' });
+    this._error.setAttribute('role', 'alert');
 
     const body = el('div', { className: 'olv-clip-body' }, [
       this._draw,
@@ -155,6 +162,7 @@ export class ClipPanel {
       modeRow,
       actions,
       this._readout,
+      this._error,
       advanced,
     ]);
 
@@ -304,14 +312,38 @@ export class ClipPanel {
     this._emit();
   }
 
-  private _numInput(onChange: (v: number) => void): HTMLInputElement {
+  private _numInput(axis: Axis): HTMLInputElement {
     const input = el('input', { className: 'olv-bc-input olv-clip-num', type: 'number' }) as HTMLInputElement;
     input.step = 'any';
-    input.addEventListener('input', () => {
-      const v = Number.parseFloat(input.value);
-      if (Number.isFinite(v)) onChange(v);
-    });
+    input.addEventListener('input', () => this._editAxis(axis));
     return input;
+  }
+
+  /**
+   * Take a numeric edit on one axis. Both of the axis's fields are read
+   * together: the pair is applied only when each is a number and min is not
+   * above max. Otherwise the clip keeps its last valid bounds and the message
+   * says so, instead of applying a box that keeps nothing.
+   */
+  private _editAxis(axis: Axis): void {
+    const lo = Number.parseFloat(this._minInputs[axis].value);
+    const hi = Number.parseFloat(this._maxInputs[axis].value);
+    const name = AXES[axis].label;
+    let problem: string | null = null;
+    if (!Number.isFinite(lo) || !Number.isFinite(hi)) problem = `${name} min or max is empty or not a number.`;
+    else if (lo > hi) problem = `${name} min is above ${name} max.`;
+    for (const input of [this._minInputs[axis], this._maxInputs[axis]]) {
+      input.setAttribute('aria-invalid', problem ? 'true' : 'false');
+    }
+    if (problem) {
+      this._fieldErrors.set(axis, `${problem} Not applied; the clip keeps ${name} ${fmt(this._min[axis])} to ${fmt(this._max[axis])}.`);
+    } else {
+      this._fieldErrors.delete(axis);
+      this._min[axis] = lo;
+      this._max[axis] = hi;
+    }
+    this._error.textContent = [...this._fieldErrors.values()].join(' ');
+    if (!problem) this._apply();
   }
 
   private _setMode(mode: ClipMode): void {
@@ -328,9 +360,14 @@ export class ClipPanel {
   }
 
   private _paintExtents(): void {
+    // The fields are being set from a valid state, so any pending edit message is moot.
+    this._fieldErrors.clear();
+    this._error.textContent = '';
     for (const { axis } of AXES) {
-      this._minInputs[axis].value = String(round(this._min[axis]));
-      this._maxInputs[axis].value = String(round(this._max[axis]));
+      this._minInputs[axis].value = fmt(this._min[axis]);
+      this._maxInputs[axis].value = fmt(this._max[axis]);
+      this._minInputs[axis].setAttribute('aria-invalid', 'false');
+      this._maxInputs[axis].setAttribute('aria-invalid', 'false');
     }
   }
 
@@ -397,6 +434,7 @@ export class ClipPanel {
 /** Trailing quiet period before the kept-point count runs. */
 export const CLIP_COUNT_DEBOUNCE_MS = 120;
 
-function round(v: number): number {
-  return Math.round(v * 1000) / 1000;
+/** A bound as typed: full precision, with only floating-point noise removed (0.0004 stays 0.0004). */
+function fmt(v: number): string {
+  return String(Number(v.toPrecision(12)));
 }

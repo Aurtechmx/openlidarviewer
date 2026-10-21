@@ -32,7 +32,7 @@ v0.7.0 continues from v0.6.9 (`c164e907f50ff49da7233385d92285c53dfb3b8d`). The v
 
 ## Measure, clip and inspect
 
-- Clip box. Applied per point in the shader, so it works under WebGPU and on streaming nodes. Draw it, flip Inside or Outside, fit it to the scan, or turn a Box measurement into the clip region. Quick exports honour it and add `-clip` to the name.
+- Clip box. Applied per point in the shader, so it works under WebGPU and on streaming nodes. Draw it, flip Inside or Outside, fit it to the scan (placed scans included), or turn a Box measurement into the clip region. Reversed or blank bounds are not applied and the panel says so. Quick exports honour it and add `-clip` to the name.
 - Measurements snap and grade across every visible scan, read each scan's units, and mark unverified units on the label. A result card shows the latest figure with Copy and Details.
 - An Area that crosses itself is refused. A profile's "Avg grade" is now "Endpoint gradient".
 - Reference plane. Horizontal, vertical or through three picked points.
