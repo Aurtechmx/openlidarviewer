@@ -105,7 +105,7 @@ jobs:
         run: npm run benchmark:publication:verify
       - name: Upload the battery result
         if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: publication-battery
           path: benchmark-results/publication
@@ -113,7 +113,7 @@ jobs:
           retention-days: 30
       - name: Upload the result tree
         if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: clean-clone-results
           path: benchmark-results
