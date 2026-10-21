@@ -95,7 +95,7 @@
       "@type": "SoftwareApplication",
       "identifier": "@loaders.gl/core",
       "name": "@loaders.gl/core",
-      "version": "^4.5.2",
+      "version": "^4.5.4",
       "provider": {
         "@type": "Organization",
         "name": "npm",
@@ -107,7 +107,7 @@
       "@type": "SoftwareApplication",
       "identifier": "@loaders.gl/gltf",
       "name": "@loaders.gl/gltf",
-      "version": "^4.5.2",
+      "version": "^4.5.4",
       "provider": {
         "@type": "Organization",
         "name": "npm",
@@ -119,7 +119,7 @@
       "@type": "SoftwareApplication",
       "identifier": "@loaders.gl/obj",
       "name": "@loaders.gl/obj",
-      "version": "^4.5.2",
+      "version": "^4.5.4",
       "provider": {
         "@type": "Organization",
         "name": "npm",
@@ -131,7 +131,7 @@
       "@type": "SoftwareApplication",
       "identifier": "@loaders.gl/ply",
       "name": "@loaders.gl/ply",
-      "version": "^4.5.2",
+      "version": "^4.5.4",
       "provider": {
         "@type": "Organization",
         "name": "npm",
