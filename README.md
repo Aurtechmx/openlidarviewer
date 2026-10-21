@@ -4,18 +4,15 @@
 
 A browser-native LiDAR and point-cloud viewer for fast local inspection, 3D navigation, measurement, and terrain analysis. Local files are not uploaded.
 
-<!-- Does it build and run, everywhere it claims to -->
 [![CI](https://github.com/Aurtechmx/openlidarviewer/actions/workflows/ci.yml/badge.svg)](https://github.com/Aurtechmx/openlidarviewer/actions/workflows/ci.yml)
 [![Clean clone](https://github.com/Aurtechmx/openlidarviewer/actions/workflows/clean-clone.yml/badge.svg)](https://github.com/Aurtechmx/openlidarviewer/actions/workflows/clean-clone.yml)
 [![Benchmark portability](https://github.com/Aurtechmx/openlidarviewer/actions/workflows/benchmark-portability.yml/badge.svg)](https://github.com/Aurtechmx/openlidarviewer/actions/workflows/benchmark-portability.yml)
 
-<!-- Is it measured, and by whom -->
 [![Security audit](https://github.com/Aurtechmx/openlidarviewer/actions/workflows/security.yml/badge.svg)](https://github.com/Aurtechmx/openlidarviewer/actions/workflows/security.yml)
 [![Coverage](https://img.shields.io/codecov/c/github/Aurtechmx/openlidarviewer?label=coverage&color=3fb950)](https://codecov.io/gh/Aurtechmx/openlidarviewer)
 [![Core mutation score](https://img.shields.io/endpoint?style=flat&label=core%20mutation%20score&url=https%3A%2F%2Fbadge-api.stryker-mutator.io%2Fgithub.com%2FAurtechmx%2Fopenlidarviewer%2Fmain)](https://dashboard.stryker-mutator.io/reports/github.com/Aurtechmx/openlidarviewer/main)
 [![Quality gate](https://sonarcloud.io/api/project_badges/measure?project=Aurtechmx_openlidarviewer&metric=alert_status)](https://sonarcloud.io/summary/new_code?id=Aurtechmx_openlidarviewer)
 
-<!-- Can the work be found and reused -->
 [![DOI](https://img.shields.io/badge/DOI-10.5281%2Fzenodo.21544619-1682D4)](https://doi.org/10.5281/zenodo.21544619)
 [![fair-software.eu](https://img.shields.io/badge/fair--software.eu-%E2%97%8F%20%20%E2%97%8F%20%20%E2%97%8B%20%20%E2%97%8F%20%20%E2%97%8B-orange)](https://fair-software.eu)
 [![Latest release](https://img.shields.io/github/v/release/Aurtechmx/openlidarviewer?color=2F6BFF)](https://github.com/Aurtechmx/openlidarviewer/releases/latest)
@@ -31,7 +28,7 @@ New here? The [User Guide](docs/USER_GUIDE.md) covers opening and measuring a sc
 
 OpenLiDARViewer opens LiDAR and point-cloud datasets straight in the browser. You inspect a scan, navigate it in 3D, change how it is coloured, measure, run terrain analysis and export the results, with no desktop GIS to set up. Files are read and rendered locally, so there is no server to upload to.
 
-It is a viewer and an inspection tool, not a GIS or a survey-grade processing suite. Results state their basis where one applies, and a terrain or contour export is gated on evidence rather than produced on request.
+It is a viewer and an inspection tool, not a GIS or a survey-grade processing suite. Results state their basis, and terrain and contour exports require sufficient evidence.
 
 ## Features
 
@@ -66,7 +63,7 @@ OpenLiDARViewer does not claim survey-grade measurement or support for every LiD
 - A COPC `.copc.laz` file, on disk or hosted at a URL, opens through progressive, octree-based, view-dependent streaming with worker-based decoding and bounded memory, never a full-file load. A remote scan opens from the start screen's Open from URL field or a shareable `?copc=<url>` deep link; the deep link asks for confirmation naming the host before anything is requested
 - EPT (Entwine Point Tile) streaming: local and remote, `binary` and `laszip` tiles
 - 3D Tiles / `.pnts`: a single `.pnts` tile opens as a point cloud. It is detected by its magic bytes, decoded from uncompressed or quantised positions with colour, and placed by its `RTC_CENTER`
-- 3D Tiles / `tileset.json`: a 3D Tiles 1.0 or 1.1 tileset whose content is PNTS opens from a URL and streams the way COPC and EPT do. The scheduler culls against the camera, selects what fits the point budget, and fetches and decodes tile bodies as they are needed; each tile is placed by its own cumulative transform, after its `RTC_CENTER` and before the render origin, in float64. A streamed tileset reports no source point total, because a `tileset.json` never states one and the per-tile figures are decode-admission estimates rather than counts. A tileset whose hierarchy is implicit, a quadtree or octree of subtree files rather than a written-out tree, opens too: it is expanded to the equivalent explicit tileset before parsing, so the same refusals apply. Both refinement modes stream: ADD draws every resident node, and REPLACE swaps a parent for its children atomically once all of them are resident, with no doubled geometry and no hole. A tile whose content is a nested external `tileset.json` is followed and spliced in as a child, so a set split across several documents opens as one scene. Both the single `content` and the 3D Tiles 1.1 `contents[]` array are read, and a tile whose entries are all point clouds streams every one. Mesh content (B3DM, I3DM, CMPT, glTF) and Draco are refused by name, because point streaming is the whole of the subset. See [`docs/supported-formats.md`](docs/supported-formats.md) for the limits of the subset
+- 3D Tiles / `tileset.json`: a 3D Tiles 1.0 or 1.1 point-cloud (PNTS) tileset streams from a URL like COPC and EPT, including implicit tiling, external child tilesets and both refinement modes. Mesh content and Draco are refused. See [`docs/supported-formats.md`](docs/supported-formats.md) for the supported subset
 - A curated catalog of 12 hand-vetted public COPC / EPT datasets
 - Remote URLs on a local or private network are refused. An EPT hierarchy of more than 2,000,000 nodes is read only up to that point, and a COPC data node above 128 MiB is dropped
 
@@ -83,7 +80,7 @@ Game-like navigation lets a scan be explored like a 3D environment.
 - A triangular nav widget that surfaces the current mode and a centre Reset
 - Saved, renamable camera views for repeatable inspection
 - Shareable view links: Copy view link reproduces the current view (camera, colour mode, point sizing); no scan data is shared, the recipient still needs the same file
-- Movement speed scales with the size of the loaded scan, so the controls feel right for a small room or a kilometre-wide survey
+- Movement speed scales with the size of the loaded scan
 
 | Control | Action |
 |---|---|
@@ -149,7 +146,7 @@ Open the Measure tool, pick a kind from the toolbar, and place points directly o
 - Classification editor: paint a class id over a lassoed selection and write the result back to LAS
 - Density heatmap overlay for coverage QA, box clipping / slicing for interactive cross-cuts, and measurement chains that combine placed measurements as sum / difference / ratio
 - A Scan Intelligence panel with point count, dimensions, density, spacing, attributes, and an Advanced report of integrity diagnostics
-- A Dataset Intelligence card (header-derived Point Density, Terrain Complexity, Ground Visibility, Streaming Coverage, Terrain Confidence) that leaves a row blank rather than fabricating a bucket when no signal is available
+- A Dataset Intelligence card (header-derived Point Density, Terrain Complexity, Ground Visibility, Streaming Coverage, Terrain Confidence) that leaves a row blank when no signal is available
 - Point inspection: click a point to read its coordinates and attributes (LAS return number, point source ID, GPS time, and UTM + lat/lon when a CRS is known), with one-click copy, or hover with the live probe for a click-free readout
 - Capture provenance from LAS/LAZ and E57 headers (sensor, source software, date), shown in the Scan Report when the file carries it
 
@@ -161,9 +158,9 @@ Measurement is meant for visual inspection and research, not survey-grade use. O
 
 OpenLiDARViewer ships a terrain analysis stack under `src/terrain/`. Shared type contracts (`TerrainContracts.ts`) give every stage one coverage envelope: a coverage mode (`full` / `resident-only` / `sampled`), the source and analyzed point counts, a 0-100 confidence value, and ordered warnings, so an analyser never implies full-cloud certainty when only resident streaming nodes were walked.
 
-The lightest surface is the Dataset Intelligence card in the Inspector: header-derived, informational, and it does not perform ground classification. The main capability is the confidence-aware DTM and contour pipeline (`src/terrain/contour/`, `ground/`, `surface/`) surfaced through the Analyse panel: ground classification, a gridded DTM with per-cell confidence and hold-out RMSE validation, a 0-100 heuristic terrain readiness index (workflow-readiness weights, not an external accuracy calibration), surface models (DSM, canopy height, slope, multi-directional hillshade), a single top-level Terrain Assessment verdict, evidence-graded contour export (GeoJSON / SVG / DXF), a printable map sheet, and a georeferenced DEM package (ASCII Grid + GeoTIFF). Ground classification is a heuristic: its output is derived, not survey-grade. A DTM quality gate governs whether terrain-product export is enabled, and per-cell confidence is stated in two parts: measured cells carry an empirical reliability at a stated tolerance, and interpolated cells carry a model-based support score that is not calibrated. Treat terrain products and DEM exports as export-ready only when the Terrain Assessment reads Good, and as preview otherwise.
+The Analyse panel runs a confidence-aware DTM and contour pipeline: ground classification, a gridded DTM with per-cell confidence and hold-out RMSE, surface models (DSM, canopy height, slope, hillshade), a Terrain Assessment verdict, evidence-graded contour export (GeoJSON, SVG, DXF), a printable map sheet and a georeferenced DEM package (ASCII Grid + GeoTIFF). Ground classification is heuristic and not survey-grade. Treat terrain products as export-ready only when the Terrain Assessment reads Good, and as preview otherwise. The Dataset Intelligence card in the Inspector is a lighter, header-only summary.
 
-Contour Studio is the post-analysis step that turns an analysed scan into a contour deliverable, kept out of the Analyse panel so map-making doesn't crowd the terrain work. You pick a purpose: one of the four named ones (Engineering Plan, Survey Review, Terrain Research, Presentation Map) or Custom. A purpose only bundles presentation defaults and can never raise a claim. Analytical contours are the exact isolines of the grid, while cartographic contours are generalised for legibility, reference the analytical geometry's hash, and are never labelled exact. Every export routes through one evidence gate that can only downgrade (validated, exploratory, or blocked): a blocked product returns a diagnostic instead of a polished file, an exploratory one is watermarked, and the permit decision is stamped into each artifact's provenance. Exports cover contour vectors (GeoJSON, DXF, SVG), a map-sheet PDF, a DEM raster package, a terrain intelligence report, and a complete ZIP with a SHA256SUMS manifest. Accuracy figures are internal hold-out only; the algorithm cross-checks against independent tools are listed in the claim register. Nothing is survey-grade, and no output asserts certification.
+Contour Studio turns an analysed scan into a contour deliverable. Pick a purpose (Engineering Plan, Survey Review, Terrain Research, Presentation Map or Custom); it sets presentation defaults only. Analytical contours are exact isolines of the grid; cartographic contours are smoothed for legibility and never labelled exact. Every export passes one evidence gate: blocked products return a diagnostic, exploratory ones are watermarked. Exports include GeoJSON, DXF and SVG contours, a map-sheet PDF, a DEM package, a terrain report and a ZIP with SHA256SUMS. Accuracy figures are internal hold-out only, and no output is survey-grade or certified.
 
 See [`docs/terrain-intelligence.md`](docs/terrain-intelligence.md), [`docs/validation/terrain-validation-matrix.md`](docs/validation/terrain-validation-matrix.md), and [`docs/contour-studio.md`](docs/contour-studio.md).
 </details>
@@ -220,7 +217,7 @@ For large datasets, stream COPC (`.copc.laz`) or EPT (`ept.json`), which load pr
 <details>
 <summary><b>Format matrix and compatibility notes</b></summary>
 
-That covers phone and mobile scan exports (PLY, OBJ, GLB/GLTF; `USDZ` needs conversion first), terrestrial laser-scanner data in E57 (the ASTM E2807 format; a subset, cross-decoded against PDAL on one re-exported scan as recorded in the claim register under E57-INGEST, with no conformance to that standard claimed) plus PTX and PTS, georeferenced drone LiDAR in LAS/LAZ, and PCD in all three encodings (ASCII, binary, binary-compressed). Large COPC and EPT datasets stream progressively, locally or over HTTP range requests from a URL, with bounded memory and no full-file load.
+That covers phone and mobile scan exports (PLY, OBJ, GLB/GLTF; `USDZ` needs conversion first), terrestrial laser-scanner data (E57, PTX, PTS), georeferenced drone LiDAR (LAS/LAZ) and PCD in all three encodings. E57 support is a tested subset; no conformance to ASTM E2807 is claimed. Large COPC and EPT datasets stream progressively from disk or a URL with bounded memory.
 
 Format support depends on the device (browser memory, GPU capacity) and on the data: its size, how it was preprocessed, and how complete OLV's reader for that format is. The per-format detail, including scanner and app compatibility, is the format matrix in [`docs/supported-formats.md`](docs/supported-formats.md).
 </details>
@@ -228,7 +225,7 @@ Format support depends on the device (browser memory, GPU capacity) and on the d
 <details>
 <summary><b>System requirements</b></summary>
 
-OpenLiDARViewer runs in the browser and depends on modern GPU-accelerated web rendering. Performance varies with the dataset and the device. Use a modern Chromium-based browser (Chrome or Edge) with WebGL 2.0 support and hardware acceleration enabled. WebGPU is used automatically where it is available, including in Firefox and Safari on the platforms where they expose it, with the WebGL 2 fallback used elsewhere (see `docs/developer-manual.md` section 14 for the per-browser breakdown): a boot-and-render smoke (`.github/workflows/browser-smoke.yml`) and the full deterministic end-to-end suite run on both engines as an advisory cross-browser matrix, which no merge rule requires.
+OpenLiDARViewer needs a browser with WebGL 2.0 and hardware acceleration; performance depends on the dataset and the device. A Chromium-based browser (Chrome, Edge, Brave) is recommended. WebGPU is used automatically where available, with WebGL 2 as the fallback. Per-browser details are in `docs/developer-manual.md` section 14.
 
 | Component | Minimum | Recommended |
 |---|---|---|
@@ -245,7 +242,7 @@ Very large datasets are best handled as COPC or EPT; other very large formats ma
 
 OpenLiDARViewer includes a mobile-friendly interface for opening compatible point-cloud and 3D scan files from phones and tablets. On mobile: files open from the device file picker or a cloud file provider, Scan Intelligence shows as a compact panel, navigation uses touch gestures, measurement uses tap-based point selection, and rendering defaults to a mobile-safe performance mode.
 
-A typical workflow is to export a compatible scan from a mobile scanning app, save it to device storage or a cloud storage provider, open OpenLiDARViewer in a mobile browser, tap "Open scan from device," then inspect, measure, and export. For a practical test, capture a scan with a phone LiDAR scanning app. Export it as GLTF/GLB, OBJ or PLY and open the file. Export formats, free-tier options, and pricing differ between apps and can change, so check each app's current help. Some formats may require a paid plan.
+A typical workflow: export a scan from a phone scanning app as GLB/GLTF, OBJ or PLY, open OpenLiDARViewer in a mobile browser, tap "Open scan from device," then inspect, measure and export. Export options differ between apps, and some need a paid plan.
 
 On mobile, the browser, GPU and memory set the ceiling, and file size and point count decide how close a scan gets to it. Very large datasets may require desktop hardware, downsampling, tiling, or optimized formats. Full detail is in [`docs/mobile-browser-support.md`](docs/mobile-browser-support.md).
 </details>
@@ -334,7 +331,7 @@ OpenLiDARViewer is modular, with one file per format and one file per concern. L
 <details>
 <summary><b>Performance notes</b></summary>
 
-Point count, browser memory and GPU capability matter most for performance. Point size, rendering detail and color mode change the per-frame cost, and the file format and how the data was prepared change the load cost. A LAS/LAZ file is planned from its header before it is fully read: a cloud above the device's point budget, roughly 3M points on a capable desktop and less on weaker hardware, loads at reduced density (voxel-downsampled, or stride-decoded when far over budget so it is never fully decoded into memory; the source file is still read in once, while COPC, EPT, and the out-of-core path for a very large LAS or LAZ stream only the resident set), with a memory-safety guard, staged progress, and a cancellable load. The Detail readout always shows the `shown / total` count.
+Point count, browser memory and GPU capability matter most for performance. A LAS/LAZ file is planned from its header before it is read: a cloud above the device's point budget (roughly 3M points on a capable desktop, less on weaker hardware) loads at reduced density, with a memory guard, staged progress and a cancellable load. COPC, EPT and very large LAS/LAZ stream only what is visible. The Detail readout shows the `shown / total` count.
 
 COPC streaming (local and remote) uses a view-dependent scheduler, hierarchy-aware eviction, a dispatch-pressure gate that bounds residency under 1B-synthetic-point stress, and picking against actively refining clouds. EPT streams through the same scheduler.
 
@@ -347,7 +344,7 @@ OpenLiDARViewer is a viewer, not a replacement for a GIS or a survey-grade proce
 
 - Large files are limited by browser memory and GPU performance; some formats need preprocessing or conversion before they load, and format support is still evolving.
 - Measurement is for visual inspection, not survey-grade use.
-- Metric figures fail closed when the CRS linear unit is unconfirmed: the viewer reports extents in the source unit rather than fabricating metres.
+- Metric figures are withheld when the CRS linear unit is unconfirmed; extents are shown in the source unit.
 - Reprojection exists only on export, in the Export tab and the batch converter. It transforms X and Y, applies no vertical-datum shift, and refuses NAD27.
 - Classification visualization depends on attributes present in the file.
 - Very large datasets stream as COPC or EPT, and a very large LAS or LAZ is indexed into browser storage; other huge formats may still need tiling or downsampling.
@@ -364,7 +361,7 @@ Is my data uploaded anywhere?
 No. Files from your device are read and rendered locally and are not uploaded. The app requests its own files, any remote dataset or sample you open, and, only when you run a location search, the public LiDAR catalogue (Microsoft Planetary Computer). The full list is in [PRIVACY.md](PRIVACY.md).
 
 What's the largest scan it can open?
-Most local files are bounded by browser memory and the GPU. A very large uncompressed LAS or chunked LAZ is the exception: it is indexed out of core into browser storage and streamed through the same scheduler, and reopening the same file reuses that index. A content hash authorises the reuse, so an edited file never gets a stale one. The index is a cache, not durable storage: the browser or you may clear it, and old ones are evicted under a size cap. Where storage is missing or too small, the file is refused with guidance rather than loaded whole.
+Most local files are bounded by browser memory and the GPU. A very large uncompressed LAS or chunked LAZ is indexed into browser storage and streamed, and reopening the same file reuses that index. The browser may clear it, and a file is refused with guidance when storage is too small.
 
 For anything else too large, stream it as COPC or EPT, or convert it with PDAL or Entwine. Streaming loads only the set the camera needs.
 
@@ -391,11 +388,11 @@ The quick report takes five to ten minutes. A longer comparison against a refere
 
 ## Validation & reproducibility
 
-For reviewers, and anyone who wants to check the claims above rather than take them on trust:
+For reviewers:
 
 - [REVIEWER_QUICKSTART.md](REVIEWER_QUICKSTART.md): install and run the offline test suite from a clean clone.
 - [VALIDATION_REPORT_v0.7.0.md](docs/releases/VALIDATION_REPORT_v0.7.0.md): what this release validates and what it does not. No product changed evidence level in this release; the register holds 38 claims, 17 of them at E4 and none at E5. One measurement method changed: the interactive stockpile volume is integrated over an area grid, and VOL-STOCKPILE stays at E3. Two new claims were added for Terrain Flow Pulse's depression inventory work (TERRAIN-FLOW-PULSE at E3, TERRAIN-FLOW-DEPRESSION-INVENTORY at E2), and one new claim for Terrain Access's traversability screening (TERRAIN-ACCESS at E3, internal-oracle ceiling); no existing claim's evidence level changed.
-- [KNOWN_LIMITATIONS_v0.7.0.md](docs/releases/KNOWN_LIMITATIONS_v0.7.0.md): the documented limits of this release (no evidence promotion, a stockpile record that is not integrated beyond the toast, a registration stack that ships without a user path, touch gestures run in CI as synthesized events with no real-device check, one measurement figure with a known basis problem, no cross-CRS reprojection).
+- [KNOWN_LIMITATIONS_v0.7.0.md](docs/releases/KNOWN_LIMITATIONS_v0.7.0.md): the documented limits of this release.
 - [REPRODUCIBILITY.md](REPRODUCIBILITY.md): the pinned toolchain and the steps to reproduce the build, tests, and reported figures.
 - [ARTIFACT_EVALUATION.md](ARTIFACT_EVALUATION.md): how to evaluate the artifact without special hardware or private data.
 - [DATA_AVAILABILITY.md](DATA_AVAILABILITY.md): where the test fixtures and streamed sample datasets come from, and how they are licensed.
@@ -416,9 +413,9 @@ Format specifications OLV builds against (no conformance claimed): ASPRS (LAS/LA
 
 ## Citation & research collaboration
 
-OpenLiDARViewer v0.6.7 and later is licensed under AGPL-3.0-only so its code and methods stay open, including when a modified version is offered over a network. The licence lets you use, study, change, and redistribute the software under those terms, and it says nothing about citation. Citation is a separate request: if the software, its validation framework, algorithms, or documentation helped your research, software, thesis, or commercial work, please cite it. GitHub's "Cite this repository" button reads [CITATION.cff](CITATION.cff) and gives you the current reference, including BibTeX.
+OpenLiDARViewer v0.6.7 and later is licensed under AGPL-3.0-only. If the software, its validation framework, algorithms or documentation helped your work, please cite it. GitHub's "Cite this repository" button reads [CITATION.cff](CITATION.cff) and gives the current reference, including BibTeX.
 
-Being cited is the minimum; working together is the better outcome. Independent reproduction, new surveyed-checkpoint datasets, terrain and contour cross-checks against a reference tool, and method comparisons feed the evidence record directly, and a result that holds or fails on your data tells us more than one that only holds on ours. If you have a dataset or a study in mind, open an issue or a discussion. The specifics, and what we can offer in return, are in [docs/collaboration/RESEARCH_COLLABORATION.md](docs/collaboration/RESEARCH_COLLABORATION.md).
+Independent reproduction, surveyed-checkpoint datasets, cross-checks against reference tools and method comparisons are welcome. Open an issue or a discussion; details are in [docs/collaboration/RESEARCH_COLLABORATION.md](docs/collaboration/RESEARCH_COLLABORATION.md).
 
 ## License
 
