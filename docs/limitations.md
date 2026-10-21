@@ -25,6 +25,8 @@ OpenLiDARViewer is a viewer for inspecting and documenting point clouds. It does
 
 The viewer reads the CRS, vertical datum and units from the file and uses them for measurement, density and export metadata. Metric figures are withheld when the unit is unknown, and area and volume are refused on a geographic-degree grid.
 
+Terrain analysis on Web Mercator data (such as USGS EPT) is scaled for latitude and refused when the scan is too large for one scale to hold; load a smaller area or reproject to a local projected CRS. Scans beyond ±89° latitude, depth-down vertical references and geocentric CRS are refused.
+
 Reprojection happens only on export. It changes X and Y to a chosen EPSG code, leaves Z and its vertical reference unchanged, and refuses NAD27. Measurement, terrain analysis and epoch comparison work in the source coordinates, and a comparison across different datums is blocked.
 
 ## Display
