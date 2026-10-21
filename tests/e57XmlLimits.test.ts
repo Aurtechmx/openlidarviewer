@@ -21,7 +21,12 @@ describe('E57 XML limits', () => {
   it('refuses XML nested deeper than real E57 schemas, with a clear error', () => {
     const depth = 100_000;
     const doc = '<a>'.repeat(depth) + '</a>'.repeat(depth);
-    expect(() => parseXml(doc)).toThrow(/Invalid XML: nesting/);
+    expect(() => parseXml(doc)).toThrow(/its XML section nests deeper than/);
+    try {
+      parseXml(doc);
+    } catch (e) {
+      expect((e as LoadError).category).toBe('malformed-file');
+    }
   }, 5000);
 
   it('still parses ordinary nesting', () => {
@@ -69,5 +74,14 @@ describe('E57 XML element and attribute ceilings', () => {
     // The shipped files declare 8 to 60 elements; 200,000 is three orders above.
     expect(MAX_XML_NODES).toBeGreaterThanOrEqual(100 * 60);
     expect(MAX_XML_ATTRIBUTES).toBeGreaterThanOrEqual(100 * 96);
+  });
+});
+
+describe('E57 XML attributes', () => {
+  it('reads keys and quoted values, and an unterminated value runs to the end of the document', () => {
+    expect(parseXml('<a x="1" y=\'two\'/>').attrs).toEqual({ x: '1', y: 'two' });
+    expect(parseXml('<a x="1"><b k="v"/></a>').children[0].attrs.k).toBe('v');
+    expect(parseXml('<a x="1').attrs).toEqual({ x: '1' });
+    expect(parseXml('<a x=').attrs).toEqual({ x: '' });
   });
 });

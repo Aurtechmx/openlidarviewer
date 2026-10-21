@@ -94,7 +94,8 @@ export function settleTerrainGatherFrame(
   for (const s of sources) {
     const local = !isZUpFormat(s.format) && !hasHorizontalCrs(s.crs);
     // Only a PLY or OBJ with no CRS has no axis from its format or its CRS;
-    // its own points decide it.
+    // its own points decide it. classifyScanShape strides to at most 60,000
+    // samples, so reading a whole layer costs the same as reading the gather.
     const own = s.layerPoints;
     const detected = local && !isYUpBySpec(s.format)
       ? (classifyScanShape(own && own.length > 0 ? own : positions).up === 'y' ? 'y' : 'z')

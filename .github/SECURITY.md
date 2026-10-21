@@ -119,6 +119,29 @@ The Node tools used by the validation image (`validation/oracles/npm`) have
 their own manifest and lockfile. They are never part of the shipped archive or
 its SBOM, but they are kept current by Dependabot like the rest.
 
+## Accepted risks
+
+These are known and accepted, with the reason:
+
+- `connect-src 'self' https:` lets the app fetch any HTTPS host, which Open from
+  URL needs for COPC, EPT and 3D Tiles. Remote fetches send no credentials,
+  follow no redirects and send no referrer.
+- Remote URLs to private and loopback addresses are refused by host name. A
+  public name that resolves to a private address is not caught; no credentials
+  are sent with such a request.
+- `frame-ancestors` is set in `_headers` and `.htaccess`, and a browser ignores
+  it in a meta tag. On a host that applies neither file, the app checks its own
+  framing at start-up and, framed by a page that is not on the deployer's
+  allow-list, shows a notice instead of starting.
+
+## Service worker recovery
+
+The service worker caches only the app's own content-hashed files, and
+`/sw.js` is served without caching, so a new deploy replaces it on the next
+visit. To remove it from every client, deploy a `sw.js` that deletes the
+caches whose names start with `olv-shell-` and calls `self.registration.unregister()`
+in its `activate` handler.
+
 ## Supported versions
 
 OpenLiDARViewer is actively maintained. Security fixes are applied to the

@@ -133,20 +133,13 @@ jobs:
           path: incoming
 
       # The file was produced by a job that ran repository code, so it is
-      # treated as data: it must parse as JSON with a plain numeric score
-      # before anything is committed or interpolated into a title.
+      # treated as data: it is rebuilt from its known fields, and must carry a
+      # numeric score, before anything is committed or interpolated into a title.
       - name: Take the evidence file
         run: |
           set -euo pipefail
-          node -e '
-            const fs = require("node:fs");
-            const e = JSON.parse(fs.readFileSync("incoming/mutation-evidence.json", "utf8"));
-            if (typeof e !== "object" || e === null || typeof e.score !== "number" || !Number.isFinite(e.score)) {
-              console.error("mutation-evidence.json has no numeric score");
-              process.exit(1);
-            }
-          '
-          cp incoming/mutation-evidence.json docs/validation/mutation-evidence.json
+          # Rebuilt from known fields with checked types; anything else is dropped.
+          node scripts/sanitize-mutation-evidence.mjs incoming/mutation-evidence.json docs/validation/mutation-evidence.json
 
       - name: Open a pull request carrying the evidence
         env:
