@@ -87,9 +87,9 @@ bridges or noise, and its result is heuristic, not survey-grade.
 
 ## What was settled from v0.6.9, and what was not
 
-Every v0.6.9 limitation was reproduced or cleared rather than carried forward.
-Each one has a test that proves its status. Of the inherited set, the boundary share was fixed,
-the stockpile split was closed, and two turned out not to reproduce: the
+Each v0.6.9 limitation was rechecked against this release, and each has a test
+for its current status. The boundary share was fixed, the stockpile split was
+closed, and two did not reproduce: the
 oriented extent is presented as a principal-axis estimate with its failure mode
 named, and truncation is reported rather than hidden.
 
@@ -331,9 +331,8 @@ in `lazyChunks.ts`) Flow Pulse's overlay already uses. Exported rasters and
 the route GeoJSON carry the real world corner in the dataset CRS, with a
 `.prj` when a world origin and CRS/WKT are supplied, rather than always a
 local (0, 0) origin. The run record states whether the terrain was built
-from every point or from a sample, read from the DTM's own `coverageMode`
-(`computeTerrainCore`'s own fix, shared by every reader of that field), so
-Terrain Access states the same honest basis without a change of its own.
+from every point or from a sample, read from the DTM's `coverageMode`, so
+Terrain Access states the same basis as the other terrain outputs.
 
 A move's grade is the largest of the Horn gradient along the heading at
 either end cell and the move's own rise over its length, and its cross slope

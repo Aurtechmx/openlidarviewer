@@ -1,0 +1,87 @@
+name: Bug report
+description: Something does not work the way the docs say it should.
+title: "[Bug] "
+labels: [bug]
+body:
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened
+      description: A clear description of the problem, and what you expected instead.
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Open the viewer
+        2. Load a .laz file of about 1.2 GB
+        3. ...
+    validations:
+      required: true
+  - type: dropdown
+    id: format
+    attributes:
+      label: Format
+      options:
+        - LAS
+        - LAZ
+        - COPC (.copc.laz)
+        - EPT (ept.json)
+        - 3D Tiles (tileset.json / .pnts)
+        - E57
+        - PLY
+        - OBJ
+        - glTF / GLB
+        - PCD
+        - PTX / PTS
+        - XYZ / CSV / ASC / TXT
+        - Not related to a file
+    validations:
+      required: true
+  - type: input
+    id: size
+    attributes:
+      label: File size and approximate point count
+      placeholder: e.g. 1.2 GB, about 40 million points
+  - type: input
+    id: version
+    attributes:
+      label: Viewer version or commit
+      description: Printed in the browser console when the viewer opens, for example v0.7.0.
+    validations:
+      required: true
+  - type: input
+    id: browser
+    attributes:
+      label: Browser, version and operating system
+      placeholder: e.g. Brave 1.80 on macOS 26
+    validations:
+      required: true
+  - type: dropdown
+    id: backend
+    attributes:
+      label: Rendering backend shown in the viewer
+      options:
+        - WebGPU
+        - WebGL 2
+        - Not sure
+  - type: textarea
+    id: console
+    attributes:
+      label: Console output
+      description: Any errors from the browser developer console.
+      render: text
+  - type: textarea
+    id: screenshots
+    attributes:
+      label: Screenshots
+      description: Optional. Drag images here.
+  - type: checkboxes
+    id: data
+    attributes:
+      label: Data
+      options:
+        - label: I have not attached or linked data I am not allowed to share. A small synthetic file that shows the bug is ideal.
+          required: true

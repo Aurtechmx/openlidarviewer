@@ -1,66 +1,43 @@
 # Current Limitations
 
-OpenLiDARViewer is an actively maintained project focused on lightweight visualization and interaction. It is not meant to replace full GIS, photogrammetry, or survey-grade processing tools.
+OpenLiDARViewer is a viewer for inspecting and documenting point clouds. It does not replace full GIS, photogrammetry or survey-grade processing tools.
 
-## Known limitations
+## Files and memory
 
-Large files are limited by browser memory and GPU performance. A cloud above the point budget is loaded at reduced density (voxel-downsampled, or, when it is far over budget, stride-decoded so it is never fully *decoded* into memory) though the source file is still read in once, so this is not out-of-core; COPC and EPT, along with a very large uncompressed LAS indexed out of core into browser storage, are the streaming paths. If a load would still risk exhausting memory, it automatically falls back to a sparser one and says so in the status toast.
+- **Large files** are limited by browser memory and GPU performance. A cloud above the point budget loads at reduced density and says so in the status toast.
+- **Streaming.** COPC and EPT, local or on a CORS-enabled host, stream progressively. A very large uncompressed LAS, or a chunked LAZ, is indexed into browser storage and streamed the same way. That index is a cache the browser may clear, and the file is refused with guidance if storage is too small. One streamed source is open at a time.
+- **LAZ speed** is bounded by the decoder. Fast load lowers the memory peak of a large LAZ but does not make it proportionally faster.
+- **E57** covers common terrestrial-scanner files (Cartesian XYZ with colour, intensity, classification and normals). A file of about 900 MB or more is refused; convert it to LAS, LAZ or COPC. Scans stored only as spherical coordinates are skipped with a warning. Uncommon schema features may not load.
+- **Meshes.** OBJ and glTF are shown as their vertices; faces and materials are not drawn. A glTF must be GLB or self-contained, and Draco-compressed glTF is refused.
+- **Other formats** may need conversion first. See [supported-formats.md](supported-formats.md).
+- **Remote URLs** that point at private or local network hosts are refused.
 
-Fast loading of compressed LAZ is bounded by the decoder. A very large LAZ file loads with a lower memory peak under fast load, but not proportionally faster: the `laz-perf` decoder decompresses records strictly in sequence, so stride loading still decompresses every record: it only skips the coordinate transform and storage for the records it drops. Uncompressed LAS, whose records are randomly addressable, does get the proportional speed-up.
+## Measurement and terrain
 
-Format coverage is still evolving. Some LiDAR formats need preprocessing or conversion before they load. See [supported-formats.md](supported-formats.md).
+- **Measurement** is for visual inspection and is not survey-grade. Measurements are kept for the browser session; export the session JSON to keep them.
+- **Terrain products** (DTM, DSM, canopy height, slope, hillshade, contours, DEM export) carry a Good, Preview, Limited or Blocked verdict. Confidence is a data-quality estimate, not a survey certification. Treat results as deliverable-ready only when the verdict is Good, and validate Preview and Limited results independently. See [terrain-intelligence.md](terrain-intelligence.md) and [validation/terrain-validation-matrix.md](validation/terrain-validation-matrix.md).
+- **Volumes** are area-weighted per cell. The uncertainty band is a diagnostic of surface spread, not a confidence interval.
+- **Noise and Withheld points.** Epoch change and the volume tools leave out ASPRS noise classes 7 and 18 and state the count. On a voxel-reduced cloud they cannot be separated, and the result says so.
+- **Classification** colouring needs classification values in the file, and many scans have none.
+- **Precision.** Positions are held as 32-bit floats around a local origin. This is sub-millimetre for a normal survey scan and coarser over very wide extents; the Scan Report states the figure and terrain deliverables are declined above a 10 mm step. See [coordinate-precision.md](coordinate-precision.md).
 
-Measurement is for visual inspection. The measurement toolkit (distance, polyline, area, height, angle, and slope) is meant for inspection and documentation. It is not survey-grade and should not be treated as such unless it has been validated against survey-grade data and procedures. Measurements are kept for the browser session; the JSON session export is the way to retain them beyond that.
+## Coordinate systems
 
-Terrain products are confidence-rated, not certified. The Analyse panel
-ships a confidence-aware bare-earth DTM with derived DSM, canopy height
-(CHM = DSM − DTM), slope, hillshade, evidence-graded contours, and a
-georeferenced DEM export (Esri ASCII Grid + GeoTIFF). Each analysis carries
-a Terrain Assessment verdict (Good / Preview / Limited / Blocked) and a
-per-cell confidence whose measured cells are calibrated against hold-out
-error; interpolated cells keep their geometric estimate, which is not
-calibrated against anything. That confidence is a data-quality estimate, not a survey
-certification: it does not stand in for a licensed surveyor, ground control,
-datum validation, or regulatory acceptance. Treat terrain products and DEM
-exports as deliverable-ready only when the assessment reads Good;
-Preview / Limited surfaces are for inspection and measurement and should be
-validated independently before you rely on them. Details and the validation
-coverage are in [terrain-intelligence.md](terrain-intelligence.md) and
-[validation/terrain-validation-matrix.md](validation/terrain-validation-matrix.md).
+The viewer reads the CRS, vertical datum and units from the file and uses them for measurement, density and export metadata. Metric figures are withheld when the unit is unknown, and area and volume are refused on a geographic-degree grid.
 
-E57 coverage is broad but not exhaustive. The E57 reader handles the common real-world files terrestrial scanners produce (Cartesian XYZ with colour, intensity, classification and normals) and was checked manually against scanner-vendor exports during development; no such fixture is committed, so that check is not reproducible from this archive. E57 files that use uncommon schema features, spherical coordinates, or non-standard extensions may not load.
+Terrain analysis on Web Mercator data (such as USGS EPT) is scaled for latitude and refused when the scan is too large for one scale to hold; load a smaller area or reproject to a local projected CRS. Scans beyond ±89° latitude, depth-down vertical references and geocentric CRS are refused.
 
-Coordinate reference systems are read, and reprojected only on export. The viewer detects the CRS and vertical datum from the source (LAS VLRs / GeoKeys, compound-CRS WKT); converts linear units to metres for measurement and density when the unit is known; recentres large coordinates for floating-point precision (a local render frame, reversible via the stored origin); propagates the detected CRS, datum and units into export metadata and warnings; and refuses metric area and volume on a geographic-degree grid. Reproject in the Export tab and in the batch converter transforms X and Y to a target EPSG code. Z and its vertical reference are left unchanged, so there is no vertical-datum shift, and a move into or out of NAD27 is refused. Measurement, terrain analysis and epoch comparison do not reproject: coordinates are shown and analysed in their source frame with the source CRS recorded. Cross-datum quantitative comparison is blocked rather than approximated.
+Reprojection happens only on export. It changes X and Y to a chosen EPSG code, leaves Z and its vertical reference unchanged, and refuses NAD27. Measurement, terrain analysis and epoch comparison work in the source coordinates, and a comparison across different datums is blocked.
 
-Classification visualization depends on classification attributes actually being present in the file, and many scans carry none.
+## Display
 
-Epoch change and the volume tools always leave out ASPRS noise classes 7 and 18, including when Withheld points are included. Each states the number of noise points it left out. A file without classification is read in full.
+WebGPU support varies by browser; the viewer falls back to WebGL 2. Eye Dome Lighting is a screen-space depth cue, not physical lighting, and is off by default on the WebGL 2 fallback and on mobile.
 
-In-memory positions are stored as 32-bit floats, so a very wide extent resolves coarsely. Coordinates are recentred on a local origin before they are narrowed, which keeps a normal survey scan at sub-millimetre resolution. The step between representable values still grows with the extent: on a metre grid it is under a millimetre out to a 16 km reach, about 8 mm at 100 km, and about 31 mm at 400 km. The Scan Report states the figure for the loaded scan and grades it, and terrain deliverables (contours, DTM raster, deliverable package, terrain report) decline above a 10 mm step rather than exporting coordinates finer than the representation can distinguish. Tiling the dataset, or loading it as COPC and working per region, keeps the step small. Details in [coordinate-precision.md](coordinate-precision.md).
+## Not in scope
 
-Very large datasets are handled through streaming. A COPC (Cloud Optimized Point Cloud) `.copc.laz` file or an EPT (Entwine Point Tile) dataset, local or hosted at a CORS-enabled URL, opens through progressive, octree-based streaming: partial range reads, a view-dependent scheduler with a memory-pressure dispatch gate, bounded residency, and worker decoding, so a file far larger than memory renders without ever being read whole. A very large uncompressed LAS reaches the same streaming engine by a different route: it is indexed out of core in a worker and its tiles written to browser storage (OPFS), then streamed like a COPC. That index is a persistent local cache: reopening the same source reuses it and skips the out-of-core decode and index rebuild, after a sampled source-fingerprint and cache-generation match locate a candidate and a whole-file content hash authorises the reuse. That authorising hash is re-read and computed on reopen, so the reopen skips the rebuild's decode/index work but not a whole-file pass. The net saving is largest when re-decode would dominate, not a fixed speedup. It is not a durable artifact: the browser or user may clear origin-private storage, and least-recently-used stores are evicted past a soft cap. The file is refused with guidance if storage is unavailable or too small rather than materialised whole. A very large compressed LAZ takes this path too when it carries a usable chunk table (the modern chunked LAZ layout), decoded a window of chunks at a time from that table. A LAZ without one (a pre-2011 pointwise compressor, or a point format the chunk decoder does not cover) is refused with the same guidance rather than read whole, since a multi-gigabyte sequential decode would exhaust memory. Any other very large format still relies on the downsampling and stride-decode fallbacks above.
+Full GIS layers and analysis, photogrammetry, survey-grade measurement, vertical-datum transformation and editing of point data are left to dedicated tools.
 
-EPT behaviour in practice depends on the dataset. EPT support reads both the `binary` and `laszip` tile dataTypes; in real-world use, time-to-first-render and refinement smoothness depend on the dataset's hierarchy organisation and tile density and on the host, which has to be CORS-enabled and range-capable and should be low-latency. The client's browser memory and the network matter too. A well-built EPT served from a fast CDN streams comparably to COPC; a deeply unbalanced hierarchy, a slow host, or a tight-memory device can change that picture.
-
-WebGPU feature support varies by browser. Where it is unavailable, the viewer uses its WebGL 2 fallback.
-
-Eye Dome Lighting is a screen-space depth cue, not physically-based lighting: it shades depth discontinuities to make structure readable, and does not model real light, shadows, or materials. It runs as a post-processing pass and is off by default on the WebGL 2 fallback and on mobile, where it can still be enabled by hand.
-
-OBJ and glTF meshes are shown as their vertices. Faces and materials are not rendered. glTF must be GLB or self-contained (a `.gltf` with embedded/data-URI buffers): a `.gltf` that references external files (a separate `buffer.bin`) can't be resolved from a single-file open, and reports a clear error asking for GLB or an embedded glTF.
-
-## Limits in 0.7.0
-
-- A glTF or GLB that uses Draco mesh compression is refused. The decoder is not bundled and none is downloaded.
-- An E57 file of about 900 MB or more is refused before its points are read. Convert it to LAS, LAZ or COPC.
-- A remote URL whose host is a bare single-label name, ends in a private-network suffix, or is a loopback, private, link-local, shared, multicast or reserved IP address is refused.
-- An EPT hierarchy of more than 2,000,000 nodes is read only up to that point, and the open reports it.
-- Two epochs that declare the same horizontal CRS are compared in their supplied coordinates. No registration is estimated.
-
-The full list is in [KNOWN_LIMITATIONS_v0.7.0.md](releases/KNOWN_LIMITATIONS_v0.7.0.md).
-
-## Not in scope, for now
-
-Full GIS layers and analysis, photogrammetry, survey-grade measurement, vertical-datum transformation and editing of point data are deliberately left to dedicated tools.
+The complete, itemised list for this release is in [KNOWN_LIMITATIONS_v0.7.0.md](releases/KNOWN_LIMITATIONS_v0.7.0.md).
 
 ## Reporting issues
 

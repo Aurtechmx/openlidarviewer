@@ -88,7 +88,7 @@ composed by the `analyseContours` orchestrator
   vertical tolerance. An NVA/VVA-style vertical statistic (1.96 x RMSEz on internal hold-out, not ASPRS checkpoints) is reported via
   `verticalAccuracy.ts`.
 - Evidence-graded contours (`contour/`). Marching-squares contouring,
-  density-gated intervals, stitching, styling, honesty-preserving smoothing,
+  density-gated intervals, stitching, styling, confidence-aware smoothing,
   label placement, hypsometric colouring, and a shared feature model that
   exports to GeoJSON, SVG, and DXF, with each run graded solid /
   dashed / gap by its supporting confidence.
@@ -145,7 +145,7 @@ interface TerrainCoverageMeta {
 }
 ```
 
-The analyser populates these honestly. The Dataset Intelligence card attaches
+The analyser fills these only from data it has. The Dataset Intelligence card attaches
 a streaming caveat ("Analysis is based on currently loaded data. Results may
 change as additional points stream.") to any non-`full` row. The DTM/contour
 pipeline extends the same contract: empty cells render as gaps rather than
@@ -195,7 +195,7 @@ from the existing quality report, quality score, cell metrics, accuracy
 standards, and coverage, so it never disagrees with the numbers shown
 beneath it.
 
-It reports two independent axes, deliberately not conflated:
+It reports two independent axes, kept separate:
 
 - Surface Quality: *is the terrain surface internally valid?* Derived
   purely from surface metrics (coverage, interpolation, edge risk, density,
