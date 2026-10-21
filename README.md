@@ -350,7 +350,7 @@ OpenLiDARViewer is a viewer, not a replacement for a GIS or a survey-grade proce
 - Metric figures fail closed when the CRS linear unit is unconfirmed: the viewer reports extents in the source unit rather than fabricating metres.
 - Reprojection exists only on export, in the Export tab and the batch converter. It transforms X and Y, applies no vertical-datum shift, and refuses NAD27.
 - Classification visualization depends on attributes present in the file.
-- Very large datasets stream as COPC (local or remote); other huge formats may still need tiling or downsampling.
+- Very large datasets stream as COPC or EPT, and a very large LAS or LAZ is indexed into browser storage; other huge formats may still need tiling or downsampling.
 - WebGPU feature support varies by browser, with the WebGL 2 fallback used otherwise. Eye Dome Lighting is a screen-space depth cue, not physically-based lighting, and is off by default on the WebGL 2 fallback and on mobile.
 
 Full detail is in [`docs/limitations.md`](docs/limitations.md).
