@@ -371,6 +371,26 @@ collision. The independent Python oracle that cross-checks the routing core
 was written inside this project, not taken from an external routing tool, so
 the `TERRAIN-ACCESS` claim sits at E3.
 
+## Observatory is a preview
+
+Observatory works from the points resident in the scan and the scanner stations
+the file declares. It has no per-cell no-return evidence, so it cannot assess
+acquisition coverage completely. Per-point evidence colouring and strength maps
+are not connected to the shipped workflow. The voxel edge and region are not
+editable; a refused run asks for a smaller area or a lower-density load. A
+running job has no Cancel button. Suggested station positions are not checked
+for reachability, and Observatory and Terrain Access are not joined into a
+station-placement workflow.
+
+## Flow Pulse and Terrain Access run on the main thread
+
+Both tools compute after one animation frame on the interface thread, so a
+large grid can make the page unresponsive, most likely on a phone or tablet.
+Neither has been benchmarked on those devices. Flow accumulation counts
+contributing cells and area, not water volume, and the pulse says nothing about
+timing, flooding or discharge. Terrain Access checks width clearance only, not
+vehicle length, orientation or collision, and has had no field or vehicle trial.
+
 ## Registration is not exposed
 
 Six modules implement alignment. No user path reaches them.
@@ -421,7 +441,7 @@ measurement controller, which took twenty-eight more. The draw precision bound's
 fails the build when either passes its recorded baseline, so a raise is a hand
 edit to `docs/validation/monolith-size-baseline.json` and always shows in the
 diff.
-Fan-out is 97 for the shell, 73 for the renderer, across 1163 modules with no
+Fan-out is 97 for the shell, 73 for the renderer, across 1164 modules with no
 dependency cycles. Fan-out counts the distinct modules a file imports with a
 value import, source files and external packages alike; type-only and dynamic
 imports are not counted. The shell and the renderer figures are held

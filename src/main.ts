@@ -110,7 +110,7 @@ import { makeExportCrsResolver, resolvedExportCrs } from './app/exportCrsResolve
 import { createInspectorVisualCoordinator } from './app/inspectorVisualCoordinator';
 import type { MeasurementExportActionDeps } from './app/measurementExportActions';
 import { exportImageAction, runPointExport } from './app/exportImageAction';
-import { ClipPanel } from './ui/ClipPanel';
+import { ClipPanel, fitBoundsInProject } from './ui/ClipPanel';
 import type { ClipBox } from './render/clip/clipBox';
 // Two-epoch change detection is loaded on demand (it pulls the terrain
 // ground-filter + rasteriser): see compareLoadedLayers' dynamic import.
@@ -2490,7 +2490,7 @@ const clipPanel = new ClipPanel({
   // `viewer?.`: the constructor's setVisible(false) → onApply(null) fires before
   // the deferred Viewer exists, and clearing a clip on none is a no-op.
   onApply: (clip: ClipBox | null) => viewer?.setClip(clip),
-  fitBounds: () => scans.activeCloud()?.bounds() ?? null,
+  fitBounds: () => fitBoundsInProject(scans.activeCloud()?.bounds() ?? null, scans.activeId ? viewer?.layerProjectOffset(scans.activeId) ?? null : null),
   keptCount: () => (scans.activeId ? viewer.clipKeptCount(scans.activeId) : null),
 });
 const clipFlow = createClipFlowFromShell({ clipPanel, overlay: stage.overlay, viewer: () => viewer, ready: () => viewerReady, toast: showLassoToast, runTool,

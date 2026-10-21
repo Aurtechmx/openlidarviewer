@@ -53,7 +53,8 @@ describe('loaders.gl call sites', () => {
 
   it('passes the options to the glTF parse', async () => {
     const { loadGltf } = await import('../src/io/loadGltf');
-    await loadGltf(new ArrayBuffer(8), 'glb').catch(() => {});
+    const minimal = new TextEncoder().encode(JSON.stringify({ asset: { version: '2.0' } })).buffer as ArrayBuffer;
+    await loadGltf(minimal, 'gltf').catch(() => {});
     // The glTF parse adds its own `gltf` block on top of the shared options:
     // no image decoding and no image-format probes, both of which build a DOM
     // `Image` that the parse worker does not have.

@@ -70,3 +70,45 @@ describe('the glTF JSON is decoded and parsed once before loaders.gl sees the fi
     expect(parse.mock.calls.filter(([arg]) => arg === text)).toHaveLength(1);
   });
 });
+
+describe('glTF 1.0 and unreadable GLB headers cannot reach the network', () => {
+  /** A glTF 1.0 document: buffers keyed by id, not listed. */
+  function gltfV1WithBufferUri(uri: string): ArrayBuffer {
+    const doc = { asset: { version: '1.0' }, buffers: { b: { uri, byteLength: 1 } } };
+    return new TextEncoder().encode(JSON.stringify(doc)).buffer as ArrayBuffer;
+  }
+
+  /** A GLB whose first chunk is not JSON (the GLB 1.0 layout). */
+  function glbV1(): ArrayBuffer {
+    const json = new TextEncoder().encode(JSON.stringify({ buffers: { b: { uri: 'https://tracker.example/t.bin' } } }));
+    const out = new ArrayBuffer(20 + json.length);
+    const v = new DataView(out);
+    v.setUint32(0, 0x46546c67, true); // 'glTF'
+    v.setUint32(4, 1, true);
+    v.setUint32(8, out.byteLength, true);
+    v.setUint32(12, json.length, true);
+    v.setUint32(16, 0, true); // contentFormat 0, not 'JSON'
+    new Uint8Array(out, 20).set(json);
+    return out;
+  }
+
+  it('finds a URI in a glTF 1.0 buffer map', async () => {
+    const { externalGltfUris } = await import('../src/io/loadGltf');
+    expect(externalGltfUris({ buffers: { b: { uri: 'https://tracker.example/t.bin' } } })).toEqual(['https://tracker.example/t.bin']);
+  });
+
+  it('refuses a glTF 1.0 file without requesting its buffer', async () => {
+    const fetchSpy = vi.fn(async () => new Response(new ArrayBuffer(1)));
+    vi.stubGlobal('fetch', fetchSpy);
+    await expect(loadGltf(gltfV1WithBufferUri('https://tracker.example/t.bin'), 'gltf')).rejects.toThrow(/version 2\.0/);
+    expect(fetchSpy).not.toHaveBeenCalled();
+  });
+
+  it('refuses a GLB whose JSON chunk cannot be read, even under a .gltf name', async () => {
+    const fetchSpy = vi.fn(async () => new Response(new ArrayBuffer(1)));
+    vi.stubGlobal('fetch', fetchSpy);
+    await expect(loadGltf(glbV1(), 'glb')).rejects.toThrow(/JSON chunk/);
+    await expect(loadGltf(glbV1(), 'gltf')).rejects.toThrow(/JSON chunk/);
+    expect(fetchSpy).not.toHaveBeenCalled();
+  });
+});

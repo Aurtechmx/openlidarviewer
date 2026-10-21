@@ -32,6 +32,7 @@ import type { ContourFeature, ContourFeatureModel } from './contourFeatureModel'
 import { contourShapeStyleLabel } from './contourShapeStyle';
 import { decimalsForInterval, type ContourLabel } from './labelPlacement';
 import { provenanceLines, type ExportProvenance } from '../export/exportProvenance';
+import { singleLine } from '../../export/safeText';
 
 interface LayerDef {
   readonly name: string;
@@ -115,7 +116,9 @@ export function dxfContours(
   // self-describing. With the unified provenance every line is stamped; without
   // it, the lone shape-style comment is kept for back-compat.
   if (provenance) {
-    for (const line of provenanceLines(provenance)) pair(999, line);
+    // A source or CRS name can carry a line break; in DXF that would start a
+    // new group code, so each comment is kept on one line.
+    for (const line of provenanceLines(provenance)) pair(999, singleLine(line));
   } else {
     pair(999, `OpenLiDARViewer contour style: ${contourShapeStyleLabel(model.contourStyle)}`);
   }

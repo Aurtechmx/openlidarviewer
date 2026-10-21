@@ -304,14 +304,34 @@ export function externalGltfUris(document: unknown): string[] {
   if (!doc || typeof doc !== 'object') return [];
   const out: string[] = [];
   for (const list of [doc.buffers, doc.images]) {
-    if (!Array.isArray(list)) continue;
-    for (const entry of list) {
+    // glTF 1.0 keys these by id instead of listing them; read both shapes.
+    const entries = Array.isArray(list) ? list : list && typeof list === 'object' ? Object.values(list) : [];
+    for (const entry of entries) {
       const uri = (entry as { uri?: unknown } | null)?.uri;
       if (typeof uri === 'string' && !/^data:/i.test(uri.trim())) out.push(uri);
     }
   }
   return out;
 }
+
+/**
+ * The only requests the glTF parser may make: decoding a `data:` URI held in
+ * the file. Anything else is refused, so a reference the checks above did not
+ * catch still cannot reach the network.
+ */
+function dataUriOnlyFetch(url: string): Promise<Response> {
+  if (/^data:/i.test(url.trim())) return fetch(url);
+  return Promise.reject(new Error(EXTERNAL_GLTF_MESSAGE));
+}
+
+/** True when the bytes start with the GLB magic `glTF`. */
+function hasGlbMagic(buffer: ArrayBuffer): boolean {
+  const b = new Uint8Array(buffer, 0, Math.min(4, buffer.byteLength));
+  return b.length === 4 && b[0] === 0x67 && b[1] === 0x6c && b[2] === 0x54 && b[3] === 0x46;
+}
+
+const UNSUPPORTED_GLTF_VERSION_MESSAGE =
+  'This glTF is not version 2.0. Re-export it as glTF 2.0 or GLB 2.0.';
 
 const DRACO_EXTENSION = 'KHR_draco_mesh_compression';
 
@@ -420,10 +440,18 @@ export async function loadGltf(
   // Refuse before parsing: nothing outside the file is requested.
   // The JSON is decoded and parsed once; both checks read the same document.
   const document = gltfJson(buffer, sourceFormat);
+  if (document === null && (sourceFormat === 'glb' || hasGlbMagic(buffer))) {
+    throw new LoadError('malformed-file', 'This GLB has no readable JSON chunk.');
+  }
+  const version = (document as { asset?: { version?: unknown } } | null)?.asset?.version;
+  if (document !== null && !(typeof version === 'string' && /^2\./.test(version))) {
+    throw new LoadError('unsupported-format', UNSUPPORTED_GLTF_VERSION_MESSAGE, UNSUPPORTED_GLTF_VERSION_MESSAGE);
+  }
   if (externalGltfUris(document).length > 0) throw new Error(EXTERNAL_GLTF_MESSAGE);
   assertGltfJsonAdmissible(document, options.maxVertices ?? MAX_GLTF_VERTICES);
   const raw = await parse(buffer, GLTFLoader, {
     ...LOCAL_ONLY_LOADER_OPTIONS,
+    fetch: dataUriOnlyFetch,
     gltf: {
       loadImages: false,
       // Draco files are refused above. These keep loaders.gl from ever trying
