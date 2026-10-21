@@ -101,12 +101,12 @@ These change numbers earlier builds reported. Each has a regression test, and th
 
 ## Also in this release
 
-Observatory stations and a slice plane, a results shelf, a session log with Open in Profile Workbench, intensity ramps trimmed to the 2nd to 98th percentile, Make available offline, a storage-grid diagnostics library, a draw precision bound in the scan report, the Olv font and a new emblem, a privacy statement and full licence notices.
+Observatory (a preview) with stations and a slice plane, a results shelf, a session log with Open in Profile Workbench, intensity ramps trimmed to the 2nd to 98th percentile, Make available offline, a storage-grid diagnostics library, a draw precision bound in the scan report, the Olv font and a new emblem, a privacy statement and full licence notices.
 
 ## Evidence and limits
 
 The register holds 38 claims, 17 of them at E4 and none at E5. Flow Pulse (E3), its depression inventory (E2), Terrain Access (E3) and VVA-P95 (E3) are new, and no existing claim changed level. three.js advanced to 0.186.
 
-Nothing here is a survey-grade result; held-out validation against independent reference data has not been done. Figures from a display sample describe the points held, not the whole file. Registration is not exposed beyond Compare elevation's planar fit, one streamed source is open at a time, and an E57 of about 900 MB or more is refused before its points are read.
+Nothing here is a survey-grade result; held-out validation against independent reference data has not been done. Figures from a display sample describe the points held, not the whole file. Observatory is a preview that uses resident points and declared stations, Flow Pulse and Terrain Access run on the main thread, registration is not exposed beyond Compare elevation's planar fit, one streamed source is open at a time, and an E57 of about 900 MB or more is refused before its points are read.
 
 Details: [CHANGELOG.md](../../CHANGELOG.md), [KNOWN_LIMITATIONS_v0.7.0.md](KNOWN_LIMITATIONS_v0.7.0.md) and [VALIDATION_REPORT_v0.7.0.md](VALIDATION_REPORT_v0.7.0.md).

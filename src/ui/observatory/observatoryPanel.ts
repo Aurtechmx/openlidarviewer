@@ -217,7 +217,7 @@ function ineligibleBody(reason: string): HTMLElement {
 
 function refusedBody(reason: string): HTMLElement {
   return el('div', { className: 'olv-observatory-refused' }, [
-    el('p', { text: `The run was refused: ${reason}. Try a coarser voxel edge or a smaller region.` }),
+    el('p', { text: `The run was refused: ${reason}. Open a smaller area or a lower-density load, then run again.` }),
   ]);
 }
 

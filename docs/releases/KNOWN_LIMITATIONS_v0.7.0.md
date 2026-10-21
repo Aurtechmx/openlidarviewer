@@ -371,6 +371,26 @@ collision. The independent Python oracle that cross-checks the routing core
 was written inside this project, not taken from an external routing tool, so
 the `TERRAIN-ACCESS` claim sits at E3.
 
+## Observatory is a preview
+
+Observatory works from the points resident in the scan and the scanner stations
+the file declares. It has no per-cell no-return evidence, so it cannot assess
+acquisition coverage completely. Per-point evidence colouring and strength maps
+are not connected to the shipped workflow. The voxel edge and region are not
+editable; a refused run asks for a smaller area or a lower-density load. A
+running job has no Cancel button. Suggested station positions are not checked
+for reachability, and Observatory and Terrain Access are not joined into a
+station-placement workflow.
+
+## Flow Pulse and Terrain Access run on the main thread
+
+Both tools compute after one animation frame on the interface thread, so a
+large grid can make the page unresponsive, most likely on a phone or tablet.
+Neither has been benchmarked on those devices. Flow accumulation counts
+contributing cells and area, not water volume, and the pulse says nothing about
+timing, flooding or discharge. Terrain Access checks width clearance only, not
+vehicle length, orientation or collision, and has had no field or vehicle trial.
+
 ## Registration is not exposed
 
 Six modules implement alignment. No user path reaches them.
