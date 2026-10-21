@@ -31,6 +31,10 @@
 # longer mean "the static gate passed and nothing else was checked".
 set -o pipefail
 
+# git answers for this project only, never for a repository above it
+# (see scripts/lib/confineGit.mjs).
+export GIT_CEILING_DIRECTORIES="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd -P)${GIT_CEILING_DIRECTORIES:+:$GIT_CEILING_DIRECTORIES}"
+
 MODE="${OLV_GATE_MODE:-development}"
 LOG="${OLV_GATE_LOG:-release/gate.log}"
 mkdir -p "$(dirname "$LOG")"

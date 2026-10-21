@@ -20,8 +20,10 @@ import {
   type CompassViewer,
 } from '../src/ui/compassController';
 
-function fakeViewer(cloudCount = 1): CompassViewer & {
+function fakeViewer(cloudCount = 1, streaming = false): CompassViewer & {
   count: number;
+  /** Whether a streamed scan is open, beside any static layers. */
+  streaming: boolean;
   /** Deliver one drawn frame to whatever is subscribed. */
   draw(): void;
   listeners(): number;
@@ -29,7 +31,9 @@ function fakeViewer(cloudCount = 1): CompassViewer & {
   const subscribed = new Set<() => void>();
   const v = {
     count: cloudCount,
+    streaming,
     clouds: () => ({ length: v.count }),
+    get hasStreamingCloud() { return v.streaming; },
     cameraOrientation: () => ({ forward: [0, -1, 0] as const, up: [0, 0, 1] as const, upIsZ: true }),
     setStandardView: () => undefined,
     orientView: () => true,
@@ -352,5 +356,59 @@ describe('rapid open / close during the lazy load', () => {
     await Promise.resolve(); await Promise.resolve();
     expect(cube.state.mounts).toBe(1);
     expect(v.listeners()).toBe(1);
+  });
+});
+
+describe('compass on a streamed scan', () => {
+  it('mounts for a stream with no static layer, which the layer list does not hold', async () => {
+    const { c, cube } = build('on');
+    const v = fakeViewer(0, true);
+    c.attachViewer(v);
+    cube.state.resolve();
+    await Promise.resolve();
+    expect(cube.state.mounts).toBe(1);
+    expect(v.listeners()).toBe(1);
+  });
+
+  it('follows a stream opening after the viewer attached, and closing', async () => {
+    const { c, cube } = build('on');
+    const v = fakeViewer(0, false);
+    c.attachViewer(v);
+    expect(cube.state.mounts).toBe(0);
+
+    v.streaming = true; // the Viewer's onStreamingChange calls refresh
+    c.refresh();
+    cube.state.resolve();
+    await Promise.resolve();
+    expect(cube.state.mounts).toBe(1);
+
+    v.streaming = false;
+    c.refresh();
+    expect(cube.state.disposes).toBe(1);
+    expect(v.listeners()).toBe(0);
+  });
+
+  it('stays up when one of a static layer and a stream closes and the other remains', async () => {
+    const { c, cube } = build('on');
+    const v = fakeViewer(1, true);
+    c.attachViewer(v);
+    cube.state.resolve();
+    await Promise.resolve();
+    v.streaming = false;
+    c.refresh();
+    expect(cube.state.disposes).toBe(0);
+    v.count = 0;
+    c.refresh();
+    expect(cube.state.disposes).toBe(1);
+  });
+
+  it('does not mount when the stream closed while the chunk was loading', async () => {
+    const { c, cube } = build('on');
+    const v = fakeViewer(0, true);
+    c.attachViewer(v);
+    v.streaming = false;
+    cube.state.resolve();
+    await Promise.resolve();
+    expect(cube.state.mounts).toBe(0);
   });
 });

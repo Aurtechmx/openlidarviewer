@@ -357,7 +357,8 @@ export const METHOD_REGISTRY: Readonly<Record<string, MethodEntry>> = {
       'Cut-fill volume of a footprint above a base plane, integrated over a ' +
       'regular horizontal grid: each cell holding at least one point contributes ' +
       'its footprint-clipped area times its median height above the base, so a ' +
-      'density gradient does not weight the result. Cells without points are ' +
+      'densely sampled cell weighs no more than a sparse one; within-cell sampling ' +
+      'and surface variation can still bias the estimate. Cells without points are ' +
       'never read as zero: inside the convex extent of the covered cells they ' +
       'take a surface interpolated from the nearest covered cells (inverse-' +
       'distance weighting); outside it they are excluded and their area ' +
@@ -384,7 +385,8 @@ export const METHOD_REGISTRY: Readonly<Record<string, MethodEntry>> = {
     summary:
       'Cut-fill volume by integrating over a regular horizontal grid: each cell ' +
       'contributes its polygon-clipped area times a robust (median) surface height ' +
-      'above the base, so a density gradient in the cloud does not bias the result. ' +
+      'above the base, so area weighting removes unequal weighting between cells; ' +
+      'within-cell sampling and surface variation can still bias the estimate. ' +
       'Unobserved cells reduce reported coverage rather than reading as zero. ' +
       'From olv.volume.stockpile v3 the cut-fill tools integrate the same grid. ' +
       'v2 excludes cells whose centre falls outside a concave footprint and ' +

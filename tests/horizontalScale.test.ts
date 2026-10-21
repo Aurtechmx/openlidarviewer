@@ -15,7 +15,12 @@ import {
   METRES_PER_DEGREE,
   metresPerDegreeLatitude,
   metresPerDegreeLongitude,
+  geographicLatitudeRefusal,
+  GeographicLatitudeError,
+  MAX_GEOGRAPHIC_LATITUDE_DEG,
 } from '../src/terrain/ground/horizontalScale';
+import { hornSlopeAspect } from '../src/terrain/ground/terrainDerivatives';
+import { computeTerrainCore } from '../src/terrain/contour/analyseContours';
 
 describe('horizontalCellMetres', () => {
   it('projected metre data passes through unchanged (default scale)', () => {
@@ -54,12 +59,10 @@ describe('cosLatitude', () => {
     expect(cosLatitude(Number.NaN)).toBe(1);
   });
 
-  it('clamps beyond ±89° so the E–W scale never collapses to 0', () => {
-    // cos(89°) ≈ 0.017452 — the floor for any |lat| ≥ 89, including the pole.
-    const floor = Math.cos((89 * Math.PI) / 180);
-    expect(cosLatitude(89)).toBeCloseTo(floor, 12);
-    expect(cosLatitude(90)).toBeCloseTo(floor, 12);
-    expect(cosLatitude(-90)).toBeCloseTo(floor, 12);
+  it('is the cosine at the latitude itself, limited only to ±90°', () => {
+    expect(cosLatitude(89.9)).toBeCloseTo(Math.cos((89.9 * Math.PI) / 180), 12);
+    expect(cosLatitude(90)).toBeCloseTo(0, 12);
+    expect(cosLatitude(95)).toBeCloseTo(0, 12);
   });
 });
 
@@ -88,15 +91,12 @@ describe('horizontalCellMetresXY', () => {
     expect(at60.x / at60.y).toBeCloseTo(0.5, 2);
   });
 
-  it('clamps a degenerate (≥90°) latitude to a POSITIVE X (89° floor)', () => {
-    // The longitude series is clamped at ±89° like cosLatitude: a pole-crossing
-    // latitude keeps the E–W scale finite and non-zero instead of dividing
-    // derivatives by ~0.
-    const polar = horizontalCellMetresXY(0.001, true, 95);
-    expect(polar.x).toBeGreaterThan(0);
-    expect(polar.x).toBeCloseTo(0.001 * metresPerDegreeLongitude(89), 9);
-    // N–S is the polar meridional degree, ≈ 111 694 m.
-    expect(polar.y).toBeCloseTo(111.6939173, 6);
+  it('withholds a geographic cell size beyond ±89° instead of substituting another latitude', () => {
+    for (const lat of [89.5, 89.9, -89.9, 95]) {
+      expect(() => horizontalCellMetresXY(0.001, true, lat)).toThrow(GeographicLatitudeError);
+    }
+    // Projected frames never consult the latitude.
+    expect(horizontalCellMetresXY(2, false, 89.9)).toEqual({ x: 2, y: 2 });
   });
 
   it('an UNKNOWN latitude (null) keeps the isotropic estimate, never NaN', () => {
@@ -134,5 +134,52 @@ describe('WGS84 degree lengths', () => {
       expect(metresPerDegreeLatitude(lat)).toBe(METRES_PER_DEGREE);
       expect(metresPerDegreeLongitude(lat)).toBe(METRES_PER_DEGREE);
     }
+  });
+});
+
+/**
+ * The local ellipsoidal metric (π/180)·a·cos φ / √(1 − e² sin² φ) on WGS84 is
+ * the analytic truth for a degree of longitude. The series must agree with it
+ * at the latitude asked, and a grid beyond the supported latitude is refused
+ * rather than answered with another latitude's scale.
+ */
+describe('polar latitudes', () => {
+  const A = 6_378_137;
+  const E2 = 0.00669437999014;
+  const truth = (lat: number): number => {
+    const phi = (lat * Math.PI) / 180;
+    return ((Math.PI / 180) * A * Math.cos(phi)) / Math.sqrt(1 - E2 * Math.sin(phi) ** 2);
+  };
+
+  it.each([89, -89, 89.5, -89.5, 89.9, -89.9])('the longitude degree at %s° matches the ellipsoid within 0.01 %%', (lat) => {
+    expect(Math.abs(metresPerDegreeLongitude(lat) / truth(lat) - 1)).toBeLessThan(1e-4);
+  });
+
+  it('a 45° east-west plane at 89° reads 45° through the shipped Horn slope', () => {
+    const cell = 0.0001; // degrees
+    const { x, y } = horizontalCellMetresXY(cell, true, 89);
+    const cols = 9;
+    const rows = 9;
+    const z = new Float32Array(cols * rows);
+    for (let r = 0; r < rows; r++) for (let c = 0; c < cols; c++) z[r * cols + c] = c * x; // rise = run east
+    const { slope } = hornSlopeAspect(z, cols, rows, x, y);
+    // Slope is rise over run; 45° is a gradient of 1.
+    expect((Math.atan(slope[4 * cols + 4]) * 180) / Math.PI).toBeCloseTo(45, 4);
+  });
+
+  it.each([89.5, -89.5, 89.9, -89.9])('at %s° the metric derivatives are refused with the reason', (lat) => {
+    expect(geographicLatitudeRefusal(lat)).toMatch(/polar projected CRS/);
+    expect(() => horizontalCellMetresXY(0.0001, true, lat)).toThrow(/beyond the ±89°/);
+    const points = Array.from({ length: 400 }, (_, i) => ({ x: (i % 20) * 0.0001, y: Math.floor(i / 20) * 0.0001, z: i % 20 }));
+    expect(() =>
+      computeTerrainCore({ points } as never, { cellSizeM: 0.0002, isGeographic: true, latitudeDeg: lat } as never),
+    ).toThrow(GeographicLatitudeError);
+  });
+
+  it('accepts the boundary itself and unknown latitudes', () => {
+    expect(geographicLatitudeRefusal(MAX_GEOGRAPHIC_LATITUDE_DEG)).toBeNull();
+    expect(geographicLatitudeRefusal(-MAX_GEOGRAPHIC_LATITUDE_DEG)).toBeNull();
+    expect(geographicLatitudeRefusal(null)).toBeNull();
+    expect(geographicLatitudeRefusal(Number.NaN)).toBeNull();
   });
 });

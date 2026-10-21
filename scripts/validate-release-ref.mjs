@@ -21,6 +21,7 @@
  * Usage: node scripts/validate-release-ref.mjs [--require-tag]
  */
 
+import './lib/confineGit.mjs';
 import { readFileSync, existsSync } from 'node:fs';
 import { execFileSync, spawnSync } from 'node:child_process';
 import { resolve, dirname } from 'node:path';

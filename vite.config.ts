@@ -1,3 +1,6 @@
+// Before anything runs git: the build identity is this project's commit or
+// 'unknown', never a parent repository's (scripts/lib/confineGit.mjs).
+import './scripts/lib/confineGit.mjs';
 import { defineConfig, minifySync, transformWithOxc, type Plugin, type PluginOption, type TransformResult } from 'vite';
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -29,8 +32,10 @@ const pkg = JSON.parse(
  * `__BUILD_IDENTITY__` global (see src/build/buildIdentity.ts). This is what
  * lets an export record which BUILD produced it, not just which release.
  *
- * Honesty: git is queried best-effort. On a checkout with no `.git` (a source
- * tarball) the queries throw and `commit` stays the literal `'unknown'`,
+ * Honesty: git is queried best-effort, and only about this project: the
+ * confineGit import above stops git's search at the project root, so a source
+ * archive extracted inside another checkout does not take that checkout's
+ * commit. On a tree with no `.git` the queries throw and `commit` stays the literal `'unknown'`,
  * `dirty` stays `false` — never a fabricated hash. `builtAt` honours
  * `SOURCE_DATE_EPOCH` so a reproducible build can pin the timestamp.
  */

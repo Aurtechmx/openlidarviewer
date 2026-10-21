@@ -8,15 +8,18 @@
  * is a financial figure (inventory valuation, earthworks payment), and the
  * honest version is "1,254 m³ ± 41 (±3.3%), and here is exactly why."
  *
- * The band combines two independent, defensible error sources and shows the
- * math behind each:
+ * The band is a MODEL band, not a calibrated interval. It combines two terms
+ * and shows the math behind each:
  *
- *   1. SAMPLING error — the point-sample estimator integrates the mean
- *      thickness over the footprint. The standard error of that mean is
- *      σ(thickness) / √N over the N points inside the polygon, so the
- *      1σ volume error is  area · σ(thickness) / √N. Sparse footprints have
- *      a larger band; this is the "density" honesty the Scan Intelligence
- *      panel already preaches, made quantitative.
+ *   1. SURFACE SPREAD term — the volume integrates each grid cell's median
+ *      height (stockpileAreaGrid.ts), and the term is
+ *      sqrt(Σ (A_c · NMAD_c / √n_c)²) over the covered cells. NMAD/√n is the
+ *      form of a MEAN's standard error; a median's is about 1.25× larger for
+ *      normal noise, and the reproducibility pack measures the combined band
+ *      covering the true volume in 60.5% of trials, 95% interval 55.6–65.2%,
+ *      against a nominal 68% (benchmarks/out/metrics.md, M3). Read it as an
+ *      uncalibrated surface-spread diagnostic. Sparse footprints have a
+ *      larger band.
  *      INDEPENDENCE ASSUMPTION: the √N reduction treats per-point thickness
  *      residuals as spatially INDEPENDENT. Real scan noise is correlated
  *      (scan lines, registration drift, surface texture), so the true
@@ -135,8 +138,10 @@ export interface StockpileBreakdown {
   /** Sample std (n−1) of the per-point thickness, m. */
   readonly thicknessStdDev: number;
   /**
-   * 1σ volume term from the cell surfaces, m³: sqrt(Σ (A_c · NMAD_c / √n_c)²)
+   * Surface spread term from the cell surfaces, m³: sqrt(Σ (A_c · NMAD_c / √n_c)²)
    * over the covered grid cells, the same cells the volume is integrated on.
+   * An uncalibrated diagnostic: NMAD/√n is a mean's standard-error form applied
+   * to a cell median.
    */
   readonly samplingError: number;
   /** 1σ volume error from base-plane uncertainty over the covered area, m³. */
@@ -166,7 +171,11 @@ export interface StockpileVolumeResult {
   readonly volume: number;
   /** Material below the base inside the footprint (cut), native units³. ≥ 0. */
   readonly cut: number;
-  /** Combined 1σ uncertainty on `volume`, native units³. */
+  /**
+   * Combined model band on `volume` (surface spread and base terms in
+   * quadrature), native units³. Not a confidence interval: its measured ±1σ
+   * coverage is below the nominal 68% (repro M3).
+   */
   readonly sigma: number;
   /** Volume − 1σ, native units³ (clamped at 0). */
   readonly low: number;

@@ -11,6 +11,7 @@
  *
  * Exit 0 = clean; exit 1 = an ignored source file (prints the paths).
  */
+import './lib/confineGit.mjs';
 import { execFileSync } from 'node:child_process';
 import { requireBinaryOnPath } from './lib/binaryOnPath.mjs';
 

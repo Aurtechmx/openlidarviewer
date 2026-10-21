@@ -14,6 +14,7 @@
  * both wrong in the same direction is the case that got through last time.
  */
 
+import './lib/confineGit.mjs';
 import { readFileSync, existsSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
 import { resolve, dirname } from 'node:path';

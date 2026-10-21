@@ -144,6 +144,18 @@ on lattice points; which cell such a point joins is then decided by
 floating-point rounding, and a very small selection can move by a cell's worth
 under translation.
 
+Area weighting removes unequal weighting between cells; it does not make a
+cell's median equal the cell's area-average height. Where the surface varies
+inside a cell, where in the cell the points fall moves the figure: on a 16 m
+ramp (exact 2,048 m³) with four points per 2 m cell, the same number of points
+shifted toward each cell's low side gives 1,920 m³ (−6.25%), and a smooth
+density gradient also biases it
+(`tests/stockpileWithinCellSampling.test.ts`). The ± model band is an
+uncalibrated surface-spread diagnostic, not a confidence interval: its spread
+term applies a mean's standard-error form, NMAD/√n, to a cell median, and over
+400 synthetic trials it covers the true volume in 60.5% of them (95% interval
+55.6–65.2%) against a nominal 68% (`benchmarks/out/metrics.md`, M3).
+
 ## Two densities, each stating its basis
 
 Analyse reads the resident gather and the Scan Report divides the declared count
@@ -655,7 +667,7 @@ output keeps the source WKT that states it, and the contour DXF, contour SVG
 and map sheet label its coordinates as unitless source units rather than
 naming the unit.
 
-## Depth references, geocentric frames and Web Mercator are refused, not converted
+## Depth references and geocentric frames are refused; Web Mercator is scaled by latitude in terrain analysis only
 
 Terrain analysis, contours, DEM export, Flow Pulse, Terrain Access and change
 detection refuse a depth-positive-down vertical reference on either epoch
@@ -663,13 +675,33 @@ detection refuse a depth-positive-down vertical reference on either epoch
 normalisation is supported."). Depths are not negated into heights. A
 geocentric CRS (EPSG:4978 and similar) is refused by every metric, terrain and
 elevation workflow; it is not converted to geographic or projected
-coordinates. Web Mercator is treated as grid units only: horizontal lengths,
-areas, grades, slopes and volumes are withheld and heights are kept; no
-scale-factor correction is applied. A geocentric code outside the built-in
+coordinates. Web Mercator is treated as grid units by the Measure tool, the
+scan report and change detection: horizontal lengths, areas, grades, slopes
+and volumes are withheld there and heights are kept. Terrain analysis, and the
+contours, DEM export, Flow Pulse and Terrain Access built from it, convert a
+Web Mercator grid with the WGS 84 ground scale at the scan's latitude: east–west
+cos φ / √(1 − e² sin² φ) and north–south (1 − e²) cos φ / (1 − e² sin² φ)^(3/2),
+whose geometric mean is the one factor used (0.77 at Denver). The coordinates
+and the DEM's georeference stay in Web Mercator. The factor is exact at the
+scan's centre latitude and changes across the scan, so a run states the
+largest relative error it leaves (0.5% for a 0.4° tall scan about 40° N) and is
+refused above 1%, for example a whole regional dataset, with the reason:
+zoom in so less is loaded, or reproject to UTM. A Web Mercator scan whose
+position is unknown (several layers, or a moved layer) is refused. Streamed
+USGS EPT datasets are in Web Mercator, so this is what lets them be
+analysed. A geocentric code outside the built-in
 list is recognised only from its WKT or GeoTIFF model type. A WKT
 engineering CRS (ENGCRS, LOCAL_CS) is not yet classified as local and keeps
 its current handling. Reproject refuses a geocentric source or target, because
 it maps only horizontal X and Y.
+
+A geographic (degree) scan beyond ±89° latitude is refused by terrain analysis
+and everything built on its cell sizes (slope, aspect, hillshade, DEM export,
+Flow Pulse, Terrain Access) with the reason: a degree of longitude shrinks too
+fast near a pole for one representative latitude to stand for the grid.
+Reprojecting the scan to a polar projected CRS such as EPSG:3413 or EPSG:3031
+lets it run. Within ±89° the east–west scale is the ellipsoid's at the grid
+latitude.
 
 ## Exports carry the geographic refusal, not the endpoint grade
 

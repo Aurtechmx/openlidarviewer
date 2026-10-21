@@ -426,12 +426,14 @@ claims:
     prohibitedClaim: ["survey-grade stockpile volume", "validated uncertainty interval"]
     scope:
       supported:
-        - "A density gradient across the footprint does not bias the figure (cells are area-weighted, not point-weighted)."
+        - "Area weighting removes unequal weighting between cells: a densely sampled cell weighs no more than a sparse one (cells are area-weighted, not point-weighted)."
         - "Unsupported cells lower the reported footprint support instead of reading as zero."
       unsupported:
         - "Base-surface uncertainty, which is unquantified."
+        - "Invariance to where points fall inside a cell: within-cell sampling and surface variation can still bias the estimate (tests/stockpileWithinCellSampling.test.ts)."
         - "Coverage gaps below the support thresholds; the figure is then a preview or withheld."
         - "Any validated uncertainty interval on the reported volume."
+        - "Calibrated coverage of the model band: its measured ±1σ coverage is 60.5% (95% interval 55.6–65.2%) against a nominal 68% (reproducibility pack M3)."
 
   # ── Ground / terrain surfaces ───────────────────────────────────────────────
   - claimId: GROUND-FILTER

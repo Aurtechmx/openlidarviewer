@@ -96,6 +96,16 @@ function detectedVerticalChange(before: Float32Array, alignedAfter: Float32Array
 // ── The metrics object (also written under REPRO=1) ───────────────────────────
 const metrics: Record<string, unknown> = {};
 
+/** 95% Wilson score interval for `k` successes in `n` trials. */
+function wilson95(k: number, n: number): [number, number] {
+  const z = 1.959963984540054;
+  const p = k / n;
+  const d = 1 + (z * z) / n;
+  const c = p + (z * z) / (2 * n);
+  const h = z * Math.sqrt((p * (1 - p)) / n + (z * z) / (4 * n * n));
+  return [(c - h) / d, (c + h) / d];
+}
+
 describe('reproducibility + calibration', () => {
   test('M1: full-3D registration absorbs vertical change; horizontal-only preserves it', () => {
     const before = terrain(300, 1);
@@ -132,10 +142,13 @@ describe('reproducibility + calibration', () => {
     expect(errXY).toBeLessThan(0.3);
   });
 
-  test('M3: the stockpile ± band is well-calibrated (empirical coverage ≈ nominal)', () => {
+  test('M3: the stockpile model band\'s empirical ±1σ coverage, stated against its 95% interval', () => {
     // A flat L×L slab of height H over an explicit base at z=0, with a noisy top
-    // surface (sigma_eps). True volume = L^2 * H; the reported 1σ should cover
-    // that truth in ~68% of noise realisations.
+    // surface (sigma_eps). True volume = L^2 * H. A calibrated 1σ band would cover
+    // that truth in about 68% of noise realisations; this measures how often the
+    // band does, and says "calibrated" only when the 95% Wilson interval of the
+    // measured coverage contains 68%. The band is a model term, not a validated
+    // interval: its spread term uses NMAD/√n on a cell median.
     const L = 10, H = 2, sigmaEps = 0.1, ptsPerSide = 22, trials = 400;
     const trueVolume = L * L * H;
     const polygon = [[0, 0, 0], [L, 0, 0], [L, L, 0], [0, L, 0]] as [number, number, number][];
@@ -160,16 +173,24 @@ describe('reproducibility + calibration', () => {
       relErrs.push(Math.abs(res.volume - trueVolume) / trueVolume);
     }
     const coverage1sigma = within1 / trials;
+    const wilson = wilson95(within1, trials);
+    const calibrated = wilson[0] <= 0.68 && 0.68 <= wilson[1];
     metrics.M3_stockpile_band_coverage = {
       nominal1sigma: 0.68,
       empirical1sigma: round(coverage1sigma, 3),
+      wilson95: [round(wilson[0], 3), round(wilson[1], 3)],
+      calibrated,
       trials,
       meanRelErrorPct: round(mean(relErrs) * 100, 3),
       trueVolumeM3: trueVolume,
     };
-    // Well-calibrated: the empirical 1σ coverage should sit near the nominal 68%.
-    expect(coverage1sigma).toBeGreaterThan(0.58);
-    expect(coverage1sigma).toBeLessThan(0.80);
+    expect(wilson[0]).toBeLessThanOrEqual(coverage1sigma);
+    expect(coverage1sigma).toBeLessThanOrEqual(wilson[1]);
+    // The measured coverage, 242 of 400 at these seeds, is below the nominal 68%
+    // and its interval excludes it. Should an estimator change move it, this
+    // fails so the generated statement and the register are revisited with it.
+    expect(within1).toBe(242);
+    expect(calibrated).toBe(false);
   });
 
   test('M4: the report digest is deterministic and tamper-evident', () => {
@@ -259,7 +280,7 @@ afterAll(() => {
 
   const m1 = metrics.M1_mean_bias as { horizontalOnlyM: number; full3dM: number };
   const m2 = metrics.M2_alignment_recovery as { residualM: number; recoveryErrorM: number };
-  const m3 = metrics.M3_stockpile_band_coverage as { empirical1sigma: number; meanRelErrorPct: number; trials: number };
+  const m3 = metrics.M3_stockpile_band_coverage as { empirical1sigma: number; wilson95: [number, number]; calibrated: boolean; meanRelErrorPct: number; trials: number };
   const m4 = metrics.M4_digest as { deterministic: boolean; algorithm: string; tamperDetected: boolean };
   const m5 = metrics.M5_terrain_complexity as {
     planeSlopeDeg: number;
@@ -280,7 +301,7 @@ ground truth. No external data. Regenerate with a single command.
 | M1 | Mean detected-vertical-change error, horizontal-only registration | ${m1.horizontalOnlyM} m |
 | M1 | Mean detected-vertical-change error, full-3D registration | ${m1.full3dM} m |
 | M2 | Planar alignment horizontal-recovery error (known 5 m shift) | ${m2.recoveryErrorM} m (residual ${m2.residualM} m) |
-| M3 | Stockpile ±1σ band empirical coverage (nominal 0.68, ${m3.trials} trials) | ${m3.empirical1sigma} |
+| M3 | Stockpile model band ±1σ empirical coverage (nominal 0.68, ${m3.trials} trials; 95% Wilson interval) | ${m3.empirical1sigma} (${m3.wilson95[0]}–${m3.wilson95[1]}) |
 | M3 | Stockpile mean relative volume error | ${m3.meanRelErrorPct} % |
 | M4 | Report digest deterministic / tamper-detected (${m4.algorithm}) | ${m4.deterministic && m4.tamperDetected ? 'yes / yes' : 'FAIL'} |
 | M5 | VRM median ± IQR on a constant ${m5.planeSlopeDeg}° plane (slope-independence) | ${m5.planeVrmMedian} ± ${m5.planeVrmIqr} |
@@ -290,7 +311,9 @@ ground truth. No external data. Regenerate with a single command.
 M1 evidences the change-detection design choice: a full-3D rigid registration
 absorbs a true uniform vertical change into its z-shift (large detected-change
 error), while the horizontal-only constraint preserves it (near-zero error). M3
-shows the reported uncertainty band is calibrated rather than nominal. M5
+${m3.calibrated
+    ? 'measures a band coverage whose 95% interval contains the nominal 68% on this synthetic slab; that is not a calibration of the band on real surveys.'
+    : `measures the model band covering the true volume in ${Math.round(m3.empirical1sigma * 100)}% of trials, whose 95% interval (${Math.round(m3.wilson95[0] * 100)}–${Math.round(m3.wilson95[1] * 100)}%) excludes the nominal 68%: the band is an uncalibrated surface-spread diagnostic, not a confidence interval.`} M5
 evidences the terrain-complexity design choice: VRM (Sappington et al. 2007)
 separates ruggedness from steepness — a constant 45° plane scores ~0 while a
 rough surface with the same face slope scores high — and TPI (Weiss 2001)

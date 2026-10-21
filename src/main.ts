@@ -245,7 +245,7 @@ import { CatalogPanel, buildCuratedDemoSample } from './ui/CatalogPanel';
 // streaming clouds expose `.crs()` returning the same shape.
 import type { StreamingReportCloud } from './app/streamingScanReport'; import { runStreamingModules, preloadStreamingReport } from './app/streamingReportSeam';
 import { CrsService, datasetIdentity } from './geo/CrsService';
-import { groundMetresPermitted, verticalMetresPerUnit, volumeClaimRefusal, volumeUnitCaveat } from './geo/SpatialContext';
+import { groundMetresPermitted, resolvedHorizontalUnitToMetres, verticalMetresPerUnit, volumeClaimRefusal, volumeUnitCaveat } from './geo/SpatialContext';
 import { prepareEpochFrames, epochUnitMismatchLines, compareSuggestionAllowed } from './app/epochFramePrep';
 // Shared vertical-unit labeller (already eager via terrainAnalysisRunner) —
 // feeds the colorbar legend's elevation unit from the resolved CRS.
@@ -1790,7 +1790,7 @@ function newAnalysePanel(
         // "unitless" rather than asserting metres. Undefined before a CRS resolves
         // ⇒ serializeContours keeps its standing metre default.
         linearUnit: cur?.linearUnit,
-        resolvedUnitToMetres: ctx.linearUnitKnown ? ctx.linearUnitToMetres : undefined, // RESOLVED, not declared
+        resolvedUnitToMetres: resolvedHorizontalUnitToMetres(ctx, terrainRunner.getLastGroundUnitToMetres()), // RESOLVED, not declared
         resolvedCrsLabel: cur ? (cur.epsg != null ? `EPSG:${cur.epsg}` : cur.name ?? null) : null,
         // Source frame → WGS 84 lon/lat, from the resolved CRS and origin the rest of
         // this context uses; absent when it cannot be converted. Anchored at the
@@ -1973,7 +1973,7 @@ void viewerLoaded.then(() => {
     refreshColorbarOverlay();
     // A manual (non-auto) "Treat as" choice pins the routing exactly like the
     // "Run terrain anyway" override — a late streaming node must not flip it.
-    routeCoordinator.onStreamingNodeReady();
+    routeCoordinator.onStreamingNodeReady(); compass.refresh(); exportPanel.refreshSummarySoon(); // the cube and the Export count follow the first nodes
   };
   // GPU render-stage failures (shader-compile / pipeline-creation) surface on the
   // WebGPU device's uncaptured-error channel AFTER decode + attach resolved; without

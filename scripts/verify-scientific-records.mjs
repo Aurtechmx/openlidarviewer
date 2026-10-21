@@ -79,6 +79,7 @@
  *   node scripts/verify-scientific-records.mjs --out <dir>
  */
 
+import './lib/confineGit.mjs';
 import { execFileSync } from 'node:child_process';
 import { mkdirSync, writeFileSync, readFileSync, readdirSync, existsSync } from 'node:fs';
 import { resolve, dirname, join, relative } from 'node:path';

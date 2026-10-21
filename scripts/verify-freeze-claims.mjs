@@ -51,6 +51,7 @@
  * or read error.
  */
 
+import './lib/confineGit.mjs';
 import { execFileSync } from 'node:child_process';
 import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { resolve, dirname, join } from 'node:path';

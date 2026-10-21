@@ -135,8 +135,8 @@ export function presentStockpile(
     densityRow,
     { label: 'Base plane', value: baseLabel },
     { label: 'Mean thickness', value: `${(b.meanThickness * vert).toFixed(2)} m` },
-    { label: 'Surface error', value: `± ${int(b.samplingError * vol)} m³` },
-    { label: 'Base-plane error', value: `± ${int(b.basePlaneError * vol)} m³` },
+    { label: 'Surface spread term', value: `± ${int(b.samplingError * vol)} m³` },
+    { label: 'Base-plane term', value: `± ${int(b.basePlaneError * vol)} m³` },
   ];
 
   return {

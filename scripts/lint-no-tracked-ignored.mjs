@@ -30,6 +30,7 @@
  *
  * Exit 0 = clean; exit 1 = a tracked path that .gitignore already excludes.
  */
+import './lib/confineGit.mjs';
 import { execFileSync } from 'node:child_process';
 import { requireBinaryOnPath } from './lib/binaryOnPath.mjs';
 

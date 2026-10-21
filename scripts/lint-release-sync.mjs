@@ -21,6 +21,7 @@
  * wired into `test:release` and CI).
  */
 
+import './lib/confineGit.mjs';
 import { execFileSync } from 'node:child_process';
 import { escapeRegExp } from './regex-escape.mjs';
 import { readFileSync, existsSync } from 'node:fs';

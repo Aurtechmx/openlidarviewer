@@ -48,8 +48,8 @@ describe('presentStockpile', () => {
     expect(byLabel['Points in footprint']).toBe('4,200');
     expect(byLabel['Density']).toBe('13.2 pts/m²');
     expect(byLabel['Base plane']).toMatch(/lowest ground, ±0.08 m/);
-    expect(byLabel['Surface error']).toBe('± 18 m³');
-    expect(byLabel['Base-plane error']).toBe('± 25 m³');
+    expect(byLabel['Surface spread term']).toBe('± 18 m³');
+    expect(byLabel['Base-plane term']).toBe('± 25 m³');
   });
 
   test('an unknown-unit result labels density honestly instead of claiming pts/m²', () => {
@@ -144,8 +144,8 @@ describe('presentStockpile — compound CRS vertical factor', () => {
   test('the error bands scale with the same cubic factor as the volume', () => {
     const v = presentStockpile(result(), { lin: 1, vert: US_FOOT });
     const row = (label: string) => v.rows.find((r) => r.label === label)?.value ?? '';
-    expect(row('Surface error')).toContain('5'); // 18 × 0.3048 = 5.49
-    expect(row('Base-plane error')).toContain('8'); // 25 × 0.3048 = 7.62
+    expect(row('Surface spread term')).toContain('5'); // 18 × 0.3048 = 5.49
+    expect(row('Base-plane term')).toContain('8'); // 25 × 0.3048 = 7.62
   });
 });
 
@@ -238,7 +238,7 @@ describe('presentStockpileAreaGrid', () => {
     expect(v.surfaceTermM3).toBeCloseTo(grid.surfaceTermM3 * lin * lin, 9);
   });
 
-  test('a density gradient across the footprint does not move the figure', () => {
+  test('a density difference between halves of a flat-topped footprint does not move the figure', () => {
     // Ten times more points on the left half. The point-weighted estimator
     // would follow the density; the area-weighted one follows the geometry.
     const uniform = Float32Array.from(prism(3, 0.5, 0.5));

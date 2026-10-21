@@ -306,8 +306,10 @@ export interface StoragePreflightVerdict {
   readonly freeBytes: number | null;
   readonly quotaBytes: number | null;
   readonly usageBytes: number | null;
-  /** The user-facing sentence. Names the required and available figures. */
+  /** The full account: required and available figures and how they were reached. Goes in the report. */
   readonly message: string;
+  /** Points the index would hold; null when the header did not establish it. */
+  readonly pointCount: number | null;
 }
 
 export interface StoragePreflightOptions {
@@ -360,6 +362,7 @@ function verdict(
     quotaBytes: space.quotaBytes ?? null,
     usageBytes: space.usageBytes ?? null,
     message,
+    pointCount: demand.known ? demand.pointCount : null,
   };
 }
 
@@ -481,7 +484,49 @@ export function storagePreflightRefusal(
   name: string,
 ): LoadError | undefined {
   if (result.proceed) return undefined;
-  return new LoadError('memory-constraint', `${name}: ${result.message}`);
+  return new LoadError('memory-constraint', storagePreflightSummary(result, name), `${name}: ${result.message}`);
+}
+
+/** "210.9 million points", "850,000 points". */
+function pointsPhrase(count: number): string {
+  return count >= 1_000_000 ? `${(count / 1_000_000).toFixed(1)} million points` : `${groupDigits(count)} points`;
+}
+
+const COPC_REMEDY =
+  'Convert it to COPC with PDAL or untwine and open the .copc.laz file, which streams without local storage.';
+
+/**
+ * The message shown for a refusal: what happened, the figures that decided it,
+ * and what to do. The full account ({@link StoragePreflightVerdict.message}) is
+ * the error's report, offered through Copy report.
+ */
+export function storagePreflightSummary(result: StoragePreflightVerdict, name: string): string {
+  const required = formatByteSize(result.requiredBytes);
+  const points = result.pointCount != null ? `Its ${pointsPhrase(result.pointCount)} need` : 'It needs';
+  switch (result.outcome) {
+    case 'insufficient-storage':
+      return (
+        `${name} is too large to open in this browser. ${points} about ${required} of browser storage, ` +
+        `and about ${formatByteSize(result.availableBytes)} is available.\n\n${COPC_REMEDY} ` +
+        'Freeing disk space on this computer can also raise the storage the browser allows.'
+      );
+    case 'no-quota':
+      return (
+        `${name} cannot be opened here: this browser allows this site no storage, as in a private ` +
+        `window or when site data is blocked. ${points} about ${required}.\n\n` +
+        `Open it in a regular window, or ${COPC_REMEDY.charAt(0).toLowerCase()}${COPC_REMEDY.slice(1)}`
+      );
+    case 'estimate-unavailable':
+    case 'quota-unknown':
+      return (
+        `${name} cannot be opened here: this browser does not report how much storage is available, ` +
+        `and ${points.charAt(0).toLowerCase()}${points.slice(1)} about ${required}.\n\n${COPC_REMEDY}`
+      );
+    case 'demand-unknown':
+      return `${name} cannot be opened: its header does not state enough to size it, so the file may be damaged or incomplete.`;
+    default:
+      return `${name} cannot be opened in this browser.\n\n${COPC_REMEDY}`;
+  }
 }
 
 /**

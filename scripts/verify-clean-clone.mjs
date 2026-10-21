@@ -38,6 +38,7 @@
  *   node scripts/verify-clean-clone.mjs --drop <path>  # negative control
  *   node scripts/verify-clean-clone.mjs --keep         # leave the tree for inspection
  */
+import './lib/confineGit.mjs';
 import { execFileSync, spawnSync } from 'node:child_process';
 import { existsSync, mkdtempSync, mkdirSync, rmSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';

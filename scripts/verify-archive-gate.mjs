@@ -27,6 +27,7 @@
  * Run: node scripts/verify-archive-gate.mjs
  */
 
+import './lib/confineGit.mjs';
 import { execFileSync, execSync } from 'node:child_process';
 import { mkdtempSync, rmSync, existsSync, symlinkSync } from 'node:fs';
 import { tmpdir } from 'node:os';

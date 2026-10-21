@@ -28,6 +28,7 @@
  * tests/fixtures and validation/ is outside the scanned set by extension.
  */
 
+import './lib/confineGit.mjs';
 import { execFileSync } from 'node:child_process';
 import { readFileSync, readdirSync } from 'node:fs';
 import { resolve, dirname } from 'node:path';

@@ -295,6 +295,9 @@ export { clipFrameOffset } from '../render/clip/clipExportScope';
 /** Thrown when a findings chunk resolves undefined. */
 const FINDINGS_LOAD_FAILED = 'Saved findings could not load.';
 
+/** The summary of an open scan that holds no points yet. */
+export const WAITING_FOR_POINTS = 'Waiting for the first points to load.';
+
 export class ExportPanel {
   readonly element: HTMLElement;
   /** The moved deliverables (formats / image / report), or null when not wired. */
@@ -624,6 +627,26 @@ export class ExportPanel {
     this._fullResRow.querySelector<HTMLInputElement>('.olv-export-fullres-box')?.focus();
   }
 
+  /** Re-read the point count and size line only. */
+  refreshSummary(): void {
+    this._renderSummary();
+  }
+
+  private _summaryTimer: ReturnType<typeof setTimeout> | null = null;
+
+  /**
+   * Re-read the summary at most every 600 ms: called for every streamed node,
+   * since the count it states is the resident frontier, which grows as they
+   * arrive. The last call always lands.
+   */
+  refreshSummarySoon(): void {
+    if (this._summaryTimer !== null) return;
+    this._summaryTimer = setTimeout(() => {
+      this._summaryTimer = null;
+      this._renderSummary();
+    }, 600);
+  }
+
   /** Re-evaluate the full-resolution availability for the active cloud. */
   refresh(): void {
     this._renderHealth();
@@ -856,7 +879,9 @@ export class ExportPanel {
       : s.warnings.find((w) => w.level === 'error') ??
         s.warnings.find((w) => w.level === 'warn') ??
         s.warnings.find((w) => w.level === 'info');
-    this._summary.textContent = `${s.line} · ${s.basisLabel}`;
+    // A scan is open but holds no points yet (a stream before its first node):
+    // "Open a scan to export" would say the opposite of what is on screen.
+    this._summary.textContent = input.pointCount === 0 && !clip && this._cb.isStreamingPending?.() ? WAITING_FOR_POINTS : `${s.line} · ${s.basisLabel}`;
     this._summary.className = 'olv-export-summary';
     this._summaryNote.textContent = note ? note.message : '';
     this._summaryNote.className = note

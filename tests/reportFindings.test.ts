@@ -221,3 +221,32 @@ describe('buildInspectionSummary: extent and density on a metric 1000 m × 860 m
     expect(d?.detail).toMatch(/All-returns density 8\.1 pts\/m² over the bounding-box footprint/);
   });
 });
+
+describe('Georeference finding and unit status', () => {
+  const base: MetadataInputs = {
+    fileName: 'drcog.ept',
+    format: 'EPT',
+    sourcePointCount: 19_912_349_351,
+    width: 67821,
+    depth: 48002,
+    height: 2777,
+    density: Number.NaN,
+    hasRgb: false,
+    hasIntensity: true,
+    hasClassification: true,
+    crsName: 'WGS 84 / Pseudo-Mercator (EPSG:3857)',
+    crsUnit: 'metre',
+  };
+  const detail = (m: MetadataInputs) => buildInspectionSummary(m).findings.find((f) => f.label === 'Georeference')?.detail;
+
+  it('does not call a grid unit a linear unit when the extents are marked unconfirmed', () => {
+    const d = detail({ ...base, extentUnitStatus: 'unknown' });
+    expect(d).toBe('Declared axis unit: metre; not confirmed as a ground unit (see Units).');
+    expect(d).not.toMatch(/^Linear unit/);
+  });
+
+  it('keeps "Linear unit" when the unit is confirmed', () => {
+    expect(detail({ ...base, extentUnitStatus: 'confirmed' })).toBe('Linear unit: metre.');
+    expect(detail(base)).toBe('Linear unit: metre.');
+  });
+});

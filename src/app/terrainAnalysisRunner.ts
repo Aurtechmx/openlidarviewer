@@ -74,7 +74,14 @@ import {
 } from '../lazyChunks';
 // Tiny pure constant (no heavy terrain code rides along) — the unit-aware
 // cell floor must agree with the metres-per-degree scale the pipeline uses.
-import { METRES_PER_DEGREE } from '../terrain/ground/horizontalScale';
+import {
+  METRES_PER_DEGREE,
+  TerrainRefusalError,
+  webMercatorRefusal,
+  webMercatorNote,
+  webMercatorScaleBound,
+  type WebMercatorScaleBound,
+} from '../terrain/ground/horizontalScale';
 import { exceedsWholeFileCap } from '../io/loadPlan';
 // Honest vertical-unit label for the Contour Studio launch frame (feet vs metres).
 import { verticalUnitLabel } from '../units/units';
@@ -124,6 +131,13 @@ function authorizerFor(
   };
 }
 
+const webMercatorBounds = new WeakMap<TerrainCoreParams, WebMercatorScaleBound>();
+
+/** The Web Mercator scale bound `deriveCoreParams` took for `params`, or undefined when the frame is not Web Mercator. */
+export function webMercatorBoundFor(params: TerrainCoreParams): WebMercatorScaleBound | undefined {
+  return webMercatorBounds.get(params);
+}
+
 export function deriveCoreParams(
   positions: Float32Array,
   classification: Uint8Array | undefined,
@@ -154,9 +168,26 @@ export function deriveCoreParams(
   // The shared elevation-workflow gate. Every terrain product (analysis,
   // contours, DEM export, flow, access) is built from the core these params
   // key, so a frame refused here is refused for all of them.
-  const frameRefusal = elevationWorkflowRefusal(ctx);
-  if (frameRefusal !== null) throw new Error(frameRefusal);
+  const frameRefusal = elevationWorkflowRefusal(ctx, { webMercatorGroundScale: true });
+  if (frameRefusal !== null) throw new TerrainRefusalError(frameRefusal);
   const isGeographic = ctx.isGeographic;
+  // A Web Mercator grid is converted with the WGS 84 ground scale at the scan's
+  // latitude, which needs the scan's position: the world northing of the grid
+  // is the origin plus the local Y. The coordinates and the georeference stay
+  // in Web Mercator; only the metric figures use the factor. Beyond the error
+  // one factor can stand for, the run is refused with the reason.
+  let webMercator: WebMercatorScaleBound | undefined;
+  if (ctx.metricValidity === 'grid-only') {
+    const originY = getWorldOriginY?.();
+    if (originY == null || !Number.isFinite(originY) || !Number.isFinite(minY) || !Number.isFinite(maxY)) {
+      throw new TerrainRefusalError(
+        'This scan is Web Mercator and its position is unknown (it has no single origin: several layers are open, or one has been moved), so its ground scale cannot be taken. Keep one scan open.',
+      );
+    }
+    webMercator = webMercatorScaleBound(originY + minY, originY + maxY);
+    const scaleRefusal = webMercatorRefusal(webMercator);
+    if (scaleRefusal !== null) throw new TerrainRefusalError(scaleRefusal);
+  }
   // Aim for a grid ~256 cells across, clamped to a sane floor. The floor is
   // 0.25 METRES expressed in SOURCE units — the old raw `0.25` was unit-blind:
   // on a geographic (degree) CRS it forced 0.25° ≈ 28 km cells, collapsing any
@@ -171,6 +202,8 @@ export function deriveCoreParams(
   let metresPerUnit: number;
   if (isGeographic) {
     metresPerUnit = METRES_PER_DEGREE;
+  } else if (webMercator) {
+    metresPerUnit = webMercator.groundPerGrid * (ctx.linearUnitToMetres > 0 ? ctx.linearUnitToMetres : 1);
   } else if (ctx.linearUnitToMetres > 0) {
     metresPerUnit = ctx.linearUnitToMetres;
   } else {
@@ -200,7 +233,7 @@ export function deriveCoreParams(
     totalPoints != null && Number.isFinite(totalPoints) && n > 0
       ? Math.max(1, totalPoints / n)
       : 1;
-  return {
+  const params: TerrainCoreParams = {
     cellSizeM,
     crs: crsName,
     // Numeric codes travel beside the label so no export ever recovers a code
@@ -216,7 +249,9 @@ export function deriveCoreParams(
     // consistent, so the unconditional GeoTIFF fallback is the right policy
     // HERE, and it is named rather than re-spelled as a `??` chain.
     verticalUnitToMetres: verticalMetresPerUnit(ctx, 'horizontal') ?? 1,
-    horizontalUnitToMetres: ctx.linearUnitToMetres,
+    // Web Mercator: ground metres per grid unit at the scan's latitude, so
+    // slopes, areas and densities are ground figures. Otherwise the CRS's unit.
+    horizontalUnitToMetres: webMercator ? webMercator.groundPerGrid * ctx.linearUnitToMetres : ctx.linearUnitToMetres,
     // The two FACTS beside the two FACTORS. The factors above are the GeoTIFF
     // geometry policy and are never undefined; the core derived "resolved" from
     // their finiteness, so on a scan with no CRS (placeholder factor 1) every
@@ -238,6 +273,8 @@ export function deriveCoreParams(
       }
       : {}),
   };
+  if (webMercator) webMercatorBounds.set(params, webMercator);
+  return params;
 }
 
 export interface TerrainAnalysisRunnerDeps {
@@ -342,6 +379,12 @@ export interface TerrainAnalysisRunner {
    * mesh is detected as Z-up here but the format table would call it Y-up.
    */
   getLastSourceUpAxis(): 'z' | 'y';
+  /**
+   * Ground metres per grid unit the last Web Mercator analysis used, or null
+   * when the last run was not Web Mercator (or none ran). Exports and labs
+   * convert horizontal distances with it so they agree with the analysis.
+   */
+  getLastGroundUnitToMetres(): number | null;
   /**
    * Abort any in-flight compute and drop every cached terrain core. Called
    * from the reset-to-empty path so a result for the now-closed scan can never
@@ -638,6 +681,7 @@ export function createTerrainAnalysisRunner(
   // Updated by every run() and export build (a scan's frame is interval- and
   // style-independent, so the last gather always describes the current scan).
   let lastSourceUpAxis: 'z' | 'y' = 'z';
+  let lastGroundUnitToMetres: number | null = null;
 
   // The active cloud's world-origin Y (the render-recentre offset), so a
   // geographic scan's grid-centre LATITUDE can be recovered from the local
@@ -855,6 +899,8 @@ export function createTerrainAnalysisRunner(
       // scan's resolved CRS + vertical datum into the analysis so the readiness
       // gate and export honesty reflect a georeferenced file.
       const coreParams = coreParamsOf(gathered);
+      const mercator = webMercatorBoundFor(coreParams);
+      lastGroundUnitToMetres = mercator?.groundPerGrid ?? null;
       // Withheld-aware recovery (L26): the display gather above stamped
       // withheldExcluded === null exactly when some contributing buffer
       // carried no flags channel, which for a lone static cloud means it was
@@ -894,8 +940,9 @@ export function createTerrainAnalysisRunner(
       // A rotated glTF, or a mesh whose up axis was read from the point layout,
       // is stated beside whatever else the status line says about this run.
       const upAxisNote = gatherUpAxisNote(gathered.upAxisBasis, gathered.sourceUpAxis);
+      const scaleNote = webMercatorNote(mercator);
       const status = (text: string | null): void => {
-        const line = [text, upAxisNote].filter((t): t is string => t !== null).join(' ');
+        const line = [text, upAxisNote, scaleNote].filter((t): t is string => t !== null).join(' ');
         if (line !== '') analysePanel.setStatus(line);
       };
       if (withheldRecovered) {
@@ -990,7 +1037,8 @@ export function createTerrainAnalysisRunner(
       console.error('OpenLiDARViewer: terrain analysis failed.', err);
       analysePanel.setBusy(false);
       const msg = err instanceof Error ? err.message : String(err);
-      analysePanel.setStatus(`Analysis failed: ${msg}`);
+      // A refusal for the frame or scale is a decision, not a fault: it says the run did not happen.
+      analysePanel.setStatus(err instanceof TerrainRefusalError ? `Terrain analysis did not run. ${msg}` : `Analysis failed: ${msg}`);
     } finally {
       // Release the controller reference if it is still ours (a newer run swaps
       // in its own). Leaves an aborted controller in place for the winner.
@@ -1062,6 +1110,7 @@ export function createTerrainAnalysisRunner(
     // for the now-closed scan can never land on the panel.
     terrainAbort?.abort();
     terrainAbort = null;
+    lastGroundUnitToMetres = null;
     // Drop every cached terrain core so a stale core can't be served for a
     // different scan and memory stays bounded. Guarded: the cache chunk is only
     // loaded after the first run, and before that there is nothing to clear —
@@ -1107,6 +1156,10 @@ export function createTerrainAnalysisRunner(
     return lastSourceUpAxis;
   }
 
+  function getLastGroundUnitToMetres(): number | null {
+    return lastGroundUnitToMetres;
+  }
+
   return {
     run,
     buildResultAtInterval,
@@ -1114,6 +1167,7 @@ export function createTerrainAnalysisRunner(
     abortAndClearCache,
     refreshDatasetStory,
     getLastSourceUpAxis,
+    getLastGroundUnitToMetres,
     getContourLayers,
     subscribeDerivedLayers: (fn) => { derivedListeners.add(fn); return () => { derivedListeners.delete(fn); }; },
   };

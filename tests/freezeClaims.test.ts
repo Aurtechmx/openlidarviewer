@@ -39,6 +39,7 @@ function newRepo(): string {
   // the platform's separator rather than assuming ':'. The throwaway repo needs
   // that sibling too, or the import fails before any assertion runs.
   copyFileSync(HELPER, join(dir, 'scripts/lib/binaryOnPath.mjs'));
+  copyFileSync(resolve(__dirname, '../scripts/lib/confineGit.mjs'), join(dir, 'scripts/lib/confineGit.mjs'));
   git(dir, 'add', '-A');
   git(dir, 'commit', '-qm', 'scaffold');
   return dir;

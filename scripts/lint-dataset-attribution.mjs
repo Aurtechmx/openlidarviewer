@@ -13,6 +13,7 @@
  * is not seen, so name derived files after the dataset they come from.
  */
 
+import './lib/confineGit.mjs';
 import { execFileSync } from 'node:child_process';
 import { readdirSync, readFileSync } from 'node:fs';
 import { join, resolve, dirname } from 'node:path';

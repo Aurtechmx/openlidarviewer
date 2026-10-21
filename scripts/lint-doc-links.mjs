@@ -23,6 +23,7 @@
  * Exit 0 when every path resolves, 1 when any does not, 2 on a read error.
  */
 
+import './lib/confineGit.mjs';
 import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { resolve, dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';

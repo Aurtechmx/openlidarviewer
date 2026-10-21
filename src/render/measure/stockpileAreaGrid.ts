@@ -17,7 +17,10 @@
  * where each cell `c` of a regular horizontal grid contributes its polygon-clipped
  * area A_c and a robust (median) surface height from the points that fall in it.
  * Every cell counts once, regardless of how many points sampled it, so a density
- * gradient no longer biases the result. Cells with too little support are NOT
+ * difference between cells no longer weights the result. Within a cell it can
+ * still bias it: the median is the area-average height only when the points
+ * are spread evenly over the cell or the surface is flat inside it
+ * (tests/stockpileWithinCellSampling.test.ts). Cells with too little support are NOT
  * interpolated to zero — they are recorded as unobserved and reduce the reported
  * coverage, so a footprint with a hole cannot masquerade as a full measurement.
  *
@@ -724,10 +727,13 @@ export function stockpileAreaGrid(input: StockpileAreaGridInput): StockpileAreaG
       // verdict are exactly what they were. What is added is the ACCOUNTING —
       // how much of the supported area rests on one return each — so a caller
       // can say it. Demoting such a footprint was tried and reverted: a
-      // thinly sampled half of a pile is the density gradient this method
-      // exists to be invariant to, and a test said so.
+      // thinly sampled half of a pile is a density difference between cells,
+      // which this method exists to be invariant to, and a test said so.
       if (hs.length < 2) singleReturnAreaSrc += areaSrc;
-      // Surface-term variance: (A_c[m²]·σ_c[m])², σ_c = spread/√support (SEM).
+      // Surface-term variance: (A_c[m²]·σ_c[m])², σ_c = spread/√support. That is
+      // the standard-error form of a MEAN applied to a cell MEDIAN (a median's is
+      // about √(π/2) ≈ 1.25× larger for normal noise), so the band is an
+      // uncalibrated surface-spread diagnostic; repro M3 measures its coverage.
       const aM2 = areaSrc * unit * unit;
       const sigmaM = (spread * unit) / Math.sqrt(hs.length);
       surfaceVarM6 += (aM2 * sigmaM) * (aM2 * sigmaM);
@@ -793,8 +799,8 @@ export function stockpileAreaGrid(input: StockpileAreaGridInput): StockpileAreaG
 
   // Coverage stays a statement about AREA OBSERVED, deliberately. Demoting a
   // sparse-but-complete footprint would contradict the property this method
-  // exists for: a density gradient must not move the answer, and a thinly
-  // sampled half of a pile is exactly that gradient. What the single-return
+  // exists for: a density difference between cells must not move the answer,
+  // and a thinly sampled half of a pile is exactly that difference. What the single-return
   // share affects is the UNCERTAINTY, which is reported separately and is
   // already declared incomplete.
   const coverage: StockpileAreaGridResult['coverage'] =

@@ -18,6 +18,7 @@
  * Usage: npm run release:verify -- --dir release/payload
  */
 
+import './lib/confineGit.mjs';
 import { readFileSync, readdirSync, statSync, existsSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';

@@ -19,6 +19,7 @@
  *
  * Exit 0 when every check passes, 1 when any fails, 2 on a read or parse error.
  */
+import './lib/confineGit.mjs';
 import { readFileSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';

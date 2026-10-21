@@ -17,6 +17,7 @@
  * Scope is the shipped surface: the files `git archive` would include. Files
  * that are already export-ignored are exempt.
  */
+import './lib/confineGit.mjs';
 import { readFileSync, existsSync, readdirSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
 import { resolve, dirname, join, relative } from 'node:path';

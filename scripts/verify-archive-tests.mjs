@@ -22,6 +22,7 @@
  *                 all of them when none is named
  *   -- args       passed to each bucket's vitest run (e.g. --shard=1/3)
  */
+import './lib/confineGit.mjs';
 import { execFileSync, spawnSync } from 'node:child_process';
 import { existsSync, mkdirSync, mkdtempSync, readdirSync, rmSync, symlinkSync } from 'node:fs';
 import { tmpdir } from 'node:os';

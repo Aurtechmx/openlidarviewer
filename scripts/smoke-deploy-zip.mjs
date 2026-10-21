@@ -24,6 +24,7 @@
  * Writes: release/smoke-deploy-v<version>.json
  */
 
+import './lib/confineGit.mjs';
 import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { createServer } from 'node:net';

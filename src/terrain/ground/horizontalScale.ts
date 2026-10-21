@@ -51,36 +51,80 @@ export function metresPerDegreeLatitude(latitudeDeg: number | null | undefined):
  * Metres per degree of LONGITUDE (east–west) on the WGS84 ellipsoid at
  * geodetic latitude φ, from the standard series
  * `111412.84 cos φ − 93.5 cos 3φ + 0.118 cos 5φ`
- * (≈ 111 319 m at the equator). φ is clamped to ±89° like {@link cosLatitude}
- * so the scale never collapses to zero. A null or non-finite latitude returns
- * the mean {@link METRES_PER_DEGREE}, the isotropic fallback (no E–W
- * correction) the per-axis helpers have always used when φ is unknown.
+ * (≈ 111 319 m at the equator, 194.9 m at 89.9°). It is the scale at φ itself:
+ * φ is limited only to the valid range ±90°, never moved to another latitude.
+ * Products that divide by a cell's east–west size check the latitude against
+ * {@link MAX_GEOGRAPHIC_LATITUDE_DEG} first ({@link geographicLatitudeRefusal}).
+ * A null or non-finite latitude returns the mean {@link METRES_PER_DEGREE},
+ * the isotropic fallback (no E–W correction) used when φ is unknown.
  */
 export function metresPerDegreeLongitude(latitudeDeg: number | null | undefined): number {
   if (latitudeDeg == null || !Number.isFinite(latitudeDeg)) return METRES_PER_DEGREE;
-  const lat = Math.max(-MAX_ABS_LATITUDE_DEG, Math.min(MAX_ABS_LATITUDE_DEG, latitudeDeg));
-  const phi = (lat * Math.PI) / 180;
+  const phi = (Math.max(-90, Math.min(90, latitudeDeg)) * Math.PI) / 180;
   return 111_412.84 * Math.cos(phi) - 93.5 * Math.cos(3 * phi) + 0.118 * Math.cos(5 * phi);
 }
 
 /**
- * Latitude clamp for the cos φ east–west scale. Beyond ~±89° a degree of
- * longitude collapses toward zero and the plate-carrée cell model this module
- * implements stops being meaningful (a pole-crossing scan needs a projected
- * CRS, not a cos-φ correction). Clamping keeps the E–W scale finite and
- * non-zero — cos 89° ≈ 0.0175 — instead of dividing derivatives by ~0.
+ * Highest absolute latitude at which a geographic grid's slope, aspect,
+ * hillshade, cell sizes and the products built on them are computed. Above it
+ * a degree of longitude shrinks so fast across a footprint that one
+ * representative latitude cannot stand for the grid (at 89.9° the E–W scale
+ * changes by 1 % over 0.0006° of latitude), and the scan needs a polar
+ * projected CRS instead.
  */
-const MAX_ABS_LATITUDE_DEG = 89;
+export const MAX_GEOGRAPHIC_LATITUDE_DEG = 89;
+
+/** A terrain run refused for its frame or scale: the panel states it as "did not run", not as a failure. */
+export class TerrainRefusalError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'TerrainRefusalError';
+  }
+}
+
+/** A geographic grid beyond {@link MAX_GEOGRAPHIC_LATITUDE_DEG}: its metric derivatives are withheld. */
+export class GeographicLatitudeError extends TerrainRefusalError {
+  constructor(message: string) {
+    super(message);
+    this.name = 'GeographicLatitudeError';
+  }
+}
 
 /**
- * cos(latitude) for the east–west metres-per-degree scale. Non-finite
- * latitudes return 1 (no correction — the honest isotropic fallback), so a
- * caller that cannot resolve a representative latitude degrades gracefully
- * instead of guessing one (or poisoning the scale with NaN).
+ * Why metric derivatives of a geographic grid at `latitudeDeg` are withheld, or
+ * null when the latitude is within the supported domain (or unknown, which has
+ * its own isotropic fallback and warning).
+ */
+export function geographicLatitudeRefusal(latitudeDeg: number | null | undefined): string | null {
+  if (latitudeDeg == null || !Number.isFinite(latitudeDeg)) return null;
+  if (Math.abs(latitudeDeg) <= MAX_GEOGRAPHIC_LATITUDE_DEG) return null;
+  return (
+    `This scan's coordinates are geographic (degrees) at latitude ${latitudeDeg.toFixed(3)}°, beyond the ±${MAX_GEOGRAPHIC_LATITUDE_DEG}° ` +
+    'within which a degree of longitude can be converted to metres for one representative latitude. Slope, aspect, ' +
+    'cell sizes and the products built on them are withheld. Reproject the scan to a polar projected CRS ' +
+    '(for example EPSG:3413 or EPSG:3031) and open it again.'
+  );
+}
+
+/**
+ * Throw {@link GeographicLatitudeError} for a geographic grid beyond the
+ * supported latitude. Called before any work that divides by a cell size.
+ */
+export function assertGeographicLatitudeSupported(isGeographic: boolean | undefined, latitudeDeg: number | null | undefined): void {
+  const refusal = isGeographic ? geographicLatitudeRefusal(latitudeDeg) : null;
+  if (refusal) throw new GeographicLatitudeError(refusal);
+}
+
+/**
+ * cos(latitude) for the east–west metres-per-degree scale, at φ itself (limited
+ * only to ±90°). Non-finite latitudes return 1 (no correction — the honest
+ * isotropic fallback), so a caller that cannot resolve a representative
+ * latitude degrades gracefully instead of guessing one (or poisoning the scale
+ * with NaN).
  */
 export function cosLatitude(latitudeDeg: number | null | undefined): number {
   if (latitudeDeg == null || !Number.isFinite(latitudeDeg)) return 1;
-  const lat = Math.max(-MAX_ABS_LATITUDE_DEG, Math.min(MAX_ABS_LATITUDE_DEG, latitudeDeg));
+  const lat = Math.max(-90, Math.min(90, latitudeDeg));
   return Math.cos((lat * Math.PI) / 180);
 }
 
@@ -136,9 +180,12 @@ export function horizontalCellMetresXY(
 ): CellMetresXY {
   if (isGeographic) {
     // Ellipsoidal degree lengths at the grid latitude: the meridional degree
-    // for N–S, the parallel degree for E–W (clamped at ±89° so it never
-    // collapses to 0). A non-finite latitude falls back to the isotropic mean
-    // instead of poisoning every derivative with NaN.
+    // for N–S, the parallel degree for E–W. Beyond the supported latitude no
+    // length is returned: substituting another latitude would change every
+    // slope. A non-finite latitude falls back to the isotropic mean instead of
+    // poisoning every derivative with NaN.
+    const refusal = geographicLatitudeRefusal(latitudeDeg);
+    if (refusal) throw new GeographicLatitudeError(refusal);
     return {
       x: cellSizeM * metresPerDegreeLongitude(latitudeDeg),
       y: cellSizeM * metresPerDegreeLatitude(latitudeDeg),
@@ -150,4 +197,100 @@ export function horizontalCellMetresXY(
       : 1;
   const m = cellSizeM * scale;
   return { x: m, y: m };
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Web Mercator ground scale
+// ─────────────────────────────────────────────────────────────────────────────
+//
+// EPSG:3857 takes WGS 84 geodetic longitude λ and latitude φ and maps them on a
+// SPHERE of radius a: x = a·λ, y = a·ln tan(π/4 + φ/2). Metres of grid are
+// therefore not metres on the ground, and the factor depends on latitude and,
+// slightly, on direction, because the sphere is not the ellipsoid. On the WGS 84
+// ellipsoid (semi-major a, first eccentricity e), with N the prime-vertical and
+// M the meridional radius of curvature:
+//
+//   east–west:    ground/grid = N·cos φ / a            = cos φ / √(1 − e² sin² φ)
+//   north–south:  ground/grid = M·cos φ / a            = (1 − e²) cos φ / (1 − e² sin² φ)^(3/2)
+//
+// Both are exact at φ. Across a footprint φ changes, so one factor is an
+// approximation whose size {@link webMercatorScaleBound} states and the terrain
+// runner refuses beyond {@link WEB_MERCATOR_MAX_SCALE_ERROR}. Coordinates and
+// georeferencing stay in EPSG:3857; only the metric derivatives (slope, areas,
+// densities) use the factor.
+
+const WGS84_A_M = 6_378_137;
+const WGS84_E2 = 0.006_694_379_990_14;
+
+/** Largest relative error in a ground length accepted from one Web Mercator factor. */
+export const WEB_MERCATOR_MAX_SCALE_ERROR = 0.01;
+
+/** Geodetic latitude of a Web Mercator northing, degrees (the inverse of y = a·ln tan(π/4 + φ/2)). */
+export function webMercatorLatitudeOfY(yMetres: number): number {
+  return ((2 * Math.atan(Math.exp(yMetres / WGS84_A_M)) - Math.PI / 2) * 180) / Math.PI;
+}
+
+/** Ground metres per Web Mercator grid metre at latitude `latitudeDeg`: east–west, north–south and their geometric mean. */
+export function webMercatorGroundScale(latitudeDeg: number): { readonly x: number; readonly y: number; readonly mean: number } {
+  const phi = (latitudeDeg * Math.PI) / 180;
+  const s = Math.sin(phi);
+  const w = 1 - WGS84_E2 * s * s;
+  const x = Math.cos(phi) / Math.sqrt(w);
+  const y = ((1 - WGS84_E2) * Math.cos(phi)) / (w * Math.sqrt(w));
+  return { x, y, mean: Math.sqrt(x * y) };
+}
+
+/** What one Web Mercator factor stands for over a northing range. */
+export interface WebMercatorScaleBound {
+  /** Latitude of the factor, degrees: the middle of the northing range. */
+  readonly latitudeDeg: number;
+  /** The factor: ground metres per grid metre, the geometric mean of the two axes. */
+  readonly groundPerGrid: number;
+  /** Largest relative error of a ground length from using the factor over the range: either axis, at the ends, the centre and the equator. */
+  readonly maxRelativeError: number;
+}
+
+/**
+ * The factor for a northing range [yMinMetres, yMaxMetres] and the largest
+ * relative error it leaves: the greatest distance of either axis's scale from
+ * the factor, over the range's two ends, its centre, and the equator when the
+ * range crosses it (the scale is largest there). Each axis is compared with
+ * the factor itself, so the axis difference at the centre and the change with
+ * latitude are counted together, products included.
+ */
+export function webMercatorScaleBound(yMinMetres: number, yMaxMetres: number): WebMercatorScaleBound {
+  const lo = Math.min(yMinMetres, yMaxMetres);
+  const hi = Math.max(yMinMetres, yMaxMetres);
+  const centre = webMercatorLatitudeOfY((lo + hi) / 2);
+  const at = webMercatorGroundScale(centre);
+  const samples = [lo, hi, (lo + hi) / 2, ...(lo < 0 && hi > 0 ? [0] : [])];
+  let worst = 0;
+  for (const y of samples) {
+    const e = webMercatorGroundScale(webMercatorLatitudeOfY(y));
+    worst = Math.max(worst, Math.abs(e.x / at.mean - 1), Math.abs(e.y / at.mean - 1));
+  }
+  return { latitudeDeg: centre, groundPerGrid: at.mean, maxRelativeError: worst };
+}
+
+/** Why a Web Mercator scan cannot be analysed over this northing range, or null. */
+export function webMercatorRefusal(bound: WebMercatorScaleBound): string | null {
+  if (!Number.isFinite(bound.groundPerGrid) || !(bound.groundPerGrid > 0)) {
+    return 'This scan is Web Mercator and its latitude cannot be read, so its ground scale is unknown.';
+  }
+  if (bound.maxRelativeError <= WEB_MERCATOR_MAX_SCALE_ERROR) return null;
+  return (
+    `This scan is Web Mercator, whose scale changes with latitude, and it spans ${(bound.maxRelativeError * 100).toFixed(1)}% ` +
+    `of scale error about latitude ${bound.latitudeDeg.toFixed(2)}°, more than the ${(WEB_MERCATOR_MAX_SCALE_ERROR * 100).toFixed(0)}% ` +
+    'one ground factor can stand for. Zoom in so less of it is loaded, or reproject it to a local metric CRS such as UTM.'
+  );
+}
+
+/** The line the Analyse panel adds to a Web Mercator run: how its ground figures were scaled. Null for any other frame. */
+export function webMercatorNote(bound: WebMercatorScaleBound | undefined): string | null {
+  if (!bound) return null;
+  return (
+    `Web Mercator grid: lengths, slopes and areas use the ground scale at latitude ${bound.latitudeDeg.toFixed(2)}° ` +
+    `(${bound.groundPerGrid.toFixed(4)} m per grid metre), which leaves at most ${(bound.maxRelativeError * 100).toFixed(2)}% error across this scan. ` +
+    'The coordinates and the exported georeference stay in Web Mercator.'
+  );
 }

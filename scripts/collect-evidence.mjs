@@ -23,6 +23,7 @@
  * protection. Writes `docs/validation/test-evidence.json`.
  */
 
+import './lib/confineGit.mjs';
 import { readFileSync, writeFileSync, mkdirSync, copyFileSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';

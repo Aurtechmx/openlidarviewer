@@ -32,6 +32,7 @@
  * gate, which runs against an unpacked archive with no `.git`.
  */
 
+import './lib/confineGit.mjs';
 import { execFileSync } from 'node:child_process';
 import { resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';

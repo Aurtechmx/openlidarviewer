@@ -54,7 +54,7 @@ ax.spines["top"].set_visible(False)
 ax.spines["right"].set_visible(False)
 save(fig, "registration_bias")
 
-# --- Figure 2: uncertainty-band calibration -----------------------------------
+# --- Figure 2: model-band coverage, nominal vs measured ----------------------
 cov = M["M3_stockpile_band_coverage"]
 fig2, ax2 = plt.subplots(figsize=(3.4, 3.0))
 bars = ax2.bar(["nominal", "empirical"],
@@ -63,7 +63,7 @@ bars = ax2.bar(["nominal", "empirical"],
 ax2.axhline(cov["nominal1sigma"], color=OI["grey"], linestyle="--", linewidth=1)
 ax2.set_ylim(0, 1)
 ax2.set_ylabel("±1σ coverage")
-ax2.set_title(f"Stockpile band calibration ({cov['trials']} trials)")
+ax2.set_title(f"Stockpile model band ±1σ coverage ({cov['trials']} trials)")
 for b, v in zip(bars, [cov["nominal1sigma"], cov["empirical1sigma"]]):
     ax2.text(b.get_x() + b.get_width() / 2, v + 0.02, f"{v:.2f}", ha="center", fontsize=9)
 ax2.spines["top"].set_visible(False)

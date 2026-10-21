@@ -387,12 +387,20 @@ export function heightUnitsPermitted(ctx: SpatialContext): boolean {
  * axis inverts every rise into a fall (a surface going from 10 m to 9 m depth
  * rose by 1 m, and was reported as a 1 m loss); a geocentric frame has no
  * ground plane and no elevation axis; a Web Mercator grid has no ground-metre
- * scale for slopes, areas and volumes. Each is refused rather than computed.
+ * scale of its own for slopes, areas and volumes. Each is refused rather than
+ * computed, except that terrain analysis may take a Web Mercator grid through
+ * `webMercatorGroundScale`: it applies the ellipsoidal ground scale at the
+ * scan's latitude and refuses when that scale changes too much across it
+ * (`horizontalScale.ts`).
  */
-export function elevationWorkflowRefusal(ctx: SpatialContext): string | null {
+export function elevationWorkflowRefusal(
+  ctx: SpatialContext,
+  /** A workflow that converts a Web Mercator grid with the ground scale at its latitude (terrain analysis) accepts it here. */
+  options: { readonly webMercatorGroundScale?: boolean } = {},
+): string | null {
   if (ctx.kind === 'geocentric') return GEOCENTRIC_REASON;
   if (ctx.verticalAxisDown) return DEPTH_AXIS_REFUSAL;
-  if (ctx.metricValidity === 'grid-only') return WEB_MERCATOR_REASON;
+  if (ctx.metricValidity === 'grid-only' && options.webMercatorGroundScale !== true) return WEB_MERCATOR_REASON;
   return null;
 }
 
@@ -488,3 +496,14 @@ export function heightScale(ctx: SpatialContext, horizontalKnown: boolean): { re
     : { factor: 1, suffix: HEIGHT_UNIT_GAP_SUFFIX['vertical-unit-invalid'] };
 }
 
+
+/**
+ * Metres per horizontal source unit that exports and labs may print, or
+ * `undefined` when none is resolved. A Web Mercator grid has none of its own:
+ * its ground scale is the one the last terrain analysis used at the scan's
+ * latitude (`lastWebMercatorGroundScale`), so until one has run it is unresolved.
+ */
+export function resolvedHorizontalUnitToMetres(ctx: SpatialContext, lastWebMercatorGroundScale: number | null): number | undefined {
+  if (ctx.metricValidity === 'grid-only') return lastWebMercatorGroundScale ?? undefined;
+  return ctx.linearUnitKnown ? ctx.linearUnitToMetres : undefined;
+}
