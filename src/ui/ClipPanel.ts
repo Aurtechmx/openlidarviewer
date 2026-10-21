@@ -152,7 +152,7 @@ export class ClipPanel {
     this._readout = el('p', { className: 'olv-export-fullres-hint', text: '' });
     this._readout.setAttribute('role', 'status');
     this._readout.setAttribute('aria-live', 'polite');
-    this._error = el('p', { className: 'olv-export-fullres-hint olv-clip-error', text: '' });
+    this._error = el('p', { className: 'olv-flow-selection-error olv-clip-error', text: '' });
     this._error.setAttribute('role', 'alert');
 
     const body = el('div', { className: 'olv-clip-body' }, [
