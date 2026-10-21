@@ -50,10 +50,10 @@ These ship in the deploy archive.
 |---|---|---|---|
 | @fontsource-variable/inter | ^5.3.0 | 5.3.0 | OFL-1.1 |
 | @fontsource/jetbrains-mono | ^5.3.0 | 5.3.0 | OFL-1.1 |
-| @loaders.gl/core | ^4.5.2 | 4.5.2 | MIT |
-| @loaders.gl/gltf | ^4.5.2 | 4.5.2 | MIT |
-| @loaders.gl/obj | ^4.5.2 | 4.5.2 | MIT |
-| @loaders.gl/ply | ^4.5.2 | 4.5.2 | MIT |
+| @loaders.gl/core | ^4.5.4 | 4.5.4 | MIT |
+| @loaders.gl/gltf | ^4.5.4 | 4.5.4 | MIT |
+| @loaders.gl/obj | ^4.5.4 | 4.5.4 | MIT |
+| @loaders.gl/ply | ^4.5.4 | 4.5.4 | MIT |
 | laz-perf | ^0.0.7 | 0.0.7 | Apache-2.0 |
 | pdf-lib | ^1.17.1 | 1.17.1 | MIT |
 | proj4 | ^2.22.0 | 2.22.0 | MIT |
@@ -66,7 +66,7 @@ Build, test, docs, and mutation tooling. None reaches the deployed app.
 | Package | Declared range | Resolved | License |
 |---|---|---|---|
 | @axe-core/playwright | 4.13.0 | 4.13.0 | MPL-2.0 |
-| @loaders.gl/las | ^4.5.2 | 4.5.2 | MIT |
+| @loaders.gl/las | ^4.5.4 | 4.5.4 | MIT |
 | @playwright/test | ^1.63.0 | 1.63.0 | Apache-2.0 |
 | @stryker-mutator/core | ^10.0.0 | 10.0.0 | Apache-2.0 |
 | @stryker-mutator/vitest-runner | ^10.0.0 | 10.0.0 | Apache-2.0 |
@@ -75,7 +75,7 @@ Build, test, docs, and mutation tooling. None reaches the deployed app.
 | @vitest/coverage-v8 | ^5.0.1 | 5.0.1 | MIT |
 | rollup-plugin-visualizer | ^7.1.1 | 7.1.1 | MIT |
 | typescript | ~7.0.2 | 7.0.2 | Apache-2.0 |
-| vite | ^8.3.1 | 8.3.1 | MIT |
+| vite | ^8.3.4 | 8.3.4 | MIT |
 | vite-plugin-javascript-obfuscator | ^3.1.0 | 3.1.0 | MIT |
 | vitepress | 1.6.4 | 1.6.4 | MIT |
 | vitest | ^5.0.0 | 5.0.1 | MIT |
