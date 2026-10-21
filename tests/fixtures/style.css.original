@@ -2482,6 +2482,9 @@ button:disabled { cursor: not-allowed; }
 /* Progress toast */
 .olv-toast {
   position: absolute; top: var(--olv-lane-top); left: 50%; transform: translateX(-50%);
+  /* Above the start screen, its sibling in the overlay: with no stacking order
+   * the start screen, later in the document, painted its title over a refusal. */
+  z-index: var(--z-raised);
   display: flex; flex-direction: column; gap: var(--space-md);
   background: var(--panel); border: 0.5px solid var(--hairline);
   border-radius: var(--radius-md); padding: var(--space-md) var(--space-2xl);
@@ -3037,7 +3040,10 @@ body:has(.olv-right-rail.olv-right-collapsed) .olv-navbar { --olv-nb-r: 0px; }
  * existing `.olv-export` flex idiom. Picker takes the elastic share so
  * a long template label doesn't push the button off the row. */
 .olv-report-row { display: flex; gap: var(--space-sm); align-items: stretch; }
-.olv-report-row .olv-export-btn { flex: 0 0 auto; }
+/* `width: auto` and no top margin: the generic `.olv-export-btn` (90-converter-export.css)
+ * is `width: 100%` with a top margin for a button on its own row; here it sat beside
+ * the picker at the full row width, squeezed the picker to 13px and ran off the panel. */
+.olv-report-row .olv-export-btn { flex: 0 0 auto; width: auto; margin-top: 0; }
 .olv-report-select {
   flex: 1; min-width: 0;
   font-size: var(--text-xs); color: var(--text-dim);
