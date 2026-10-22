@@ -61,8 +61,9 @@ test('1280px: the result card drops below the measure bar and a progress toast',
   await placeTestDistance(page);
   const card = page.locator('.olv-result-card');
   await expect(card).toBeVisible({ timeout: 10_000 });
-  // Bring the progress toast up over the lane, as a long task would.
-  await page.evaluate(() => document.querySelector('.olv-toast:not(.olv-recovery-notice)')?.classList.remove('olv-hidden'));
+  // Bring the progress toast up over the lane, as a long task would. A new
+  // task's progress also ends the settle of the open before it.
+  await page.evaluate(() => document.querySelector('.olv-toast:not(.olv-recovery-notice)')?.classList.remove('olv-hidden', 'is-finishing'));
   const top = ['.olv-result-card', '.olv-toast:not(.olv-hidden)', '.olv-measure-bar:not(.olv-hidden)'];
   await expect.poll(async () => (await painted(page, top)).length, { timeout: 5_000 }).toBe(3);
   // The lane's claim: the card clears each of the others. The toast and the

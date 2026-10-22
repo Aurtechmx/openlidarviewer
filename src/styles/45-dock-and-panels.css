@@ -304,6 +304,8 @@
   border-radius: var(--radius-md); padding: var(--space-md) var(--space-2xl);
   min-width: 220px; max-width: 360px;
 }
+/* A finished load's settle gives way to the measure bar opened over it. */
+body:has(.olv-measure-bar:not(.olv-hidden)) .olv-toast.is-finishing { visibility: hidden; }
 .olv-toast-row { display: flex; align-items: center; gap: var(--space-md); }
 .olv-toast-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--accent); flex: none; }
 /* `pre-line` lets the multi-line preload summary break on its newlines;
