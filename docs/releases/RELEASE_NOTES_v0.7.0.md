@@ -51,7 +51,7 @@ v0.7.0 continues from v0.6.9 (`c164e907f50ff49da7233385d92285c53dfb3b8d`). The v
 ## Opening files
 
 - Sampled layers. Export all N points, Reload at higher density, and a `-sample` suffix and provenance note on anything written from a sample.
-- A file over 1 GiB in a format other than LAS or LAZ is refused before it is read, as are full-resolution exports, reloads and conversions over 1 GiB. A larger LAS or LAZ streams from disk.
+- A file over 1 GiB in a format other than LAS or LAZ is refused before it is read, as are full-resolution exports, reloads and conversions over 1 GiB. A larger LAS or LAZ streams from disk, or opens as a labelled sample when browser storage is too small.
 - While a file opens the status shows its name, format, stage and bytes read. Several dropped files read "Opening 2 of 3" with Cancel and Cancel remaining files.
 - A file that cannot be read names the formats that open and suggests an E57 or LAS version.
 - E57. Colour and intensity flagged invalid are masked per point, intensity and colour are normalised by their declared limits, malformed poses are skipped and dropped channels are named. Limits on XML size, nesting and counts apply.

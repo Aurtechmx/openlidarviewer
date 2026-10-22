@@ -5,7 +5,7 @@ OpenLiDARViewer is a viewer for inspecting and documenting point clouds. It does
 ## Files and memory
 
 - **Large files** are limited by browser memory and GPU performance. A cloud above the point budget loads at reduced density and says so in the status toast.
-- **Streaming.** COPC and EPT, local or on a CORS-enabled host, stream progressively. A very large uncompressed LAS, or a chunked LAZ, is indexed into browser storage and streamed the same way. That index is a cache the browser may clear, and the file is refused with guidance if storage is too small. One streamed source is open at a time.
+- **Streaming.** COPC and EPT, local or on a CORS-enabled host, stream progressively. A very large uncompressed LAS, or a chunked LAZ, is indexed into browser storage and streamed the same way. That index is a cache the browser may clear, and when storage is too small an evenly spread sample of the file opens instead, labelled as a sample. One streamed source is open at a time.
 - **LAZ speed** is bounded by the decoder. Fast load lowers the memory peak of a large LAZ but does not make it proportionally faster.
 - **E57** covers common terrestrial-scanner files (Cartesian XYZ with colour, intensity, classification and normals). A file of about 900 MB or more is refused; convert it to LAS, LAZ or COPC. Scans stored only as spherical coordinates are skipped with a warning. Uncommon schema features may not load.
 - **Meshes.** OBJ and glTF are shown as their vertices; faces and materials are not drawn. A glTF must be GLB or self-contained, and Draco-compressed glTF is refused.

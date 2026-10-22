@@ -530,6 +530,46 @@ export function storagePreflightSummary(result: StoragePreflightVerdict, name: s
 }
 
 /**
+ * The notice shown when the index cannot be built and a sample of the file is
+ * opened instead. It states what is on screen (a spread, not every point), why,
+ * and the two ways to the whole file. The figures are the refusal's own.
+ */
+export function storageSampleNotice(
+  result: StoragePreflightVerdict | null,
+  name: string,
+  shownPoints: number,
+  declaredPoints: number | null,
+): string {
+  const whole = declaredPoints != null && shownPoints >= declaredPoints;
+  const of = declaredPoints != null ? ` of ${pointsPhrase(declaredPoints)}` : '';
+  const head = whole
+    ? `Opened all ${pointsPhrase(shownPoints)} of ${name} without its streaming index.`
+    : `Opened a sample of ${pointsPhrase(shownPoints)}${of} from ${name}, spread evenly across the file.`;
+  const required = result ? formatByteSize(result.requiredBytes) : null;
+  let why: string;
+  switch (result?.outcome) {
+    case 'insufficient-storage':
+      why = `The full index needs about ${required} of browser storage and about ${formatByteSize(result.availableBytes)} is available.`;
+      break;
+    case 'no-quota':
+      why = 'This browser allows this site no storage, as in a private window or when site data is blocked.';
+      break;
+    case 'estimate-unavailable':
+    case 'quota-unknown':
+      why = 'This browser does not report how much storage is available.';
+      break;
+    default:
+      why = 'This browser has no storage for the full index.';
+  }
+  return (
+    `${head} ${why} ` +
+    (whole
+      ? 'Free disk space and reopen the file to stream it, or convert it to COPC.'
+      : 'Figures describe the points shown, not the whole file. Free disk space and reopen the file to load it fully, or convert it to COPC.')
+  );
+}
+
+/**
  * Size the index, ask for the estimate, decide. The reader is a parameter with
  * the live one as its default, so production gets the browser and a test gets
  * whatever it wants without touching a global.

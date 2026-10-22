@@ -361,7 +361,7 @@ Is my data uploaded anywhere?
 No. Files from your device are read and rendered locally and are not uploaded. The app requests its own files, any remote dataset or sample you open, and, only when you run a location search, the public LiDAR catalogue (Microsoft Planetary Computer). The full list is in [PRIVACY.md](PRIVACY.md).
 
 What's the largest scan it can open?
-Most local files are bounded by browser memory and the GPU. A very large uncompressed LAS or chunked LAZ is indexed into browser storage and streamed, and reopening the same file reuses that index. The browser may clear it, and a file is refused with guidance when storage is too small.
+Most local files are bounded by browser memory and the GPU. A very large uncompressed LAS or chunked LAZ is indexed into browser storage and streamed, and reopening the same file reuses that index. The browser may clear it. When storage is too small, an evenly spread sample of the file opens instead and says so.
 
 For anything else too large, stream it as COPC or EPT, or convert it with PDAL or Entwine. Streaming loads only the set the camera needs.
 

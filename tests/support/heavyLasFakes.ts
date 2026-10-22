@@ -22,16 +22,17 @@ import { createStreamingClassLedger } from '../../src/app/streamingClassLedger';
 
 export const WORLD_MIN = [400000, 5200000, 55] as const;
 
-/** A modest uncompressed LAS with intensity + classification channels. */
-export function lasBytes(n: number): ArrayBuffer {
+/** A modest uncompressed LAS with intensity + classification channels, laid
+ *  out as a grid `width` points wide. */
+export function lasBytes(n: number, width = 200): ArrayBuffer {
   const x = new Float64Array(n);
   const y = new Float64Array(n);
   const z = new Float64Array(n);
   const intensity = new Uint16Array(n);
   const classification = new Uint8Array(n);
   for (let i = 0; i < n; i++) {
-    x[i] = WORLD_MIN[0] + (i % 200) * 1.5;
-    y[i] = WORLD_MIN[1] + Math.floor(i / 200) * 1.5;
+    x[i] = WORLD_MIN[0] + (i % width) * 1.5;
+    y[i] = WORLD_MIN[1] + Math.floor(i / width) * 1.5;
     z[i] = WORLD_MIN[2] + (i % 13) * 0.4;
     intensity[i] = i & 0xffff;
     classification[i] = 2;
@@ -97,7 +98,7 @@ export function fakeViewer(opts: { hasStreamingCloud?: boolean } = {}) {
   const viewer = {
     ...fakeWork(),
     ready: Promise.resolve(),
-    attachStreamingCloud: vi.fn(async () => {}),
+    attachStreamingCloud: vi.fn((_source: unknown) => Promise.resolve()),
     detachStreamingCloud: vi.fn(),
     activeBackend: () => 'webgl2' as const,
     availableImageExportModes: vi.fn(() => new Map()),
