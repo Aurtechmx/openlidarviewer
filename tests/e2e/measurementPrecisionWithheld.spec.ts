@@ -74,7 +74,7 @@ for (const reach of [1000, 200_000]) {
     await waitForLoadIdle(page);
     // Local coordinates: metres from the layer's floor(min) origin.
     await measure(page, [[reach, 0, 0], [reach + 0.005, 0, 0]]);
-    const row = page.locator('.olv-measure-panel, .olv-measure-list').getByText(reach > 1000 ? /not resolved: below this scan's/ : /0\.5\d* cm|5(\.0+)? mm/).first();
+    const row = page.locator('.olv-measure-panel, .olv-measure-list').getByText(reach > 1000 ? /not resolved: this scan holds positions/ : /0\.5\d* cm|5(\.0+)? mm/).first();
     await expect(row).toBeVisible({ timeout: 15_000 });
     const csv = await exportCsv(page);
     if (reach > 1000) {

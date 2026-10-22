@@ -51,7 +51,7 @@ import {
   liveStoreNames,
   removeStoreIfIdle,
 } from '../io/heavy/oocStoreLiveness';
-import { OlvTileSource, PreviewCloudSource } from '../io/heavy/OlvTileSource';
+import { OlvTileSource, PreviewCloudSource, SAMPLE_INCOMPLETE_REASON } from '../io/heavy/OlvTileSource';
 import { buildPreviewSample } from '../io/heavy/previewSampler';
 import { TileChunkDecoder } from '../io/heavy/tileChunkDecoder';
 import { revealStreamingScanChrome } from '../ui/streamingScanReveal';
@@ -416,7 +416,17 @@ async function openSampleInstead(args: {
   if (!sample) return refusal;
   const replace = args.replace ?? (await askHeavyReplace(deps, file.name));
   if (replace === null || signal.aborted) return { status: 'cancelled' };
-  const source = new PreviewCloudSource({ id: `sample-${storeName}`, name: file.name, sample, crs });
+  // The file's own CRS, read by bounded range reads where the index path has
+  // not read it already (no browser storage), so the sample never borrows one.
+  let sampleCrs = crs;
+  if (!sampleCrs) {
+    const range = openRange(file);
+    sampleCrs = await resolveLasCrsFromRange((offset, length) => range.readRange(offset, length, signal), facts.fileBytes).catch(() => null);
+    if (signal.aborted) return { status: 'cancelled' };
+  }
+  const source = new PreviewCloudSource({
+    id: `sample-${storeName}`, name: file.name, sample, crs: sampleCrs, incompleteReason: SAMPLE_INCOMPLETE_REASON,
+  });
   const decoder = new TileChunkDecoder(sample.schema, sample.recordBytes);
   try {
     await attachStreamingScan(source, decoder, deps, signal);
@@ -427,10 +437,43 @@ async function openSampleInstead(args: {
   }
   deps.streaming.resetStreamState();
   settleHeavyReplace(deps, replace);
+  publishSampleIdentity(source, sample.pointCount, facts.declaredPointCount ?? null, deps.streaming);
   return {
     status: 'sampled',
     notice: storageSampleNotice(verdict, file.name, sample.pointCount, facts.declaredPointCount ?? null),
   };
+}
+
+/**
+ * Publish an opened sample's own identity in one step, so nothing of the scan
+ * it replaced stays on screen: its CRS and provenance, the Inspector's counts
+ * as the sample shown against the file's total, a fresh classification legend,
+ * the streaming layout, and a report that says it is a sample. The finished-scan
+ * surfaces (the full report, the streaming panel, the status poll) are not
+ * revealed: the octree records why the cloud is incomplete, so no analysis or
+ * export reads the sample as the whole file.
+ */
+function publishSampleIdentity(
+  source: PreviewCloudSource,
+  shown: number,
+  declared: number | null,
+  s: OpenStreamingDeps,
+): void {
+  activateCommittedStreamingCloud(source, s);
+  resetClassificationUi(s);
+  enterStreamingInspectorMode(s, s.getViewer().availableImageExportModes());
+  publishStreamingDetail(s.inspector, { residentPointCount: shown, sourcePointCount: declared }, s.debug);
+  const of = declared !== null ? ` of ${declared.toLocaleString('en-US')}` : '';
+  try {
+    s.inspector.setReport([{
+      label: 'Sample',
+      value: `${shown.toLocaleString('en-US')}${of} points of ${source.name}, spread evenly; opened without its full index`,
+      status: 'warn',
+    }]);
+  } catch (err) {
+    if (s.debug) console.warn('[inspector] setReport (sample) threw', err);
+  }
+  s.revealAnalysePanel(source.name, false);
 }
 
 export async function executeHeavyLasBuild(

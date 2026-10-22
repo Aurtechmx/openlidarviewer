@@ -284,19 +284,34 @@ export function valueForDimension(
  * Run an aggregate operation over a measurement selection in a given
  * dimension. Pure: the same input always produces the same output.
  */
-/** The refusal a chain carries when a member's figure is below its position step. */
+/** The refusal a chain carries when a member's figure cannot be given on its scan's position step. */
 export const CHAIN_UNRESOLVED =
-  "not resolved: a measurement in it is below its scan's position step; load a smaller tile to measure it";
+  "not resolved: a measurement in it is held too coarsely on its scan to give this figure; load a smaller tile to measure it";
 
-/** The `measurementMetrics` key a chain dimension reads for a kind, or null when it reads none from the points. */
-function chainMetricKey(kind: Measurement['kind'], dimension: ChainDimension): string | null {
+/**
+ * The `measurementMetrics` keys a chain dimension's value is made from, for
+ * every kind `valueForDimension` reads from the points. A figure read from the
+ * cloud rather than the points (a volume's cut and fill) has none.
+ */
+export function chainMetricKeys(kind: Measurement['kind'], dimension: ChainDimension): readonly string[] {
   switch (dimension) {
-    case 'length': return kind === 'slope' ? 'run_m' : kind === 'distance' || kind === 'polyline' || kind === 'profile' ? 'length_m' : null;
-    case 'area': return kind === 'area' || kind === 'volume' ? 'area_m2' : null;
-    case 'height': return kind === 'height' || kind === 'profile' ? 'vertical_m' : kind === 'box' ? 'height_m' : kind === 'slope' ? 'rise_m' : null;
-    case 'angle': return kind === 'angle' || kind === 'slope' ? 'angle_deg' : null;
-    case 'grade': return kind === 'slope' || kind === 'profile' ? 'grade_pct' : null;
-    default: return null;
+    case 'length':
+      if (kind === 'slope') return ['run_m', 'rise_m'];
+      return kind === 'distance' || kind === 'polyline' || kind === 'profile' ? ['length_m'] : [];
+    case 'area':
+      if (kind === 'box') return ['width_m', 'depth_m'];
+      return kind === 'area' || kind === 'volume' ? ['area_m2'] : [];
+    case 'volume-fill':
+      return kind === 'box' ? ['width_m', 'depth_m', 'height_m', 'volume_m3'] : [];
+    case 'height':
+      if (kind === 'height' || kind === 'profile') return ['vertical_m'];
+      return kind === 'slope' ? ['rise_m'] : kind === 'box' ? ['height_m'] : [];
+    case 'angle':
+      return kind === 'angle' ? ['angle_deg'] : kind === 'slope' ? ['angle_deg'] : [];
+    case 'grade':
+      return kind === 'slope' || kind === 'profile' ? ['grade_pct'] : [];
+    default:
+      return [];
   }
 }
 
@@ -329,13 +344,14 @@ export function aggregate(
       refusal: geographicRefusal ? GEOGRAPHIC_NOT_AVAILABLE : VERTICAL_SCALE_NOT_AVAILABLE,
     };
   }
-  // A member whose figure is below its scan's position step cannot be told from
-  // zero, so no total, mean or extreme of it is honest: the chain is refused.
+  // A member whose figure cannot be given on its scan's position step has no
+  // honest value, so no total, mean or extreme of it is given: the chain is refused.
   if (scale.positionSteps) {
     for (const m of measurements) {
-      const key = chainMetricKey(m.kind, dimension);
-      const steps = key ? scale.positionSteps(m) : null;
-      if (key && steps && unresolvedMetricKeys(m, worldUp, unitToMetres, verticalUnitToMetres, steps).includes(key)) {
+      const keys = chainMetricKeys(m.kind, dimension);
+      const steps = keys.length > 0 ? scale.positionSteps(m) : null;
+      const unresolved = steps ? unresolvedMetricKeys(m, worldUp, unitToMetres, verticalUnitToMetres, steps) : [];
+      if (keys.some((k) => unresolved.includes(k))) {
         return { value: Number.NaN, unit: '', contributingCount: 0, totalCount, operation, dimension, refusal: CHAIN_UNRESOLVED };
       }
     }

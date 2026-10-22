@@ -119,7 +119,7 @@ describe('a separation below the position step', () => {
     expect(r.length).toBe('');
     expect(r.row).toMatch(/not resolved/);
     expect(r.row).toMatch(/Load a smaller tile/);
-    expect(r.live).toMatch(/^not resolved: below this scan's 15\.63 mm position step/);
+    expect(r.live).toMatch(/^not resolved: this scan holds positions about 15\.63 mm apart/);
     expect(r.live).not.toMatch(/0\.0 cm|0 cm/);
   });
 });
