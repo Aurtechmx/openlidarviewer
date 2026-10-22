@@ -16,6 +16,11 @@ import type { SceneOverlayHost } from './sceneLineOverlay';
 export interface QuadLayerBuffers {
   readonly verts: Float32Array;
   readonly colors: Float32Array;
+  /**
+   * Grid cells the buffers stand for, when that is not one quad per cell
+   * (the flow network draws several quads per cell). Defaults to quads.
+   */
+  readonly cellsDrawn?: number;
 }
 
 export class QuadLayer {
@@ -29,18 +34,25 @@ export class QuadLayer {
   // narrow contract `SceneLineOverlay` documents), not to be a real
   // `THREE.Object3D` that sets `.parent` as a side effect of `add`.
   private _attached = false;
+  private _cells: number | null = null;
 
-  constructor(host: SceneOverlayHost, opacity: number) {
+  private readonly _renderOrder: number;
+
+  /** `renderOrder` defaults to 1; a higher value draws over layers below it. */
+  constructor(host: SceneOverlayHost, opacity: number, renderOrder = 1) {
     this._host = host;
     this._opacity = opacity;
+    this._renderOrder = renderOrder;
   }
 
-  /** Cells currently drawn — 6 vertices per cell. 0 = nothing drawn. */
+  /** Cells currently drawn — `cellsDrawn` when given, else 6 vertices per cell. 0 = nothing drawn. */
   get cellCount(): number {
-    return (this._geometry?.getAttribute('position')?.count ?? 0) / 6;
+    if (!this._geometry) return 0;
+    return this._cells ?? (this._geometry.getAttribute('position')?.count ?? 0) / 6;
   }
 
   set(buffers: QuadLayerBuffers): void {
+    this._cells = buffers.cellsDrawn ?? null;
     if (!this._material) {
       const material = new THREE.MeshBasicMaterial();
       material.vertexColors = true;
@@ -56,7 +68,7 @@ export class QuadLayer {
     if (!this._mesh) {
       this._mesh = new THREE.Mesh(this._geometry, this._material);
       this._mesh.frustumCulled = false;
-      this._mesh.renderOrder = 1;
+      this._mesh.renderOrder = this._renderOrder;
     }
     if (!this._attached) {
       this._host.add(this._mesh);
@@ -78,6 +90,7 @@ export class QuadLayer {
     this._mesh = null;
     this._geometry = null;
     this._material = null;
+    this._cells = null;
     this._host.requestFrame();
   }
 }

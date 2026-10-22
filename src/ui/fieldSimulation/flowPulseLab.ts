@@ -23,7 +23,7 @@
  * without growing the monolith — see `flowResultGrid.ts`); a downstream-path
  * trace and an upstream-catchment trace, drawn on the grid and, when the
  * caller supplies scene membership, in the 3D scene through `FlowOverlay`; and
- * a flow-accumulation overlay, log-scaled, that counts cells rather than
+ * a flow-accumulation overlay, a log-scaled drainage network, that counts cells rather than
  * water. None of it enters `SimulationRunRecord` — presentation state (which
  * overlay is on, which cell is selected) is not a scientific parameter, and
  * `FlowPulseParams` carries none of it.
@@ -614,7 +614,7 @@ function mountFlowPulseInteractive(
   });
   const overlayLegend = el('div', {
     className: 'olv-flow-overlay-legend',
-    text: 'Log-scaled: brighter means more cells drain through that point. It counts cells, not water.',
+    text: 'Drainage lines on a log scale: wider and brighter lines mean more cells drain through that point. It counts cells, not water.',
   });
   const overlayUnavailable = el('div', {
     className: 'olv-flow-overlay-unavailable',
@@ -806,7 +806,7 @@ function mountFlowPulseInteractive(
     const motion = el('button', {
       className: 'olv-flow-motion-toggle', type: 'button',
       text: 'Pause flow motion',
-      tip: 'Dots move along the flow directions, faster where more cells drain through. Off when the system asks for reduced motion.',
+      tip: 'Particles move along the drainage lines, faster and brighter where more cells drain through. Off when the system asks for reduced motion.',
     }) as HTMLButtonElement;
     const syncMotion = (): void => {
       const st = flowMotionControlState(prefersReducedMotion(), grid.particles.paused);

@@ -4,6 +4,10 @@ The format is based on Keep a Changelog and the project follows Semantic Version
 
 ## [Unreleased]
 
+### Changed
+
+- Flow Pulse draws flow accumulation as a drainage network. In the 3D view and on the Lab grid only cells whose log-scaled upstream count is at least 0.4 are drawn, each as a line to its downstream neighbour that is wider and brighter (deep blue to near white) where more cells drain through, over a dark casing; the scan stays visible between lines. The Lab grid's base is a grey hillshade lit from the north-west, and its moving particles follow the lines with fading trails. Upstream counts are counts of cells, not water. Results, digests and exports are unchanged.
+
 ## [0.7.0] - 2026-10-22
 
 ### Added
