@@ -4,10 +4,6 @@ The format is based on Keep a Changelog and the project follows Semantic Version
 
 ## [Unreleased]
 
-### Changed
-
-- Flow Pulse draws flow accumulation as a drainage network. In the 3D view and on the Lab grid only cells whose log-scaled upstream count is at least 0.4 are drawn, each as a line to its downstream neighbour that is wider and brighter (deep blue to near white) where more cells drain through, over a dark casing; the scan stays visible between lines. The Lab grid's base is a grey hillshade lit from the north-west, and its moving particles follow the lines with fading trails. Upstream counts are counts of cells, not water. Results, digests and exports are unchanged.
-
 ## [0.7.0] - 2026-10-22
 
 ### Added
@@ -36,6 +32,7 @@ The format is based on Keep a Changelog and the project follows Semantic Version
 
 ### Changed
 
+- Flow Pulse draws flow accumulation as a drainage network. In the 3D view and on the Lab grid only cells whose log-scaled upstream count is at least 0.4 are drawn, each as a line to its downstream neighbour that is wider and brighter (deep blue to near white) where more cells drain through, over a dark casing; the scan stays visible between lines. The Lab grid's base is a grey hillshade lit from the north-west, and its moving particles follow the lines with fading trails. Upstream counts are counts of cells, not water. Results, digests and exports are unchanged.
 - The curated dataset list holds six entries instead of twelve. Dropped: the 2010 San Francisco Coast and Golden Gate surveys, whose extents are mostly open water; Los Angeles 2016, superseded by Los Angeles block 2; and the second and third Denver DRCOG and the second Grand Canyon entries, which duplicated a denser one. All six were re-checked on 2026-10-19 (range request, CORS from the app origin, first data tile) and carry that date. The credits page states that sample data comes with no warranty and can be withdrawn by its provider.
 - The v0.7 implementation ledger and its generated status table are no longer in the source archive; they stay in the repository. lint:known-limitations and lint:v070-status skip with a printed notice when run from an archive, and still fail in a git checkout when the ledger is missing.
 - The georeferenced orthographic PNG (PNG + .pgw + .prj) now has transparent no-data: pixels with no points have alpha 0 and pixels with points have alpha 255, with no partly transparent pixels. The PNG carries an `olv:nodata` text chunk that says so. The world file, the raster size and the colours of fully covered pixels are unchanged; a pixel at least half covered is written opaque with its point colour. Screen rendering and every other snapshot or export stay opaque.
