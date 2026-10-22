@@ -110,9 +110,11 @@ test('under reduced motion the splash clears and the status shows with no animat
   await expect(page.locator('.olv-empty-hero-mark')).toBeVisible();
   await dropDenseGridPly(page);
   await expect(page.locator('.olv-toast')).toHaveClass(/is-busy/);
-  // One frame later: the app's reduced-motion floor shortens any remaining
-  // transition to 0.01 ms, so only real motion (longer than 1 ms) is counted.
-  const state = await page.evaluate(async () => {
+  // A frame or two later: the app's reduced-motion floor shortens any
+  // remaining transition to 0.01 ms, so only real motion (longer than 1 ms)
+  // is counted. The splash's own style can land a frame after the toast's
+  // class under load, so the state is polled rather than read once.
+  await expect.poll(() => page.evaluate(async () => {
     await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
     const toast = document.querySelector('.olv-toast')!;
     const empty = document.querySelector('.olv-empty')!;
@@ -126,8 +128,7 @@ test('under reduced motion the splash clears and the status shows with no animat
       toast: getComputedStyle(toast).opacity,
       moving: moving.map((a) => `${(a as CSSAnimation).animationName ?? (a as CSSTransition).transitionProperty} on ${((a.effect as KeyframeEffect).target as Element).className}`),
     };
-  });
-  expect(state).toEqual({ hero: 'hidden', toast: '1', moving: [] });
+  }), { timeout: 2_000 }).toEqual({ hero: 'hidden', toast: '1', moving: [] });
   await page.evaluate(() => (window as unknown as { __release: () => void }).__release());
   await expect(page.locator('.olv-empty')).toBeHidden({ timeout: 20_000 });
 });
