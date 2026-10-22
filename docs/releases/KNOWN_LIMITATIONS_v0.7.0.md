@@ -703,10 +703,12 @@ cos φ / √(1 − e² sin² φ) and north–south (1 − e²) cos φ / (1 − e
 whose geometric mean is the one factor used (0.77 at Denver). The coordinates
 and the DEM's georeference stay in Web Mercator. The factor is exact at the
 scan's centre latitude and changes across the scan, so a run states the
-largest relative error it leaves on lengths and, separately, on areas (an area
-error is about twice a length error). It is refused above 1% on lengths or 2% on
-areas, for example a whole regional dataset, with the reason: zoom in so less
-is loaded, or reproject to UTM. These figures are the projection approximation
+largest relative error it leaves on horizontal lengths and, separately, on
+horizontal cell areas (an area error is about twice a length error). It is
+refused when either passes 1%, for example a whole regional dataset or a
+footprint 0.6 degrees tall near 60 degrees, with the reason: zoom in so less is
+loaded, or reproject to UTM. The cell-area bound does not extend to surface
+area, volume or slope angle. These figures are the projection approximation
 only, not the accuracy of the data. A layer placed in a project is scaled at its
 project position; a scan whose position cannot be read is refused. Streamed
 USGS EPT datasets are in Web Mercator, so this is what lets them be

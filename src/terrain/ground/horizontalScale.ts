@@ -224,8 +224,12 @@ const WGS84_E2 = 0.006_694_379_990_14;
 
 /** Largest relative error in a ground length accepted from one Web Mercator factor. */
 export const WEB_MERCATOR_MAX_SCALE_ERROR = 0.01;
-/** The area counterpart: an area error is about twice a length error, so twice the length limit. */
-export const WEB_MERCATOR_MAX_AREA_ERROR = 0.02;
+/**
+ * Largest relative error in a horizontal cell-area factor accepted from one
+ * factor. Held to the same 1% as lengths: an area error is about twice a length
+ * error, so this narrows the accepted footprint rather than widening the claim.
+ */
+export const WEB_MERCATOR_MAX_AREA_ERROR = 0.01;
 
 /** Geodetic latitude of a Web Mercator northing, degrees (the inverse of y = a·ln tan(π/4 + φ/2)). */
 export function webMercatorLatitudeOfY(yMetres: number): number {
@@ -250,7 +254,7 @@ export interface WebMercatorScaleBound {
   readonly groundPerGrid: number;
   /** Largest relative error of a ground length from using the factor over the range: either axis, at the ends, the centre and the equator. */
   readonly maxRelativeError: number;
-  /** Largest relative error of a ground area (the factor squared against the two axes' product) over the same points. */
+  /** Largest relative error of a horizontal cell-area factor (the factor squared against the two axes' product) over the same points. */
   readonly maxRelativeAreaError: number;
 }
 
@@ -289,7 +293,7 @@ export function webMercatorRefusal(bound: WebMercatorScaleBound): string | null 
   const areaOk = bound.maxRelativeAreaError <= WEB_MERCATOR_MAX_AREA_ERROR;
   if (lengthOk && areaOk) return null;
   const spans = lengthOk
-    ? `${(bound.maxRelativeAreaError * 100).toFixed(1)}% of area error, more than the ${(WEB_MERCATOR_MAX_AREA_ERROR * 100).toFixed(0)}%`
+    ? `${(bound.maxRelativeAreaError * 100).toFixed(1)}% of horizontal cell-area error, more than the ${(WEB_MERCATOR_MAX_AREA_ERROR * 100).toFixed(0)}%`
     : `${(bound.maxRelativeError * 100).toFixed(1)}% of length error, more than the ${(WEB_MERCATOR_MAX_SCALE_ERROR * 100).toFixed(0)}%`;
   return (
     `This scan is Web Mercator, whose scale changes with latitude, and it spans ${spans} ` +
@@ -302,8 +306,8 @@ export function webMercatorRefusal(bound: WebMercatorScaleBound): string | null 
 export function webMercatorNote(bound: WebMercatorScaleBound | undefined): string | null {
   if (!bound) return null;
   return (
-    `Web Mercator grid: lengths, slopes and areas use the ground scale at latitude ${bound.latitudeDeg.toFixed(2)}° ` +
-    `(${bound.groundPerGrid.toFixed(4)} m per grid metre), which leaves at most ${(bound.maxRelativeError * 100).toFixed(2)}% error on lengths and ${(bound.maxRelativeAreaError * 100).toFixed(2)}% on areas across this scan. ` +
+    `Web Mercator grid: horizontal distances use the ground scale at latitude ${bound.latitudeDeg.toFixed(2)}° ` +
+    `(${bound.groundPerGrid.toFixed(4)} m per grid metre), which leaves at most ${(bound.maxRelativeError * 100).toFixed(2)}% error on horizontal lengths and ${(bound.maxRelativeAreaError * 100).toFixed(2)}% on horizontal cell areas across this scan. ` +
     'This is the projection approximation only, not the accuracy of the data. ' +
     'The coordinates and the exported georeference stay in Web Mercator.'
   );
