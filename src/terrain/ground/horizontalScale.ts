@@ -224,6 +224,8 @@ const WGS84_E2 = 0.006_694_379_990_14;
 
 /** Largest relative error in a ground length accepted from one Web Mercator factor. */
 export const WEB_MERCATOR_MAX_SCALE_ERROR = 0.01;
+/** The area counterpart: an area error is about twice a length error, so twice the length limit. */
+export const WEB_MERCATOR_MAX_AREA_ERROR = 0.02;
 
 /** Geodetic latitude of a Web Mercator northing, degrees (the inverse of y = a·ln tan(π/4 + φ/2)). */
 export function webMercatorLatitudeOfY(yMetres: number): number {
@@ -248,15 +250,19 @@ export interface WebMercatorScaleBound {
   readonly groundPerGrid: number;
   /** Largest relative error of a ground length from using the factor over the range: either axis, at the ends, the centre and the equator. */
   readonly maxRelativeError: number;
+  /** Largest relative error of a ground area (the factor squared against the two axes' product) over the same points. */
+  readonly maxRelativeAreaError: number;
 }
 
 /**
  * The factor for a northing range [yMinMetres, yMaxMetres] and the largest
- * relative error it leaves: the greatest distance of either axis's scale from
- * the factor, over the range's two ends, its centre, and the equator when the
- * range crosses it (the scale is largest there). Each axis is compared with
- * the factor itself, so the axis difference at the centre and the change with
- * latitude are counted together, products included.
+ * relative errors it leaves, over the range's two ends, its centre, and the
+ * equator when the range crosses it (the scale is largest there). Errors are
+ * relative to the true ground figure at that point. A length error compares the
+ * factor with each axis's scale, so the axis difference at the centre and the
+ * change with latitude are counted together. An area error compares the factor
+ * squared with the product of the two axes' scales, which can be about twice a
+ * length error.
  */
 export function webMercatorScaleBound(yMinMetres: number, yMaxMetres: number): WebMercatorScaleBound {
   const lo = Math.min(yMinMetres, yMaxMetres);
@@ -265,11 +271,13 @@ export function webMercatorScaleBound(yMinMetres: number, yMaxMetres: number): W
   const at = webMercatorGroundScale(centre);
   const samples = [lo, hi, (lo + hi) / 2, ...(lo < 0 && hi > 0 ? [0] : [])];
   let worst = 0;
+  let worstArea = 0;
   for (const y of samples) {
     const e = webMercatorGroundScale(webMercatorLatitudeOfY(y));
-    worst = Math.max(worst, Math.abs(e.x / at.mean - 1), Math.abs(e.y / at.mean - 1));
+    worst = Math.max(worst, Math.abs(at.mean / e.x - 1), Math.abs(at.mean / e.y - 1));
+    worstArea = Math.max(worstArea, Math.abs((at.mean * at.mean) / (e.x * e.y) - 1));
   }
-  return { latitudeDeg: centre, groundPerGrid: at.mean, maxRelativeError: worst };
+  return { latitudeDeg: centre, groundPerGrid: at.mean, maxRelativeError: worst, maxRelativeAreaError: worstArea };
 }
 
 /** Why a Web Mercator scan cannot be analysed over this northing range, or null. */
@@ -277,11 +285,16 @@ export function webMercatorRefusal(bound: WebMercatorScaleBound): string | null 
   if (!Number.isFinite(bound.groundPerGrid) || !(bound.groundPerGrid > 0)) {
     return 'This scan is Web Mercator and its latitude cannot be read, so its ground scale is unknown.';
   }
-  if (bound.maxRelativeError <= WEB_MERCATOR_MAX_SCALE_ERROR) return null;
+  const lengthOk = bound.maxRelativeError <= WEB_MERCATOR_MAX_SCALE_ERROR;
+  const areaOk = bound.maxRelativeAreaError <= WEB_MERCATOR_MAX_AREA_ERROR;
+  if (lengthOk && areaOk) return null;
+  const spans = lengthOk
+    ? `${(bound.maxRelativeAreaError * 100).toFixed(1)}% of area error, more than the ${(WEB_MERCATOR_MAX_AREA_ERROR * 100).toFixed(0)}%`
+    : `${(bound.maxRelativeError * 100).toFixed(1)}% of length error, more than the ${(WEB_MERCATOR_MAX_SCALE_ERROR * 100).toFixed(0)}%`;
   return (
-    `This scan is Web Mercator, whose scale changes with latitude, and it spans ${(bound.maxRelativeError * 100).toFixed(1)}% ` +
-    `of scale error about latitude ${bound.latitudeDeg.toFixed(2)}°, more than the ${(WEB_MERCATOR_MAX_SCALE_ERROR * 100).toFixed(0)}% ` +
-    'one ground factor can stand for. Zoom in so less of it is loaded, or reproject it to a local metric CRS such as UTM.'
+    `This scan is Web Mercator, whose scale changes with latitude, and it spans ${spans} ` +
+    `one ground factor can stand for about latitude ${bound.latitudeDeg.toFixed(2)}°. ` +
+    'Zoom in so less of it is loaded, or reproject it to a local metric CRS such as UTM.'
   );
 }
 
@@ -290,7 +303,8 @@ export function webMercatorNote(bound: WebMercatorScaleBound | undefined): strin
   if (!bound) return null;
   return (
     `Web Mercator grid: lengths, slopes and areas use the ground scale at latitude ${bound.latitudeDeg.toFixed(2)}° ` +
-    `(${bound.groundPerGrid.toFixed(4)} m per grid metre), which leaves at most ${(bound.maxRelativeError * 100).toFixed(2)}% error across this scan. ` +
+    `(${bound.groundPerGrid.toFixed(4)} m per grid metre), which leaves at most ${(bound.maxRelativeError * 100).toFixed(2)}% error on lengths and ${(bound.maxRelativeAreaError * 100).toFixed(2)}% on areas across this scan. ` +
+    'This is the projection approximation only, not the accuracy of the data. ' +
     'The coordinates and the exported georeference stay in Web Mercator.'
   );
 }

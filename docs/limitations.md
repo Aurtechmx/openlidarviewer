@@ -19,7 +19,7 @@ OpenLiDARViewer is a viewer for inspecting and documenting point clouds. It does
 - **Volumes** are area-weighted per cell. The uncertainty band is a diagnostic of surface spread, not a confidence interval.
 - **Noise and Withheld points.** Epoch change and the volume tools leave out ASPRS noise classes 7 and 18 and state the count. On a voxel-reduced cloud they cannot be separated, and the result says so.
 - **Classification** colouring needs classification values in the file, and many scans have none.
-- **Precision.** Positions are held as 32-bit floats around a local origin. This is sub-millimetre for a normal survey scan and coarser over very wide extents; the Scan Report states the figure and terrain deliverables are declined above a 10 mm step. See [coordinate-precision.md](coordinate-precision.md).
+- **Precision.** Positions are held as 32-bit floats around a local origin. This is sub-millimetre for a normal survey scan and coarser over very wide extents; the Scan Report states the figure and terrain deliverables are declined above a 10 mm step. Measurements are not yet withheld on that basis: a separation smaller than the step can read as zero. See [coordinate-precision.md](coordinate-precision.md).
 
 ## Coordinate systems
 

@@ -9,6 +9,7 @@ import { describe, expect, it } from 'vitest';
 import proj4 from 'proj4';
 import {
   WEB_MERCATOR_MAX_SCALE_ERROR,
+  WEB_MERCATOR_MAX_AREA_ERROR,
   TerrainRefusalError,
   webMercatorGroundScale,
   webMercatorLatitudeOfY,
@@ -105,17 +106,42 @@ describe('the error one factor leaves, and the refusal beyond it', () => {
     let seen = 0;
     for (let k = 0; k <= 200; k++) {
       const at = webMercatorGroundScale(webMercatorLatitudeOfY(y0 + ((y1 - y0) * k) / 200));
-      seen = Math.max(seen, Math.abs(at.x / b.groundPerGrid - 1), Math.abs(at.y / b.groundPerGrid - 1));
+      // Relative to the true ground figure at that point.
+      seen = Math.max(seen, Math.abs(b.groundPerGrid / at.x - 1), Math.abs(b.groundPerGrid / at.y - 1));
     }
     expect(seen).toBeLessThanOrEqual(b.maxRelativeError + 1e-12);
     // And it is tight: the bound is reached at an end, not a loose over-estimate.
     expect(b.maxRelativeError - seen).toBeLessThan(1e-9);
   });
 
+  it('the area bound is real, and it is not the length bound', () => {
+    // 59.7 to 60.3 degrees: each length is within about 1%, an area is not.
+    const y0 = yOf(59.7), y1 = yOf(60.3);
+    const b = webMercatorScaleBound(y0, y1);
+    let seen = 0;
+    for (let k = 0; k <= 200; k++) {
+      const at = webMercatorGroundScale(webMercatorLatitudeOfY(y0 + ((y1 - y0) * k) / 200));
+      seen = Math.max(seen, Math.abs((b.groundPerGrid * b.groundPerGrid) / (at.x * at.y) - 1));
+    }
+    expect(seen).toBeLessThanOrEqual(b.maxRelativeAreaError + 1e-12);
+    expect(b.maxRelativeAreaError - seen).toBeLessThan(1e-9);
+    // About twice the length error, so a length-only figure would understate it.
+    expect(b.maxRelativeAreaError).toBeGreaterThan(1.8 * b.maxRelativeError);
+    expect(b.maxRelativeAreaError).toBeGreaterThan(0.018);
+  });
+
+  it('refuses on the area limit even when the length error is within its own', () => {
+    const base = { latitudeDeg: 60, groundPerGrid: 0.5 };
+    expect(webMercatorRefusal({ ...base, maxRelativeError: 0.009, maxRelativeAreaError: 0.021 })).toMatch(/of area error, more than the 2%/);
+    expect(webMercatorRefusal({ ...base, maxRelativeError: 0.009, maxRelativeAreaError: 0.019 })).toBeNull();
+    expect(webMercatorRefusal({ ...base, maxRelativeError: 0.011, maxRelativeAreaError: 0.019 })).toMatch(/of length error, more than the 1%/);
+    expect(WEB_MERCATOR_MAX_AREA_ERROR).toBe(2 * WEB_MERCATOR_MAX_SCALE_ERROR);
+  });
+
   it('counts the equator when a range crosses it, where the scale is largest', () => {
     const b = webMercatorScaleBound(yOf(-10), yOf(30));
     const equator = webMercatorGroundScale(0);
-    expect(b.maxRelativeError).toBeGreaterThanOrEqual(Math.abs(equator.x / b.groundPerGrid - 1));
+    expect(b.maxRelativeError).toBeGreaterThanOrEqual(Math.abs(b.groundPerGrid / equator.x - 1));
   });
 
   it('a continental extent (30° to 40°) is refused with the reason and a way forward', () => {
@@ -127,13 +153,14 @@ describe('the error one factor leaves, and the refusal beyond it', () => {
   });
 
   it('refuses a factor that is not a positive number', () => {
-    expect(webMercatorRefusal({ latitudeDeg: Number.NaN, groundPerGrid: Number.NaN, maxRelativeError: 0 })).toMatch(/cannot be read/);
+    expect(webMercatorRefusal({ latitudeDeg: Number.NaN, groundPerGrid: Number.NaN, maxRelativeError: 0, maxRelativeAreaError: 0 })).toMatch(/cannot be read/);
   });
 
   it('states how the run was scaled', () => {
     const note = webMercatorNote(webMercatorScaleBound(yOf(39.55), yOf(39.95)));
     expect(note).toMatch(/ground scale at latitude 39\.7\d°/);
-    expect(note).toMatch(/at most 0\.\d\d% error/);
+    expect(note).toMatch(/at most 0\.\d\d% error on lengths and 0\.\d\d% on areas/);
+    expect(note).toMatch(/projection approximation only, not the accuracy of the data/);
     expect(note).toMatch(/exported georeference stay in Web Mercator/);
     expect(webMercatorNote(undefined)).toBeNull();
   });

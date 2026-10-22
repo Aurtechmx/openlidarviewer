@@ -698,11 +698,19 @@ export function createTerrainAnalysisRunner(
   const worldOriginY = (sourceUpAxis: 'z' | 'y' | undefined) => (): number | null => {
     const viewer = getViewer();
     const id = getActiveId();
-    const origin =
+    const sourceOrigin =
       (id ? viewer.getCloud(id)?.sourceOrigin : null) ??
       viewer.streamingCloud?.renderOrigin ??
       null;
-    if (!origin) return null;
+    if (!sourceOrigin) return null;
+    // The gathered positions are in the PROJECT frame, with each layer's
+    // placement already folded in. The matching origin is the project's, which
+    // is the layer's source origin less its placement offset; adding the layer's
+    // own origin to project-local coordinates would count the offset twice.
+    const placement = id ? viewer.layerProjectOffset(id) : null;
+    const origin = placement
+      ? [sourceOrigin[0] - placement[0], sourceOrigin[1] - placement[1], sourceOrigin[2] - placement[2]]
+      : sourceOrigin;
     // The gather rotates a Y-up buffer into the canonical Z-up frame, so the
     // origin has to make the same trip. Terrain reads this as the NORTHING that
     // drives the geographic cos φ scale; a Y-up source's northing is its −Z, and

@@ -72,13 +72,13 @@ Build, test, docs, and mutation tooling. None reaches the deployed app.
 | @stryker-mutator/vitest-runner | ^10.0.0 | 10.0.0 | Apache-2.0 |
 | @types/proj4 | ^2.19.0 | 2.19.0 | MIT |
 | @types/three | ^0.186.0 | 0.186.0 | MIT |
-| @vitest/coverage-v8 | ^5.0.1 | 5.0.1 | MIT |
+| @vitest/coverage-v8 | ^5.0.5 | 5.0.5 | MIT |
 | rollup-plugin-visualizer | ^7.1.1 | 7.1.1 | MIT |
 | typescript | ~7.0.2 | 7.0.2 | Apache-2.0 |
 | vite | ^8.3.4 | 8.3.4 | MIT |
 | vite-plugin-javascript-obfuscator | ^3.1.0 | 3.1.0 | MIT |
 | vitepress | 1.6.4 | 1.6.4 | MIT |
-| vitest | ^5.0.0 | 5.0.1 | MIT |
+| vitest | ^5.0.5 | 5.0.5 | MIT |
 
 ## Production security status
 
@@ -109,7 +109,7 @@ through `overrides` rather than waiting on the packages that depend on them:
 
 | Package | Was | Now | Advisory |
 |---|---|---|---|
-| vite (under vitepress) | 5.4.21 | 6.4.3 | dev-server path traversal, `server.fs.deny` bypass, launch-editor NTLM disclosure |
+| vite (under vitepress) | 5.4.21 | 6.4.4 | dev-server path traversal, `server.fs.deny` bypass, launch-editor NTLM disclosure |
 | esbuild (under vitepress) | 0.21.5 | 0.25.12 | dev-server permissive CORS |
 | qs (under typed-rest-client) | 6.15.1 | 6.16.0 | `qs.stringify` denial of service; array-limit bypass and `isBuffer` denial of service |
 | brace-expansion (under minimatch 3) | 1.1.15 | 1.1.21 | CVE-2026-13149, exponential-time expansion; GHSA-mh99-v99m-4gvg, unbounded expansion |

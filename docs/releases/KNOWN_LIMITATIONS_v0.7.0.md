@@ -703,10 +703,12 @@ cos φ / √(1 − e² sin² φ) and north–south (1 − e²) cos φ / (1 − e
 whose geometric mean is the one factor used (0.77 at Denver). The coordinates
 and the DEM's georeference stay in Web Mercator. The factor is exact at the
 scan's centre latitude and changes across the scan, so a run states the
-largest relative error it leaves (0.5% for a 0.4° tall scan about 40° N) and is
-refused above 1%, for example a whole regional dataset, with the reason:
-zoom in so less is loaded, or reproject to UTM. A Web Mercator scan whose
-position is unknown (several layers, or a moved layer) is refused. Streamed
+largest relative error it leaves on lengths and, separately, on areas (an area
+error is about twice a length error). It is refused above 1% on lengths or 2% on
+areas, for example a whole regional dataset, with the reason: zoom in so less
+is loaded, or reproject to UTM. These figures are the projection approximation
+only, not the accuracy of the data. A layer placed in a project is scaled at its
+project position; a scan whose position cannot be read is refused. Streamed
 USGS EPT datasets are in Web Mercator, so this is what lets them be
 analysed. A geocentric code outside the built-in
 list is recognised only from its WKT or GeoTIFF model type. A WKT
@@ -1048,6 +1050,16 @@ correlation between windows. Empirical p-values cannot fall below 1/2001
 per peak, and the combined value below that is a model figure, not a
 calibrated probability. A supported grid is a grid the points are
 compatible with; it does not say which operation produced it.
+
+## A measurement can read zero below the position step
+
+Positions are held as 32-bit floats around a local origin, so on a very wide
+scan the step between representable positions grows (about 16 mm at 200 km).
+Two points closer than that step load at the same position, and a measurement
+between them reads 0 in the Measure panel and in the CSV and GeoJSON exports.
+The Scan Report states the step and terrain deliverables decline above 10 mm,
+but measurements are not yet withheld or flagged on that basis. On such a scan,
+read any measurement smaller than the stated step as unresolved.
 
 ## The draw precision bound is a diagnostic for one view
 

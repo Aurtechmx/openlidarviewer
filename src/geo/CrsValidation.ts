@@ -184,7 +184,7 @@ export function validateCrsForMeasurement(
         reason:
           'Local coordinates — measurements assume the source units are metres.',
         suggestion:
-          'For survey-grade values, pick a projected CRS in the Inspector.',
+          'Pick the correct projected CRS in the Inspector and confirm its units to enable metric measurements. Accuracy also depends on the source data.',
       };
 
     case 'geographic':
