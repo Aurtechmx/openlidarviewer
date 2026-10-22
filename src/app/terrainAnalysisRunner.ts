@@ -181,7 +181,7 @@ export function deriveCoreParams(
     const originY = getWorldOriginY?.();
     if (originY == null || !Number.isFinite(originY) || !Number.isFinite(minY) || !Number.isFinite(maxY)) {
       throw new TerrainRefusalError(
-        'This scan is Web Mercator and its position is unknown (it has no single origin: several layers are open, or one has been moved), so its ground scale cannot be taken. Keep one scan open.',
+        'This scan is Web Mercator and its position cannot be read, so its ground scale cannot be taken. Reopen the scan, or reproject it to a local metric CRS such as UTM.',
       );
     }
     webMercator = webMercatorScaleBound(originY + minY, originY + maxY);
