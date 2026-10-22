@@ -238,10 +238,10 @@ describe('the terrain run on a Web Mercator scan', () => {
     expect(p.cellSizeM).toBeCloseTo(Math.max(0.25 / expected, 1000 / 256), 9);
   });
 
-  it('refuses, as "did not run", when the scan has no single origin to take its latitude from', () => {
+  it('refuses, as "did not run", when the scan has no origin to take its latitude from', () => {
     const run = () => deriveCoreParams(grid(), undefined, facts(base), undefined, false, () => null);
     expect(run).toThrow(TerrainRefusalError);
-    expect(run).toThrow(/position is unknown/);
+    expect(run).toThrow(/position cannot be read/);
   });
 
   it('refuses a scan too tall for one factor, with the reason', () => {
