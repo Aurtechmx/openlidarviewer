@@ -10,6 +10,7 @@
  * orchestration is testable without the whole app.
  */
 
+import { positionStepsResolver } from './measurementPositionSteps';
 import type { Measurement, MeasureUnitFrame, Vec3 } from '../render/measure/types';
 import type { GeoJsonLonLat, MeasurementExportContext } from '../export/measurementExport';
 import type { SpatialUpAxis } from '../geo/SpatialContext';
@@ -444,6 +445,8 @@ export async function exportMeasurementsFile(
     // The measurements' own layer up, never the scene's: a Y-up scan made
     // active must not zero a Z-up survey's heights.
     up,
+    // A figure below the step its own layer holds positions at is withheld.
+    positionSteps: positionStepsResolver(layers),
     unitToMetres: owned ? owned.unitToMetres : snap.unitToMetres,
     verticalUnitToMetres: owned ? owned.verticalUnitToMetres : snap.verticalUnitToMetres,
     crsName: geo.crsName,
@@ -693,6 +696,7 @@ export async function exportMeasurementIntegrityReport(
     geographic,
     verticalRefused,
     verticalScaleInvalid,
+    positionStepsResolver(deps.layers ? exportLayersOf(deps.layers.view, deps.layers.stableIdFor) : []),
   );
   const out = await textToWrite(f.text, deps, signReportText);
   if (out === null) return;
@@ -736,7 +740,7 @@ export async function collectMeasurementFindings(
     return [];
   }
   const { measurementsToFindings } = await deps.loadMeasurementReport();
-  return measurementsToFindings(own, up, unitToMetres, verticalUnitToMetres, { geographic, unitsVerified, verticalRefused, verticalScaleInvalid });
+  return measurementsToFindings(own, up, unitToMetres, verticalUnitToMetres, { positionSteps: positionStepsResolver(deps.layers ? exportLayersOf(deps.layers.view, deps.layers.stableIdFor) : []), geographic, unitsVerified, verticalRefused, verticalScaleInvalid });
 }
 
 /**

@@ -34,6 +34,7 @@ import { buildMeasurementRows } from './ReportMeasurementSection';
 import { buildInspectionSummary } from './ReportFindings';
 import type { Annotation } from '../render/annotate/types';
 import type { Measurement, UnitSystem } from '../render/measure/types';
+import type { AxisSteps } from '../render/measure/geometry';
 import { DEFAULT_TEMPLATE_ID } from './ReportTemplates';
 
 /**
@@ -85,6 +86,8 @@ export interface ComposeReportInputs {
   readonly verticalRefused?: boolean;
   /** True when the vertical unit is declared and cannot be read; see `buildMeasurementRows`. */
   readonly verticalScaleInvalid?: boolean;
+  /** The step each measurement's positions are held at on its own layer(s); a headline below it is withheld. */
+  readonly positionSteps?: (m: Measurement) => AxisSteps | null;
   /**
    * Why measurements were left out of this scan's report (taken on another
    * scan, or on one whose owner cannot be resolved). Printed under the
@@ -157,6 +160,7 @@ export function composeReportInputs(input: ComposeReportInputs): ReportInputs {
       input.geographicCrs ?? false,
       input.verticalRefused ?? false,
       input.verticalScaleInvalid ?? false,
+      input.positionSteps,
     ),
     ...(input.measurementsWithheld ? { measurementsWithheld: input.measurementsWithheld } : {}),
     technicalNotes: input.technicalNotes,

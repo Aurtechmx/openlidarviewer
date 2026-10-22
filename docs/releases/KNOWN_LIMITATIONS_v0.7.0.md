@@ -441,7 +441,7 @@ measurement controller, which took twenty-eight more. The draw precision bound's
 fails the build when either passes its recorded baseline, so a raise is a hand
 edit to `docs/validation/monolith-size-baseline.json` and always shows in the
 diff.
-Fan-out is 97 for the shell, 73 for the renderer, across 1164 modules with no
+Fan-out is 97 for the shell, 73 for the renderer, across 1165 modules with no
 dependency cycles. Fan-out counts the distinct modules a file imports with a
 value import, source files and external packages alike; type-only and dynamic
 imports are not counted. The shell and the renderer figures are held
@@ -1053,15 +1053,17 @@ per peak, and the combined value below that is a model figure, not a
 calibrated probability. A supported grid is a grid the points are
 compatible with; it does not say which operation produced it.
 
-## A measurement can read zero below the position step
+## A measurement below the position step is withheld
 
 Positions are held as 32-bit floats around a local origin, so on a very wide
 scan the step between representable positions grows (about 16 mm at 200 km).
-Two points closer than that step load at the same position, and a measurement
-between them reads 0 in the Measure panel and in the CSV and GeoJSON exports.
-The Scan Report states the step and terrain deliverables decline above 10 mm,
-but measurements are not yet withheld or flagged on that basis. On such a scan,
-read any measurement smaller than the stated step as unresolved.
+Where a scan's step is over the 10 mm precision budget, a measured value
+smaller than the step on the layer it was taken on is withheld with the reason:
+the Measure panel and scene labels say it is not resolved, the CSV leaves the
+cell empty, GeoJSON writes null with a `not_resolved` property, the reports
+record a null finding, and a chain containing it is refused. Values longer than
+the step are still reported, within that step. Recovery is to load a smaller
+tile of the source, or COPC, so each region is held near its own origin.
 
 ## The draw precision bound is a diagnostic for one view
 

@@ -46,6 +46,10 @@ import {
   measurementMetrics,
   reducedSampleCaveat,
   refusalNote,
+  unresolvedNote,
+  HEADLINE_METRIC_KEY,
+  unresolvedMetricKeys,
+  type AxisSteps,
 } from '../export/measurementExport';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -151,13 +155,14 @@ function computeValue(
   verticalToMetres: number,
   /** False when the frame states no linear unit; nothing may be called metres. */
   verified: boolean,
+  steps: AxisSteps | null = null,
 ): string {
   // One shared, up-axis- and compound-CRS-correct computation for every kind;
   // this function only formats the metre values it returns (M6).
   // Pass full precision (6 dp) — the formatters below apply the report's own
   // adaptive sub-centimetre rounding, so the PDF matches the live panel to the
   // digit rather than inheriting the tabular exports' millimetre columns (M6).
-  const mm = measurementMetrics(m, up, unitToMetres, verticalToMetres, 6);
+  const mm = measurementMetrics(m, up, unitToMetres, verticalToMetres, 6, steps);
   switch (m.kind) {
     case 'distance':
     case 'polyline':
@@ -379,22 +384,34 @@ export function buildMeasurementRows(
    * figure that reads Z reads "not available" with the reason.
    */
   verticalScaleInvalid = false,
+  /**
+   * The step each measurement's positions are held at on its own layer(s). A
+   * headline below it reads as not resolved, with the reason, in place of a
+   * number; absent: nothing is withheld on that basis.
+   */
+  positionSteps?: (m: Measurement) => AxisSteps | null,
 ): readonly ReportMeasurementRow[] {
   const f = Number.isFinite(unitToMetres) && unitToMetres > 0 ? unitToMetres : 1;
   const vf = Number.isFinite(verticalToMetres) && verticalToMetres > 0 ? verticalToMetres : f;
   return measurements.map((m) => {
-    const note = refusalNote(m, geographicCrs, verticalRefused, verticalScaleInvalid);
+    const steps = positionSteps?.(m) ?? null;
+    const unresolved = unresolvedNote(m, worldUp, f, vf, steps);
+    const headlineUnresolved =
+      unresolved !== undefined && unresolvedMetricKeys(m, worldUp, f, vf, steps).includes(HEADLINE_METRIC_KEY[m.kind]);
+    const note = refusalNote(m, geographicCrs, verticalRefused, verticalScaleInvalid) ?? (headlineUnresolved ? unresolved! : null);
     const refused = note !== null;
     return {
       name: m.name,
       kind: m.kind,
       value: note !== null
         ? note
-        : computeValue(m, unitSystem, worldUp, f, vf, unitsVerified),
+        : computeValue(m, unitSystem, worldUp, f, vf, unitsVerified, steps),
       pointCount: m.points.length,
       ...(m.kind === 'volume' && !refused && reducedSampleCaveat(m.volume?.withheld)
         ? { note: reducedSampleCaveat(m.volume?.withheld) as string }
-        : {}),
+        : !refused && unresolved
+          ? { note: unresolved }
+          : {}),
       profileExtras: m.kind === 'profile' && !refused
         ? buildProfileExtras(m, unitSystem, f, worldUp, vf, unitsVerified)
         : undefined,

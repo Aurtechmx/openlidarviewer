@@ -18,6 +18,9 @@
  */
 
 import { aggregate as aggregateMeasurements } from '../render/measure/measurementChains';
+import { positionStepsResolver } from './measurementPositionSteps';
+import type { AxisSteps } from '../render/measure/geometry';
+import type { Measurement } from '../render/measure/types';
 import { layerUpFrameOf, layerUpVectorResolver } from './layerUpFrames';
 import { upVectorOf } from '../geo/frame/layerUpFrame';
 import { cloudUpAxisMoved, setCloudUpResolver } from '../render/layerUpRegistry';
@@ -119,6 +122,8 @@ export interface MeasurePanelMount {
  * scaffolding does not weigh on the shell monolith.
  */
 export function createMeasurePanelMount(deps: MeasurePanelMountDeps): MeasurePanelMount {
+  // The step each measurement's positions are held at on its own layer(s), bound with the unit frames.
+  let chainSteps: ((m: Measurement) => AxisSteps | null) | null = null;
   let panel: MeasurePanel | null = null;
   // One launcher for the whole mount, so a second Expand replaces the dock the
   // first one left rather than stacking on it. Memoised rather than built here:
@@ -292,7 +297,7 @@ export function createMeasurePanelMount(deps: MeasurePanelMountDeps): MeasurePan
           // The same frame verdicts the live grade and the exports read: a
           // geographic frame refuses all but height, and an unconfirmed scale
           // is not called metres.
-          { geographic: f.geographic, verticalRefused: f.verticalRefused, verticalScaleInvalid: f.verticalUnitInvalid, unitsVerified: f.crsKnown && !f.geographic },
+          { positionSteps: (m) => chainSteps?.(m) ?? null, geographic: f.geographic, verticalRefused: f.verticalRefused, verticalScaleInvalid: f.verticalUnitInvalid, unitsVerified: f.crsKnown && !f.geographic },
         );
       },
       // v0.3.10 Profile-as-Deliverable — expose the controller's unit
@@ -432,6 +437,7 @@ export function createMeasurePanelMount(deps: MeasurePanelMountDeps): MeasurePan
     },
     bindUnitFrames: (src) => {
       const v = deps.getViewer();
+      chainSteps = (m) => positionStepsResolver(src.clouds().map((id) => ({ stableId: src.stableIdFor(id), projectOffset: v.layerProjectOffset(id) })))(m);
       // Navigation up reads the same per-layer frame as the owner frames, and
       // re-aligns when a CRS change moves the active layer's axis.
       v.layerUp = layerUpVectorResolver(src.cloud, src.activeId, deps.crsService);
@@ -443,6 +449,7 @@ export function createMeasurePanelMount(deps: MeasurePanelMountDeps): MeasurePan
       return bindMeasureUnitFrames(v.measure, {
         ...src,
         crs: deps.crsService,
+        projectOffset: (id) => v.layerProjectOffset(id),
         realignUp: () => {
           v.alignUpToLayer(src.activeId());
           if (cloudUpAxisMoved(src.clouds().map(src.cloud))) {

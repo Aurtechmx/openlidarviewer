@@ -18,7 +18,7 @@
 import type { ExportDigests } from '../science/exportDigestRecord';
 import { formatGroupedInt } from '../science/withheldCounts';
 import type { Measurement, Vec3 } from '../render/measure/types';
-import { areaWithheldNote, measurementMetrics, refusalNote, roundMeasured, reducedSampleCaveat } from './measurementExport';
+import { areaWithheldNote, measurementMetrics, refusalNote, roundMeasured, reducedSampleCaveat, unresolvedMetricKeys, unresolvedNote, type AxisSteps } from './measurementExport';
 import {
   buildReportManifest,
   canonicalize,
@@ -137,6 +137,11 @@ export interface FindingsFrame {
    * units rather than metres. Defaults true.
    */
   readonly unitsVerified?: boolean;
+  /**
+   * The step a measurement's positions are held at on its own layer(s). A
+   * figure below it is withheld with the reason; absent: none is.
+   */
+  readonly positionSteps?: (m: Measurement) => AxisSteps | null;
 }
 
 /** A metre unit label, renamed to source units when the scale is unconfirmed. */
@@ -165,7 +170,8 @@ export function measurementsToFindings(
   const u = (unit: string): string => unitLabel(unit, verified);
   const findings: ReportFinding[] = [];
   measurements.forEach((m, i) => {
-    const metrics = measurementMetrics(m, up, unitToMetres, verticalToMetres);
+    const steps = frame.positionSteps?.(m) ?? null;
+    const metrics = measurementMetrics(m, up, unitToMetres, verticalToMetres, 3, steps);
     // A figure the live tool refuses is recorded as an explicit null with the
     // reason, never as a number. Only complete measurements produce a finding.
     const refused = refusalNote(m, frame.geographic, frame.verticalRefused, frame.verticalScaleInvalid);
@@ -184,6 +190,15 @@ export function measurementsToFindings(
       return;
     }
     const primary = PRIMARY[m.kind];
+    // A headline below the step its positions are held at is an explicit null
+    // with the reason. It is never replaced by another figure of the record.
+    const unresolved = unresolvedNote(m, up, unitToMetres, verticalToMetres, steps);
+    const vv = Number.isFinite(verticalToMetres) && verticalToMetres > 0 ? verticalToMetres : unitToMetres;
+    if (unresolved && primary && unresolvedMetricKeys(m, up, unitToMetres, vv, steps).includes(primary.key)) {
+      const label = m.name?.trim() || `${m.kind} ${i + 1}`;
+      findings.push({ label, value: null, unit: '', caveats: [unresolved] });
+      return;
+    }
     let value: number | null = null;
     let unit = '';
     if (primary && Number.isFinite(metrics[primary.key])) {
@@ -281,7 +296,7 @@ export function measurementsToFindings(
       }
       return;
     }
-    findings.push({ label, value, unit });
+    findings.push(unresolved ? { label, value, unit, caveats: [unresolved] } : { label, value, unit });
   });
   return findings;
 }
@@ -339,6 +354,8 @@ export function integrityReportFile(
   verticalRefused: boolean = false,
   /** True when the vertical unit is declared and cannot be read; see {@link FindingsFrame}. */
   verticalScaleInvalid: boolean = false,
+  /** The step each measurement's positions are held at; see {@link FindingsFrame}. */
+  positionSteps?: (m: Measurement) => AxisSteps | null,
 ): IntegrityReportFile {
   const gate = exportGate(claimId);
   // A product the register disables entirely never leaves — not even as an
@@ -355,7 +372,7 @@ export function integrityReportFile(
     software,
     notes: reportNotes(unitsVerified, crsName, geographic, verticalRefused, verticalScaleInvalid),
     digests,
-  }, verticalToMetres, undefined, { geographic, unitsVerified, verticalRefused, verticalScaleInvalid });
+  }, verticalToMetres, undefined, { geographic, unitsVerified, verticalRefused, verticalScaleInvalid, positionSteps });
   return {
     filename: `${datasetId}-report.json`,
     text: JSON.stringify(manifest, null, 2),

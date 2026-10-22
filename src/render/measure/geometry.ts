@@ -12,6 +12,8 @@
  */
 
 import type { Vec3 } from '../navMath';
+import { float32Spacing, PRECISION_BUDGET_M, formatPrecisionMetres } from '../../geo/inMemoryPrecision';
+import type { Measurement } from './types';
 
 const EPSILON = 1e-9;
 
@@ -558,3 +560,198 @@ export function toMetricFrame(p: Vec3, up: Vec3, h: number, v: number): Vec3 {
 // The ring-validity verdict that gates every Area figure; re-exported so the
 // export layer reaches it through the geometry module it already uses.
 export { areaRingVerdict, areaWithheldReason, type AreaRingVerdict } from './areaValidity';
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Position resolution
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * When a measured value is smaller than the step its
+ * scan's positions are held at.
+ *
+ * Positions are held as Float32 values around a layer's local origin, so the
+ * step between representable positions grows with the distance from that
+ * origin (about 16 mm at 200 km). Two points closer than that step can load at
+ * the same position, and a measurement between them would read zero. Where the
+ * step is within the precision budget the representation is adequate and every
+ * value, a genuine zero included, stands. Where it is over budget, a value
+ * smaller than the step cannot be told from zero, so it is withheld and the
+ * reason given, never reported as a number.
+ *
+ * Pure: the steps are read from the measurement's own points less its layer's
+ * placement offset, which is the value the layer's buffer actually holds.
+ */
+/** The `measurementMetrics` key each kind's headline reads. */
+export const HEADLINE_METRIC_KEY: Readonly<Record<Measurement['kind'], string>> = {
+  distance: 'length_m', polyline: 'length_m', profile: 'length_m', area: 'area_m2', height: 'vertical_m',
+  angle: 'angle_deg', slope: 'grade_pct', box: 'volume_m3', volume: 'area_m2',
+};
+
+/** The largest Float32 step, per axis and in source units, at a measurement's points. */
+export interface AxisSteps {
+  readonly x: number;
+  readonly y: number;
+  readonly z: number;
+}
+
+/**
+ * The step each axis is held at across `points`, given the placement offset
+ * between the layer's buffer and the frame the points are in. Null when a point
+ * is not finite.
+ */
+export function positionSteps(points: readonly Vec3[], offset: Vec3 | null | undefined): AxisSteps | null {
+  let x = 0, y = 0, z = 0;
+  for (const p of points) {
+    const sx = float32Spacing(p[0] - (offset?.[0] ?? 0));
+    const sy = float32Spacing(p[1] - (offset?.[1] ?? 0));
+    const sz = float32Spacing(p[2] - (offset?.[2] ?? 0));
+    if (!Number.isFinite(sx) || !Number.isFinite(sy) || !Number.isFinite(sz)) return null;
+    x = Math.max(x, sx); y = Math.max(y, sy); z = Math.max(z, sz);
+  }
+  return { x, y, z };
+}
+
+/** The larger of two step sets, axis by axis: a measurement spanning layers is held at the coarser. */
+export function coarserSteps(a: AxisSteps | null, b: AxisSteps | null): AxisSteps | null {
+  if (!a) return b;
+  if (!b) return a;
+  return { x: Math.max(a.x, b.x), y: Math.max(a.y, b.y), z: Math.max(a.z, b.z) };
+}
+
+/** The steps in metres along the horizontal plane, the up axis, and in space. */
+export interface LinearSteps {
+  readonly horizontal: number;
+  readonly vertical: number;
+  readonly spatial: number;
+}
+
+/** Convert axis steps to metres for a frame whose up axis is `up`. */
+export function linearSteps(steps: AxisSteps, up: Vec3, unitToMetres: number, verticalToMetres = unitToMetres): LinearSteps {
+  const a = [Math.abs(up[0]), Math.abs(up[1]), Math.abs(up[2])];
+  const upAxis = a[2] >= a[0] && a[2] >= a[1] ? 2 : a[1] >= a[0] ? 1 : 0;
+  const s = [steps.x, steps.y, steps.z];
+  const horizontal = Math.max(...s.filter((_, i) => i !== upAxis)) * unitToMetres;
+  const vertical = s[upAxis] * verticalToMetres;
+  return { horizontal, vertical, spatial: Math.max(horizontal, vertical) };
+}
+
+/** True when the representation is coarser than the precision budget, so small values may be unresolved. */
+export function overBudget(s: LinearSteps): boolean {
+  return s.spatial > PRECISION_BUDGET_M;
+}
+
+/**
+ * The `measurementMetrics` keys of `m` whose value is below the step its
+ * positions are held at, on a scan held coarser than the budget. Empty when the
+ * representation is adequate or every value is resolved. A value is unresolved
+ * when it, or a length it is derived from, is shorter than the relevant step:
+ * horizontal figures against the horizontal step, vertical against the
+ * vertical, and spatial ones against the larger.
+ */
+export function unresolvedMetricKeys(
+  m: Pick<Measurement, 'kind' | 'points'>,
+  up: Vec3,
+  unitToMetres: number,
+  verticalToMetres: number,
+  steps: AxisSteps | null | undefined,
+): string[] {
+  if (!steps) return [];
+  const s = linearSteps(steps, up, unitToMetres, verticalToMetres);
+  if (!overBudget(s)) return [];
+  const mp = m.points.map((p) => toMetricFrame(p, up, unitToMetres, verticalToMetres));
+  const below = (v: number, step: number): boolean => !(Math.abs(v) >= step);
+  const out = new Set<string>();
+  switch (m.kind) {
+    case 'distance':
+      if (mp.length >= 2 && below(distance(mp[0], mp[1]), s.spatial)) out.add('length_m');
+      break;
+    case 'polyline':
+      for (let i = 1; i < mp.length; i++) if (below(distance(mp[i - 1], mp[i]), s.spatial)) out.add('length_m');
+      break;
+    case 'height':
+      if (mp.length >= 2) {
+        const v = verticalDelta(mp[0], mp[1], up);
+        if (below(v.vertical, s.vertical)) out.add('vertical_m');
+        if (below(v.horizontal, s.horizontal)) out.add('horizontal_m');
+      }
+      break;
+    case 'angle':
+      if (mp.length >= 3 && (below(distance(mp[1], mp[0]), s.spatial) || below(distance(mp[1], mp[2]), s.spatial))) {
+        out.add('angle_deg');
+      }
+      break;
+    case 'slope':
+      if (mp.length >= 2) {
+        const sl = slopeBetween(mp[0], mp[1], up);
+        // A grade is rise over run: either one unresolved leaves no grade.
+        if (below(sl.rise, s.vertical) || below(sl.run, s.horizontal)) {
+          for (const k of ['grade_pct', 'angle_deg', 'rise_m', 'run_m']) out.add(k);
+        }
+      }
+      break;
+    case 'profile':
+      if (mp.length >= 2) {
+        const p = profileMetrics(mp[0], mp[1], up);
+        if (below(p.length3d, s.spatial)) out.add('length_m');
+        if (below(p.lengthHorizontal, s.horizontal)) out.add('horizontal_m').add('grade_pct');
+        if (below(p.verticalDrop, s.vertical)) out.add('vertical_m').add('grade_pct');
+      }
+      break;
+    case 'area':
+      for (let i = 0; i < mp.length; i++) {
+        if (below(distance(mp[i], mp[(i + 1) % mp.length]), s.spatial)) {
+          for (const k of ['area_m2', 'horizontal_area_m2', 'perimeter_m']) out.add(k);
+          break;
+        }
+      }
+      break;
+    case 'box':
+      if (mp.length >= 2) {
+        const b = boxMetrics(boxFromCorners(mp[0], mp[1]), up);
+        if (below(b.width, s.horizontal)) out.add('width_m').add('volume_m3');
+        if (below(b.depth, s.horizontal)) out.add('depth_m').add('volume_m3');
+        if (below(b.height, s.vertical)) out.add('height_m').add('volume_m3');
+      }
+      break;
+    case 'volume':
+      // The cut and fill are integrated from the cloud, not from these points;
+      // only the footprint drawn from them can be unresolved.
+      for (let i = 0; i < mp.length; i++) {
+        if (below(distance(mp[i], mp[(i + 1) % mp.length]), s.horizontal)) { out.add('area_m2'); break; }
+      }
+      break;
+  }
+  return [...out];
+}
+
+/** The short form the Measure panel prints in place of a headline below the step. */
+export function unresolvedHeadline(steps: AxisSteps, up: Vec3, unitToMetres: number, verticalToMetres = unitToMetres): string {
+  const s = linearSteps(steps, up, unitToMetres, verticalToMetres);
+  return `not resolved: below this scan's ${formatPrecisionMetres(s.spatial)} position step; load a smaller tile to measure it`;
+}
+
+/**
+ * The panel's not-resolved headline for `m` in its unit frame, or null when the
+ * figure its headline reads is resolved (or no step is known).
+ */
+export function unresolvedHeadlineFor(
+  m: Pick<Measurement, 'kind' | 'points'>,
+  steps: AxisSteps | null,
+  up: Vec3,
+  frame: { readonly unitToMetres: number; readonly verticalUnitToMetres: number | null },
+): string | null {
+  if (!steps) return null;
+  const v = frame.verticalUnitToMetres ?? frame.unitToMetres;
+  if (!unresolvedMetricKeys(m, up, frame.unitToMetres, v, steps).includes(HEADLINE_METRIC_KEY[m.kind])) return null;
+  return unresolvedHeadline(steps, up, frame.unitToMetres, v);
+}
+
+/** Why some of a measurement's figures are withheld, for display and export. */
+export function unresolvedReason(steps: AxisSteps, up: Vec3, unitToMetres: number, verticalToMetres = unitToMetres): string {
+  const s = linearSteps(steps, up, unitToMetres, verticalToMetres);
+  return (
+    `not resolved: positions on this scan are held about ${formatPrecisionMetres(s.spatial)} apart, ` +
+    'so a smaller separation cannot be told from zero. Load a smaller tile of the source to measure it.'
+  );
+}
+

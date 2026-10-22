@@ -31,6 +31,7 @@
  * (see `docs/architecture/architecture-map.md`).
  */
 
+import { activeScanPositionSteps } from './measurementPositionSteps';
 import { pointBasisLine } from '../export/exportSummary';
 import { sourceInterpretationOf, type SourceInterpretationRecord } from '../science/sourceInterpretation';
 import { footprintMetres } from '../report/reportFootprint';
@@ -577,6 +578,8 @@ export async function generateReportPdf(templateId: string, deps: ReportExportDe
     verticalRefused: viewer.measure.verticalRefused === true,
     // A declared vertical unit that cannot be read: no height prints as metres.
     verticalScaleInvalid: viewer.measure.verticalUnitInvalid === true,
+    // A figure below the step the active scan holds positions at is withheld.
+    positionSteps: activeScanPositionSteps(deps.scans.activeId ? viewer.layerProjectOffset?.(deps.scans.activeId) ?? null : null),
     provenance: provenanceFp,
     // The file's own declared source metadata (E57 today) — verbatim,
     // rendered by the report's "Declared source metadata" section under the

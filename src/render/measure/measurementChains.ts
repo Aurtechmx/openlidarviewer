@@ -38,6 +38,7 @@
  * rule the live grade and the exports apply.
  */
 
+import { unresolvedMetricKeys, type AxisSteps } from './geometry';
 import { areaRingVerdict } from './areaValidity';
 import type { Measurement, MeasurementKind, UnitSystem } from './types';
 import { displayDecimals, formatArea, formatLength, formatVolume } from './format';
@@ -107,6 +108,11 @@ export interface ChainScale {
    * height, a grade, a volume), so every one is refused.
    */
   readonly verticalScaleInvalid?: boolean;
+  /**
+   * The step each measurement's positions are held at on its own layer(s). A
+   * chain with a member whose figure is below it is refused, never summed.
+   */
+  readonly positionSteps?: (m: Measurement) => AxisSteps | null;
 }
 
 /**
@@ -278,6 +284,22 @@ export function valueForDimension(
  * Run an aggregate operation over a measurement selection in a given
  * dimension. Pure: the same input always produces the same output.
  */
+/** The refusal a chain carries when a member's figure is below its position step. */
+export const CHAIN_UNRESOLVED =
+  "not resolved: a measurement in it is below its scan's position step; load a smaller tile to measure it";
+
+/** The `measurementMetrics` key a chain dimension reads for a kind, or null when it reads none from the points. */
+function chainMetricKey(kind: Measurement['kind'], dimension: ChainDimension): string | null {
+  switch (dimension) {
+    case 'length': return kind === 'slope' ? 'run_m' : kind === 'distance' || kind === 'polyline' || kind === 'profile' ? 'length_m' : null;
+    case 'area': return kind === 'area' || kind === 'volume' ? 'area_m2' : null;
+    case 'height': return kind === 'height' || kind === 'profile' ? 'vertical_m' : kind === 'box' ? 'height_m' : kind === 'slope' ? 'rise_m' : null;
+    case 'angle': return kind === 'angle' || kind === 'slope' ? 'angle_deg' : null;
+    case 'grade': return kind === 'slope' || kind === 'profile' ? 'grade_pct' : null;
+    default: return null;
+  }
+}
+
 export function aggregate(
   measurements: ReadonlyArray<Measurement>,
   operation: ChainOperation,
@@ -306,6 +328,17 @@ export function aggregate(
       dimension,
       refusal: geographicRefusal ? GEOGRAPHIC_NOT_AVAILABLE : VERTICAL_SCALE_NOT_AVAILABLE,
     };
+  }
+  // A member whose figure is below its scan's position step cannot be told from
+  // zero, so no total, mean or extreme of it is honest: the chain is refused.
+  if (scale.positionSteps) {
+    for (const m of measurements) {
+      const key = chainMetricKey(m.kind, dimension);
+      const steps = key ? scale.positionSteps(m) : null;
+      if (key && steps && unresolvedMetricKeys(m, worldUp, unitToMetres, verticalUnitToMetres, steps).includes(key)) {
+        return { value: Number.NaN, unit: '', contributingCount: 0, totalCount, operation, dimension, refusal: CHAIN_UNRESOLVED };
+      }
+    }
   }
   // Geometry values arrive in render (source) units; each value is converted
   // into metres ONCE, inside valueForDimension, so min/max/mean all operate on

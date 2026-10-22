@@ -50,7 +50,7 @@ import {
   boxCorners,
   BOX_EDGES,
   elevationDatumOffset,
-  toMetricFrame,
+  toMetricFrame, unresolvedHeadlineFor, type AxisSteps,
 } from './geometry';
 import { resizeBoxByCorner, BOX_CORNER_INDICES, type BoxCornerIndex } from './boxEdit';
 import { areaBreakdown, lineBreakdown } from './measureBreakdown';
@@ -595,6 +595,7 @@ export class MeasureController {
    * scan's (the fields above). Null resolver: every measurement uses them.
    */
   private _unitResolver: ((layerId: string) => MeasureUnitFrame | null) | null = null;
+  private _positionSteps: ((m: Measurement) => AxisSteps | null) | null = null; // per-layer position step (setPositionStepResolver); null: none withheld
   /** True while the fields above hold one measurement's own frame (see {@link _inFrameOf}). */
   private _inOwnFrame = false;
   private _lastCamera: THREE.PerspectiveCamera | null = null;
@@ -1048,6 +1049,7 @@ export class MeasureController {
    * ({@link UNRESOLVED_UNIT_FRAME}). A null answer, or work naming no layer,
    * keeps the active scan's factors.
    */
+  setPositionStepResolver(resolve: ((m: Measurement) => AxisSteps | null) | null): void { this._positionSteps = resolve; this._emitChange(); }
   setUnitResolver(resolve: ((layerId: string) => MeasureUnitFrame | null) | null): void {
     this._unitResolver = resolve;
     this.refreshUnitFrames();
@@ -2384,6 +2386,7 @@ export class MeasureController {
     // on the isotropic points, so a compound CRS reads what the export writes.
     const q = this._iso(p);
     if (this._upRefusalText !== null && upAxisRefusesKind(m.kind)) return this._upRefusalText;
+    const unresolved = unresolvedHeadlineFor(m, this._positionSteps?.(m) ?? null, this.upFor(m), this._ownUnitFrame(m) ?? this._activeUnitFrame()); if (unresolved !== null) return unresolved;
     switch (m.kind) {
       case 'distance': {
         if (p.length < 2) return '—';
