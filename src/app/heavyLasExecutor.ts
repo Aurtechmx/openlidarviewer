@@ -380,8 +380,6 @@ async function recordAndEvict(
  * back", because the whole-file loader would face the same too-large allocation.
  * `cancelled` is the one non-heavy tag: the user stopped the open on purpose.
  */
-/** Points in the sample opened when the index cannot be built: what the render budget holds. */
-const SAMPLE_FALLBACK_POINTS = 2_000_000;
 
 /**
  * The index cannot be built here (browser storage too small or absent), so open
@@ -407,7 +405,8 @@ async function openSampleInstead(args: {
   deps.setPhase('Reading a sample of the file…');
   let sample: Awaited<ReturnType<typeof buildPreviewSample>> = null;
   try {
-    sample = await buildPreviewSample(openRange(file), facts, { signal, targetPoints: SAMPLE_FALLBACK_POINTS });
+    // As many points as this device's render budget holds, spread across the whole file.
+    sample = await buildPreviewSample(openRange(file), facts, { signal, targetPoints: deps.renderBudget });
   } catch (err) {
     if (signal.aborted || isCancel(err)) return { status: 'cancelled' };
     if (deps.debug) console.warn('[heavy-las] sample fallback failed', err);

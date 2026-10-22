@@ -51,8 +51,8 @@ import { stratifiedSampleIndices } from '../strideSample';
 import type { ProgressUpdate } from '../loadProgress';
 import type { LasHeader } from '../lasHeader';
 
-/** Record formats the per-chunk laz-perf decoder is exercised for (COPC's set). */
-const CHUNK_DECODE_FORMATS = new Set([6, 7, 8]);
+/** Record formats the per-chunk laz-perf decoder is exercised for: LAS 1.0-1.3's 0-3 and COPC's 6-8. */
+export const CHUNK_DECODE_FORMATS: ReadonlySet<number> = new Set([0, 1, 2, 3, 6, 7, 8]);
 
 /**
  * Everything one chunk needs to decode into a chunk-LOCAL `RawPoints`, with no

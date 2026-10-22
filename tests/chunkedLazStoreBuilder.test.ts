@@ -160,18 +160,17 @@ describe('chunked LAZ tile store builder', () => {
     expect(bodyReads.length).toBe(0);
   });
 
-  it('refuses a chunked LAZ whose point format the chunk decoder does not support', async () => {
-    // tiny-pdrf0.laz and tiny-pdrf1.laz have usable chunk tables but PDRF 0/1,
-    // which the per-chunk decoder is not exercised for; the source names the
-    // format in the error rather than decoding it wrong.
-    for (const name of ['tiny-pdrf0.laz', 'tiny-pdrf1.laz']) {
-      const buffer = loadFixture(name);
-      const fmt = parseLasHeader(buffer).pointFormat;
-      await expect(
-        buildTileStoreFromLaz(new ArrayBufferRangeSource(buffer), memorySpill()),
-      ).rejects.toThrow(
-        new RegExp(`point format(s)?[^0-9]*${fmt}`),
-      );
+  it('builds a chunked LAZ in point formats 0, 1 and 3, as it does 6 to 8', async () => {
+    // The LAS 1.0-1.3 formats most airborne surveys still ship in. Every point
+    // is placed in the store; the decoded values are checked in
+    // chunkedLazLegacyFormats.test.ts.
+    for (const [name, points] of [['tiny-pdrf0.laz', 8], ['tiny-pdrf1.laz', 8], ['multichunk-pdrf3.laz', 120_000]] as const) {
+      const built = await buildTileStoreFromLaz(new ArrayBufferRangeSource(loadFixture(name)), memorySpill(), {
+        pointsPerLeaf: 20_000,
+        memoryBudgetBytes: 4 * 1024 * 1024,
+      });
+      expect(built.reader.manifest.pointCount, name).toBe(points);
+      expect(built.reader.leaves().reduce((s, l) => s + l.pointCount, 0), name).toBe(points);
     }
   });
 

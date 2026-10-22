@@ -52,8 +52,8 @@ import {
   type TileSchema,
 } from './tileRecord';
 
-/** Point formats the per-chunk laz-perf decoder is exercised for (COPC's set). */
-const CHUNK_DECODE_FORMATS = new Set([6, 7, 8]);
+/** Point formats the per-chunk laz-perf decoder is exercised for: 0-3 and COPC's 6-8. */
+const CHUNK_DECODE_FORMATS = new Set([0, 1, 2, 3, 6, 7, 8]);
 
 /**
  * Fixed prefix read for the LAS public header, sized so a header parse never
@@ -212,7 +212,7 @@ export async function openChunkedLazSource(
   const header = table.header;
   if (!CHUNK_DECODE_FORMATS.has(header.pointFormat)) {
     throw new ChunkedLazUnsupportedError(
-      `chunked LAZ out-of-core supports point formats 6, 7 and 8; ` +
+      `chunked LAZ out-of-core supports point formats 0 to 3 and 6 to 8; ` +
         `this file is point format ${header.pointFormat}`,
     );
   }
