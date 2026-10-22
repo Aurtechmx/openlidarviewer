@@ -102,6 +102,14 @@
 @media (pointer: coarse) and (max-width: 767px), (pointer: coarse) and (max-height: 500px) {
   .olv-state-strip { flex-wrap: nowrap; overflow-x: auto; overscroll-behavior-x: contain; }
   .olv-ss-item { flex: none; min-height: 44px; min-width: 44px; }
+  /* The row runs past the screen on a phone: its right edge fades so the
+     cut reads as "more this way", and the end padding lets the last item
+     scroll clear of the fade. */
+  .olv-state-strip {
+    padding-inline-end: var(--space-2xl);
+    -webkit-mask-image: linear-gradient(to right, #000 calc(100% - var(--space-2xl)), transparent);
+    mask-image: linear-gradient(to right, #000 calc(100% - var(--space-2xl)), transparent);
+  }
 }
 
 /* Elapsed time (and the estimate left) a host shows beside its busy

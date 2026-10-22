@@ -165,6 +165,13 @@
     box-shadow: none;
   }
   .olv-mobile-sheet.is-collapsed .olv-msheet-head::before { display: none; }
+  /* Collapsed, the head holds the location line above the tabs. Its height
+     joins --m-chrome-head-h, so the dock sits on the sheet instead of the
+     sheet growing under the dock and covering its captions. */
+  .olv-mobile-sheet.is-collapsed .olv-msheet-head > .olv-loc { height: var(--m-loc-h); }
+  :root:has(.olv-mobile-sheet.is-collapsed .olv-msheet-head > .olv-loc:not([hidden])) {
+    --m-loc-row: var(--m-loc-h);
+  }
 
   /* Body: the active tabpanel only; scrolls inside the sheet. */
   .olv-msheet-body {
