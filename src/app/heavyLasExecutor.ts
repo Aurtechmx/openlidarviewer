@@ -17,7 +17,9 @@
 import {
   storagePreflight,
   storagePreflightRefusal,
+  storageSampleNotice,
   readStorageEstimate,
+  type StoragePreflightVerdict,
 } from '../io/heavy/storagePreflight';
 import {
   openTileStore,
@@ -378,6 +380,59 @@ async function recordAndEvict(
  * back", because the whole-file loader would face the same too-large allocation.
  * `cancelled` is the one non-heavy tag: the user stopped the open on purpose.
  */
+/** Points in the sample opened when the index cannot be built: what the render budget holds. */
+const SAMPLE_FALLBACK_POINTS = 2_000_000;
+
+/**
+ * The index cannot be built here (browser storage too small or absent), so open
+ * an even sample of the file instead of refusing it. Returns `refusal` when no
+ * sample can be taken (a file too small to sample, or a read fault), so a file
+ * is only refused when it truly cannot be shown. The sample is attached with the
+ * scan chrome but NOT the committed-scan reveal: it must not publish a scan
+ * report, provenance or the Analyse rail as if the whole file had been read.
+ */
+async function openSampleInstead(args: {
+  file: File;
+  signal: AbortSignal;
+  facts: LasHeaderFacts;
+  deps: HeavyLasBridgeDeps;
+  openRange: (f: File) => RangeSource;
+  replace: HeavyReplacePlan | null;
+  storeName: string;
+  crs: CrsInfo | null;
+  verdict: StoragePreflightVerdict | null;
+  refusal: HeavyOpenResult;
+}): Promise<HeavyOpenResult> {
+  const { file, signal, facts, deps, openRange, storeName, crs, verdict, refusal } = args;
+  deps.setPhase('Reading a sample of the file…');
+  let sample: Awaited<ReturnType<typeof buildPreviewSample>> = null;
+  try {
+    sample = await buildPreviewSample(openRange(file), facts, { signal, targetPoints: SAMPLE_FALLBACK_POINTS });
+  } catch (err) {
+    if (signal.aborted || isCancel(err)) return { status: 'cancelled' };
+    if (deps.debug) console.warn('[heavy-las] sample fallback failed', err);
+  }
+  if (signal.aborted) return { status: 'cancelled' };
+  if (!sample) return refusal;
+  const replace = args.replace ?? (await askHeavyReplace(deps, file.name));
+  if (replace === null || signal.aborted) return { status: 'cancelled' };
+  const source = new PreviewCloudSource({ id: `sample-${storeName}`, name: file.name, sample, crs });
+  const decoder = new TileChunkDecoder(sample.schema, sample.recordBytes);
+  try {
+    await attachStreamingScan(source, decoder, deps, signal);
+  } catch (err) {
+    if (signal.aborted || isCancel(err)) return { status: 'cancelled' };
+    if (deps.debug) console.warn('[heavy-las] sample attach failed', err);
+    return refusal;
+  }
+  deps.streaming.resetStreamState();
+  settleHeavyReplace(deps, replace);
+  return {
+    status: 'sampled',
+    notice: storageSampleNotice(verdict, file.name, sample.pointCount, facts.declaredPointCount ?? null),
+  };
+}
+
 export async function executeHeavyLasBuild(
   file: File,
   signal: AbortSignal,
@@ -418,7 +473,12 @@ export async function executeHeavyLasBuild(
   }
 
   const root = await getOpfsRoot();
-  if (root === null) return { status: 'unavailable', heavy: true, reason: 'no OPFS root' };
+  if (root === null) {
+    return openSampleInstead({
+      file, signal, facts, deps, openRange, replace: null, storeName, crs: null, verdict: null,
+      refusal: { status: 'unavailable', heavy: true, reason: 'no OPFS root' },
+    });
+  }
 
   // Asked once, before any work: whether the stream this open replaces, and
   // the work on it, may go. Applied only after the new source commits, so a
@@ -499,8 +559,13 @@ export async function executeHeavyLasBuild(
   );
   if (!verdict.proceed) {
     const error = storagePreflightRefusal(verdict, file.name);
-    if (error) return { status: 'refused', heavy: true, error };
-    return { status: 'unavailable', heavy: true, reason: 'preflight refused without a message' };
+    const refusal: HeavyOpenResult = error
+      ? { status: 'refused', heavy: true, error }
+      : { status: 'unavailable', heavy: true, reason: 'preflight refused without a message' };
+    // A header that cannot size the file is a damaged file, not a storage limit:
+    // that one stays refused. Every storage limit opens a sample instead.
+    if (verdict.outcome === 'demand-unknown') return refusal;
+    return openSampleInstead({ file, signal, facts, deps, openRange, replace, storeName, crs, verdict, refusal });
   }
 
   // PREVIEW FIRST. Before the long index build, put a bounded, stratified

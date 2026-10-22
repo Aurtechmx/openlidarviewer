@@ -275,7 +275,7 @@ describe('openLocalHeavyLas — the out-of-core local LAS bridge', () => {
     expect(attachStreamingCloud).not.toHaveBeenCalled();
   });
 
-  it('surfaces the preflight refusal and builds nothing when storage cannot be checked', async () => {
+  it('opens a sample and builds nothing when storage cannot be checked', async () => {
     const buffer = lasBytes(160_000);
     const { range } = counting(new ArrayBufferRangeSource(buffer));
     const { file } = spyFile('heavy.las', buffer.byteLength);
@@ -287,12 +287,30 @@ describe('openLocalHeavyLas — the out-of-core local LAS bridge', () => {
 
     const result = await openLocalHeavyLas(file, new AbortController().signal, deps, env);
 
+    expect(result.status).toBe('sampled');
+    // Only the sample was attached, and nothing was written to OPFS.
+    expect(attachStreamingCloud).toHaveBeenCalledTimes(1);
+    expect(opfs.topLevel()).toEqual([]);
+  });
+
+  it('refuses with the preflight sentence when no sample can be taken either', async () => {
+    // Too few points to sample: the sampler returns nothing, so the refusal stands.
+    const buffer = lasBytes(20_000);
+    const { range } = counting(new ArrayBufferRangeSource(buffer));
+    const { file } = spyFile('tiny.las', buffer.byteLength);
+    const { deps, attachStreamingCloud } = makeDeps();
+    const { env, opfs } = makeEnv({
+      range,
+      reading: { available: false, reason: 'no navigator.storage in this test' },
+    });
+
+    const result = await openLocalHeavyLas(file, new AbortController().signal, deps, env);
+
     expect(result.status).toBe('refused');
     if (result.status === 'refused') {
       expect(result.heavy).toBe(true);
-      expect(result.error.message).toContain('heavy.las');
+      expect(result.error.message).toContain('tiny.las');
     }
-    // Nothing was attached and nothing was written to OPFS.
     expect(attachStreamingCloud).not.toHaveBeenCalled();
     expect(opfs.topLevel()).toEqual([]);
   });

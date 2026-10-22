@@ -359,6 +359,12 @@ export async function openScan(file: File, deps: OpenScanDeps): Promise<void> {
       finishLoad(deps).catch(() => false);
       return;
     }
+    if (heavy.status === 'sampled') {
+      // A sample of the file is on screen: finish like an attached scan, then say it is a sample.
+      deps.dropZone.setCancelHandler(null);
+      finishLoad(deps).catch(() => false).finally(() => deps.showToast(heavy.notice));
+      return;
+    }
     if (heavy.status === 'cancelled') {
       deps.dropZone.setCancelHandler(null);
       showCancelled(deps);

@@ -140,6 +140,13 @@ export interface LasHeaderFacts {
 export type HeavyOpenResult =
   /** A streaming source was attached — the file is open. */
   | { readonly status: 'attached'; readonly source: OlvTileSource; readonly decoder: TileChunkDecoder }
+  /**
+   * The tile store could not be built here (browser storage too small, or none),
+   * so an even sample of the file is on screen instead. `notice` says so, with
+   * the figures. The sample is not a finished scan: no scan report, provenance
+   * or Analyse surfaces are revealed for it.
+   */
+  | { readonly status: 'sampled'; readonly notice: string }
   /** The plan did not route this file out of core; the caller loads it whole. */
   | { readonly status: 'not-heavy' }
   /** OPFS or workers were unavailable. Fall through only when `heavy` is false. */
