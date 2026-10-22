@@ -1177,13 +1177,14 @@ function drawTitleBlock(
     : `${contourShapeStyleLabel(input.model.contourStyle)} (current view, not recorded)`;
   text(`Contour style: ${styleLabel}`, mxx, topY - 99, 6.5, font, DIM);
   // What the sheet was built from, as the provenance states it: a display
-  // sample says so on the sheet, not only in the sidecar JSON. Three lines: at
-  // two, a real basis ("2,899,049 of 47,170,656 points (display sample); whole-
-  // dataset support not claimed") lost the caveat that is the point of the line.
+  // sample says so on the sheet, not only in the sidecar JSON. Up to four lines:
+  // a streamed basis ("284,517 of 15,680,312 points (analysed subsample of the
+  // resident streaming set, 2,276,133 resident); whole-dataset support not
+  // claimed") ran past three and lost the caveat that is the point of the line.
   if (prov) {
     const basisMaxW = Math.max(60, rcx - 10 - mxx - 4);
-    wrapTextToWidth(`Analysed basis: ${prov.analysedBasisLine}`, basisMaxW, 6, (t, sz) => font.widthOfTextAtSize(safe(t), sz), 3)
-      .forEach((ln, i) => text(ln, mxx, topY - 110 - i * 7.5, 6, font, DIM));
+    wrapTextToWidth(`Analysed basis: ${prov.analysedBasisLine}`, basisMaxW, 6, (t, sz) => font.widthOfTextAtSize(safe(t), sz), 4)
+      .forEach((ln, i) => text(ln, mxx, topY - 110 - i * 7, 6, font, DIM));
   }
 
   // Right column — accuracy + readiness + provenance.

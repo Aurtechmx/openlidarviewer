@@ -961,7 +961,7 @@ function drawDensityBar(
     });
   }
   // Measured readout at the bar end.
-  cursor.page.drawText(`${bar.measured.toFixed(0)} ${sanitiseForPdf(bar.unit)}`, {
+  cursor.page.drawText(`${bar.measured.toFixed(1)} ${sanitiseForPdf(bar.unit)}`, {
     x: x0 + barW + 8, y: barBottom - 1, size: BODY_FONT_SIZE - 1, font: bold,
     color: rgb(theme.bodyText.r, theme.bodyText.g, theme.bodyText.b),
   });
