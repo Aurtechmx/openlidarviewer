@@ -165,11 +165,14 @@
     box-shadow: none;
   }
   .olv-mobile-sheet.is-collapsed .olv-msheet-head::before { display: none; }
-  /* Collapsed, the head holds the location line above the tabs. Its height
-     joins --m-chrome-head-h, so the dock sits on the sheet instead of the
-     sheet growing under the dock and covering its captions. */
+  /* Collapsed, a mode home's location line only repeats the active tab, so it
+     is dropped and the scan keeps the height. A deeper location keeps its
+     line and its Back; that line's height joins --m-chrome-head-h, so the dock
+     sits on the sheet instead of the sheet growing under it and covering the
+     dock's captions. */
+  .olv-mobile-sheet.is-collapsed .olv-msheet-head > .olv-loc.is-mode-home { display: none; }
   .olv-mobile-sheet.is-collapsed .olv-msheet-head > .olv-loc { height: var(--m-loc-h); }
-  :root:has(.olv-mobile-sheet.is-collapsed .olv-msheet-head > .olv-loc:not([hidden])) {
+  :root:has(.olv-mobile-sheet.is-collapsed .olv-msheet-head > .olv-loc:not([hidden]):not(.is-mode-home)) {
     --m-loc-row: var(--m-loc-h);
   }
 
