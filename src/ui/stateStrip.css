@@ -107,8 +107,8 @@
      scroll clear of the fade. */
   .olv-state-strip {
     padding-inline-end: var(--space-2xl);
-    -webkit-mask-image: linear-gradient(to right, #000 calc(100% - var(--space-2xl)), transparent);
-    mask-image: linear-gradient(to right, #000 calc(100% - var(--space-2xl)), transparent);
+    -webkit-mask-image: linear-gradient(to right, var(--text) calc(100% - var(--space-2xl)), transparent);
+    mask-image: linear-gradient(to right, var(--text) calc(100% - var(--space-2xl)), transparent);
   }
 }
 
