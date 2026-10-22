@@ -33,6 +33,7 @@ import { createHash } from 'node:crypto';
 import { resolve, dirname, basename } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { isCliEntry } from './lib/isCliEntry.mjs';
+import { releaseChannelFor, releaseChannelProblems } from './lib/releaseChannel.mjs';
 import { computeArchitectureFingerprint } from './lint-module-graph.mjs';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
@@ -82,6 +83,8 @@ export function buildManifest({ version, evidence, assets, builtAt, sourceDateEp
     }
     if (!evidence.commit) problems.push('evidence names no commit');
     if (!evidence.tag) problems.push('evidence names no tag');
+    else problems.push(...releaseChannelProblems({ version, tag: evidence.tag, channel: evidence.releaseChannel }));
+    if (!evidence.releaseChannel) problems.push('evidence names no release channel');
     if (evidence.releaseAuthoritative !== true) {
       problems.push('evidence is not release-authoritative — it was not produced by exact-tag CI');
     }
@@ -110,7 +113,7 @@ export function buildManifest({ version, evidence, assets, builtAt, sourceDateEp
       schemaVersion: 1,
       project: 'openlidarviewer',
       version,
-      releaseChannel: 'prerelease',
+      releaseChannel: releaseChannelFor(version),
       tag: evidence.tag,
       gitCommit: evidence.commit,
       repository: evidence.repository ?? 'Aurtechmx/openlidarviewer',
