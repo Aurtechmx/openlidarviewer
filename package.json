@@ -222,13 +222,13 @@
     "@stryker-mutator/vitest-runner": "^10.0.0",
     "@types/proj4": "^2.19.0",
     "@types/three": "^0.186.0",
-    "@vitest/coverage-v8": "^5.0.1",
+    "@vitest/coverage-v8": "^5.0.5",
     "rollup-plugin-visualizer": "^7.1.1",
     "typescript": "~7.0.2",
     "vite": "^8.3.4",
     "vite-plugin-javascript-obfuscator": "^3.1.0",
     "vitepress": "1.6.4",
-    "vitest": "^5.0.0"
+    "vitest": "^5.0.5"
   },
   "overrides": {
     "minimatch@3": {
@@ -236,7 +236,7 @@
     },
     "qs": "^6.16.0",
     "vitepress": {
-      "vite": "^6.4.3"
+      "vite": "6.4.4"
     },
     "texture-compressor": "file:vendor-stubs/texture-compressor",
     "@loaders.gl/las": {

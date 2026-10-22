@@ -158,7 +158,13 @@ describe('measurement export uses the owning scan frame', () => {
     await exportMeasurementIntegrityReport(onB.make([onB.dist('m', A)]));
     expect(onB.reportCalls[0]![4]).toBe('a');
     expect(onB.reportCalls[0]![5]).toBe('WGS 84 / UTM zone 12N');
-    expect(onB.reportCalls[0]).toEqual(onA.reportCalls[0]);
+    // Every argument matches whichever scan is active, the position-step
+    // resolver included: it reads the owning layer, so it gives the same steps.
+    const [a, b] = [onA.reportCalls[0]!, onB.reportCalls[0]!];
+    expect(b.slice(0, -1)).toEqual(a.slice(0, -1));
+    const ms = a[0] as Measurement[];
+    const stepsOf = (args: unknown[]) => ms.map((m) => (args.at(-1) as (x: Measurement) => unknown)(m));
+    expect(stepsOf(b)).toEqual(stepsOf(a));
   });
 
   it('the integrity report refuses mixed frames; findings keep only the active scan\'s and withhold the rest', async () => {

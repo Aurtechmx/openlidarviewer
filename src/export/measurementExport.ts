@@ -31,6 +31,8 @@ import {
 /** The refusal rule and wording, for the report and KML serializers. */
 export { GEOGRAPHIC_NOT_AVAILABLE, VERTICAL_NOT_AVAILABLE, VERTICAL_SCALE_NOT_AVAILABLE, geographicRefusesKind };
 export { reducedSampleCaveat } from '../render/measure/types';
+/** The position-step rule, for the report serializers. */
+export { HEADLINE_METRIC_KEY, unresolvedMetricKeys, type AxisSteps };
 import { lightProvenance, type LightProvenanceInput } from './lightProvenance';
 import {
   distance,
@@ -48,6 +50,10 @@ import {
   boxCorners,
   boxMetrics,
   toMetricFrame,
+  unresolvedMetricKeys,
+  unresolvedReason,
+  HEADLINE_METRIC_KEY,
+  type AxisSteps,
 } from '../render/measure/geometry';
 
 export interface MeasurementExportContext {
@@ -61,6 +67,11 @@ export interface MeasurementExportContext {
   readonly sourceOf?: (m: Measurement) => string | null;
   /** World up vector, for the height / grade / slope derivations. */
   readonly up: Vec3;
+  /**
+   * The step a measurement's positions are held at, per axis, on the layer(s)
+   * it was taken on. Absent or null: no figure is withheld on that basis.
+   */
+  readonly positionSteps?: (m: Measurement) => AxisSteps | null;
   /** Render-units → metres (1 for metric scans; e.g. 0.3048 for US-foot scans). */
   readonly unitToMetres: number;
   /**
@@ -198,6 +209,7 @@ export function measurementMetrics(
   unitToMetres: number,
   verticalToMetres: number = unitToMetres,
   decimals = 3,
+  steps: AxisSteps | null = null,
 ): Record<string, number> {
   const out: Record<string, number> = {};
   // Round at the surface's chosen precision. The tabular exports (CSV / GeoJSON /
@@ -308,7 +320,28 @@ export function measurementMetrics(
       }
       break;
   }
+  // A figure below the step this scan's positions are held at cannot be told
+  // from zero: it is omitted, like any figure the geometry cannot establish,
+  // and `unresolvedNote` states why.
+  for (const k of unresolvedMetricKeys(m, up, L, Vv, steps)) delete out[k];
   return out;
+}
+
+/**
+ * Why some of `m`'s figures are omitted because they are smaller than the step
+ * its scan's positions are held at, or undefined when none is.
+ */
+export function unresolvedNote(
+  m: Measurement,
+  up: Vec3,
+  unitToMetres: number,
+  verticalToMetres: number = unitToMetres,
+  steps: AxisSteps | null = null,
+): string | undefined {
+  if (!steps || !isComplete(m)) return undefined;
+  const Vv = Number.isFinite(verticalToMetres) && verticalToMetres > 0 ? verticalToMetres : unitToMetres;
+  const keys = unresolvedMetricKeys(m, up, unitToMetres, Vv, steps);
+  return keys.length > 0 ? `${keys.join(', ')} ${unresolvedReason(steps, up, unitToMetres, Vv)}` : undefined;
 }
 
 /**
@@ -520,6 +553,14 @@ function geometryFor(
   return { geometry: { type: 'Polygon', coordinates: [ring] }, withheld: null, elevations: cw ? elevations.slice().reverse() : elevations };
 }
 
+/** The withheld keys as nulls, and why, for a record with figures below its position step. */
+function unresolvedProps(m: Measurement, ctx: MeasurementExportContext, steps: AxisSteps | null): Record<string, unknown> {
+  const vv = ctx.verticalUnitToMetres ?? ctx.unitToMetres;
+  const keys = unresolvedMetricKeys(m, ctx.up, ctx.unitToMetres, vv, steps);
+  if (keys.length === 0 || !steps) return {};
+  return { ...Object.fromEntries(keys.map((k) => [k, null])), not_resolved: unresolvedReason(steps, ctx.up, ctx.unitToMetres, vv) };
+}
+
 /** The `area_withheld` property for a record whose ring establishes no area. */
 function areaNoteProp(m: Measurement, ctx: MeasurementExportContext): { area_withheld?: string; angle_withheld?: string } {
   const note = areaWithheldNote(m, ctx.up, ctx.unitToMetres, ctx.verticalUnitToMetres);
@@ -552,8 +593,9 @@ export function measurementsToGeoJSON(
       // A figure the geographic frame refuses stays as its key with a null
       // value, and the feature says why, so a reader sees it was withheld
       // rather than never computed.
+      const steps = ctx.positionSteps?.(m) ?? null;
       const metrics = geographicFilter(
-        measurementMetrics(m, ctx.up, ctx.unitToMetres, ctx.verticalUnitToMetres),
+        measurementMetrics(m, ctx.up, ctx.unitToMetres, ctx.verticalUnitToMetres, 3, steps),
         m,
         ctx.geographic,
         ctx.verticalRefused,
@@ -567,6 +609,7 @@ export function measurementsToGeoJSON(
         ...(ctx.sourceOf ? { source: ctx.sourceOf(m) } : {}),
         ...(unitsKnown ? metrics : inSourceUnits(metrics)),
         ...(refused ? { not_available: refused } : {}),
+        ...unresolvedProps(m, ctx, steps),
         ...areaNoteProp(m, ctx),
         ...(placed.withheld ? { geometry_withheld: placed.withheld } : {}),
         ...(lonLat.sourceHeights ? { elevations_source: placed.elevations } : {}),
@@ -807,10 +850,12 @@ export function measurementsToCsv(
     const withGeo = refused ? `${units}; ${refused}` : units;
     const note = areaWithheldNote(m, ctx.up, ctx.unitToMetres, ctx.verticalUnitToMetres)
       ?? angleWithheldNote(m, ctx.up, ctx.unitToMetres, ctx.verticalUnitToMetres);
-    return note ? `${withGeo}; ${note}` : withGeo;
+    const withNote = note ? `${withGeo}; ${note}` : withGeo;
+    const unresolved = unresolvedNote(m, ctx.up, ctx.unitToMetres, ctx.verticalUnitToMetres, ctx.positionSteps?.(m) ?? null);
+    return unresolved ? `${withNote}; ${unresolved}` : withNote;
   };
   for (const m of measurements) {
-    const all = measurementMetrics(m, ctx.up, ctx.unitToMetres, ctx.verticalUnitToMetres);
+    const all = measurementMetrics(m, ctx.up, ctx.unitToMetres, ctx.verticalUnitToMetres, 3, ctx.positionSteps?.(m) ?? null);
     // Refused figures are dropped, so the cell is empty like any figure the
     // geometry cannot establish.
     const raw = geographicRefuses(m, ctx.geographic, ctx.verticalRefused, ctx.verticalScaleInvalid)

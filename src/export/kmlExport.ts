@@ -21,6 +21,7 @@
  * content is XML-escaped (& < > " ').
  */
 
+import type { AxisSteps } from '../render/measure/geometry';
 import type { ExportDigests } from '../science/exportDigestRecord';
 import { lightProvenance, lightProvenanceLine, type LightProvenanceInput } from './lightProvenance';
 import type { Annotation } from '../render/annotate/types';
@@ -33,6 +34,7 @@ import {
   plainDecimal,
   areaWithheldNote,
   angleWithheldNote,
+  unresolvedNote,
   collapsedGeometryReason,
 } from './measurementExport';
 import { verticalReferenceKey } from '../model/layerCompatibility';
@@ -67,6 +69,8 @@ export interface KmlSiteOutline {
 }
 
 export interface KmlExportInput {
+  /** The step each measurement's positions are held at on its own layer(s); a figure below it is withheld. */
+  readonly positionSteps?: (m: Measurement) => AxisSteps | null;
   /** Annotations → <Point> placemarks. */
   readonly annotations: readonly Annotation[];
   /** Measurements → <LineString> / <Polygon> placemarks. */
@@ -385,7 +389,8 @@ function annotationPlacemark(a: Annotation, input: KmlExportInput): string {
  * so a foot-based scan reports true metres rather than raw render units.
  */
 function metricsLine(m: Measurement, input: KmlExportInput): string {
-  const all = measurementMetrics(m, input.up, input.unitToMetres, input.verticalUnitToMetres);
+  const steps = input.positionSteps?.(m) ?? null;
+  const all = measurementMetrics(m, input.up, input.unitToMetres, input.verticalUnitToMetres, 3, steps);
   const metrics = geographicFilter(all, m, input.geographic, input.verticalRefused, input.verticalScaleInvalid);
   const parts = Object.entries(metrics).filter(([, v]) => v !== null).map(([k, v]) => `${k}=${typeof v === 'number' ? plainDecimal(v) : v}`);
   const note0 = refusalNote(m, input.geographic, input.verticalRefused, input.verticalScaleInvalid);
@@ -394,7 +399,8 @@ function metricsLine(m: Measurement, input: KmlExportInput): string {
     return `Measured (${input.unitLabel}): ${parts.join(', ')}. Other figures ${note0}.`;
   }
   const note = areaWithheldNote(m, input.up, input.unitToMetres, input.verticalUnitToMetres)
-    ?? angleWithheldNote(m, input.up, input.unitToMetres, input.verticalUnitToMetres);
+    ?? angleWithheldNote(m, input.up, input.unitToMetres, input.verticalUnitToMetres)
+    ?? unresolvedNote(m, input.up, input.unitToMetres, input.verticalUnitToMetres, steps);
   if (parts.length === 0) return note ?? '';
   const line = `Measured (${input.unitLabel}): ${parts.join(', ')}`;
   return note ? `${line}. ${note}` : line;

@@ -317,6 +317,7 @@ export class DropZone {
     // A new load starts from the short trail.
     this._scan.reset();
     this.toast.classList.remove('olv-toast-error');
+    this.toast.classList.remove('is-finishing');
     this.toast.classList.add('is-opening', 'is-busy');
     this._setBar(undefined);
     if (fileName) {
@@ -399,7 +400,7 @@ export class DropZone {
     this._clearHideTimer();
     this._token++;
     // Staged progress supersedes the blue "Opening …" pulse.
-    this.toast.classList.remove('is-opening', 'olv-toast-error');
+    this.toast.classList.remove('is-opening', 'olv-toast-error', 'is-finishing');
     this.toast.classList.add('is-busy');
     this._text.textContent = text;
     this._srAlert.textContent = '';
@@ -490,7 +491,7 @@ export class DropZone {
     this._clearHideTimer();
     this._endOperation();
     this._token++;
-    this.toast.classList.remove('is-opening', 'is-busy');
+    this.toast.classList.remove('is-opening', 'is-busy', 'is-finishing');
     this._scan.reset();
     this.toast.classList.add('olv-hidden');
     this._setBar(undefined);
@@ -539,6 +540,9 @@ export class DropZone {
     const token = ++this._token;
     this._onCancel = null;
     this._syncCancel();
+    // The load is done; while the scan settles the toast gives the lane to a
+    // tool opened meanwhile.
+    this.toast.classList.add('is-finishing');
     if (name) this._announce(`Opened ${name}.`, true);
     return this._scan.complete().then(() => {
       if (token !== this._token) return false;
@@ -557,7 +561,7 @@ export class DropZone {
       this.setProgress(null);
       return;
     }
-    this.toast.classList.remove('olv-toast-error', 'is-opening');
+    this.toast.classList.remove('olv-toast-error', 'is-opening', 'is-finishing');
     this.toast.classList.add('is-busy');
     const text = lines.join('\n');
     this._text.textContent = text;
@@ -596,7 +600,7 @@ export class DropZone {
     this._syncCancel();
     this._setBar(undefined);
     this._clearMeter();
-    this.toast.classList.remove('is-opening', 'is-busy');
+    this.toast.classList.remove('is-opening', 'is-busy', 'is-finishing');
     this.toast.classList.add('olv-toast-error');
     // The status node is emptied (when it holds the toast's text) so the
     // failure isn't double-read.

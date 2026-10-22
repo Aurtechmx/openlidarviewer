@@ -90,6 +90,7 @@ describe('architecture fingerprint', () => {
       version,
       commit: 'abc1234',
       tag: `v${version}`,
+      releaseChannel: 'stable',
       releaseAuthoritative: true,
       gateExit: 0,
       stages: { mutation: 'executed' },

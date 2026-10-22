@@ -25,6 +25,7 @@ import type { MeasureController } from '../render/measure/MeasureController';
 import { UNRESOLVED_UNIT_FRAME, sameUnitFrame, type MeasureUnitFrame } from '../render/measure/types';
 import { measureUnitFrameOf, scanContextOf } from './measurementExportFrame';
 import { layerUpFrameOf, measureUpFieldsOf, type LayerFrameCrs } from './layerUpFrames';
+import { positionStepsResolver } from './measurementPositionSteps';
 
 /** The slice of the app a layer's unit frame is resolved from. */
 export interface LayerUnitSource {
@@ -35,6 +36,8 @@ export interface LayerUnitSource {
   readonly cloud: (viewerId: string) => PointCloud | undefined;
   readonly stableIdFor: (viewerId: string) => string | null;
   readonly crs: LayerFrameCrs;
+  /** A layer's placement offset into the project frame, or null when unplaced. Optional for narrow seams. */
+  readonly projectOffset?: (viewerId: string) => readonly [number, number, number] | null;
   /**
    * Re-align navigation up after a CRS change: assigning, replacing or clearing
    * a CRS can move a layer's resolved up axis. Optional for narrow seams.
@@ -84,6 +87,12 @@ export function bindMeasureUnitFrames(measure: MeasureController, src: LayerUnit
     return out;
   };
   measure.setUnitResolver(resolve);
+  // Read live, not memoised: a layer can be placed without the layer set changing.
+  const offsetOf = src.projectOffset;
+  if (offsetOf) {
+    measure.setPositionStepResolver((m) =>
+      positionStepsResolver(src.clouds().map((id) => ({ stableId: src.stableIdFor(id), projectOffset: offsetOf(id) })))(m));
+  }
   return {
     onCrsChange() {
       memo.clear();

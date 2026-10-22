@@ -19,7 +19,7 @@ v0.7.0 continues from v0.6.9 (`c164e907f50ff49da7233385d92285c53dfb3b8d`). The v
 
 - Flow Pulse. Single-direction routing, flow accumulation and a depression inventory, on the raw or the conditioned surface, with traced paths and catchments and a ZIP export. A banner marks results from a blocked or preview terrain run as illustration only.
 - Terrain Access. Slope, step, ruggedness and obstruction limits, editable profiles, a preview before the run, the cost terms that shape the route, the p95 grade and the measured, interpolated and low-confidence share of route cells. It is a screening, never a safety guarantee. ZIP export included.
-- Web Mercator. Terrain analysis converts distances with the ground scale at the scan's latitude, states the scale and its largest error, and refuses a scan too large for one scale. Geographic scans beyond ±89° latitude are refused.
+- Web Mercator. Terrain analysis converts distances with the ground scale at the scan's latitude, including for a layer placed in a project, states separate bounds for horizontal lengths and cell areas, and refuses a scan where either passes 1%. Geographic scans beyond ±89° latitude are refused.
 - Contours are anchored to world elevation. The DEM package adds per-cell evidence, sensitivity and attention rasters.
 - Ground density reads the covered area, which removes a high bias on thinned loads.
 
@@ -34,6 +34,7 @@ v0.7.0 continues from v0.6.9 (`c164e907f50ff49da7233385d92285c53dfb3b8d`). The v
 
 - Clip box. Applied per point in the shader, so it works under WebGPU and on streaming nodes. Draw it, flip Inside or Outside, fit it to the scan (placed scans included), or turn a Box measurement into the clip region. Reversed or blank bounds are not applied and the panel says so. Quick exports honour it and add `-clip` to the name.
 - Measurements snap and grade across every visible scan, read each scan's units, and mark unverified units on the label. A result card shows the latest figure with Copy and Details.
+- A value smaller than the step a very wide scan holds positions at is withheld with the reason, never shown as zero.
 - An Area that crosses itself is refused. A profile's "Avg grade" is now "Endpoint gradient".
 - Reference plane. Horizontal, vertical or through three picked points.
 - Reports and findings. A profile sheet names its project and sample basis, long PDF text continues on the next page, and figures state UTC. Findings are kept per scan with Undo on Clear all.

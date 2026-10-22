@@ -60,6 +60,12 @@ describe('buildEvidenceRecord — release mode', () => {
     expect(r.record.releaseAuthoritative).toBe(true);
     expect(r.record.releaseChannel).toBe('prerelease');
     expect(r.record.schemaVersion).toBe(3);
+  });
+
+  it('records a stable version as stable', () => {
+    const r = buildEvidenceRecord(base({ version: '0.7.0', tag: 'v0.7.0' }));
+    expect(r.ok).toBe(true);
+    expect(r.record.releaseChannel).toBe('stable');
     expect(r.record.total).toEqual({ passed: 50, skipped: 0 });
   });
 

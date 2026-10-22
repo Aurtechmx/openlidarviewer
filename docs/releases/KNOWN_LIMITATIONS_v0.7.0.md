@@ -441,7 +441,7 @@ measurement controller, which took twenty-eight more. The draw precision bound's
 fails the build when either passes its recorded baseline, so a raise is a hand
 edit to `docs/validation/monolith-size-baseline.json` and always shows in the
 diff.
-Fan-out is 97 for the shell, 73 for the renderer, across 1164 modules with no
+Fan-out is 97 for the shell, 73 for the renderer, across 1165 modules with no
 dependency cycles. Fan-out counts the distinct modules a file imports with a
 value import, source files and external packages alike; type-only and dynamic
 imports are not counted. The shell and the renderer figures are held
@@ -703,10 +703,14 @@ cos φ / √(1 − e² sin² φ) and north–south (1 − e²) cos φ / (1 − e
 whose geometric mean is the one factor used (0.77 at Denver). The coordinates
 and the DEM's georeference stay in Web Mercator. The factor is exact at the
 scan's centre latitude and changes across the scan, so a run states the
-largest relative error it leaves (0.5% for a 0.4° tall scan about 40° N) and is
-refused above 1%, for example a whole regional dataset, with the reason:
-zoom in so less is loaded, or reproject to UTM. A Web Mercator scan whose
-position is unknown (several layers, or a moved layer) is refused. Streamed
+largest relative error it leaves on horizontal lengths and, separately, on
+horizontal cell areas (an area error is about twice a length error). It is
+refused when either passes 1%, for example a whole regional dataset or a
+footprint 0.6 degrees tall near 60 degrees, with the reason: zoom in so less is
+loaded, or reproject to UTM. The cell-area bound does not extend to surface
+area, volume or slope angle. These figures are the projection approximation
+only, not the accuracy of the data. A layer placed in a project is scaled at its
+project position; a scan whose position cannot be read is refused. Streamed
 USGS EPT datasets are in Web Mercator, so this is what lets them be
 analysed. A geocentric code outside the built-in
 list is recognised only from its WKT or GeoTIFF model type. A WKT
@@ -1048,6 +1052,18 @@ correlation between windows. Empirical p-values cannot fall below 1/2001
 per peak, and the combined value below that is a model figure, not a
 calibrated probability. A supported grid is a grid the points are
 compatible with; it does not say which operation produced it.
+
+## A measurement below the position step is withheld
+
+Positions are held as 32-bit floats around a local origin, so on a very wide
+scan the step between representable positions grows (about 16 mm at 200 km).
+Where a scan's step is over the 10 mm precision budget, a measured value
+smaller than the step on the layer it was taken on is withheld with the reason:
+the Measure panel and scene labels say it is not resolved, the CSV leaves the
+cell empty, GeoJSON writes null with a `not_resolved` property, the reports
+record a null finding, and a chain containing it is refused. Values longer than
+the step are still reported, within that step. Recovery is to load a smaller
+tile of the source, or COPC, so each region is held near its own origin.
 
 ## The draw precision bound is a diagnostic for one view
 

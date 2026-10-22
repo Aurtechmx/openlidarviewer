@@ -7,7 +7,7 @@ ships inside the archive; the generated hashes live in the attached manifest.
 
 ## The closed asset set
 
-A published prerelease attaches exactly these, and nothing else:
+A published release, stable or prerelease, attaches exactly these, and nothing else:
 
 | Asset | What it is |
 |---|---|

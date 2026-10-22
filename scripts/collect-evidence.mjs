@@ -24,6 +24,7 @@
  */
 
 import './lib/confineGit.mjs';
+import { releaseChannelFor, releaseChannelProblems } from './lib/releaseChannel.mjs';
 import { readFileSync, writeFileSync, mkdirSync, copyFileSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
@@ -268,9 +269,7 @@ export function buildEvidenceRecord(input) {
   if (release) {
     // A release record names the tag it describes, or it is not one.
     if (!tag) problems.push('release mode requires a tag');
-    else if (version && tag !== `v${version}`) {
-      problems.push(`tag ${tag} does not match v${version}`);
-    }
+    else problems.push(...releaseChannelProblems({ version, tag, channel: null }));
     if (bundle?.liveEntryKiB == null || bundle?.ceilingKiB == null) {
       problems.push('bundle measurement missing from the gate log');
     }
@@ -345,7 +344,7 @@ export function buildEvidenceRecord(input) {
       schemaVersion: 3,
       project: 'openlidarviewer',
       version,
-      releaseChannel: release ? 'prerelease' : 'development',
+      releaseChannel: release ? releaseChannelFor(version) : 'development',
       releaseAuthoritative: release,
       tag,
       commit,

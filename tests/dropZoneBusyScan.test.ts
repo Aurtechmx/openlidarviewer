@@ -126,6 +126,21 @@ describe('load toast progress and finish', () => {
     await expect(left).resolves.toBe(false);
   });
 
+  it('marks only the settle of a finished load as finishing', async () => {
+    vi.useFakeTimers();
+    const { zone, toast } = await freshZone();
+    zone.setProgress('Decoding…', 0.5);
+    expect(toast.cls.has('is-finishing')).toBe(false);
+    void zone.finish();
+    expect(toast.cls.has('is-finishing')).toBe(true);
+    zone.setOpening('Opening next.laz…');
+    expect(toast.cls.has('is-finishing')).toBe(false);
+    void zone.finish();
+    await vi.advanceTimersByTimeAsync(2000);
+    expect(toast.cls.has('olv-hidden')).toBe(true);
+    expect(toast.cls.has('is-finishing')).toBe(false);
+  });
+
   it('keeps a later announcement in the shared status node when the settle hides the toast', async () => {
     vi.useFakeTimers();
     const { zone, toast } = await freshZone();

@@ -25,6 +25,7 @@
  * serialiser is a lazy loader so this module stays off the boot graph.
  */
 
+import { activeScanPositionSteps } from './measurementPositionSteps';
 import {
   resolveLocalToLonLat,
   LonLatConversionError,
@@ -307,7 +308,12 @@ export async function exportSiteKml(deps: KmlActionDeps): Promise<void> {
   const notes = annotationsOwnedByActive(deps.annotations(), view);
   // Deep copies: the controllers hand out their live arrays and objects, so a
   // note added or a vertex dragged during the import would otherwise reach it.
+  // The step is read from each measurement as its scan holds it, before the
+  // copy below is moved into the scene frame.
+  const stepsOf = activeScanPositionSteps(deps.sceneOffset?.() ?? null);
+  const stepsById = new Map(owned.own.map((m) => [m.id, stepsOf(m)]));
   const input: KmlExportInput = {
+    positionSteps: (m) => stepsById.get(m.id) ?? null,
     annotations: notes.own.map((a) => inSceneFrame(structuredClone(a), d)),
     measurements: owned.own.map((m) => measurementInSceneFrame(structuredClone(m), d)),
     withheldMeasurements: owned.withheld,
