@@ -11,7 +11,7 @@ import { ArrayBufferRangeSource } from '../src/io/range/ArrayBufferRangeSource';
 import type { RangeSource } from '../src/io/range/RangeSource';
 import { fakeOpfs } from './support/fakeOpfs';
 import { lasBytes, makeDeps, spyFile } from './support/heavyLasHarness';
-import { buildLocalOocStore } from '../src/io/heavy/localOocBuild';
+import { makeEnv } from './support/heavyLasFakes';
 import { PreviewCloudSource } from '../src/io/heavy/OlvTileSource';
 import {
   openLocalHeavyLas,
@@ -27,8 +27,8 @@ function envWith(range: RangeSource, opts: { storage?: StorageEstimateReading; n
   const env: HeavyLasBridgeEnv = {
     capable: () => true,
     openRange: () => range,
-    getOpfsRoot: async () => (opts.noOpfs ? null : opfs.root),
-    readStorage: async () => opts.storage ?? reading(200_000_000_000),
+    getOpfsRoot: () => Promise.resolve(opts.noOpfs ? null : opfs.root),
+    readStorage: () => Promise.resolve(opts.storage ?? reading(200_000_000_000)),
     runIndex: runIndex as unknown as HeavyLasBridgeEnv['runIndex'],
   };
   return { env, runIndex };
@@ -100,20 +100,7 @@ describe('heavy open: sample fallback', () => {
     const buffer = lasBytes(n);
     const { file } = spyFile('big.las', buffer.byteLength);
     const { deps } = makeDeps();
-    const range = new ArrayBufferRangeSource(buffer);
-    const opfs = fakeOpfs({ syncAccess: true, fileMove: true });
-    const env: HeavyLasBridgeEnv = {
-      capable: () => true,
-      openRange: () => range,
-      getOpfsRoot: async () => opfs.root,
-      readStorage: async () => reading(200_000_000_000),
-      async runIndex(req) {
-        return buildLocalOocStore(range, opfs.root, req.storeName, {
-          pointsPerLeaf: req.pointsPerLeaf, memoryBudgetBytes: req.memoryBudgetBytes, maxDepth: req.maxDepth,
-          batchPoints: 4096, signal: req.signal, onPhase: req.onPhase,
-        });
-      },
-    };
+    const env = makeEnv(new ArrayBufferRangeSource(buffer));
     const result = await openLocalHeavyLas(file, new AbortController().signal, deps, env);
     expect(result.status).toBe('attached');
   });
