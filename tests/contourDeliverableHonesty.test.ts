@@ -68,10 +68,13 @@ describe('interpolatedCaption', () => {
     expect(caption).toContain('1%');
   });
 
-  it('names BOTH grades it is counting', () => {
+  it('names everything it is counting, and does not call it interpolated', () => {
+    // A dashed segment is sparse measured ground as often as interpolated
+    // support, and one non-solid number cannot tell them apart.
     const caption = interpolatedCaption(tallySegments([...seg('dashed', 1), ...seg('gap', 1)]));
-    expect(caption).toContain('interpolated (dashed)');
-    expect(caption).toContain('uncertain (gap)');
+    expect(caption).toContain('below the solid threshold');
+    expect(caption).toContain('sparse ground, interpolated or gap');
+    expect(caption).not.toMatch(/is interpolated/);
   });
 
   it('says so plainly when nothing was drawn', () => {

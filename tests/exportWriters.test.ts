@@ -279,3 +279,60 @@ describe('dxfContours', () => {
     expect(withProv.trimEnd().endsWith('EOF')).toBe(true);
   });
 });
+
+/**
+ * Every writer carries the run's basis: measured, sparse (measured-only ground
+ * below the solid threshold), interpolated, gap, or unavailable. A dashed line
+ * is not by itself interpolated.
+ */
+describe('contour basis in every writer', () => {
+  const M = 1;
+  const I = 2;
+  const split = model([
+    feat('solid', [[0, 0], [10, 0]], 10, false, false, M),
+    feat('dashed', [[0, 2], [10, 2]], 11, false, false, M),
+    feat('dashed', [[0, 4], [10, 4]], 12, false, false, M | I),
+    feat('gap', [[0, 6], [10, 6]], 13, false, false, I),
+    feat('dashed', [[0, 8], [10, 8]], 14),
+  ]);
+
+  it('GeoJSON: a basis per feature, and the split shares beside the unchanged non-solid share', () => {
+    const gj = toGeoJSON(split) as any;
+    expect(gj.features.map((f: any) => f.properties.basis)).toEqual(['measured', 'sparse', 'interpolated', 'gap', 'unavailable']);
+    // Provenance stays the raw union; the sparse run is measured ground.
+    expect(gj.features[1].properties.provenance).toBe('measured');
+    expect(gj.features[1].properties.grade).toBe('dashed');
+    // The fixture's own non-solid figure is carried as it was.
+    expect(gj.metadata.interpolatedFraction).toBe(0.2);
+    expect(gj.metadata.interpolatedLengthFraction).toBe(0.2);
+    expect(gj.metadata.sparseLengthFraction).toBe(0.2);
+    expect(gj.metadata.gapLengthFraction).toBe(0.2);
+    expect(gj.metadata.lengthFractionNote).toMatch(/interpolatedFraction is everything below the solid threshold/);
+  });
+
+  it('GeoJSON (RFC 7946): the basis survives the lon/lat writer', async () => {
+    const { toGeoJSONWgs84 } = await import('../src/terrain/contour/geojsonContours');
+    const gj = toGeoJSONWgs84(split, ([x, y, z]) => [x / 1e5, y / 1e5, z]) as any;
+    expect(gj.features.map((f: any) => f.properties.basis)).toEqual(['measured', 'sparse', 'interpolated', 'gap', 'unavailable']);
+  });
+
+  it('SVG: a data-basis per path, sparse ground continuous and lighter, interpolated dashed', () => {
+    const svg = svgContours(split);
+    const paths = [...svg.matchAll(/<path [^>]*>/g)].map((m) => m[0]);
+    expect(paths.map((p) => p.match(/data-basis="(\w+)"/)?.[1])).toEqual(['measured', 'sparse', 'interpolated', 'gap', 'unavailable']);
+    expect(paths[1]).not.toMatch(/stroke-dasharray/);
+    expect(paths[1]).toMatch(/stroke-opacity="0.6"/);
+    expect(paths[2]).toMatch(/stroke-dasharray/);
+    // Without provenance a dashed run is drawn as interpolated, never as sparse ground.
+    expect(paths[4]).toMatch(/stroke-dasharray/);
+    for (const label of ['Sparse ground (measured)', 'Interpolated', 'Low-confidence gap']) expect(svg).toContain(`>${label}</text>`);
+    expect(svg).toContain('20% interpolated \u00b7 20% sparse ground \u00b7 20% gap (by contour length)');
+  });
+
+  it('DXF: sparse intermediate ground on its own layer, interpolated and gap stay uncertain', () => {
+    const dxf = dxfContours(split);
+    expect(dxf).toMatch(/\n0\nLAYER\n2\nCONTOUR_SPARSE\n/);
+    const layers = [...dxf.matchAll(/\n0\nLWPOLYLINE\n8\n(\w+)\n/g)].map((m) => m[1]);
+    expect(layers).toEqual(['CONTOUR_INTER', 'CONTOUR_SPARSE', 'CONTOUR_UNCERTAIN', 'CONTOUR_UNCERTAIN', 'CONTOUR_UNCERTAIN']);
+  });
+});

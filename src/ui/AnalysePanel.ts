@@ -84,7 +84,7 @@ import { triggerDownload } from '../io/download';
 // Colourblind-safe twin of the coverage tile: same confidence buckets on the
 // Cividis palette, so a colour-vision-deficient viewer isn't left with the
 // green/yellow/red ramp. Selected when the colourblind-safe palette is active.
-import { interpolatedShareCaption } from '../terrain/contour/evidenceGrade';
+import { contourShareCaption } from '../terrain/contour/evidenceGrade';
 import {
   computeTerrainReadiness,
   type ReadinessIndicator,
@@ -2212,10 +2212,13 @@ export class AnalysePanel {
     this._body.replaceChildren();
     if (!this._result) return;
     this._body.append(
-      el('div', {
-        className: 'olv-analyse-caption',
-        text: interpolatedShareCaption(this._result.model.interpolatedFraction),
-      }),
+      this._hint(
+        el('div', {
+          className: 'olv-analyse-caption',
+          text: contourShareCaption(this._result.model),
+        }),
+        'Sparse ground: measured, but with fewer ground returns than a typical cell. Interpolated: filled from nearby ground. Gap: too little support to trust.',
+      ),
     );
     if (this._result.excludedByClassification > 0) {
       this._body.append(

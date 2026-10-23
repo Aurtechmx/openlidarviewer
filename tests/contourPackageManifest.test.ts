@@ -131,6 +131,16 @@ describe('contourFeatureAttributes (§21.1)', () => {
     expect(a.uncertainty_condition).toBe('not-assessed');
   });
 
+  it('a dashed run on measured-only ground is sparse, not interpolated', () => {
+    const sparse = contourFeatureAttributes(feature({ grade: 'dashed', provBits: 1 }), ctx);
+    expect(sparse.support_class).toBe('sparse');
+    expect(sparse.measured_fraction).toBe(1);
+    expect(sparse.interpolated_fraction).toBe(0);
+    const interp = contourFeatureAttributes(feature({ grade: 'dashed', provBits: 3 }), ctx);
+    expect(interp.support_class).toBe('interpolated');
+    expect(interp.interpolated_fraction).toBe(1);
+  });
+
   it('unknown elevation unit is reported as "unknown", never fabricated', () => {
     const a = contourFeatureAttributes(feature(), { ...ctx, elevationUnit: '' });
     expect(a.elevation_unit).toBe('unknown');

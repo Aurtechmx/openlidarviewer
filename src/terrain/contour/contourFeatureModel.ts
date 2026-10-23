@@ -7,12 +7,13 @@
  * elevation, evidence grade, and georeferencing.
  *
  * The honest move that distinguishes these exports: each polyline is
- * split into maximal runs of a single evidence grade (by SEGMENT grade =
- * the weaker of its two endpoints), so a downstream GIS sees exactly
- * which spans are confident (solid), interpolated (dashed), or
- * unsupported (gap) — instead of one authoritative line over mixed
- * evidence. Nothing is silently dropped; gap runs are emitted and
- * labelled so the recipient decides.
+ * split into maximal runs of a single display grade (by SEGMENT grade =
+ * the weaker of its two endpoints) AND a single basis (see
+ * {@link contourBasis}), so a downstream GIS sees exactly which spans are
+ * confident measured ground (solid), measured but sparse ground or
+ * interpolated support (dashed), or unsupported (gap) — instead of one
+ * authoritative line over mixed evidence. Nothing is silently dropped; gap
+ * runs are emitted and labelled so the recipient decides.
  *
  * CRS is mandatory for a usable export: when it is unknown the model
  * still builds but carries a prominent warning, and writers surface it.
@@ -24,6 +25,8 @@ import { gradeForConfidence, type ContourDisplayGrade } from '../ground/cellConf
 import type { TerrainCoverageMode } from '../TerrainContracts';
 import type { ContourPolyline, StitchedLevel } from './stitchContours';
 import {
+  PROV_I,
+  PROV_M,
   unionProvBits,
   provenanceSetFromBits,
   type ContourSegmentEvidence,
@@ -52,6 +55,12 @@ export interface ContourFeature {
    * via {@link featureEvidence}.
    */
   readonly provBits?: number;
+  /**
+   * What the run stands on (see {@link ContourBasis}), decided per segment by
+   * {@link buildFeatureModel}. Read it through {@link contourBasis}, which
+   * derives it from `grade` and `provBits` for a feature assembled by hand.
+   */
+  readonly basis?: ContourBasis;
   /** True only when this feature is a complete closed ring. */
   readonly closed: boolean;
   /** Vertices as [x, y] in CRS coordinates (elevation is `value`). */
@@ -69,6 +78,104 @@ export function featureEvidence(f: ContourFeature): ContourSegmentEvidence {
     provenance: provenanceSetFromBits(f.provBits ?? 0),
     support: { 'presentation-confidence': f.meanConfidence },
   };
+}
+
+/**
+ * What a contour run stands on: its display grade and its source provenance
+ * read together.
+ *
+ * The grade alone cannot say this. A measured cell's confidence scales with its
+ * ground-return count against the scene's median count, so measured ground
+ * under canopy grades dashed; read as "interpolated", that put most of a drone
+ * strip's measured ground in the interpolated share. The basis keeps the two
+ * apart:
+ *  - `measured`: solid, on measured cells only.
+ *  - `sparse`: below the solid threshold, on measured cells only.
+ *  - `interpolated`: not a gap, and on cells that touch interpolated ground.
+ *  - `gap`: below the dashed threshold, whatever its support.
+ *  - `unavailable`: not a gap, and the run carries no provenance (a feature
+ *    assembled by hand). Fails closed: never read as measured.
+ */
+export type ContourBasis = 'measured' | 'sparse' | 'interpolated' | 'gap' | 'unavailable';
+
+/**
+ * The basis of one run (see {@link ContourBasis}): the one
+ * {@link buildFeatureModel} recorded, else read from the run's grade and its
+ * provenance union, where any interpolated bit makes it interpolated.
+ */
+export function contourBasis(f: Pick<ContourFeature, 'grade' | 'provBits' | 'basis'>): ContourBasis {
+  if (f.basis !== undefined) return f.basis;
+  if (f.grade === 'gap') return 'gap';
+  const bits = f.provBits ?? 0;
+  if ((bits & PROV_I) !== 0) return 'interpolated';
+  if ((bits & PROV_M) === 0) return 'unavailable';
+  return f.grade === 'solid' ? 'measured' : 'sparse';
+}
+
+/** The four line kinds a map draws and its legend names. */
+export type ContourLineKind = Exclude<ContourBasis, 'unavailable'>;
+
+/**
+ * The line kind a run is drawn as. A run with no provenance (a model built by
+ * hand) is never drawn as sparse measured ground: a solid one keeps the plain
+ * contour line its grade earned, anything weaker is drawn as interpolated.
+ */
+export function contourLineKind(f: Pick<ContourFeature, 'grade' | 'provBits' | 'basis'>): ContourLineKind {
+  const basis = contourBasis(f);
+  if (basis !== 'unavailable') return basis;
+  return f.grade === 'solid' ? 'measured' : 'interpolated';
+}
+
+/**
+ * Length-weighted shares of a model's contour, by basis. Each is 0..1, or NaN
+ * when there is no contour length. Together they make up the non-solid share,
+ * less any run that carries no provenance (`unavailable`), which counts in none.
+ */
+export interface ContourLengthShares {
+  /** Runs on any interpolated support. */
+  readonly interpolated: number;
+  /** Measured-only runs below the solid threshold. */
+  readonly sparse: number;
+  /** Runs below the dashed threshold. */
+  readonly gap: number;
+}
+
+/** Non-solid and per-basis shares of a feature list, by drawn length. */
+function measureLengthShares(
+  features: ReadonlyArray<ContourFeature>,
+): ContourLengthShares & { readonly nonSolid: number } {
+  let total = 0;
+  let nonSolid = 0;
+  let interpolated = 0;
+  let sparse = 0;
+  let gap = 0;
+  for (const f of features) {
+    const basis = contourBasis(f);
+    for (let i = 1; i < f.coordinates.length; i++) {
+      const len = segLen(f.coordinates[i - 1], f.coordinates[i]);
+      total += len;
+      if (f.grade !== 'solid') nonSolid += len;
+      if (basis === 'interpolated') interpolated += len;
+      else if (basis === 'sparse') sparse += len;
+      else if (basis === 'gap') gap += len;
+    }
+  }
+  const share = (len: number): number => (total > 0 ? len / total : Number.NaN);
+  return { nonSolid: share(nonSolid), interpolated: share(interpolated), sparse: share(sparse), gap: share(gap) };
+}
+
+/**
+ * The per-basis length shares every surface prints. A model built by
+ * {@link buildFeatureModel} carries them; one assembled by hand is measured
+ * from its features here.
+ */
+export function modelLengthShares(model: ContourFeatureModel): ContourLengthShares {
+  const { interpolatedLengthFraction: interpolated, sparseLengthFraction: sparse, gapLengthFraction: gap } = model;
+  if (interpolated !== undefined && sparse !== undefined && gap !== undefined) {
+    return { interpolated, sparse, gap };
+  }
+  const m = measureLengthShares(model.features);
+  return { interpolated: m.interpolated, sparse: m.sparse, gap: m.gap };
 }
 
 /** Bounding box of all feature coordinates. */
@@ -146,8 +253,25 @@ export interface ContourFeatureModel {
   /** The contour shape style this model's geometry was produced with. */
   readonly contourStyle: ContourShapeStyle;
   readonly bbox: ContourBBox | null;
-  /** Length-weighted fraction of contour that is dashed or gap. */
+  /**
+   * Length-weighted fraction of contour that is NOT solid: sparse ground,
+   * interpolated and gap together. NaN when there is no contour length.
+   *
+   * The name predates the basis split and is kept, with this value, because the
+   * GeoJSON metadata and existing callers read it. It is not the interpolated
+   * share: that is {@link interpolatedLengthFraction}.
+   */
   readonly interpolatedFraction: number;
+  /**
+   * Length-weighted fraction on interpolated support (basis `interpolated`).
+   * Set by {@link buildFeatureModel}; read through {@link modelLengthShares},
+   * which also measures a model assembled by hand.
+   */
+  readonly interpolatedLengthFraction?: number;
+  /** Length-weighted fraction on measured-only support below solid (basis `sparse`). */
+  readonly sparseLengthFraction?: number;
+  /** Length-weighted fraction below the dashed threshold (basis `gap`). */
+  readonly gapLengthFraction?: number;
   /** Coverage provenance the contours inherit from the DTM. */
   readonly coverageMode: TerrainCoverageMode;
   readonly warnings: string[];
@@ -241,7 +365,7 @@ function segLen(a: [number, number], b: [number, number]): number {
   return Math.hypot(b[0] - a[0], b[1] - a[1]);
 }
 
-/** Split one polyline into single-grade run features. */
+/** Split one polyline into run features of a single grade and basis. */
 function splitPolyline(poly: ContourPolyline, isIndex: boolean): ContourFeature[] {
   const vs = poly.vertices;
   if (vs.length < 2) return [];
@@ -250,9 +374,23 @@ function splitPolyline(poly: ContourPolyline, isIndex: boolean): ContourFeature[
   const path = poly.closed ? [...vs, vs[0]] : vs;
   const segGrade = (i: number): ContourDisplayGrade =>
     gradeForConfidence(Math.min(path[i].confidence, path[i + 1].confidence));
+  // A run also breaks where interpolated support starts or stops, so each run
+  // has one basis. A segment stands on interpolated ground when BOTH endpoints
+  // carry interpolated provenance. A vertex's bits are the union of the cells of
+  // the segments that meet there, so both ends of a segment carry its own cell's
+  // bits: the test catches every segment whose cell touches interpolated ground.
+  // Asking for only one end also caught the measured segment either side of an
+  // interpolated stretch, which on a drone strip doubled the interpolated share
+  // (about 10% of contour length where 5% stood on interpolated cells). Gap runs
+  // are not split this way.
+  const segKey = (i: number): string => {
+    const g = segGrade(i);
+    if (g === 'gap') return g;
+    return (path[i].provBits & path[i + 1].provBits & PROV_I) === 0 ? g : `${g}+i`;
+  };
 
   const out: ContourFeature[] = [];
-  const emit = (startV: number, endV: number, grade: ContourDisplayGrade, closed: boolean) => {
+  const emit = (startV: number, endV: number, grade: ContourDisplayGrade, key: string, closed: boolean) => {
     const slice = path.slice(startV, endV + 1);
     if (slice.length < 2) return;
     let confSum = 0;
@@ -265,12 +403,18 @@ function splitPolyline(poly: ContourPolyline, isIndex: boolean): ContourFeature[
       confSum += v.confidence;
       provBits = unionProvBits(provBits, v.provBits);
     }
+    let basis: ContourBasis;
+    if (grade === 'gap') basis = 'gap';
+    else if (key.endsWith('+i')) basis = 'interpolated';
+    else if ((provBits & PROV_M) === 0) basis = 'unavailable';
+    else basis = grade === 'solid' ? 'measured' : 'sparse';
     out.push({
       value: poly.value,
       isIndex,
       grade,
       meanConfidence: confSum / slice.length,
       provBits,
+      basis,
       closed,
       coordinates: coords,
     });
@@ -278,16 +422,18 @@ function splitPolyline(poly: ContourPolyline, isIndex: boolean): ContourFeature[
 
   let runStart = 0;
   let curGrade = segGrade(0);
+  let curKey = segKey(0);
   for (let i = 1; i < path.length - 1; i++) {
-    const g = segGrade(i);
-    if (g !== curGrade) {
-      emit(runStart, i, curGrade, false);
+    const k = segKey(i);
+    if (k !== curKey) {
+      emit(runStart, i, curGrade, curKey, false);
       runStart = i;
-      curGrade = g;
+      curGrade = segGrade(i);
+      curKey = k;
     }
   }
   const wholeSingleRun = runStart === 0;
-  emit(runStart, path.length - 1, curGrade, poly.closed && wholeSingleRun);
+  emit(runStart, path.length - 1, curGrade, curKey, poly.closed && wholeSingleRun);
   return out;
 }
 
@@ -312,29 +458,21 @@ export function buildFeatureModel(
     }
   }
 
-  // bbox + length-weighted interpolated fraction.
+  // bbox + length-weighted shares (non-solid, and per basis).
   let minX = Infinity;
   let minY = Infinity;
   let maxX = -Infinity;
   let maxY = -Infinity;
-  let totalLen = 0;
-  let interpLen = 0;
   for (const f of features) {
-    for (let i = 0; i < f.coordinates.length; i++) {
-      const [x, y] = f.coordinates[i];
+    for (const [x, y] of f.coordinates) {
       if (x < minX) minX = x;
       if (y < minY) minY = y;
       if (x > maxX) maxX = x;
       if (y > maxY) maxY = y;
-      if (i > 0) {
-        const len = segLen(f.coordinates[i - 1], f.coordinates[i]);
-        totalLen += len;
-        if (f.grade !== 'solid') interpLen += len;
-      }
     }
   }
   const bbox: ContourBBox | null = features.length > 0 ? { minX, minY, maxX, maxY } : null;
-  const interpolatedFraction = totalLen > 0 ? interpLen / totalLen : Number.NaN;
+  const shares = measureLengthShares(features);
 
   if (params.crs == null) {
     warnings.push('CRS unknown — this export is not georeferenced and may be unusable downstream');
@@ -355,7 +493,10 @@ export function buildFeatureModel(
     requestedIntervalM: params.requestedIntervalM ?? null,
     contourStyle: params.contourStyle ?? defaultContourShapeStyle,
     bbox,
-    interpolatedFraction,
+    interpolatedFraction: shares.nonSolid,
+    interpolatedLengthFraction: shares.interpolated,
+    sparseLengthFraction: shares.sparse,
+    gapLengthFraction: shares.gap,
     coverageMode: params.coverageMode ?? 'full',
     warnings,
   };

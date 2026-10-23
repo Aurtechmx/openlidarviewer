@@ -14,8 +14,9 @@
  * what makes that unreachable from here. See the proof in
  * `tests/contourOverlayPlacement.test.ts`.
  *
- * EVIDENCE HONESTY. A contour's grade is not decoration: `solid` means measured
- * support, `dashed` means interpolated. The overlay distinguishes them by colour
+ * EVIDENCE HONESTY. A contour's grade is not decoration: `solid` means confident
+ * support, `dashed` means weaker support (sparse measured ground or interpolated
+ * cells; `contourBasis` tells them apart). The overlay distinguishes them by colour
  * and alpha rather than by a dash PATTERN — a screen-space dash length is
  * meaningless at an arbitrary 3D zoom, and a dashed line that reads as solid
  * when you fly close would be the dishonest option. `gap` segments are excluded

@@ -3,13 +3,14 @@
  *
  * A printable, standards-aware contour MAP SHEET — the deliverable a surveyor
  * hands a client. Vector contours (index bold + labelled, intermediate hairline,
- * dashed where interpolated) over a clean sheet, wrapped in a cartographic
- * collar: a coordinate graticule with UTM-style tick labels, a round scale bar,
- * a north arrow, a legend that explains the line types, and a title block
- * carrying the CRS, vertical datum, map scale, date, and the accuracy block with
- * an honest readiness note. That block is NOT a standards determination: the NVA
- * and VVA figures apply the ASPRS 2014 formulas to internally withheld ground
- * points rather than independent survey checkpoints, and the density line names
+ * lighter on sparse measured ground, dashed where interpolated) over a clean
+ * sheet, wrapped in a cartographic collar: a coordinate graticule with UTM-style
+ * tick labels, a round scale bar, a north arrow, a legend that explains the line
+ * types, and a title block carrying the CRS, vertical datum, map scale, date,
+ * and the accuracy block with an honest readiness note. That block is NOT a
+ * standards determination: the NVA and VVA figures apply the ASPRS 2014
+ * formulas to internally withheld ground points rather than independent survey
+ * checkpoints, and the density line names
  * which USGS 3DEP nominal-pulse-density floor the measured GROUND-return density
  * clears, as context. Calling it "validated ASPRS / USGS 3DEP accuracy" claimed
  * a conformance assessment nothing here performs.
@@ -24,7 +25,14 @@ import { crsOriginLine } from '../../science/crsOrigin';
 import { PDFDocument, StandardFonts, rgb, degrees, type PDFFont, type PDFPage } from 'pdf-lib';
 import { verticalSuffixFromLabel } from '../../units/units';
 import { metresPerLinearUnit } from '../../io/crs';
-import type { ContourFeatureModel, ContourFeature } from '../../terrain/contour/contourFeatureModel';
+import {
+  contourLineKind,
+  modelLengthShares,
+  type ContourFeatureModel,
+  type ContourFeature,
+  type ContourLengthShares,
+  type ContourLineKind,
+} from '../../terrain/contour/contourFeatureModel';
 import type { Annotation, AnnotationType } from '../annotate/types';
 import { buildAnnotationReport, type AnnotationReportRow } from './annotationReportTable';
 import {
@@ -34,7 +42,7 @@ import {
 import { decimalsForInterval, type ContourLabel } from '../../terrain/contour/labelPlacement';
 import { placeContourLabels } from '../../terrain/contourStudio/contourLabelEngine';
 import { contourShapeStyleLabel } from '../../terrain/contour/contourShapeStyle';
-import { gradePercent } from '../../terrain/contour/evidenceGrade';
+import { CONTOUR_SHARE_BASIS, contourShareParts } from '../../terrain/contour/evidenceGrade';
 import type { DemAccuracyStandards } from '../../terrain/quality/demAccuracyStandards';
 import type { ExportProvenance } from '../../terrain/export/exportProvenance';
 import { DENSITY_REF_SAMPLE_NOTE } from '../../terrain/export/analysedBasis';
@@ -210,10 +218,10 @@ const DIM = rgb(0.42, 0.46, 0.52);
 const FRAME = rgb(0.2, 0.22, 0.26);
 const SEPIA = rgb(0.36, 0.24, 0.13);
 const SEPIA_INDEX = rgb(0.24, 0.14, 0.05);
-// A lighter sepia for INTERPOLATED contours: still continuous (it is a real
-// estimate between measured ground), but visibly weaker than a measured line so
-// the ~96%-interpolated preview reads as signal, not noise. Gap (unsupported)
-// runs stay broken — the strongest "do not trust this line" signal.
+// A lighter sepia for contours below the solid threshold: sparse measured ground
+// stays continuous in it (it is measured, just thinly), interpolated support is
+// dashed in it, and gap (unsupported) runs stay broken — the strongest "do not
+// trust this line" signal.
 const SEPIA_LIGHT = rgb(0.58, 0.47, 0.36);
 const WHITE = rgb(1, 1, 1);
 
@@ -231,13 +239,13 @@ const ANNOTATION_COLORS: Record<AnnotationType, ReturnType<typeof rgb>> = {
 };
 
 /**
- * One place that maps a contour feature's index/grade to its drawn style, so the
+ * One place that maps a contour feature's index/basis to its drawn style, so the
  * plotting loop and the legend swatches can never disagree. Honest by
- * construction: a MEASURED line is full-ink and continuous; an INTERPOLATED line
- * is a lighter continuous tint; a low-confidence GAP is broken. INDEX contours
- * are always drawn continuous (the map's structural skeleton) and carry weight;
- * their evidence shows as a lighter ink when interpolated rather than a dash that
- * would fight the index hierarchy.
+ * construction: a MEASURED line is full-ink and continuous; SPARSE measured
+ * ground is a thinner, lighter continuous line; an INTERPOLATED line is dashed;
+ * a low-confidence GAP is dotted and faint. INDEX contours carry weight and stay
+ * the map's structural skeleton: sparse index ground is a lighter ink, an
+ * interpolated index run a long dash that still reads as one line.
  */
 export interface ContourDrawStyle {
   readonly color: ReturnType<typeof rgb>;
@@ -245,16 +253,18 @@ export interface ContourDrawStyle {
   readonly dash: number[] | null;
   readonly opacity: number;
 }
-export function contourDrawStyle(isIndex: boolean, grade: ContourFeature['grade']): ContourDrawStyle {
+export function contourDrawStyle(isIndex: boolean, basis: ContourLineKind): ContourDrawStyle {
   if (isIndex) {
     const w = 1.2;
-    if (grade === 'solid') return { color: SEPIA_INDEX, width: w, dash: null, opacity: 1 };
-    if (grade === 'dashed') return { color: SEPIA_INDEX, width: w, dash: null, opacity: 0.72 };
+    if (basis === 'measured') return { color: SEPIA_INDEX, width: w, dash: null, opacity: 1 };
+    if (basis === 'sparse') return { color: SEPIA_INDEX, width: w * 0.92, dash: null, opacity: 0.72 };
+    if (basis === 'interpolated') return { color: SEPIA_INDEX, width: w * 0.92, dash: [w * 4, w * 1.6], opacity: 0.72 };
     return { color: SEPIA_INDEX, width: w * 0.92, dash: [w * 1.6, w * 2.2], opacity: 0.6 };
   }
   const w = 0.55;
-  if (grade === 'solid') return { color: SEPIA, width: w, dash: null, opacity: 1 };
-  if (grade === 'dashed') return { color: SEPIA_LIGHT, width: w * 0.92, dash: null, opacity: 0.9 };
+  if (basis === 'measured') return { color: SEPIA, width: w, dash: null, opacity: 1 };
+  if (basis === 'sparse') return { color: SEPIA_LIGHT, width: w * 0.82, dash: null, opacity: 0.9 };
+  if (basis === 'interpolated') return { color: SEPIA_LIGHT, width: w * 0.92, dash: [3, 1.8], opacity: 0.9 };
   return { color: SEPIA_LIGHT, width: w * 0.82, dash: [1.4, 2.4], opacity: 0.6 };
 }
 
@@ -410,9 +420,29 @@ export function layoutAccuracyColumn(
   return { lines, bottomY };
 }
 
-/** The sheet's interpolated share, named by its basis (contour length, not grid cells). */
-export function interpolatedLengthLine(fraction: number): string {
-  return `${gradePercent(fraction)}% interpolated or uncertain (by contour length)`;
+/**
+ * The sheet's contour share, split by basis and named by what it is measured by
+ * (contour length, not grid cells), e.g. "4% interpolated · 45% sparse ground
+ * (by contour length)": the panel's wording. Packed into at most two lines of
+ * `maxWidthPt`, breaking only between parts so a figure never leaves its noun.
+ */
+export function contourShareSheetLines(
+  shares: ContourLengthShares,
+  maxWidthPt: number,
+  fontSizePt: number,
+  measure: (s: string, size: number) => number,
+): string[] {
+  if (!Number.isFinite(shares.interpolated)) return ['Contour shares not measured (no contours)'];
+  const parts = contourShareParts(shares);
+  const pieces = parts.map((p, i) => (i < parts.length - 1 ? `${p} ·` : `${p} ${CONTOUR_SHARE_BASIS}`));
+  const lines: string[] = [];
+  for (const piece of pieces) {
+    const last = lines.at(-1);
+    if (last !== undefined && measure(`${last} ${piece}`, fontSizePt) <= maxWidthPt) lines[lines.length - 1] = `${last} ${piece}`;
+    else lines.push(piece);
+  }
+  if (lines.length <= 2 && lines.every((l) => measure(l, fontSizePt) <= maxWidthPt)) return lines;
+  return wrapTextToWidth(pieces.join(' '), maxWidthPt, fontSizePt, measure, 2);
 }
 
 export function mapLinearUnitLabel(linearUnit: MapSheetInput['linearUnit']): string {
@@ -702,7 +732,7 @@ function drawMap(
       d += `${i === 0 ? 'M' : 'L'}${pageX(wx).toFixed(2)} ${svgY(pageY(wy)).toFixed(2)} `;
     }
     if (f.closed) d += 'Z';
-    const st = contourDrawStyle(f.isIndex, f.grade);
+    const st = contourDrawStyle(f.isIndex, contourLineKind(f));
     const opts: Parameters<PDFPage['drawSvgPath']>[1] = {
       x: 0, y: PH, borderColor: st.color, borderWidth: st.width, borderOpacity: st.opacity,
     };
@@ -1150,25 +1180,24 @@ function drawTitleBlock(
   };
   // Swatches drawn from the SAME contourDrawStyle the map plots, so the legend
   // can never describe a line weight/tint the sheet doesn't use.
-  sample(topY - 32, 'Index contour (labelled)', contourDrawStyle(true, 'solid'));
-  sample(topY - 45, 'Intermediate contour', contourDrawStyle(false, 'solid'));
-  sample(topY - 58, 'Interpolated (uncertain)', contourDrawStyle(false, 'dashed'));
-  sample(topY - 71, 'Low-confidence gap', contourDrawStyle(false, 'gap'));
-  // Interpolated fraction is NaN when there is no contour length to measure
-  // against (an empty contour set). Report that honestly rather than collapsing
-  // it to a fabricated 0%.
-  // The number is the share of length that is NOT solid, which is the two
-  // swatches immediately above: dashed (interpolated) AND gap (uncertain).
-  // Printed as "interpolated" alone it contradicted the legend and the data —
-  // on a real sheet it read "100% interpolated" while 504 of the drawn features
-  // carried `provenance: measured`, and thirty solid contours were on the page.
-  // gradePercent keeps 100 for the exact case, so "99%" is what a sheet with
-  // any solid line can say.
-  const interpFraction = input.model.interpolatedFraction;
-  const interpLine = Number.isFinite(interpFraction)
-    ? interpolatedLengthLine(interpFraction)
-    : 'Interpolated fraction — not measured (no contours)';
-  text(interpLine, mxx, topY - 88, 6.5, font, DIM);
+  sample(topY - 31, 'Index contour (labelled)', contourDrawStyle(true, 'measured'));
+  sample(topY - 41.5, 'Intermediate contour', contourDrawStyle(false, 'measured'));
+  sample(topY - 52, 'Sparse ground (measured)', contourDrawStyle(false, 'sparse'));
+  sample(topY - 62.5, 'Interpolated', contourDrawStyle(false, 'interpolated'));
+  sample(topY - 73, 'Low-confidence gap', contourDrawStyle(false, 'gap'));
+  // The share line names each swatch's share apart. One "interpolated or
+  // uncertain" figure counted every line below the solid threshold, and a
+  // measured cell grades below it whenever it holds fewer ground returns than
+  // the scene's typical cell: on a drone strip it printed 49% while a few
+  // percent of the cells were interpolated. Unmeasured (no contour length) is
+  // said plainly rather than collapsed to a fabricated 0%.
+  const shareLines = contourShareSheetLines(
+    modelLengthShares(input.model),
+    rcx - 10 - mxx - 4,
+    6.5,
+    (s, sz) => font.widthOfTextAtSize(safe(s), sz),
+  );
+  shareLines.forEach((ln, i) => text(ln, mxx, topY - 84 - i * 7.5, 6.5, font, DIM));
   // Honest stamp of the shape style applied to the plotted contours, sourced
   // from the unified provenance so it matches every other export of the same
   // run. Without provenance the only style available is the one the view holds

@@ -10,7 +10,8 @@ import {
   wrapTextToWidth,
   scaleBarUnit,
   mapScaleLabel,
-  interpolatedLengthLine,
+  contourShareSheetLines,
+  contourDrawStyle,
   mapLinearUnitLabel,
 } from '../src/render/measure/mapSheetPdf';
 import type { ContourFeatureModel, ContourFeature } from '../src/terrain/contour/contourFeatureModel';
@@ -516,8 +517,106 @@ describe('mapScaleLabel — no numeric ratio without a known ground unit', () =>
   });
 });
 
-describe('interpolatedLengthLine — names its basis', () => {
-  it('says the share is by contour length', () => {
-    expect(interpolatedLengthLine(0.99)).toMatch(/% interpolated or uncertain \(by contour length\)$/);
+/**
+ * The sheet once printed one "interpolated or uncertain" share: every line below
+ * the solid threshold. A measured cell grades below it whenever it holds fewer
+ * ground returns than the scene's typical cell, so on a drone strip with a few
+ * percent of interpolated cells the sheet said 49%. Interpolated and sparse
+ * measured ground now have their own swatch, their own line style and their own
+ * share.
+ */
+describe('map sheet — interpolated and sparse ground apart', () => {
+  const contentStreams = (bytes: Uint8Array): string => {
+    let out = '';
+    for (const seg of Buffer.from(bytes).toString('latin1').split(/stream\r?\n/).slice(1)) {
+      try {
+        out += inflateSync(Buffer.from(seg.split('endstream')[0], 'latin1')).toString('latin1');
+      } catch { continue; }
+    }
+    return out;
+  };
+  const drawnText = (bytes: Uint8Array): string =>
+    [...contentStreams(bytes).matchAll(/<([0-9A-Fa-f]*)> Tj/g)].map((m) => Buffer.from(m[1]!, 'hex').toString('latin1')).join('\n');
+
+  const PROV_M = 1;
+  const PROV_I = 2;
+  const run = (value: number, grade: ContourFeature['grade'], provBits: number, y: number): ContourFeature =>
+    ({ value, isIndex: false, grade, meanConfidence: 50, closed: false, provBits, coordinates: [[0, y], [100, y]] });
+  // 1 measured, 9 sparse, 1 interpolated, 1 gap run, each 100 long.
+  const split: ContourFeatureModel = {
+    ...model,
+    features: [
+      run(100, 'solid', PROV_M, 0),
+      ...Array.from({ length: 9 }, (_, i) => run(101 + i, 'dashed', PROV_M, 5 + i * 5)),
+      run(110, 'dashed', PROV_M | PROV_I, 55),
+      run(111, 'gap', PROV_I, 60),
+    ],
+    bbox: { minX: 0, minY: 0, maxX: 100, maxY: 60 },
+    interpolatedFraction: 11 / 12,
+    interpolatedLengthFraction: 1 / 12,
+    sparseLengthFraction: 9 / 12,
+    gapLengthFraction: 1 / 12,
+  };
+
+  it('names five line kinds in the legend, with the share of each kind apart', async () => {
+    const text = drawnText(await buildMapSheetPdf({ model: split, labels: [], provenance: PROV }));
+    for (const label of ['Index contour (labelled)', 'Intermediate contour', 'Sparse ground (measured)', 'Interpolated', 'Low-confidence gap']) {
+      expect(text).toContain(label);
+    }
+    expect(text).toContain('8% interpolated \xb7');
+    expect(text).toContain('75% sparse ground \xb7');
+    expect(text).toContain('8% gap (by contour length)');
+    expect(text, 'the old single share counted sparse ground as interpolated').not.toContain('interpolated or uncertain');
+    expect(text).not.toContain('Interpolated (uncertain)');
+  });
+
+  it('draws interpolated runs dashed and sparse ground continuous', async () => {
+    const streams = contentStreams(await buildMapSheetPdf({ model: split, labels: [], provenance: PROV }));
+    const interp = contourDrawStyle(false, 'interpolated');
+    const sparse = contourDrawStyle(false, 'sparse');
+    expect(interp.dash).not.toBeNull();
+    expect(sparse.dash).toBeNull();
+    // The interpolated dash pattern is on the page: the one interpolated run and its swatch.
+    expect(streams.match(new RegExp(`\\[${interp.dash!.join(' ')}\\] 0 d`, 'g'))?.length).toBe(2);
+  });
+
+  it('gives every legend kind a style of its own', () => {
+    const kinds = ['measured', 'sparse', 'interpolated', 'gap'] as const;
+    const key = (k: (typeof kinds)[number], index: boolean): string => {
+      const st = contourDrawStyle(index, k);
+      return JSON.stringify([st.color, st.width, st.dash, st.opacity]);
+    };
+    for (const index of [false, true]) expect(new Set(kinds.map((k) => key(k, index))).size).toBe(4);
+  });
+
+  it('reads the shares of a model assembled without them from its features', async () => {
+    const { interpolatedLengthFraction: _i, sparseLengthFraction: _s, gapLengthFraction: _g, ...bare } = split;
+    const text = drawnText(await buildMapSheetPdf({ model: bare, labels: [], provenance: PROV }));
+    expect(text).toContain('75% sparse ground');
+  });
+
+  it('fits the share inside the legend column on every sheet, breaking only between parts', async () => {
+    const { PDFDocument, StandardFonts } = await import('pdf-lib');
+    const font = await (await PDFDocument.create()).embedFont(StandardFonts.Helvetica);
+    const measure = (t: string, sz: number): number => font.widthOfTextAtSize(t, sz);
+    const worst = { interpolated: 0.99, sparse: 0.99, gap: 0.99 };
+    for (const width of [612, 792, 595.28, 841.89]) {
+      // The legend column runs from 46% of the content width to the separator 10pt
+      // left of the 72% accuracy column, less the 4pt the sheet keeps clear.
+      const column = (36 + (width - 72) * 0.72 - 10) - (36 + (width - 72) * 0.46) - 4;
+      const lines = contourShareSheetLines(worst, column, 6.5, measure);
+      expect(lines.length).toBeLessThanOrEqual(2);
+      for (const l of lines) expect(measure(l, 6.5)).toBeLessThanOrEqual(column);
+      for (const l of lines) expect(l).not.toMatch(/^(interpolated|sparse ground|gap)\b/);
+      expect(lines.join(' ')).toBe('99% interpolated \u00b7 99% sparse ground \u00b7 99% gap (by contour length)');
+    }
+  });
+
+  it('leaves the gap part out when there is no gap, and says unmeasured plainly', () => {
+    const measure = (t: string, sz: number): number => t.length * sz * 0.5;
+    expect(contourShareSheetLines({ interpolated: 0.04, sparse: 0.45, gap: 0 }, 400, 6.5, measure))
+      .toEqual(['4% interpolated \u00b7 45% sparse ground (by contour length)']);
+    expect(contourShareSheetLines({ interpolated: Number.NaN, sparse: Number.NaN, gap: Number.NaN }, 400, 6.5, measure))
+      .toEqual(['Contour shares not measured (no contours)']);
   });
 });

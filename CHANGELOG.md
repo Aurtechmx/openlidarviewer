@@ -65,6 +65,7 @@ The format is based on Keep a Changelog and the project follows Semantic Version
 - Visible interface text spells colour the British way throughout: the View panel section is "Colour by", and the streaming panel colour chip and its tooltips read "Colour". Code names, file formats and LAS field names are unchanged.
 - Caution reads in one colour in the left panels. A new --caution token, set per theme to the PREVIEW state colour, now draws the class panel captions, the Review verdict, the Terrain PREVIEW verdicts and statuses, the caution workflow glyph and the Analyse home needs badge, which used three different ambers.
 - The Export, converter, Clip and layer Compare buttons (.olv-bc-pill) are drawn as the View panel chip (.olv-chip): the same size, corners, hover, selected and disabled states, focus ring and press. The class name is kept.
+- The contour map sheet, the SVG and the Analyse caption show interpolated contours and measured but sparse ground apart, each with its own line style and share, e.g. "4% interpolated · 45% sparse ground (by contour length)"; one "interpolated or uncertain" figure used to count both. GeoJSON features carry `basis`, the metadata adds `interpolatedLengthFraction`, `sparseLengthFraction` and `gapLengthFraction` (`interpolatedFraction` keeps its non-solid value), SVG paths carry `data-basis`, and DXF adds a CONTOUR_SPARSE layer. Dashed runs now break where interpolated support starts or stops; contour geometry and the DTM are unchanged.
 
 ### Fixed
 

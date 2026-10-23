@@ -3,8 +3,9 @@ import { analyseContours } from '../src/terrain/contour/analyseContours';
 import type { TerrainPoint } from '../src/terrain/TerrainContracts';
 import { densityReferenceFloorFor, type AnalysedBasis } from '../src/terrain/export/analysedBasis';
 import { describeWithheldRead, formatGroupedInt } from '../src/science/withheldCounts';
-import { interpolatedShareCaption } from '../src/terrain/contour/evidenceGrade';
-import { interpolatedLengthLine, layoutAccuracyColumn } from '../src/render/measure/mapSheetPdf';
+import { contourShareCaption } from '../src/terrain/contour/evidenceGrade';
+import { contourShareSheetLines, layoutAccuracyColumn } from '../src/render/measure/mapSheetPdf';
+import type { ContourFeatureModel, ContourLengthShares } from '../src/terrain/contour/contourFeatureModel';
 import { PDFDocument, StandardFonts } from 'pdf-lib';
 import { FakeEl, installAnalysePanelDom } from './helpers/analysePanelDom';
 
@@ -91,12 +92,29 @@ describe('validation row units', () => {
   });
 });
 
-describe('interpolated share', () => {
-  it('prints the same percentage on the panel and the sheet', () => {
-    for (const f of [0.004, 0.55, 0.76, 0.998]) {
-      const pct = /^(\d+)%/;
-      expect(interpolatedShareCaption(f).match(pct)?.[1]).toBe(interpolatedLengthLine(f).match(pct)?.[1]);
+describe('contour share', () => {
+  const withShares = (s: ContourLengthShares): ContourFeatureModel => ({
+    features: [], interpolatedFraction: s.interpolated + s.sparse + s.gap,
+    interpolatedLengthFraction: s.interpolated, sparseLengthFraction: s.sparse, gapLengthFraction: s.gap,
+  }) as unknown as ContourFeatureModel;
+
+  it('prints the same wording on the panel and the sheet', async () => {
+    const font = await (await PDFDocument.create()).embedFont(StandardFonts.Helvetica);
+    const measure = (t: string, sz: number): number => font.widthOfTextAtSize(t, sz);
+    for (const s of [
+      { interpolated: 0.004, sparse: 0.45, gap: 0 },
+      { interpolated: 0.55, sparse: 0.2, gap: 0.01 },
+      { interpolated: 0.998, sparse: 0.001, gap: 0.001 },
+    ]) {
+      // Portrait A4 is the narrowest legend column.
+      expect(contourShareSheetLines(s, 126, 6.5, measure).join(' ')).toBe(contourShareCaption(withShares(s)));
     }
+  });
+
+  it('shows the panel the split share of a real run', async () => {
+    expect(await panelText(FULL, false)).toMatch(
+      /\d+% interpolated · \d+% sparse ground( · \d+% gap)? \(by contour length\)|All contour length is from confident, measured terrain\./,
+    );
   });
 });
 

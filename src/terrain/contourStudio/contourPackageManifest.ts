@@ -15,7 +15,7 @@
  *    role and evidence level carried per feature, and support never overstated.
  */
 
-import type { ContourFeature } from '../contour/contourFeatureModel';
+import { contourBasis, type ContourFeature } from '../contour/contourFeatureModel';
 import type { ContourGeometryRole } from './contourGeometryProduct';
 import type { ScientificExportDecision } from '../../export/exportManifest';
 
@@ -48,10 +48,12 @@ export interface FeatureAttributeContext {
   };
 }
 
-type Support = 'measured' | 'interpolated' | 'unsupported';
+type Support = 'measured' | 'sparse' | 'interpolated' | 'unsupported';
 function supportOf(f: ContourFeature): Support {
   if (f.grade === 'solid') return 'measured';
-  if (f.grade === 'dashed') return 'interpolated';
+  // A dashed run on measured-only ground is sparse, not interpolated: it grades
+  // dashed because its cells hold fewer ground returns than a typical cell.
+  if (f.grade === 'dashed') return contourBasis(f) === 'sparse' ? 'sparse' : 'interpolated';
   return 'unsupported';
 }
 
@@ -72,7 +74,7 @@ export function contourFeatureAttributes(
     geometry_role: ctx.geometryRole,
     closed: f.closed,
     support_class: support,
-    measured_fraction: support === 'measured' ? 1 : 0,
+    measured_fraction: support === 'measured' || support === 'sparse' ? 1 : 0,
     interpolated_fraction: support === 'interpolated' ? 1 : 0,
     unsupported_fraction: support === 'unsupported' ? 1 : 0,
     vertical_sigma_m: u ? u.verticalSigmaM : null,
