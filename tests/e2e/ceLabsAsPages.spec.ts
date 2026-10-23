@@ -58,7 +58,8 @@ test.describe('labs are Analyse pages', () => {
       // The first crumb is the Analyse home from anywhere under it.
       await bar(page).locator('.olv-loc-crumb', { hasText: /^Analyse$/ }).click();
       await expect(bar(page)).toHaveAttribute('data-path', 'Analyse');
-      await page.locator(`.olv-ah-row[data-analysis="${id}"] .olv-ah-open`).click();
+      // A lab card's one action is its Run (or Open) button.
+      await page.locator(`.olv-ah-row[data-analysis="${id}"] .olv-ah-run`).click();
       await expect(labPage(page, id)).toBeVisible({ timeout: 20_000 });
       await expect(labPage(page, id).locator(marker)).toBeVisible({ timeout: 20_000 });
       await expect(bar(page)).toHaveAttribute('data-path', `Analyse › Terrain › ${name}`);
@@ -79,7 +80,7 @@ test.describe('labs are Analyse pages', () => {
     await expect(labPage(page, 'observatory').locator('.olv-observatory-section-title')).toHaveCount(5, { timeout: 30_000 });
     await expect(bar(page)).toHaveAttribute('data-path', 'Analyse › Observatory');
     await expectSceneLive(page);
-    await bar(page).locator('.olv-loc-back').click();
+    await clickTaskBack(page, 'analyse');
     await expect(bar(page)).toHaveAttribute('data-path', 'Analyse');
     await expect(labPage(page, 'observatory')).toBeHidden();
     // Go to shows the page as it was left, with nothing rerun.

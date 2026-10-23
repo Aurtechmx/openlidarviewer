@@ -139,15 +139,22 @@
     gap: var(--space-2xs);
   }
 }
-/* While the header bar shows a Back to the parent, the task header in the rail
-   would repeat it ("← Data" twice), so the rail keeps only the page title. The
-   two name the same place: both go to the page's parent or the mode home
-   (locationModel.ts backTarget, workspaceRouter.ts sync). A Back that closes a
-   workspace goes elsewhere, so the rail's Back stays then. On the phone the
-   sheet's location line carries that Back, so the page's own is hidden there
-   too. locationBar.ts sets the root classes. */
+/* One Back per page in each layout. The header bar's Back and the page's own
+   (the task header in the rail) name the same place: both go to the page's
+   parent or the mode home (locationModel.ts backTarget, workspaceRouter.ts
+   sync), so one of them is hidden. An Analyse page keeps its own on a desktop,
+   a button under the page title, and the header's goes while the rail is
+   open; with the rail collapsed (or Focus mode) the header's is the way back.
+   Every other page keeps the header's. While a workspace is open the header
+   control closes it, which the workspace's own Close at its top does too, so
+   on an Analyse page that one stays instead; the page's Back goes elsewhere
+   (its parent) and stays. On the phone the sheet's location line carries the
+   Back, or the workspace's Close, so the page's own copy is hidden there.
+   locationBar.ts sets the root classes. */
 .olv-has-header-back .olv-left-panels .olv-ws-task > .olv-ws-back,
-.olv-has-sheet-back .olv-mobile-sheet .olv-ws-task > .olv-ws-back {
+.olv-has-sheet-back .olv-mobile-sheet .olv-ws-task > .olv-ws-back,
+.olv-has-sheet-close .olv-mobile-sheet .olv-ws-close,
+.olv-has-page-back:not(:has(.olv-left-panels.olv-rail-collapsed)) .olv-topbar > .olv-loc > .olv-loc-back {
   display: none;
 }
 /* A mode home: the one crumb repeats the active mode tab, so no pill. */
@@ -172,13 +179,25 @@
 .olv-msheet-head > .olv-loc .olv-loc-back {
   min-height: 44px;
 }
+/* Back already names the level above, so the sheet keeps Back and the current
+   page ("← Data | Classes", not "← Data | Data › Classes"), as the header does
+   below 1024 px. The current page keeps its full path for assistive tech. */
+.olv-msheet-head > .olv-loc > .olv-loc-back:not([hidden]) + .olv-loc-crumbs > li:not(:last-child) { display: none; }
 
-/* A workspace's own way out, at its top. */
+/* A workspace's own way out, at its top: a quiet button at the Analyse
+   rail's button size, 44 px on touch. */
 .olv-ws-close {
+  align-self: flex-start;
   margin: 0 0 var(--space-sm);
+  padding: 0 var(--space-md);
   color: var(--accent);
-  border: 0.5px solid var(--hairline);
-  min-height: 44px;
+  font: 600 var(--text-sm) / 1.2 var(--font);
+  border: 0.5px solid var(--hairline-strong);
+  background: var(--hover-wash);
+  min-height: 32px;
+}
+@media (pointer: coarse) {
+  .olv-ws-close { min-height: 44px; }
 }
 
 /* ── Command palette: a visible close control; unavailable Go to rows ───── */

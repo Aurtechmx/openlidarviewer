@@ -44,21 +44,6 @@ export function renderContourStudioLauncher(
   card.setAttribute('role', 'group');
   card.setAttribute('aria-label', 'Terrain products');
 
-  card.append(el('div', { className: 'olv-contour-launcher-head', text: 'Terrain Products' }));
-  card.append(el('div', { className: 'olv-contour-launcher-title', text: state.title }));
-  card.append(el('p', { className: 'olv-contour-launcher-message', text: state.message }));
-
-  // Reasons (present on unavailable + exploratory states).
-  if (state.status === 'unavailable' || state.status === 'exploratory') {
-    if (state.reasons.length > 0) {
-      const list = el('ul', { className: 'olv-contour-launcher-reasons' });
-      for (const reason of state.reasons) {
-        list.append(el('li', { text: reason }));
-      }
-      card.append(list);
-    }
-  }
-
   const button = el('button', { className: 'olv-contour-launcher-action' });
   button.type = 'button';
 
@@ -76,7 +61,28 @@ export function renderContourStudioLauncher(
       button.addEventListener('click', () => opts.onLaunch?.());
     }
   }
-  card.append(button);
+
+  // The action leads; what the deliverable carries folds into one line under
+  // it (the title) that opens to the message and the reasons. A blocked state
+  // shows them open, with its disabled action after them: they are why.
+  const about = el('details', { className: 'olv-contour-launcher-about' }, [
+    el('summary', { className: 'olv-contour-launcher-title', text: state.title }),
+    el('p', { className: 'olv-contour-launcher-message', text: state.message }),
+  ]);
+  // Reasons (present on unavailable + exploratory states).
+  if (state.status === 'unavailable' || state.status === 'exploratory') {
+    if (state.reasons.length > 0) {
+      const list = el('ul', { className: 'olv-contour-launcher-reasons' });
+      for (const reason of state.reasons) {
+        list.append(el('li', { text: reason }));
+      }
+      about.append(list);
+    }
+  }
+  if (state.status === 'unavailable') about.open = true;
+  // One child per call: the node test DOM's append takes a single node.
+  card.append(state.status === 'unavailable' ? about : button);
+  card.append(state.status === 'unavailable' ? button : about);
 
   return card;
 }

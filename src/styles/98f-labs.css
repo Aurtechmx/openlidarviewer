@@ -202,7 +202,7 @@
 .olv-lab-actions > .olv-flow-cond > .olv-flow-cond-btn { flex: 1 1 0; }
 /* The page's main action reads as one: Export on Flow Pulse, Find route on Terrain Access. */
 .olv-lab-actions > :is(.olv-flow-export, .olv-ta-run) {
-  font: 600 var(--text-xs) / 1.2 var(--font); color: var(--on-accent);
+  font: 600 var(--text-sm) / 1.2 var(--font); color: var(--on-accent);
   background: var(--accent); border: 1px solid var(--accent); border-radius: var(--radius-sm);
   padding: var(--space-sm) var(--space-xl); min-height: 32px; cursor: pointer;
 }
@@ -240,13 +240,17 @@
 .olv-lab-preparing-line { margin: 0; display: flex; align-items: center; gap: var(--space-md); font-size: var(--text-sm); font-weight: 600; color: var(--text); }
 .olv-lab-preparing-note { margin: 0; font-size: var(--text-xs); color: var(--text-dim); text-wrap: pretty; }
 
-/* The Analyse home's one action on a lab row. */
+/* The Analyse home's one action on a card: Run (or Open) a lab, Run terrain
+   analysis. The rail's filled button, the same size as the labs' own. */
 .olv-ah-run {
   align-self: flex-start; appearance: none;
+  display: inline-flex; align-items: center; justify-content: center;
   background: var(--accent); border: 1px solid var(--accent); color: var(--on-accent);
-  border-radius: var(--radius-md); padding: var(--space-xs) var(--space-xl); min-height: 28px;
-  font: 600 var(--text-xs) / 1.2 var(--font); cursor: pointer;
+  border-radius: var(--radius-sm); padding: var(--space-xs) var(--space-xl); min-height: 32px;
+  font: 600 var(--text-sm) / 1.2 var(--font); cursor: pointer;
+  transition: background var(--dur-fast) var(--ease-standard);
 }
+.olv-ah-run:hover { background: color-mix(in srgb, var(--accent) 88%, white); }
 .olv-ah-run:focus-visible { outline: var(--focus-ring); outline-offset: var(--focus-ring-offset); }
 
 /* Three figures sit in one row at every width. */
@@ -263,7 +267,7 @@
 
 /* Touch: every lab control meets the 44 px floor. */
 @media (pointer: coarse) {
-  .olv-lab-chip-summary, .olv-lab-details-summary, .olv-ah-run,
+  .olv-lab-chip-summary, .olv-lab-details-summary, .olv-ah-run, .olv-ah-open, .olv-at-link, .olv-at-link.is-primary,
   .olv-flow-cond-btn, .olv-flow-mode-btn, .olv-flow-overlay-toggle, .olv-flow-export,
   .olv-ta-segmented-btn, .olv-ta-run, .olv-ta-export, .olv-ta-retry, .olv-ta-overlay-toggle, .olv-ta-form-submit, .olv-ta-example {
     min-height: 44px;

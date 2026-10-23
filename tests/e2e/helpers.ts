@@ -77,9 +77,10 @@ export async function openClassesPage(page: Page): Promise<void> {
  * The Back that leaves a mode's task page. While the header location bar
  * shows a Back to the parent (the root carries `olv-has-header-back`), the
  * rail's task header shows only the title, so this is the header's Back; on a
- * phone, or while a workspace's own close holds the header Back, it is the
- * rail's. One selector picks by the same class the stylesheet reads, so it
- * matches exactly one control in every state.
+ * phone, on a desktop Analyse page (whose own Back is the one Back), or while
+ * a workspace's own close holds the header Back, it is the rail's. One
+ * selector picks by the same class the stylesheet reads, so it matches
+ * exactly one control in every state.
  */
 export function taskBack(page: Page, mode: string): Locator {
   return page.locator(

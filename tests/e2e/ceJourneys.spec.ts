@@ -347,8 +347,7 @@ test.describe('CE wayfinding journeys', () => {
     await page.locator('.olv-ah-row[data-analysis="terrain"] .olv-ah-open').click();
     await page.locator('.olv-analyse-run').click();
     await expect(page.locator('.olv-fit-verdict-text')).toBeVisible({ timeout: 60_000 });
-    await page.locator('.olv-at-link', { hasText: 'Contours' }).click();
-    await page.locator('.olv-analyse-contour-launcher .olv-contour-launcher-action').click();
+    await page.locator('.olv-at-link', { hasText: 'Contours' }).click(); // Make contours: Contour Studio opens
     await expect(page.locator('.olv-cs-export-btn', { hasText: /^GeoJSON$/ })).toBeVisible({ timeout: 30_000 });
     await page.locator('.olv-rail-tab').click();
     await expect(page.locator('#olv-left-panels')).toHaveClass(/olv-rail-collapsed/);

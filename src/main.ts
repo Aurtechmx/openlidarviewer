@@ -2219,9 +2219,9 @@ const terrainRunner = createTerrainAnalysisRunner({
     inspectorCards.noteTerrainComplexity(
       cx && cx.band ? { bucket: cx.band, label: cx.bandLabel, detail: cx.detail } : null,
     );
-    // On a phone the panel that produced this sits in the bottom sheet at 'peek',
-    // so the verdict lands below the fold. Open it on the assessment (no-op on desktop).
-    phoneSheet?.revealResult('analyse', '.olv-analyse-assessment');
+    // On a phone the sheet sits at 'peek', so the verdict lands below the fold.
+    // Open it at the top of its page, where the verdict leads (no-op on desktop).
+    phoneSheet?.revealResult('analyse', '.olv-ws-task');
   },
 });
 

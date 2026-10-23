@@ -49,18 +49,21 @@ async function goTo(page: Page, title: string): Promise<boolean> {
 /**
  * The labelled way back on the current surface, or '' when there is none (a
  * dead end). A dialog's own Back comes first, then the palette's close, then a
- * workspace's close, then the location bar's Back.
+ * workspace's close, then the location bar's Back, then the page's own Back
+ * (an Analyse page on a desktop keeps its own and the bar drops its copy).
  */
 async function wayBack(page: Page): Promise<string> {
   const candidates = [
     page.locator('.olv-modal-backdrop .olv-modal-back'),
     page.locator('.olv-palette:not(.olv-hidden) .olv-palette-close'),
     page.locator('.olv-workbench-close'),
+    page.locator('.olv-ws-close:visible'),
     bar(page).locator('.olv-loc-back'),
+    page.locator('.olv-ws-mode.is-active > .olv-ws-task > .olv-ws-back:visible'),
   ];
   for (const c of candidates) {
     if ((await c.count()) && (await c.first().isVisible())) {
-      const name = (await c.first().getAttribute('aria-label')) ?? (await c.first().innerText());
+      const name = (await c.first().getAttribute('aria-label')) ?? (await c.first().innerText()).replace(/^←\s*/, 'Back to ');
       if (/^(Back to |Close )\S/.test(name)) return name;
     }
   }
@@ -103,7 +106,8 @@ async function sweep(page: Page, size: { width: number; height: number }): Promi
     await expect(bar(page).locator('.olv-loc-back')).toHaveText('Close Contour Studio');
     await expect(page.locator('.olv-analyse-contour-deliverable > .olv-ws-close')).toHaveText('Close Contour Studio');
     await check('Contour Studio');
-    await bar(page).locator('.olv-loc-back').click();
+    // One Close on screen: the workspace's own on a desktop Analyse page, the bar's on a phone.
+    await page.locator('.olv-ws-close:visible, .olv-loc:not([hidden]) .olv-loc-back:visible').first().click();
     await expect(bar(page)).toHaveAttribute('data-path', 'Analyse › Terrain › Contours');
   }
   // The palette itself has a visible close control.
@@ -113,14 +117,20 @@ async function sweep(page: Page, size: { width: number; height: number }): Promi
   await page.locator('.olv-palette-close').click();
   await expect(page.locator('.olv-palette')).toBeHidden();
   // A lab is a page under Terrain, and its Back names Terrain.
-  // The first crumb goes to the Analyse home from anywhere under it.
-  await bar(page).locator('.olv-loc-crumb', { hasText: /^Analyse$/ }).click();
+  // The first crumb goes to the Analyse home from anywhere under it; the phone
+  // sheet shows Back and the current page only, so there Back goes up twice.
+  const analyseCrumb = bar(page).locator('.olv-loc-crumb', { hasText: /^Analyse$/ });
+  if (await analyseCrumb.isVisible()) await analyseCrumb.click();
+  else for (let i = 0; i < 2; i++) await bar(page).locator('.olv-loc-back').click();
   await expect(bar(page)).toHaveAttribute('data-path', 'Analyse');
-  await page.locator('.olv-ah-row[data-analysis="flow-pulse"] .olv-ah-open:visible').click();
+  // A lab card's one action is its Run (or Open) button.
+  await page.locator('.olv-ah-row[data-analysis="flow-pulse"] .olv-ah-run:visible').click();
   await expect(bar(page)).toHaveAttribute('data-path', 'Analyse › Terrain › Flow Pulse', { timeout: 20_000 });
-  const labBack = bar(page).locator('.olv-loc-back');
+  // One Back on screen, named for Terrain: the page's own on a desktop, the sheet's on a phone.
+  const labBack = page.locator('.olv-loc:not([hidden]) .olv-loc-back:visible, #olv-ws-mode-analyse > .olv-ws-task > .olv-ws-back:visible');
+  await expect(labBack).toHaveCount(1);
   await expect(labBack).toHaveText('← Terrain');
-  await expect(labBack).toHaveAttribute('aria-label', 'Back to Terrain');
+  await expect(bar(page).locator('.olv-loc-back')).toHaveAttribute('aria-label', 'Back to Terrain');
   await check('Flow Pulse');
   await labBack.click();
   await expect(bar(page)).toHaveAttribute('data-path', 'Analyse › Terrain');
@@ -168,11 +178,10 @@ test.describe('one exit convention', () => {
     await openAnalysePage(page, 'terrain');
     await page.locator('.olv-analyse-run').click();
     await expect(page.locator('.olv-fit-verdict-text')).toBeVisible({ timeout: 90_000 });
+    // Make contours opens Contour Studio on the Contours page.
     const link = page.locator('.olv-at-link', { hasText: 'Contours' });
     await link.click();
-    const launch = page.locator('.olv-analyse-contour-launcher .olv-contour-launcher-action');
-    await launch.click();
-    await expect(bar(page)).toHaveAttribute('data-path', 'Analyse › Terrain › Contours › Contour Studio');
+    await expect(bar(page)).toHaveAttribute('data-path', 'Analyse › Terrain › Contours › Contour Studio', { timeout: 20_000 });
     await page.mouse.click(720, 300); // focus leaves the rail; Escape still applies
     await page.keyboard.press('Escape');
     await expect(bar(page)).toHaveAttribute('data-path', 'Analyse › Terrain › Contours');

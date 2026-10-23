@@ -118,7 +118,10 @@ describe('Analyse home', () => {
 
   it('a lab row runs its palette entry; the lab then places itself on its page', async () => {
     const t = await make(['dtm', 'contours']);
-    t.row('flow-pulse').find((e) => e.hasClass('olv-ah-open'))!.fire('click');
+    // One action per card: a lab with a Run button has a plain heading, not a second control.
+    expect(t.row('flow-pulse').find((e) => e.hasClass('olv-ah-open'))).toBeUndefined();
+    expect(t.row('flow-pulse').find((e) => e.hasClass('olv-ah-head'))).toBeDefined();
+    t.row('flow-pulse').find((e) => e.hasClass('olv-ah-run'))!.fire('click');
     t.row('observatory').find((e) => e.hasClass('olv-ah-open'))!.fire('click');
     expect(t.runAction.mock.calls.map((c) => c[0])).toEqual(['analyse.flowPulse', 'analyse.observatory']);
     expect(t.router.route().page).toBeNull();

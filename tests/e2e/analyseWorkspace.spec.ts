@@ -52,22 +52,22 @@ test.describe('Analyse home and pages', () => {
     await expect(page.locator(`${ANALYSE} .olv-analyse-home`)).toBeHidden();
     await runTerrain(page);
 
-    // Conclusion first, then Why? with the whole Process Studio behind it.
+    // Conclusion first: after a run the run's verdict is the page's one status
+    // line, then Make contours, then Why? with the whole Process Studio behind it.
     const terrain = page.locator(`${ANALYSE} .olv-analyse-page[data-page="terrain"]`);
-    await expect(terrain.locator('.olv-at-verdict .olv-ah-badge')).toBeVisible();
+    await expect(terrain.locator('.olv-fit-verdict')).toBeVisible();
+    await expect(terrain.locator('.olv-at-verdict')).toBeHidden();
     const studio = terrain.locator('.olv-process-studio');
     await expect(studio).toBeHidden();
     await terrain.locator('.olv-why-summary').first().click();
     await expect(studio).toBeVisible();
     await expect(studio.locator('.olv-ps-product', { hasText: 'DTM' })).toHaveClass(/olv-ps-produced/);
 
-    await terrain.locator('.olv-at-link', { hasText: 'Contours' }).click();
+    // Make contours lands in Contour Studio on the Contours page.
+    await terrain.locator('.olv-at-link', { hasText: 'Make contours' }).click();
     await expect(title(page)).toHaveText('Contours');
     await expect(back(page)).toHaveText('← Terrain');
-    const launch = page.locator('.olv-analyse-contour-launcher .olv-contour-launcher-action');
-    await expect(launch).toBeVisible({ timeout: 20_000 });
-    await launch.click();
-    await expect(page.locator('.olv-analyse-contour-deliverable')).not.toHaveClass(/olv-hidden/);
+    await expect(page.locator('.olv-analyse-contour-deliverable')).not.toHaveClass(/olv-hidden/, { timeout: 20_000 });
     await expect(page.locator('.olv-cs-export-btn', { hasText: /^GeoJSON$/ })).toBeVisible();
 
     await clickTaskBack(page, 'analyse');
@@ -115,10 +115,8 @@ test.describe('Analyse home and pages', () => {
     await loadScan(page);
     await row(page, 'terrain').locator('.olv-ah-open').click();
     await runTerrain(page);
-    await page.locator('.olv-at-link').click();
-    const launch = page.locator('.olv-analyse-contour-launcher .olv-contour-launcher-action');
-    await expect(launch).toBeVisible({ timeout: 20_000 });
-    await launch.click();
+    await page.locator('.olv-at-link').click(); // Make contours: Contour Studio opens
+    await expect(page.locator('.olv-cs-export-btn', { hasText: /^GeoJSON$/ })).toBeVisible({ timeout: 20_000 });
     const before = await resultDigest(page, 'c');
     expect(before.tagged).toBe(0);
 

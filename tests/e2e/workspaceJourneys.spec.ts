@@ -163,9 +163,9 @@ test.describe('workspace journeys', () => {
     await expect(terrain.locator('.olv-process-studio')).toBeVisible();
     const first = await terrainDigest(page, 'c');
 
+    // Make contours opens the Contours page with Contour Studio open.
     await terrain.locator('.olv-at-link', { hasText: 'Contours' }).click();
     await expect(taskTitle(page, 'analyse')).toHaveText('Contours');
-    await page.locator('.olv-analyse-contour-launcher .olv-contour-launcher-action').click();
     await expect(page.locator('.olv-cs-export-btn', { hasText: /^GeoJSON$/ })).toBeVisible();
     await expectWorkspaceRules(page);
 
@@ -308,10 +308,10 @@ test.describe('target size', () => {
     await showWorkspaceMode(page, 'data');
     for (const sel of ['.olv-add-dataset-row', '.olv-layer-solo', '.olv-layer-lock', '.olv-layer-x']) await expectTargets(page, sel, 24);
     await showWorkspaceMode(page, 'analyse');
-    // Run terrain analysis and the other remedies, and the labs' one Run.
-    await expect(page.locator('.olv-ah-remedy', { hasText: 'Run terrain analysis' })).toBeVisible();
+    // Each card's one action (Run terrain analysis, the labs' Run) and the card headings.
+    await expect(page.locator('.olv-ah-run', { hasText: 'Run terrain analysis' })).toBeVisible();
     await expect(page.locator('.olv-ah-run', { hasText: 'Run Flow Pulse' })).toBeVisible();
-    await expectTargets(page, '.olv-ah-remedy', 24);
+    await expectTargets(page, '.olv-ah-open', 24);
     await expectTargets(page, '.olv-ah-run', 24);
     await page.locator('.olv-ah-row[data-analysis="terrain"] .olv-ah-open').click();
     await expectTargets(page, '.olv-analyse-run', 24);
@@ -329,7 +329,7 @@ test.describe('target size', () => {
       await page.locator('.olv-mobile-sheet .olv-msheet-tab[data-tab="data"]').click();
       for (const sel of ['.olv-add-dataset-row', '.olv-layer-solo', '.olv-layer-lock', '.olv-layer-x']) await expectTargets(page, sel, 44);
       await page.locator('.olv-mobile-sheet .olv-msheet-tab[data-tab="analyse"]').click();
-      await expectTargets(page, '.olv-msheet-slot[data-tab="analyse"] .olv-ah-remedy', 44);
+      await expectTargets(page, '.olv-msheet-slot[data-tab="analyse"] .olv-ah-open', 44);
       await expectTargets(page, '.olv-msheet-slot[data-tab="analyse"] .olv-ah-run', 44);
       await page.locator('.olv-msheet-slot[data-tab="analyse"] .olv-ah-row[data-analysis="terrain"] .olv-ah-open').click();
       await page.locator('.olv-msheet-slot[data-tab="analyse"] .olv-analyse-run').click();

@@ -139,7 +139,7 @@ test.describe('results shelf', () => {
     await page.locator('.olv-analyse-run').click();
     await expect(page.locator('.olv-fit-verdict-text')).toBeVisible({ timeout: 30_000 });
     await clickTaskBack(page, 'analyse');
-    await page.locator('.olv-ah-row[data-analysis="flow-pulse"] .olv-ah-open').click();
+    await page.locator('.olv-ah-row[data-analysis="flow-pulse"] .olv-ah-run').click();
     const labPage = page.locator('.olv-analyse-page[data-page="flow-pulse"]');
     await expect(labPage).toBeVisible({ timeout: 20_000 });
     const card = labPage.locator('.olv-at-body');

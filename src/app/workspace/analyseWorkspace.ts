@@ -17,7 +17,10 @@
  * disclosure with the full reasons (on Terrain, the whole Process Studio
  * panel), then the task itself with its Evidence and Method. The Flow Pulse
  * and Terrain Access pages fold both into the lab's own status chip instead,
- * so their map comes first.
+ * so their map comes first, and Contours folds them into one status line the
+ * same way, so its action comes first. After a run the Terrain page's next
+ * step sits under its verdict: Make contours opens the Contours page with
+ * Contour Studio open, so a contour file is one export away.
  *
  * The panels are live nodes, never recreated: the Analyse panel, the sections
  * it lends out (`AnalysePanel.part`), the Object panel and the Process Studio
@@ -58,6 +61,7 @@ export interface AnalyseHostPanel {
   part(name: 'contours' | 'range' | 'features'): HTMLElement;
   hasPart(name: 'contours' | 'range' | 'features'): boolean;
   restoreParts(): void;
+  /** The slot under the run's verdict, shown only while the panel holds a result. */
   linksHost(): HTMLElement;
   setPartsListener(fn: (() => void) | null): void;
   /** The last run's own usability, or null before a run. */
@@ -115,6 +119,9 @@ const LAB_ACTION: Partial<Record<AnalysisId, string>> = {
 /** The labs whose page leads with their map and fold the verdict into a status chip. */
 const CHIP_LABS: ReadonlySet<AnalysePage> = new Set(['flow-pulse', 'terrain-access']);
 
+/** Pages whose header verdict and `Why?` are folded into one status line. */
+const FOLDED: ReadonlySet<AnalysePage> = new Set([...CHIP_LABS, 'contours']);
+
 /** A routine missing prerequisite reads as what the step needs, not as Blocked. */
 const tone = (r: Pick<AnalysisRow, 'status' | 'needs'>): string => (r.needs ? 'needs' : r.status);
 
@@ -138,18 +145,47 @@ function pageShell(page: AnalysePage, extra: HTMLElement | null = null): PageShe
   const body = el('div', { className: 'olv-at-body' });
   const root = el('section', { className: 'olv-analyse-page' }, extra ? [verdict, extra, why, body] : [verdict, why, body]);
   root.dataset.page = page;
-  // The lab's status chip carries the verdict and its reasons.
-  if (CHIP_LABS.has(page)) { verdict.hidden = true; why.hidden = true; }
+  // A status line (the lab's chip, or Contours' own) carries the verdict and its reasons.
+  if (FOLDED.has(page)) { verdict.hidden = true; why.hidden = true; }
   return { root, verdict, why, whyBody, body };
+}
+
+/**
+ * A page's verdict as one line, the labs' status chip (`ui/labGuide.ts`): the
+ * badge and the reason on one line, which opens to the whole reason. Built
+ * here, with the same classes, so the home's chunk takes in no lab code.
+ */
+function statusLine(): { element: HTMLElement; set: (v: Pick<AnalysisRow, 'status' | 'reason' | 'needs'>) => void } {
+  const mark = el('span', { className: 'olv-ah-badge' });
+  const text = el('span', { className: 'olv-lab-chip-text' });
+  const details = el('details', { className: 'olv-lab-chip' }, [el('summary', { className: 'olv-lab-chip-summary' }, [mark, text])]);
+  const wrap = el('div', { className: 'olv-lab-chip-wrap' }, [details]);
+  wrap.setAttribute('role', 'status');
+  return {
+    element: wrap,
+    set(v) {
+      details.className = `olv-lab-chip is-${tone(v)}`;
+      mark.className = `olv-ah-badge is-${tone(v)}`;
+      mark.textContent = v.needs ?? STATUS_TEXT[v.status];
+      text.textContent = v.reason;
+    },
+  };
 }
 
 export function createAnalyseWorkspace(d: AnalyseWorkspaceDeps): AnalyseWorkspace {
   let router: WorkspaceRouter | null = null;
   const list = el('ul', { className: 'olv-ah-list' });
   const home = el('section', { className: 'olv-analyse-home', ariaLabel: 'Analyses' }, [list]);
+  // The Terrain page's next step once a run has produced a result: Make
+  // contours (Contour Studio open), or the Contours page when they are blocked.
+  // It sits in the panel's slot under the run's verdict, which the panel shows
+  // only while it holds a result.
+  const contoursLink = el('button', { className: 'olv-at-link is-primary', type: 'button', tip: 'Contour lines from this run: open Contour Studio, or see what blocks it.' });
+  const nextStep = el('div', { className: 'olv-at-next' }, [contoursLink]);
+  const contoursLine = statusLine();
   const shells: Record<AnalysePage, PageShell> = {
     terrain: pageShell('terrain'),
-    contours: pageShell('contours'),
+    contours: pageShell('contours', contoursLine.element),
     objects: pageShell('objects'),
     features: pageShell('features'),
     range: pageShell('range'),
@@ -195,10 +231,30 @@ export function createAnalyseWorkspace(d: AnalyseWorkspaceDeps): AnalyseWorkspac
     watched.add(n);
     new MutationObserver(() => api.refresh()).observe(n, { attributes: true, attributeFilter: ['style', 'class'] });
   };
-  // The Terrain page's primary action once a run has produced a result.
-  const contoursLink = el('button', { className: 'olv-at-link is-primary', type: 'button' });
-
-  contoursLink.addEventListener('click', () => { void api.open('contours'); });
+  /**
+   * Contours, straight into Contour Studio: the launcher on the Contours page
+   * opens it, as the palette's Go to does. A blocked launcher, or none, leaves
+   * the Contours page, which says why.
+   */
+  async function openContours(): Promise<void> {
+    await api.open('contours');
+    const launch = await launcherAction();
+    const route = router?.route();
+    if (launch && !launch.disabled && route?.mode === 'analyse' && route.page === 'contours') launch.click();
+  }
+  /** The launcher's action; its chunk mounts it just after a run, so wait a moment for it. */
+  function launcherAction(): Promise<HTMLButtonElement | null> {
+    const find = (): HTMLButtonElement | null => shells.contours.body.querySelector<HTMLButtonElement>('.olv-contour-launcher-action');
+    const now = find();
+    if (now || typeof MutationObserver === 'undefined') return Promise.resolve(now);
+    return new Promise((resolve) => {
+      const done = (b: HTMLButtonElement | null): void => { obs.disconnect(); clearTimeout(timer); resolve(b); };
+      const obs = new MutationObserver(() => { const b = find(); if (b) done(b); });
+      obs.observe(shells.contours.body, { childList: true, subtree: true });
+      const timer = setTimeout(() => done(null), 5000);
+    });
+  }
+  contoursLink.addEventListener('click', () => { void openContours(); });
 
   const input = (): AnalysisStatusInput => {
     const s = d.studio.state();
@@ -293,7 +349,7 @@ export function createAnalyseWorkspace(d: AnalyseWorkspaceDeps): AnalyseWorkspac
         panel.setPartsListener(() => api.refresh());
         watch(panel.element);
         shells.terrain.body.append(panel.element);
-        panel.linksHost().replaceChildren(contoursLink);
+        panel.linksHost().replaceChildren(nextStep);
         shells.contours.body.append(panel.part('contours'));
         shells.features.body.append(panel.part('features'));
         shells.range.body.append(panel.part('range'));
@@ -322,41 +378,48 @@ export function createAnalyseWorkspace(d: AnalyseWorkspaceDeps): AnalyseWorkspac
       const rows = analysisRows(inp);
       publishAnalysisRows(rows);
       const items = rows.map((row) => {
-        const open = el('button', { className: 'olv-ah-open', type: 'button' }, [
-          el('span', { className: 'olv-ah-name', text: row.label }),
-          badge(row),
-        ]);
-        open.addEventListener('click', () => openRow(row.id));
+        const lab = CHIP_LABS.has(row.id as AnalysePage);
+        // One action per card. A lab's is its Run (or Open) button, so its
+        // heading is a title, not a second control for the same thing. Before
+        // a run the Terrain card's is the run itself, one click from home, and
+        // its heading opens the page without running. Every other card's
+        // heading is its one way in.
+        let action: HTMLElement | null = null;
+        if (lab) action = labRunButton(row, inp.produced.has('dtm'));
+        else if (row.id === 'terrain' && !inp.produced.has('dtm') && row.status !== 'blocked') {
+          action = el('button', { className: 'olv-ah-run', type: 'button', text: 'Run terrain analysis', tip: 'Build the ground surface and check it for terrain products.' });
+          action.addEventListener('click', () => d.runAction('analyse.run'));
+        }
+        const title = [el('span', { className: 'olv-ah-name', text: row.label }), badge(row)];
+        let head: HTMLElement;
+        if (lab && action) {
+          head = el('div', { className: 'olv-ah-head' }, title);
+        } else {
+          head = el('button', { className: 'olv-ah-open', type: 'button' }, title);
+          head.addEventListener('click', () => openRow(row.id));
+        }
         // A lab with nothing to review shows its purpose alone; the badge says the rest.
-        const quiet = CHIP_LABS.has(row.id as AnalysePage) && (row.status === 'ready' || row.needs === TERRAIN_FIRST);
-        const li = el('li', { className: `olv-ah-row is-${tone(row)}` }, quiet ? [open] : [
-          open,
+        const quiet = lab && (row.status === 'ready' || row.needs === TERRAIN_FIRST);
+        const li = el('li', { className: `olv-ah-row is-${tone(row)}` }, quiet ? [head] : [
+          head,
           el('p', { className: 'olv-ah-reason', text: row.reason, title: row.reason }),
         ]);
         li.dataset.analysis = row.id;
         const purpose = LAB_PURPOSE[row.id as LabId];
         if (purpose) li.append(el('p', { className: 'olv-ah-hint', text: purpose }));
         if (row.remedy) li.append(remedyButton(row.remedy));
-        if (CHIP_LABS.has(row.id as AnalysePage)) {
-          const run = labRunButton(row, inp.produced.has('dtm'));
-          if (run) li.append(run);
-        }
-        // Before a run, the Terrain row carries the run itself: one click from home.
-        if (row.id === 'terrain' && !inp.produced.has('dtm') && row.status !== 'blocked') {
-          const run = el('button', { className: 'olv-ah-remedy', type: 'button', text: 'Run terrain analysis' });
-          run.addEventListener('click', () => d.runAction('analyse.run'));
-          li.append(run);
-        }
+        if (action) li.append(action);
         return li;
       });
-      // With contours produced, Contours is a child row under Terrain, one click from home.
+      // With contours produced, Contours is a child row under Terrain, one click
+      // from home; it opens straight into Contour Studio, as Make contours does.
       const contours = contoursStatus(inp);
       if (inp.produced.has('contours')) {
         const open = el('button', { className: 'olv-ah-open', type: 'button' }, [
           el('span', { className: 'olv-ah-name', text: 'Contours' }),
           badge(contours),
         ]);
-        open.addEventListener('click', () => { void api.open('contours'); });
+        open.addEventListener('click', () => { void openContours(); });
         const child = el('li', { className: `olv-ah-row is-child is-${tone(contours)}` }, [
           open,
           el('p', { className: 'olv-ah-reason', text: contours.reason, title: contours.reason }),
@@ -365,11 +428,16 @@ export function createAnalyseWorkspace(d: AnalyseWorkspaceDeps): AnalyseWorkspac
         items.splice(1, 0, child);
       }
       list.replaceChildren(...items);
-      // Before contours exist the link offers to make them; after, it opens them.
+      // The Terrain page's next step: Make contours, which opens Contour
+      // Studio; a blocked result keeps a quiet link to the page that says why.
       const made = inp.produced.has('contours');
-      contoursLink.replaceChildren(el('span', { className: 'olv-ah-name', text: made ? 'Contours' : 'Create contours' }), badge(contours));
+      const blocked = contours.status === 'blocked';
+      contoursLink.className = blocked ? 'olv-at-link' : 'olv-at-link is-primary';
+      contoursLink.replaceChildren(...(blocked
+        ? [el('span', { className: 'olv-ah-name', text: 'Contours' }), badge(contours)]
+        : [el('span', { className: 'olv-ah-name', text: 'Make contours' })]));
       contoursLink.dataset.made = String(made);
-      renderVerdict(shells.contours, contours);
+      contoursLine.set(contours);
       for (const row of rows) {
         const page = pageOf[row.id];
         if (!page) continue;
@@ -384,7 +452,17 @@ export function createAnalyseWorkspace(d: AnalyseWorkspaceDeps): AnalyseWorkspac
         // Terrain's Why? is the Process Studio panel; the others carry the full reason.
         if (page !== 'terrain') shells[page].whyBody.replaceChildren(el('p', { className: 'olv-why-reason', text: row.reason }));
       }
-      shells.contours.whyBody.replaceChildren(el('p', { className: 'olv-why-reason', text: contours.reason }));
+      // After a run the panel's verdict is the Terrain page's one status line,
+      // with Make contours under it and Why? first among the details below.
+      // Before one, the page leads with its own verdict and Why?.
+      const t = shells.terrain;
+      const links = d.analysePanel()?.linksHost();
+      t.verdict.hidden = !!inp.terrainRun && !!links;
+      if (inp.terrainRun && links) {
+        if (t.why.parentElement !== links) links.append(t.why);
+      } else if (t.why.parentElement !== t.root) {
+        t.root.insertBefore(t.why, t.body);
+      }
       for (const [page, s] of Object.entries(shells) as [AnalysePage, PageShell][]) {
         s.root.classList.toggle('olv-hidden', !available(page));
       }

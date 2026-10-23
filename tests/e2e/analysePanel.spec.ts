@@ -132,15 +132,11 @@ test('after running on a scan: readiness, chips, recommendations, and gated expo
   // is unit-tested). The retired inline `.olv-analyse-dl` row still exists as a
   // set of DETACHED backing click-targets the workspace dispatches to, so it is
   // no longer asserted on here.
-  // Contour Studio is on the Contours page, under Terrain.
+  // Contour Studio is on the Contours page, under Terrain: Make contours opens
+  // it, which reveals the gated deliverable (loses `olv-hidden`), surfacing the
+  // real shipped export surface — the workspace `.olv-cs-export-btn` bar.
   await openAnalysePage(page, 'contours');
-  const launch = page.locator('.olv-analyse-contour-launcher .olv-contour-launcher-action');
-  await expect(launch).toBeVisible({ timeout: 20_000 });
-  await expect(launch).toBeEnabled();
-  await launch.click();
-  // The gated deliverable is revealed (loses `olv-hidden`), surfacing the real
-  // shipped export surface — the workspace `.olv-cs-export-btn` bar.
-  await expect(page.locator('.olv-analyse-contour-deliverable')).not.toHaveClass(/olv-hidden/);
+  await expect(page.locator('.olv-analyse-contour-deliverable')).not.toHaveClass(/olv-hidden/, { timeout: 20_000 });
 
   // Vector export: the GeoJSON button is visible and (exploratory ⇒ not blocked)
   // enabled.
@@ -187,11 +183,8 @@ async function openDemExport(page: Page, drop: (page: Page) => Promise<void>) {
   await page.waitForTimeout(1500);
   await openAnalyse(page);
   await page.locator('.olv-analyse-run').click();
-  // Contour Studio is on the Contours page, under Terrain.
+  // Contour Studio is on the Contours page, under Terrain; Make contours opens it.
   await openAnalysePage(page, 'contours');
-  const launch = page.locator('.olv-analyse-contour-launcher .olv-contour-launcher-action');
-  await expect(launch).toBeVisible({ timeout: 20_000 });
-  await launch.click();
   const dem = page.locator('.olv-cs-export-btn', { hasText: /^DEM \(ZIP\)$/ });
   return async (): Promise<{ zip: Uint8Array; entry: (suffix: string) => Uint8Array | null }> => {
     const [download] = await Promise.all([page.waitForEvent('download', { timeout: 60_000 }), dem.click()]);
