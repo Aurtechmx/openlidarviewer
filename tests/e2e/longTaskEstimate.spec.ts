@@ -28,15 +28,17 @@ test('a streaming open that reports progress shows the time left', async ({ page
     const w = window as unknown as { __waits: string[] };
     w.__waits = [];
     new MutationObserver(() => {
+      // The strip draws its elapsed time from data-wait (CSS), not from text.
       for (const node of document.querySelectorAll('.olv-busy-wait, .olv-ss-processing')) {
-        const t = `${node.className}|${node.textContent ?? ''}`;
+        const drawn = node.querySelector<HTMLElement>('.olv-ss-wait')?.dataset.wait ?? '';
+        const t = `${node.className}|${node.textContent ?? ''}${drawn}`;
         if (/elapsed/.test(t) && !w.__waits.includes(t)) w.__waits.push(t);
       }
-    }).observe(document.body, { subtree: true, childList: true, characterData: true });
+    }).observe(document.body, { subtree: true, childList: true, characterData: true, attributes: true, attributeFilter: ['data-wait'] });
   });
   await openEptFixture(page);
   await expect(page.locator('.olv-busy-wait').filter({ hasText: /left$/ }).first()).toBeVisible({ timeout: 30_000 });
-  await expect(page.locator('.olv-ss-processing .olv-ss-wait')).toHaveText(/elapsed, (about \d+ (s|min) left|a few seconds left)$/);
+  await expect(page.locator('.olv-ss-processing .olv-ss-wait')).toHaveAttribute('data-wait', /elapsed, (about \d+ (s|min) left|a few seconds left)$/);
   await expect.poll(() => next, { timeout: 30_000 }).toBe(EPT_FIXTURE_NODES - 1);
   await expect(page.locator('.olv-busy-wait')).toHaveCount(0, { timeout: 30_000 });
 

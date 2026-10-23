@@ -266,12 +266,12 @@ export class DatasetIntelligenceCard {
     const title = el('div', { className: 'olv-panel-title olv-di-title', text: 'Dataset Intelligence' });
     // A visible route to the Dataset Story (otherwise only in the ⌘K palette /
     // shortcut sheet). Reuses the existing modal via the injected opener — no
-    // second inference path.
+    // second inference path. The visible text is the accessible name; the tip
+    // describes where it goes.
     if (onOpenStory) {
       const storyBtn = el('button', {
         className: 'olv-di-story-link',
         text: 'Dataset overview',
-        ariaLabel: 'Open Dataset Story',
         tip: 'Open the full Dataset Story report for this scan.',
       }) as HTMLButtonElement;
       storyBtn.type = 'button';

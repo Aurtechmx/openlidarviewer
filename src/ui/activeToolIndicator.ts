@@ -62,7 +62,14 @@ export function createActiveToolIndicator(): ActiveToolIndicator {
   const chips = el('span', { className: 'olv-ati-chips' });
   const finish = el('button', { className: 'olv-ati-btn olv-ati-finish', type: 'button', text: 'Finish', tip: 'Finish the open measurement' }) as HTMLButtonElement;
   const cancel = el('button', { className: 'olv-ati-btn olv-ati-cancel', type: 'button', tip: 'Leave the tool and return to navigation (Esc)' }) as HTMLButtonElement;
-  cancel.append(el('span', { text: 'Cancel' }), el('kbd', { className: 'olv-ati-key', text: 'Esc' }));
+  // The key cap is drawn from data-key by CSS, so it is not part of the
+  // button's text: the visible label is "Cancel", which leads the accessible
+  // name, and the shortcut is in that name and in aria-keyshortcuts.
+  const key = el('kbd', { className: 'olv-ati-key' });
+  key.dataset.key = 'Esc';
+  key.setAttribute('aria-hidden', 'true');
+  cancel.append(el('span', { text: 'Cancel' }), key);
+  cancel.setAttribute('aria-keyshortcuts', 'Escape');
   const element = el('div', { className: 'olv-ati olv-hidden' }, [status, chips, finish, cancel]);
   element.setAttribute('role', 'group');
   element.setAttribute('aria-label', 'Active tool');
