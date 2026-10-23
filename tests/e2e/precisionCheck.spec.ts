@@ -16,7 +16,7 @@ test('the Performance panel checks precision at this view and copies a certifica
   await expect(section).toBeVisible({ timeout: 10_000 });
   await expect(section).toContainText('Precision at this view');
   const line = section.locator('.olv-precision-line');
-  await expect(line).toHaveText(/^Positions within .* at this view, inside the 1 mm limit\.$/);
+  await expect(line).toHaveText(/^Rendering error at most .* at this view, inside the 1 mm limit\.$/);
   await expect(line).toHaveAttribute('aria-live', 'polite');
   await expect(section.locator('.olv-chip', { hasText: '1 mm' })).toHaveAttribute('aria-pressed', 'true');
 

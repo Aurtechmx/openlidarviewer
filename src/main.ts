@@ -35,7 +35,7 @@ import { findDuplicateIds, type Action } from './ui/actionRegistry';
 import { runSceneTool, type SceneTool } from './app/toggleTool';
 import type { SessionIoDeps } from './app/sessionIo';
 import type { SessionSnapshotDeps } from './app/sessionSnapshot';
-import { openScan, clearPendingSessionRestore, heldSessionWork, type OpenScanDeps } from './app/openScan';
+import { openScan, clearPendingSessionRestore, heldSessionWork, sourceDigestReady, type OpenScanDeps } from './app/openScan';
 import {
   openStreamingCopc as runOpenStreamingCopc,
   handleRemoteEpt as runHandleRemoteEpt,
@@ -2351,9 +2351,9 @@ const exportPanel = new ExportPanel({
     // report covers what the scan-report card already does on PNG
     // exports, but as a multi-page PDF with the full Inspector context.
     // The progress toast surfaces while the lazy module loads and the PDF
-    // renders; failures route through the same toast UI as every other
-    // export.
-    dropZone.setProgress('Generating report…');
+    // renders, and says when it waits for the source file's checksum;
+    // failures route through the same toast UI as every other export.
+    dropZone.setProgress(sourceDigestReady(scans.activeCloud()) ? 'Generating report…' : 'Generating report: checking the source file first…');
     return generateReportPdf(templateId)
       .then(() => {
         recordUsage('report', templateId);

@@ -584,3 +584,21 @@ describe('package builders with an unsafe basename', () => {
     expect(() => buildZip([{ name: file!.filename, bytes: file!.bytes }])).not.toThrow();
   });
 });
+
+describe('source checksum readiness', () => {
+  it('reports a cloud ready once its file has been hashed, and not before', async () => {
+    const { rememberCloudFile, sourceDigestReady } = await import('../src/io/sourceFiles');
+    const { sourceDigestOf } = await import('../src/export/exportDigests');
+    const cloud = {};
+    rememberCloudFile(cloud, new File([new Uint8Array(8)], 'scan.laz'));
+    expect(sourceDigestReady(cloud)).toBe(false);
+    let finish: (v: string) => void = () => {};
+    const pending = sourceDigestOf({ key: cloud, streamed: false }, () => new Promise<string>((r) => { finish = r; }));
+    expect(sourceDigestReady(cloud)).toBe(false);
+    finish('ab'.repeat(32));
+    await pending;
+    expect(sourceDigestReady(cloud)).toBe(true);
+    // A cloud with no file behind it never waits.
+    expect(sourceDigestReady({})).toBe(true);
+  });
+});

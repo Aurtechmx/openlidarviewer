@@ -5,6 +5,7 @@
  * an older one; the export button keeps its busy text meanwhile.
  */
 import { analysisSourceDigest } from './exportDigests';
+import { sourceDigestReady } from '../io/sourceFiles';
 import { exportDigests, type ExportDigests } from '../science/exportDigestRecord';
 import type { CrsOriginInput } from '../science/crsOrigin';
 
@@ -26,4 +27,10 @@ export async function terrainExportDigests(host: TerrainDigestHost, result: obje
   const id = host.getActiveScanId?.() ?? null;
   const cloud = id ? host.getFeatureCloud?.(id) ?? null : null;
   return exportDigests(await analysisSourceDigest(result, cloud, abort.signal), host.getMapContext?.()?.crs ?? null);
+}
+
+/** True when an export of the active scan would not wait for its source checksum. */
+export function terrainSourceDigestReady(host: TerrainDigestHost): boolean {
+  const id = host.getActiveScanId?.() ?? null;
+  return sourceDigestReady(id ? host.getFeatureCloud?.(id) ?? null : null);
 }

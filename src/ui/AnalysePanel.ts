@@ -29,7 +29,7 @@
 
 import { blockedCiClause } from '../terrain/validate/holdoutCiText';
 import type { LocalToLonLatSourceZ } from '../export/lonLatMapper';
-import { terrainExportDigests, type TerrainExportDigests } from '../export/terrainExportDigests';
+import { terrainExportDigests, terrainSourceDigestReady, type TerrainExportDigests } from '../export/terrainExportDigests';
 import { sourceInterpretationOf, type SourceInterpretationRecord } from '../science/sourceInterpretation';
 import { showBusyScan, clearBusyScan, createBusyScan, createBusyScanController, type BusyScanController } from './busyScan';
 import type { AnalyseContoursResult } from '../terrain/contour/analyseContours';
@@ -3066,7 +3066,8 @@ export class AnalysePanel {
         exportBtn.disabled = true;
         cancelBtn.disabled = true;
         const restoreLabel = exportBtn.textContent ?? 'Export PDF';
-        showBusyScan(exportBtn, 'Exporting…');
+        // The first export of a file waits for its source checksum; say so.
+        showBusyScan(exportBtn, terrainSourceDigestReady(this._cb) ? 'Exporting…' : 'Checking the source file…');
         try {
           const chosenInterval = Number(intervalSel.value);
           const chosenStyle = styleSel.value as ContourShapeStyle;

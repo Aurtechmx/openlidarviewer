@@ -58,7 +58,7 @@ describe('the precision check', () => {
   it('certifies a loaded scan within 1 mm at this view, and says so in one sentence', () => {
     const r = readPrecision(deps(), 0.001);
     expect(r.state).toBe('PASS');
-    expect(r.line).toMatch(/^Positions within .* mm at this view, inside the 1 mm limit\.$/);
+    expect(r.line).toMatch(/^Rendering error at most .* mm at this view, inside the 1 mm limit\.$/);
     expect(r.diagnostic?.boundMetres).toBeLessThan(0.001);
   });
 
@@ -89,7 +89,9 @@ describe('the precision certificate', () => {
     expect(c.frame.crs).toBe(32633);
     expect(c.frame.origin).toEqual(ORIGIN);
     expect(c.dataset.name).toBe('tile.las');
-    expect(c.covers).toMatch(/not survey accuracy/);
+    expect(c.covers).toMatch(/Not survey accuracy/);
+    expect(c.reference).toMatch(/binary64 from the stored coordinates/);
+    expect(c.citation).toMatch(/Per-Draw Precision Bounds/);
     expect(c.scopeDigest).toMatch(/^[0-9a-f]{64}$/);
   });
 

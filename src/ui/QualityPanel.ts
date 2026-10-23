@@ -40,6 +40,7 @@ import {
 } from '../render/quality/pixelRatioCeiling';
 import type { StreamingQuality } from '../render/streaming/streamingBudget';
 import {
+  PRECISION_METHOD_NOTE,
   PRECISION_SCOPE,
   PRECISION_TOLERANCES,
   precisionCertificate,
@@ -197,7 +198,7 @@ export class QualityPanel {
     }
     const checkButton = el('button', {
       className: 'olv-precision-check', text: 'Check precision',
-      tip: 'Bound how far the GPU can place each point from its true position at this view, and compare it with the limit.',
+      tip: 'Bound each point’s rendering error against its reference position, computed in double precision from the stored coordinates, before projection.',
     }) as HTMLButtonElement;
     checkButton.type = 'button';
     checkButton.addEventListener('click', () => this.refreshPrecision());
@@ -214,7 +215,7 @@ export class QualityPanel {
         this._precisionLine,
         el('div', { className: 'olv-precision-actions' }, [checkButton, this._copyButton]),
         this._precisionNote,
-        el('p', { className: 'olv-quality-note', text: PRECISION_SCOPE }),
+        el('p', { className: 'olv-quality-note', text: `${PRECISION_SCOPE} ${PRECISION_METHOD_NOTE}` }),
       ])
       : null;
 

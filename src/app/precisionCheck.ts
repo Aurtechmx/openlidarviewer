@@ -31,7 +31,7 @@ import {
   type DrawTile,
 } from '../science/drawPrecision';
 import { drawPrecisionViewFor, type DrawPrecisionViewer } from './drawPrecisionView';
-import { methodRef, methodTag } from '../science/methodRegistry';
+import { method, methodRef, methodTag } from '../science/methodRegistry';
 import { sha256Hex } from '../terrain/export/sha256';
 import { buildIdentityLabel } from '../build/buildIdentity';
 
@@ -44,7 +44,14 @@ export const PRECISION_TOLERANCES: readonly { readonly label: string; readonly m
 
 /** What the check covers, stated once for the panel and the certificate. */
 export const PRECISION_SCOPE =
-  'Where the GPU places each point before projection, not survey accuracy.';
+  'Rendering error against the stored coordinates, before projection. Not survey accuracy.';
+
+/** The method, named where the check is offered. */
+export const PRECISION_METHOD_NOTE = 'Method: per-draw precision bound (A. Urias).';
+
+/** What every bound is measured against. */
+const PRECISION_REFERENCE =
+  'each point as computed in binary64 from the stored coordinates and the same model-view, before projection';
 
 /** What the panel hands the check: getters, so the panel holds no scene state. */
 export interface PrecisionDeps {
@@ -99,11 +106,11 @@ export function precisionLine(d: DrawPrecisionDiagnostic, tauMetres: number): st
   const limit = limitLabel(tauMetres);
   switch (d.state) {
     case 'PASS':
-      return `Positions within ${formatPrecisionMetres(d.boundMetres ?? Number.NaN)} at this view, inside the ${limit} limit.`;
+      return `Rendering error at most ${formatPrecisionMetres(d.boundMetres ?? Number.NaN)} at this view, inside the ${limit} limit.`;
     case 'NOT_CERTIFIED':
-      return `Positions within ${formatPrecisionMetres(d.boundMetres ?? Number.NaN)} at this view: not certified for the ${limit} limit.`;
+      return `Rendering error bound ${formatPrecisionMetres(d.boundMetres ?? Number.NaN)} at this view: not certified for the ${limit} limit.`;
     case 'UNGRADED':
-      return `Bound ${(d.boundSourceUnits ?? Number.NaN).toPrecision(3)} source units at this view; ${d.reason ?? 'no unit'}, so no limit is checked.`;
+      return `Rendering error bound ${(d.boundSourceUnits ?? Number.NaN).toPrecision(3)} source units at this view; ${d.reason ?? 'no unit'}, so no limit is checked.`;
     case 'NOT_TESTED':
       return `Not checked: ${d.reason ?? 'the draw is outside the checker domain'}.`;
   }
@@ -169,6 +176,7 @@ export function precisionCertificate(deps: PrecisionDeps, tauMetres: number, now
     kind: 'olv.draw-precision-certificate',
     version: 1,
     method: methodTag(methodRef(DRAW_PRECISION_METHOD_ID)),
+    citation: method(DRAW_PRECISION_METHOD_ID)?.citation ?? null,
     generatedAt: now.toISOString(),
     build: buildIdentityLabel(),
     ...scope,
@@ -179,6 +187,7 @@ export function precisionCertificate(deps: PrecisionDeps, tauMetres: number, now
       reason: d.reason,
       statement: precisionLine(d, tauMetres),
     },
+    reference: PRECISION_REFERENCE,
     covers: PRECISION_SCOPE,
     scopeDigest: sha256Hex(new TextEncoder().encode(canonical(scope))),
   };

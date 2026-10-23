@@ -25,6 +25,7 @@ import { scanFactsFromStatic } from './sessionScanFacts';
 import { heldSessionWork, takePendingSessionRestore } from './pendingSessionRestore';
 export { clearPendingSessionRestore, heldSessionWork } from './pendingSessionRestore';
 import { rememberCloudFile } from '../io/sourceFiles';
+export { sourceDigestReady } from '../io/sourceFiles';
 import { detectCopc } from '../io/copc/copcDetect';
 import { formatProgress, loadStageLabel } from '../io/loadProgress';
 import { loadContextFacts, streamingContextFacts } from '../io/loadScope';
@@ -60,7 +61,7 @@ import type { LayerIdentityService } from './layerIdentityService';
 import type { InspectorCardRefreshers } from './inspectorCardRefreshers';
 import type { CrsCoordinator } from './crsCoordinator';
 import type { ViewBookmarksService } from './viewBookmarks';
-import { loadPreviewCloud, loadLoadDiagnostics } from '../lazyChunks';
+import { loadPreviewCloud, loadLoadDiagnostics, loadExportDigests } from '../lazyChunks';
 import type { PreviewCloudHandle, PreviewCloudViewer } from './previewCloud';
 import type { PreviewChunk } from '../io/loadLas';
 import { PREVIEW_MAX_POINTS } from '../render/previewLimits';
@@ -455,6 +456,17 @@ export async function openScan(file: File, deps: OpenScanDeps): Promise<void> {
   }
 }
 
+/**
+ * Hash the scan's source file once the open has settled, so the first report
+ * or contour export does not stall on a whole-file checksum. The hash runs in
+ * a worker; a large file takes tens of seconds, which this hides.
+ */
+function prefetchDigestWhenIdle(cloud: object): void {
+  const start = (): void => { void loadExportDigests().then((m) => m.prefetchSourceDigest(cloud), () => {}); };
+  const idle = (globalThis as { requestIdleCallback?: (cb: () => void, o?: { timeout: number }) => number }).requestIdleCallback;
+  setTimeout(() => (idle ? idle(start, { timeout: 5000 }) : start()), 2000);
+}
+
 /** Hide the status for a cancelled open, saying so politely where supported. */
 function showCancelled(deps: OpenScanDeps): void {
   if (deps.dropZone.setCancelled) deps.dropZone.setCancelled();
@@ -638,7 +650,7 @@ export async function attachStaticCloud(
   deps.inspector.setCoverageAvailable(false);
   // Retain the source file + whether the display cloud was reduced, so the
   // Export panel can offer a full-resolution re-decode.
-  if (source.file) { deps.rememberSourceFile(id, source.file); rememberCloudFile(result.cloud, source.file, sourcePositions(result.cloud)); }
+  if (source.file) { deps.rememberSourceFile(id, source.file); rememberCloudFile(result.cloud, source.file, sourcePositions(result.cloud)); prefetchDigestWhenIdle(result.cloud); }
   deps.rememberReduced(id, result.downsampled);
   // Local-first counter — categorical source format only; never the file name.
   try { recordUsage('scan-open', result.cloud.sourceFormat); }
