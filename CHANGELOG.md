@@ -33,6 +33,7 @@ The format is based on Keep a Changelog and the project follows Semantic Version
 
 ### Changed
 
+- Fewer repeated controls. The sample's Reload and Export all links show in the status bar and Layer Health, no longer a third time in Dataset Intelligence. In the Export tab the quick format section is named "Points on screen (PLY, OBJ, XYZ, CSV)", apart from the converter's formats, and the PDF report section is named "Scan report" rather than repeating its button's label.
 - A LAS or LAZ whose index does not fit in browser storage opens as an ordinary scan from an even sample of every record in the file, read in pieces across the device's cores, rather than as a one-tile stream of a few hundred chunks. Classification editing works on it, the scan report, provenance and PDFs give the file's own point count, format, density and checksum with the sample named as the point basis, and Reload at higher density reads the file again the same way.
 - Flow Pulse opens with Priority-Flood conditioning, so the first view is the connected drainage; Raw terrain is one choice away and the run record names which was used.
 - Terrain Access offers Walker, ATV and 4x4 vehicle example profiles above its fields. A click fills every required field with editable values to confirm, not a rating or a safety limit. The run record and export README name the example and say whether a value was edited.

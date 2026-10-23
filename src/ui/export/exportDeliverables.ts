@@ -170,7 +170,9 @@ export function buildExportDeliverables(cb: ExportDeliverablesCallbacks): Export
     return button;
   });
   const formatRow = el('div', { className: 'olv-export' }, formatButtons);
-  const formatSection = collapsibleSection('Export', formatRow);
+  // Named for what it writes, apart from the converter's formats above: the
+  // points on screen, clip box applied, as a mesh or text file.
+  const formatSection = collapsibleSection('Points on screen (PLY, OBJ, XYZ, CSV)', formatRow);
 
   // Visual Export Studio — one button per PNG mode. Start disabled so a user
   // cannot fire an export with nothing to draw; the class matches the format
@@ -243,7 +245,7 @@ export function buildExportDeliverables(cb: ExportDeliverablesCallbacks): Export
   const element = el('div', {}, [
     formatSection,
     collapsibleSection('Image export', imageRow),
-    collapsibleSection('Report PDF', reportRow),
+    collapsibleSection('Scan report', reportRow),
   ]);
 
   const setImageExportEnabled = (enabled: boolean): void => {

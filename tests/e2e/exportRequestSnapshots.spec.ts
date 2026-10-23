@@ -35,7 +35,7 @@ async function exportPanel(page: Page): Promise<Locator> {
 }
 
 async function quickSection(exp: Locator): Promise<void> {
-  const summary = exp.locator('summary', { hasText: /^Export$/ });
+  const summary = exp.locator('summary', { hasText: /^Points on screen/ });
   const btn = exp.locator('.olv-export-btn', { hasText: /^XYZ$/ });
   if (!(await btn.isVisible())) await summary.click();
   await expect(btn).toBeVisible();
@@ -372,7 +372,7 @@ test.describe('the technical PDF describes one scan', () => {
       // 5 m on scan A; 10 units on scan B.
       await distance([[4, 2, 1], [7, 6, 1]]);
       const exp = await exportPanel(page);
-      await exp.locator('summary', { hasText: 'Report PDF' }).click();
+      await exp.locator('summary', { hasText: 'Scan report' }).click();
       await exp.getByRole('combobox', { name: 'PDF report template' }).selectOption('technical-report');
       let downloaded: { name: string; bytes: Buffer } | null = null;
       page.on('download', async (d) => { downloaded = { name: d.suggestedFilename(), bytes: readFileSync((await d.path())!) }; });

@@ -42,7 +42,7 @@ test('a point-cloud format button disables itself for its own export and release
   // disclosure nested inside the panel body (closed by default), distinct
   // from the panel's own expand/collapse and from the converter's "Export"
   // button above it.
-  const exportDisclosure = panel.locator('summary.olv-section-summary', { hasText: /^Export$/ });
+  const exportDisclosure = panel.locator('summary.olv-section-summary', { hasText: /^Points on screen/ });
   await exportDisclosure.click();
 
   const xyz = panel.locator('.olv-export-btn', { hasText: /^XYZ$/ });
