@@ -760,7 +760,9 @@ function drawMap(
         maxCurvature: 0.5,
         edgeMargin: extent * 0.015,
         labelHeight: (sz + 2) / t.scale,
-        charWidth: 3.7 / t.scale,
+        // A bold digit at 6.5 pt is 3.6 pt wide; the rest covers the white
+        // knock-out drawn round each label, so no knock-out hides another.
+        charWidth: 4.1 / t.scale,
         minFeatureLenForScale: extent * 0.04,
         // Honour the purpose's label mode: 'index only' (the default and the
         // pre-purpose behaviour) or every contour when the purpose labels all.

@@ -14,6 +14,7 @@ import { formatPrecisionMetres } from '../geo/inMemoryPrecision';
 import type { DrawPrecisionDiagnostic } from '../science/drawPrecision';
 
 const BACKEND_LABEL = { webgpu: 'WebGPU, WGSL f32', webgl2: 'WebGL 2, GLSL highp' } as const;
+const CONTRACT_LABEL = { rn: 'round-to-nearest', faithful: 'faithful rounding' } as const;
 
 function headline(d: DrawPrecisionDiagnostic): AnalysisRow {
   const label = 'Draw precision bound';
@@ -32,7 +33,8 @@ function headline(d: DrawPrecisionDiagnostic): AnalysisRow {
     label,
     value:
       `${formatPrecisionMetres(d.boundMetres ?? Number.NaN)} at this view, `
-      + `${outcome} ${formatPrecisionMetres(d.tauMetres ?? Number.NaN)} (${BACKEND_LABEL[d.backend]})`,
+      + `${outcome} ${formatPrecisionMetres(d.tauMetres ?? Number.NaN)} `
+      + `(${BACKEND_LABEL[d.backend]}; ${CONTRACT_LABEL[d.contract]})`,
     status: d.state === 'PASS' ? 'info' : 'warn',
   };
 }

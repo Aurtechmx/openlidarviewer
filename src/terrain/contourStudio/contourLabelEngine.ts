@@ -201,8 +201,15 @@ function uprightAngle(a: number): number {
   return angle;
 }
 
-function labelBox(x: number, y: number, w: number, h: number): Box {
-  return { minX: x - w / 2, minY: y - h / 2, maxX: x + w / 2, maxY: y + h / 2 };
+/**
+ * The axis-aligned footprint of a w × h label drawn at `angle`: what a
+ * rotated label covers on the sheet, so two steep labels on neighbouring
+ * contours are tested on the space they really take.
+ */
+function labelBox(x: number, y: number, w: number, h: number, angle: number): Box {
+  const c = Math.abs(Math.cos(angle)), s = Math.abs(Math.sin(angle));
+  const bw = w * c + h * s, bh = w * s + h * c;
+  return { minX: x - bw / 2, minY: y - bh / 2, maxX: x + bw / 2, maxY: y + bh / 2 };
 }
 function overlaps(a: Box, b: Box): boolean {
   return a.minX < b.maxX && a.maxX > b.minX && a.minY < b.maxY && a.maxY > b.minY;
@@ -249,7 +256,7 @@ export function placeContourLabels(
       const w = Math.max(1, text.length) * params.charWidth;
       for (const pos of positions) {
         if (params.maxLabels != null && placed.length >= params.maxLabels) break;
-        const box = labelBox(pos.x, pos.y, w, params.labelHeight);
+        const box = labelBox(pos.x, pos.y, w, params.labelHeight, pos.angle);
         if (!withinEdge(box, params.page, params.edgeMargin)) { suppressedByPageEdge++; continue; }
         if (placedBoxes.some((b) => overlaps(b, box))) { suppressedByCollision++; continue; }
         placed.push({ value: f.value, text, x: pos.x, y: pos.y, angle: pos.angle, support, isIndex: f.isIndex });
@@ -267,7 +274,7 @@ export function placeContourLabels(
     if (support === 'unsupported') { suppressedBySupport++; continue; }
 
     const text = fmt(f.value);
-    const box = labelBox(run.x, run.y, Math.max(1, text.length) * params.charWidth, params.labelHeight);
+    const box = labelBox(run.x, run.y, Math.max(1, text.length) * params.charWidth, params.labelHeight, run.angle);
 
     if (!withinEdge(box, params.page, params.edgeMargin)) { suppressedByPageEdge++; continue; }
     if (placedBoxes.some((b) => overlaps(b, box))) { suppressedByCollision++; continue; }

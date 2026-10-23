@@ -156,7 +156,7 @@ describe('report rows', () => {
   it('state the outcome, the scope, and the citation', () => {
     const rows = drawPrecisionRows(evaluateDrawPrecision(tileFromLocalFloat32(local), view('webgpu'), METRES));
     expect(rows[0].label).toBe('Draw precision bound');
-    expect(rows[0].value).toMatch(/within 1\.00 mm \(WebGPU, WGSL f32\)/);
+    expect(rows[0].value).toMatch(/within 1\.00 mm \(WebGPU, WGSL f32; round-to-nearest\)/);
     expect(rows[1].advanced).toBe(true);
     expect(rows[1].value).toMatch(/eye-space point position before projection/);
     expect(rows[1].value).toMatch(/divide by w/);
