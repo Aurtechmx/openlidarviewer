@@ -654,6 +654,11 @@ export const METHOD_REGISTRY: Readonly<Record<string, MethodEntry>> = {
     category: 'simulation',
     implementation: ['src/simulation/flowPulse/d8Flow.ts'],
   },
+  // v5 raises a filled cell one Float32 step above the cell it was reached
+  // from, the increment Barnes, Lehman & Mulla take with nextafter, instead of
+  // a fixed 1 mm: the flood is ordered by the raised heights, and the larger
+  // rise overstated spill levels by up to centimetres and let a few small
+  // depressions spill over the wrong rim. The conditioned surface changes.
   // v4 also seeds the rim of NoData that reaches the grid edge, which lies
   // outside the survey, matching D8 v2; NoData the survey encloses stays a wall.
   // v3 counts a cell as filled only when its original height is strictly
@@ -667,16 +672,18 @@ export const METHOD_REGISTRY: Readonly<Record<string, MethodEntry>> = {
   // declared `.gap-outlet` variant below.
   'olv.simulation.terrain-flow.priority-flood': {
     id: 'olv.simulation.terrain-flow.priority-flood',
-    version: 4,
+    version: 5,
     name: 'Priority-Flood depression conditioning',
     summary:
       'Floods inward from the edge of the survey (the grid boundary and NoData that '
       + 'reaches it), raising each cell reached from below to its spill level, and '
       + 'returns a second surface rather than modifying the DTM. NoData the survey '
       + 'encloses is a wall, as D8 reads it; cells NoData encloses are left as '
-      + 'they are and counted. An optional increment above the spill parent breaks '
-      + 'the resulting plateaux; increments lost to Float32 precision are counted '
-      + 'and reported rather than assumed to have applied. Only a cell whose original '
+      + 'they are and counted. Each filled cell sits one Float32 step above the cell '
+      + 'it was reached from, which breaks the resulting plateaux without lifting a '
+      + 'depression above its true spill point; a fixed increment can be asked for '
+      + 'instead, and increments lost to Float32 precision are then counted and '
+      + 'reported rather than assumed to have applied. Only a cell whose original '
       + 'height is strictly below its spill level counts as filled; a flat lifted by '
       + 'the epsilon alone is counted separately, and fill depth excludes the epsilon.',
     citation: 'Barnes, Lehman & Mulla (2014), doi:10.1016/j.cageo.2013.04.024',
@@ -685,7 +692,7 @@ export const METHOD_REGISTRY: Readonly<Record<string, MethodEntry>> = {
   },
   'olv.simulation.terrain-flow.priority-flood.gap-outlet': {
     id: 'olv.simulation.terrain-flow.priority-flood.gap-outlet',
-    version: 2,
+    version: 3,
     name: 'Priority-Flood conditioning with NoData gaps as exits',
     summary:
       'The same flood, also seeded at every cell beside NoData, so a gap drains '

@@ -76,10 +76,14 @@ reach to spill out of the depression holding it. One pass, a binary
 min-heap ordered by elevation then by insertion order, so two cells reached
 at the same elevation resolve the same way on every run, runs in O(n log n).
 
-An optional epsilon parameter raises each filled cell a small amount above
-its spill parent, turning what would otherwise be a plateau (no descent, so
-D8 would report it flat) into a surface with a deterministic path out. The
-epsilon is not fill. Following Barnes, Lehman and Mulla, a cell counts as
+Each filled cell is raised a small amount above the cell it was reached
+from, turning what would otherwise be a plateau (no descent, so D8 would
+report it flat) into a surface with a deterministic path out. By default the
+rise is one Float32 step (`fillEpsilon: 'float32-step'`), the smallest the
+surface can hold, as Barnes, Lehman and Mulla specify with `nextafter`. The
+flood is ordered by the raised heights, so a larger rise can carry a
+depression's interior above a rim it should spill over; a fixed rise in the
+vertical unit can still be asked for. The epsilon is not fill. Following Barnes, Lehman and Mulla, a cell counts as
 filled only when its original height is strictly below the spill level it
 was reached from; a cell level with that spill level (a flat) rises by the
 epsilon alone and is counted separately as `flatCellsResolved`. The
@@ -256,9 +260,9 @@ inventory's evidence is weaker than the routing claim's evidence; see
 
 Six methods are registered under the `terrain-flow` prefix.
 `olv.simulation.terrain-flow.d8`, version 2, performs single-flow-direction
-routing. `olv.simulation.terrain-flow.priority-flood`, version 4, performs
+routing. `olv.simulation.terrain-flow.priority-flood`, version 5, performs
 depression conditioning with NoData treated as a wall.
-`olv.simulation.terrain-flow.priority-flood.gap-outlet`, version 2, performs
+`olv.simulation.terrain-flow.priority-flood.gap-outlet`, version 3, performs
 the same conditioning with NoData gaps read as drainage exits.
 `olv.simulation.terrain-flow.accumulation`, version 1, computes flow
 accumulation over the D8 graph. `olv.simulation.terrain-flow.catchment`,

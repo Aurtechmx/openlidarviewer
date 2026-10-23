@@ -20,7 +20,7 @@ import { describe, expect, it } from 'vitest';
 
 import { CELL_ROUTED, CELL_SINK, d8Flow } from '../src/simulation/flowPulse/d8Flow';
 import { CELL_OUTLET } from '../src/simulation/flowPulse/flowTypes';
-import { filledCells, priorityFlood } from '../src/simulation/flowPulse/priorityFlood';
+import { filledCells, nextFloat32Up, priorityFlood } from '../src/simulation/flowPulse/priorityFlood';
 import type { FlowGrid } from '../src/simulation/flowPulse/flowTypes';
 
 function gridOf(rows: readonly (readonly (number | null)[])[]): FlowGrid {
@@ -348,5 +348,65 @@ describe('the options are checked', () => {
   it('refuses a NoData reading it does not know', () => {
     const noData = 'edge' as unknown as 'wall';
     expect(() => priorityFlood(bowl(), { noData })).toThrow(/wall.*outlet/);
+  });
+});
+
+describe('the Float32-step rise', () => {
+  it('steps to the next Float32 value above, through zero and for negatives', () => {
+    const f = (x: number): number => Math.fround(x);
+    for (const x of [f(1), f(10.0035), f(603.25), f(-2.5), f(1e-30), f(300_000.5)]) {
+      const up = nextFloat32Up(x);
+      expect(up).toBeGreaterThan(x);
+      expect(Math.fround(up)).toBe(up);
+      // Nothing Float32 lies strictly between.
+      expect(Math.fround((x + up) / 2) === x || Math.fround((x + up) / 2) === up).toBe(true);
+    }
+    expect(nextFloat32Up(0)).toBe(1.401298464324817e-45);
+    expect(nextFloat32Up(-0)).toBe(1.401298464324817e-45);
+    expect(nextFloat32Up(-1.401298464324817e-45)).toBe(-0);
+    expect(nextFloat32Up(Infinity)).toBe(Infinity);
+  });
+
+  // Row 1 holds the only routes: an outlet at 10 on the west edge, a flat run
+  // at 10, a lip n at 10.0035, a pit p at 9, and an edge cell r at 10.004 on
+  // the east. Water in p spills over n, the lower rim. A 1 mm rise lifts the
+  // flat run past 10.004, so the flood reaches p from r first.
+  const W = 100;
+  const lip = (): FlowGrid => gridOf([
+    [W, W, W, W, W, W, W, W, W, W],
+    [10, 10, 10, 10, 10, 10, 10, 10.0035, 9, 10.004],
+    [W, W, W, W, W, W, W, W, W, W],
+  ]);
+  const p = 1 * 10 + 8;
+  const n = 1 * 10 + 7;
+
+  it('spills a depression at its true level and over the lower rim', () => {
+    const g = lip();
+    const exact = priorityFlood(g, { epsilon: 0 });
+    const res = priorityFlood(g, { epsilon: 'float32-step' });
+    expect(res.spillLevel[p]).toBe(exact.spillLevel[p]);
+    expect(res.spillLevel[p]).toBe(Math.fround(10.0035));
+    expect(res.epsilonAbsorbed).toBe(0);
+    const routed = d8Flow({ ...g, z: res.z });
+    expect(routed.receiver[p]).toBe(n);
+    expect(routed.sinkCount).toBe(0);
+    expect(routed.flatCount).toBe(0);
+  });
+
+  it('a fixed 1 mm rise overstates the same spill level, the reason it is not the default', () => {
+    const res = priorityFlood(lip(), { epsilon: 0.001 });
+    expect(res.spillLevel[p]).toBe(Math.fround(10.004));
+  });
+
+  it('is never absorbed, even where a millimetre is', () => {
+    const g = gridOf([
+      [300_000, 300_000, 300_000],
+      [300_000, 299_000, 300_000],
+      [300_000, 300_000, 300_000],
+    ]);
+    expect(priorityFlood(g, { epsilon: 0.001 }).epsilonAbsorbed).toBeGreaterThan(0);
+    const res = priorityFlood(g, { epsilon: 'float32-step' });
+    expect(res.epsilonAbsorbed).toBe(0);
+    expect(d8Flow({ ...g, z: res.z }).flatCount).toBe(0);
   });
 });

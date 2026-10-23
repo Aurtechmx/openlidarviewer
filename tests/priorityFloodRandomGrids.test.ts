@@ -317,3 +317,26 @@ describe('the wall leaves no sink or flat on any cell it reached', () => {
     }
   });
 });
+
+describe('the Float32-step rise on random grids', () => {
+  it('reaches the exact spill levels and leaves no sink or flat', () => {
+    const rand = mulberry32(20261023);
+    for (let trial = 0; trial < 40; trial++) {
+      // Fractional heights near the real file's magnitude, where a fixed
+      // rise and the flood order interact.
+      const g = randomGrid(rand, 12 + (trial % 7), 9 + (trial % 5), 0, 0.15);
+      for (let i = 0; i < g.z.length; i++) g.z[i] = Math.fround(600 + g.z[i] * 0.0037);
+      const exact = priorityFlood(g, { epsilon: 0 });
+      const res = priorityFlood(g, { epsilon: 'float32-step' });
+      expect(Array.from(res.spillLevel)).toEqual(Array.from(exact.spillLevel));
+      expect(res.cellsRaised).toBe(exact.cellsRaised);
+      expect(res.epsilonAbsorbed).toBe(0);
+      const routed = d8Flow({ ...g, z: res.z });
+      // Cells NoData encloses keep their heights and may stay pits.
+      if (res.cellsUnreachable === 0) {
+        expect(routed.sinkCount, `trial ${trial}`).toBe(0);
+        expect(routed.flatCount, `trial ${trial}`).toBe(0);
+      }
+    }
+  });
+});

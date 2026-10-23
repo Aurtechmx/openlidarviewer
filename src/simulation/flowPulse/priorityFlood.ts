@@ -19,7 +19,11 @@
  * Filling to exactly the spill level leaves a plateau, and a plateau has no
  * descent, so D8 would report flats across every filled depression. The
  * standard remedy raises each filled cell a hair above its spill parent, which
- * gives a deterministic path out.
+ * gives a deterministic path out. The flood is ordered by the raised heights,
+ * so a rise larger than it needs to be can carry a depression's interior above
+ * a rim it should spill over and overstate its spill level. Barnes, Lehman and
+ * Mulla take the smallest representable step for that reason, and
+ * `'float32-step'` is that step; a fixed rise is still accepted.
  *
  * That remedy has a failure mode worth naming. Elevations are held as Float32,
  * and at a magnitude of a few hundred thousand metres the gap between
@@ -116,11 +120,16 @@ export type NoDataReading = 'wall' | 'outlet';
 /** Options for a conditioning pass. */
 export interface PriorityFloodOptions {
   /**
-   * How far above its spill parent a filled cell is placed. Zero fills to the
-   * exact spill level and leaves plateaux, which is a legitimate choice when
-   * the caller wants fill depths rather than a drainable surface.
+   * How far above its spill parent a filled cell is placed. `'float32-step'`
+   * places it on the next Float32 value above, the smallest rise the surface
+   * can hold (Barnes, Lehman & Mulla 2014 take it with nextafter): it gives a
+   * flat a way out without lifting a depression's interior above ground it
+   * should spill over, and it is never absorbed. A number is a fixed rise in
+   * the vertical unit. Zero fills to the exact spill level and leaves
+   * plateaux, which is a legitimate choice when the caller wants fill depths
+   * rather than a drainable surface.
    */
-  readonly epsilon?: number;
+  readonly epsilon?: number | 'float32-step';
   /** How a NoData cell is read. Defaults to `wall`. */
   readonly noData?: NoDataReading;
 }
@@ -209,9 +218,12 @@ export function priorityFlood(
 ): PriorityFloodResult {
   assertFlowGrid(grid);
   const epsilon = options.epsilon ?? 0;
-  if (!(Number.isFinite(epsilon) && epsilon >= 0)) {
-    throw new RangeError(`priorityFlood: epsilon must be a finite non-negative rise; got ${epsilon}`);
+  const step = epsilon === 'float32-step';
+  if (!step && !(Number.isFinite(epsilon) && epsilon >= 0)) {
+    throw new RangeError(`priorityFlood: epsilon must be 'float32-step' or a finite non-negative rise; got ${String(epsilon)}`);
   }
+  const rise = (zc: number): number => (step ? nextFloat32Up(zc) : zc + (epsilon as number));
+  const rises = step || (epsilon as number) > 0;
   const noData = options.noData ?? 'wall';
   if (noData !== 'wall' && noData !== 'outlet') {
     throw new RangeError(`priorityFlood: noData must be 'wall' or 'outlet'; got ${String(noData)}`);
@@ -287,11 +299,11 @@ export function priorityFlood(
       // reached at so D8 has a descent (flats included).
       if (original <= zc) {
         const before = z[nb];
-        z[nb] = zc + epsilon;
+        z[nb] = rise(zc);
         if (depressionMask[nb] !== 1 && z[nb] > before) flatCellsResolved++;
         // The epsilon vanished into Float32: the cell is level with its
         // parent and the flat it was meant to break survives.
-        if (epsilon > 0 && z[nb] <= zc) epsilonAbsorbed++;
+        if (rises && z[nb] <= zc) epsilonAbsorbed++;
       }
       heap.push(nb, z[nb]);
     }
@@ -306,6 +318,25 @@ export function priorityFlood(
     z, cellsRaised, maxFillDepth, fillDepthSum, epsilonAbsorbed, cellsUnreachable,
     flatCellsResolved, depressionMask, spillLevel: spill,
   };
+}
+
+const F32 = new Float32Array(1);
+const F32_BITS = new Int32Array(F32.buffer);
+
+/**
+ * The next Float32 value above `x`, itself a Float32 value. Moving the bit
+ * pattern by one is the step: up for a positive value, down (toward zero) for
+ * a negative one, and from either zero to the smallest positive subnormal.
+ */
+export function nextFloat32Up(x: number): number {
+  if (Number.isNaN(x) || x === Infinity) return x;
+  F32[0] = x;
+  if (F32[0] === 0) {
+    F32_BITS[0] = 1;
+    return F32[0];
+  }
+  F32_BITS[0] += F32[0] > 0 ? 1 : -1;
+  return F32[0];
 }
 
 /**

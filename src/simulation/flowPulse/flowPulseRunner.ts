@@ -136,8 +136,8 @@ export interface FlowPulseParams {
   readonly routing: FlowRoutingMethod;
   /** How a cell whose height was interpolated is treated. */
   readonly interpolated: InterpolatedPolicy;
-  /** Rise above the spill parent when conditioning, in the vertical unit. */
-  readonly fillEpsilon: number;
+  /** Rise above the spill parent when conditioning: one Float32 step, or a fixed rise in the vertical unit. */
+  readonly fillEpsilon: number | 'float32-step';
   /**
    * How conditioning reads a NoData cell. Routing always treats one as a
    * wall; `outlet` makes conditioning treat a gap as a drainage exit.
@@ -161,7 +161,7 @@ export const FLOW_PULSE_DEFAULTS: FlowPulseParams = Object.freeze({
   conditioning: 'priority-flood',
   routing: 'd8',
   interpolated: 'route',
-  fillEpsilon: 0.001,
+  fillEpsilon: 'float32-step',
   fillNoData: 'wall',
   maxCells: 4_000_000,
   withheldExcluded: null,

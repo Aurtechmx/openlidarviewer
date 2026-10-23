@@ -207,7 +207,7 @@ function manifestOps(result: FlowPulseResult): ProcessingOpInput[] {
       ops.push({
         method: methodTag(methodRef(id)),
         params: {
-          fillEpsilon: (p.fillEpsilon as number | null) ?? null,
+          fillEpsilon: (p.fillEpsilon as number | 'float32-step' | null) ?? null,
           fillNoData: (p.fillNoData as string | null) ?? null,
         },
       });
