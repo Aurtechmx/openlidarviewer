@@ -8,6 +8,7 @@ The format is based on Keep a Changelog and the project follows Semantic Version
 
 ### Added
 
+- Precision at this view in the Performance panel. Check precision states the per-draw bound for the open scan at the current camera against a 1 mm, 1 cm or 10 cm limit, and Copy certificate copies a JSON record of the bound, the limit, the evidence state, and the data, frame, view, shader and arithmetic contract it covers, with a digest of that scope. It bounds where the GPU places each point before projection, not survey accuracy.
 - An interactive 3D view cube in the top-right of the stage. It turns with the camera's pitch, yaw and roll in the scan's up-axis frame. Its six faces, twelve edges and eight corners each turn the camera to that direction around the current pivot at the current distance, so a click never resets the zoom; a face also updates Plan View exactly as the toolbar's view buttons do, and an edge or corner turns Plan View off. A Home control below it fits the scan (Frame all). Side faces read N/E/S/W only for a Z-up scan with a known CRS; a local or unknown-CRS scan reads Front/Back/Left/Right. The cube stays left of the expanded right rail and below the header and a floating colour key, and moves when the rail opens, closes or resizes. It loads lazily with its own stylesheet.
 - Keyboard access to all 26 view cube views at any orientation. Tab enters the cube as one stop, the arrow keys move through the faces, edges and corners in a fixed order, Home and End jump, and Enter or Space turns the camera. A view hidden for pointers is outlined at its place with its name beside the cube while it has focus, and the new view is announced.
 - A one-time hint after the first scan opens on a desktop: "Drag to orbit · Scroll to zoom · Double-click to focus". It is shown once and can be dismissed.
@@ -67,6 +68,7 @@ The format is based on Keep a Changelog and the project follows Semantic Version
 
 ### Fixed
 
+- The draw precision bound no longer reads "Not tested" when the camera's inverse matrix carries a bottom row within rounding of (0, 0, 0, 1); that row sets only w, which the bounded position does not use.
 - Flow routing reads no-data that reaches the edge of the grid as ground outside the survey, so a strip drains out of its sides instead of ponding against them (`olv.simulation.terrain-flow.d8@2`, `olv.simulation.terrain-flow.priority-flood@4`).
 - A display sample of a scan that fills only part of its bounding box, such as a survey strip, lands near its point budget instead of a fraction of it.
 - A reload no longer offers to compare the file with itself, and a layer a reload just made is not offered the same reload again. Export all points is not offered for a file too large to read whole.

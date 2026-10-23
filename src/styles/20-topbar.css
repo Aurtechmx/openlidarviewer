@@ -159,3 +159,27 @@
 /* The honesty line. Small, but it is the reason the control can exist at all:
    nothing here reaches a computed quantity. */
 .olv-quality-note { margin: 0; color: var(--text-faint); line-height: 1.45; }
+/* Precision at this view: the per-draw bound against a chosen limit. */
+.olv-precision {
+  display: flex; flex-direction: column; gap: var(--space-sm);
+  padding-top: var(--space-md);
+  border-top: 0.5px solid var(--hairline);
+}
+.olv-quality-subtitle { font-weight: 600; color: var(--text); }
+.olv-precision-line { color: var(--text); line-height: 1.45; }
+.olv-precision-line[data-state="NOT_CERTIFIED"] { color: var(--warn); }
+.olv-precision-actions { display: flex; flex-wrap: wrap; gap: var(--space-sm); }
+.olv-precision-check, .olv-precision-copy {
+  color: var(--text-dim); background: transparent;
+  border: 0.5px solid var(--hairline); border-radius: var(--radius-sm);
+  padding: var(--space-xs) var(--space-md);
+  font-size: var(--text-xs); cursor: pointer;
+}
+.olv-precision-check { color: var(--text); border-color: var(--hairline-strong); }
+.olv-precision-check:hover, .olv-precision-copy:hover:not(:disabled) { color: var(--text); border-color: var(--accent); }
+.olv-precision-copy:disabled { opacity: 0.4; cursor: default; }
+.olv-precision-note { color: var(--text-faint); min-height: 0; }
+.olv-precision-note:empty { display: none; }
+@media (pointer: coarse) {
+  .olv-precision-check, .olv-precision-copy, .olv-precision .olv-chip { min-height: 44px; min-width: 44px; }
+}

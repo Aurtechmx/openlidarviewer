@@ -22,6 +22,27 @@ export interface DrawPrecisionViewer {
   getCloud(id: string): PointCloud | undefined;
 }
 
+/** How far an affine model-view's bottom row may sit from (0, 0, 0, 1) and still be rounding. */
+const AFFINE_ROW_SLACK = 1e-12;
+
+/**
+ * The model-view with its bottom row read as exactly (0, 0, 0, 1) when it is
+ * within rounding of it. three.js inverts the camera matrix in floating point,
+ * so an affine camera's inverse can carry a bottom row such as
+ * (1e-17, 0, 0, 0.9999999999999999). That row sets only w, which the
+ * eye-space position does not use, and the checker refuses any matrix whose
+ * row is not exact. A row further off is left as it is, for the checker to refuse.
+ */
+export function withExactAffineRow(m: Float64Array): Float64Array {
+  // Column-major: the bottom row is elements 3, 7, 11 and 15.
+  const near = Math.abs(m[3]) <= AFFINE_ROW_SLACK && Math.abs(m[7]) <= AFFINE_ROW_SLACK
+    && Math.abs(m[11]) <= AFFINE_ROW_SLACK && Math.abs(m[15] - 1) <= AFFINE_ROW_SLACK;
+  if (!near) return m;
+  const out = Float64Array.from(m);
+  out[3] = 0; out[7] = 0; out[11] = 0; out[15] = 1;
+  return out;
+}
+
 /**
  * The draw of cloud `id` at the current camera, or undefined when it cannot be
  * read (no id, or `cloud` is not the cloud the viewer draws under that id).
@@ -34,5 +55,5 @@ export function drawPrecisionViewFor(
   if (!id || viewer.getCloud(id) !== cloud) return undefined;
   const modelView64 = viewer.cloudModelView64(id);
   if (!modelView64) return undefined;
-  return { modelView64, backend: viewer.activeBackend(), path: 'instanced-quad-highp' };
+  return { modelView64: withExactAffineRow(modelView64), backend: viewer.activeBackend(), path: 'instanced-quad-highp' };
 }

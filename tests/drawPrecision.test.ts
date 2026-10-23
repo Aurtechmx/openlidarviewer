@@ -20,7 +20,7 @@ import {
 } from '../src/science/drawPrecision';
 import { drawPrecisionRows } from '../src/analysis/drawPrecisionRows';
 import { scanReport } from '../src/analysis/modules/scanReport';
-import { drawPrecisionViewFor } from '../src/app/drawPrecisionView';
+import { drawPrecisionViewFor, withExactAffineRow } from '../src/app/drawPrecisionView';
 import { PointCloud } from '../src/model/PointCloud';
 import { composeModelView64, EXPRESSION_GLSL, EXPRESSION_WGSL } from '../src/vendor/spe-check/olv_preflight.mjs';
 import type { CrsInfo } from '../src/io/crs';
@@ -201,5 +201,20 @@ describe('drawPrecisionViewFor', () => {
   it('returns undefined for no id or a cloud the viewer does not draw under that id', () => {
     expect(drawPrecisionViewFor(viewer, null, cloud)).toBeUndefined();
     expect(drawPrecisionViewFor(viewer, 'cloud_1', cloud)).toBeUndefined();
+  });
+});
+
+describe('withExactAffineRow', () => {
+  it('reads a bottom row within rounding of (0, 0, 0, 1) as exact, which only sets w', () => {
+    const m = Float64Array.from(IDENTITY);
+    m[3] = 1e-17; m[15] = 1 - 1e-16;
+    const out = withExactAffineRow(m);
+    expect([out[3], out[7], out[11], out[15]]).toEqual([0, 0, 0, 1]);
+    expect(evaluateDrawPrecision(tileFromLocalFloat32(farCloud(10).local), { modelView64: out, backend: 'webgpu', path: 'instanced-quad-highp' }, METRES).state).not.toBe('NOT_TESTED');
+  });
+  it('leaves a projective row for the checker to refuse', () => {
+    const m = Float64Array.from(IDENTITY);
+    m[11] = -1;
+    expect(withExactAffineRow(m)).toBe(m);
   });
 });

@@ -20,6 +20,7 @@
 import { el } from './dom';
 import { loadQualityPanel } from '../lazyChunks';
 import type { QualityPanel } from './QualityPanel';
+import type { PrecisionDeps } from '../app/precisionCheck';
 import {
   QUALITY_SCOPE_NOTE,
   resolveQualitySettings,
@@ -67,6 +68,8 @@ export interface QualityControlOptions {
    * until that wiring lands.
    */
   toast?: LazyLoadToast;
+  /** The scene the panel's precision check reads. */
+  precision?: PrecisionDeps;
 }
 
 export class QualityControl {
@@ -168,6 +171,7 @@ export class QualityControl {
       };
     }
     panel.render(this._preference, this.settings());
+    panel.refreshPrecision();
     panel.element.hidden = false;
     this._setOpenState(true);
   }
@@ -215,6 +219,7 @@ export class QualityControl {
       const panel = new QualityPanelCtor({
         onPreference: (patch) => this._update(patch),
         onPin: (field) => this._update({ overrides: { ...this._preference.overrides, ...field } }),
+        ...(this._options.precision ? { precision: this._options.precision } : {}),
       });
       panel.element.hidden = true;
       this.element.append(panel.element);

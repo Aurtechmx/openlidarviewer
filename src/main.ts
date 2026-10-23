@@ -3335,7 +3335,7 @@ function mountPerformanceControl(): void {
     getViewer: () => viewer, getStreamingQuality: () => streamingUi.quality(),
     device: () => ({ tier: deviceCapsValue.tier, isMobile: isPhone(), backend: viewer.activeBackend() }),
     onStreamingQuality: (q) => streamingUi.noteQualityFromControl(q),
-    onUserChange: () => { visuals.syncRendering(); persistPrefs(); },
+    onUserChange: () => { visuals.syncRendering(); persistPrefs(); }, precision: { viewer: () => viewer, activeId: () => scans.activeId, activeCloud: () => scans.activeCloud(), context: () => crsService.context() },
   });
 }
 
