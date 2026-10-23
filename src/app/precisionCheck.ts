@@ -32,6 +32,7 @@ import {
   type DrawPrecisionUnit,
 } from '../science/drawPrecision';
 import { drawPrecisionViewFor, type DrawPrecisionViewer } from './drawPrecisionView';
+import { DRAW_PRECISION_LOD_METHOD_ID, selectCertifiedLevel, type LodSelection } from '../science/drawPrecisionLod';
 import { method, methodRef, methodTag } from '../science/methodRegistry';
 import { sha256Hex } from '../terrain/export/sha256';
 import { buildIdentityLabel } from '../build/buildIdentity';
@@ -73,6 +74,10 @@ export interface PrecisionReading {
   readonly diagnostic: DrawPrecisionDiagnostic | null;
   /** The points the bound covers: those drawn for the open scan. */
   readonly pointsDrawn: number;
+  /** The coarsest certified level, when the check was asked for it. */
+  readonly lod: LodSelection | null;
+  /** The limit and model-view the reading holds for; another view gives another key. */
+  readonly viewKey: string;
 }
 
 /**
@@ -109,10 +114,21 @@ export interface PrecisionRequest {
   readonly diagnostic: DrawPrecisionDiagnostic;
   /** The faithful rounding the WGSL and GLSL ES specs guarantee: the worst case. */
   readonly faithful: DrawPrecisionDiagnostic;
+  /** The coarsest level that fits the limit under faithful rounding, when asked for. */
+  readonly lod: LodSelection | null;
 }
 
-/** Evaluate the active scan at the current view and capture the request, or say why not. */
-export function capturePrecisionRequest(deps: PrecisionDeps, tauMetres: number, now: Date = new Date()): PrecisionRequest | string {
+/**
+ * Evaluate the active scan at the current view and capture the request, or say
+ * why not. `lod` also selects the coarsest certified level and counts its
+ * points: a press of Check or a certificate asks for it, the live refresh does not.
+ */
+export function capturePrecisionRequest(
+  deps: PrecisionDeps,
+  tauMetres: number,
+  now: Date = new Date(),
+  options: { readonly lod?: boolean } = {},
+): PrecisionRequest | string {
   const viewer = deps.viewer();
   const cloud = deps.activeCloud();
   if (!viewer || !cloud) return 'Open a scan to check its precision.';
@@ -121,7 +137,8 @@ export function capturePrecisionRequest(deps: PrecisionDeps, tauMetres: number, 
   const context = deps.context();
   const upFrame = layerUpFrameFromContext(cloud.sourceFormat, context);
   const zUp = upFrame.ok && upFrame.axis === 'z';
-  const tile = tileFromLocalFloat32(sourcePositions(cloud));
+  const positions = sourcePositions(cloud);
+  const tile = tileFromLocalFloat32(positions);
   const unit = drawPrecisionUnitOf(context, { horizontalKnown: groundMetresPermitted(context), zUp });
   return {
     cloud,
@@ -146,6 +163,7 @@ export function capturePrecisionRequest(deps: PrecisionDeps, tauMetres: number, 
     modelView64: Array.from(view.modelView64),
     diagnostic: evaluateDrawPrecision(tile, view, unit, tauMetres, 'rn'),
     faithful: evaluateDrawPrecision(tile, view, unit, tauMetres, 'faithful'),
+    lod: options.lod ? selectCertifiedLevel(positions, tile, view, unit, tauMetres, { count: true }) : null,
   };
 }
 
@@ -178,11 +196,38 @@ export function precisionLine(d: DrawPrecisionDiagnostic, tauMetres: number, fai
   }
 }
 
-/** Check the active scan at the current view against `tauMetres`. */
-export function readPrecision(deps: PrecisionDeps, tauMetres: number): PrecisionReading {
-  const e = capturePrecisionRequest(deps, tauMetres);
-  if (typeof e === 'string') return { state: 'NO_SCAN', line: e, diagnostic: null, pointsDrawn: 0 };
-  return { state: e.diagnostic.state, line: precisionLine(e.diagnostic, tauMetres, e.faithful), diagnostic: e.diagnostic, pointsDrawn: e.dataset.pointsDrawn };
+/** A cell size as read: millimetres below a metre, metres above. */
+function cellLabel(metres: number): string {
+  return metres < 1 ? `${Number((metres * 1000).toPrecision(4))} mm cells` : `${Number(metres.toPrecision(4))} m cells`;
+}
+
+/** The panel's sentence for a level selection, or null when no limit was checked. */
+export function lodLine(s: LodSelection | null): string | null {
+  if (!s || s.state === 'UNGRADED' || s.state === 'NOT_TESTED') return null;
+  const limit = limitLabel(s.tauMetres);
+  if (s.state === 'NONE') {
+    return `No level of detail is certified for the ${limit} limit under faithful rounding (bound ${formatPrecisionMetres(s.bMetres ?? Number.NaN)}).`;
+  }
+  const sum = `${formatPrecisionMetres(s.hMetres ?? 0)} + ${formatPrecisionMetres(s.bMetres ?? Number.NaN)} ≤ ${limit}`;
+  if (s.level === 0) {
+    return `Coarsest certified level: full resolution (bound ${formatPrecisionMetres(s.bMetres ?? Number.NaN)} ≤ ${limit}, faithful rounding). No coarser level fits.`;
+  }
+  const share = s.pointsKept !== null && s.pointsFull > 0 ? `, ${Math.round((s.pointsKept / s.pointsFull) * 100)}% of points` : '';
+  return `Coarsest certified level: ${cellLabel(s.cellSizeMetres ?? Number.NaN)}${share} (${sum}, faithful rounding). Not drawn in this version.`;
+}
+
+/** Check the active scan at the current view against `tauMetres`; `lod` also selects its certified level. */
+export function readPrecision(deps: PrecisionDeps, tauMetres: number, options: { readonly lod?: boolean } = {}): PrecisionReading {
+  const e = capturePrecisionRequest(deps, tauMetres, new Date(), options);
+  if (typeof e === 'string') return { state: 'NO_SCAN', line: e, diagnostic: null, pointsDrawn: 0, lod: null, viewKey: '' };
+  return {
+    state: e.diagnostic.state,
+    line: precisionLine(e.diagnostic, tauMetres, e.faithful),
+    diagnostic: e.diagnostic,
+    pointsDrawn: e.dataset.pointsDrawn,
+    lod: e.lod,
+    viewKey: `${tauMetres}|${e.dataset.name}|${e.modelView64.join(',')}`,
+  };
 }
 
 /** The evidence state as the paper's Table 3 names it. */
@@ -282,6 +327,7 @@ export function certificateOf(request: PrecisionRequest, sourceHash: SourceHash 
       boundState: boundState(d),
       statement: precisionLine(d, tauMetres, faithful),
       bounds: [boundRecord(d), boundRecord(faithful)],
+      ...(request.lod ? { levelOfDetail: lodRecord(request.lod) } : {}),
     },
     holdsFor: HOLDS_FOR,
     reference: PRECISION_REFERENCE,
@@ -289,6 +335,29 @@ export function certificateOf(request: PrecisionRequest, sourceHash: SourceHash 
     scopeDigest: sha256Hex(new TextEncoder().encode(canonical(scope))),
   };
   return JSON.stringify(certificate, null, 2);
+}
+
+/** The level selection as the certificate records it, with the claim it supports. */
+function lodRecord(s: LodSelection): object {
+  return {
+    method: methodTag(methodRef(DRAW_PRECISION_LOD_METHOD_ID)),
+    rule: 'coarsest level k with sigma * H_k + B_k <= tau, B_k under faithful rounding',
+    scope: 'single node: the whole draw; no camera regions, no multi-node selection; the level is selected and certified, not drawn',
+    state: s.state,
+    level: s.level,
+    cellSizeMetres: s.cellSizeMetres,
+    hMetres: s.hMetres,
+    bMetres: s.bMetres,
+    tauMetres: s.tauMetres,
+    stretch: s.stretch,
+    pointsFull: s.pointsFull,
+    pointsKept: s.pointsKept,
+    positionBytesFull: s.bytesFull,
+    positionBytesKept: s.bytesKept,
+    selectionMs: Number(s.selectionMs.toFixed(3)),
+    statement: lodLine(s),
+    reason: s.reason,
+  };
 }
 
 /**
@@ -301,7 +370,7 @@ export function precisionCertificate(
   now: Date = new Date(),
   sourceHash: SourceHash | null = null,
 ): string | null {
-  const request = capturePrecisionRequest(deps, tauMetres, now);
+  const request = capturePrecisionRequest(deps, tauMetres, now, { lod: true });
   return typeof request === 'string' ? null : certificateOf(request, sourceHash);
 }
 
@@ -317,7 +386,7 @@ export async function precisionCertificateWithHash(
   tauMetres: number,
   onWaiting?: () => void,
 ): Promise<string | null> {
-  const request = capturePrecisionRequest(deps, tauMetres);
+  const request = capturePrecisionRequest(deps, tauMetres, new Date(), { lod: true });
   if (typeof request === 'string') return null;
   if (!sourceDigestReady(request.cloud)) onWaiting?.();
   const { sourceDigestOf } = await loadExportDigests();

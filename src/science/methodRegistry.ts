@@ -483,6 +483,21 @@ export const METHOD_REGISTRY: Readonly<Record<string, MethodEntry>> = {
     // The checker itself is src/vendor/spe-check/ (spe_check.mjs, olv_preflight.mjs), reached through this module.
     implementation: ['src/science/drawPrecision.ts'],
   },
+  'olv.render.draw-precision-lod': {
+    id: 'olv.render.draw-precision-lod',
+    version: 1,
+    name: 'Certified level-of-detail selection for one draw',
+    summary:
+      'The single-node case of the per-draw controller: the whole draw is one node, and level k '
+      + 'keeps one point per occupied cell of 1 mm * 2^k at the cell centre. Selects the coarsest level '
+      + 'with sigma * H_k + B_k <= tau, where H_k bounds the two-way distance between the stored points '
+      + 'and the level, sigma the model-view stretch and B_k the faithful-rounding eye-space bound. '
+      + 'Selected and certified at a check; the level is not drawn. No camera regions, no multi-node selection.',
+    citation:
+      'A. Urias, "Per-Draw Precision Bounds for Large-Coordinate Rendering in WebGL2 and WebGPU" (controller, single-node case).',
+    category: 'precision',
+    implementation: ['src/science/drawPrecisionLod.ts'],
+  },
   'olv.topology.linkage-record': {
     id: 'olv.topology.linkage-record',
     version: 1,

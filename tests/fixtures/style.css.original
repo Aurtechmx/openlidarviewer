@@ -1137,6 +1137,8 @@ button:disabled { cursor: not-allowed; }
 .olv-precision-copy:disabled { opacity: 0.4; cursor: default; }
 .olv-precision-note { color: var(--text-faint); min-height: 0; }
 .olv-precision-note:empty { display: none; }
+.olv-precision-lod { color: var(--text-dim); font-size: var(--text-xs); }
+.olv-precision-lod:empty { display: none; }
 @media (pointer: coarse) {
   .olv-precision-check, .olv-precision-copy, .olv-precision .olv-chip { min-height: 44px; min-width: 44px; }
 }

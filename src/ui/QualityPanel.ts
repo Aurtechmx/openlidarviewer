@@ -45,6 +45,7 @@ import {
   PRECISION_TOLERANCES,
   precisionCertificateWithHash,
   readPrecision,
+  lodLine,
   type PrecisionDeps,
   type PrecisionReading,
 } from '../app/precisionCheck';
@@ -122,6 +123,9 @@ export class QualityPanel {
   private _tolerance: number = PRECISION_TOLERANCES[0].metres;
   private readonly _toleranceChips = new Map<number, HTMLButtonElement>();
   private readonly _precisionLine: HTMLElement;
+  /** The level selected by the last Check; it covers that camera only. */
+  private readonly _lodLine: HTMLElement;
+  private _lodViewKey = '';
   private readonly _precisionNote: HTMLElement;
   private readonly _copyButton: HTMLButtonElement;
   private _noteTimer: ReturnType<typeof setTimeout> | null = null;
@@ -188,6 +192,7 @@ export class QualityPanel {
     this._precisionLine = el('div', { className: 'olv-precision-line' });
     this._precisionLine.setAttribute('role', 'status');
     this._precisionLine.setAttribute('aria-live', 'polite');
+    this._lodLine = el('div', { className: 'olv-precision-lod' });
     this._precisionNote = el('div', { className: 'olv-precision-note' });
     this._precisionNote.setAttribute('aria-live', 'polite');
     for (const t of PRECISION_TOLERANCES) {
@@ -207,7 +212,7 @@ export class QualityPanel {
     // The line follows the camera on its own; a click is the reader asking for
     // this view's check, so it says what it covered and when.
     checkButton.addEventListener('click', () => {
-      const reading = this.refreshPrecision();
+      const reading = this.refreshPrecision(true);
       if (!reading || reading.diagnostic === null) return;
       this._precisionLine.classList.remove('is-checked');
       void this._precisionLine.offsetWidth; // restart the highlight
@@ -226,6 +231,7 @@ export class QualityPanel {
         el('div', { className: 'olv-quality-subtitle', text: 'Precision at this view' }),
         row('Limit', el('div', { className: 'olv-quality-chips' }, [...this._toleranceChips.values()])),
         this._precisionLine,
+        this._lodLine,
         el('div', { className: 'olv-precision-actions' }, [checkButton, this._copyButton]),
         this._precisionNote,
         el('p', { className: 'olv-quality-note', text: `${PRECISION_SCOPE} ${PRECISION_METHOD_NOTE}` }),
@@ -292,7 +298,8 @@ export class QualityPanel {
   }
 
   /** Check the active scan at the current view against the chosen limit. */
-  refreshPrecision(): PrecisionReading | null {
+  /** Re-read the check; `lod` (a press of Check) also selects the certified level for this view. */
+  refreshPrecision(lod = false): PrecisionReading | null {
     const deps = this._callbacks.precision;
     if (!deps) return null;
     for (const [metres, chip] of this._toleranceChips) {
@@ -300,9 +307,17 @@ export class QualityPanel {
       chip.classList.toggle('olv-chip-active', active);
       chip.setAttribute('aria-pressed', active ? 'true' : 'false');
     }
-    const reading = readPrecision(deps, this._tolerance);
+    const reading = readPrecision(deps, this._tolerance, { lod });
     // Rewritten only on a change, so a live refresh does not re-announce the same line.
     if (this._precisionLine.textContent !== reading.line) this._precisionLine.textContent = reading.line;
+    // The level holds for the camera and limit it was selected at, and goes when either changes.
+    if (lod) {
+      this._lodLine.textContent = lodLine(reading.lod) ?? '';
+      this._lodViewKey = reading.viewKey;
+    } else if (this._lodViewKey !== reading.viewKey && this._lodLine.textContent !== '') {
+      this._lodLine.textContent = '';
+      this._lodViewKey = '';
+    }
     this._precisionLine.dataset.state = reading.state;
     this._copyButton.disabled = reading.diagnostic === null || this._certificatePending;
     return reading;

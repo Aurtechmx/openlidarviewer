@@ -25,7 +25,7 @@ vi.mock('../src/lazyChunks', async (importOriginal) => ({
   }),
 }));
 
-import { PRECISION_TOLERANCES, precisionCertificate, precisionCertificateWithHash, readPrecision, type PrecisionDeps } from '../src/app/precisionCheck';
+import { PRECISION_TOLERANCES, lodLine, precisionCertificate, precisionCertificateWithHash, readPrecision, type PrecisionDeps } from '../src/app/precisionCheck';
 import { PointCloud } from '../src/model/PointCloud';
 import { spatialContextFrom } from '../src/geo/SpatialContext';
 import type { CrsInfo } from '../src/io/crs';
@@ -240,5 +240,65 @@ describe('a certificate waiting on the source hash', () => {
     expect(c.frame.crs).toBe(32633);
     expect(c.frame.origin).toEqual(ORIGIN);
     expect(c.camera.positionInScanCoordinates[0]).toBeCloseTo(ORIGIN[0] + 500, 6);
+  });
+});
+
+describe('the certified level of detail', () => {
+  it('is selected on a check, not on the live reading', () => {
+    expect(readPrecision(deps(), 0.01).lod).toBeNull();
+    const r = readPrecision(deps(), 0.01, { lod: true });
+    expect(r.lod?.state).toBe('CERTIFIED');
+  });
+
+  it('certifies nothing at 1 mm here: round-to-nearest passes, but the faithful bound does not', () => {
+    const r = readPrecision(deps(), 0.001, { lod: true });
+    expect(r.state).toBe('PASS');
+    expect(r.lod?.state).toBe('NONE');
+    expect(r.lod!.bMetres!).toBeGreaterThan(0.001);
+    expect(lodLine(r.lod)).toMatch(/^No level of detail is certified for the 1 mm limit under faithful rounding \(bound .* mm\)\.$/);
+  });
+
+  it('at 1 cm a millimetre grid fits, and keeps every point of a cloud metres apart', () => {
+    const r = readPrecision(deps(), 0.01, { lod: true });
+    expect(r.lod!.level).toBeGreaterThan(0);
+    expect(r.lod!.cellSizeMetres!).toBeLessThan(0.01);
+    expect(r.lod!.pointsKept).toBe(r.lod!.pointsFull);
+    expect(lodLine(r.lod)).toMatch(/^Coarsest certified level: \d+ mm cells, 100% of points \(.* ≤ 1 cm, faithful rounding\)\. Not drawn in this version\.$/);
+  });
+
+  it('names full resolution when no coarser level fits', () => {
+    const r = readPrecision(deps(), 0.0015, { lod: true });
+    expect(r.lod?.state).toBe('CERTIFIED');
+    expect(r.lod?.level).toBe(0);
+    expect(lodLine(r.lod)).toMatch(/^Coarsest certified level: full resolution \(bound .* mm ≤ 1\.50 mm, faithful rounding\)\. No coarser level fits\.$/);
+  });
+
+  it('names a coarser level, its share of points and that it is not drawn, when one fits', () => {
+    const r = readPrecision(deps(), 100, { lod: true });
+    expect(r.lod!.level).toBeGreaterThan(0);
+    expect(lodLine(r.lod)).toMatch(/^Coarsest certified level: .* cells, \d+% of points \(.* ≤ .*, faithful rounding\)\. Not drawn in this version\.$/);
+  });
+
+  it('reads a key that changes with the camera and the limit', () => {
+    const a = readPrecision(deps(), 0.001).viewKey;
+    expect(readPrecision(deps(), 0.001).viewKey).toBe(a);
+    expect(readPrecision(deps(), 0.01).viewKey).not.toBe(a);
+    expect(readPrecision(deps({}, translatedView(400, 500, 800)), 0.001).viewKey).not.toBe(a);
+  });
+
+  it('is recorded in the certificate with its rule and the narrow claim it supports', () => {
+    const c = JSON.parse(precisionCertificate(deps(), 0.01, new Date('2026-10-23T00:00:00Z'))!);
+    const l = c.result.levelOfDetail;
+    expect(l.method).toBe('olv.render.draw-precision-lod@1');
+    expect(l.rule).toMatch(/coarsest level k with sigma \* H_k \+ B_k <= tau/);
+    expect(l.scope).toMatch(/single node.*not drawn/);
+    expect(l.state).toBe('CERTIFIED');
+    expect(l.level).toBeGreaterThan(0);
+    expect(l.hMetres + l.bMetres).toBeLessThanOrEqual(0.01);
+    expect(l.pointsKept).toBe(4000);
+    expect(l.positionBytesFull).toBe(4000 * 12);
+    expect(l.selectionMs).toBeGreaterThanOrEqual(0);
+    // The level is a result, not part of the scope the digest covers.
+    expect(c.scopeDigest).toBe(JSON.parse(precisionCertificate(deps(), 0.01, new Date('2027-01-01T00:00:00Z'))!).scopeDigest);
   });
 });
