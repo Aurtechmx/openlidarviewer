@@ -12,7 +12,7 @@ function realManifest() {
     source: 'site.laz',
     ops: [
       { method: 'olv.ground.smrf@1', params: {}, note: 'params not captured in this slice' },
-      { method: 'olv.dtm.idw-fill@1', params: { coverageMode: 'full' } },
+      { method: 'olv.dtm.idw-fill@2', params: { coverageMode: 'full' } },
     ],
   });
 }

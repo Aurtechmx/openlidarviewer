@@ -114,6 +114,14 @@ export interface DtmQualityReport {
    */
   readonly interpolatedOfSurfaceRatio: number;
   readonly emptyCellRatio: number;
+  /**
+   * No-data gaps inside the surveyed area, as a fraction of it: the grid less
+   * the no-data cells outside the survey (`CellStatusTally.outsideCoverage`).
+   * The readiness check reads this, so a strip survey in a square grid is not
+   * judged by the empty corners of its grid. Equals `emptyCellRatio` when
+   * nothing lies outside.
+   */
+  readonly emptySurveyRatio: number;
   readonly edgeRiskRatio: number;
   readonly meanCellConfidence: number;
   readonly holdoutRmseM: number;
@@ -143,6 +151,9 @@ export function evaluateDtmQuality(input: DtmQualityInput): DtmQualityReport {
   const measuredCellRatio = t.measured / total;
   const interpolatedCellRatio = interpolatedLike / total;
   const emptyCellRatio = t.empty / total;
+  const outside = t.outsideCoverage ?? 0;
+  const surveyCells = t.total - outside;
+  const emptySurveyRatio = surveyCells > 0 ? Math.max(0, t.empty - outside) / surveyCells : emptyCellRatio;
   const edgeRiskRatio = t.edgeRisk / total;
   const measuredOfCovered = covered > 0 ? t.measured / covered : 0;
   const interpolatedOfSurfaceRatio = covered > 0 ? interpolatedLike / covered : 0;
@@ -175,7 +186,7 @@ export function evaluateDtmQuality(input: DtmQualityInput): DtmQualityReport {
     // surface with an unknown datum is still a GOOD surface.
     const readyChecks: Array<[boolean, string]> = [
       [measuredOfCovered >= T.readyMeasuredOfCovered, `${pct(interpolatedOfSurfaceRatio)} of the surface is interpolated`],
-      [emptyCellRatio <= T.readyMaxEmptyRatio, `${pct(emptyCellRatio)} of the grid has no data`],
+      [emptySurveyRatio <= T.readyMaxEmptyRatio, `${pct(emptySurveyRatio)} of the surveyed area has no data`],
       [edgeRiskRatio <= T.readyMaxEdgeRiskRatio, `${pct(edgeRiskRatio)} of cells are a long interpolation from real returns`],
       [rmseOk, 'vertical accuracy could not be validated'],
       [input.meanCellConfidence >= T.readyMinMeanConfidence, 'mean confidence is low'],
@@ -230,6 +241,7 @@ export function evaluateDtmQuality(input: DtmQualityInput): DtmQualityReport {
     interpolatedCellRatio,
     interpolatedOfSurfaceRatio,
     emptyCellRatio,
+    emptySurveyRatio,
     edgeRiskRatio,
     meanCellConfidence: input.meanCellConfidence,
     holdoutRmseM: input.holdoutRmseM,

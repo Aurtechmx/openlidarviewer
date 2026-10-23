@@ -389,10 +389,12 @@ describe('buildDemPackage', () => {
     expect(pcts.length).toBe(3);
     const sum = pcts.reduce((a, m) => a + Number(m[2]), 0);
     expect(sum).toBeCloseTo(100, 1);
-    // For this fixture (COV=[2,2,1,0]): 50 / 25 / 25.
-    expect(readme).toMatch(/Measured:\s+50\.0%/);
-    expect(readme).toMatch(/Interpolated:\s+25\.0%/);
-    expect(readme).toMatch(/Unsupported:\s+25\.0%/);
+    // For this fixture (COV=[2,2,1,0]) the no-data cell reaches the grid
+    // border, so it lies outside the surveyed area and the shares are of the
+    // other three cells: 66.7 / 33.3 / 0.
+    expect(readme).toMatch(/Measured:\s+66\.7%/);
+    expect(readme).toMatch(/Interpolated:\s+33\.3%/);
+    expect(readme).toMatch(/Unsupported:\s+0\.0%/);
   });
 
   it('the async builder produces a complete deliverable from a real analysed result', async () => {

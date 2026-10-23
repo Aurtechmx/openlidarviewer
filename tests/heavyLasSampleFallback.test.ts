@@ -53,7 +53,8 @@ describe('heavy open: sample fallback', () => {
       expect(result.verdict?.outcome).toBe('insufficient-storage');
       // Nothing was on screen, so nothing was asked.
       expect(result.replaced).toBe('none');
-      const notice = storageSampleNotice(result.verdict, 'big.las', 2_000_000, 210_887_303);
+      const notice = result.notice(2_000_000, 210_887_303);
+      expect(notice).toBe(storageSampleNotice(result.verdict, 'big.las', 2_000_000, 210_887_303));
       expect(notice).toMatch(/^Opened an even sample of 2.0 million of the 210.9 million points in big\.las\./);
       expect(notice).toMatch(/of browser storage/);
       expect(notice).toMatch(/Free disk space and reopen the file/);
@@ -67,7 +68,7 @@ describe('heavy open: sample fallback', () => {
     const { deps, attachStreamingCloud } = makeDeps();
     const { env, runIndex } = envWith(new ArrayBufferRangeSource(buffer), { noOpfs: true });
     const result = await openLocalHeavyLas(file, new AbortController().signal, deps, env);
-    expect(result).toEqual({ status: 'sample', verdict: null });
+    expect(result).toMatchObject({ status: 'sample', verdict: null });
     expect(runIndex).not.toHaveBeenCalled();
     expect(attachStreamingCloud).not.toHaveBeenCalled();
   });

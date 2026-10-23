@@ -89,7 +89,11 @@ const SUPPORTING_TESTS: Readonly<Record<string, readonly string[]>> = {
   ],
   'olv.terrain.vrm': ['tests/vrmCrossCheck.test.ts', 'tests/terrainDescriptorSyntheticTruth.test.ts'],
   'olv.terrain.tpi': ['tests/tpiCrossCheck.test.ts', 'tests/terrainDescriptorSyntheticTruth.test.ts'],
-  'olv.dtm.idw-fill': ['tests/surfaceFromRaster.test.ts', 'tests/geodesicFillAccuracy.test.ts'],
+  'olv.dtm.idw-fill': [
+    'tests/surfaceFromRaster.test.ts',
+    'tests/geodesicFillAccuracy.test.ts',
+    'tests/terrainCoverageFootprint.test.ts',
+  ],
   'olv.terrain.evidence.support': ['tests/demEvidence.test.ts'],
   'olv.terrain.evidence.sensitivity': ['tests/demSensitivity.test.ts'],
   'olv.terrain.evidence.residual': ['tests/demAttention.test.ts'],

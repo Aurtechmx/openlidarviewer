@@ -196,15 +196,23 @@ export const METHOD_REGISTRY: Readonly<Record<string, MethodEntry>> = {
   // summary describe the actual algorithm, not just the prefill.
   'olv.dtm.idw-fill': {
     id: 'olv.dtm.idw-fill',
-    version: 1,
+    // v2: only cells inside the data footprint (the closing of the measured
+    // cells by an 8-cell disc, plus voids the data encloses) are filled; v1
+    // filled every void within the fill radius, outside the survey too.
+    version: 2,
     name: 'DTM rasterisation with geodesic-distance void fill',
     summary:
       'Bins ground returns to a grid, then fills interior voids by geodesic-distance ' +
       'propagation from measured cells (an Euclidean IDW prefill seeds a provisional ' +
-      'surface, refined along in-surface geodesic distance), tracking measured vs interpolated cells.',
+      'surface, refined along in-surface geodesic distance), tracking measured vs interpolated cells. ' +
+      'Cells outside the data footprint are left as no data.',
     citation: 'Internal composition (geodesic-distance void fill with an IDW prefill); no single source method.',
     category: 'dtm',
-    implementation: ['src/terrain/ground/surfaceFromRaster.ts', 'src/terrain/ground/geodesicFill.ts'],
+    implementation: [
+      'src/terrain/ground/surfaceFromRaster.ts',
+      'src/terrain/ground/geodesicFill.ts',
+      'src/terrain/ground/coverageFootprint.ts',
+    ],
   },
   'olv.terrain.evidence.support': {
     id: 'olv.terrain.evidence.support',

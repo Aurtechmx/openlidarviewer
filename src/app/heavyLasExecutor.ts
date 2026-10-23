@@ -18,6 +18,7 @@ import {
   storagePreflight,
   storagePreflightRefusal,
   readStorageEstimate,
+  storageSampleNotice,
   type StoragePreflightVerdict,
 } from '../io/heavy/storagePreflight';
 import {
@@ -385,10 +386,11 @@ async function recordAndEvict(
  * file opens as a sample instead of being refused: the caller hands it to the
  * whole-file loader as a ranged read, which keeps a stratified stride of every
  * record in the file and opens it as an ordinary scan whose source count is the
- * file's own. `verdict` says why, for the notice shown once it is open.
+ * file's own. `verdict` says why, and the notice says so once it is open.
  */
-function openSampleInstead(verdict: StoragePreflightVerdict | null, replace?: HeavyReplacePlan): HeavyOpenResult {
-  return replace ? { status: 'sample', verdict, replaced: replace.outcome } : { status: 'sample', verdict };
+function openSampleInstead(name: string, verdict: StoragePreflightVerdict | null, replace?: HeavyReplacePlan): HeavyOpenResult {
+  const notice = (shown: number, declared: number | null): string => storageSampleNotice(verdict, name, shown, declared);
+  return replace ? { status: 'sample', verdict, replaced: replace.outcome, notice } : { status: 'sample', verdict, notice };
 }
 
 export async function executeHeavyLasBuild(
@@ -432,7 +434,7 @@ export async function executeHeavyLasBuild(
 
   const root = await getOpfsRoot();
   if (root === null) {
-    return openSampleInstead(null);
+    return openSampleInstead(file.name, null);
   }
 
   // Asked once, before any work: whether the stream this open replaces, and
@@ -520,7 +522,7 @@ export async function executeHeavyLasBuild(
     // A header that cannot size the file is a damaged file, not a storage limit:
     // that one stays refused. Every storage limit opens a sample instead.
     if (verdict.outcome === 'demand-unknown') return refusal;
-    return openSampleInstead(verdict, replace);
+    return openSampleInstead(file.name, verdict, replace);
   }
 
   // PREVIEW FIRST. Before the long index build, put a bounded, stratified

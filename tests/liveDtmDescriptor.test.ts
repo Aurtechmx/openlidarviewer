@@ -8,6 +8,7 @@ import { METHOD_REGISTRY } from '../src/science/methodRegistry';
 import {
   LIVE_INTERPOLATION,
   LIVE_EXTRAPOLATION_GUARD,
+  LIVE_COVERAGE_RADIUS_CELLS,
 } from '../src/terrain/ground/surfaceFromRaster';
 import {
   LIVE_DTM_AGGREGATION,
@@ -35,6 +36,7 @@ describe('resolveLiveDtmDescriptor', () => {
     // Guard read from the production source of truth, not re-typed here.
     expect(d.extrapolationGuard.radiusCells).toBe(LIVE_EXTRAPOLATION_GUARD.radiusCells);
     expect(d.extrapolationGuard.penalty).toBe(LIVE_EXTRAPOLATION_GUARD.penalty);
+    expect(d.coverageRadiusCells).toBe(LIVE_COVERAGE_RADIUS_CELLS);
     // Method identity defaults for the unit scales.
     expect(d.horizontalUnitToMetres).toBe(1);
     expect(d.verticalUnitToMetres).toBe(1);
@@ -98,6 +100,7 @@ describe('dtmMethodDigest', () => {
       { verticalUnitToMetres: 0.3048 },
       { extrapolationGuard: { radiusCells: 4, penalty: 0.5 } },
       { extrapolationGuard: { radiusCells: 8, penalty: 0.25 } },
+      { coverageRadiusCells: 4 },
     ];
     for (const m of mutations) {
       const mutated = { ...base, ...m } as LiveDtmDescriptor;
@@ -106,11 +109,13 @@ describe('dtmMethodDigest', () => {
   });
 
   it('default trust holds the digest byte-identical; trust=false moves it', () => {
-    // Pinned pre-refactor default digest: deriving despike from a trust
-    // parameter must not perturb the production default (trust=true → despike
-    // off). If this literal ever changes, the delivered method changed.
+    // Pinned default digest: deriving despike from a trust parameter must not
+    // perturb the production default (trust=true → despike off). If this
+    // literal ever changes, the delivered method changed. Last moved by
+    // olv.dtm.idw-fill@2, which leaves cells outside the data footprint as no
+    // data (method version 2 and the footprint radius both enter the digest).
     const DEFAULT_DIGEST =
-      '5150c0a1321a523cf4c4c8522bc549a5388acf018d6ee4f6132d71a4d1505149';
+      '2a195e64973ef80ec4c2a33119e27ce0905048ad319337444cf916586784ce35';
     expect(dtmMethodDigest(resolveLiveDtmDescriptor())).toBe(DEFAULT_DIGEST);
     // trust=false flips despike on — a method-behaviour change — so the digest
     // must differ from the trusted default.

@@ -103,7 +103,11 @@ export function buildContourReviewSummary(
   input: ContourReviewInput,
 ): ContourReviewSummary {
   const tally = result.cellStatusTally;
-  const total = tally.total > 0 ? tally.total : 1;
+  // Shares are of the surveyed area: no-data outside the survey (the rest of a
+  // strip's bounding grid) is neither support nor a void in the surface.
+  const outside = tally.outsideCoverage ?? 0;
+  const total = tally.total - outside > 0 ? tally.total - outside : 1;
+  const voidCells = Math.max(0, tally.empty - outside);
   const measuredFrac = tally.measured / total;
   // "Covered" means every cell that carries a value, matching
   // `terrainAssessment` and the Analyse panel. This counted only
@@ -135,7 +139,7 @@ export function buildContourReviewSummary(
     value: sourceValue,
     rationale: [
       `${tally.measured.toLocaleString()} measured ground cells`,
-      `${pct(covered / total)} of the grid is covered`,
+      `${pct(covered / total)} of the surveyed area is covered`,
       ...(tally.measured > 0 && groundDerived
         ? ['Ground was derived by the viewer’s classifier, not read from the source file. Validate before using it as survey ground.']
         : []),
@@ -255,10 +259,10 @@ export function buildContourReviewSummary(
   // weakness at all where two thirds of it was weak. Weak cells are the ones
   // a reviewer most needs to see, so they are named rather than folded away.
   const [pMeasured, pInterp, pLow, pEdge, pVoid] = wholePercents(
-    [tally.measured, tally.interpolated, tally.lowConfidence, tally.edgeRisk, tally.empty],
+    [tally.measured, tally.interpolated, tally.lowConfidence, tally.edgeRisk, voidCells],
     total,
   );
-  const weakFrac = (tally.lowConfidence + tally.edgeRisk + tally.empty) / total;
+  const weakFrac = (tally.lowConfidence + tally.edgeRisk + voidCells) / total;
   let supportConfidence: ReviewRow['confidence'];
   if (weakFrac < 0.1) supportConfidence = 'high';
   else if (weakFrac < 0.3) supportConfidence = 'medium';

@@ -213,8 +213,11 @@ export function terrainAssessment(result: AnalyseContoursResult): TerrainAssessm
     tally.measured + tally.interpolated + tally.lowConfidence + tally.edgeRisk;
   const interpFrac =
     coveredCells > 0 ? 1 - tally.measured / coveredCells : 1;
-  const gridTotal = tally.total > 0 ? tally.total : 1;
-  const emptyFrac = tally.empty / gridTotal;
+  // Gaps inside the surveyed area, over that area: no-data outside the survey
+  // (the rest of a strip's bounding grid) is not a gap in the surface.
+  const outsideCells = tally.outsideCoverage ?? 0;
+  const surveyTotal = tally.total - outsideCells > 0 ? tally.total - outsideCells : 1;
+  const emptyFrac = Math.max(0, tally.empty - outsideCells) / surveyTotal;
   const edgeFrac = Number.isFinite(cm?.boundaryMeasuredRatio) ? cm.boundaryMeasuredRatio : 0;
   // Returns per CELL AREA, and the cell size is in source units until a
   // horizontal scale resolves — so this is pts/m² only when one did. It is not
@@ -362,7 +365,7 @@ export function terrainAssessment(result: AnalyseContoursResult): TerrainAssessm
     if (coverageMode === 'resident-only') caps.push('only resident streaming nodes were walked');
     else if (coverageMode === 'sampled') caps.push('the surface was built from a sample of the points');
     if (interpFrac > HIGH_INTERP_FRACTION) caps.push(`${pctStr(interpFrac)} of the surface is interpolated`);
-    if (emptyFrac > HIGH_EMPTY_FRACTION) caps.push(`${pctStr(emptyFrac)} of the grid has no data`);
+    if (emptyFrac > HIGH_EMPTY_FRACTION) caps.push(`${pctStr(emptyFrac)} of the surveyed area has no data`);
     // `edgeFrac` is cellMetrics.boundaryMeasuredRatio: the fraction of
     // MEASURED cells that sit within a couple of cells of the data boundary.
     // Those cells HAVE real returns; they are just least supported by

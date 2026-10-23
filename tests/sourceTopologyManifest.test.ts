@@ -48,7 +48,7 @@ const BUILD = '0.5.9 (abc1234, release channel, built 2026-07-01T00:00:00Z)';
 function sampleOps(): ProcessingOpInput[] {
   return [
     { method: 'olv.ground.smrf@1', params: {}, note: 'params not captured in this slice' },
-    { method: 'olv.dtm.idw-fill@1', params: { coverageMode: 'full' } },
+    { method: 'olv.dtm.idw-fill@1', params: { coverageMode: 'full' } }, // method-literal-ok: the baseline hashes below were captured over this tag
     { method: 'olv.terrain.vrm@1', params: { windowCells: 3, windowGroundM: 3.2 } },
   ];
 }
@@ -130,7 +130,7 @@ describe('a cloud that never carried an acquisition topology', () => {
     expect(m.ops).toHaveLength(3);
     expect(m.ops.map((o) => o.method)).toEqual([
       'olv.ground.smrf@1',
-      'olv.dtm.idw-fill@1',
+      'olv.dtm.idw-fill@1', // method-literal-ok: the fixture ops above
       'olv.terrain.vrm@1',
     ]);
     // Nothing anywhere in the manifest mentions linkage: absence is silence,

@@ -87,8 +87,7 @@ import {
   applyConfidenceCalibration,
 } from '../validate/calibrateConfidence';
 import {
-  classifyCellStatus,
-  tallyCellStatus,
+  tallyDtmCellStatus,
   type CellStatusTally,
 } from '../quality/dtmCellStatus';
 import { evaluateDtmQuality, type DtmQualityInput, type DtmQualityReport } from '../quality/dtmQualityGate';
@@ -1316,7 +1315,7 @@ export function computeTerrainCore(
 
   // 5b) DTM cell status, the quality gate (ready / previewOnly / blocked).
   // The gate decides whether the UI may offer the terrain-product (contour/DEM) export at all.
-  const cellStatusTally = tallyCellStatus(classifyCellStatus(dtm));
+  const cellStatusTally = tallyDtmCellStatus(dtm);
   const groundPointRatio =
     gf.sourcePointCount > 0 ? gf.groundPointCount / gf.sourcePointCount : Number.NaN;
   // The gate's RMSE field means metres and is judged against a metre floor.

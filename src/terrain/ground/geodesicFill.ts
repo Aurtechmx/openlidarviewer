@@ -88,6 +88,13 @@ export interface GeodesicParams {
    * alone could not reveal.
    */
   readonly probeVoids?: number;
+  /**
+   * Voids allowed to receive a fill (1 = fill). A void outside it stays NaN
+   * and is neither solved nor counted against the budget. The provisional
+   * surface the paths walk on is built without it, so a void inside the mask
+   * gets the same value it would get without one. Omitted = every void.
+   */
+  readonly fillMask?: Uint8Array;
 }
 
 /**
@@ -310,8 +317,10 @@ export function geodesicFillWithReport(
   // The voids to fill, in index order. A cell the prefill could not reach has
   // no provisional height to walk from, so it stays NaN and the caller decides.
   const voids: number[] = [];
+  const fillMask = params.fillMask;
   for (let i = 0; i < n; i++) {
     if (hadData[i] === 1) continue; // measured — keep verbatim
+    if (fillMask && fillMask[i] !== 1) { out[i] = Number.NaN; continue; } // outside the mask
     if (!Number.isFinite(surface[i])) { out[i] = Number.NaN; continue; } // unreachable gap
     voids.push(i);
   }

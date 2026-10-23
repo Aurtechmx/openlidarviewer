@@ -108,6 +108,15 @@ describe('epochs of different extent over one identical surface', () => {
     // Before the measured-only rule 4,334 extrapolated cells were compared, for a raw net of 1,462 m³.
     expect(Math.abs(cmp.result.stats.rawNetVolumeM3)).toBeLessThan(1);
     expect(cmp.result.stats.meanAbsChangeM).toBeLessThan(0.01);
-    expect(cmp.cellSupport.interpolatedExcluded).toBeGreaterThan(0);
+    // The earlier epoch carries no height past its own footprint at all, so
+    // there is no extrapolated fringe left for the measured-only rule to drop.
+    let beforeBeyond = 0;
+    for (let r = 0; r < d.before.rows; r++) {
+      for (let c = 0; c < d.before.cols; c++) {
+        const x = d.before.originH1 + (c + 0.5) * d.cellSizeM;
+        if (x > 102 && d.before.coverage[r * d.before.cols + c] > 0) beforeBeyond++;
+      }
+    }
+    expect(beforeBeyond).toBe(0);
   });
 });

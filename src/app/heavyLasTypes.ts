@@ -147,8 +147,15 @@ export type HeavyOpenResult =
    * of all its records, loaded as an ordinary scan whose source count is the
    * file's. `verdict` is the storage reading behind it, null when there is no
    * storage at all; `replaced` is the replace answer when the open already asked.
+   * `notice` words the sample for the user once the loader knows how many points
+   * it holds.
    */
-  | { readonly status: 'sample'; readonly verdict: StoragePreflightVerdict | null; readonly replaced?: ReplaceOutcome }
+  | {
+      readonly status: 'sample';
+      readonly verdict: StoragePreflightVerdict | null;
+      readonly replaced?: ReplaceOutcome;
+      readonly notice: (shownPoints: number, declaredPoints: number | null) => string;
+    }
   /** The plan did not route this file out of core; the caller loads it whole. */
   | { readonly status: 'not-heavy' }
   /** OPFS or workers were unavailable. Fall through only when `heavy` is false. */

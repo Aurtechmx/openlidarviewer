@@ -91,11 +91,13 @@ export function explainLimitations(result: AnalyseContoursResult): Limitations {
   }
 
   // ── low measured coverage / high empty ratio ──────────────────────────
-  const emptyFrac = finite(q.emptyCellRatio);
+  // Of the surveyed area: no-data outside the survey (the rest of a strip's
+  // bounding grid) is not a gap to fill.
+  const emptyFrac = finite(q.emptySurveyRatio ?? q.emptyCellRatio);
   if (Number.isFinite(emptyFrac) && emptyFrac > HIGH_EMPTY_FRACTION) {
     emit(
       'empty',
-      `${pct(emptyFrac)} of the grid has no data at all.`,
+      `${pct(emptyFrac)} of the surveyed area has no data at all.`,
       'Extend coverage over the gaps and fly more passes so the grid fills in.',
     );
   }

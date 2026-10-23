@@ -432,10 +432,7 @@ export async function openScan(file: File, deps: OpenScanDeps): Promise<void> {
       },
     );
     await attachStaticCloud(result, { file, signal: controller.signal, preview, sourceDigest, replaced: sample?.replaced }, deps);
-    if (sample && !controller.signal.aborted) {
-      const { storageSampleNotice } = await import('../io/heavy/storagePreflight');
-      deps.showToast(storageSampleNotice(sample.verdict, file.name, result.cloud.pointCount, result.originalPointCount));
-    }
+    if (sample && !controller.signal.aborted) deps.showToast(sample.notice(result.cloud.pointCount, result.originalPointCount));
   } catch (err) {
     deps.dropZone.setCancelHandler(null);
     if (preview) takeDownPreview(deps, preview);
