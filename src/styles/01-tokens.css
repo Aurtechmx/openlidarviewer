@@ -318,8 +318,9 @@
   --m-tab-hit: 44px;            /* its tap area */
   --m-tabs-pad: 2px;            /* tab-strip inset inside the head */
   --m-head-pad-y: 3px;          /* head padding, collapsed */
+  --m-loc-h: 20px;              /* a collapsed head's location line, when shown */
   --m-chrome-head-h: calc(
-    var(--m-tab-h) + 2 * var(--m-tabs-pad) + 2 * var(--m-head-pad-y)
+    var(--m-tab-h) + 2 * var(--m-tabs-pad) + 2 * var(--m-head-pad-y) + var(--m-loc-row, 0px)
   );
 
   /*

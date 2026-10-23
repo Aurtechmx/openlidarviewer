@@ -136,6 +136,7 @@ means the points were made up for the test and carry no third-party data.
 | File | Origin | Third-party data |
 |---|---|---|
 | `multichunk.laz` | Added in #441 (commit 4a6747b8). 120 000 synthetic points written by the app's LAS writer (PDRF 7), then LAZ-compressed with PDAL 2.10.2 so it holds three laszip chunks. No generating script is committed. | None. Project data. |
+| `multichunk-pdrf3.laz` | 120 000 synthetic points written with laspy 2.7.0 and lazrs at point format 3, LAS 1.2, in three 50 000-point chunks. The value formula is listed in `tests/chunkedLazLegacyFormats.test.ts`. No generating script is committed. | None. Project data. |
 | `tiny-pdrf0.laz`, `tiny-pdrf1.laz` | Added in #646 (commit 5c8ba47d). Eight points written with laspy 2.7.0 at point formats 0 and 1; the values are listed in `tests/eptLaszipDecode.test.ts`. No generating script is committed. | None. Project data. |
 | `terrain-access-utm.las` | Added in #1017 (commit 041bff11). Written by `scripts/gen-terrain-access-fixture.ts` with the app's LAS writer. | None. Project data. |
 | `tiny.pcd`, `tiny.pts`, `tiny.ptx` | In the initial public release (commit 3e24ee7d). Hand-written ASCII files of two to four points; no generating script. The PCD header comment is the format's standard first line. | None. Project data. |

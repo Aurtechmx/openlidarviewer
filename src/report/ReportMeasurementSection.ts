@@ -49,6 +49,7 @@ import {
   unresolvedNote,
   HEADLINE_METRIC_KEY,
   unresolvedMetricKeys,
+  unresolvedReason,
   type AxisSteps,
 } from '../export/measurementExport';
 
@@ -230,6 +231,8 @@ function buildProfileExtras(
   vf: number,
   /** False when the frame states no linear unit; see `computeValue`. */
   verified: boolean,
+  /** The step the profile's positions are held at; figures it cannot give are withheld. */
+  steps: AxisSteps | null = null,
 ): ReportProfileDeliverableExtras | undefined {
   if (m.kind !== 'profile' || m.points.length < 2) return undefined;
   const a = m.points[0];
@@ -267,7 +270,10 @@ function buildProfileExtras(
   // factors — so the detail line agrees with its headline and the live tool to
   // the digit. `mm.length_m` here is exactly what `computeValue` formats as the
   // headline, and `Δh` scales by the vertical factor (compound CRS), not `f`.
-  const mm = measurementMetrics(m, up, f, vf, 6);
+  const mm = measurementMetrics(m, up, f, vf, 6, steps);
+  // The sampled heights are held at the same vertical step as the endpoints, so
+  // when the profile's vertical change is withheld its slopes and chart are too.
+  const verticalWithheld = steps !== null && unresolvedMetricKeys(m, up, f, vf, steps).includes('vertical_m');
   const fmtM = (v: number | undefined): string =>
     v != null ? formatLinear(v, system, verified) : '—';
   const summaryLine =
@@ -282,7 +288,9 @@ function buildProfileExtras(
 
   const signPrefix = (v: number): string => (v >= 0 ? '+' : '');
   let slopeLine: string;
-  if (Number.isFinite(summary.maxGradePercent)) {
+  if (verticalWithheld && steps) {
+    slopeLine = `Slope summary withheld: ${unresolvedReason(steps, up, f, vf)}`;
+  } else if (Number.isFinite(summary.maxGradePercent)) {
     slopeLine =
       `Max ${signPrefix(summary.maxGradePercent)}${summary.maxGradePercent.toFixed(2)}%, ` +
       `Min ${signPrefix(summary.minGradePercent)}${summary.minGradePercent.toFixed(2)}%, ` +
@@ -314,7 +322,7 @@ function buildProfileExtras(
     coverageCaveat: m.profileChartResidentOnly
       ? 'Resident-node analysis only — profile may refine as streaming loads.'
       : undefined,
-    chart: chart && chart.filter((s) => Number.isFinite(s.height)).length >= 2 ? chart : undefined,
+    chart: !verticalWithheld && chart && chart.filter((s) => Number.isFinite(s.height)).length >= 2 ? chart : undefined,
   };
 }
 
@@ -413,7 +421,7 @@ export function buildMeasurementRows(
           ? { note: unresolved }
           : {}),
       profileExtras: m.kind === 'profile' && !refused
-        ? buildProfileExtras(m, unitSystem, f, worldUp, vf, unitsVerified)
+        ? buildProfileExtras(m, unitSystem, f, worldUp, vf, unitsVerified, steps)
         : undefined,
     };
   });

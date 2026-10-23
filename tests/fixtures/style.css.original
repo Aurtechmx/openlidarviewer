@@ -318,8 +318,9 @@
   --m-tab-hit: 44px;            /* its tap area */
   --m-tabs-pad: 2px;            /* tab-strip inset inside the head */
   --m-head-pad-y: 3px;          /* head padding, collapsed */
+  --m-loc-h: 20px;              /* a collapsed head's location line, when shown */
   --m-chrome-head-h: calc(
-    var(--m-tab-h) + 2 * var(--m-tabs-pad) + 2 * var(--m-head-pad-y)
+    var(--m-tab-h) + 2 * var(--m-tabs-pad) + 2 * var(--m-head-pad-y) + var(--m-loc-row, 0px)
   );
 
   /*
@@ -2492,6 +2493,8 @@ button:disabled { cursor: not-allowed; }
 }
 /* A finished load's settle gives way to the measure bar opened over it. */
 body:has(.olv-measure-bar:not(.olv-hidden)) .olv-toast.is-finishing { visibility: hidden; }
+/* A finished load has no controls left, so its settle never takes a tap meant for what is under it. */
+.olv-toast.is-finishing { pointer-events: none; }
 .olv-toast-row { display: flex; align-items: center; gap: var(--space-md); }
 .olv-toast-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--accent); flex: none; }
 /* `pre-line` lets the multi-line preload summary break on its newlines;
@@ -10314,6 +10317,16 @@ details[open] > :is(.olv-why-summary, .olv-fit-caveats-summary, .olv-analyse-wor
     box-shadow: none;
   }
   .olv-mobile-sheet.is-collapsed .olv-msheet-head::before { display: none; }
+  /* Collapsed, a mode home's location line only repeats the active tab, so it
+     is dropped and the scan keeps the height. A deeper location keeps its
+     line and its Back; that line's height joins --m-chrome-head-h, so the dock
+     sits on the sheet instead of the sheet growing under it and covering the
+     dock's captions. */
+  .olv-mobile-sheet.is-collapsed .olv-msheet-head > .olv-loc.is-mode-home { display: none; }
+  .olv-mobile-sheet.is-collapsed .olv-msheet-head > .olv-loc { height: var(--m-loc-h); }
+  :root:has(.olv-mobile-sheet.is-collapsed .olv-msheet-head > .olv-loc:not([hidden]):not(.is-mode-home)) {
+    --m-loc-row: var(--m-loc-h);
+  }
 
   /* Body: the active tabpanel only; scrolls inside the sheet. */
   .olv-msheet-body {

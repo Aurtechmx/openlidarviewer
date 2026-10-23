@@ -7,6 +7,7 @@
  * without the surfaces that describe a finished scan.
  */
 import { describe, it, expect, vi } from 'vitest';
+import { writeLas14 } from '../src/convert/writeLas';
 import { ArrayBufferRangeSource } from '../src/io/range/ArrayBufferRangeSource';
 import type { RangeSource } from '../src/io/range/RangeSource';
 import { fakeOpfs } from './support/fakeOpfs';
@@ -61,18 +62,50 @@ describe('heavy open: sample fallback', () => {
     }
   });
 
-  it('does not publish the surfaces of a finished scan for the sample', async () => {
+  it('publishes the sample as its own file, and as a sample, not as a finished scan', async () => {
     const buffer = lasBytes(n);
     const { file } = spyFile('big.las', buffer.byteLength);
-    const { deps } = makeDeps();
+    const { deps, attached } = makeDeps();
     const { env } = envWith(new ArrayBufferRangeSource(buffer), { storage: reading(1_000_000) });
     await openLocalHeavyLas(file, new AbortController().signal, deps, env);
+    const source = attached[0] as PreviewCloudSource;
     const s = deps.streaming as unknown as Record<string, Record<string, ReturnType<typeof vi.fn>> | ReturnType<typeof vi.fn>>;
-    expect((s.inspectorCards as Record<string, ReturnType<typeof vi.fn>>).refreshProvenanceFromStreaming).not.toHaveBeenCalled();
-    expect((s.crsCoordinator as Record<string, ReturnType<typeof vi.fn>>).refreshCrsForStreamingCloud).not.toHaveBeenCalled();
-    expect(s.revealAnalysePanel as ReturnType<typeof vi.fn>).not.toHaveBeenCalled();
-    // The previous stream's state is still cleared, as for any committed scan.
+    const fn = (o: string, k: string) => (s[o] as Record<string, ReturnType<typeof vi.fn>>)[k]!;
+    // Its own CRS and provenance replace the previous scan's, in one step.
+    expect(fn('crsCoordinator', 'refreshCrsForStreamingCloud')).toHaveBeenCalledWith(source);
+    expect(fn('inspectorCards', 'refreshProvenanceFromStreaming')).toHaveBeenCalledWith(source);
+    expect(s.revealAnalysePanel as ReturnType<typeof vi.fn>).toHaveBeenCalledWith('big.las', false);
+    // The counts read as the sample shown against the file's total.
+    expect(fn('inspector', 'setStreamingDetail')).toHaveBeenCalledWith({
+      residentPointCount: source.sourcePointCount, sourcePointCount: n, sourcePointCountKnown: true,
+    });
+    const report = fn('inspector', 'setReport').mock.calls.at(-1)![0] as { label: string; value: string }[];
+    expect(report).toHaveLength(1);
+    expect(report[0]!.value).toMatch(/points of big\.las, spread evenly; opened without its full index$/);
+    // The octree says why it is incomplete; nothing is building.
+    expect(source.octree.isComplete).toBe(false);
+    expect(source.octree.errors[0]).toMatch(/opened without its full index/);
+    // The finished-scan surfaces stay closed.
+    expect(s.runStreamingModules as ReturnType<typeof vi.fn>).not.toHaveBeenCalled();
+    expect(s.startStreamingStatusPolling as ReturnType<typeof vi.fn>).not.toHaveBeenCalled();
+    expect(fn('streamingPanel', 'show')).not.toHaveBeenCalled();
+    // The previous stream's state is cleared, as for any committed scan.
     expect(s.resetStreamState as ReturnType<typeof vi.fn>).toHaveBeenCalledTimes(1);
+  });
+
+  it('reads the file\'s own CRS when the browser has no storage', async () => {
+    const pts = new Float64Array(n);
+    const cloud = {
+      count: n, x: pts.map((_, i) => 400000 + (i % 1000) * 1.5), y: pts.map((_, i) => 5200000 + Math.floor(i / 1000) * 1.5),
+      z: pts.map(() => 55), intensity: new Uint16Array(n), classification: new Uint8Array(n).fill(2),
+    };
+    const bytes = writeLas14(cloud, { epsg: 32613 });
+    const buffer = bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer;
+    const { file } = spyFile('big.las', buffer.byteLength);
+    const { deps, attached } = makeDeps();
+    const { env } = envWith(new ArrayBufferRangeSource(buffer), { noOpfs: true });
+    await openLocalHeavyLas(file, new AbortController().signal, deps, env);
+    expect((attached[0] as PreviewCloudSource).crs()?.epsg).toBe(32613);
   });
 
   it('opens a sample when the browser has no storage to write the index to', async () => {

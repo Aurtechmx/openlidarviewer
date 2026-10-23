@@ -50,7 +50,7 @@ import {
   boxCorners,
   BOX_EDGES,
   elevationDatumOffset,
-  toMetricFrame, unresolvedHeadlineFor, type AxisSteps,
+  toMetricFrame, unresolvedHeadlineFor, unresolvedKeysFor, type AxisSteps,
 } from './geometry';
 import { resizeBoxByCorner, BOX_CORNER_INDICES, type BoxCornerIndex } from './boxEdit';
 import { areaBreakdown, lineBreakdown } from './measureBreakdown';
@@ -972,7 +972,6 @@ export class MeasureController {
     return v != null && Math.abs(v - this._unitToMetres) > 1e-12;
   }
 
-
   /**
    * Whether the active scan has a known CRS with real-world units. Drives the
    * trust grade's "scale verified" signal — distinct from `unitToMetres`, which
@@ -1178,10 +1177,10 @@ export class MeasureController {
 
   private _summaryOf(m: Measurement): MeasurementSummary {
     const f = this._unitToMetres;
-    // The row, its breakdown and the overlay obey one refusal: a frame whose
-    // axes are not ground distances (degrees) prints the reason, not a number.
+    // The row, its breakdown and the overlay obey one refusal: a frame whose axes are not ground
+    // distances prints the reason, and a figure withheld on the position step leaves no breakdown.
     const refusal = this._upRefusalText !== null && upAxisRefusesKind(m.kind) ? this._upRefusalText : this._frameRefusal(m.kind);
-    const metricsOk = refusal === null && this._upRefusalText === null;
+    const metricsOk = refusal === null && this._upRefusalText === null && this._unresolved(m).length === 0;
     return {
       id: m.id,
       kind: m.kind,
@@ -1189,7 +1188,7 @@ export class MeasureController {
       value: refusal ?? this._headlineText(m),
       ...(this._unitUnverified() || (m.kind === 'height' && this._heightUnverified()) ? { unitUnverified: true } : {}),
       // An unreadable vertical unit has no metres for the chart's elevations.
-      profileChart: m.profileChart && !this._verticalUnitInvalid
+      profileChart: m.profileChart && !this._verticalUnitInvalid && this._unresolved(m).length === 0
         ? scaleProfileSamples(m.profileChart, f, this._originUp, this._effVertical())
         : undefined,
       profileDatumKnown: this._originUp !== null,
@@ -2380,6 +2379,7 @@ export class MeasureController {
   }
 
   /** The headline value string for a measurement, shown in the panel. */
+  /** The figures of `m` withheld on its scan's position step, in its own frame. */ private _unresolved(m: Measurement): string[] { return unresolvedKeysFor(m, this._positionSteps?.(m) ?? null, this.upFor(m), this._ownUnitFrame(m) ?? this._activeUnitFrame()); }
   private _headlineText(m: Measurement): string {
     const p = m.points;
     // Every figure that combines the horizontal and vertical axes is computed
@@ -2591,7 +2591,7 @@ export class MeasureController {
       const from = labels.length;
       this._inFrameOf(m, () => {
         this._appendMeasurement(m, vertices, edges, polygons, labels);
-        this._refuseGeographicLabels(m, labels, from);
+        this._refuseGeographicLabels(m, labels, from); if (this._unresolved(m).length > 0) labels.splice(from, labels.length - from, ...labels.slice(from).filter((l) => l.primary));
       });
       if (this._drag?.id === m.id) for (let i = from; i < labels.length; i++) labels[i] = { ...labels[i]!, priority: true };
     }

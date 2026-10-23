@@ -441,16 +441,21 @@ const PREVIEW_NODE_ID = 'p';
 export const PREVIEW_INCOMPLETE_REASON =
   'preview sample: a spread of the cloud, the full index is still building';
 
+/** The reason a sample opened in place of the full index records: nothing is building. */
+export const SAMPLE_INCOMPLETE_REASON =
+  'sample: an even spread of the file, opened without its full index';
+
 /**
  * A one-node octree over the sample. `isComplete` is false by construction: this
  * is a sample, never the whole cloud, and the recorded reason says so.
  */
 class PreviewOctree implements StreamingOctreeView {
   readonly store = new StreamingNodeStore();
-  readonly errors: readonly string[] = [PREVIEW_INCOMPLETE_REASON];
+  readonly errors: readonly string[];
   readonly isComplete = false;
 
-  constructor(bounds: Box6, pointCount: number, spacing: number) {
+  constructor(bounds: Box6, pointCount: number, spacing: number, reason: string) {
+    this.errors = [reason];
     this.store.add({
       id: PREVIEW_NODE_ID,
       key: { depth: 0, x: 0, y: 0, z: 0 },
@@ -474,6 +479,8 @@ export interface PreviewCloudSourceOptions {
   readonly name: string;
   readonly sample: PreviewSample;
   readonly crs?: CrsInfo | null;
+  /** Why the octree is incomplete; a preview while the index builds by default. */
+  readonly incompleteReason?: string;
 }
 
 /** A {@link StreamingSource} over a bounded, stratified preview sample. */
@@ -522,7 +529,7 @@ export class PreviewCloudSource implements StreamingSource {
       this._localCube[4] + o[1],
       this._localCube[5] + o[2],
     ];
-    this.octree = new PreviewOctree(worldBounds, options.sample.pointCount, size);
+    this.octree = new PreviewOctree(worldBounds, options.sample.pointCount, size, options.incompleteReason ?? PREVIEW_INCOMPLETE_REASON);
   }
 
   /** THE SAMPLE SIZE — never the file's declared count. See the class note. */

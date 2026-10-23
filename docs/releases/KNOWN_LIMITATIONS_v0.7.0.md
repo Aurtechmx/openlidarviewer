@@ -1053,17 +1053,17 @@ per peak, and the combined value below that is a model figure, not a
 calibrated probability. A supported grid is a grid the points are
 compatible with; it does not say which operation produced it.
 
-## A measurement below the position step is withheld
+## A figure the position step cannot give within 1 cm is withheld
 
 Positions are held as 32-bit floats around a local origin, so on a very wide
 scan the step between representable positions grows (about 16 mm at 200 km).
-Where a scan's step is over the 10 mm precision budget, a measured value
-smaller than the step on the layer it was taken on is withheld with the reason:
-the Measure panel and scene labels say it is not resolved, the CSV leaves the
-cell empty, GeoJSON writes null with a `not_resolved` property, the reports
-record a null finding, and a chain containing it is refused. Values longer than
-the step are still reported, within that step. Recovery is to load a smaller
-tile of the source, or COPC, so each region is held near its own origin.
+Each figure is admitted on the largest error its held positions can carry
+along the axes it uses. Where that bound is over the 10 mm budget the figure is
+withheld with the reason, whatever value it rounded to: the Measure panel,
+its breakdown and scene labels, the profile chart, the CSV, GeoJSON, KML, the
+reports and chain totals all leave it out. A figure along a finely held axis
+of the same scan is still given. Recovery is to load a smaller tile of the
+source, or COPC, so each region is held near its own origin.
 
 ## The draw precision bound is a diagnostic for one view
 

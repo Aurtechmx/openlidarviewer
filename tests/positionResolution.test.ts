@@ -52,12 +52,16 @@ describe('unresolvedMetricKeys', () => {
     expect(measurementMetrics(d, UP, 1, 1, 3, steps(d.points)).length_m).toBe(0);
   });
 
-  it('withholds a collapsed distance on a coarse scan, and keeps one longer than the step', () => {
+  it('withholds a separation on the coarse axis whatever its size, and keeps one on a fine axis', () => {
     const collapsed = m('distance', [[FAR, 0, 0], [FAR, 0, 0]]);
     expect(unresolvedMetricKeys(collapsed, UP, 1, 1, steps(collapsed.points))).toEqual(['length_m']);
     expect(measurementMetrics(collapsed, UP, 1, 1, 3, steps(collapsed.points)).length_m).toBeUndefined();
-    const long = m('distance', [[FAR, 0, 0], [FAR + 3, 0, 0]]);
-    expect(measurementMetrics(long, UP, 1, 1, 3, steps(long.points)).length_m).toBeCloseTo(3, 2);
+    // Held 15.6 mm apart along X, a 3 m run there can be off by more than 1 cm.
+    const alongX = m('distance', [[FAR, 0, 0], [FAR + 3, 0, 0]]);
+    expect(measurementMetrics(alongX, UP, 1, 1, 3, steps(alongX.points)).length_m).toBeUndefined();
+    // The same run along Y reads Y's fine step.
+    const alongY = m('distance', [[FAR, 0, 0], [FAR, 3, 0]]);
+    expect(measurementMetrics(alongY, UP, 1, 1, 3, steps(alongY.points)).length_m).toBeCloseTo(3, 2);
   });
 
   it('keeps a resolved height on a scan that is wide only in X', () => {
@@ -88,7 +92,7 @@ describe('unresolvedMetricKeys', () => {
 
   it('states the step and the way out', () => {
     expect(unresolvedHeadline(steps([[FAR, 0, 0]]), UP, 1)).toBe(
-      "not resolved: below this scan's 15.63 mm position step; load a smaller tile to measure it",
+      "not resolved: this scan holds positions about 15.63 mm apart, too coarse for this figure; load a smaller tile to measure it",
     );
   });
 });
@@ -118,7 +122,7 @@ describe('the step follows the layer a measurement was taken on', () => {
 
 describe('every surface withholds the same figure', () => {
   const collapsed = m('distance', [[FAR, 0, 0], [FAR, 0, 0]], { name: 'Tie' } as Partial<Measurement>);
-  const steady = m('distance', [[FAR, 0, 0], [FAR + 3, 0, 0]], { id: 'steady', name: 'Run' } as Partial<Measurement>);
+  const steady = m('distance', [[FAR, 0, 0], [FAR, 3, 0]], { id: 'steady', name: 'Run' } as Partial<Measurement>);
   const stepsOf = (x: Measurement) => positionSteps(x.points, null);
 
   it('the note names the key, the step and the remedy', () => {

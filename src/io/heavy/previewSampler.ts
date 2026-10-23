@@ -35,7 +35,7 @@ import { decodeContext, finalizeRawColors } from '../lasDecodeShared';
 import { openSlicedLas } from './slicedLasReader';
 import { readLazChunkTable } from './lazChunkTable';
 import { withinDecodedByteBudget } from './heavyByteBudget';
-import { decodeLazChunkLocal } from './decodeLazChunked';
+import { CHUNK_DECODE_FORMATS, decodeLazChunkLocal } from './decodeLazChunked';
 import { getLazPerf } from '../lazDecode';
 import {
   packTileRecord,
@@ -182,7 +182,7 @@ async function sampleLas(
  * Sample a chunked LAZ: read the chunk table, pick a spread of chunks across the
  * file, and decode each one from its own bounded range read. Returns null when
  * the table is unusable or the point format is outside the per-chunk decoder's
- * set (6, 7, 8) — the same fail-closed set the full LAZ build supports.
+ * set (0 to 3, 6 to 8) — the same fail-closed set the full LAZ build supports.
  */
 async function sampleLaz(
   range: RangeSource,
@@ -194,7 +194,7 @@ async function sampleLaz(
   const table = await readLazChunkTable(range, signal, offsetToPointData);
   if (!table.supported) return null;
   const header = table.header;
-  if (![6, 7, 8].includes(header.pointFormat)) return null;
+  if (!CHUNK_DECODE_FORMATS.has(header.pointFormat)) return null;
   const chunks = table.chunks;
   if (chunks.length === 0) return null;
 
@@ -209,9 +209,14 @@ async function sampleLaz(
   const lazPerf = await getLazPerf();
 
   // Pick a spread of chunk indices across the file, so the decoded points span
-  // the whole flight rather than its first chunks.
-  const wanted = Math.min(strata, chunks.length);
+  // the whole flight rather than its first chunks. Each pick gives an equal
+  // share of the target, and there are enough picks that a share is a part of
+  // a chunk: a whole chunk per pick would reach the target before the last
+  // picks and leave the end of the file out.
+  const meanChunk = Math.max(1, total / chunks.length);
+  const wanted = Math.min(chunks.length, Math.max(strata, 4 * Math.ceil(target / meanChunk)));
   const stride = chunks.length / wanted;
+  const share = Math.max(1, Math.ceil(target / wanted));
 
   const packed: Uint8Array[] = [];
   // Sampled positions, kept only to frame a file whose header bounds are untrusted.
@@ -251,7 +256,7 @@ async function sampleLaz(
       ctx,
     });
     finalizeRawColors(raw);
-    const take = Math.min(c.pointCount, target - sampled);
+    const take = Math.min(c.pointCount, share, target - sampled);
     packed.push(packBatch(raw, take, schema, recordBytes));
     if (!choice.boundsTrusted) positions.push(raw.positions.subarray(0, take * 3));
     sampled += take;

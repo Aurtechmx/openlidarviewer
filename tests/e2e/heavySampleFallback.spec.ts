@@ -1,4 +1,5 @@
 import { test, expect, type Page } from '@playwright/test';
+import { readFileSync } from 'node:fs';
 import { isBenignPageError } from './pageErrors';
 
 /**
@@ -8,7 +9,7 @@ import { isBenignPageError } from './pageErrors';
  * cannot fit).
  */
 
-async function lasBase64(n: number): Promise<string> {
+async function lasBase64(n: number, epsg?: number): Promise<string> {
   (globalThis as Record<string, unknown>).__BUILD_IDENTITY__ ??= {
     version: '0.0.0-test', commit: 'unknown', dirty: false, builtAt: '1970-01-01T00:00:00.000Z',
   };
@@ -25,7 +26,7 @@ async function lasBase64(n: number): Promise<string> {
     intensity[i] = i & 0xffff;
     classification[i] = 2;
   }
-  return Buffer.from(writeLas14({ count: n, x, y, z, intensity, classification })).toString('base64');
+  return Buffer.from(writeLas14({ count: n, x, y, z, intensity, classification }, epsg ? { epsg } : {})).toString('base64');
 }
 
 async function dropBase64(page: Page, base64: string, name: string): Promise<void> {
@@ -63,4 +64,23 @@ test('a heavy LAS with too little browser storage opens as a labelled sample', a
   await expect(notice).toContainText(/storage/);
   await expect(page.locator('.olv-empty-title')).toBeHidden();
   expect(errors).toEqual([]);
+});
+
+test('a sample that replaces a stream carries its own CRS and name, not the previous scan\'s', async ({ page }) => {
+  test.setTimeout(150_000);
+  await page.addInitScript(() => {
+    Object.defineProperty(navigator, 'deviceMemory', { value: 0.001, configurable: true });
+    Object.defineProperty(navigator.storage, 'estimate', { value: async () => ({ quota: 1_000_000, usage: 0 }), configurable: true });
+  });
+  await page.goto('/');
+  await expect(page.locator('.olv-empty-title')).toBeVisible();
+  const copc = readFileSync('tests/fixtures/copc/terrain-access-utm.copc.laz').toString('base64');
+  await dropBase64(page, copc, 'prior.copc.laz');
+  const crs = page.locator('.olv-crs-epsg').first();
+  await expect(crs).toContainText('32613', { timeout: 30_000 });
+
+  await dropBase64(page, await lasBase64(120_000, 3857), 'replacement-sample.las');
+  await expect(page.locator('.olv-lasso-toast-msg')).toContainText('replacement-sample.las', { timeout: 90_000 });
+  await expect(crs).toContainText('3857');
+  await expect(page.getByRole('button', { name: /Dataset: replacement-sample\.las/ })).toBeVisible();
 });

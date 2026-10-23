@@ -306,6 +306,8 @@
 }
 /* A finished load's settle gives way to the measure bar opened over it. */
 body:has(.olv-measure-bar:not(.olv-hidden)) .olv-toast.is-finishing { visibility: hidden; }
+/* A finished load has no controls left, so its settle never takes a tap meant for what is under it. */
+.olv-toast.is-finishing { pointer-events: none; }
 .olv-toast-row { display: flex; align-items: center; gap: var(--space-md); }
 .olv-toast-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--accent); flex: none; }
 /* `pre-line` lets the multi-line preload summary break on its newlines;
