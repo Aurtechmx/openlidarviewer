@@ -268,7 +268,7 @@ describe('the certified level of detail', () => {
     expect(r.lod!.level).toBeGreaterThan(0);
     expect(r.lod!.cellSizeMetres!).toBeLessThan(0.01);
     expect(r.lod!.pointsKept).toBe(r.lod!.pointsFull);
-    expect(lodLine(r.lod)).toMatch(/^Coarsest certified level: \d+ mm cells, 100% of points \(.* ≤ 1 cm, faithful rounding\)\. Not drawn in this version\.$/);
+    expect(lodLine(r.lod)).toMatch(/^Coarsest certified level: \d+ mm cells, 100\.0% of points \(.* ≤ 1 cm, faithful rounding\)\. Not drawn in this version\.$/);
   });
 
   it('names full resolution when no coarser level fits', () => {
@@ -281,7 +281,7 @@ describe('the certified level of detail', () => {
   it('names a coarser level, its share of points and that it is not drawn, when one fits', () => {
     const r = readPrecision(deps(), 100, { lod: 'count' });
     expect(r.lod!.level).toBeGreaterThan(0);
-    expect(lodLine(r.lod)).toMatch(/^Coarsest certified level: .* cells, \d+% of points \(.* ≤ .*, faithful rounding\)\. Not drawn in this version\.$/);
+    expect(lodLine(r.lod)).toMatch(/^Coarsest certified level: .* cells, \d+\.\d% of points \(.* ≤ .*, faithful rounding\)\. Not drawn in this version\.$/);
   });
 
   it('is recorded in the certificate with its rule and the narrow claim it supports', () => {

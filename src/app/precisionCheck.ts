@@ -213,7 +213,7 @@ export function lodLine(s: LodSelection | null): string | null {
   if (s.level === 0) {
     return `Coarsest certified level: full resolution (bound ${formatPrecisionMetres(s.bMetres ?? Number.NaN)} ≤ ${limit}, faithful rounding). No coarser level fits.`;
   }
-  const share = s.pointsKept !== null && s.pointsFull > 0 ? `, ${Math.round((s.pointsKept / s.pointsFull) * 100)}% of points` : '';
+  const share = s.pointsKept !== null && s.pointsFull > 0 ? `, ${((s.pointsKept / s.pointsFull) * 100).toFixed(1)}% of points` : '';
   return `Coarsest certified level: ${cellLabel(s.cellSizeMetres ?? Number.NaN)}${share} (${sum}, faithful rounding). Not drawn in this version.`;
 }
 
