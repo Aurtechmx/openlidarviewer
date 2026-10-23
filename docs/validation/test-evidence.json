@@ -5,9 +5,9 @@
   "releaseChannel": "development",
   "releaseAuthoritative": false,
   "tag": null,
-  "commit": "0469a2a5fccf0b2b89296c472b088a75948837ed",
+  "commit": "a1a5ced8bba9c41814116ea8fb8ec38069cb214d",
   "repository": null,
-  "generatedAt": "2026-10-22T22:06:16.584Z",
+  "generatedAt": "2026-10-23T21:45:16.824Z",
   "nodeVersion": "v26.7.0",
   "npmVersion": "11.19.0",
   "platform": "darwin-arm64",
@@ -17,7 +17,7 @@
   "workflowSha": null,
   "gateExit": 0,
   "gateLog": "release/gate.log",
-  "gateLogSha256": "8299d5ce748c461d0c9da8d5940075175b88968220da11413cbe590495579396",
+  "gateLogSha256": "635111a28450f2004aa80499b81a5b8e60373646e79cd60203c4b29c005a4b69",
   "stages": {
     "mutation": "not-executed"
   },
@@ -52,7 +52,7 @@
   },
   "buckets": {
     "unit": {
-      "passed": 15506,
+      "passed": 15525,
       "skipped": 43,
       "runs": 3
     },
@@ -72,20 +72,20 @@
       "runs": 1
     },
     "slow": {
-      "passed": 1542,
+      "passed": 1544,
       "skipped": 6,
       "runs": 2
     }
   },
   "total": {
-    "passed": 24054,
+    "passed": 24075,
     "skipped": 50
   },
   "bundle": {
     "liveEntryKiB": 411,
     "ceilingKiB": 795
   },
-  "packageLockSha256": "fe62e5651d6389231679a22e55e178c0acb408c059bf8fa8666fe90a0a87466c",
+  "packageLockSha256": "b8b7c0647f22d9caf8fb6ac3b71130e7eac371a567013efc2efd169fc812b88c",
   "sbom": {
     "sha256": "9d35d7257dd95122c9f0e059ae2f8ac7e9c2bd3ba2ec04d664f2bf8addac00ea",
     "rootName": "openlidarviewer",
