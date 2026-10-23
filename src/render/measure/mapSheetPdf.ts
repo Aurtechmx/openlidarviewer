@@ -365,6 +365,17 @@ export function scaleBarUnit(
 }
 
 /**
+ * Where to start a label of width `w` drawn at `angle` so its middle lands on
+ * (`px`, `py`): PDF text turns about its own origin, so the start is the
+ * anchor less half the width along the baseline and `lift` (the glyphs'
+ * mid-height) across it.
+ */
+export function rotatedLabelOrigin(px: number, py: number, w: number, lift: number, angle: number): [number, number] {
+  const c = Math.cos(angle), s = Math.sin(angle);
+  return [px - (c * w) / 2 + s * lift, py - (s * w) / 2 - c * lift];
+}
+
+/**
  * The plain linear-unit label for the SOURCE units the map is drawn in.
  * Single-sourced so the scale bar and the notes never disagree about the unit.
  *
@@ -794,7 +805,8 @@ function drawMap(
     const bw = Math.abs(w * Math.cos(lab.angle)) + Math.abs(sz * Math.sin(lab.angle)) + 3;
     const bh = Math.abs(w * Math.sin(lab.angle)) + Math.abs(sz * Math.cos(lab.angle)) + 2;
     page.drawRectangle({ x: px - bw / 2, y: py - bh / 2, width: bw, height: bh, color: WHITE, opacity: 0.82 });
-    page.drawText(s, { x: px - w / 2, y: py - sz / 2 + 1, size: sz, font: bold, color: SEPIA_INDEX, rotate: degrees((lab.angle * 180) / Math.PI) });
+    const [ox, oy] = rotatedLabelOrigin(px, py, w, sz / 2 - 1, lab.angle);
+    page.drawText(s, { x: ox, y: oy, size: sz, font: bold, color: SEPIA_INDEX, rotate: degrees((lab.angle * 180) / Math.PI) });
   }
 
   // ── orientation (top-right inside frame) ─────────────────────────────────

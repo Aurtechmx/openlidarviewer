@@ -13,6 +13,7 @@ import {
   contourShareSheetLines,
   contourDrawStyle,
   mapLinearUnitLabel,
+  rotatedLabelOrigin,
 } from '../src/render/measure/mapSheetPdf';
 import type { ContourFeatureModel, ContourFeature } from '../src/terrain/contour/contourFeatureModel';
 import type { Annotation } from '../src/render/annotate/types';
@@ -618,5 +619,25 @@ describe('map sheet — interpolated and sparse ground apart', () => {
       .toEqual(['4% interpolated \u00b7 45% sparse ground (by contour length)']);
     expect(contourShareSheetLines({ interpolated: Number.NaN, sparse: Number.NaN, gap: Number.NaN }, 400, 6.5, measure))
       .toEqual(['Contour shares not measured (no contours)']);
+  });
+});
+
+describe('contour label placement on the sheet', () => {
+  // The middle of the drawn text, from the origin PDF text turns about.
+  const middle = (o: [number, number], w: number, lift: number, a: number): [number, number] => [
+    o[0] + Math.cos(a) * (w / 2) - Math.sin(a) * lift,
+    o[1] + Math.sin(a) * (w / 2) + Math.cos(a) * lift,
+  ];
+
+  it('centres a label on its anchor at any angle', () => {
+    for (const a of [0, 0.4, Math.PI / 2, -Math.PI / 2, -1.2]) {
+      const [x, y] = middle(rotatedLabelOrigin(300, 400, 20, 2.25, a), 20, 2.25, a);
+      expect(x).toBeCloseTo(300, 9);
+      expect(y).toBeCloseTo(400, 9);
+    }
+  });
+
+  it('keeps the horizontal case where it was', () => {
+    expect(rotatedLabelOrigin(300, 400, 20, 2.25, 0)).toEqual([290, 397.75]);
   });
 });
