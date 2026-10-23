@@ -273,7 +273,11 @@ export async function openScan(file: File, deps: OpenScanDeps): Promise<void> {
   }
   const controller = new AbortController();
   // A reload at higher density hands this open a raised budget; any other open uses the device's.
-  const renderBudget = takeReloadBudget(file) ?? deps.renderBudget;
+  const reloadBudget = takeReloadBudget(file);
+  const renderBudget = reloadBudget ?? deps.renderBudget;
+  // A reload replaces a loaded layer, so it never routes out of core: a file too
+  // large to read whole is read again by ranges at the raised budget.
+  const reloading = reloadBudget !== null;
   let preview: PreviewCloudHandle | null = null;
   // Whether a streaming scan was already on screen when this open began.
   //
@@ -324,7 +328,7 @@ export async function openScan(file: File, deps: OpenScanDeps): Promise<void> {
     // loader would face the same too-large allocation, so this REFUSES with a
     // named reason instead of falling through into an out-of-memory crash.
     let streamed = false;
-    const heavy = await openLocalHeavyLas(file, controller.signal, {
+    const heavy = reloading ? { status: 'not-heavy' as const } : await openLocalHeavyLas(file, controller.signal, {
       viewerReady: deps.viewerReady,
       getViewer: deps.getViewer,
       isPhone: deps.isTouchFirst ?? deps.isPhone,
@@ -424,7 +428,7 @@ export async function openScan(file: File, deps: OpenScanDeps): Promise<void> {
         deviceMemoryGB: deps.deviceMemoryGB(),
         signal: controller.signal,
         head: headSlice,
-        rangedSample: sample !== null,
+        rangedSample: sample !== null || reloading,
       },
     );
     await attachStaticCloud(result, { file, signal: controller.signal, preview, sourceDigest, replaced: sample?.replaced }, deps);

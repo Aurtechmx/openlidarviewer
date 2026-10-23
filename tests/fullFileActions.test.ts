@@ -59,7 +59,8 @@ describe('assessFullFile', () => {
   });
 
   it('refuses a heavy file with both figures', () => {
-    const f = synth('heavy');
+    // Under the whole-file cap, so the memory figures decide.
+    const f = synth('heavy', { fileBytes: 900_000_000 });
     const a = assessFullFile(f, desktop16);
     expect(a.show).toBe(true);
     expect(a.allowed).toBe(false);
@@ -67,7 +68,7 @@ describe('assessFullFile', () => {
   });
 
   it('says the ceiling is estimated when the browser reports no memory', () => {
-    const a = assessFullFile(synth('heavy'), { deviceMemoryGB: undefined, isMobile: false });
+    const a = assessFullFile(synth('heavy', { fileBytes: 900_000_000 }), { deviceMemoryGB: undefined, isMobile: false });
     expect(a.memoryEstimated).toBe(true);
     expect(a.reason).toContain(`about ${formatGb(memoryCeilingBytes(undefined, false))} (estimated)`);
   });
@@ -210,21 +211,20 @@ describe('reload at higher density', () => {
     expect(assessReload(full, high).reason).toBe(`${compactPointCount(GPU_HARD_POINT_CEILING)} of ${compactPointCount(20_000_000)} points are loaded. A reload would not add points on this device.`);
   });
 
-  it('refuses the heavy file that does not fit memory, and hides for a complete load', () => {
+  it('reads a heavy LAS again by ranges, and hides for a complete load', () => {
     const heavy = assessReload(synth('heavy'), high);
-    expect(heavy.allowed).toBe(false);
-    expect(heavy.reason).toContain(formatGb(heavy.estimateBytes));
-    expect(heavy.reason).toContain(`over the ${formatGb(memoryCeilingBytes(16, false))} this device allows for a loaded layer`);
-    expect(heavy.reason).toContain('opens as a streamed scan');
-    expect(heavy.reason).toMatch(/ of .* points are loaded\./);
+    // The file is never held whole, so only the decoded points count against memory.
+    expect(heavy.allowed).toBe(true);
+    expect(heavy.label).toBe(`Reload at ${compactPointCount(heavy.target)} points`);
+    expect(heavy.target).toBeGreaterThan(synth('heavy').resident);
     expect(assessReload(synth('small'), high).show).toBe(false);
   });
 
-  it('says a LAS too large to hold would stream, and a non-streaming format does not fit', () => {
+  it('plans a LAS too large to hold as a ranged read, and a non-streaming format does not fit', () => {
     const las = synth('heavy');
-    const plan = planLoad({ sourceCount: las.declared!, budget: GPU_HARD_POINT_CEILING, fileBytes: las.fileBytes, format: 'las', attributes: las.attributes, isMobile: false, deviceMemoryGB: 16 });
-    expect(plan.buildThenStream).toBe(true);
-    expect(assessReload(las, high).reason).toMatch(/opens as a streamed scan, and a reload only replaces a loaded layer\.$/);
+    const plan = planLoad({ sourceCount: las.declared!, budget: GPU_HARD_POINT_CEILING, fileBytes: las.fileBytes, format: 'las', attributes: las.attributes, isMobile: false, deviceMemoryGB: 16, fileResident: false });
+    expect(plan.buildThenStream).toBe(false);
+    expect(plan.rangedRead).toBe(true);
     const ply = assessReload(synth('heavy', { format: 'ply' }), high);
     expect(ply.allowed).toBe(false);
     expect(ply.reason).toContain(`more than the ${formatGb(memoryCeilingBytes(16, false))} this device allows`);

@@ -124,21 +124,26 @@ function facts(format: SourceFormat, fileBytes: number): FullFileLayerFacts {
 
 const roomy = { deviceMemoryGB: 64, isMobile: false };
 
-describe('full-resolution export and reload refuse over the cap', () => {
-  it.each(['las', 'laz', 'ply'] as const)('full export refuses an over-cap %s', (format) => {
-    const a = assessFullFile(facts(format, MAX_WHOLE_FILE_BYTES + 1), roomy);
-    expect(a.allowed).toBe(false);
-    expect(a.reason).toBe(WHOLE_FILE_TOO_LARGE_MESSAGE);
+describe('full-resolution export and reload over the cap', () => {
+  it.each(['las', 'laz', 'ply'] as const)('full export is not offered for an over-cap %s', (format) => {
+    // The re-decode reads the file whole, which no device can do over the cap.
+    expect(assessFullFile(facts(format, MAX_WHOLE_FILE_BYTES + 1), roomy).show).toBe(false);
   });
 
   it('full export still allows an under-cap file', () => {
     expect(assessFullFile(facts('las', 600_000_000), roomy).allowed).toBe(true);
   });
 
-  it.each(['las', 'ply'] as const)('reload refuses an over-cap %s', (format) => {
-    const r = assessReload(facts(format, FOUR_GB), { ...roomy, tier: 'high' });
+  it('reload refuses an over-cap ply', () => {
+    const r = assessReload(facts('ply', FOUR_GB), { ...roomy, tier: 'high' });
     expect(r.allowed).toBe(false);
     expect(r.reason).toContain(WHOLE_FILE_TOO_LARGE_MESSAGE);
+  });
+
+  it.each(['las', 'laz'] as const)('reload reads an over-cap %s again by ranges', (format) => {
+    const r = assessReload(facts(format, FOUR_GB), { ...roomy, tier: 'high' });
+    expect(r.allowed).toBe(true);
+    expect(r.target).toBeGreaterThan(1_000_000);
   });
 
   it('the full-resolution read refuses before the confirm and before arrayBuffer()', async () => {
