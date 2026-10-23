@@ -190,6 +190,7 @@ export class QualityControl {
 
   /** Drop the document listeners this control installed. */
   dispose(): void {
+    if (this._precisionTimer !== null) clearInterval(this._precisionTimer);
     document.removeEventListener('pointerdown', this._onDocumentPointerDown, true);
     document.removeEventListener('keydown', this._onDocumentKeyDown);
   }
@@ -237,8 +238,13 @@ export class QualityControl {
     this._options.onPersist?.(this._preference);
   }
 
+  /** While the panel is open its precision line follows the scene and the camera. */
+  private _precisionTimer: ReturnType<typeof setInterval> | null = null;
+
   private _setOpenState(open: boolean): void {
     this._open = open;
+    if (this._precisionTimer !== null) clearInterval(this._precisionTimer);
+    this._precisionTimer = open && this._options.precision ? setInterval(() => this._panel?.refreshPrecision(), 500) : null;
     this._button.setAttribute('aria-expanded', open ? 'true' : 'false');
     this._button.classList.toggle('olv-quality-button-open', open);
     // The header carries its own z-index, which makes it a stacking context: a

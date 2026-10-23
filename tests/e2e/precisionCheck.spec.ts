@@ -50,3 +50,14 @@ test('with no scan open the panel asks for one and offers no certificate', async
   await expect(section.locator('.olv-precision-line')).toHaveText('Open a scan to check its precision.');
   await expect(section.getByRole('button', { name: 'Copy certificate' })).toBeDisabled();
 });
+
+test('an open panel follows the scene: it updates when a scan opens after it', async ({ page }) => {
+  await page.goto('/?test=1');
+  await page.locator('.olv-quality-button').click();
+  const line = page.locator('.olv-precision .olv-precision-line');
+  await expect(line).toHaveText('Open a scan to check its precision.');
+  await dropTerrainAccessUtmLas(page);
+  await expect(page.locator('.olv-empty')).toBeHidden({ timeout: 30_000 });
+  if (!(await page.locator('.olv-precision').isVisible())) await page.locator('.olv-quality-button').click();
+  await expect(line).toHaveText(/^Rendering error at most .* inside the 1 mm limit\.$/, { timeout: 10_000 });
+});

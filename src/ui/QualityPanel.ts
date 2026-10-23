@@ -288,7 +288,8 @@ export class QualityPanel {
       chip.setAttribute('aria-pressed', active ? 'true' : 'false');
     }
     const reading = readPrecision(deps, this._tolerance);
-    this._precisionLine.textContent = reading.line;
+    // Rewritten only on a change, so a live refresh does not re-announce the same line.
+    if (this._precisionLine.textContent !== reading.line) this._precisionLine.textContent = reading.line;
     this._precisionLine.dataset.state = reading.state;
     this._copyButton.disabled = reading.diagnostic === null;
   }
