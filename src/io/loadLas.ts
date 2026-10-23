@@ -337,6 +337,8 @@ export async function loadLazFromFile(
   policy?: DecodePoolPolicy,
   previewBudget?: number,
   pointSemantics?: boolean,
+  /** False when the plan read the file by ranges and left its bytes out of the memory estimate. */
+  wholeFileAllowed = true,
 ): Promise<PointCloud> {
   // The VLRs sit between the public header and the point data.
   const head = await readLasHead(file, name);
@@ -439,6 +441,16 @@ export async function loadLazFromFile(
     return toCloud(pooled);
   }
 
+  // A ranged plan sized the load without the file's bytes, so reading it
+  // whole here could need more memory than the plan allowed: refuse instead.
+  if (!wholeFileAllowed) {
+    const why = stats.poolFallbackReason ? ` (${stats.poolFallbackReason})` : '';
+    throw new LoadError(
+      'memory-constraint',
+      `${name} was planned as a sample read in pieces, and its compressed chunks could not be decoded separately here${why}. `
+        + 'Reading it whole would need more memory than that plan allowed.',
+    );
+  }
   // Past the whole-file cap the file cannot be read into one buffer: refuse
   // rather than try, since the parallel chunk decode was the only way to read it.
   if (exceedsWholeFileCap(file.size)) {

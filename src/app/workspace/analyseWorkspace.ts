@@ -391,8 +391,10 @@ export function createAnalyseWorkspace(d: AnalyseWorkspaceDeps): AnalyseWorkspac
           action.addEventListener('click', () => d.runAction('analyse.run'));
         }
         const title = [el('span', { className: 'olv-ah-name', text: row.label }), badge(row)];
+        // A lab's heading is never a control: when its card offers no Run (a
+        // block terrain cannot clear), a heading click would run it anyway.
         let head: HTMLElement;
-        if (lab && action) {
+        if (lab) {
           head = el('div', { className: 'olv-ah-head' }, title);
         } else {
           head = el('button', { className: 'olv-ah-open', type: 'button' }, title);

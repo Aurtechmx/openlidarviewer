@@ -127,6 +127,20 @@ describe('Analyse home', () => {
     expect(t.router.route().page).toBeNull();
   });
 
+  it('a lab blocked by something terrain cannot clear offers no control, not even its heading', async () => {
+    const t = await make();
+    // A scan with no points: terrain cannot build a surface for the labs.
+    t.setState({ facts: { ...facts, pointCount: 0 } as ScanFacts, view: undefined, produced: new Set<ProductId>() });
+    for (const id of ['flow-pulse', 'terrain-access']) {
+      const r = t.row(id);
+      expect(r.hasClass('is-blocked'), id).toBe(true);
+      expect(r.find((e) => e.hasClass('olv-ah-run'))).toBeUndefined();
+      expect(r.find((e) => e.hasClass('olv-ah-open'))).toBeUndefined();
+      expect(r.find((e) => e.hasClass('olv-ah-head'))).toBeDefined();
+    }
+    expect(t.runAction).not.toHaveBeenCalled();
+  });
+
   it('labs are registered pages: Flow Pulse and Terrain Access under Terrain, Observatory top level', async () => {
     const t = await make(['dtm']);
     expect(t.aw.pages['flow-pulse']).toMatchObject({ title: 'Flow Pulse', parent: 'terrain' });

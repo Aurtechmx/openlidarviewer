@@ -939,8 +939,8 @@ export function renderFlowPulseNeedsGround(onRunTerrain: (() => void) | null): H
 }
 
 /** Show Flow Pulse's page while the terrain run it needs builds the ground surface. */
-export function openFlowPulsePreparing(): { close(): void } {
-  return openLabSurface('flow-pulse', 'Flow Pulse', el('div', { className: 'olv-flow-lab' }, [preparingGround('flow-pulse')]));
+export function openFlowPulsePreparing(onClose?: () => void): { close(): void } {
+  return openLabSurface('flow-pulse', 'Flow Pulse', el('div', { className: 'olv-flow-lab' }, [preparingGround('flow-pulse')]), onClose);
 }
 
 /** Run and show Flow Pulse on its Analyse page. */

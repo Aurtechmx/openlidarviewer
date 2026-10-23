@@ -147,6 +147,7 @@ export async function parseFile(
     const { loadLazFromFile } = await import('./loadLas');
     const cloud = await loadLazFromFile(
       file, name, stride, onProgress, onPreviewChunk, onStats, policy, previewBudget, pointSemantics,
+      plan.rangedRead !== true,
     );
     return budgetedLas(cloud, plan, onProgress);
   }

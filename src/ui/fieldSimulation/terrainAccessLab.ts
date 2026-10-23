@@ -1205,8 +1205,8 @@ export function mountTerrainAccessInteractive(
 }
 
 /** Show Terrain Access's page while the terrain run it needs builds the ground surface. */
-export function openTerrainAccessPreparing(): { close(): void } {
-  return openLabSurface('terrain-access', 'Terrain Access', el('div', { className: 'olv-ta-lab' }, [preparingGround('terrain-access')]));
+export function openTerrainAccessPreparing(onClose?: () => void): { close(): void } {
+  return openLabSurface('terrain-access', 'Terrain Access', el('div', { className: 'olv-ta-lab' }, [preparingGround('terrain-access')]), onClose);
 }
 
 /**

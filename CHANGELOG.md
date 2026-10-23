@@ -72,6 +72,9 @@ The format is based on Keep a Changelog and the project follows Semantic Version
 
 ### Fixed
 
+- Closing a scan while Flow Pulse or Terrain Access is building its ground surface no longer opens the lab in a dialog over the empty app afterwards.
+- A Flow Pulse or Terrain Access card blocked by something a terrain run cannot fix no longer starts one when its heading is clicked; the heading is a title, as on a card that can run.
+- A LAZ opened as a sample is refused with a reason, rather than read whole, when its compressed chunks cannot be decoded separately: the sample's memory plan left the file's bytes out.
 - Priority-Flood raises each filled cell one Float32 step above the cell it was reached from, as Barnes, Lehman and Mulla specify, instead of a fixed 1 mm. The larger rise reordered the flood, so a few spill levels came out up to centimetres high and some small depressions drained over the wrong rim; depression counts and fill depths now match an exact fill (`olv.simulation.terrain-flow.priority-flood@5`, `olv.simulation.terrain-flow.priority-flood.gap-outlet@3`).
 - The scan report's in-memory resolution no longer converts Z with the horizontal unit when the source declares a vertical unit that cannot be read. The figure covers the horizontal axes and says so, and the precision permit still checks them.
 - A Flow Pulse run on a sampled scan records its input as sampled, with the sample caveat, rather than as full coverage. The figure under the grid reads Surface (cells with a height) instead of Routed, and the outlet note says an edge outlet can be where a stream enters.

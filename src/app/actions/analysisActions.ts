@@ -38,18 +38,21 @@ export function contributeAnalysisActions(deps: AnalysisActionDeps): Action[] {
    * One click to a lab result. With no terrain result yet (or when asked to
    * run it again) the lab's page shows progress while terrain runs, then the
    * lab opens on the new ground surface. A run that produces none leaves the
-   * lab's own notice, which says so.
+   * lab's own notice, which says so. A progress page closed while terrain ran
+   * (the scan was closed) opens nothing: there is no scan to open the lab on.
    */
   const withGround = async (
     panel: LabPanel,
     force: boolean,
-    preparing: () => { close(): void },
+    preparing: (onClose: () => void) => { close(): void },
     open: (p: LabPanel) => void,
   ): Promise<void> => {
     if (panel.hasResult && !force) { open(panel); return; }
-    const wait = preparing();
+    let closed = false;
+    const wait = preparing(() => { closed = true; });
     try {
       await entry.run();
+      if (closed) return;
       open(await entry.showPanel());
     } finally {
       wait.close();
@@ -87,7 +90,7 @@ export function contributeAnalysisActions(deps: AnalysisActionDeps): Action[] {
         // terrain first when the scan has no analysis yet.
         const go = (force: boolean): void => {
           const load = () => Promise.all([entry.showPanel(), loadFlowPulseLab()])
-            .then(([panel, lab]) => withGround(panel, force, () => lab.openFlowPulsePreparing(), (p) => {
+            .then(([panel, lab]) => withGround(panel, force, (onClose) => lab.openFlowPulsePreparing(onClose), (p) => {
               lab.openFlowPulseLab(p.flowInput ?? null, { onRunTerrain: () => go(true) });
             }));
           const toast = deps.showLassoToast;
@@ -115,7 +118,7 @@ export function contributeAnalysisActions(deps: AnalysisActionDeps): Action[] {
         // terrain first when the scan has no analysis yet.
         const go = (force: boolean): void => {
           void Promise.all([entry.showPanel(), loadTerrainAccessLab()])
-            .then(([panel, lab]) => withGround(panel, force, () => lab.openTerrainAccessPreparing(), (p) => {
+            .then(([panel, lab]) => withGround(panel, force, (onClose) => lab.openTerrainAccessPreparing(onClose), (p) => {
               lab.openTerrainAccessLab(p.terrainAccessInput ?? null, { onRunTerrain: () => go(true) });
             }))
             .catch((err) => console.warn('[terrain-access] lab chunk failed to load', err));

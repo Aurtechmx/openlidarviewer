@@ -168,6 +168,23 @@ describe('one click to a lab result: terrain runs first when there is none', () 
       expect(deps.terrainAnalysisEntry.showAnalyseMode).not.toHaveBeenCalled();
     });
 
+    it(`${id}: opens nothing when the progress page closed while terrain ran (the scan was closed)`, async () => {
+      const deps = terrainDeps();
+      const preparing = id === 'analyse.flowPulse' ? openFlowPulsePreparing : openTerrainAccessPreparing;
+      // The page host runs the page's close when the scan closes; this one closes mid-run.
+      preparing.mockImplementationOnce(((onClose?: () => void) => {
+        events.push(`${prefix}preparing`);
+        let done = false;
+        const close = (): void => { if (done) return; done = true; events.push(`${prefix}preparing-closed`); onClose?.(); };
+        const run = deps.terrainAnalysisEntry.run as unknown as { mockImplementationOnce(f: () => Promise<void>): void };
+        run.mockImplementationOnce(async () => { events.push('terrain-run'); close(); });
+        return { close };
+      }) as never);
+      contributeAnalysisActions(deps).find((a) => a.id === id)!.run();
+      await settle();
+      expect(events).toEqual([`${prefix}preparing`, 'terrain-run', `${prefix}preparing-closed`]);
+    });
+
     it(`${id}: with a terrain result, opens the lab at once and runs nothing`, async () => {
       const deps = terrainDeps();
       await deps.terrainAnalysisEntry.run();

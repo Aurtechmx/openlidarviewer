@@ -93,6 +93,16 @@ describe('LAZ past the whole-file cap', () => {
     expect(whole).not.toHaveBeenCalled();
   });
 
+  it('is refused, not read whole, under a ranged plan that left the file out of its memory estimate', async () => {
+    const bytes = readFileSync('tests/fixtures/multichunk.laz');
+    const file = fileOf(bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer, 'sampled.laz');
+    const whole = vi.spyOn(file, 'arrayBuffer');
+    await expect(
+      loadLazFromFile(file, 'sampled.laz', 1, undefined, undefined, undefined, undefined, undefined, undefined, false),
+    ).rejects.toThrow(/planned as a sample read in pieces/);
+    expect(whole).not.toHaveBeenCalled();
+  });
+
   it('is still read whole below the cap when the chunks cannot be decoded separately', async () => {
     const bytes = readFileSync('tests/fixtures/multichunk.laz');
     const file = fileOf(bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer, 'small.laz');
