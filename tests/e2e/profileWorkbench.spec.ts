@@ -1,5 +1,6 @@
 import { test, expect, type Page } from '@playwright/test';
 import { placeProfile } from './helpers';
+import { isBenignPageError } from './pageErrors';
 
 /**
  * Profile workbench acceptance flows.
@@ -181,8 +182,8 @@ test.describe('profile workbench', () => {
     // A workbench that throws on teardown still passes every assertion above,
     // because the DOM it leaves behind is the DOM those assertions want.
     const errors: string[] = [];
-    page.on('console', (m) => { if (m.type() === 'error') errors.push(m.text()); });
-    page.on('pageerror', (e) => errors.push(String(e)));
+    page.on('console', (m) => { if (m.type() === 'error' && !isBenignPageError(m.text())) errors.push(m.text()); });
+    page.on('pageerror', (e) => { if (!isBenignPageError(e.message)) errors.push(String(e)); });
 
     await placeProfile(page);
     await openWorkbench(page);

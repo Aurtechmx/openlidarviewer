@@ -28,7 +28,7 @@ function collectErrors(page: Page): ErrorLog {
     if (!isBenignPageError(err.message)) log.errors.push(`pageerror: ${err.message}`);
   });
   page.on('console', (msg) => {
-    if (msg.type() === 'error') log.errors.push(`console.error: ${msg.text()}`);
+    if (msg.type() === 'error' && !isBenignPageError(msg.text())) log.errors.push(`console.error: ${msg.text()}`);
   });
   return log;
 }

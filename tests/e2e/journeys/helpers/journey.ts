@@ -29,8 +29,8 @@ export const ERROR_ALLOWLIST: ReadonlyArray<{ pattern: RegExp; reason: string }>
   {
     pattern: /^Refused to apply a stylesheet because its hash, its nonce, or 'unsafe-inline' does not appear in the style-src directive/,
     reason:
-      "WebKit only: Playwright's screenshot injects an inline <style>, which the app's CSP blocks. " +
-      'App-raised CSP violations are still caught: startJourney records securitypolicyviolation events and fails on any that is not an inline style shortly after a screenshot.',
+      "WebKit only: Playwright's screenshot injects an inline <style>, which the app's CSP blocks, and WebKit 27.2 reports one for each <select> it builds (see pageErrors.ts). " +
+      'App-raised CSP violations are still caught: startJourney records securitypolicyviolation events and fails on any that is not an inline style shortly after a screenshot or one per <select> created.',
   },
   {
     pattern: /GL Driver Message|GPU stall due to ReadPixels/,
@@ -92,25 +92,54 @@ export function startJourney(page: Page, info: TestInfo, journeyId: string, extr
   // runner that violation event arrives well after the screenshot returns, so
   // an inline style-src-elem violation within SHOT_GRACE_MS of a screenshot is
   // the harness's own and is dropped; every other violation fails the step.
-  void page.addInitScript(() => {
-    const w = window as unknown as { __jCsp: Array<{ t: number; text: string; inlineStyle: boolean }>; __jShots: number[] };
+  //
+  // WebKit 27.2 (Playwright 1.64) also reports one inline style-src-attr
+  // violation for every <select> element created, from the engine's own inner
+  // tree for the control (see pageErrors.ts). On WebKit the page counts the
+  // selects it creates, and that many inline style-src-attr violations are
+  // dropped; any beyond the count still fail the step.
+  const selectBudget = page.context().browser()?.browserType().name() === 'webkit';
+  void page.addInitScript((countSelects) => {
+    const w = window as unknown as {
+      __jCsp: Array<{ t: number; text: string; inlineStyle: boolean; inlineAttr: boolean }>;
+      __jShots: number[];
+      __jSelects: number;
+    };
     w.__jCsp = [];
     w.__jShots = [];
+    w.__jSelects = 0;
+    if (countSelects) {
+      const create = Document.prototype.createElement;
+      Document.prototype.createElement = function (this: Document, ...args: Parameters<Document['createElement']>) {
+        if (String(args[0]).toLowerCase() === 'select') w.__jSelects += 1;
+        return create.apply(this, args);
+      } as Document['createElement'];
+    }
     document.addEventListener('securitypolicyviolation', (e) => {
       w.__jCsp.push({
         t: performance.now(),
         text: `${e.violatedDirective} ${e.blockedURI} ${e.sourceFile}:${e.lineNumber}`,
         inlineStyle: e.violatedDirective.startsWith('style-src') && e.blockedURI === 'inline',
+        inlineAttr: e.violatedDirective === 'style-src-attr' && e.blockedURI === 'inline',
       });
     });
-  });
+  }, selectBudget);
   const SHOT_GRACE_MS = 5_000;
   const cspViolations = (): Promise<string[]> =>
     page
       .evaluate((grace) => {
-        const w = window as unknown as { __jCsp?: Array<{ t: number; text: string; inlineStyle: boolean }>; __jShots?: number[] };
+        const w = window as unknown as {
+          __jCsp?: Array<{ t: number; text: string; inlineStyle: boolean; inlineAttr: boolean }>;
+          __jShots?: number[];
+          __jSelects?: number;
+        };
         const shots = w.__jShots ?? [];
         return (w.__jCsp?.splice(0) ?? [])
+          .filter((v) => {
+            if (!v.inlineAttr || !w.__jSelects) return true;
+            w.__jSelects -= 1;
+            return false;
+          })
           .filter((v) => !(v.inlineStyle && shots.some((s) => v.t >= s && v.t - s <= grace)))
           .map((v) => v.text);
       }, SHOT_GRACE_MS)

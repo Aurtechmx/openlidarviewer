@@ -11,6 +11,7 @@ import { expect, test, type Page } from '@playwright/test';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { suppressOnboardingTour, useAdvancedInspector } from './helpers';
+import { isBenignPageError } from './pageErrors';
 
 // These specs drive the Inspector's Advanced sections.
 test.beforeEach(async ({ page }) => useAdvancedInspector(page));
@@ -116,8 +117,8 @@ test('a failed open leaves the loaded project untouched', async ({ page }) => {
 
 test('unreadable bytes get the open advice and keep the loaded scene', async ({ page }) => {
   const errors: string[] = [];
-  page.on('pageerror', (e) => errors.push(`pageerror: ${e.message}`));
-  page.on('console', (m) => { if (m.type() === 'error') errors.push(`console.error: ${m.text()}`); });
+  page.on('pageerror', (e) => { if (!isBenignPageError(e.message)) errors.push(`pageerror: ${e.message}`); });
+  page.on('console', (m) => { if (m.type() === 'error' && !isBenignPageError(m.text())) errors.push(`console.error: ${m.text()}`); });
 
   const bytes = readFileSync(fileURLToPath(new URL('../../public/samples/tiny.las', import.meta.url)));
   await drop(page, [...bytes], 'tiny.las');
