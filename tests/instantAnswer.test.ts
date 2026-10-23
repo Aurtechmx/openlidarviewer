@@ -3,7 +3,7 @@
  */
 
 import { describe, it, expect } from 'vitest';
-import { planInstantAnswer } from '../src/intelligence/instantAnswer';
+import { planInstantAnswer, sameSourcePair } from '../src/intelligence/instantAnswer';
 
 describe('planInstantAnswer', () => {
   it('a second scan offers the before/after compare, naming both scans', () => {
@@ -71,5 +71,16 @@ describe('planInstantAnswer', () => {
   it('a known CRS keeps the plain terrain prompt', () => {
     const a = planInstantAnswer({ cloudCount: 1, scanShape: 'terrain', crsKnown: true })!;
     expect(a.message).not.toMatch(/unknown/);
+  });
+});
+
+describe('sameSourcePair', () => {
+  it('is true only for two layers read from the same file, as a reload makes', () => {
+    const file = new File([new Uint8Array(4)], 'scan.laz');
+    const other = new File([new Uint8Array(4)], 'scan.laz');
+    expect(sameSourcePair(['a', 'b'], new Map([['a', file], ['b', file]]))).toBe(true);
+    expect(sameSourcePair(['a', 'b'], new Map([['a', file], ['b', other]]))).toBe(false);
+    expect(sameSourcePair(['a', 'b'], new Map([['a', file]]))).toBe(false);
+    expect(sameSourcePair(['a', 'b', 'c'], new Map([['a', file], ['b', file], ['c', file]]))).toBe(false);
   });
 });

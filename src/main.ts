@@ -114,7 +114,7 @@ import { ClipPanel, fitBoundsInProject } from './ui/ClipPanel';
 import type { ClipBox } from './render/clip/clipBox';
 // Two-epoch change detection is loaded on demand (it pulls the terrain
 // ground-filter + rasteriser): see compareLoadedLayers' dynamic import.
-import { planInstantAnswer } from './intelligence/instantAnswer';
+import { planInstantAnswer, sameSourcePair } from './intelligence/instantAnswer';
 import { decodeFull } from './convert/decodeFull';
 import { createHelpOverlayLazy, createLazySingleton, createLazySurfaceLoader, buttonLazyTrigger, dialogOpen, retryableOnce, mountPanelOnce } from './app/helpOverlayLazy';
 import {
@@ -789,7 +789,7 @@ let _lastInstantScanLabel: string | undefined;
  */
 function showInstantAnswer(scanLabel: string): void {
   const answer = planInstantAnswer({
-    cloudCount: viewer.clouds().length, compareReady: compareSuggestionAllowed(crsService, viewer.clouds().map((id) => viewer.getCloud(id))),
+    cloudCount: viewer.clouds().length, compareReady: !sameSourcePair(viewer.clouds(), sourceFileById) && compareSuggestionAllowed(crsService, viewer.clouds().map((id) => viewer.getCloud(id))),
     scanShape: captureProvenance.verdict(),
     scanLabel, priorScanLabel: _lastInstantScanLabel,
     crsKnown: crsIsKnown(crsService.current()),

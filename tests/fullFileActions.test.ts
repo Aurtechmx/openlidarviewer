@@ -211,6 +211,14 @@ describe('reload at higher density', () => {
     expect(assessReload(full, high).reason).toBe(`${compactPointCount(GPU_HARD_POINT_CEILING)} of ${compactPointCount(20_000_000)} points are loaded. A reload would not add points on this device.`);
   });
 
+  it('is not offered again for a layer that already holds most of what a reload would show', () => {
+    const fresh = assessReload(synth('heavy'), high);
+    expect(fresh.show).toBe(true);
+    // The layer a reload at that target made, evened out under it.
+    const reloaded = synth('heavy', { resident: Math.round(fresh.target * 0.77) });
+    expect(assessReload(reloaded, high).show).toBe(false);
+  });
+
   it('reads a heavy LAS again by ranges, and hides for a complete load', () => {
     const heavy = assessReload(synth('heavy'), high);
     // The file is never held whole, so only the decoded points count against memory.

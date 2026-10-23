@@ -366,6 +366,10 @@ export function assessReload(f: FullFileLayerFacts | null, device: ReloadDevice)
   // replace a loaded layer.
   if (!ranged && exceedsWholeFileCap(f.fileBytes)) return { ...base, allowed: false, reason: `${held}. ${WHOLE_FILE_TOO_LARGE_MESSAGE}` };
   if (target <= f.resident) return { ...base, allowed: false, reason: `${held}. A reload would not add points on this device.` };
+  // A reload short of every point is evened out by voxel and lands under its
+  // target, so a layer already holding two thirds of it would gain little: a
+  // layer a reload just made would otherwise offer the same reload again.
+  if (!allPoints && f.resident * 1.5 >= target) return NO_RELOAD;
   return { ...base, allowed: true };
 }
 
