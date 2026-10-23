@@ -181,6 +181,14 @@ describe('scan report wiring', () => {
     expect(row?.value).toMatch(/within 1\.00 mm/);
   });
 
+  it('leaves the row ungraded when the vertical unit is declared but unreadable', () => {
+    // The token survives a session round trip that drops a non-finite factor.
+    const bad = new PointCloud({ positions: local, origin: ORIGIN, sourceFormat: 'las', name: 'far', metadata: { crs: { ...METRE_CRS, verticalLinearUnit: 'unknown' } } });
+    const row = scanReport.run(bad, undefined, { drawPrecision: view('webgpu') }).rows.find((r) => r.label === 'Draw precision bound');
+    expect(row?.value).toMatch(/source units\) at this view; the vertical unit could not be interpreted, not graded/);
+    expect(row?.value).not.toMatch(/within/);
+  });
+
   it('omits them without a draw, leaving the report unchanged', () => {
     const rows = scanReport.run(cloud).rows;
     expect(rows.some((r) => r.label.startsWith('Draw '))).toBe(false);

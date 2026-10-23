@@ -9,7 +9,7 @@ import { heightLabel, HEIGHT_INCLUDES_NOISE_SUFFIX } from '../../geo/height';
 import { estimateInMemoryPrecision } from '../../geo/inMemoryPrecision';
 import { inMemoryPrecisionRows } from '../inMemoryPrecisionRows';
 import { drawPrecisionRows } from '../drawPrecisionRows';
-import { evaluateDrawPrecision, tileFromLocalFloat32 } from '../../science/drawPrecision';
+import { drawPrecisionUnitOf, evaluateDrawPrecision, tileFromLocalFloat32 } from '../../science/drawPrecision';
 import { SCAN_DENSITY_METHOD_TAG } from '../streamingExtentRows';
 
 /** ", N flagged invalid and masked" when the file flags points whose `bit` attribute is not a measurement. */
@@ -358,11 +358,8 @@ export const scanReport: AnalysisModule = {
     // demand here and never consulted by the render loop. {rho, r} are cached
     // per position buffer, so a re-run only redoes the O(1) check.
     const draw = options?.drawPrecision
-      ? drawPrecisionRows(evaluateDrawPrecision(tileFromLocalFloat32(sourcePositions(cloud)), options.drawPrecision, {
-        linearUnitKnown: basis.unitKnown,
-        linearUnitToMetres: ctx.linearUnitToMetres,
-        verticalUnitToMetres: zUp ? ctx.verticalUnitToMetres : undefined,
-      }))
+      ? drawPrecisionRows(evaluateDrawPrecision(tileFromLocalFloat32(sourcePositions(cloud)), options.drawPrecision,
+        drawPrecisionUnitOf(ctx, { horizontalKnown: basis.unitKnown, zUp })))
       : [];
     rows.push(
       ...inMemoryPrecisionRows(precision),

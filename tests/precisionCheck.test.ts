@@ -8,8 +8,24 @@
  * a digest of that scope: the same scope always gives the same digest, and a
  * different limit or view gives a different one.
  */
-import { describe, it, expect } from 'vitest';
-import { PRECISION_TOLERANCES, precisionCertificate, readPrecision, type PrecisionDeps } from '../src/app/precisionCheck';
+import { describe, it, expect, vi } from 'vitest';
+
+// The source hash, held open by the race test so the scene can change under it.
+const digest = vi.hoisted(() => ({
+  pending: null as null | ((v: { sha256: string | null; note: string | null }) => void),
+  calls: [] as unknown[],
+}));
+vi.mock('../src/lazyChunks', async (importOriginal) => ({
+  ...(await importOriginal<object>()),
+  loadExportDigests: async () => ({
+    sourceDigestOf: (ref: { key: unknown }) => {
+      digest.calls.push(ref.key);
+      return new Promise((resolve) => { digest.pending = resolve; });
+    },
+  }),
+}));
+
+import { PRECISION_TOLERANCES, precisionCertificate, precisionCertificateWithHash, readPrecision, type PrecisionDeps } from '../src/app/precisionCheck';
 import { PointCloud } from '../src/model/PointCloud';
 import { spatialContextFrom } from '../src/geo/SpatialContext';
 import type { CrsInfo } from '../src/io/crs';
@@ -80,7 +96,7 @@ describe('the precision certificate', () => {
     expect(json).not.toBeNull();
     const c = JSON.parse(json!);
     expect(c.kind).toBe('olv.draw-precision-certificate');
-    expect(c.version).toBe(2);
+    expect(c.version).toBe(3);
     expect(c.method).toBe('olv.render.draw-precision-bound@1');
     expect(c.result.boundState).toBe('PASS_BOUND');
     expect(c.requirement.toleranceMetres).toBe(0.001);
@@ -88,7 +104,11 @@ describe('the precision certificate', () => {
     expect(c.result.bounds.map((b: { contract: string }) => b.contract)).toEqual(['rn', 'faithful']);
     expect(c.result.bounds[0].evidence.boundState).toBe('PASS_BOUND');
     expect(c.result.bounds[1].boundMetres).toBeGreaterThan(c.result.bounds[0].boundMetres);
-    expect(c.holdsFor).toMatch(/^The 4000 points drawn, from this camera/);
+    // The bound is a property of the envelope, so the claim is stated over it.
+    expect(c.holdsFor).toMatch(/^Every point stored within the stated local extent and storage error bound/);
+    expect(c.dataset.pointsDrawn).toBe(4000);
+    expect(c.frame.gradedUnder).toEqual({ linearUnitKnown: true, linearUnitToMetres: 1, verticalScaleInvalid: false });
+    expect(c.frame.verticalScale).toBe('absent');
     // The translated view puts the camera at (500, 500, 800) in local coordinates.
     expect(c.camera.positionInScanCoordinates[0]).toBeCloseTo(ORIGIN[0] + 500, 6);
     expect(c.camera.positionInScanCoordinates[2]).toBeCloseTo(ORIGIN[2] + 800, 6);
@@ -114,5 +134,111 @@ describe('the precision certificate', () => {
 
   it('has nothing to certify without a loaded scan', () => {
     expect(precisionCertificate(deps({ activeCloud: () => null }), 0.001)).toBeNull();
+  });
+});
+
+const crsDeps = (crs: CrsInfo): PrecisionDeps => deps({ context: () => spatialContextFrom(crs) });
+
+describe('the vertical unit the bound is graded under', () => {
+  const cases: [string, Partial<CrsInfo>, 'PASS' | 'UNGRADED'][] = [
+    ['metres on every axis', { verticalLinearUnit: 'metre', verticalUnitToMetres: 1 }, 'PASS'],
+    ['no vertical unit declared: the horizontal unit stands in', {}, 'PASS'],
+    ['feet up over metres across', { verticalLinearUnit: 'us-survey-foot', verticalUnitToMetres: 0.3048006096 }, 'UNGRADED'],
+    ['a zero vertical factor', { verticalUnitToMetres: 0 }, 'UNGRADED'],
+    ['a negative vertical factor', { verticalUnitToMetres: -1 }, 'UNGRADED'],
+    ['a non-finite vertical factor', { verticalUnitToMetres: Number.NaN }, 'UNGRADED'],
+    ['an unreadable vertical unit with no factor', { verticalLinearUnit: 'unknown' }, 'UNGRADED'],
+  ];
+  for (const [name, over, state] of cases) {
+    it(`${name}: ${state === 'PASS' ? 'graded in metres' : 'no metric verdict'}`, () => {
+      const r = readPrecision(crsDeps({ ...METRE_CRS, ...over } as CrsInfo), 0.001);
+      expect(r.state).toBe(state);
+      if (state === 'UNGRADED') {
+        expect(r.line).not.toMatch(/ mm|inside the|PASS/);
+        const c = JSON.parse(precisionCertificate(crsDeps({ ...METRE_CRS, ...over } as CrsInfo), 0.001)!);
+        expect(c.result.boundState).toBe('NOT_APPLICABLE');
+        expect(c.result.bounds.every((b: { boundMetres: number | null }) => b.boundMetres === null)).toBe(true);
+      }
+    });
+  }
+
+  it('names the unreadable vertical unit as the reason', () => {
+    const r = readPrecision(crsDeps({ ...METRE_CRS, verticalLinearUnit: 'unknown' }), 0.001);
+    expect(r.diagnostic?.reason).toBe('the vertical unit could not be interpreted');
+  });
+});
+
+describe('the certificate scope digest', () => {
+  const digestOf = (d: PrecisionDeps, tau = 0.001, at = '2026-10-23T00:00:00Z'): string =>
+    JSON.parse(precisionCertificate(d, tau, new Date(at))!).scopeDigest;
+  const base = digestOf(deps());
+  const otherCloud = (over: Partial<ConstructorParameters<typeof PointCloud>[0]>): PrecisionDeps => {
+    const cloud = new PointCloud({ positions: farCloud(), origin: ORIGIN, sourceFormat: 'las', name: 'tile.las', metadata: { crs: METRE_CRS }, ...over });
+    const viewer = {
+      activeBackend: () => 'webgpu' as const,
+      cloudModelView64: () => translatedView(500, 500, 800),
+      getCloud: () => cloud,
+    };
+    return deps({ viewer: () => viewer, activeCloud: () => cloud });
+  };
+
+  // Every input that can change the result, each changed on its own.
+  const mutations: [string, () => string][] = [
+    ['the limit', () => digestOf(deps(), 0.01)],
+    ['the camera', () => digestOf(deps({}, translatedView(400, 500, 800)))],
+    ['the vertical factor', () => digestOf(crsDeps({ ...METRE_CRS, verticalUnitToMetres: 0.3048 }))],
+    ['the vertical unit being unreadable', () => digestOf(crsDeps({ ...METRE_CRS, verticalLinearUnit: 'unknown' }))],
+    ['the horizontal factor', () => digestOf(crsDeps({ ...METRE_CRS, linearUnit: 'foot', linearUnitToMetres: 0.3048 }))],
+    ['the horizontal unit being unknown', () => digestOf(crsDeps({ ...METRE_CRS, linearUnit: 'unknown' }))],
+    ['the CRS', () => digestOf(crsDeps({ ...METRE_CRS, epsg: 32634, name: 'WGS 84 / UTM zone 34N' }))],
+    ['the backend', () => {
+      const d = deps();
+      const v = d.viewer()!;
+      return digestOf({ ...d, viewer: () => ({ ...v, activeBackend: () => 'webgl2' as const }) });
+    }],
+    ['the origin', () => digestOf(otherCloud({ origin: [500_001, 4_500_000, 200] }))],
+    ['the stored points', () => digestOf(otherCloud({ positions: farCloud(3000) }))],
+  ];
+  for (const [what, run] of mutations) {
+    it(`changes with ${what}`, () => expect(run()).not.toBe(base));
+  }
+
+  it('does not change with the time alone, and is the same for the same request', () => {
+    expect(digestOf(deps(), 0.001, '2027-01-01T00:00:00Z')).toBe(base);
+    expect(digestOf(deps())).toBe(base);
+  });
+});
+
+describe('a certificate waiting on the source hash', () => {
+  it('describes the scan and view it was asked for, whatever changes before the hash arrives', async () => {
+    const a = new PointCloud({ positions: farCloud(), origin: ORIGIN, sourceFormat: 'las', name: 'A.las', metadata: { crs: METRE_CRS } });
+    const b = new PointCloud({ positions: farCloud(2000), origin: [600_000, 4_600_000, 300], sourceFormat: 'las', name: 'B.las', metadata: { crs: { ...METRE_CRS, epsg: 32634 } } });
+    let active = a;
+    let view = translatedView(500, 500, 800);
+    const viewer = {
+      activeBackend: () => 'webgpu' as const,
+      cloudModelView64: () => view,
+      getCloud: () => active,
+    };
+    const d: PrecisionDeps = {
+      viewer: () => viewer,
+      activeId: () => 'cloud_0',
+      activeCloud: () => active,
+      context: () => spatialContextFrom(active === a ? METRE_CRS : { ...METRE_CRS, epsg: 32634 }),
+    };
+    digest.calls.length = 0;
+    const pending = precisionCertificateWithHash(d, 0.001);
+    await vi.waitFor(() => expect(digest.pending).not.toBeNull());
+    // The scene moves on while A's file is still being hashed.
+    active = b;
+    view = translatedView(100, 100, 100);
+    digest.pending!({ sha256: 'a'.repeat(64), note: null });
+    const c = JSON.parse((await pending)!);
+    expect(digest.calls).toEqual([a]);
+    expect(c.dataset.name).toBe('A.las');
+    expect(c.dataset.sourceSha256).toBe('a'.repeat(64));
+    expect(c.frame.crs).toBe(32633);
+    expect(c.frame.origin).toEqual(ORIGIN);
+    expect(c.camera.positionInScanCoordinates[0]).toBeCloseTo(ORIGIN[0] + 500, 6);
   });
 });

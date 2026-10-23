@@ -50,12 +50,12 @@ has re-opened the divergence this closes.
   `carrier` path must be free of the deprecated predicates listed below.
 - Reads: the context fields it now uses.
 
-## Inventory (19 consumers)
+## Inventory (20 consumers)
 
 | # | Consumer | Status | Routes through | Reads |
 |---|----------|--------|----------------|-------|
 | 1 | Point inspection | migrated | `src/render/pointInfo.ts`, `src/geo/cursorReadout.ts`, `src/app/coordinateHudMount.ts` | `linearUnit`, `linearUnitKnown`, `linearUnitToMetres`, `kind`, `epsg`, `crsName`, `isGeographic`, `upAxis`, `verticalReference`, `verticalUnitToMetres` |
-| 2 | Scan report | migrated | `src/analysis/modules/scanReport.ts`, `src/analysis/ModuleApi.ts` | `linearUnitKnown`, `linearUnitToMetres` |
+| 2 | Scan report | migrated | `src/analysis/modules/scanReport.ts`, `src/analysis/ModuleApi.ts` | `linearUnitKnown`, `linearUnitToMetres`, `verticalUnitToMetres`, `verticalScaleState` |
 | 3 | Space / object report | migrated | `src/main.ts`, `src/app/scanRouteCoordinator.ts` | `linearUnitToMetres`, `linearUnitKnown` |
 | 4 | Stockpile and cut/fill volume | migrated | `src/main.ts` | `linearUnitToMetres`, `linearUnitKnown`, `verticalMetresPerUnit` |
 | 5 | Density and fitness grades | migrated | `src/render/streaming/runFullCloudGradeAction.ts`, `src/app/streamingUiCoordinator.ts` | `linearUnitKnown`, `linearUnitToMetres`, `verticalMetresPerUnit` |
@@ -73,6 +73,7 @@ has re-opened the divergence this closes.
 | 17 | Cross-CRS project placement | migrated | `src/geo/projectPlacement.ts` | vertical verdict delegated to `src/geo/frameCompatibility.ts` |
 | 18 | State strip providers | migrated | `src/process/stateProviders.ts`, `src/app/stateStrip/stripReads.ts`, `src/app/stateStrip/stateStripMount.ts` | `crsName`, `epsg`, `linearUnit`, `linearUnitKnown`, `metricSeverity`, `verticalReference`, `verticalReferenceKnown`, `verticalDatum`, `verticalEpsg` |
 | 19 | Reference plane | migrated | `src/render/workplane/workplaneReadout.ts`, `src/app/workplaneController.ts` | `isGeographic`, `metricClaimsPermitted`, `linearUnit`, `verticalMetresPerUnit` |
+| 20 | Draw precision check | migrated | `src/app/precisionCheck.ts` | `groundMetresPermitted`, `linearUnitToMetres`, `verticalUnitToMetres`, `verticalScaleState`, `epsg`, `upAxis` |
 
 ## Deprecated predicates
 

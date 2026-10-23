@@ -166,6 +166,37 @@ export interface DrawPrecisionUnit {
   readonly linearUnitToMetres: number;
   /** Vertical factor, when one is declared; a different factor leaves the bound ungraded. */
   readonly verticalUnitToMetres?: number;
+  /**
+   * The source declares a vertical unit that cannot be read. One axis then
+   * has no metre factor, so the bound is left ungraded: it never borrows the
+   * horizontal factor, which is only a fallback for an undeclared vertical.
+   */
+  readonly verticalScaleInvalid?: boolean;
+}
+
+/** The unit facts of a spatial context, as the shape {@link drawPrecisionUnitOf} reads. */
+export interface DrawPrecisionUnitFacts {
+  readonly linearUnitToMetres: number;
+  readonly verticalUnitToMetres?: number;
+  readonly verticalScaleState: 'valid' | 'absent' | 'invalid';
+}
+
+/**
+ * The unit the bound is graded under, built the one way the panel, the
+ * certificate and the scan report all use. `horizontalKnown` is the caller's
+ * gate for ground metres; `zUp` passes the vertical factor only when storage
+ * axis Z is the vertical one.
+ */
+export function drawPrecisionUnitOf(
+  ctx: DrawPrecisionUnitFacts,
+  opts: { readonly horizontalKnown: boolean; readonly zUp: boolean },
+): DrawPrecisionUnit {
+  return {
+    linearUnitKnown: opts.horizontalKnown,
+    linearUnitToMetres: ctx.linearUnitToMetres,
+    verticalUnitToMetres: opts.zUp ? ctx.verticalUnitToMetres : undefined,
+    verticalScaleInvalid: ctx.verticalScaleState === 'invalid',
+  };
 }
 
 /** Evaluate the bound for one cloud tile and one view. Never throws for a bad draw. */
@@ -178,8 +209,9 @@ export function evaluateDrawPrecision(
 ): DrawPrecisionDiagnostic {
   const expression = shaderExpressionFor(view.backend, view.path);
   const f = unit.linearUnitToMetres;
+  const verticalInvalid = unit.verticalScaleInvalid === true;
   const mixedUnits = unit.verticalUnitToMetres !== undefined && unit.verticalUnitToMetres !== f;
-  const graded = unit.linearUnitKnown && Number.isFinite(f) && f > 0 && !mixedUnits;
+  const graded = unit.linearUnitKnown && Number.isFinite(f) && f > 0 && !mixedUnits && !verticalInvalid;
   const base = { expression, backend: view.backend, tileBasis: tile.basis, contract, evidence: null };
   let res;
   try {
@@ -210,7 +242,9 @@ export function evaluateDrawPrecision(
       boundSourceUnits: res.bound,
       boundMetres: null,
       tauMetres: null,
-      reason: mixedUnits ? 'horizontal and vertical units differ' : 'no linear unit declared',
+      reason: verticalInvalid
+        ? 'the vertical unit could not be interpreted'
+        : mixedUnits ? 'horizontal and vertical units differ' : 'no linear unit declared',
     };
   }
   return {

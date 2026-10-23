@@ -125,6 +125,8 @@ export class QualityPanel {
   private readonly _precisionNote: HTMLElement;
   private readonly _copyButton: HTMLButtonElement;
   private _noteTimer: ReturnType<typeof setTimeout> | null = null;
+  /** A certificate is being prepared; a second request waits for it. */
+  private _certificatePending = false;
 
   constructor(callbacks: QualityPanelCallbacks) {
     this._callbacks = callbacks;
@@ -302,16 +304,28 @@ export class QualityPanel {
     // Rewritten only on a change, so a live refresh does not re-announce the same line.
     if (this._precisionLine.textContent !== reading.line) this._precisionLine.textContent = reading.line;
     this._precisionLine.dataset.state = reading.state;
-    this._copyButton.disabled = reading.diagnostic === null;
+    this._copyButton.disabled = reading.diagnostic === null || this._certificatePending;
     return reading;
   }
 
   /** Copy the certificate, or save it as a file where the clipboard is refused. */
   private async _copyCertificate(): Promise<void> {
     const deps = this._callbacks.precision;
-    if (!deps) return;
+    if (!deps || this._certificatePending) return;
     this.refreshPrecision();
-    const json = await precisionCertificateWithHash(deps, this._tolerance, () => this._note('Checking the source file for the certificate…'));
+    this._certificatePending = true;
+    this._copyButton.disabled = true;
+    let json: string | null;
+    try {
+      // The note stays up while the source file is hashed, however long that takes.
+      json = await precisionCertificateWithHash(deps, this._tolerance, () => this._note('Preparing the certificate: checking the source file…', true));
+    } catch (e) {
+      this._note(`The certificate could not be prepared: ${e instanceof Error ? e.message : String(e)}`);
+      return;
+    } finally {
+      this._certificatePending = false;
+      this.refreshPrecision();
+    }
     if (!json) return;
     try {
       await navigator.clipboard.writeText(json);
@@ -326,10 +340,11 @@ export class QualityPanel {
     }
   }
 
-  private _note(text: string): void {
+  /** Show a note; it clears after a few seconds unless `persist`, which holds it until the next note. */
+  private _note(text: string, persist = false): void {
     this._precisionNote.textContent = text;
     if (this._noteTimer !== null) clearTimeout(this._noteTimer);
-    this._noteTimer = setTimeout(() => { this._precisionNote.textContent = ''; }, 4000);
+    this._noteTimer = persist ? null : setTimeout(() => { this._precisionNote.textContent = ''; }, 4000);
   }
 
   /** Emit one pinned Advanced field for the controller to merge. */

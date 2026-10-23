@@ -25,10 +25,11 @@ import { formatPrecisionMetres } from '../geo/inMemoryPrecision';
 import {
   DRAW_PRECISION_CONTRACT,
   DRAW_PRECISION_METHOD_ID,
+  drawPrecisionUnitOf,
   evaluateDrawPrecision,
   tileFromLocalFloat32,
   type DrawPrecisionDiagnostic,
-  type DrawTile,
+  type DrawPrecisionUnit,
 } from '../science/drawPrecision';
 import { drawPrecisionViewFor, type DrawPrecisionViewer } from './drawPrecisionView';
 import { method, methodRef, methodTag } from '../science/methodRegistry';
@@ -74,18 +75,44 @@ export interface PrecisionReading {
   readonly pointsDrawn: number;
 }
 
-interface Evaluated {
+/**
+ * One check, captured whole and at once: the scan, every fact the result was
+ * evaluated from, and the result. A certificate is built from this and nothing
+ * else, so a scan, camera or unit that changes while the source file is being
+ * hashed cannot reach a certificate taken before it changed.
+ */
+export interface PrecisionRequest {
+  /** The scan the check read; its source file is the one hashed. */
   readonly cloud: PointCloud;
-  readonly tile: DrawTile;
+  readonly capturedAt: Date;
+  readonly tauMetres: number;
+  readonly dataset: {
+    readonly name: string;
+    readonly sourceFingerprint: string | null;
+    readonly pointsDrawn: number;
+    readonly declaredPoints: number;
+  };
+  readonly frame: {
+    readonly crs: number | null;
+    readonly origin: readonly number[];
+    readonly localExtent: readonly number[];
+    readonly storageErrorBound: readonly number[];
+    readonly storageBasis: string;
+    /** Which storage axis is vertical, as the unit was built for it. */
+    readonly verticalAxis: 'z' | 'not-z';
+    readonly verticalScale: SpatialContext['verticalScaleState'];
+    /** The unit the bound was graded under: every factor and gate it read. */
+    readonly gradedUnder: DrawPrecisionUnit;
+  };
   readonly modelView64: readonly number[];
   /** Round to nearest: the contract the limit is checked under. */
   readonly diagnostic: DrawPrecisionDiagnostic;
   /** The faithful rounding the WGSL and GLSL ES specs guarantee: the worst case. */
   readonly faithful: DrawPrecisionDiagnostic;
-  readonly context: SpatialContext;
 }
 
-function evaluate(deps: PrecisionDeps, tauMetres: number): Evaluated | string {
+/** Evaluate the active scan at the current view and capture the request, or say why not. */
+export function capturePrecisionRequest(deps: PrecisionDeps, tauMetres: number, now: Date = new Date()): PrecisionRequest | string {
   const viewer = deps.viewer();
   const cloud = deps.activeCloud();
   if (!viewer || !cloud) return 'Open a scan to check its precision.';
@@ -95,18 +122,30 @@ function evaluate(deps: PrecisionDeps, tauMetres: number): Evaluated | string {
   const upFrame = layerUpFrameFromContext(cloud.sourceFormat, context);
   const zUp = upFrame.ok && upFrame.axis === 'z';
   const tile = tileFromLocalFloat32(sourcePositions(cloud));
-  const unit = {
-    linearUnitKnown: groundMetresPermitted(context),
-    linearUnitToMetres: context.linearUnitToMetres,
-    verticalUnitToMetres: zUp ? context.verticalUnitToMetres : undefined,
-  };
+  const unit = drawPrecisionUnitOf(context, { horizontalKnown: groundMetresPermitted(context), zUp });
   return {
     cloud,
-    tile,
+    capturedAt: now,
+    tauMetres,
+    dataset: {
+      name: cloud.name,
+      sourceFingerprint: cloud.sourceDigest ?? null,
+      pointsDrawn: cloud.pointCount,
+      declaredPoints: cloud.declaredPointCount ?? cloud.pointCount,
+    },
+    frame: {
+      crs: context.epsg ?? null,
+      origin: [...cloud.sourceOrigin],
+      localExtent: [...tile.r],
+      storageErrorBound: [...tile.rho],
+      storageBasis: tile.basis,
+      verticalAxis: zUp ? 'z' : 'not-z',
+      verticalScale: context.verticalScaleState,
+      gradedUnder: { ...unit },
+    },
     modelView64: Array.from(view.modelView64),
     diagnostic: evaluateDrawPrecision(tile, view, unit, tauMetres, 'rn'),
     faithful: evaluateDrawPrecision(tile, view, unit, tauMetres, 'faithful'),
-    context,
   };
 }
 
@@ -141,9 +180,9 @@ export function precisionLine(d: DrawPrecisionDiagnostic, tauMetres: number, fai
 
 /** Check the active scan at the current view against `tauMetres`. */
 export function readPrecision(deps: PrecisionDeps, tauMetres: number): PrecisionReading {
-  const e = evaluate(deps, tauMetres);
+  const e = capturePrecisionRequest(deps, tauMetres);
   if (typeof e === 'string') return { state: 'NO_SCAN', line: e, diagnostic: null, pointsDrawn: 0 };
-  return { state: e.diagnostic.state, line: precisionLine(e.diagnostic, tauMetres, e.faithful), diagnostic: e.diagnostic, pointsDrawn: e.cloud.pointCount };
+  return { state: e.diagnostic.state, line: precisionLine(e.diagnostic, tauMetres, e.faithful), diagnostic: e.diagnostic, pointsDrawn: e.dataset.pointsDrawn };
 }
 
 /** The evidence state as the paper's Table 3 names it. */
@@ -200,43 +239,29 @@ export interface SourceHash {
   readonly note: string | null;
 }
 
+/** What the bound holds for: the envelope it was taken over, not a named set of points. */
+const HOLDS_FOR =
+  'Every point stored within the stated local extent and storage error bound, drawn with this model-view '
+  + 'under the stated contract and shader expression. The bound depends on that envelope, not on which points '
+  + 'fill it; the source hash and point counts say which data it was taken from. Any other draw needs its own check.';
+
 /**
- * A precision certificate for the active scan at the current view, as JSON, or
- * null when there is nothing to certify. It records both contracts' bounds
- * with the checker's evidence, the drawn points, the camera and the scan's
- * hash, so the claim is no wider than the bound: these points, this camera,
- * this contract and shader. `scopeDigest` is the SHA-256 of that scope: a
- * certificate is void once any of it changes, and two certificates with the
- * same digest cover the same draw.
+ * The certificate for a captured request, as JSON. It records both contracts'
+ * bounds with the checker's evidence, the frame and unit they were graded
+ * under, the camera and the scan's hash. `scopeDigest` is the SHA-256 of that
+ * scope, which holds every input that can change the result: a certificate is
+ * void once any of it changes, and two certificates with the same digest cover
+ * the same draw. The time it was taken is not part of the scope.
  */
-export function precisionCertificate(
-  deps: PrecisionDeps,
-  tauMetres: number,
-  now: Date = new Date(),
-  sourceHash: SourceHash | null = null,
-): string | null {
-  const e = evaluate(deps, tauMetres);
-  if (typeof e === 'string') return null;
-  const { cloud, tile, diagnostic: d, faithful, context } = e;
+export function certificateOf(request: PrecisionRequest, sourceHash: SourceHash | null = null): string {
+  const { diagnostic: d, faithful, tauMetres } = request;
   const scope = {
-    dataset: {
-      name: cloud.name,
-      sourceSha256: sourceHash?.sha256 ?? null,
-      sourceFingerprint: cloud.sourceDigest,
-      pointsDrawn: cloud.pointCount,
-      declaredPoints: cloud.declaredPointCount ?? cloud.pointCount,
-    },
-    frame: {
-      crs: context.epsg ?? null,
-      linearUnitToMetres: context.linearUnitToMetres,
-      origin: [...cloud.sourceOrigin],
-      localExtent: [...tile.r],
-      storageErrorBound: [...tile.rho],
-      storageBasis: tile.basis,
-    },
+    method: methodTag(methodRef(DRAW_PRECISION_METHOD_ID)),
+    dataset: { ...request.dataset, sourceSha256: sourceHash?.sha256 ?? null },
+    frame: request.frame,
     camera: {
-      positionInScanCoordinates: cameraPositionOf(e.modelView64, cloud.sourceOrigin),
-      modelView64: e.modelView64,
+      positionInScanCoordinates: cameraPositionOf(request.modelView64, request.frame.origin),
+      modelView64: request.modelView64,
     },
     draw: {
       strategy: 'model-view composed in binary64 on the CPU, narrowed to binary32 once',
@@ -247,10 +272,9 @@ export function precisionCertificate(
   };
   const certificate = {
     kind: 'olv.draw-precision-certificate',
-    version: 2,
-    method: methodTag(methodRef(DRAW_PRECISION_METHOD_ID)),
+    version: 3,
     citation: method(DRAW_PRECISION_METHOD_ID)?.citation ?? null,
-    generatedAt: now.toISOString(),
+    generatedAt: request.capturedAt.toISOString(),
     build: buildIdentityLabel(),
     ...scope,
     ...(sourceHash?.note ? { sourceSha256Note: sourceHash.note } : {}),
@@ -259,7 +283,7 @@ export function precisionCertificate(
       statement: precisionLine(d, tauMetres, faithful),
       bounds: [boundRecord(d), boundRecord(faithful)],
     },
-    holdsFor: `The ${cloud.pointCount} points drawn, from this camera, under the stated contract and shader expression; any other draw needs its own check.`,
+    holdsFor: HOLDS_FOR,
     reference: PRECISION_REFERENCE,
     covers: PRECISION_SCOPE,
     scopeDigest: sha256Hex(new TextEncoder().encode(canonical(scope))),
@@ -268,18 +292,35 @@ export function precisionCertificate(
 }
 
 /**
+ * A precision certificate for the active scan at the current view, as JSON, or
+ * null when there is nothing to certify.
+ */
+export function precisionCertificate(
+  deps: PrecisionDeps,
+  tauMetres: number,
+  now: Date = new Date(),
+  sourceHash: SourceHash | null = null,
+): string | null {
+  const request = capturePrecisionRequest(deps, tauMetres, now);
+  return typeof request === 'string' ? null : certificateOf(request, sourceHash);
+}
+
+/**
  * The certificate with the scan's whole-file SHA-256, waiting for it when it
- * is still being computed (`onWaiting` says so first). Null with nothing open.
+ * is still being computed (`onWaiting` says so first). The request is captured
+ * before the first wait and the certificate is built from it alone, so the
+ * hash and everything beside it describe the same scan and view. Null with
+ * nothing open.
  */
 export async function precisionCertificateWithHash(
   deps: PrecisionDeps,
   tauMetres: number,
   onWaiting?: () => void,
 ): Promise<string | null> {
-  const cloud = deps.activeCloud();
-  if (!cloud) return null;
-  if (!sourceDigestReady(cloud)) onWaiting?.();
+  const request = capturePrecisionRequest(deps, tauMetres);
+  if (typeof request === 'string') return null;
+  if (!sourceDigestReady(request.cloud)) onWaiting?.();
   const { sourceDigestOf } = await loadExportDigests();
-  const hash = await sourceDigestOf({ key: cloud, streamed: false });
-  return precisionCertificate(deps, tauMetres, new Date(), hash);
+  const hash = await sourceDigestOf({ key: request.cloud, streamed: false });
+  return certificateOf(request, hash);
 }
