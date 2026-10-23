@@ -48,10 +48,7 @@ export interface AnalysisRow {
   readonly status: AnalysisStatus;
   /** One sentence: why the row reads as it does. */
   readonly reason: string;
-  /**
-   * Offered on a BLOCKED row when something can lift it, and on a row the
-   * Terrain run caps (review or blocked), where the fix is the Terrain page.
-   */
+  /** Offered on a BLOCKED row when something the app can do lifts it. */
   readonly remedy: AnalysisRemedy | null;
   /**
    * On a blocked row: the prerequisite named by the first remedy the app can
@@ -93,6 +90,8 @@ const LABEL: Readonly<Record<AnalysisId, string>> = {
 
 const NEEDS_SCAN = 'Needs a loaded scan';
 const NEEDS_TERRAIN = 'Needs terrain';
+/** A lab row with no DTM yet: its entry runs terrain before the lab. */
+export const TERRAIN_FIRST = 'Runs terrain first';
 
 /** What a preflight fix supplies, as the prerequisite a blocked row needs. */
 const NEEDS_FOR: Partial<Record<PreflightActionId, string>> = {
@@ -183,15 +182,20 @@ export function analysisRows(input: AnalysisStatusInput): AnalysisRow[] {
         return row(id, t.status, t.reason, t.byRun ? null : preflightRemedy(dtm, input.canRemediate));
       }
       case 'flow-pulse':
-      case 'terrain-access':
-        // Both labs read the DTM of the latest terrain run and refuse without one.
-        if (!hasDtm) return row(id, 'blocked', 'Needs the DTM from a terrain run.', PREPARE_TERRAIN);
-        {
-          // A DTM-dependent row is never better than the Terrain run it reads.
-          const c = capByRun({ status: dtm.status, reason: dtm.status === 'ready' ? 'Reads the DTM from the latest terrain run.' : dtm.reason }, input.terrainRun);
-          if (c.byRun) return { id, label: LABEL[id], status: c.status, reason: `Terrain run: ${c.reason}`, remedy: PREPARE_TERRAIN };
-          return row(id, c.status, c.reason);
+      case 'terrain-access': {
+        // Both labs read the DTM of the latest terrain run. Their own entry
+        // runs terrain first, so only a blocker on that run stops them.
+        if (!hasDtm) {
+          if (dtm.status === 'blocked') return row(id, 'blocked', dtm.reason, preflightRemedy(dtm, input.canRemediate));
+          return { id, label: LABEL[id], status: 'blocked', reason: 'No terrain run yet. Running the lab runs terrain first.', remedy: null, needs: TERRAIN_FIRST };
         }
+        // A DTM-dependent row is never better than the Terrain run it reads.
+        // Running terrain again changes nothing, so a capped row offers no
+        // way back to Terrain; only a fix the app can apply is offered.
+        const c = capByRun({ status: dtm.status, reason: dtm.status === 'ready' ? 'Reads the DTM from the latest terrain run.' : dtm.reason }, input.terrainRun);
+        if (c.byRun) return row(id, c.status, `Terrain run: ${c.reason}`, preflightRemedy(dtm, input.canRemediate));
+        return row(id, c.status, c.reason);
+      }
       case 'observatory': {
         // The run reads the resident static cloud and does nothing without one.
         // A scan with no declared stations is ineligible, never Ready.

@@ -25,8 +25,8 @@ export interface TerrainAnalysisEntryDeps {
   }>;
   /** Show an Analyse page once the panel is up, when the shell has pages. */
   readonly showPage?: (page: 'terrain' | 'contours') => void;
-  /** Run terrain analysis over the active scan. */
-  readonly run: () => void;
+  /** Run terrain analysis over the active scan; settles when the run has finished or stopped. */
+  readonly run: () => Promise<void> | void;
 }
 
 /**

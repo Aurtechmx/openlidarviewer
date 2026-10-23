@@ -52,9 +52,11 @@ for (const viewport of SIZES) {
       const row = slot.locator('.olv-ah-row[data-analysis="flow-pulse"]');
       await expect(row).toBeVisible({ timeout: 20_000 });
 
-      await row.locator('.olv-ah-open').tap();
+      // The row's one action runs terrain first, then shows the map.
+      await row.locator('.olv-ah-run', { hasText: 'Run Flow Pulse' }).tap();
       await expect(page.locator('.olv-analyse-page[data-page="flow-pulse"]')).toBeVisible({ timeout: 20_000 });
       await expect(slot.locator('.olv-ws-task-title')).toHaveText('Flow Pulse');
+      await expect(page.locator('.olv-analyse-page[data-page="flow-pulse"] .olv-flow-grid-canvas')).toBeVisible({ timeout: 60_000 });
     });
   });
 }

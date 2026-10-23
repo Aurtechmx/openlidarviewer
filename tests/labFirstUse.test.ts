@@ -188,3 +188,32 @@ describe('the ground row on an unusable terrain run', () => {
     expect(copy.labReadiness('flow-pulse', true, false)[1]!.note).toContain('geographic degrees with no known latitude does not run');
   });
 });
+
+describe('the status chip', () => {
+  it('folds every caveat into one line, and shows the stricter of the lab and its home row', async () => {
+    const { statusChip } = await import('../src/ui/labGuide');
+    const { setLabPageStatus } = await import('../src/ui/labSurface');
+    const chip = statusChip('flow-pulse');
+    const banner = document.createElement('p');
+    banner.textContent = 'Terrain run not usable: read this as illustration only.';
+    chip.set({ tone: 'review', summary: 'Illustration only · 53% interpolated', lines: [banner] });
+    const root = rec(chip.element);
+    const badge = (): string => root.find('olv-ah-badge')!.textContent;
+    const words = (): string => root.find('olv-lab-chip-text')!.textContent;
+    expect(badge()).toBe('Review');
+    expect(words()).toBe('Illustration only · 53% interpolated');
+    // The caveat is folded, not dropped: it is inside the chip, word for word.
+    expect(root.find('olv-lab-chip-body')!.textContent).toContain('read this as illustration only');
+    // A stricter home row takes the badge and the words.
+    setLabPageStatus('flow-pulse', { tone: 'blocked', badge: 'Blocked', reason: 'Terrain run: Not usable for terrain products as-is.' });
+    expect(badge()).toBe('Blocked');
+    expect(words()).toBe('Terrain run: Not usable for terrain products as-is.');
+    // A milder one keeps the lab's own words and adds its reason inside.
+    setLabPageStatus('flow-pulse', { tone: 'ready', badge: 'Ready', reason: 'Reads the DTM from the latest terrain run.' });
+    expect(badge()).toBe('Review');
+    expect(words()).toBe('Illustration only · 53% interpolated');
+    expect(root.find('olv-lab-chip-reason')!.textContent).toBe('Reads the DTM from the latest terrain run.');
+    chip.dispose();
+    setLabPageStatus('flow-pulse', null);
+  });
+});

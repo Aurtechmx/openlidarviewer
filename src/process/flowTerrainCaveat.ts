@@ -10,7 +10,7 @@
 
 import type { DtmReadiness } from '../terrain/quality/dtmQualityGate';
 
-/** The banner's lead sentence, shown above the Flow Pulse result card. */
+/** The banner's lead sentence, shown in the Flow Pulse status chip. */
 export const FLOW_TERRAIN_BANNER = 'Terrain run not usable: read this as illustration only';
 
 export interface FlowTerrainCaveat {

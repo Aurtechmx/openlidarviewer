@@ -22,27 +22,31 @@ async function openTerrainAccess(page: Page): Promise<void> {
   await expect(page.locator('.olv-analyse-page[data-page="terrain-access"]')).toBeVisible();
 }
 
-test('without a ground surface: no form, the terrain run, the way back, and Apply off with its reason', async ({ page }) => {
+test('without a ground surface: one click runs terrain first, then the form with Apply off and its reason', async ({ page }) => {
   await page.goto('/?test=1');
   await dropDenseGridPly(page);
   await expect(page.locator('.olv-empty')).toBeHidden({ timeout: 20_000 });
   await expect(page.locator('.olv-dock .olv-tool', { hasText: /^Analyse$/ })).toBeEnabled({ timeout: 20_000 });
 
+  // The lab's page shows progress while terrain runs, never a refusal or the Terrain page.
+  await page.evaluate(() => {
+    const w = window as unknown as { __preparingSeen: boolean };
+    w.__preparingSeen = false;
+    const obs = new MutationObserver(() => {
+      if (!document.querySelector('.olv-analyse-page[data-page="terrain-access"] .olv-lab-preparing [role="status"]')) return;
+      w.__preparingSeen = true;
+      obs.disconnect();
+    });
+    obs.observe(document.body, { subtree: true, childList: true });
+  });
   await openTerrainAccess(page);
   const labPage = page.locator('.olv-analyse-page[data-page="terrain-access"]');
-  // The ground surface is checked before the form: no form, a plain notice.
-  await expect(labPage.locator('.olv-lab-purpose')).toContainText('Not a safety guarantee.');
-  await expect(labPage.locator('.olv-lab-ready[data-state="missing"]')).toContainText('Ground surface (terrain run)');
-  await expect(labPage.locator('.olv-ta-form')).toHaveCount(0);
+  await expect(labPage.locator('.olv-ta-form')).toBeVisible({ timeout: 30_000 });
+  expect(await page.evaluate(() => (window as unknown as { __preparingSeen: boolean }).__preparingSeen), 'progress showed on the lab page').toBe(true);
   await expect(labPage).not.toContainText('NO_DTM');
-
-  await labPage.locator('.olv-lab-fix', { hasText: 'Run terrain analysis' }).click();
-  await expect(page.locator('.olv-analyse-page[data-page="terrain-access"]')).toBeHidden();
-  await expect(page.locator('.olv-analyse-readiness .olv-analyse-ready:not(.is-skeleton)')).toHaveCount(3, { timeout: 20_000 });
-  const back = page.locator('.olv-at-back', { hasText: 'Back to Terrain Access' });
-  await expect(back).toBeVisible({ timeout: 20_000 });
-  await back.click();
-  await expect(page.locator('.olv-analyse-page[data-page="terrain-access"]')).toBeVisible();
+  await expect(page.locator('.olv-at-back')).toHaveCount(0);
+  await expect(labPage.locator('.olv-lab-chip .olv-lab-ready[data-state="met"]')).toContainText('Ground surface (terrain run)');
+  await expect(labPage.locator('.olv-lab-purpose')).toContainText('Not a safety guarantee.');
 
   // This local fixture has no known units: the form shows, Apply is off and says why.
   await expect(labPage.locator('.olv-ta-form')).toBeVisible();
@@ -275,6 +279,8 @@ test('obstruction limit from the same terrain run: enabled, and the route goes r
   });
   await expect(card).toContainText(/Slope from a synthesised neighbour\s*\d+% of route cells, allowed and disclosed \(exploratory\)/);
   // A straight crossing would be about 9.6 m; going round the box is longer.
+  // The full run card is under Details, behind the three figures.
+  await labPage.locator('.olv-lab-details > summary').click();
   const lengthText = await card.locator('.olv-story-row', { hasText: 'Horizontal length' }).innerText();
   const lengthM = Number(/([\d.]+) m/.exec(lengthText)?.[1]);
   expect(lengthM).toBeGreaterThan(12);

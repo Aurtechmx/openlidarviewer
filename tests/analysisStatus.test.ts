@@ -3,8 +3,9 @@
  *
  * The Analyse home rows come from Process Studio's own verdicts: the product
  * authority (preflight where it answers, else ProcessService), the produced
- * set the terrain run writes, and the independent QA checks. A blocked lab
- * row offers the Terrain page as its fix.
+ * set the terrain run writes, and the independent QA checks. A lab row with
+ * no terrain run says its entry runs terrain first, and a lab row the run
+ * caps never sends the reader back to Terrain.
  */
 
 import { describe, it, expect } from 'vitest';
@@ -17,6 +18,7 @@ import {
   productVerdict,
   capByRun,
   PREPARE_TERRAIN,
+  TERRAIN_FIRST,
   type AnalysisStatusInput,
 } from '../src/process/analysisStatus';
 import type { PreflightView } from '../src/app/toolPreflightRuntime';
@@ -63,11 +65,12 @@ describe('analysisRows', () => {
     expect(t.remedy).toEqual({ kind: 'preflight', action: 'set-coordinate-system', tool: 'terrain-dtm', label: 'Set coordinate system' });
   });
 
-  it('blocks both labs until a terrain run produced the DTM, with Prepare terrain as the fix', () => {
+  it('blocks both labs until a terrain run produced the DTM, and says the lab runs terrain first', () => {
     for (const id of ['flow-pulse', 'terrain-access']) {
       const r = byId(analysisRows(input()), id);
       expect(r.status).toBe('blocked');
-      expect(r.remedy).toEqual(PREPARE_TERRAIN);
+      expect(r.needs).toBe(TERRAIN_FIRST);
+      expect(r.remedy).toBeNull();
       const after = byId(analysisRows(input({ produced: new Set<ProductId>(['dtm', 'contours']) })), id);
       expect(after.status).toBe(ProcessService.fromFacts([facts]).readiness('dtm'));
       expect(after.remedy).toBeNull();
@@ -85,6 +88,20 @@ describe('analysisRows', () => {
   it('Objects & Space reads review without a known linear unit', () => {
     expect(byId(analysisRows(input()), 'objects').status).toBe('ready');
     expect(byId(analysisRows(input({ facts: { ...facts, crs: null } })), 'objects').status).toBe('review');
+  });
+
+  it('a lab before a run keeps a genuine blocker on the terrain run, with its fix', () => {
+    const pre: ToolPreflight = {
+      tool: 'terrain-dtm', status: 'blocked',
+      reasons: [{ message: 'The linear unit is unknown.' } as ToolPreflight['reasons'][number]],
+      remediations: [{ action: 'set-coordinate-system', label: 'Set coordinate system' }],
+    };
+    const view: PreflightView = { products: new Map([['dtm', pre]]), measureTools: [] };
+    for (const id of ['flow-pulse', 'terrain-access']) {
+      const r = byId(analysisRows(input({ view, canRemediate: () => true })), id);
+      expect(r).toMatchObject({ status: 'blocked', reason: 'The linear unit is unknown.', needs: 'Needs a projected CRS' });
+      expect(r.remedy).toMatchObject({ kind: 'preflight', action: 'set-coordinate-system' });
+    }
   });
 
   it('every row is blocked with no scan, and offers nothing', () => {
@@ -154,7 +171,8 @@ describe('Terrain status: the more restrictive of Process Studio and the run', (
         } else {
           expect(r.status).toBe(want);
           expect(r.reason).toBe('Terrain run: V.');
-          expect(r.remedy).toEqual(PREPARE_TERRAIN);
+          // Running terrain again would not change the run, so no Prepare terrain.
+          expect(r.remedy).toBeNull();
         }
         // Never better-looking than Terrain itself.
         const t = byId(analysisRows(input({ produced, terrainRun: { tier, verdict: 'V.' } })), 'terrain');
@@ -169,8 +187,8 @@ describe('routine prerequisites read as what the step needs', () => {
   it('names the missing scan, terrain or stations, with the verdict unchanged', () => {
     for (const r of analysisRows(input({ facts: null }))) expect(r).toMatchObject({ status: 'blocked', needs: 'Needs a loaded scan' });
     const rows = analysisRows(input({ hasStations: false }));
-    expect(byId(rows, 'flow-pulse')).toMatchObject({ status: 'blocked', needs: 'Needs terrain', remedy: PREPARE_TERRAIN });
-    expect(byId(rows, 'terrain-access')).toMatchObject({ status: 'blocked', needs: 'Needs terrain' });
+    expect(byId(rows, 'flow-pulse')).toMatchObject({ status: 'blocked', needs: TERRAIN_FIRST, remedy: null });
+    expect(byId(rows, 'terrain-access')).toMatchObject({ status: 'blocked', needs: TERRAIN_FIRST });
     expect(byId(rows, 'observatory')).toMatchObject({ status: 'blocked', needs: 'Needs scanner stations' });
     expect(contoursStatus(input())).toMatchObject({ status: 'blocked', needs: 'Needs terrain' });
     const streaming = byId(analysisRows(input({ facts: { ...facts, kind: 'streaming', coverage: 'resident-only' } })), 'observatory');

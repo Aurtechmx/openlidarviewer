@@ -52,7 +52,7 @@ test.describe('labs are Analyse pages', () => {
     await expect(page.locator('.olv-fit-verdict-text')).toBeVisible({ timeout: 90_000 });
 
     for (const [id, name, marker] of [
-      ['flow-pulse', 'Flow Pulse', '.olv-story-card'],
+      ['flow-pulse', 'Flow Pulse', '.olv-flow-grid-canvas'],
       ['terrain-access', 'Terrain Access', '.olv-ta-form'],
     ] as const) {
       // The first crumb is the Analyse home from anywhere under it.

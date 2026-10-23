@@ -55,7 +55,7 @@ goes on leaving.
 | Annotate page | Dock **Annotate**, launcher row, `A`, palette | `← Tools` | No | First home button | Page "Annotate", panel "Annotations" |
 | Clip page | Launcher row, palette "Clip box" | `← Tools` | No | First home button | Page "Clip box", panel "Clip box" |
 | Analyse home | Rail tab **Analyse**, dock **Analyse** | Home | No | n/a | Tab "Analyse" |
-| Terrain page | Home row **Terrain**, remedy "Prepare terrain" | `← Analyse` | No | First home button | Page "Terrain", panel "Analyse" |
+| Terrain page | Home row **Terrain**, "Run terrain analysis" | `← Analyse` | No | First home button | Page "Terrain", panel "Analyse" |
 | Contours page | Terrain link "Create contours" or "Contours", home child row | `← Terrain` | No | First home button | Page "Contours" |
 | Objects page | Home row | `← Analyse` | No | First home button | Page "Objects & Space", panel "Object scan" |
 | Features page | Home row | `← Analyse` | No | First home button | Page "Feature candidates" |
@@ -200,8 +200,8 @@ The list has 25 rows.
 | 8 | Analyse mode (dock `tool.analyse`, no registry title) | Dock "Analyse" (toggles the panel and switches mode); rail tab "Analyse"; phone tab "Analyse". Decided: the dock copy opens the Analyse home |
 | 9 | `analyse.run` "Run terrain analysis" | Analyse home button; Terrain page button; palette |
 | 10 | `analyse.contours` "Create contours" | Terrain link "Create contours" or "Contours"; home child row "Contours"; launcher "Create Contour Deliverable"; palette |
-| 11 | `analyse.flowPulse` | Home row "Flow Pulse"; palette "Flow Pulse (Field Simulation Lab)"; shelf Focus |
-| 12 | `analyse.terrainAccess` | Home row "Terrain Access"; palette "Terrain Access (Field Simulation Lab)"; shelf Focus |
+| 11 | `analyse.flowPulse` | Home row "Flow Pulse" and its "Run Flow Pulse"; palette "Flow Pulse (Field Simulation Lab)"; shelf Focus. With no terrain run it runs terrain first on the lab page |
+| 12 | `analyse.terrainAccess` | Home row "Terrain Access" and its "Run Terrain Access"; palette "Terrain Access (Field Simulation Lab)"; shelf Focus. With no terrain run it runs terrain first on the lab page |
 | 13 | `analyse.observatory` | Home row "Observatory"; palette "Observatory (observation evidence)"; shelf Focus |
 | 14 | Command palette (no registry id) | Dock "Commands"; Ctrl or Cmd+K |
 | 15 | `help.shortcuts` "Show keyboard shortcuts" | Key `?`; palette |
@@ -366,14 +366,14 @@ exists yet, so every SS element currently lives somewhere else.
 | Lab | Element | Role |
 | --- | --- | --- |
 | All three | The modal frame | MOD, holding a whole workspace |
-| Flow Pulse | Surface choice, click action, retry, "Export package (ZIP)" | CTX |
-| Flow Pulse | Result grid, selection | WS |
-| Flow Pulse | "Show flow accumulation", legend | RS |
-| Flow Pulse | Story card, Limitations | SS |
-| Terrain Access | Profile form, "Run Terrain Access", latest route, export | CTX |
-| Terrain Access | Grid, inspector, selection | WS |
-| Terrain Access | "Show traversability map" | RS |
-| Terrain Access | Story, Limitations | SS |
+| Flow Pulse | Status line, surface choice, click action, retry, "Export package (ZIP)" | CTX |
+| Flow Pulse | Result grid, figures, selection | WS |
+| Flow Pulse | "Drainage in 3D", legend (in Details) | RS |
+| Flow Pulse | Story card, Limitations (in Details) | SS |
+| Terrain Access | Status line, profile form, "Find route", latest route, export | CTX |
+| Terrain Access | Grid, figures, inspector, selection | WS |
+| Terrain Access | "Map in 3D" | RS |
+| Terrain Access | Story, Limitations (in Details) | SS |
 | Observatory | Run, Sources, Evidence, Planning, Record and export | CTX |
 | Observatory | 3D marker key | VP |
 | Observatory | Shadow and its slice level | RS |

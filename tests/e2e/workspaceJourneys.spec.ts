@@ -8,7 +8,7 @@
  * A: Data home -> Layer Health in the Inspector -> Classes page -> Back.
  * B: Measure -> Results -> Data -> back to Measure with its state.
  * C: Analyse -> Terrain -> Run -> Why? -> Contours -> generate -> Results -> back.
- * D: a lab blocked on the terrain run -> Prepare terrain -> the Terrain page.
+ * D: a lab with no terrain run -> its one Run -> the lab's own page.
  * E: Results -> the terrain result -> Export with the DEM package preselected.
  * F: two scans; a result keeps its source and Focus does not retarget.
  * Deterministic, Firefox and WebKit projects.
@@ -188,14 +188,15 @@ test.describe('workspace journeys', () => {
     await expectWorkspaceRules(page);
   });
 
-  test('D: a lab that needs terrain, Prepare terrain, the Terrain page', async ({ page }) => {
+  test('D: a lab with no terrain run, its one Run, the lab page', async ({ page }) => {
     await openDense(page);
     await showWorkspaceMode(page, 'analyse');
     const access = page.locator('.olv-ah-row[data-analysis="terrain-access"]');
-    await expect(access.locator('.olv-ah-badge')).toHaveText('Needs terrain');
-    await access.locator('.olv-ah-remedy', { hasText: 'Prepare terrain' }).click();
-    await expect(taskTitle(page, 'analyse')).toHaveText('Terrain');
-    await expect(page.locator('.olv-analyse-run')).toBeVisible();
+    await expect(access.locator('.olv-ah-badge')).toHaveText('Runs terrain first');
+    await expect(access.locator('.olv-ah-remedy')).toHaveCount(0);
+    await access.locator('.olv-ah-run', { hasText: 'Run Terrain Access' }).click();
+    await expect(taskTitle(page, 'analyse')).toHaveText('Terrain Access');
+    await expect(page.locator('.olv-analyse-page[data-page="terrain-access"] .olv-ta-form')).toBeVisible({ timeout: 30_000 });
     await expect(page.locator('.olv-modal')).toHaveCount(0);
     await expectWorkspaceRules(page);
   });
@@ -307,10 +308,11 @@ test.describe('target size', () => {
     await showWorkspaceMode(page, 'data');
     for (const sel of ['.olv-add-dataset-row', '.olv-layer-solo', '.olv-layer-lock', '.olv-layer-x']) await expectTargets(page, sel, 24);
     await showWorkspaceMode(page, 'analyse');
-    // Run terrain analysis, Prepare terrain and the other remedies.
+    // Run terrain analysis and the other remedies, and the labs' one Run.
     await expect(page.locator('.olv-ah-remedy', { hasText: 'Run terrain analysis' })).toBeVisible();
-    await expect(page.locator('.olv-ah-remedy', { hasText: 'Prepare terrain' }).first()).toBeVisible();
+    await expect(page.locator('.olv-ah-run', { hasText: 'Run Flow Pulse' })).toBeVisible();
     await expectTargets(page, '.olv-ah-remedy', 24);
+    await expectTargets(page, '.olv-ah-run', 24);
     await page.locator('.olv-ah-row[data-analysis="terrain"] .olv-ah-open').click();
     await expectTargets(page, '.olv-analyse-run', 24);
     await page.locator('.olv-analyse-run').click();
@@ -328,6 +330,7 @@ test.describe('target size', () => {
       for (const sel of ['.olv-add-dataset-row', '.olv-layer-solo', '.olv-layer-lock', '.olv-layer-x']) await expectTargets(page, sel, 44);
       await page.locator('.olv-mobile-sheet .olv-msheet-tab[data-tab="analyse"]').click();
       await expectTargets(page, '.olv-msheet-slot[data-tab="analyse"] .olv-ah-remedy', 44);
+      await expectTargets(page, '.olv-msheet-slot[data-tab="analyse"] .olv-ah-run', 44);
       await page.locator('.olv-msheet-slot[data-tab="analyse"] .olv-ah-row[data-analysis="terrain"] .olv-ah-open').click();
       await page.locator('.olv-msheet-slot[data-tab="analyse"] .olv-analyse-run').click();
       await expect(page.locator('.olv-msheet-slot[data-tab="analyse"] .olv-fit-verdict-text')).toBeVisible({ timeout: 30_000 });

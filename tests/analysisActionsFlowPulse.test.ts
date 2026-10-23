@@ -14,16 +14,20 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 let loadResult: 'success' | 'reject' | 'undefined' = 'success';
-const openFlowPulseLab = vi.fn();
+const events: string[] = [];
+const openFlowPulseLab = vi.fn((input: unknown, _opts?: unknown) => { events.push(`open:${input === null ? 'none' : 'surface'}`); });
+const openFlowPulsePreparing = vi.fn(() => { events.push('preparing'); return { close: () => events.push('preparing-closed') }; });
+const openTerrainAccessLab = vi.fn((input: unknown) => { events.push(`ta-open:${input === null ? 'none' : 'surface'}`); });
+const openTerrainAccessPreparing = vi.fn(() => { events.push('ta-preparing'); return { close: () => events.push('ta-preparing-closed') }; });
 const loadFlowPulseLab = vi.fn(() => {
   if (loadResult === 'reject') return Promise.reject(new Error('flow-pulse chunk failed'));
   if (loadResult === 'undefined') return Promise.resolve(undefined as unknown as { openFlowPulseLab: typeof openFlowPulseLab });
-  return Promise.resolve({ openFlowPulseLab });
+  return Promise.resolve({ openFlowPulseLab, openFlowPulsePreparing });
 });
 
 vi.mock('../src/lazyChunks', () => ({
   loadFlowPulseLab: () => loadFlowPulseLab(),
-  loadTerrainAccessLab: () => Promise.resolve({ openTerrainAccessLab: vi.fn() }),
+  loadTerrainAccessLab: () => Promise.resolve({ openTerrainAccessLab, openTerrainAccessPreparing }),
 }));
 
 import { contributeAnalysisActions, type AnalysisActionDeps } from '../src/app/actions/analysisActions';
@@ -54,6 +58,7 @@ function flowPulseAction(deps: AnalysisActionDeps) {
 
 beforeEach(() => {
   loadResult = 'success';
+  events.length = 0;
   openFlowPulseLab.mockClear();
   loadFlowPulseLab.mockClear();
 });
@@ -135,5 +140,53 @@ describe('Terrain Access action', () => {
     expect(action).toBeDefined();
     expect(deps.terrainAnalysisEntry.showAnalyseMode).not.toHaveBeenCalled();
     warnSpy.mockRestore();
+  });
+});
+
+describe('one click to a lab result: terrain runs first when there is none', () => {
+  /** A panel with no terrain result until `run` settles. */
+  function terrainDeps() {
+    let analysed = false;
+    const surface = { dtm: 'surface' };
+    const run = vi.fn(async () => { events.push('terrain-run'); analysed = true; });
+    const showPanel = vi.fn(async () => ({
+      hasResult: analysed,
+      flowInput: analysed ? (surface as never) : null,
+      terrainAccessInput: analysed ? (surface as never) : null,
+    }));
+    return fakeDeps({ terrainAnalysisEntry: { showAnalyseMode: vi.fn(), showPanel, run } });
+  }
+  const settle = async () => { for (let i = 0; i < 5; i++) await new Promise((r) => setTimeout(r, 0)); };
+
+  for (const [id, prefix] of [['analyse.flowPulse', ''], ['analyse.terrainAccess', 'ta-']] as const) {
+    it(`${id}: shows progress on the lab page, runs terrain, then opens the lab on the new surface`, async () => {
+      const deps = terrainDeps();
+      contributeAnalysisActions(deps).find((a) => a.id === id)!.run();
+      await settle();
+      expect(events).toEqual([`${prefix}preparing`, 'terrain-run', `${prefix}open:surface`, `${prefix}preparing-closed`]);
+      // It never leaves for the Terrain page.
+      expect(deps.terrainAnalysisEntry.showAnalyseMode).not.toHaveBeenCalled();
+    });
+
+    it(`${id}: with a terrain result, opens the lab at once and runs nothing`, async () => {
+      const deps = terrainDeps();
+      await deps.terrainAnalysisEntry.run();
+      events.length = 0;
+      contributeAnalysisActions(deps).find((a) => a.id === id)!.run();
+      await settle();
+      expect(events).toEqual([`${prefix}open:surface`]);
+    });
+  }
+
+  it('a lab that opened without a surface runs terrain again from its notice', async () => {
+    const deps = fakeDeps(); // a result, but no flow input
+    flowPulseAction(deps).run();
+    await settle();
+    expect(events).toEqual(['open:none']);
+    const opts = openFlowPulseLab.mock.calls[0]![1] as unknown as { onRunTerrain: () => void };
+    opts.onRunTerrain();
+    await settle();
+    expect(deps.terrainAnalysisEntry.run).toHaveBeenCalledTimes(1);
+    expect(events.slice(1)).toEqual(['preparing', 'open:none', 'preparing-closed']);
   });
 });

@@ -66,7 +66,9 @@ import { dtmProductDigest } from '../../science/dtmProductDigest';
 import { buildIdentityProvenance } from '../../build/buildIdentity';
 import { verticalUnitLabel } from '../../units/units';
 import { TerrainAccessResultGrid, maskFromIndices, terrainAccessGridLegend } from './terrainAccessResultGrid';
-import { howToRead, labHeader, methodDetails, needsGround, nextStep, readinessList } from '../labGuide';
+import {
+  howToRead, labDetails, labHeader, methodDetails, needsGround, nextStep, preparingGround, readinessList, statusChip, type ChipFacts,
+} from '../labGuide';
 import { firstBlocker, labReadiness, tangentToDegrees } from '../../process/labGuideCopy';
 import {
   buildTerrainAccessMapBuffers,
@@ -406,21 +408,22 @@ function estimatedConstraintNodes(constraints: unknown, estimates: unknown): HTM
 }
 
 /** The run's answer as a card: a refusal's named reason, or the route diagnostics.
+ * `flat` writes the method as a plain section, for a card that may sit inside Details.
  * §22: never a safety/passability word appears here. */
-export function renderTerrainAccessRunCard(outcome: TerrainAccessLabOutcome | null): HTMLElement {
+export function renderTerrainAccessRunCard(outcome: TerrainAccessLabOutcome | null, flat = false): HTMLElement {
   const card = el('aside', { className: 'olv-story-card' });
   if (!outcome) return card;
   if (!outcome.ok) {
     card.append(
       el('div', { className: 'olv-story-headline olv-lab-refusal', text: 'Terrain Access did not run' }),
       el('div', { className: 'olv-story-next', text: outcome.reason }),
-      methodDetails([row('Reason code', outcome.code)]),
+      methodDetails([row('Reason code', outcome.code)], flat),
     );
     return card;
   }
   const d = outcome.diagnostics;
   card.append(
-    el('div', { className: 'olv-story-headline olv-lab-caveat', text: 'A geometric traversability screening — not a safety or passability guarantee' }),
+    el('div', { className: 'olv-story-headline olv-lab-caveat', text: TERRAIN_ACCESS_SCREENING }),
     row('Route cells', String(d.cellCount)),
     row('Horizontal length', `${d.horizontalLengthM.toFixed(1)} m`),
     row('Ascent / descent', `${d.totalAscentM.toFixed(1)} m / ${d.totalDescentM.toFixed(1)} m`),
@@ -448,12 +451,15 @@ export function renderTerrainAccessRunCard(outcome: TerrainAccessLabOutcome | nu
   for (const sentence of outcome.limitations) list.append(el('li', { text: sentence }));
   card.append(
     el('span', { className: 'olv-story-k', text: 'Limitations' }), list,
-    methodDetails([row('Method', outcome.record.methods.join(' → '))]),
+    methodDetails([row('Method', outcome.record.methods.join(' → '))], flat),
   );
   return card;
 }
 
-/** The figure row under the map after a route is found; null before a run or on a refusal. */
+/**
+ * The three figures under the map after a route is found; null before a run
+ * or on a refusal. Every other diagnostic stays in the run card.
+ */
 export function terrainAccessStats(outcome: TerrainAccessLabOutcome | null): HTMLElement | null {
   if (!outcome?.ok) return null;
   const d = outcome.diagnostics;
@@ -461,8 +467,24 @@ export function terrainAccessStats(outcome: TerrainAccessLabOutcome | null): HTM
     { label: 'Length', value: d.horizontalLengthM.toFixed(1), unit: 'm' },
     { label: 'Ascent', value: d.totalAscentM.toFixed(1), unit: 'm' },
     { label: 'Max grade', value: (Math.atan(d.maxLongitudinalGrade) * 180 / Math.PI).toFixed(1), unit: '°' },
-    { label: 'Cells', value: String(d.cellCount) },
   ]);
+}
+
+/** The run card's lead caveat, also carried by the status chip. */
+export const TERRAIN_ACCESS_SCREENING = 'A geometric traversability screening — not a safety or passability guarantee';
+
+/**
+ * The status chip for Terrain Access: a few words, and behind them the
+ * readiness checklist and the screening caveat, word for word.
+ */
+export function terrainAccessChipFacts(input: TerrainAccessLabInput | null, outcome: TerrainAccessLabOutcome | null): ChipFacts {
+  const items = terrainAccessReadiness(input);
+  const lines = [readinessList(items), el('p', { className: 'olv-story-next olv-lab-caveat', text: TERRAIN_ACCESS_SCREENING })];
+  const blocker = firstBlocker(items);
+  if (!input) return { tone: 'blocked', summary: 'No ground surface yet', lines };
+  if (blocker) return { tone: 'blocked', summary: 'Units not known · Apply profile is off', lines };
+  if (outcome && !outcome.ok) return { tone: 'blocked', summary: 'No route found · reason below', lines };
+  return { tone: 'ready', summary: 'Screening only · not a safety guarantee', lines };
 }
 
 /** Plain lines beside a Terrain Access map and route. */
@@ -770,8 +792,10 @@ export function mountTerrainAccessInteractive(
   const body = el('div', { className: 'olv-ta-body' });
   const readiness = terrainAccessReadiness(input);
   const head = labHeader('terrain-access', input ? 1 : 0);
-  const stepLine = nextStep(input ? 'Next: describe the vehicle or walker, then apply the profile.' : '');
-  root.append(head.element, readinessList(readiness), live, body);
+  const stepLine = nextStep(input ? 'Describe the vehicle or walker, then apply the profile.' : '');
+  // Every caveat folds into one chip at the top; it opens to the full text.
+  const chip = statusChip('terrain-access');
+  root.append(chip.element, live, body);
   const announce = (msg: string): void => { live.textContent = msg; };
 
   let profile: TerrainAccessProfile | null = null;
@@ -787,8 +811,8 @@ export function mountTerrainAccessInteractive(
   const overlayHost = input?.overlayHost ?? null;
   const overlay = acquireTerrainAccessOverlay(overlayHost, input?.isStale ?? null);
   // Reflects whatever the persisted overlay is already showing: reopening
-  // the Lab after leaving the overlay on picks the toggle back up in the
-  // "on" state rather than forgetting it was ever shown.
+  // the Lab after leaving the map on picks the toggle back up in the "on"
+  // state. The route itself is drawn in 3D whether or not the map is.
   let overlayOn = persistentTerrainAccessOverlay?.overlayOn ?? false;
 
   const grid = new TerrainAccessResultGrid({
@@ -801,6 +825,14 @@ export function mountTerrainAccessInteractive(
   const inspectorPanel = el('div', { className: 'olv-ta-inspector' });
   const selectionPanel = el('div', { className: 'olv-ta-selection' });
   const runCard = el('div', { className: 'olv-ta-run-card' });
+  // The run card shows under the map while it runs or when it refuses; a
+  // found route's full card folds into Details behind its three figures.
+  const cardMain = el('div', { className: 'olv-ta-card-slot' });
+  const cardDetails = el('div', { className: 'olv-ta-card-slot' });
+  const placeRunCard = (busyNow = false): void => {
+    (busyNow || !outcome?.ok ? cardMain : cardDetails).append(runCard);
+    chip.set(terrainAccessChipFacts(input, outcome));
+  };
   const statsHost = el('div', { className: 'olv-ta-stats' });
 
   const modeCtl = segmentedControl<SelectMode>(
@@ -810,7 +842,7 @@ export function mountTerrainAccessInteractive(
     (value) => { mode = value; modeCtl.sync(); },
   );
 
-  const runButton = button('Run Terrain Access', 'olv-ta-run', 'Run the least-cost route search between the start and goal cells.');
+  const runButton = button('Find route', 'olv-ta-run', 'Run the least-cost route search between the start and goal cells.');
   const exportButton = button('Export package (ZIP)', 'olv-ta-export', 'Export the run as a ZIP package: route, grid, and report.');
 
   function applyOverlayVisibility(): void {
@@ -823,7 +855,7 @@ export function mountTerrainAccessInteractive(
     }
   }
 
-  const overlayToggle = button('Show traversability map', 'olv-ta-overlay-toggle', 'Toggle the traversability map overlay on the 3D view.');
+  const overlayToggle = button('Map in 3D', 'olv-ta-overlay-toggle', 'Show or hide the traversability map overlay on the 3D view. The route is always drawn.');
   overlayToggle.setAttribute('aria-pressed', overlayOn ? 'true' : 'false');
   overlayToggle.addEventListener('click', () => {
     overlayOn = !overlayOn;
@@ -842,15 +874,15 @@ export function mountTerrainAccessInteractive(
     exportButton.disabled = !terrainAccessExportReady(outcome, busy, exportBusy);
     if (outcome?.ok) {
       head.setStage(4);
-      stepLine.textContent = 'Next: read the route below, or export it.';
+      stepLine.textContent = 'Route found. Move the start or goal to try another, or export it.';
     } else if (startCell && goalCell) {
       head.setStage(3);
-      stepLine.textContent = 'Next: run Terrain Access.';
+      stepLine.textContent = 'Press Find route.';
     } else {
       head.setStage(2);
       stepLine.textContent = startCell
-        ? 'Next: choose Set goal, then click a cell (or move with the arrow keys and press Enter).'
-        : 'Next: click a cell to set the start (or move with the arrow keys and press Enter), then set the goal.';
+        ? 'Choose Set goal, then click a cell on the map (or use the arrow keys and Enter).'
+        : 'Click a cell on the map to set the start (or use the arrow keys and Enter), then set the goal.';
     }
   }
 
@@ -861,7 +893,8 @@ export function mountTerrainAccessInteractive(
     grid.setRouteMask(null);
     overlay?.clearRoute();
     statsHost.replaceChildren();
-    runCard.replaceChildren(renderTerrainAccessRunCard(null));
+    runCard.replaceChildren(renderTerrainAccessRunCard(null, true));
+    placeRunCard();
     publishLabRun('terrain-access', null);
   }
 
@@ -934,9 +967,11 @@ export function mountTerrainAccessInteractive(
     if (!preview) return;
     if (!preview.ok) {
       head.setStage(1);
+      chip.set(terrainAccessChipFacts(input, preview));
       body.replaceChildren(
         renderTerrainAccessRunCard(preview),
-        makeEditProfileButton(() => { preview = null; profile = null; renderRoot(); }),
+        makeEditProfileButton(editProfile),
+        labDetails([head.element]),
       );
       return;
     }
@@ -960,7 +995,8 @@ export function mountTerrainAccessInteractive(
       if (!startCell || !goalCell || !profile || busy) return;
       if (input?.isStale?.()) {
         outcome = { ok: false, code: 'STALE_INPUT', reason: TERRAIN_ACCESS_STALE_REASON };
-        runCard.replaceChildren(renderTerrainAccessRunCard(outcome));
+        runCard.replaceChildren(renderTerrainAccessRunCard(outcome, true));
+        placeRunCard();
         announce(TERRAIN_ACCESS_STALE_REASON);
         return;
       }
@@ -971,13 +1007,15 @@ export function mountTerrainAccessInteractive(
       const busyLine = el('p', { className: 'olv-flow-busy' });
       showBusyScan(busyLine, 'Finding a route…', 'emblem');
       runCard.replaceChildren(busyLine);
+      placeRunCard(true);
       await new Promise<void>((resolve) => {
         if (typeof requestAnimationFrame === 'function') requestAnimationFrame(() => resolve());
         else setTimeout(resolve, 0);
       });
       if (!startCell || !goalCell || !profile) {
         busy = false;
-        runCard.replaceChildren(renderTerrainAccessRunCard(outcome));
+        runCard.replaceChildren(renderTerrainAccessRunCard(outcome, true));
+        placeRunCard();
         renderSelection();
         return;
       }
@@ -1001,34 +1039,53 @@ export function mountTerrainAccessInteractive(
         overlay?.clearRoute();
         announce(`Terrain Access did not run: ${outcome.reason}`);
       }
-      runCard.replaceChildren(renderTerrainAccessRunCard(outcome));
+      runCard.replaceChildren(renderTerrainAccessRunCard(outcome, true));
+      placeRunCard();
       statsHost.replaceChildren(...[terrainAccessStats(outcome)].filter((n): n is HTMLElement => n !== null));
       // The Run button's tip sits over the card that just filled in.
       hideTip();
       renderSelection();
     };
 
-    runCard.replaceChildren(renderTerrainAccessRunCard(null));
+    runCard.replaceChildren(renderTerrainAccessRunCard(null, true));
+    placeRunCard();
     inspectorPanel.replaceChildren();
 
-    // The map leads, then its figures and legend; reading notes come after the result.
+    // The map leads, then the three figures, the click hint and the actions;
+    // the legend, the full run card and the reading notes fold into Details.
     body.replaceChildren(
-      modeCtl.element,
-      stepLine,
       grid.element,
       statsHost,
-      terrainAccessGridLegend(),
+      el('div', { className: 'olv-lab-controls' }, [modeCtl.element, stepLine]),
       selectionPanel,
-      runButton,
       inspectorPanel,
-      runCard,
-      howToRead(TERRAIN_ACCESS_HOW_TO_READ),
-      overlayHost ? el('div', { className: 'olv-ta-overlay-section' }, [overlayToggle]) : el('div', {
-        className: 'olv-ta-overlay-unavailable',
-        text: 'The 3D traversability overlay is not available in this view; the 2D result grid still carries every interaction.',
-      }),
-      exportButton,
+      cardMain,
+      el('div', { className: 'olv-lab-actions' }, [
+        runButton,
+        exportButton,
+        ...(overlayHost ? [overlayToggle] : []),
+        makeEditProfileButton(editProfile),
+      ]),
+      labDetails([
+        terrainAccessGridLegend(),
+        howToRead(TERRAIN_ACCESS_HOW_TO_READ),
+        ...(overlayHost ? [] : [el('div', {
+          className: 'olv-ta-overlay-unavailable',
+          text: 'The 3D traversability overlay is not available in this view; the 2D result grid still carries every interaction.',
+        })]),
+        head.element,
+        cardDetails,
+      ]),
     );
+  }
+
+  /** Back to the form, which keeps what was typed; the map and any route go. */
+  function editProfile(): void {
+    clearResult();
+    preview = null;
+    profile = null;
+    overlay?.setMapVisible(false);
+    renderRoot();
   }
 
   const blocker = firstBlocker(readiness);
@@ -1050,15 +1107,16 @@ export function mountTerrainAccessInteractive(
   }, blocker && input ? `Apply profile is off. ${blocker.note}` : null, terrainAccessAboveGroundAvailable(input));
 
   function renderRoot(): void {
+    chip.set(terrainAccessChipFacts(input, outcome));
     // No ground surface: the form waits until there is one to screen.
     if (!input) {
-      body.replaceChildren(needsGround(onRunTerrain));
+      body.replaceChildren(needsGround(onRunTerrain), labDetails([head.element]));
       return;
     }
     if (!preview) {
       head.setStage(1);
-      body.replaceChildren(stepLine, form.element);
-      stepLine.textContent = 'Next: describe the vehicle or walker, then apply the profile.';
+      body.replaceChildren(stepLine, form.element, labDetails([head.element, howToRead(TERRAIN_ACCESS_HOW_TO_READ)]));
+      stepLine.textContent = 'Describe the vehicle or walker, then apply the profile.';
       return;
     }
     renderPreview();
@@ -1075,6 +1133,7 @@ export function mountTerrainAccessInteractive(
     // rather than constructing a second one that would orphan the first.
     dispose: () => {
       grid.dispose();
+      chip.dispose();
       if (!overlayOn && persistentTerrainAccessOverlay) {
         persistentTerrainAccessOverlay.overlay.dispose();
         persistentTerrainAccessOverlay = null;
@@ -1083,11 +1142,18 @@ export function mountTerrainAccessInteractive(
   };
 }
 
-/** Run and show Terrain Access on its Analyse page. `onRunTerrain` starts the terrain run when the ground surface is missing. */
+/** Show Terrain Access's page while the terrain run it needs builds the ground surface. */
+export function openTerrainAccessPreparing(): { close(): void } {
+  return openLabSurface('terrain-access', 'Terrain Access', el('div', { className: 'olv-ta-lab' }, [preparingGround('terrain-access')]));
+}
+
+/**
+ * Run and show Terrain Access on its Analyse page. `onRunTerrain` runs terrain
+ * when the ground surface is missing and reopens the lab on its result.
+ */
 export function openTerrainAccessLab(input: TerrainAccessLabInput | null, opts: { readonly onRunTerrain?: () => void } = {}): ModalHandle {
   let handle: ModalHandle | null = null;
-  const run = opts.onRunTerrain;
-  const interactive = mountTerrainAccessInteractive(input, run ? () => { handle?.close(); run(); } : null);
+  const interactive = mountTerrainAccessInteractive(input, opts.onRunTerrain ?? null);
   // A shelf Focus reopens the published route on the same layer: its run
   // card leads the lab, read from the kept outcome, with nothing recomputed.
   const prior = takeResultReopen('terrain-access') ? labRun('terrain-access') : null;

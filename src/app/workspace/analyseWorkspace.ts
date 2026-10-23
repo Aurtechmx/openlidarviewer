@@ -9,11 +9,15 @@
  * scan-dependent Feature candidates and Range frames are router pages. The
  * Flow Pulse and Terrain Access labs are pages under Terrain and Observatory
  * is a page of its own: each lab places its body here through
- * `ui/labSurface.ts`, so the scene stays in view while it is open.
+ * `ui/labSurface.ts`, so the scene stays in view while it is open. A Flow
+ * Pulse or Terrain Access row runs its lab in one click: the lab's entry runs
+ * terrain first when there is no result yet.
  *
  * Every page leads with its conclusion (status and reason), then a `Why?`
  * disclosure with the full reasons (on Terrain, the whole Process Studio
- * panel), then the task itself with its Evidence and Method.
+ * panel), then the task itself with its Evidence and Method. The Flow Pulse
+ * and Terrain Access pages fold both into the lab's own status chip instead,
+ * so their map comes first.
  *
  * The panels are live nodes, never recreated: the Analyse panel, the sections
  * it lends out (`AnalysePanel.part`), the Object panel and the Process Studio
@@ -26,6 +30,7 @@ import { el } from '../../ui/dom';
 import {
   analysisRows,
   contoursStatus,
+  TERRAIN_FIRST,
   type AnalysisId,
   type AnalysisRemedy,
   type AnalysisRow,
@@ -36,8 +41,7 @@ import type { ProcessStudioState } from '../processStudioMount';
 import type { PreflightActionId, ToolId } from '../../process/toolPreflight';
 import type { WorkspacePage, WorkspaceRouter } from './workspaceRouter';
 import { LAB_NAME, LAB_PURPOSE, type LabId } from '../../process/labGuideCopy';
-import { labReturn, setLabReturn } from '../labReturn';
-import { setLabPageHost } from '../../ui/labSurface';
+import { setLabPageHost, setLabPageStatus } from '../../ui/labSurface';
 import { publishAnalysisRows } from '../../process/analysisRowsFeed';
 
 /** The slice of the mounted Process Studio the home reads. */
@@ -108,6 +112,9 @@ const LAB_ACTION: Partial<Record<AnalysisId, string>> = {
   observatory: 'analyse.observatory',
 };
 
+/** The labs whose page leads with their map and fold the verdict into a status chip. */
+const CHIP_LABS: ReadonlySet<AnalysePage> = new Set(['flow-pulse', 'terrain-access']);
+
 /** A routine missing prerequisite reads as what the step needs, not as Blocked. */
 const tone = (r: Pick<AnalysisRow, 'status' | 'needs'>): string => (r.needs ? 'needs' : r.status);
 
@@ -131,6 +138,8 @@ function pageShell(page: AnalysePage, extra: HTMLElement | null = null): PageShe
   const body = el('div', { className: 'olv-at-body' });
   const root = el('section', { className: 'olv-analyse-page' }, extra ? [verdict, extra, why, body] : [verdict, why, body]);
   root.dataset.page = page;
+  // The lab's status chip carries the verdict and its reasons.
+  if (CHIP_LABS.has(page)) { verdict.hidden = true; why.hidden = true; }
   return { root, verdict, why, whyBody, body };
 }
 
@@ -138,10 +147,8 @@ export function createAnalyseWorkspace(d: AnalyseWorkspaceDeps): AnalyseWorkspac
   let router: WorkspaceRouter | null = null;
   const list = el('ul', { className: 'olv-ah-list' });
   const home = el('section', { className: 'olv-analyse-home', ariaLabel: 'Analyses' }, [list]);
-  // The way back to a lab that started the terrain run.
-  const backLink = el('div', { className: 'olv-at-back-host' });
   const shells: Record<AnalysePage, PageShell> = {
-    terrain: pageShell('terrain', backLink),
+    terrain: pageShell('terrain'),
     contours: pageShell('contours'),
     objects: pageShell('objects'),
     features: pageShell('features'),
@@ -156,8 +163,12 @@ export function createAnalyseWorkspace(d: AnalyseWorkspaceDeps): AnalyseWorkspac
   setLabPageHost((lab, body, onClose) => {
     // With no scan the workspace is not on screen: the lab takes a dialog.
     if (!scanOpen()) return null;
-    labClose[lab]?.();
     const shell = shells[lab];
+    // A lab that finishes after the reader left its progress page lands
+    // quietly: they are not pulled back from where they went.
+    const route = router?.route();
+    const quiet = !!shell.body.querySelector('.olv-lab-preparing') && !(route?.mode === 'analyse' && route.page === lab);
+    labClose[lab]?.();
     shell.body.replaceChildren(body);
     let closed = false;
     const close = (): void => {
@@ -170,8 +181,10 @@ export function createAnalyseWorkspace(d: AnalyseWorkspaceDeps): AnalyseWorkspac
     };
     labClose[lab] = close;
     api.refresh();
-    router?.navigate({ mode: 'analyse', page: lab }, true);
-    d.reveal?.();
+    if (!quiet) {
+      router?.navigate({ mode: 'analyse', page: lab }, true);
+      d.reveal?.();
+    }
     return { element: shell.root, close };
   });
   // A panel shown or hidden by its owner (the scan route, the dock toggle)
@@ -223,10 +236,27 @@ export function createAnalyseWorkspace(d: AnalyseWorkspaceDeps): AnalyseWorkspac
     return b;
   };
 
+  /**
+   * A lab row's primary action: open the lab's page when it is already
+   * showing a result, else run it (terrain first when there is none). None
+   * when the row is blocked before any terrain run by something else.
+   */
+  function labRunButton(row: AnalysisRow, hasDtm: boolean): HTMLElement | null {
+    if (row.status === 'blocked' && row.needs !== TERRAIN_FIRST && !hasDtm) return null;
+    const page = row.id as AnalysePage;
+    const shown = available(page);
+    const name = LAB_NAME[row.id as LabId];
+    const b = el('button', {
+      className: 'olv-ah-run', type: 'button', text: `${shown ? 'Open' : 'Run'} ${name}`,
+      tip: shown ? `Show the ${name} result.` : hasDtm ? `Run ${name} on the latest ground surface.` : `Run terrain analysis, then ${name}.`,
+    });
+    b.addEventListener('click', () => { void api.open(page); });
+    return b;
+  }
+
+  /** A lab already showing a result opens as it is; otherwise its entry runs it. */
   function openRow(id: AnalysisId): void {
-    const lab = LAB_ACTION[id];
-    if (lab) d.runAction(lab);
-    else void api.open(id as AnalysePage);
+    void api.open(id as AnalysePage);
   }
 
   function renderVerdict(shell: PageShell, v: Pick<AnalysisRow, 'status' | 'reason' | 'remedy' | 'needs'>): void {
@@ -297,7 +327,9 @@ export function createAnalyseWorkspace(d: AnalyseWorkspaceDeps): AnalyseWorkspac
           badge(row),
         ]);
         open.addEventListener('click', () => openRow(row.id));
-        const li = el('li', { className: `olv-ah-row is-${tone(row)}` }, [
+        // A lab with nothing to review shows its purpose alone; the badge says the rest.
+        const quiet = CHIP_LABS.has(row.id as AnalysePage) && (row.status === 'ready' || row.needs === TERRAIN_FIRST);
+        const li = el('li', { className: `olv-ah-row is-${tone(row)}` }, quiet ? [open] : [
           open,
           el('p', { className: 'olv-ah-reason', text: row.reason, title: row.reason }),
         ]);
@@ -305,6 +337,10 @@ export function createAnalyseWorkspace(d: AnalyseWorkspaceDeps): AnalyseWorkspac
         const purpose = LAB_PURPOSE[row.id as LabId];
         if (purpose) li.append(el('p', { className: 'olv-ah-hint', text: purpose }));
         if (row.remedy) li.append(remedyButton(row.remedy));
+        if (CHIP_LABS.has(row.id as AnalysePage)) {
+          const run = labRunButton(row, inp.produced.has('dtm'));
+          if (run) li.append(run);
+        }
         // Before a run, the Terrain row carries the run itself: one click from home.
         if (row.id === 'terrain' && !inp.produced.has('dtm') && row.status !== 'blocked') {
           const run = el('button', { className: 'olv-ah-remedy', type: 'button', text: 'Run terrain analysis' });
@@ -329,14 +365,6 @@ export function createAnalyseWorkspace(d: AnalyseWorkspaceDeps): AnalyseWorkspac
         items.splice(1, 0, child);
       }
       list.replaceChildren(...items);
-      // After a terrain run a lab started, the Terrain page offers the way back.
-      const back = labReturn();
-      backLink.replaceChildren();
-      if (back && inp.produced.has('dtm')) {
-        const b = el('button', { className: 'olv-at-link olv-at-back', type: 'button', text: `Back to ${LAB_NAME[back]}`, tip: `Reopen ${LAB_NAME[back]} on the new ground surface.` });
-        b.addEventListener('click', () => { setLabReturn(null); d.runAction(LAB_ACTION[back]!); });
-        backLink.append(b);
-      }
       // Before contours exist the link offers to make them; after, it opens them.
       const made = inp.produced.has('contours');
       contoursLink.replaceChildren(el('span', { className: 'olv-ah-name', text: made ? 'Contours' : 'Create contours' }), badge(contours));
@@ -345,6 +373,10 @@ export function createAnalyseWorkspace(d: AnalyseWorkspaceDeps): AnalyseWorkspac
       for (const row of rows) {
         const page = pageOf[row.id];
         if (!page) continue;
+        if (CHIP_LABS.has(page)) {
+          setLabPageStatus(page as LabId, { tone: tone(row), badge: row.needs ?? STATUS_TEXT[row.status], reason: row.reason });
+          continue;
+        }
         // The Terrain page shows the run's verdict in full just below, so its
         // header points there instead of repeating the same sentence.
         const repeatsRun = page === 'terrain' && row.status === 'review' && !!inp.terrainRun && row.reason === inp.terrainRun.verdict;
