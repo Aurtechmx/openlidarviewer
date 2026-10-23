@@ -31,8 +31,10 @@
  * surface could not be resolved at this epsilon.
  *
  * ── NODATA IS A WALL, AS ROUTING READS IT ───────────────────────────────────
- * D8 routes nothing into an invalid cell, so the flood seeds only at the grid
- * boundary. Seeding the rim of every gap as well would call a survey hole a
+ * D8 routes nothing into an invalid cell, so the flood seeds only at the edge
+ * of the mapped surface: the grid boundary and the rim of NoData that reaches
+ * it, which lies outside the survey (see {@link outsideSurface}). Seeding the
+ * rim of every enclosed gap as well would call a survey hole a
  * drainage exit: a depression beside the hole would stay unfilled because it
  * "spills" into it, and D8, which does not route into the hole, would then
  * find a sink on the rim that conditioning reported as resolved. A region
@@ -46,7 +48,7 @@
  */
 
 import { CELL_NODATA } from './flowTypes';
-import { assertFlowGrid, D8_NEIGHBOURS, type FlowGrid } from './flowTypes';
+import { assertFlowGrid, D8_NEIGHBOURS, outsideSurface, type FlowGrid } from './flowTypes';
 
 /** A conditioned surface, and what conditioning it cost. */
 export interface PriorityFloodResult {
@@ -195,8 +197,9 @@ class CellHeap {
 /**
  * Condition `grid` so that every valid cell drains to the grid boundary.
  *
- * Seeds are the valid cells on the grid boundary, and with `noData: 'outlet'`
- * also the valid cells touching a NoData cell. A region with no seed cannot be
+ * Seeds are the valid cells on the grid boundary or touching NoData outside
+ * the surface, and with `noData: 'outlet'` also the valid cells touching any
+ * NoData cell. A region with no seed cannot be
  * conditioned, because there is nowhere for it to drain to; its cells keep
  * their elevations and are counted in `cellsUnreachable`.
  */
@@ -221,13 +224,14 @@ export function priorityFlood(
   const closed = new Uint8Array(n);
   const heap = new CellHeap(n);
 
+  const outside = outsideSurface(grid);
   const isEdgeSeed = (col: number, row: number): boolean => {
     if (col === 0 || row === 0 || col === cols - 1 || row === rows - 1) return true;
-    if (!gapsAreExits) return false;
     // An interior cell: every neighbour is on the grid, so only a gap makes
-    // it an exit.
+    // it an exit: one outside the surface always, an enclosed one when asked.
     for (const [dx, dy] of D8_NEIGHBOURS) {
-      if (valid[(row + dy) * cols + col + dx] !== 1) return true;
+      const nb = (row + dy) * cols + col + dx;
+      if (valid[nb] !== 1 && (gapsAreExits || outside[nb] === 1)) return true;
     }
     return false;
   };

@@ -81,8 +81,11 @@ describe('TF-8: a real, licensed terrain fixture routes deterministically', () =
     // Changes if the fixture, the routing method, the accumulation method or
     // the digest encoding changes — any of which is a real finding, not a
     // reason to update this string without checking which one moved.
+    // Last moved by the routing method: the stream-channel gap reaches the
+    // grid edge, so the cells beside it drain into it as outlets (sinks 94 to
+    // 41, outlets 14 to 67), as the independent oracle's record also shows.
     expect(routeFrom(fixture)).toBe(
-      'dc80c9adbbad7c0cdfa748a2dc3498ca22fcd66958140bc4c2dcdc79549ee047',
+      '958b3330f215d60d6b9603bbfeec2cc9f1a9a19c3e3f6b61d051e66c0546bf68',
     );
   });
 });

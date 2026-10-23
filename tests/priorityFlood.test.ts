@@ -19,6 +19,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { CELL_ROUTED, CELL_SINK, d8Flow } from '../src/simulation/flowPulse/d8Flow';
+import { CELL_OUTLET } from '../src/simulation/flowPulse/flowTypes';
 import { filledCells, priorityFlood } from '../src/simulation/flowPulse/priorityFlood';
 import type { FlowGrid } from '../src/simulation/flowPulse/flowTypes';
 
@@ -244,15 +245,30 @@ describe('a region NoData encloses is counted, not conditioned', () => {
   });
 
   it('counts a single cell enclosed on every side', () => {
+    // The gap around it is itself enclosed by the surface, so it is a hole in
+    // the survey, not ground outside it.
+    const g = gridOf([
+      [5, 5, 5, 5, 5],
+      [5, null, null, null, 5],
+      [5, null, 2, null, 5],
+      [5, null, null, null, 5],
+      [5, 5, 5, 5, 5],
+    ]);
+    const res = priorityFlood(g, { epsilon: 0.001 });
+    expect(res.cellsUnreachable).toBe(1);
+    expect(res.cellsRaised).toBe(0);
+    expect(res.z[12]).toBeCloseTo(2, 6);
+  });
+
+  it('drains an island in NoData that reaches the grid edge, since that NoData is outside the survey', () => {
     const g = gridOf([
       [null, null, null],
       [null, 2, null],
       [null, null, null],
     ]);
     const res = priorityFlood(g, { epsilon: 0.001 });
-    expect(res.cellsUnreachable).toBe(1);
-    expect(res.cellsRaised).toBe(0);
-    expect(res.z[4]).toBeCloseTo(2, 6);
+    expect(res.cellsUnreachable).toBe(0);
+    expect(d8Flow(g).status[4]).toBe(CELL_OUTLET);
   });
 
   it('counts nothing where every cell reaches the boundary', () => {

@@ -77,7 +77,40 @@ export const D8_NEIGHBOURS: readonly (readonly [number, number])[] = Object.free
   [1, -1],  // NE
 ]);
 
-/** Throws unless the grid's dimensions and arrays agree. */
+/**
+ * 1 for each NoData cell that reaches the grid border through other NoData
+ * cells (4-connected), 0 elsewhere.
+ *
+ * Such a cell lies outside the mapped surface, as the area around a survey
+ * strip does, so water that reaches it has left the surface the way it leaves
+ * past the grid edge. NoData the surface encloses (a hole under a building, a
+ * gap in a swath) is not outside and stays a wall.
+ */
+export function outsideSurface(grid: FlowGrid): Uint8Array {
+  const { valid, cols, rows } = grid;
+  const n = cols * rows;
+  const outside = new Uint8Array(n);
+  const stack: number[] = [];
+  const seed = (i: number): void => {
+    if (valid[i] === 1 || outside[i] === 1) return;
+    outside[i] = 1;
+    stack.push(i);
+  };
+  for (let c = 0; c < cols; c++) { seed(c); seed((rows - 1) * cols + c); }
+  for (let r = 0; r < rows; r++) { seed(r * cols); seed(r * cols + cols - 1); }
+  while (stack.length > 0) {
+    const i = stack.pop()!;
+    const col = i % cols;
+    const row = (i - col) / cols;
+    if (col > 0) seed(i - 1);
+    if (col < cols - 1) seed(i + 1);
+    if (row > 0) seed(i - cols);
+    if (row < rows - 1) seed(i + cols);
+  }
+  return outside;
+}
+
+
 export function assertFlowGrid(grid: FlowGrid): void {
   const { cols, rows, z, valid, cellMetresX, cellMetresY } = grid;
   if (!Number.isInteger(cols) || !Number.isInteger(rows) || cols <= 0 || rows <= 0) {

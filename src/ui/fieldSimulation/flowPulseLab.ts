@@ -396,7 +396,7 @@ export function flowTerrainBanner(input: FlowPulseLabInput): HTMLElement | null 
 /** Plain lines beside a Flow Pulse result. */
 export const FLOW_HOW_TO_READ: readonly string[] = [
   'Each square is one ground cell. Water in a cell moves to the neighbour with the steepest drop.',
-  'Outlets are where flow leaves the grid. Sinks are low spots where it stops.',
+  'Outlets are where flow leaves the surveyed area. Sinks are low spots where it stops.',
   'Upstream counts are numbers of cells, not volumes of water or rainfall.',
 ];
 

@@ -632,22 +632,30 @@ export const METHOD_REGISTRY: Readonly<Record<string, MethodEntry>> = {
       'src/render/measure/profileSectionExtract.ts',
     ],
   },
+  // v2 reads NoData that reaches the grid edge through NoData as ground outside
+  // the survey: a cell beside it with no lower neighbour is an outlet, as at
+  // the grid edge. v1 read all NoData as a wall, so a survey strip's own edge
+  // reported its downhill cells as pits.
   'olv.simulation.terrain-flow.d8': {
     id: 'olv.simulation.terrain-flow.d8',
-    version: 1,
+    version: 2,
     name: 'D8 single-flow-direction routing',
     summary:
       'Routes each grid cell to whichever of its eight neighbours offers the steepest '
       + 'descent per unit of horizontal distance, measured in metres per axis so an '
       + 'anisotropic grid ranks diagonals correctly. Cells with no lower neighbour are '
       + 'reported as pits, flats or outlets rather than drained; ties break on a fixed '
-      + 'neighbour order. A topographic routing graph, not a discharge field.',
+      + 'neighbour order. NoData the survey encloses is a wall; NoData that reaches the '
+      + 'grid edge lies outside the survey, and a cell beside it drains out as at the '
+      + 'grid edge. A topographic routing graph, not a discharge field.',
     citation:
       "O'Callaghan & Mark (1984), Computer Vision, Graphics, and Image Processing 28(3), "
       + '323-344.',
     category: 'simulation',
     implementation: ['src/simulation/flowPulse/d8Flow.ts'],
   },
+  // v4 also seeds the rim of NoData that reaches the grid edge, which lies
+  // outside the survey, matching D8 v2; NoData the survey encloses stays a wall.
   // v3 counts a cell as filled only when its original height is strictly
   // below the spill level it was reached from (Barnes, Lehman & Mulla 2014):
   // cells lifted only by the epsilon gradient across a flat are reported as
@@ -659,12 +667,13 @@ export const METHOD_REGISTRY: Readonly<Record<string, MethodEntry>> = {
   // declared `.gap-outlet` variant below.
   'olv.simulation.terrain-flow.priority-flood': {
     id: 'olv.simulation.terrain-flow.priority-flood',
-    version: 3,
+    version: 4,
     name: 'Priority-Flood depression conditioning',
     summary:
-      'Floods inward from the grid boundary, raising each cell reached from below '
-      + 'to its spill level, and returns a second surface rather than modifying the '
-      + 'DTM. NoData is a wall, as D8 reads it; cells NoData encloses are left as '
+      'Floods inward from the edge of the survey (the grid boundary and NoData that '
+      + 'reaches it), raising each cell reached from below to its spill level, and '
+      + 'returns a second surface rather than modifying the DTM. NoData the survey '
+      + 'encloses is a wall, as D8 reads it; cells NoData encloses are left as '
       + 'they are and counted. An optional increment above the spill parent breaks '
       + 'the resulting plateaux; increments lost to Float32 precision are counted '
       + 'and reported rather than assumed to have applied. Only a cell whose original '
