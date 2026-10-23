@@ -143,9 +143,11 @@
    would repeat it ("← Data" twice), so the rail keeps only the page title. The
    two name the same place: both go to the page's parent or the mode home
    (locationModel.ts backTarget, workspaceRouter.ts sync). A Back that closes a
-   workspace goes elsewhere, so the rail's Back stays then. The phone sheet has
-   no header bar and keeps its Back. locationBar.ts sets the root class. */
-.olv-has-header-back .olv-left-panels .olv-ws-task > .olv-ws-back {
+   workspace goes elsewhere, so the rail's Back stays then. On the phone the
+   sheet's location line carries that Back, so the page's own is hidden there
+   too. locationBar.ts sets the root classes. */
+.olv-has-header-back .olv-left-panels .olv-ws-task > .olv-ws-back,
+.olv-has-sheet-back .olv-mobile-sheet .olv-ws-task > .olv-ws-back {
   display: none;
 }
 /* A mode home: the one crumb repeats the active mode tab, so no pill. */

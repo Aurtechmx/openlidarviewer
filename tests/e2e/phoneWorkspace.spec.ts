@@ -66,7 +66,9 @@ for (const viewport of [{ width: 390, height: 844 }, { width: 844, height: 390 }
       // The same live node came back, not a rebuilt one.
       expect(await measure.count()).toBe(1);
 
-      await slot(page, 'work').locator('.olv-ws-back').click();
+      // One Back: the sheet's location line carries it, so the page's own is hidden.
+      await expect(slot(page, 'work').locator('.olv-ws-back')).toBeHidden();
+      await page.locator('.olv-msheet-head .olv-loc-back').click();
       await expect(launcher).toBeVisible();
       await expect(measure).toBeHidden();
       await expect(slot(page, 'work').locator('.olv-ws-task')).toBeHidden();
@@ -150,9 +152,9 @@ for (const viewport of [{ width: 390, height: 844 }, { width: 844, height: 390 }
       await slot(page, 'work').locator('.olv-tl-row', { hasText: 'Measure' }).click();
       await tab(page, 'work').click();
       expect(await sheetScrollers(page)).toEqual(['olv-msheet-body']);
-      const back = await slot(page, 'work').locator('.olv-ws-back').boundingBox();
+      const back = await page.locator('.olv-msheet-head .olv-loc-back').boundingBox();
       expect(back!.height).toBeGreaterThanOrEqual(44);
-      await slot(page, 'work').locator('.olv-ws-back').click();
+      await page.locator('.olv-msheet-head .olv-loc-back').click();
       for (const r of await slot(page, 'work').locator('.olv-tl-row').all()) {
         expect((await r.boundingBox())!.height).toBeGreaterThanOrEqual(44);
       }

@@ -68,6 +68,7 @@ The format is based on Keep a Changelog and the project follows Semantic Version
 
 ### Fixed
 
+- On a phone, a page inside the sheet shows one Back: the sheet's location line carries it, so the page's own Back is hidden when both lead to the same place.
 - The draw precision bound no longer reads "Not tested" when the camera's inverse matrix carries a bottom row within rounding of (0, 0, 0, 1); that row sets only w, which the bounded position does not use.
 - Flow routing reads no-data that reaches the edge of the grid as ground outside the survey, so a strip drains out of its sides instead of ponding against them (`olv.simulation.terrain-flow.d8@2`, `olv.simulation.terrain-flow.priority-flood@4`).
 - A display sample of a scan that fills only part of its bounding box, such as a survey strip, lands near its point budget instead of a fraction of it.
