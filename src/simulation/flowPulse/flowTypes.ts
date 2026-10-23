@@ -65,16 +65,18 @@ export interface FlowGrid {
  * makes the choice reproducible across runs and platforms. A different order
  * would be equally defensible and would produce a different flow field, which
  * is why it is frozen here and pinned by test rather than left to the loop.
+ *
+ * Offsets are [dcol, drow]. Row 0 is the southern row, so +drow is north.
  */
 export const D8_NEIGHBOURS: readonly (readonly [number, number])[] = Object.freeze([
   [1, 0],   // E
-  [1, 1],   // SE
-  [0, 1],   // S
-  [-1, 1],  // SW
+  [1, 1],   // NE
+  [0, 1],   // N
+  [-1, 1],  // NW
   [-1, 0],  // W
-  [-1, -1], // NW
-  [0, -1],  // N
-  [1, -1],  // NE
+  [-1, -1], // SW
+  [0, -1],  // S
+  [1, -1],  // SE
 ]);
 
 /**

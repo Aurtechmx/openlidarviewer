@@ -105,7 +105,7 @@ genuine survey hole it invents an exit that was never surveyed.
 
 `src/simulation/flowPulse/d8Flow.ts` implements O'Callaghan and Mark (1984).
 For each valid cell, the eight neighbours are inspected in a fixed order:
-east, southeast, south, southwest, west, northwest, north, northeast. The
+east, northeast, north, northwest, west, southwest, south, southeast. The
 cell drains to whichever neighbour offers the strictly greatest drop per
 metre of physical distance, with ties broken by that fixed order rather than
 by array layout. The diagonal distance is computed as

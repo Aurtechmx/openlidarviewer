@@ -187,8 +187,11 @@ function outletColumn(base: string, origin: number | null): string {
   return origin == null ? `${base}Local` : base;
 }
 
-/** Direction-index legend, matching `D8_NEIGHBOURS` in `flowTypes.ts`. */
-const DIRECTION_LEGEND = ['E', 'SE', 'S', 'SW', 'W', 'NW', 'N', 'NE'];
+/**
+ * Direction-index legend, matching `D8_NEIGHBOURS` in `flowTypes.ts`. Grid row
+ * 0 is the southern row, so a step to row + 1 is a step north.
+ */
+const DIRECTION_LEGEND = ['E', 'NE', 'N', 'NW', 'W', 'SW', 'S', 'SE'];
 
 /** cols/rows-only coverage: every cell the flow grid marks valid. */
 function coverageOf(grid: FlowGrid): Uint8Array {
