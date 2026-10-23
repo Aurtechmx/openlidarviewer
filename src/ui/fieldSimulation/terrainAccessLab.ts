@@ -481,7 +481,7 @@ export function terrainAccessStats(outcome: TerrainAccessLabOutcome | null): HTM
 }
 
 /** The run card's lead caveat, also carried by the status chip. */
-export const TERRAIN_ACCESS_SCREENING = 'A geometric traversability screening — not a safety or passability guarantee';
+export const TERRAIN_ACCESS_SCREENING = 'A geometric traversability screening, not a safety or passability guarantee';
 
 /**
  * The status chip for Terrain Access: a few words, and behind them the
