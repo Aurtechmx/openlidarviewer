@@ -25,8 +25,8 @@ Since v0.6.0 the three bundled font packages moved from 5.2.8 to 5.3.0. No
 package was added or removed, and no other bundled package changed.
 
 The accessibility audit added one development dependency,
-`@axe-core/playwright` 4.13.0 (MPL-2.0), pinned exactly, with `axe-core`
-4.13.0 (MPL-2.0) under it. It runs only in `tests/e2e/ceA11y.spec.ts` and does
+`@axe-core/playwright` (MPL-2.0), pinned exactly, now at 4.14.0 with `axe-core`
+4.14.0 (MPL-2.0) under it. It runs only in `tests/e2e/ceA11y.spec.ts` and does
 not reach the deployed app or the production component set.
 
 | Field | Value |
@@ -65,9 +65,9 @@ Build, test, docs, and mutation tooling. None reaches the deployed app.
 
 | Package | Declared range | Resolved | License |
 |---|---|---|---|
-| @axe-core/playwright | 4.13.0 | 4.13.0 | MPL-2.0 |
+| @axe-core/playwright | 4.14.0 | 4.14.0 | MPL-2.0 |
 | @loaders.gl/las | ^4.5.4 | 4.5.4 | MIT |
-| @playwright/test | ^1.63.0 | 1.63.0 | Apache-2.0 |
+| @playwright/test | ^1.64.1 | 1.64.1 | Apache-2.0 |
 | @stryker-mutator/core | ^10.0.0 | 10.0.0 | Apache-2.0 |
 | @stryker-mutator/vitest-runner | ^10.0.0 | 10.0.0 | Apache-2.0 |
 | @types/proj4 | ^2.19.0 | 2.19.0 | MIT |

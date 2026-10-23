@@ -138,7 +138,7 @@ here for transparency.
 | vitest | ^5.0.5 | 5.0.5 | MIT | https://github.com/vitest-dev/vitest |
 | vitepress | 1.6.4 | 1.6.4 | MIT | https://github.com/vuejs/vitepress |
 | vite-plugin-javascript-obfuscator | ^3.1.0 | 3.1.0 | MIT | https://github.com/elmesutupu/vite-plugin-javascript-obfuscator |
-| @playwright/test | ^1.63.0 | 1.63.0 | Apache-2.0 | https://github.com/microsoft/playwright |
+| @playwright/test | ^1.64.1 | 1.64.1 | Apache-2.0 | https://github.com/microsoft/playwright |
 | @types/three | ^0.186.0 | 0.186.0 | MIT | https://github.com/DefinitelyTyped/DefinitelyTyped |
 | rollup-plugin-visualizer | ^7.1.1 | 7.1.1 | MIT | https://github.com/btd/rollup-plugin-visualizer |
 | @vitest/coverage-v8 | ^5.0.5 | 5.0.5 | MIT | https://github.com/vitest-dev/vitest |
@@ -146,7 +146,7 @@ here for transparency.
 | @stryker-mutator/vitest-runner | ^10.0.0 | 10.0.0 | Apache-2.0 | https://github.com/stryker-mutator/stryker-js |
 | @types/proj4 | ^2.19.0 | 2.19.0 | MIT | https://github.com/DefinitelyTyped/DefinitelyTyped |
 | @loaders.gl/las | ^4.5.4 | 4.5.4 | MIT | https://github.com/visgl/loaders.gl |
-| @axe-core/playwright | 4.13.0 | 4.13.0 | MPL-2.0 | https://github.com/dequelabs/axe-core-npm |
+| @axe-core/playwright | 4.14.0 | 4.14.0 | MPL-2.0 | https://github.com/dequelabs/axe-core-npm |
 
 ## License texts
 
