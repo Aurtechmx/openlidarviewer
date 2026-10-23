@@ -92,3 +92,28 @@ describe('the render budget is a device question, not a window-size one', () => 
     expect(main).toContain('isTouchFirst: isTouchFirstDevice,');
   });
 });
+
+/** A diagonal strip of ground filling about a third of its bounding box, as a corridor survey does. */
+function diagonalStrip(n: number, seed: number): PointCloud {
+  let s = seed >>> 0;
+  const rnd = (): number => ((s = (Math.imul(s, 1664525) + 1013904223) >>> 0) / 0xffffffff);
+  const positions = new Float32Array(n * 3);
+  for (let i = 0; i < n; i++) {
+    const t = rnd() * 600;
+    const across = (rnd() - 0.5) * 120;
+    positions[i * 3] = t * 0.707 - across * 0.707;
+    positions[i * 3 + 1] = t * 0.707 + across * 0.707;
+    positions[i * 3 + 2] = Math.sin(t / 40) * 2 + rnd() * 0.3;
+  }
+  return new PointCloud({ positions, origin: [0, 0, 0], sourceFormat: 'laz', name: 'strip' });
+}
+
+describe('a cloud filling a fraction of its bounding box', () => {
+  it('lands near the budget rather than at the share of the box it fills', () => {
+    const budget = 40_000;
+    const { cloud, passes } = downsampleToBudgetReport(diagonalStrip(200_000, 7), budget);
+    expect(cloud.pointCount).toBeLessThanOrEqual(budget);
+    expect(cloud.pointCount).toBeGreaterThan(budget * 0.6);
+    expect(passes).toBeLessThanOrEqual(MAX_DOWNSAMPLE_PASSES);
+  });
+});

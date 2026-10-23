@@ -1058,8 +1058,12 @@ function drawTitleBlock(
   // The title must not collide with the Legend column (which starts at the
   // 0.46 fraction). A long filename is shrunk to fit, then ellipsised at the
   // floor size — so it degrades gracefully instead of running over the legend.
-  const titleStr = input.title ?? 'Contour Map';
   const titleMaxW = M + (PW - 2 * M) * 0.46 - lx - 12;
+  // A "<scan> — Contours" title too long for the floor size drops its suffix
+  // before anything is cut: the sheet names its contours in the rows below.
+  const fullTitle = input.title ?? 'Contour Map';
+  const titleHead = fullTitle.split(' — ')[0];
+  const titleStr = bold.widthOfTextAtSize(safe(fullTitle), 9) > titleMaxW && titleHead !== fullTitle ? titleHead : fullTitle;
   let titleSize = 14;
   while (titleSize > 9 && bold.widthOfTextAtSize(safe(titleStr), titleSize) > titleMaxW) {
     titleSize -= 0.5;
