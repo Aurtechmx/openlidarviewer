@@ -411,6 +411,10 @@ describe('traceFlowNetwork / flowNetworkLines — lines through the channel cell
       } else {
         // The tributary ends on its parent's smoothed line, so the two meet.
         expect(distanceToLine(lines[stem.parent]!.points, p[end]!, p[end + 1]!)).toBeLessThan(0.03);
+        // It keeps its own width there: no point is stronger than its own strongest cell.
+        let own = 0;
+        for (const i of stem.cells) own = Math.max(own, channelStrength(logScale(result.accumulation.upstreamCells[i]!, network.maxUpstream)));
+        for (let o = 2; o < p.length; o += FLOW_LINE_STRIDE) expect(p[o]!).toBeLessThanOrEqual(own + 1e-9);
         joins++;
       }
     });
@@ -418,7 +422,6 @@ describe('traceFlowNetwork / flowNetworkLines — lines through the channel cell
   });
 
   it('smooths a D8 staircase: no bend sharper than the cell steps it replaces, strength tapering', () => {
-    // A tributary widens into its trunk at its end, mostly under the trunk, so strength steps are checked on outlet lines.
     const result = rolling();
     const lines = flowNetworkLines(result.grid, result.routed, result.accumulation);
     let maxTurn = 0, maxStep = 0;
@@ -430,7 +433,7 @@ describe('traceFlowNetwork / flowNetworkLines — lines through the channel cell
         let turn = Math.abs(b - a);
         if (turn > Math.PI) turn = 2 * Math.PI - turn;
         maxTurn = Math.max(maxTurn, turn);
-        if (line.parent < 0) maxStep = Math.max(maxStep, Math.abs(p[o + 2]! - p[o - FLOW_LINE_STRIDE + 2]!));
+        maxStep = Math.max(maxStep, Math.abs(p[o + 2]! - p[o - FLOW_LINE_STRIDE + 2]!));
         // Never more than a cell between points, so the line keeps meeting the terrain.
         expect(Math.hypot(p[o]! - p[o - FLOW_LINE_STRIDE]!, p[o + 1]! - p[o - FLOW_LINE_STRIDE + 1]!)).toBeLessThanOrEqual(1 + 1e-9);
       }

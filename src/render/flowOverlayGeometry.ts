@@ -508,8 +508,12 @@ export function flowNetworkLines(
       junctionOf(averaged[stem.parent], stem.joinAt, raw, o);
       if (!onSurface(grid, routed, raw[o], raw[o + 1])) {
         const at = network.stems[stem.parent].cells[stem.joinAt];
-        raw[o] = at % cols; raw[o + 1] = (at - (at % cols)) / cols; raw[o + 2] = strengthOf(at);
+        raw[o] = at % cols; raw[o + 1] = (at - (at % cols)) / cols;
       }
+      // The join point carries the tributary's own strength, not its trunk's:
+      // width encodes upstream cells, and the tributary does not gain its
+      // trunk's count before it joins.
+      raw[o + 2] = raw[(len - 1) * S + 2];
       raw[o + 3] = len;
     }
     let pts: Float64Array = raw;
