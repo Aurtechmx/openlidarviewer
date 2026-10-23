@@ -737,9 +737,11 @@ describe('the profile link never touches the inspector', () => {
       [
         'crs',
         'focusPoint',
+        'heightDatum',
         'locateReturn',
         'markLinkedReturn',
         'observePointer',
+        'sceneOrigin',
         'schedulePointerFlush',
       ].sort(),
     );
@@ -924,7 +926,13 @@ interface EndToEndRig {
   pixelOf(i: number): { x: number; y: number };
 }
 
-function endToEnd(options: { evicted?: Set<string>; watch?: Set<string> } = {}): EndToEndRig {
+function endToEnd(
+  options: {
+    evicted?: Set<string>;
+    watch?: Set<string>;
+    sceneOrigin?: readonly [number, number, number];
+  } = {},
+): EndToEndRig {
   const section = fixtureSection();
   const canvas = new FakeCanvas(320, 160);
   const overlay = new FakeCanvas(320, 160);
@@ -954,6 +962,7 @@ function endToEnd(options: { evicted?: Set<string>; watch?: Set<string> } = {}):
     schedulePointerFlush: (run) => {
       frames.push(run);
     },
+    ...(options.sceneOrigin ? { sceneOrigin: () => options.sceneOrigin! } : {}),
   };
 
   // Every read of a seam member is recorded, so a test can pin the whole
@@ -1046,6 +1055,17 @@ describe('the plot, end to end', () => {
     expect(rows!.some((r) => r.label === LINK_ROW_LABEL && r.value === 'marked in 3D')).toBe(true);
     expect(rows!.some((r) => r.label === 'Source point index' && r.value === '7')).toBe(true);
     expect(rows!.some((r) => r.label === 'Streaming node' && r.value === NODE_KEY)).toBe(true);
+  });
+
+  it('reads the card coordinates in the source frame and marks the render position', () => {
+    const rig = endToEnd({ sceneOrigin: [500000, 4000000, 600] });
+    const p = rig.pixelOf(1);
+    rig.canvas.fire('click', { offsetX: p.x, offsetY: p.y });
+    const values = rig.detail.at(-1)!.map((r) => r.value);
+    expect(values.some((v) => v.startsWith('500010.01'))).toBe(true);
+    expect(values.some((v) => v.startsWith('4000020'))).toBe(true);
+    expect(values.some((v) => v.startsWith('630.01'))).toBe(true);
+    expect(rig.markers.at(-1)).toMatchObject({ position: [10.01, 20, 30.01] });
   });
 
   it('says an evicted node is gone while the card keeps its 2D figures', () => {

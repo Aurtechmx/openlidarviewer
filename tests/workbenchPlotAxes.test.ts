@@ -20,6 +20,7 @@ import {
   AXIS_LABEL_INSET_PX,
   drawWorkbenchAxes,
   prepareWorkbenchSection,
+  sectionOnDatum,
 } from '../src/app/profileWorkbenchSection';
 import {
   AXIS_LABEL_MIN_GAP_PX,
@@ -308,5 +309,48 @@ describe('the workbench plot carries axis indicators', () => {
     const left = canvas.ctx.texts.filter((t) => t.align === 'left' && t.baseline === 'middle');
     expect(left.length).toBeGreaterThan(0);
     for (const t of left) expect(t.x).toBe(AXIS_LABEL_INSET_PX);
+  });
+});
+
+describe('the workbench plot reads heights in the source frame', () => {
+  it('shifts each height by the datum and leaves the section it was given alone', () => {
+    const section = rampSection(5);
+    const before = Array.from(section.points.height);
+    const shifted = sectionOnDatum(section, 600.25);
+    expect(Array.from(shifted.points.height)).toEqual(before.map((h) => h + 600.25));
+    expect(Array.from(section.points.height)).toEqual(before);
+    // Everything but the heights is the same section.
+    expect(shifted.points.chainage).toBe(section.points.chainage);
+    expect(shifted.points.count).toBe(section.points.count);
+  });
+
+  it('keeps the project frame for a zero, unknown or unusable datum', () => {
+    const section = rampSection(5);
+    expect(sectionOnDatum(section, 0)).toBe(section);
+    expect(sectionOnDatum(section, null)).toBe(section);
+    expect(sectionOnDatum(section, Number.NaN)).toBe(section);
+  });
+
+  it('keeps chainage labels clear of the axis title on the same line', () => {
+    const viewport: ProfileViewport = { width: 420, height: 160, devicePixelRatio: 1 };
+    const canvas = new FakeCanvas(viewport.width, viewport.height);
+    prepareWorkbenchSection({
+      section: rampSection(200),
+      canvas,
+      unitSuffix: 'm',
+      unitScale: 1,
+      reference: 'unknown',
+    });
+    const title = canvas.ctx.texts.find((t) => t.align === 'right' && t.baseline === 'bottom');
+    if (!title) throw new Error('the chainage title must be drawn');
+    const titleLeft = title.x - axisLabelWidth(title.text, AXIS_FONT_PX);
+    const ticks = canvas.ctx.texts.filter((t) => t.align === 'center' && t.baseline === 'bottom');
+    expect(ticks.length).toBeGreaterThan(1);
+    for (const t of ticks) {
+      expect(
+        t.x + axisLabelWidth(t.text, AXIS_FONT_PX) / 2,
+        `"${t.text}" runs into "${title.text}"`,
+      ).toBeLessThan(titleLeft);
+    }
   });
 });
