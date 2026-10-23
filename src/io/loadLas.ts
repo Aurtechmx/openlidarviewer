@@ -35,7 +35,7 @@
 import { PointCloud } from '../model/PointCloud';
 import type { CloudMetadata } from '../model/PointCloud';
 import { parseLasHeader } from './lasHeader';
-import { bufferRangeReader, resolveLasCrs, type ByteRangeReader } from './crs';
+import { bufferRangeReader, MAX_RANGE_VLR_BLOCK_BYTES, resolveLasCrs, type ByteRangeReader } from './crs';
 import { LoadError } from './loadErrors';
 import { compressedBytesPerPointFloor, validateDeclaredPointCount } from './validateCount';
 import type { LasHeader } from './lasHeader';
@@ -274,6 +274,48 @@ export async function attachEvlrCrs(
 const LAZ_HEAD_PEEK_BYTES = 64 * 1024;
 /** Where the LAS public header records the offset to point data. */
 const OFFSET_TO_POINT_DATA = 96;
+/** Where the LAS public header records its own size and the VLR count. */
+const OFFSET_HEADER_SIZE = 94;
+const OFFSET_NUM_VLR = 100;
+/** A VLR's header, and where in it the length of the record after it sits. */
+const VLR_HEADER_BYTES = 54;
+const VLR_RECORD_LENGTH_OFFSET = 20;
+
+/** Whether the header's VLRs all end inside `head`. Each step moves at least a VLR header, so the walk is bounded by `head`. */
+function vlrsFitIn(head: ArrayBuffer): boolean {
+  const view = new DataView(head);
+  let at = view.getUint16(OFFSET_HEADER_SIZE, true);
+  const count = view.getUint32(OFFSET_NUM_VLR, true);
+  for (let i = 0; i < count; i++) {
+    if (at + VLR_HEADER_BYTES > head.byteLength) return false;
+    at += VLR_HEADER_BYTES + view.getUint16(at + VLR_RECORD_LENGTH_OFFSET, true);
+  }
+  return at <= head.byteLength;
+}
+
+/**
+ * The public header and its VLRs, read in bounded ranges. A peek covers most
+ * files; past it the read goes up to the point data but never beyond
+ * {@link MAX_RANGE_VLR_BLOCK_BYTES}, so a corrupt or hostile offset cannot
+ * size an allocation, and padding after the last VLR is not read. VLRs that
+ * themselves run past that budget are refused by name rather than dropped,
+ * since the CRS or the compression record may be among them.
+ */
+async function readLasHead(file: File, name: string): Promise<ArrayBuffer> {
+  const head = await file.slice(0, LAZ_HEAD_PEEK_BYTES).arrayBuffer();
+  if (head.byteLength < OFFSET_NUM_VLR + 4) return head;
+  const toPoints = new DataView(head).getUint32(OFFSET_TO_POINT_DATA, true);
+  if (toPoints <= head.byteLength || toPoints > file.size || vlrsFitIn(head)) return head;
+  const block = await file.slice(0, Math.min(toPoints, MAX_RANGE_VLR_BLOCK_BYTES)).arrayBuffer();
+  if (toPoints > block.byteLength && !vlrsFitIn(block)) {
+    throw new LoadError(
+      'malformed-file',
+      `${name} declares header records (VLRs) that run past ${MAX_RANGE_VLR_BLOCK_BYTES / (1 << 20)} MiB before its points. `
+        + 'Real files keep these to a few KiB; rewrite the file with LAStools or PDAL to repair its header.',
+    );
+  }
+  return block;
+}
 
 /**
  * Load a `.laz` straight from its `File`, reading what each step needs.
@@ -296,15 +338,8 @@ export async function loadLazFromFile(
   previewBudget?: number,
   pointSemantics?: boolean,
 ): Promise<PointCloud> {
-  let head = await file.slice(0, LAZ_HEAD_PEEK_BYTES).arrayBuffer();
-  // The VLRs sit between the public header and the point data; a file whose
-  // VLR block outgrows the peek is re-read up to where the points start.
-  if (head.byteLength >= OFFSET_TO_POINT_DATA + 4) {
-    const toPoints = new DataView(head).getUint32(OFFSET_TO_POINT_DATA, true);
-    if (toPoints > head.byteLength && toPoints <= file.size) {
-      head = await file.slice(0, toPoints).arrayBuffer();
-    }
-  }
+  // The VLRs sit between the public header and the point data.
+  const head = await readLasHead(file, name);
   const header = parseLasHeader(head);
   // EVLR bytes read for the CRS, recorded in the ledger below.
   const evlrReads: Array<[number, number]> = [];
@@ -442,13 +477,7 @@ export async function loadLasFromFile(
   onProgress?: (u: ProgressUpdate) => void,
   pointSemantics?: boolean,
 ): Promise<PointCloud> {
-  let head = await file.slice(0, LAZ_HEAD_PEEK_BYTES).arrayBuffer();
-  if (head.byteLength >= OFFSET_TO_POINT_DATA + 4) {
-    const toPoints = new DataView(head).getUint32(OFFSET_TO_POINT_DATA, true);
-    if (toPoints > head.byteLength && toPoints <= file.size) {
-      head = await file.slice(0, toPoints).arrayBuffer();
-    }
-  }
+  const head = await readLasHead(file, name);
   const header = parseLasHeader(head);
   await attachEvlrCrs(header, head, async (offset, length) => file.slice(offset, offset + length).arrayBuffer(), file.size);
 
