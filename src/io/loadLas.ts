@@ -42,6 +42,7 @@ import type { LasHeader } from './lasHeader';
 import { lasOriginFor, lasRecord0, type LasOriginChoice } from './lasDataOrigin';
 import { sanitizeLocalCloud, withLoadWarning } from './sanitizeCloud';
 import { truncationText, type Truncation } from './truncation';
+import { exceedsWholeFileCap } from './loadPlan';
 import { makePrng, pickInBucket, STRIDE_SAMPLE_SEED } from './strideSample';
 import type { ProgressUpdate } from './loadProgress';
 import type { RangeSource } from './range/RangeSource';
@@ -403,6 +404,15 @@ export async function loadLazFromFile(
     return toCloud(pooled);
   }
 
+  // Past the whole-file cap the file cannot be read into one buffer: refuse
+  // rather than try, since the parallel chunk decode was the only way to read it.
+  if (exceedsWholeFileCap(file.size)) {
+    const why = stats.poolFallbackReason ? ` (${stats.poolFallbackReason})` : '';
+    throw new LoadError(
+      'memory-constraint',
+      `${name} is too large to read whole, and its compressed chunks could not be decoded separately here${why}.`,
+    );
+  }
   const { decodeLaz } = await import('./lazDecode');
   const buffer = await file.arrayBuffer();
   // The whole-file read covers the file once more, prefix included.
@@ -411,6 +421,79 @@ export async function loadLazFromFile(
   settleLedger();
   onStats?.(stats);
   return toCloud(await decodeLaz(buffer, header, origin, stride, onProgress, pointSemantics));
+}
+
+/** Bytes of point records read per range when a `.las` is sampled by ranges. */
+const LAS_RANGE_WINDOW_BYTES = 8 * 1024 * 1024;
+
+/**
+ * Sample an uncompressed `.las` straight from its `File` by bounded range reads.
+ *
+ * The same stratified stride as {@link decodeLas} (one record per bucket of
+ * `stride`, at the seeded jitter of `strideSample.ts`), so the kept records do
+ * not depend on how the file was read. Records are read a window at a time,
+ * or one record at a time when buckets are wider than a window, so the file is
+ * never held whole.
+ */
+export async function loadLasFromFile(
+  file: File,
+  name = 'cloud.las',
+  stride = 1,
+  onProgress?: (u: ProgressUpdate) => void,
+  pointSemantics?: boolean,
+): Promise<PointCloud> {
+  let head = await file.slice(0, LAZ_HEAD_PEEK_BYTES).arrayBuffer();
+  if (head.byteLength >= OFFSET_TO_POINT_DATA + 4) {
+    const toPoints = new DataView(head).getUint32(OFFSET_TO_POINT_DATA, true);
+    if (toPoints > head.byteLength && toPoints <= file.size) {
+      head = await file.slice(0, toPoints).arrayBuffer();
+    }
+  }
+  const header = parseLasHeader(head);
+  await attachEvlrCrs(header, head, async (offset, length) => file.slice(offset, offset + length).arrayBuffer(), file.size);
+
+  const recordLength = header.pointDataRecordLength;
+  const pointsOffset = header.offsetToPointData;
+  const available = recordLength > 0 ? Math.floor((file.size - pointsOffset) / recordLength) : 0;
+  const count = Math.min(header.pointCount, Math.max(0, available));
+  if (header.pointCount > 0 && count === 0) {
+    throw new LoadError(
+      'malformed-file',
+      `malformed LAS: the header declares ${header.pointCount} points of ${recordLength} bytes, ` +
+        `but the body holds no complete record.`,
+    );
+  }
+  const first = count > 0 ? await file.slice(pointsOffset, pointsOffset + recordLength).arrayBuffer() : new ArrayBuffer(0);
+  const choice = lasOriginFor(header, lasRecord0(first, { ...header, offsetToPointData: 0 }));
+  const ctx = decodeContext(header, choice.origin);
+
+  const step = Math.max(1, Math.floor(stride));
+  const total = Math.ceil(count / step);
+  const out = allocRawPoints(total, ctx.gpsTimeOffset !== null, ctx.rgbOffset !== null, ctx.extended, {
+    pointSemantics,
+  });
+  const windowRecords = Math.max(1, Math.floor(LAS_RANGE_WINDOW_BYTES / recordLength));
+  // Buckets wider than a window would read a window to keep one record; read the record alone.
+  const span = step > windowRecords ? 1 : windowRecords;
+  const reportEvery = Math.max(1, Math.floor(total / 50));
+  const rand = step > 1 ? makePrng(STRIDE_SAMPLE_SEED) : undefined;
+  let windowStart = 0;
+  let windowEnd = 0;
+  let view = new DataView(new ArrayBuffer(0));
+  for (let b = 0; b < total; b++) {
+    const i = rand ? pickInBucket(b, step, count, rand) : b;
+    if (i >= windowEnd) {
+      windowStart = i;
+      windowEnd = Math.min(count, i + span);
+      const from = pointsOffset + windowStart * recordLength;
+      view = new DataView(await file.slice(from, pointsOffset + windowEnd * recordLength).arrayBuffer());
+    }
+    decodeRecord(view, (i - windowStart) * recordLength, b, ctx, out);
+    if (onProgress && (b + 1) % reportEvery === 0) onProgress(decodingUpdate(b + 1, total));
+  }
+  finalizeRawColors(out);
+  const truncation = count < header.pointCount ? { read: count, declared: header.pointCount } : undefined;
+  return cloudFromRaw(out, header, choice.origin, 'las', name, stride, truncation, choice.warning);
 }
 
 /** Which file a LAZ load read, what it read of it, and which decoder produced it. */

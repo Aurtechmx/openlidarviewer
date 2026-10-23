@@ -17,7 +17,6 @@
 import {
   storagePreflight,
   storagePreflightRefusal,
-  storageSampleNotice,
   readStorageEstimate,
   type StoragePreflightVerdict,
 } from '../io/heavy/storagePreflight';
@@ -51,7 +50,7 @@ import {
   liveStoreNames,
   removeStoreIfIdle,
 } from '../io/heavy/oocStoreLiveness';
-import { OlvTileSource, PreviewCloudSource, SAMPLE_INCOMPLETE_REASON } from '../io/heavy/OlvTileSource';
+import { OlvTileSource, PreviewCloudSource } from '../io/heavy/OlvTileSource';
 import { buildPreviewSample } from '../io/heavy/previewSampler';
 import { TileChunkDecoder } from '../io/heavy/tileChunkDecoder';
 import { revealStreamingScanChrome } from '../ui/streamingScanReveal';
@@ -382,97 +381,14 @@ async function recordAndEvict(
  */
 
 /**
- * The index cannot be built here (browser storage too small or absent), so open
- * an even sample of the file instead of refusing it. Returns `refusal` when no
- * sample can be taken (a file too small to sample, or a read fault), so a file
- * is only refused when it truly cannot be shown. The sample is attached with the
- * scan chrome but NOT the committed-scan reveal: it must not publish a scan
- * report, provenance or the Analyse rail as if the whole file had been read.
+ * The index cannot be built here (browser storage too small or absent), so the
+ * file opens as a sample instead of being refused: the caller hands it to the
+ * whole-file loader as a ranged read, which keeps a stratified stride of every
+ * record in the file and opens it as an ordinary scan whose source count is the
+ * file's own. `verdict` says why, for the notice shown once it is open.
  */
-async function openSampleInstead(args: {
-  file: File;
-  signal: AbortSignal;
-  facts: LasHeaderFacts;
-  deps: HeavyLasBridgeDeps;
-  openRange: (f: File) => RangeSource;
-  replace: HeavyReplacePlan | null;
-  storeName: string;
-  crs: CrsInfo | null;
-  verdict: StoragePreflightVerdict | null;
-  refusal: HeavyOpenResult;
-}): Promise<HeavyOpenResult> {
-  const { file, signal, facts, deps, openRange, storeName, crs, verdict, refusal } = args;
-  deps.setPhase('Reading a sample of the file…');
-  let sample: Awaited<ReturnType<typeof buildPreviewSample>> = null;
-  try {
-    // As many points as this device's render budget holds, spread across the whole file.
-    sample = await buildPreviewSample(openRange(file), facts, { signal, targetPoints: deps.renderBudget });
-  } catch (err) {
-    if (signal.aborted || isCancel(err)) return { status: 'cancelled' };
-    if (deps.debug) console.warn('[heavy-las] sample fallback failed', err);
-  }
-  if (signal.aborted) return { status: 'cancelled' };
-  if (!sample) return refusal;
-  const replace = args.replace ?? (await askHeavyReplace(deps, file.name));
-  if (replace === null || signal.aborted) return { status: 'cancelled' };
-  // The file's own CRS, read by bounded range reads where the index path has
-  // not read it already (no browser storage), so the sample never borrows one.
-  let sampleCrs = crs;
-  if (!sampleCrs) {
-    const range = openRange(file);
-    sampleCrs = await resolveLasCrsFromRange((offset, length) => range.readRange(offset, length, signal), facts.fileBytes).catch(() => null);
-    if (signal.aborted) return { status: 'cancelled' };
-  }
-  const source = new PreviewCloudSource({
-    id: `sample-${storeName}`, name: file.name, sample, crs: sampleCrs, incompleteReason: SAMPLE_INCOMPLETE_REASON,
-  });
-  const decoder = new TileChunkDecoder(sample.schema, sample.recordBytes);
-  try {
-    await attachStreamingScan(source, decoder, deps, signal);
-  } catch (err) {
-    if (signal.aborted || isCancel(err)) return { status: 'cancelled' };
-    if (deps.debug) console.warn('[heavy-las] sample attach failed', err);
-    return refusal;
-  }
-  deps.streaming.resetStreamState();
-  settleHeavyReplace(deps, replace);
-  publishSampleIdentity(source, sample.pointCount, facts.declaredPointCount ?? null, deps.streaming);
-  return {
-    status: 'sampled',
-    notice: storageSampleNotice(verdict, file.name, sample.pointCount, facts.declaredPointCount ?? null),
-  };
-}
-
-/**
- * Publish an opened sample's own identity in one step, so nothing of the scan
- * it replaced stays on screen: its CRS and provenance, the Inspector's counts
- * as the sample shown against the file's total, a fresh classification legend,
- * the streaming layout, and a report that says it is a sample. The finished-scan
- * surfaces (the full report, the streaming panel, the status poll) are not
- * revealed: the octree records why the cloud is incomplete, so no analysis or
- * export reads the sample as the whole file.
- */
-function publishSampleIdentity(
-  source: PreviewCloudSource,
-  shown: number,
-  declared: number | null,
-  s: OpenStreamingDeps,
-): void {
-  activateCommittedStreamingCloud(source, s);
-  resetClassificationUi(s);
-  enterStreamingInspectorMode(s, s.getViewer().availableImageExportModes());
-  publishStreamingDetail(s.inspector, { residentPointCount: shown, sourcePointCount: declared }, s.debug);
-  const of = declared !== null ? ` of ${declared.toLocaleString('en-US')}` : '';
-  try {
-    s.inspector.setReport([{
-      label: 'Sample',
-      value: `${shown.toLocaleString('en-US')}${of} points of ${source.name}, spread evenly; opened without its full index`,
-      status: 'warn',
-    }]);
-  } catch (err) {
-    if (s.debug) console.warn('[inspector] setReport (sample) threw', err);
-  }
-  s.revealAnalysePanel(source.name, false);
+function openSampleInstead(verdict: StoragePreflightVerdict | null, replace?: HeavyReplacePlan): HeavyOpenResult {
+  return replace ? { status: 'sample', verdict, replaced: replace.outcome } : { status: 'sample', verdict };
 }
 
 export async function executeHeavyLasBuild(
@@ -516,10 +432,7 @@ export async function executeHeavyLasBuild(
 
   const root = await getOpfsRoot();
   if (root === null) {
-    return openSampleInstead({
-      file, signal, facts, deps, openRange, replace: null, storeName, crs: null, verdict: null,
-      refusal: { status: 'unavailable', heavy: true, reason: 'no OPFS root' },
-    });
+    return openSampleInstead(null);
   }
 
   // Asked once, before any work: whether the stream this open replaces, and
@@ -607,7 +520,7 @@ export async function executeHeavyLasBuild(
     // A header that cannot size the file is a damaged file, not a storage limit:
     // that one stays refused. Every storage limit opens a sample instead.
     if (verdict.outcome === 'demand-unknown') return refusal;
-    return openSampleInstead({ file, signal, facts, deps, openRange, replace, storeName, crs, verdict, refusal });
+    return openSampleInstead(verdict, replace);
   }
 
   // PREVIEW FIRST. Before the long index build, put a bounded, stratified

@@ -359,12 +359,9 @@ export async function openScan(file: File, deps: OpenScanDeps): Promise<void> {
       finishLoad(deps).catch(() => false);
       return;
     }
-    if (heavy.status === 'sampled') {
-      // A sample of the file is on screen: finish like an attached scan, then say it is a sample.
-      deps.dropZone.setCancelHandler(null);
-      finishLoad(deps).catch(() => false).finally(() => deps.showToast(heavy.notice));
-      return;
-    }
+    // No room for the index: the loader below opens a stratified sample of the
+    // whole file by ranged reads, as an ordinary scan, and says so once it is open.
+    const sample = heavy.status === 'sample' ? heavy : null;
     if (heavy.status === 'cancelled') {
       deps.dropZone.setCancelHandler(null);
       showCancelled(deps);
@@ -374,7 +371,7 @@ export async function openScan(file: File, deps: OpenScanDeps): Promise<void> {
     // reach the whole-file loader. Surface the named reason on the drop zone the
     // same way a load failure is surfaced, and stop. `not-heavy` (and a
     // defensive `heavy: false`) still falls through to the loader below.
-    if (heavy.status !== 'not-heavy' && heavy.heavy) {
+    if (heavy.status !== 'not-heavy' && heavy.status !== 'sample' && heavy.heavy) {
       deps.dropZone.setCancelHandler(null);
       deps.dropZone.setProgress(null);
       const message = describeHeavyRefusal(heavy);
@@ -427,9 +424,14 @@ export async function openScan(file: File, deps: OpenScanDeps): Promise<void> {
         deviceMemoryGB: deps.deviceMemoryGB(),
         signal: controller.signal,
         head: headSlice,
+        rangedSample: sample !== null,
       },
     );
-    await attachStaticCloud(result, { file, signal: controller.signal, preview, sourceDigest }, deps);
+    await attachStaticCloud(result, { file, signal: controller.signal, preview, sourceDigest, replaced: sample?.replaced }, deps);
+    if (sample && !controller.signal.aborted) {
+      const { storageSampleNotice } = await import('../io/heavy/storagePreflight');
+      deps.showToast(storageSampleNotice(sample.verdict, file.name, result.cloud.pointCount, result.originalPointCount));
+    }
   } catch (err) {
     deps.dropZone.setCancelHandler(null);
     if (preview) takeDownPreview(deps, preview);
@@ -520,6 +522,8 @@ export interface AttachedCloudSource {
   readonly preview?: PreviewCloudHandle | null;
   /** The source's content fingerprint, stamped on the cloud before its CRS resolves. */
   readonly sourceDigest?: Promise<string | null>;
+  /** The answer to the replace question when the open already asked it, so it is not asked twice. */
+  readonly replaced?: ReplaceOutcome;
 }
 
 /**
@@ -585,7 +589,7 @@ export async function attachStaticCloud(
   // caps that overlap.
   // A static scan opened over a stream replaces it, and its measurements and
   // annotations belong to the stream: ask before they are lost.
-  const replaced: ReplaceOutcome = viewer.hasStreamingCloud ? (await deps.replaceGuard?.({ kind: 'scan', name: result.cloud.name })) ?? 'none' : 'none';
+  const replaced: ReplaceOutcome = !viewer.hasStreamingCloud ? 'none' : source.replaced ?? (await deps.replaceGuard?.({ kind: 'scan', name: result.cloud.name })) ?? 'none';
   if (replaced === 'cancel') throw new LoadCancelledError();
   const prior = viewer.clouds();
   const id = viewer.addCloud(result.cloud);

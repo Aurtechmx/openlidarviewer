@@ -287,14 +287,13 @@ describe('openLocalHeavyLas — the out-of-core local LAS bridge', () => {
 
     const result = await openLocalHeavyLas(file, new AbortController().signal, deps, env);
 
-    expect(result.status).toBe('sampled');
-    // Only the sample was attached, and nothing was written to OPFS.
-    expect(attachStreamingCloud).toHaveBeenCalledTimes(1);
+    expect(result.status).toBe('sample');
+    // Handed back to the loader: nothing attached here, nothing written to OPFS.
+    expect(attachStreamingCloud).not.toHaveBeenCalled();
     expect(opfs.topLevel()).toEqual([]);
   });
 
-  it('refuses with the preflight sentence when no sample can be taken either', async () => {
-    // Too few points to sample: the sampler returns nothing, so the refusal stands.
+  it('hands a small file back as a sample too, for the loader to read by ranges', async () => {
     const buffer = lasBytes(20_000);
     const { range } = counting(new ArrayBufferRangeSource(buffer));
     const { file } = spyFile('tiny.las', buffer.byteLength);
@@ -306,11 +305,7 @@ describe('openLocalHeavyLas — the out-of-core local LAS bridge', () => {
 
     const result = await openLocalHeavyLas(file, new AbortController().signal, deps, env);
 
-    expect(result.status).toBe('refused');
-    if (result.status === 'refused') {
-      expect(result.heavy).toBe(true);
-      expect(result.error.message).toContain('tiny.las');
-    }
+    expect(result.status).toBe('sample');
     expect(attachStreamingCloud).not.toHaveBeenCalled();
     expect(opfs.topLevel()).toEqual([]);
   });

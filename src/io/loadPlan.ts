@@ -46,6 +46,13 @@ export interface LoadPlanInput {
   attributes: PointAttributes;
   /** Source format — only `'laz'` changes the memory estimate (WASM heap). */
   format: SourceFormat;
+  /**
+   * False when the file is read by ranges and never held whole: a heavy LAS or
+   * LAZ opened as a sample because its out-of-core index cannot be built. Its
+   * bytes then add nothing to the memory estimate, and the plan does not route
+   * it out of core again. Defaults to true.
+   */
+  fileResident?: boolean;
 }
 
 /** The chosen strategy plus everything the UI and worker need to act on it. */
@@ -93,6 +100,12 @@ export interface LoadPlan {
    * Optional for backward-compat — treat `undefined` as `false`.
    */
   largeNonLasFormat?: boolean;
+  /**
+   * True when the plan was made for a ranged read (`fileResident: false`): the
+   * worker reads the file by ranges and keeps only the strided records, so a LAS
+   * is never read into one buffer. Optional; treat `undefined` as `false`.
+   */
+  rangedRead?: boolean;
   /**
    * True when the file is a large uncompressed LAS or chunked LAZ whose whole-file load would
    * exceed the memory ceiling, so it should be built into an out-of-core tile
@@ -508,6 +521,9 @@ export function formatPointCount(n: number): string {
 export function planLoad(input: LoadPlanInput): LoadPlan {
   const sourceCount = Math.max(0, Math.floor(input.sourceCount));
   const fileBytes = Math.max(0, input.fileBytes);
+  const resident = input.fileResident !== false;
+  // What the decode holds of the file itself: all of it, or none for a ranged read.
+  const residentBytes = resident ? fileBytes : 0;
   const { isMobile, attributes, format } = input;
   const mediumMultiplier = isMobile ? MOBILE_MEDIUM_MULTIPLIER : DESKTOP_MEDIUM_MULTIPLIER;
   const ceiling = memoryCeilingBytes(input.deviceMemoryGB, isMobile);
@@ -528,7 +544,7 @@ export function planLoad(input: LoadPlanInput): LoadPlan {
     const estimate = estimateMemoryBytes({
       pointCount: peakPointCount(mode, decoded, budget),
       attributes,
-      fileBytes,
+      fileBytes: residentBytes,
       format,
     });
     return { mode, stride, targetCount: finalCount(mode, sourceCount, budget), estimate };
@@ -545,7 +561,7 @@ export function planLoad(input: LoadPlanInput): LoadPlan {
   if (plan.estimate > ceiling) {
     memoryGuardTriggered = true;
     const perPoint = perPointBytes(attributes);
-    const fixed = fileBytes + (format === 'laz' ? fileBytes + LAZ_SCRATCH_BYTES : 0);
+    const fixed = residentBytes + (format === 'laz' ? residentBytes + LAZ_SCRATCH_BYTES : 0);
     const room = ceiling - fixed;
     const denom = (mediumMultiplier + 1) * perPoint;
     const fittingBudget = room > 0 ? Math.floor(room / denom) : MIN_BUDGET_FLOOR;
@@ -581,7 +597,7 @@ export function planLoad(input: LoadPlanInput): LoadPlan {
   // format is refused before its read.
   const isLas = format === 'las' || format === 'laz';
   const overWholeFileCap = exceedsWholeFileCap(fileBytes);
-  const buildThenStream = isLas && (mayExceedCeiling || overWholeFileCap);
+  const buildThenStream = isLas && resident && (mayExceedCeiling || overWholeFileCap);
   const wholeFileRefused = !isLas && overWholeFileCap;
 
   return {
@@ -596,6 +612,7 @@ export function planLoad(input: LoadPlanInput): LoadPlan {
     largeNonLasFormat,
     buildThenStream,
     wholeFileRefused,
+    rangedRead: !resident,
   };
 }
 

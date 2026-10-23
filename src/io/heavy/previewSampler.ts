@@ -77,6 +77,8 @@ const DEFAULT_STRATA = 64;
  * cloud. Heavy files are far larger than this; a tiny fixture returns null.
  */
 const MIN_PREVIEW_POINTS = 50_000;
+/** Longest run of consecutive records an uncompressed LAS preview reads at one place. */
+const LAS_RUN_RECORDS = 1024;
 
 /** Local (render) extent of the file from its world header bounds and origin. */
 function localExtent(
@@ -145,7 +147,9 @@ async function sampleLas(
   const schema = tileSchemaForHeader(opened.header.pointFormat, ctx);
   const recordBytes = tileRecordBytes(schema);
 
-  const bands = Math.min(strata, total);
+  // Short runs over many bands: a long run of consecutive records is a few
+  // whole scanner sweeps, which shows as rings rather than an even thinning.
+  const bands = Math.min(total, Math.max(strata, Math.ceil(target / LAS_RUN_RECORDS)));
   const step = total / bands;
   const perBand = Math.max(1, Math.min(Math.floor(target / bands), Math.floor(total / bands)));
 
@@ -226,7 +230,7 @@ async function sampleLaz(
     signal?.throwIfAborted();
     const c = chunks[Math.min(chunks.length - 1, Math.floor(i * stride))];
     // Per-chunk decoded-byte refusal, the same cap the full build enforces. The
-    // sampler decodes a WHOLE chunk before taking the first `take` points it
+    // sampler decodes a WHOLE chunk before taking the `take` points it
     // needs, so a chunk whose `pointCount * pointDataRecordLength` is over budget
     // would stage the whole over-budget decode just for a preview. Skip this
     // chunk rather than decode it — a "preview skipped: chunk exceeds safe decode
@@ -257,8 +261,11 @@ async function sampleLaz(
     });
     finalizeRawColors(raw);
     const take = Math.min(c.pointCount, share, target - sampled);
-    packed.push(packBatch(raw, take, schema, recordBytes));
-    if (!choice.boundsTrusted) positions.push(raw.positions.subarray(0, take * 3));
+    // Spread the share across the whole chunk: a chunk is a stretch of scan
+    // time, and its first records alone trace a few whole scanner sweeps.
+    const picks = spreadIndices(c.pointCount, take);
+    packed.push(packBatch(raw, take, schema, recordBytes, picks));
+    if (!choice.boundsTrusted) positions.push(pickedPositions(raw.positions, picks));
     sampled += take;
   }
   if (sampled === 0) return null;
@@ -303,16 +310,32 @@ function extentOf(parts: readonly Float32Array[]): {
   return { min, max };
 }
 
-/** Pack the first `count` points of a decoded batch into tile records. */
+/** `count` indices spread evenly over `0 .. total - 1`, ascending. */
+function spreadIndices(total: number, count: number): Uint32Array {
+  const out = new Uint32Array(count);
+  const step = total / count;
+  for (let i = 0; i < count; i++) out[i] = Math.min(total - 1, Math.floor(i * step));
+  return out;
+}
+
+/** The positions of the picked points, for framing a file with untrusted bounds. */
+function pickedPositions(positions: Float32Array, picks: Uint32Array): Float32Array {
+  const out = new Float32Array(picks.length * 3);
+  for (let i = 0; i < picks.length; i++) out.set(positions.subarray(picks[i] * 3, picks[i] * 3 + 3), i * 3);
+  return out;
+}
+
+/** Pack `count` points of a decoded batch into tile records: the first ones, or the `picks`. */
 function packBatch(
   raw: import('../lasDecodeShared').RawPoints,
   count: number,
   schema: TileSchema,
   recordBytes: number,
+  picks?: Uint32Array,
 ): Uint8Array {
   const out = new Uint8Array(count * recordBytes);
   const view = new DataView(out.buffer);
-  for (let i = 0; i < count; i++) packTileRecord(raw, i, schema, view, i * recordBytes);
+  for (let i = 0; i < count; i++) packTileRecord(raw, picks ? picks[i] : i, schema, view, i * recordBytes);
   return out;
 }
 

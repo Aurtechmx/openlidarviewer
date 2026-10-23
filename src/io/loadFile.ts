@@ -109,6 +109,13 @@ export interface LoadOptions {
   head?: ArrayBuffer;
   /** Default off; see AllocRawPointsOptions. */
   pointSemantics?: boolean;
+  /**
+   * Open a heavy LAS or LAZ as a sample read by ranges: the out-of-core index
+   * could not be built, so the worker reads the file in bounded pieces, keeps a
+   * stratified stride of its records and never holds it whole. The whole-file
+   * cap does not apply to such a read.
+   */
+  rangedSample?: boolean;
 }
 
 /** The cloud payload transferred back from the parse worker. */
@@ -181,6 +188,7 @@ function buildLasPlan(
       deviceMemoryGB: options.deviceMemoryGB,
       attributes: lasDecodedAttributes(header.pointFormat),
       format,
+      fileResident: options.rangedSample !== true,
     });
   } catch {
     // Header unreadable from the slice — no plan; the worker will report the
@@ -685,9 +693,11 @@ export async function loadFile(
   // memory first, on the device least able to hold it, and only then rejected.
   // E57 goes first: its decode ceiling (two file copies inside 2 GB) refuses
   // every E57 the cap would, so an E57 keeps its own, more specific message.
+  // A ranged sample never reads the file whole, so the whole-file cap is not its limit.
+  const ranged = plan?.rangedRead === true && (format === 'las' || format === 'laz');
   const refusal =
     e57Refusal(file, preflight) ??
-    wholeFileCapRefusal(file, format) ??
+    (ranged ? undefined : wholeFileCapRefusal(file, format)) ??
     nonStreamingOverCeilingRefusal(file, preflight, options);
   if (refusal) throw refusal;
 
@@ -696,7 +706,7 @@ export async function loadFile(
   // reads the header and, when its pool engages, each chunk as it decodes it,
   // so neither thread holds the compressed file whole. Every other format is
   // read here and its bytes transferred.
-  const sendFile = format === 'laz' && plan !== undefined;
+  const sendFile = (format === 'laz' && plan !== undefined) || ranged;
   // The File handed to the worker has no main-thread read to measure, so that
   // stage stays indeterminate. A main-thread read reports the bytes it copied.
   if (sendFile) onProgress?.({ stage: 'reading-file' });
