@@ -104,8 +104,15 @@ export function createStateStrip(host: StateStripHost): StateStrip {
     // The time a task has run sits in its own span that never shrinks, so a
     // long label is cut before it. It stays out of the accessible name: that
     // would change every second on a focused control, and the busy-task
-    // adapter speaks the time every 30 s instead.
-    if (wait) parts.push(el('span', { className: 'olv-ss-wait', text: `· ${wait}` }));
+    // adapter speaks the time every 30 s instead. CSS draws it from data-wait,
+    // so it is not part of the button's text either, and the visible text the
+    // name must contain is the task alone.
+    if (wait) {
+      const w = el('span', { className: 'olv-ss-wait' });
+      w.dataset.wait = `· ${wait}`;
+      w.setAttribute('aria-hidden', 'true');
+      parts.push(w);
+    }
     b.replaceChildren(...parts);
     b.dataset.validity = validity ?? '';
     const state = validity && caution(validity) ? ` (${STATE_LABEL[validity]})` : '';

@@ -198,9 +198,14 @@ export class CommandPalette {
       });
       this._list.append(header);
       for (const { action } of rows) {
+        const hint = action.unavailable ?? action.hint;
+        // The name reads what the row shows, in order: the title, the hint (or
+        // the reason it is unavailable) and the shortcut; aria-disabled says
+        // unavailable. The spaces between the parts draw nothing in the flex
+        // layout but keep them separate words in the row's text.
         const row = el('button', {
           className: 'olv-palette-row',
-          ariaLabel: action.title,
+          ariaLabel: [action.title, hint, action.keys].filter(Boolean).join(', '),
         });
         row.id = `olv-palette-opt-${absoluteRow}`;
         row.setAttribute('role', 'option');
@@ -208,23 +213,23 @@ export class CommandPalette {
         if (absoluteRow === this._selected) {
           row.classList.add('olv-palette-row-active');
         }
-        const textChildren: Node[] = [
+        const textChildren: (Node | string)[] = [
           el('div', { className: 'olv-palette-row-title', text: action.title }),
         ];
-        const hint = action.unavailable ?? action.hint;
         if (hint) {
           textChildren.push(
+            ' ',
             el('div', { className: 'olv-palette-row-hint', text: hint }),
           );
         }
         if (action.unavailable) {
           row.setAttribute('aria-disabled', 'true');
-          row.setAttribute('aria-label', `${action.title}, unavailable: ${action.unavailable}`);
           row.classList.add('olv-palette-row-unavailable');
         }
         row.append(el('div', { className: 'olv-palette-row-text' }, textChildren));
         if (action.keys) {
           row.append(
+            ' ',
             el('span', { className: 'olv-palette-row-key', text: action.keys }),
           );
         }

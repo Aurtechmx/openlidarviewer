@@ -12917,6 +12917,8 @@ body.olv-cvd .olv-layerhealth-report-line[data-status="warn"] { color: #e69f00; 
 .olv-ati-key {
   font-family: var(--mono, ui-monospace, monospace); font-size: var(--text-2xs); color: var(--text-dim);
 }
+/* The key cap stays out of the button's text (activeToolIndicator.ts). */
+.olv-ati-key::before { content: attr(data-key); }
 /* The pill names the mode and holds Finish, so the tools' bars drop their own
    badge and Finish and keep the step-by-step instruction: nothing twice. */
 body:has(.olv-ati:not(.olv-hidden)) :is(.olv-measure-badge, .olv-anno-hint-badge, .olv-measure-bar .olv-measure-finish) { display: none; }

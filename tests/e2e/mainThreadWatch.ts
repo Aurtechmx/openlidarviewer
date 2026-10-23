@@ -26,11 +26,13 @@ export async function watch(page: Page): Promise<void> {
       last = now;
     }, 50);
     new MutationObserver(() => {
+      // The strip draws its elapsed time from data-wait (CSS), not from text.
       for (const node of document.querySelectorAll('.olv-busy-wait, .olv-ss-processing')) {
-        const t = `${node.className}|${node.textContent ?? ''}`;
+        const drawn = node.querySelector<HTMLElement>('.olv-ss-wait')?.dataset.wait ?? '';
+        const t = `${node.className}|${node.textContent ?? ''}${drawn}`;
         if (/elapsed/.test(t) && !w.__waits.includes(t)) w.__waits.push(t);
       }
-    }).observe(document.body, { subtree: true, childList: true, characterData: true });
+    }).observe(document.body, { subtree: true, childList: true, characterData: true, attributes: true, attributeFilter: ['data-wait'] });
   });
 }
 

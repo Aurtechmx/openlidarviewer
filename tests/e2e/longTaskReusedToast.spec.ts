@@ -19,9 +19,10 @@ async function record(page: Page): Promise<void> {
     const w = window as unknown as { __rec: { t: number; s: string }[] };
     w.__rec = [];
     new MutationObserver(() => {
-      const s = document.querySelector('.olv-ss-processing .olv-ss-wait')?.textContent ?? '';
+      // The strip draws its elapsed time from data-wait (CSS), not from text.
+      const s = document.querySelector<HTMLElement>('.olv-ss-processing .olv-ss-wait')?.dataset.wait ?? '';
       if (s && w.__rec[w.__rec.length - 1]?.s !== s) w.__rec.push({ t: performance.now(), s });
-    }).observe(document.body, { subtree: true, childList: true, characterData: true });
+    }).observe(document.body, { subtree: true, childList: true, characterData: true, attributes: true, attributeFilter: ['data-wait'] });
   });
 }
 
