@@ -372,7 +372,7 @@ test.describe('the technical PDF describes one scan', () => {
       // 5 m on scan A; 10 units on scan B.
       await distance([[4, 2, 1], [7, 6, 1]]);
       const exp = await exportPanel(page);
-      await exp.locator('summary', { hasText: 'Scan report' }).click();
+      await exp.locator('summary', { hasText: 'PDF report' }).click();
       await exp.getByRole('combobox', { name: 'PDF report template' }).selectOption('technical-report');
       let downloaded: { name: string; bytes: Buffer } | null = null;
       page.on('download', async (d) => { downloaded = { name: d.suggestedFilename(), bytes: readFileSync((await d.path())!) }; });

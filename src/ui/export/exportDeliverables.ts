@@ -245,7 +245,7 @@ export function buildExportDeliverables(cb: ExportDeliverablesCallbacks): Export
   const element = el('div', {}, [
     formatSection,
     collapsibleSection('Image export', imageRow),
-    collapsibleSection('Scan report', reportRow),
+    collapsibleSection('PDF report', reportRow),
   ]);
 
   const setImageExportEnabled = (enabled: boolean): void => {
