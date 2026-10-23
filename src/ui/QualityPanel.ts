@@ -123,9 +123,8 @@ export class QualityPanel {
   private _tolerance: number = PRECISION_TOLERANCES[0].metres;
   private readonly _toleranceChips = new Map<number, HTMLButtonElement>();
   private readonly _precisionLine: HTMLElement;
-  /** The level selected by the last Check; it covers that camera only. */
+  /** The coarsest certified level at this view, selected with every reading. */
   private readonly _lodLine: HTMLElement;
-  private _lodViewKey = '';
   private readonly _precisionNote: HTMLElement;
   private readonly _copyButton: HTMLButtonElement;
   private _noteTimer: ReturnType<typeof setTimeout> | null = null;
@@ -298,8 +297,8 @@ export class QualityPanel {
   }
 
   /** Check the active scan at the current view against the chosen limit. */
-  /** Re-read the check; `lod` (a press of Check) also selects the certified level for this view. */
-  refreshPrecision(lod = false): PrecisionReading | null {
+  /** Re-read the check at this view; `count` (a press of Check) also counts the certified level's points. */
+  refreshPrecision(count = false): PrecisionReading | null {
     const deps = this._callbacks.precision;
     if (!deps) return null;
     for (const [metres, chip] of this._toleranceChips) {
@@ -307,17 +306,12 @@ export class QualityPanel {
       chip.classList.toggle('olv-chip-active', active);
       chip.setAttribute('aria-pressed', active ? 'true' : 'false');
     }
-    const reading = readPrecision(deps, this._tolerance, { lod });
+    const reading = readPrecision(deps, this._tolerance, { lod: count ? 'count' : 'live' });
     // Rewritten only on a change, so a live refresh does not re-announce the same line.
     if (this._precisionLine.textContent !== reading.line) this._precisionLine.textContent = reading.line;
-    // The level holds for the camera and limit it was selected at, and goes when either changes.
-    if (lod) {
-      this._lodLine.textContent = lodLine(reading.lod) ?? '';
-      this._lodViewKey = reading.viewKey;
-    } else if (this._lodViewKey !== reading.viewKey && this._lodLine.textContent !== '') {
-      this._lodLine.textContent = '';
-      this._lodViewKey = '';
-    }
+    // The level is selected again with every reading, so it always holds for this camera.
+    const lod = lodLine(reading.lod) ?? '';
+    if (this._lodLine.textContent !== lod) this._lodLine.textContent = lod;
     this._precisionLine.dataset.state = reading.state;
     this._copyButton.disabled = reading.diagnostic === null || this._certificatePending;
     return reading;

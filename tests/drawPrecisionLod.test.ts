@@ -173,10 +173,16 @@ describe('the selection rule', () => {
     expect(selectCertifiedLevel(dense, tile, view([300, -400, 250], 'unverified'), METRES, 0.01).state).toBe('NOT_TESTED');
   });
 
-  it('selects without a pass over the points unless asked to count', () => {
-    const s = selectCertifiedLevel(dense, tileFromLocalFloat32(dense), v, METRES, 0.5);
+  it('selects without a pass over the points unless asked to count, and reuses a count once made', () => {
+    const pts = cloud(3000, [4, 4, 2], [350, 420, 60], 23);
+    const tile = tileFromLocalFloat32(pts);
+    const s = selectCertifiedLevel(pts, tile, v, METRES, 0.5);
     expect(s.level).toBeGreaterThan(0);
     expect(s.pointsKept).toBeNull();
+    expect(selectCertifiedLevel(pts, tile, v, METRES, 0.5, { count: 'cached' }).pointsKept).toBeNull();
+    const counted = selectCertifiedLevel(pts, tile, v, METRES, 0.5, { count: true }).pointsKept;
+    expect(counted).toBeGreaterThan(0);
+    expect(selectCertifiedLevel(pts, tile, v, METRES, 0.5, { count: 'cached' }).pointsKept).toBe(counted);
   });
 });
 

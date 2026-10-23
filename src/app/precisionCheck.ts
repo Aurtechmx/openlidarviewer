@@ -74,10 +74,8 @@ export interface PrecisionReading {
   readonly diagnostic: DrawPrecisionDiagnostic | null;
   /** The points the bound covers: those drawn for the open scan. */
   readonly pointsDrawn: number;
-  /** The coarsest certified level, when the check was asked for it. */
+  /** The coarsest certified level at this view, when asked for. */
   readonly lod: LodSelection | null;
-  /** The limit and model-view the reading holds for; another view gives another key. */
-  readonly viewKey: string;
 }
 
 /**
@@ -120,14 +118,15 @@ export interface PrecisionRequest {
 
 /**
  * Evaluate the active scan at the current view and capture the request, or say
- * why not. `lod` also selects the coarsest certified level and counts its
- * points: a press of Check or a certificate asks for it, the live refresh does not.
+ * why not. `lod` also selects the coarsest certified level: `'count'` counts
+ * its points (a press of Check, a certificate), `'live'` reuses a count already
+ * made, so the refresh that follows the camera stays cheap.
  */
 export function capturePrecisionRequest(
   deps: PrecisionDeps,
   tauMetres: number,
   now: Date = new Date(),
-  options: { readonly lod?: boolean } = {},
+  options: { readonly lod?: 'count' | 'live' } = {},
 ): PrecisionRequest | string {
   const viewer = deps.viewer();
   const cloud = deps.activeCloud();
@@ -163,7 +162,9 @@ export function capturePrecisionRequest(
     modelView64: Array.from(view.modelView64),
     diagnostic: evaluateDrawPrecision(tile, view, unit, tauMetres, 'rn'),
     faithful: evaluateDrawPrecision(tile, view, unit, tauMetres, 'faithful'),
-    lod: options.lod ? selectCertifiedLevel(positions, tile, view, unit, tauMetres, { count: true }) : null,
+    lod: options.lod
+      ? selectCertifiedLevel(positions, tile, view, unit, tauMetres, { count: options.lod === 'count' ? true : 'cached' })
+      : null,
   };
 }
 
@@ -217,16 +218,15 @@ export function lodLine(s: LodSelection | null): string | null {
 }
 
 /** Check the active scan at the current view against `tauMetres`; `lod` also selects its certified level. */
-export function readPrecision(deps: PrecisionDeps, tauMetres: number, options: { readonly lod?: boolean } = {}): PrecisionReading {
+export function readPrecision(deps: PrecisionDeps, tauMetres: number, options: { readonly lod?: 'count' | 'live' } = {}): PrecisionReading {
   const e = capturePrecisionRequest(deps, tauMetres, new Date(), options);
-  if (typeof e === 'string') return { state: 'NO_SCAN', line: e, diagnostic: null, pointsDrawn: 0, lod: null, viewKey: '' };
+  if (typeof e === 'string') return { state: 'NO_SCAN', line: e, diagnostic: null, pointsDrawn: 0, lod: null };
   return {
     state: e.diagnostic.state,
     line: precisionLine(e.diagnostic, tauMetres, e.faithful),
     diagnostic: e.diagnostic,
     pointsDrawn: e.dataset.pointsDrawn,
     lod: e.lod,
-    viewKey: `${tauMetres}|${e.dataset.name}|${e.modelView64.join(',')}`,
   };
 }
 
@@ -370,7 +370,7 @@ export function precisionCertificate(
   now: Date = new Date(),
   sourceHash: SourceHash | null = null,
 ): string | null {
-  const request = capturePrecisionRequest(deps, tauMetres, now, { lod: true });
+  const request = capturePrecisionRequest(deps, tauMetres, now, { lod: 'count' });
   return typeof request === 'string' ? null : certificateOf(request, sourceHash);
 }
 
@@ -386,7 +386,7 @@ export async function precisionCertificateWithHash(
   tauMetres: number,
   onWaiting?: () => void,
 ): Promise<string | null> {
-  const request = capturePrecisionRequest(deps, tauMetres, new Date(), { lod: true });
+  const request = capturePrecisionRequest(deps, tauMetres, new Date(), { lod: 'count' });
   if (typeof request === 'string') return null;
   if (!sourceDigestReady(request.cloud)) onWaiting?.();
   const { sourceDigestOf } = await loadExportDigests();

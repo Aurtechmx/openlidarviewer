@@ -244,14 +244,19 @@ describe('a certificate waiting on the source hash', () => {
 });
 
 describe('the certified level of detail', () => {
-  it('is selected on a check, not on the live reading', () => {
+  it('is selected with every reading that asks, and the live reading never counts on its own', () => {
     expect(readPrecision(deps(), 0.01).lod).toBeNull();
-    const r = readPrecision(deps(), 0.01, { lod: true });
-    expect(r.lod?.state).toBe('CERTIFIED');
+    // Each deps() holds a cloud of its own, so no earlier test has counted its levels.
+    const fresh = deps();
+    expect(readPrecision(fresh, 100, { lod: 'live' }).lod?.pointsKept).toBeNull();
+    const counted = readPrecision(fresh, 100, { lod: 'count' }).lod!;
+    expect(counted.pointsKept).toBeGreaterThan(0);
+    // Once counted, the live reading reuses the count.
+    expect(readPrecision(fresh, 100, { lod: 'live' }).lod?.pointsKept).toBe(counted.pointsKept);
   });
 
   it('certifies nothing at 1 mm here: round-to-nearest passes, but the faithful bound does not', () => {
-    const r = readPrecision(deps(), 0.001, { lod: true });
+    const r = readPrecision(deps(), 0.001, { lod: 'count' });
     expect(r.state).toBe('PASS');
     expect(r.lod?.state).toBe('NONE');
     expect(r.lod!.bMetres!).toBeGreaterThan(0.001);
@@ -259,7 +264,7 @@ describe('the certified level of detail', () => {
   });
 
   it('at 1 cm a millimetre grid fits, and keeps every point of a cloud metres apart', () => {
-    const r = readPrecision(deps(), 0.01, { lod: true });
+    const r = readPrecision(deps(), 0.01, { lod: 'count' });
     expect(r.lod!.level).toBeGreaterThan(0);
     expect(r.lod!.cellSizeMetres!).toBeLessThan(0.01);
     expect(r.lod!.pointsKept).toBe(r.lod!.pointsFull);
@@ -267,23 +272,16 @@ describe('the certified level of detail', () => {
   });
 
   it('names full resolution when no coarser level fits', () => {
-    const r = readPrecision(deps(), 0.0015, { lod: true });
+    const r = readPrecision(deps(), 0.0015, { lod: 'count' });
     expect(r.lod?.state).toBe('CERTIFIED');
     expect(r.lod?.level).toBe(0);
     expect(lodLine(r.lod)).toMatch(/^Coarsest certified level: full resolution \(bound .* mm ≤ 1\.50 mm, faithful rounding\)\. No coarser level fits\.$/);
   });
 
   it('names a coarser level, its share of points and that it is not drawn, when one fits', () => {
-    const r = readPrecision(deps(), 100, { lod: true });
+    const r = readPrecision(deps(), 100, { lod: 'count' });
     expect(r.lod!.level).toBeGreaterThan(0);
     expect(lodLine(r.lod)).toMatch(/^Coarsest certified level: .* cells, \d+% of points \(.* ≤ .*, faithful rounding\)\. Not drawn in this version\.$/);
-  });
-
-  it('reads a key that changes with the camera and the limit', () => {
-    const a = readPrecision(deps(), 0.001).viewKey;
-    expect(readPrecision(deps(), 0.001).viewKey).toBe(a);
-    expect(readPrecision(deps(), 0.01).viewKey).not.toBe(a);
-    expect(readPrecision(deps({}, translatedView(400, 500, 800)), 0.001).viewKey).not.toBe(a);
   });
 
   it('is recorded in the certificate with its rule and the narrow claim it supports', () => {

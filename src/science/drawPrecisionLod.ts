@@ -111,6 +111,11 @@ export function levelH(tile: DrawTile, q: number): number {
 
 const countCache = new WeakMap<Float32Array, Map<number, number | null>>();
 
+/** The count {@link occupiedCells} already made for this buffer and cell size, or undefined. */
+function cachedCells(positions: Float32Array, q: number): number | null | undefined {
+  return countCache.get(positions)?.get(q);
+}
+
 /**
  * Occupied cells of size q among the stored points, or null when the grid is
  * too large to key exactly in a double. Cached per buffer and cell size.
@@ -156,9 +161,10 @@ function bound(tile: DrawTile, view: DrawPrecisionView, unit: DrawPrecisionUnit,
 const clock = (): number => (typeof performance !== 'undefined' ? performance.now() : Date.now());
 
 /**
- * Select the coarsest level that fits `tauMetres` for this draw. `count`
- * also counts the level's representatives, for the bytes it would draw; the
- * selection itself needs no pass over the points.
+ * Select the coarsest level that fits `tauMetres` for this draw. The
+ * selection needs no pass over the points. `count: true` also counts the
+ * level's representatives, for the bytes it would draw; `'cached'` reports a
+ * count only when one was already made, so a live refresh never pays for it.
  */
 export function selectCertifiedLevel(
   positions: Float32Array,
@@ -166,7 +172,7 @@ export function selectCertifiedLevel(
   view: DrawPrecisionView,
   unit: DrawPrecisionUnit,
   tauMetres: number,
-  options: { readonly count?: boolean } = {},
+  options: { readonly count?: boolean | 'cached' } = {},
 ): LodSelection {
   const t0 = clock();
   const pointsFull = Math.floor(positions.length / 3);
@@ -208,7 +214,10 @@ export function selectCertifiedLevel(
     }
   }
   const q = level > 0 ? q0 * 2 ** level : null;
-  const kept = level === 0 ? pointsFull : options.count ? occupiedCells(positions, q!) : null;
+  const kept = level === 0
+    ? pointsFull
+    : options.count === true ? occupiedCells(positions, q!)
+      : options.count === 'cached' ? cachedCells(positions, q!) ?? null : null;
   return {
     ...empty,
     state: 'CERTIFIED',
