@@ -438,6 +438,10 @@ export function createAnalyseWorkspace(d: AnalyseWorkspaceDeps): AnalyseWorkspac
         : [el('span', { className: 'olv-ah-name', text: 'Make contours' })]));
       contoursLink.dataset.made = String(made);
       contoursLine.set(contours);
+      // Whether the Terrain page's own verdict says more than the run's: a
+      // sampled scan is held at Review whatever the run found, and that must
+      // stay in view above "Ready for terrain products".
+      let terrainHeaderAdds = false;
       for (const row of rows) {
         const page = pageOf[row.id];
         if (!page) continue;
@@ -449,15 +453,17 @@ export function createAnalyseWorkspace(d: AnalyseWorkspaceDeps): AnalyseWorkspac
         // header points there instead of repeating the same sentence.
         const repeatsRun = page === 'terrain' && row.status === 'review' && !!inp.terrainRun && row.reason === inp.terrainRun.verdict;
         renderVerdict(shells[page], repeatsRun ? { ...row, reason: 'The terrain verdict and what to do next are below.' } : row);
+        if (page === 'terrain') terrainHeaderAdds = row.status !== 'ready' && !repeatsRun;
         // Terrain's Why? is the Process Studio panel; the others carry the full reason.
         if (page !== 'terrain') shells[page].whyBody.replaceChildren(el('p', { className: 'olv-why-reason', text: row.reason }));
       }
-      // After a run the panel's verdict is the Terrain page's one status line,
-      // with Make contours under it and Why? first among the details below.
+      // After a run the panel's verdict is the Terrain page's status line, with
+      // Make contours under it and Why? first among the details below; the
+      // page's own verdict stays above it only when it says more (a sample).
       // Before one, the page leads with its own verdict and Why?.
       const t = shells.terrain;
       const links = d.analysePanel()?.linksHost();
-      t.verdict.hidden = !!inp.terrainRun && !!links;
+      t.verdict.hidden = !!inp.terrainRun && !!links && !terrainHeaderAdds;
       if (inp.terrainRun && links) {
         if (t.why.parentElement !== links) links.append(t.why);
       } else if (t.why.parentElement !== t.root) {

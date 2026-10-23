@@ -266,6 +266,8 @@ describe('Analyse home shortcuts', () => {
     expect(r.find((e) => e.hasClass('olv-ah-reason'))?.ownText).toBe('Not usable for terrain products as-is.');
     const header = t.host.find((e) => e.dataset.page === 'terrain')!.find((e) => e.hasClass('olv-at-verdict'))!;
     expect(header.find((e) => e.hasClass('olv-ah-badge'))?.ownText).toBe('Blocked');
+    // A verdict stricter than the run's own line stays in view after the run.
+    expect(header.hidden).not.toBe(true);
   });
 });
 
