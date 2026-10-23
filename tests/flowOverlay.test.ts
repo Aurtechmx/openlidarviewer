@@ -83,6 +83,23 @@ describe('FlowOverlay — accumulation layer', () => {
     overlay.dispose();
   });
 
+  it('counts channel cells, not quads, and draws the network over the catchment fill', () => {
+    const host = fakeHost();
+    const overlay = new FlowOverlay(host);
+    const result = slope();
+    const buffers = buildFlowAccumulationBuffers(result.grid, result.routed, result.accumulation, frame);
+    overlay.setAccumulation(buffers);
+    // 6 quads (casing + line, 2 joints + 1 ribbon each) for 2 channel cells.
+    expect(buffers.verts.length / 18).toBe(6);
+    expect(overlay.accumulationCellCount).toBe(2);
+    const trace = catchmentClick(result, { col: 1, row: 0 }, false);
+    if (!trace.ok) throw new Error('fixture catchment must resolve');
+    overlay.setCatchment(buildFlowCatchmentBuffers(result.grid, trace.mask, frame));
+    const [network, catchment] = host.objects as THREE.Mesh[];
+    expect(network!.renderOrder).toBeGreaterThan(catchment!.renderOrder);
+    overlay.dispose();
+  });
+
   it('removes the mesh and releases GPU resources on clear', () => {
     const host = fakeHost();
     const overlay = new FlowOverlay(host);

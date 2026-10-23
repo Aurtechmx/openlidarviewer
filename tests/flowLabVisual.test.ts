@@ -28,12 +28,22 @@ describe('Flow Pulse legend', () => {
     expect(text).toContain('Upstream cells draining through a cell (log scale)');
   });
 
-  it('ticks at 1, powers of ten that leave room for the maximum label, and the maximum', () => {
-    expect(grid.upstreamTicks(3629)).toEqual([1, 10, 100, 3629])
-    expect(grid.upstreamTicks(100000)).toEqual([1, 10, 100, 1000, 100000]);
+  it('ticks at the smallest count drawn as a line, powers of ten with room either side, and the maximum', () => {
+    expect(grid.upstreamTicks(3629)).toEqual([26, 100, 1000, 3629]);
+    expect(grid.upstreamTicks(100000)).toEqual([100, 1000, 10000, 100000]);
     expect(grid.upstreamTicks(1)).toEqual([1]);
     const l = rec(grid.flowGridLegend(3629));
-    for (const t of ['1', '10', '100', '3,629']) expect(l.findByText(t)).toHaveLength(1);
+    for (const t of ['26', '100', '1,000', '3,629']) expect(l.findByText(t)).toHaveLength(1);
+    expect(grid.rampPosition(26, 3629)).toBeCloseTo(0.0035, 2);
+    expect(grid.rampPosition(3629, 3629)).toBe(1);
+  });
+
+  it('describes the drawing: wider and brighter lines, counts cells not water, relief lit from the north-west', () => {
+    const text = rec(grid.flowGridLegend(3629)).textContent;
+    expect(text).toContain('Lines start at 26 upstream cells');
+    expect(text).toContain('wider and brighter lines mean more cells drain through that point');
+    expect(text).toContain('It counts cells, not water.');
+    expect(text).toContain('north-west');
   });
 
   it('gives each mark a glyph and a word', () => {
@@ -55,6 +65,49 @@ describe('hillshade', () => {
     const away = grid.hillshade(flowGrid(4, 4, (c, r) => -c + r));
     expect(facing[5]!).toBeGreaterThan(flat[5]!);
     expect(away[5]!).toBeLessThan(flat[5]!);
+  });
+});
+
+describe('relief base', () => {
+  it('is grey, darker away from the light and lighter towards it', () => {
+    const dark = grid.reliefRgb(0), light = grid.reliefRgb(1), mid = grid.reliefRgb(0.5);
+    expect(light[0]).toBeGreaterThan(mid[0]);
+    expect(mid[0]).toBeGreaterThan(dark[0]);
+    // Near-neutral: channels differ by a slight cool cast only.
+    for (const c of [dark, mid, light]) expect(c[2] - c[0]).toBeLessThanOrEqual(8);
+    expect(grid.reliefRgb(Number.NaN)).toEqual(dark);
+  });
+});
+
+describe('drainage network on the grid', () => {
+  it('strokes only channel cells, from each centre to its receiver, after the relief', () => {
+    const g = new grid.FlowResultGrid({ ariaLabel: 'g', onActivate: () => {}, onMove: () => {} });
+    const canvas = rec(g.element).children[0]!.children[0]! as unknown as Record<string, unknown>;
+    const log: string[] = [];
+    const lines: Array<[number, number]> = [];
+    canvas.getContext = () => new Proxy({}, {
+      get: (_o, k) => {
+        if (k === 'lineTo') return (x: number, y: number) => { lines.push([x, y]); log.push('lineTo'); };
+        if (k === 'stroke') return () => log.push('stroke');
+        if (k === 'fillRect') return () => log.push('fillRect');
+        return () => {};
+      },
+      set: () => true,
+    });
+    Object.defineProperty(canvas, 'clientWidth', { value: 40 });
+    // 4 x 1 strip draining east; upstream 1, 2, 3, 4; cell 3 is the outlet.
+    const fg = flowGrid(4, 1, (c) => 4 - c);
+    const routed = {
+      receiver: Int32Array.from([1, 2, 3, -1]), direction: new Int8Array(4).fill(-1), status: Uint8Array.from([0, 0, 0, 0]),
+      sinkCount: 0, flatCount: 0, outletCount: 0,
+    };
+    g.load(fg as never, routed as never, { upstreamCells: Uint32Array.from([1, 2, 3, 4]), drainedCells: 4, unresolvedCells: 0 }, null);
+    // logScale(1, 4) = 0.43 is a channel here, so every cell has a stroke end.
+    const s = 10;
+    const ends = new Set(lines.map(([x, y]) => `${Math.round(x)},${Math.round(y)}`));
+    for (const c of [1, 2, 3]) expect(ends.has(`${c * s + s / 2},${s / 2}`)).toBe(true);
+    // Strokes come after the relief fills.
+    expect(log.lastIndexOf('fillRect')).toBeLessThan(log.indexOf('stroke'));
   });
 });
 
@@ -161,7 +214,43 @@ describe('flow particles', () => {
   it('is deterministic for a seed and caps its count', () => {
     const a = P.seededRandom(9), b = P.seededRandom(9);
     expect([a(), a(), a()]).toEqual([b(), b(), b()]);
+    expect(P.MAX_PARTICLES).toBe(900);
     expect(P.particleCount(10_000)).toBe(P.MAX_PARTICLES);
+  });
+
+  it('scales the count with the number of channel cells', () => {
+    expect(P.particleCount(0)).toBe(0);
+    expect(P.particleCount(10)).toBe(5);
+    expect(P.particleCount(1000)).toBe(500);
+    expect(P.particleCount(1801)).toBe(900);
+  });
+
+  it('moves smoothly: continuous across a cell boundary and through a turn', () => {
+    // 2 x 2: cell 0 → 1 (east), 1 → 3 (north), 3 → 2 (west); cell 2 is the outlet.
+    const turn = {
+      cols: 2, rows: 2,
+      receiver: Int32Array.from([1, 3, -1, 2]),
+      upstreamCells: Uint32Array.from([1, 2, 4, 3]),
+      maxUpstream: 4,
+    };
+    const before = P.particlePosition(turn, { cell: 0, progress: 0.9999, age: 0, prev: -1 })!;
+    const after = P.particlePosition(turn, { cell: 1, progress: 0.0001, age: 0, prev: 0 })!;
+    expect(Math.hypot(before[0] - after[0], before[1] - after[1])).toBeLessThan(1e-3);
+    // Through the corner at cell 1's centre (1.5, 0.5) the track cuts inside the corner, not through it.
+    const corner = P.particlePosition(turn, { cell: 0, progress: 0.999999, age: 0, prev: -1 })!;
+    expect(corner[0]).toBeLessThan(1.5);
+    expect(corner[1]).toBeGreaterThan(0.5);
+    // Straight from a fresh spawn: halfway is the link midpoint.
+    expect(P.particlePosition(turn, { cell: 0, progress: 0.25, age: 0 })).toEqual([0.75, 0.5]);
+    expect(P.particlePosition(turn, { cell: 2, progress: 0.5, age: 0 })).toBeNull();
+  });
+
+  it('records where a particle came from when it crosses into the next cell', () => {
+    const cells = P.spawnCells(field);
+    const parts: Parameters<typeof P.stepParticles>[1] = [{ cell: 0, progress: 0.95, age: 0, prev: -1 }];
+    P.stepParticles(field, parts, cells, 0.1, P.seededRandom(3));
+    expect(parts[0]!.cell).toBe(1);
+    expect(parts[0]!.prev).toBe(0);
   });
 });
 

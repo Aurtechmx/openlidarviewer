@@ -30,9 +30,11 @@ import {
   type GridCell,
 } from '../../simulation/flowPulse/flowGridCursor';
 import { CELL_FLAT, CELL_NODATA, CELL_OUTLET, CELL_SINK } from '../../simulation/flowPulse/flowTypes';
-import { logScale } from '../../render/flowOverlayGeometry';
+import {
+  channelMinCount, channelStrength, isChannel, logScale, waterRampColor, widthForStrength,
+} from '../../render/flowOverlayGeometry';
 import { el } from '../dom';
-import { prefersReducedMotion, rampGradient, rgbCss, viridis } from './labColormaps';
+import { prefersReducedMotion, rampGradient, rgbCss } from './labColormaps';
 import {
   LAB_LINE, LAB_WITHHELD, casedPath, cellBorders, cellCentres, cellSpan, dotCell, drawIn, fitGridCanvas, northUpCell, northUpRowStep, onWidthChange,
 } from './labGridPaint';
@@ -67,15 +69,37 @@ const CATCHMENT_COLOR = '#ffffff';
 const OUTLET_COLOR = '#38bdf8';
 const SINK_COLOR = '#f0abfc';
 const PATH_DRAW_MS = 600;
-/** How much the hillshade darkens a cell: 0 keeps the ramp colour, 1 is full shade. */
-const HILLSHADE_WEIGHT = 0.35;
+/** Grey relief range: a cell facing straight away from the light, and one facing it. */
+const RELIEF_DARK = 34;
+const RELIEF_LIGHT = 196;
+/** Line colour buckets: each bucket is one canvas path, so a large network stays cheap to stroke. */
+const NETWORK_BUCKETS = 12;
 
-/** Tick values for a log upstream-count ramp: 1, then powers of ten below the maximum, then the maximum. */
+/** Grey relief colour for a hillshade value in [0, 1], with a slight cool cast. */
+export function reliefRgb(shade: number): readonly [number, number, number] {
+  const v = Number.isFinite(shade) ? Math.min(1, Math.max(0, shade)) : 0;
+  const g = Math.round(RELIEF_DARK + (RELIEF_LIGHT - RELIEF_DARK) * v);
+  return [g, Math.min(255, g + 3), Math.min(255, g + 8)];
+}
+
+/** Position of an upstream count along the legend ramp, 0 at the channel threshold, 1 at the maximum. */
+export function rampPosition(value: number, max: number): number {
+  return channelStrength(logScale(value, max));
+}
+
+/**
+ * Tick values for the drainage-line ramp: the smallest count drawn as a line,
+ * powers of ten that leave room either side, then the maximum.
+ */
 export function upstreamTicks(max: number): number[] {
   const m = Math.max(1, Math.round(max));
-  const ticks = [1];
-  for (let v = 10; v < m; v *= 10) if (logScale(v, m) < 0.8) ticks.push(v);
-  if (m > 1) ticks.push(m);
+  const first = channelMinCount(m);
+  const ticks = [first];
+  for (let v = 10; v < m; v *= 10) {
+    const at = rampPosition(v, m);
+    if (v > first && at >= 0.15 && at < 0.8) ticks.push(v);
+  }
+  if (m > first) ticks.push(m);
   return ticks;
 }
 
@@ -123,25 +147,31 @@ function markItem(kind: 'hatch' | 'dots' | 'line' | 'ring' | 'dash', glyph: stri
 }
 
 /**
- * The grid legend: the viridis upstream-count ramp on its log scale, with
- * ticks at powers of ten up to `maxUpstream`, then the marks drawn over it.
+ * The grid legend: the water ramp of the drainage lines on its log scale,
+ * from the smallest count drawn as a line to `maxUpstream`, then the marks
+ * drawn over it.
  */
 export function flowGridLegend(maxUpstream = 1): HTMLElement {
   const max = Math.max(1, Math.round(maxUpstream));
+  const first = channelMinCount(max);
   const bar = el('div', { className: 'olv-lab-ramp-bar' });
-  bar.style.background = rampGradient(viridis);
+  bar.style.background = rampGradient(waterRampColor);
   const ticks = el('div', { className: 'olv-lab-ramp-ticks' }, upstreamTicks(max).map((v) => {
     const t = el('span', { className: 'olv-lab-ramp-tick', text: v.toLocaleString('en-US') });
-    t.style.left = `${logScale(v, max) * 100}%`;
+    t.style.left = `${rampPosition(v, max) * 100}%`;
     return t;
   }));
   const ramp = el('div', { className: 'olv-lab-ramp' }, [
     el('p', { className: 'olv-lab-ramp-title', text: 'Upstream cells draining through a cell (log scale)' }),
     bar,
     ticks,
+    el('p', {
+      className: 'olv-chips-note',
+      text: `Lines start at ${first.toLocaleString('en-US')} upstream cells; wider and brighter lines mean more cells drain through that point. It counts cells, not water. Grey relief is lit from the north-west.`,
+    }),
   ]);
   ramp.setAttribute('role', 'img');
-  ramp.setAttribute('aria-label', `Upstream-cell colour scale, viridis on a log scale: dark purple is 1 cell, yellow is ${max.toLocaleString('en-US')} cells. Relief shading darkens cells facing away from a north-west light.`);
+  ramp.setAttribute('aria-label', `Drainage-line scale on a log scale: thin deep-blue lines are ${first.toLocaleString('en-US')} upstream cells, wide near-white lines are ${max.toLocaleString('en-US')} cells. It counts cells, not water. Grey relief shading darkens cells facing away from a north-west light.`);
   const marks = legend('Grid legend', []);
   marks.append(
     markItem('line', '━', 'Path', PATH_COLOR),
@@ -329,22 +359,21 @@ export class FlowResultGrid {
     const fit = fitGridCanvas(this._canvas, grid.cols, grid.rows, styleScale);
     if (!fit) return;
     const { ctx, s: scale } = fit;
-    const acc = this._accumulation;
     const shade = this._shade;
+    // Grey shaded relief from the grid's own elevations; NoData keeps its dot pattern.
     for (let row = 0; row < grid.rows; row++) {
       for (let col = 0; col < grid.cols; col++) {
         const i = row * grid.cols + col;
         const [x, cw] = cellSpan(col, scale);
         const [y, ch] = cellSpan(row, scale);
         if (routed.status[i] === CELL_NODATA) { dotCell(ctx, x, y, Math.max(cw, ch), LAB_WITHHELD); continue; }
-        const c = viridis(acc ? logScale(acc.upstreamCells[i]!, this._maxUpstream) : 0);
-        const k = shade ? 1 - HILLSHADE_WEIGHT * (1 - shade[i]!) : 1;
-        ctx.fillStyle = rgbCss([Math.round(c[0] * k), Math.round(c[1] * k), Math.round(c[2] * k)]);
+        ctx.fillStyle = rgbCss(reliefRgb(shade ? shade[i]! : 0.7));
         ctx.fillRect(x, y, cw, ch);
       }
     }
     cellBorders(ctx, grid.cols, grid.rows, scale);
     if (this._catchmentMask) this._strokeMaskEdge(ctx, grid, this._catchmentMask, scale);
+    if (this._accumulation) this._drawNetwork(ctx, grid, routed, this._accumulation, scale);
     if (this._pathMask && this._pathOrder) {
       casedPath(ctx, cellCentres(this._pathOrder, grid.cols, scale), scale, PATH_COLOR, this._pathFraction);
     } else if (this._pathMask) {
@@ -364,6 +393,57 @@ export class FlowResultGrid {
       scale - ctx.lineWidth,
       scale - ctx.lineWidth,
     );
+  }
+
+  /**
+   * The drainage network: a round-capped stroke from each channel cell's
+   * centre to its D8 receiver's centre, width and water-ramp colour from the
+   * log-scaled upstream count, over a dark casing. Cells below the channel
+   * threshold are not drawn. Lines are bucketed by strength so each bucket
+   * is one path, and thin rills are stroked before trunks.
+   */
+  private _drawNetwork(
+    ctx: CanvasRenderingContext2D, grid: FlowGrid, routed: D8Result, acc: AccumulationResult, s: number,
+  ): void {
+    const buckets: number[][] = Array.from({ length: NETWORK_BUCKETS }, () => []);
+    for (let i = 0; i < grid.cols * grid.rows; i++) {
+      if (routed.status[i] === CELL_NODATA) continue;
+      const t = logScale(acc.upstreamCells[i]!, this._maxUpstream);
+      if (!isChannel(t)) continue;
+      buckets[Math.min(NETWORK_BUCKETS - 1, Math.floor(channelStrength(t) * NETWORK_BUCKETS))]!.push(i);
+    }
+    const trace = (cells: readonly number[]): void => {
+      ctx.beginPath();
+      for (const i of cells) {
+        const x = (i % grid.cols) * s + s / 2, y = Math.floor(i / grid.cols) * s + s / 2;
+        const to = routed.receiver[i]!;
+        ctx.moveTo(x, y);
+        if (to >= 0 && routed.status[to] !== CELL_NODATA) {
+          ctx.lineTo((to % grid.cols) * s + s / 2, Math.floor(to / grid.cols) * s + s / 2);
+        } else {
+          ctx.lineTo(x + 0.01, y);
+        }
+      }
+      ctx.stroke();
+    };
+    const strengthOf = (b: number): number => (b + 0.5) / NETWORK_BUCKETS;
+    const widthOf = (b: number): number => Math.max(1, widthForStrength(strengthOf(b)) * s);
+    ctx.save();
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+    ctx.strokeStyle = 'rgba(5, 11, 26, 0.75)';
+    for (let b = 0; b < NETWORK_BUCKETS; b++) {
+      if (buckets[b]!.length === 0) continue;
+      ctx.lineWidth = widthOf(b) + Math.max(1.5, s * 0.16);
+      trace(buckets[b]!);
+    }
+    for (let b = 0; b < NETWORK_BUCKETS; b++) {
+      if (buckets[b]!.length === 0) continue;
+      ctx.strokeStyle = rgbCss(waterRampColor(strengthOf(b)));
+      ctx.lineWidth = widthOf(b);
+      trace(buckets[b]!);
+    }
+    ctx.restore();
   }
 
   /** Dashed outline along the edges where the mask meets a cell outside it. */

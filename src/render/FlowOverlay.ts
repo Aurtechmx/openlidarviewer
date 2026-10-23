@@ -2,7 +2,7 @@
  * FlowOverlay.ts
  *
  * The thin three.js binding that draws routed flow in the 3D scene: the
- * accumulation heatmap, the click-to-pulse downstream path, and the upstream
+ * accumulation drainage network, the click-to-pulse downstream path, and the upstream
  * catchment region — three independent, individually disposable objects
  * attached through the same `derivedLayerHost()`-shaped host contours use.
  *
@@ -31,7 +31,10 @@ import type { FlowOverlayLineBuffers, FlowOverlayMeshBuffers } from './flowOverl
 /** Scene membership and redraw, and nothing more — `Viewer.derivedLayerHost()`. */
 export type FlowOverlayHost = SceneOverlayHost;
 
-const ACCUMULATION_OPACITY = 0.72;
+/** The network covers only channel cells, so it can be near-opaque without hiding the scan. */
+const NETWORK_OPACITY = 0.92;
+/** Network over the catchment fill, under the path line (renderOrder 3). */
+const NETWORK_RENDER_ORDER = 2;
 const CATCHMENT_OPACITY = 0.5;
 const PATH_COLOR = 0xfaf359;
 
@@ -68,12 +71,12 @@ export class FlowOverlay {
   private readonly _path: PathLayer;
 
   constructor(host: FlowOverlayHost) {
-    this._accumulation = new QuadLayer(host, ACCUMULATION_OPACITY);
+    this._accumulation = new QuadLayer(host, NETWORK_OPACITY, NETWORK_RENDER_ORDER);
     this._catchment = new QuadLayer(host, CATCHMENT_OPACITY);
     this._path = new PathLayer(host);
   }
 
-  /** Cells the accumulation heatmap currently draws. 0 = nothing drawn. */
+  /** Channel cells the accumulation network currently draws. 0 = nothing drawn. */
   get accumulationCellCount(): number {
     return this._accumulation.cellCount;
   }
@@ -96,7 +99,7 @@ export class FlowOverlay {
     this._accumulation.clear();
   }
 
-  /** Show or hide the accumulation heatmap without discarding the upload. */
+  /** Show or hide the accumulation network without discarding the upload. */
   setAccumulationVisible(visible: boolean): void {
     this._accumulation.setVisible(visible);
   }
