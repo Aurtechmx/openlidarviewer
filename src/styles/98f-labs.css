@@ -265,10 +265,10 @@
 @media (pointer: coarse) {
   .olv-lab-chip-summary, .olv-lab-details-summary, .olv-ah-run,
   .olv-flow-cond-btn, .olv-flow-mode-btn, .olv-flow-overlay-toggle, .olv-flow-export,
-  .olv-ta-segmented-btn, .olv-ta-run, .olv-ta-export, .olv-ta-retry, .olv-ta-overlay-toggle, .olv-ta-form-submit {
+  .olv-ta-segmented-btn, .olv-ta-run, .olv-ta-export, .olv-ta-retry, .olv-ta-overlay-toggle, .olv-ta-form-submit, .olv-ta-example {
     min-height: 44px;
   }
-  .olv-flow-cond-btn, .olv-flow-mode-btn, .olv-ta-segmented-btn { min-width: 44px; }
+  .olv-flow-cond-btn, .olv-flow-mode-btn, .olv-ta-segmented-btn, .olv-ta-example { min-width: 44px; }
 }
 @media (prefers-reduced-motion: reduce) {
   .olv-lab-chip-summary::after, .olv-lab-details-summary::before { transition: none; }

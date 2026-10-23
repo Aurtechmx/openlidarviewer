@@ -403,7 +403,11 @@
 .olv-ta-form-problems { font-size: var(--text-xs); color: var(--state-review); text-wrap: pretty; }
 .olv-ta-form-problems-list { margin: var(--space-2xs) 0 0; padding-left: 18px; display: flex; flex-direction: column; gap: 3px; }
 
-.olv-ta-form-submit, .olv-ta-run, .olv-ta-export, .olv-ta-retry, .olv-ta-overlay-toggle {
+.olv-ta-examples { display: flex; flex-direction: column; gap: var(--space-xs); }
+.olv-ta-examples-row { display: flex; flex-wrap: wrap; gap: var(--space-xs); }
+.olv-ta-examples-note { margin: 0; font-size: var(--text-2xs); color: var(--text-faint); text-wrap: pretty; }
+
+.olv-ta-form-submit, .olv-ta-run, .olv-ta-export, .olv-ta-retry, .olv-ta-overlay-toggle, .olv-ta-example {
   font: inherit; font-size: var(--text-xs); color: var(--text);
   border: 0.5px solid var(--hairline); background: rgba(255, 255, 255, 0.04);
   border-radius: 6px; padding: 4px 9px; cursor: pointer;
@@ -412,14 +416,14 @@
 .olv-ta-overlay-toggle[aria-pressed="true"] { color: var(--text); background: var(--accent-soft); border-color: var(--accent); }
 .olv-ta-form-submit:disabled, .olv-ta-run:disabled, .olv-ta-export:disabled { opacity: 0.5; cursor: not-allowed; }
 .olv-ta-form-submit:focus-visible, .olv-ta-run:focus-visible, .olv-ta-export:focus-visible,
-.olv-ta-retry:focus-visible, .olv-ta-overlay-toggle:focus-visible {
+.olv-ta-retry:focus-visible, .olv-ta-overlay-toggle:focus-visible, .olv-ta-example:focus-visible {
   outline: var(--focus-ring); outline-offset: var(--focus-ring-offset);
 }
 /* A tap fires :hover and it sticks until the next tap elsewhere, so these are
    gated behind a hover-capable query rather than applying to a touch tap. */
 @media (hover: hover) {
   .olv-ta-segmented-btn:hover, .olv-ta-overlay-toggle:hover { color: var(--text); }
-  .olv-ta-form-submit:hover, .olv-ta-run:hover, .olv-ta-export:hover, .olv-ta-retry:hover { border-color: var(--accent); }
+  .olv-ta-form-submit:hover, .olv-ta-run:hover, .olv-ta-export:hover, .olv-ta-retry:hover, .olv-ta-example:hover { border-color: var(--accent); }
 }
 
 .olv-ta-grid { display: flex; flex-direction: column; gap: var(--space-sm); align-items: flex-start; }

@@ -76,7 +76,7 @@ export const HELP_TOPICS: readonly HelpTopic[] = [
     title: 'Terrain Access',
     summary: 'Screen a route over the ground for a vehicle or walker you describe.',
     paragraphs: [
-      'Open Terrain Access from its row on the Analyse home, or from the command palette. With no terrain run yet, Run Terrain Access runs terrain first, then opens the lab. Enter the limits for the vehicle or walker: nothing is filled in for you.',
+      'Open Terrain Access from its row on the Analyse home, or from the command palette. With no terrain run yet, Run Terrain Access runs terrain first, then opens the lab. Enter the limits for the vehicle or walker, or start from the Walker, ATV or 4x4 vehicle example and check each value. An example is not a rating or a safety limit.',
       'The map colours each cell by the cost of its cheapest move. Set a start and a goal, then Find route shows the lowest-cost route. Inspect a cell to see why it is blocked. The result is a geometric screening, never a safety or passability guarantee.',
     ],
     actionIds: ['analyse.terrainAccess'],

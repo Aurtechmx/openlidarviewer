@@ -31,7 +31,7 @@ from the tree and fails when a cell drifts.
 | Render | `src/render` | ~83k | three.js/WebGPU scene, streaming scheduler, measurement tools, colour modes. |
 | Export / report | `src/export`, `src/report`, `src/convert` | ~20k | Studio exporters, PDF/report builders, batch conversion. |
 | Application services | `src/app` | ~32k | Composition root and the services that own shared state. |
-| UI | `src/ui` | ~45k | Panels, Inspector, Studio surfaces, onboarding. |
+| UI | `src/ui` | ~46k | Panels, Inspector, Studio surfaces, onboarding. |
 | Shell | `src/main.ts` | 4,244 | Wiring. A monolith under decomposition. |
 
 ## Composition root

@@ -29,12 +29,15 @@ those limits were the right ones for any real vehicle.
 ## Mobility profile
 
 `terrainAccessTypes.ts` defines `TerrainAccessProfile`. Every limit a run
-enforces is a value the caller declares explicitly, with no hidden default
-and no vehicle preset presented as validated. The Lab's own form
-(`terrainAccessProfileForm.ts`) ships with every field blank. There is no
-"load a preset" control, because a preset would smuggle unreviewed numbers
-into a run and imply they were checked against the reader's actual
-platform.
+enforces is a value the caller declares explicitly, with no hidden default.
+The Lab's own form (`terrainAccessProfileForm.ts`) opens with every field
+blank. Walker, ATV and 4x4 vehicle buttons above the fields fill every
+required field from `TERRAIN_ACCESS_EXAMPLES`, which states the basis of each
+figure. The values show in the fields, stay editable and are labelled as
+examples to confirm for the reader's own platform, not a rating or a safety
+limit. Picking one does not run anything. The applied profile records which
+example it started from and whether any limit or policy was changed
+(`origin` in the run record's profile, and the README's Profile section).
 
 The profile's grade fields are entered in the Lab as degrees, the unit a
 person reasons in, and converted once, in `parseTerrainAccessProfileForm`,
@@ -190,13 +193,13 @@ preview was built".
 ## The field simulation lab
 
 `src/ui/fieldSimulation/terrainAccessLab.ts` is opened from the command
-palette next to Flow Pulse. It has three stages: the blank mobility-profile
-form; the traversability-map preview, where start and goal are chosen on a
-keyboard- and pointer-accessible 2D result grid (arrow keys move, Enter or
-Space activates) and any cell can be inspected with "Why not?" without a
-route existing; and the completed run, with diagnostics, the route drawn on
-the grid and, where scene membership is supplied, in the 3D scene through
-`TerrainAccessOverlay`.
+palette next to Flow Pulse. It has three stages: the mobility-profile form,
+blank or filled from an example; the traversability-map preview, where start
+and goal are chosen on a keyboard- and pointer-accessible 2D result grid
+(arrow keys move, Enter or Space activates) and any cell can be inspected
+with "Why not?" without a route existing; and the completed run, with
+diagnostics, the route drawn on the grid and, where scene membership is
+supplied, in the 3D scene through `TerrainAccessOverlay`.
 
 ## Exports
 

@@ -17,7 +17,8 @@
  * A mobility profile alone already determines the traversability map (which
  * cells are eligible, and how costly each one is) — it says nothing about a
  * route until two endpoints are chosen. So the view has four states in order:
- *   1. the blank profile form (no preset — see `terrainAccessProfileForm.ts`);
+ *   1. the profile form, blank until the reader types the limits or picks
+ *      an example to start from (see `terrainAccessProfileForm.ts`);
  *   2. the traversability-map preview, once the profile parses and
  *      `prepareTerrainAccessPreview` accepts it, where start/goal are chosen
  *      on the result grid (keyboard: arrows + Enter/Space) and any cell can
@@ -81,6 +82,11 @@ import {
   describeProfileProblem,
   EMPTY_TERRAIN_ACCESS_PROFILE_FORM,
   parseTerrainAccessProfileForm,
+  profileOriginText,
+  TERRAIN_ACCESS_EXAMPLES,
+  TERRAIN_ACCESS_EXAMPLES_NOTE,
+  terrainAccessExampleForm,
+  type TerrainAccessExampleId,
   type TerrainAccessProfileFormValues,
 } from './terrainAccessProfileForm';
 import { loadTerrainAccessPackage, registerTerrainAccessOverlayInvalidator } from '../../lazyChunks';
@@ -422,8 +428,12 @@ export function renderTerrainAccessRunCard(outcome: TerrainAccessLabOutcome | nu
     return card;
   }
   const d = outcome.diagnostics;
+  const recordedProfile = outcome.record.parameters.profile as { readonly name?: unknown } | undefined;
+  const origin = profileOriginText(recordedProfile);
   card.append(
     el('div', { className: 'olv-story-headline olv-lab-caveat', text: TERRAIN_ACCESS_SCREENING }),
+    row('Profile', typeof recordedProfile?.name === 'string' ? recordedProfile.name : 'not recorded'),
+    ...(origin ? [row('Started from', origin)] : []),
     row('Route cells', String(d.cellCount)),
     row('Horizontal length', `${d.horizontalLengthM.toFixed(1)} m`),
     row('Ascent / descent', `${d.totalAscentM.toFixed(1)} m / ${d.totalDescentM.toFixed(1)} m`),
@@ -588,11 +598,18 @@ export const TERRAIN_CONFIDENCE_HINT =
   '0–100: how well ground returns support each cell (return density where measured, distance to data and local roughness where interpolated)';
 
 /** Build the mobility-profile form. Returns the element and a live-read accessor
- * for its current values — no field is pre-filled with a number (no preset). */
-export function buildProfileForm(onSubmit: () => void, blockedReason: string | null, aboveGroundAvailable = false): {
+ * for its current values. It opens blank; an example button fills every field
+ * visibly (still editable) and `announce` says so, without applying anything. */
+export function buildProfileForm(
+  onSubmit: () => void,
+  blockedReason: string | null,
+  aboveGroundAvailable = false,
+  announce: (message: string) => void = () => {},
+): {
   element: HTMLElement;
   values: () => TerrainAccessProfileFormValues;
   showProblems: (problems: readonly { field: string; reason: string }[]) => void;
+  applyExample: (id: TerrainAccessExampleId) => void;
 } {
   const state: { -readonly [K in keyof TerrainAccessProfileFormValues]: TerrainAccessProfileFormValues[K] } = {
     ...EMPTY_TERRAIN_ACCESS_PROFILE_FORM,
@@ -646,6 +663,55 @@ export function buildProfileForm(onSubmit: () => void, blockedReason: string | n
   );
 
   const problemsBox = el('div', { className: 'olv-ta-form-problems' });
+  const showProblems = (problems: readonly { field: string; reason: string }[]): void => {
+    problemsBox.replaceChildren();
+    if (problems.length === 0) return;
+    const list = el('ul', { className: 'olv-ta-form-problems-list' });
+    for (const p of problems) list.append(el('li', { text: describeProfileProblem(p) }));
+    problemsBox.append(list);
+  };
+
+  /** Show `values` in every input, toggle and policy control, and hold them as the form's state. */
+  const fill = (values: TerrainAccessProfileFormValues): void => {
+    Object.assign(state, values);
+    name.input.value = values.name;
+    longGrade.input.value = values.maxLongitudinalGradeDeg;
+    crossSlope.input.value = values.maxCrossSlopeDeg;
+    stepHeight.input.value = values.maxStepHeightM;
+    vehicleWidth.input.value = values.vehicleWidthM;
+    confidence.input.value = values.minimumTerrainConfidence;
+    ruggednessToggle.checked = values.maxRuggednessEnabled;
+    ruggedness.input.value = values.maxRuggedness;
+    ruggedness.input.disabled = !values.maxRuggednessEnabled;
+    lengthToggle.checked = values.vehicleLengthEnabled;
+    vehicleLength.input.value = values.vehicleLengthM;
+    vehicleLength.input.disabled = !values.vehicleLengthEnabled;
+    obstacleToggle.checked = aboveGroundAvailable && values.obstacleHeightEnabled;
+    obstacleHeight.input.value = values.obstacleHeightThresholdM;
+    obstacleHeight.input.disabled = !obstacleToggle.checked;
+    unknownPolicyCtl.sync();
+    evidenceGapCtl.sync();
+  };
+
+  // Picking an example fills the fields and nothing else: the reader still applies the profile.
+  const applyExample = (id: TerrainAccessExampleId): void => {
+    fill(terrainAccessExampleForm(id));
+    showProblems([]);
+    const label = TERRAIN_ACCESS_EXAMPLES.find((e) => e.id === id)?.label ?? id;
+    announce(`${label} example filled in. Check each value, then apply the profile.`);
+  };
+  const exampleRow = el('div', { className: 'olv-ta-examples-row', ariaLabel: 'Example profiles' },
+    TERRAIN_ACCESS_EXAMPLES.map((ex) => {
+      const b = button(ex.label, 'olv-ta-example', `Fill the fields with the ${ex.label} example. Check each value before you apply the profile.`);
+      b.addEventListener('click', () => applyExample(ex.id));
+      return b;
+    }));
+  exampleRow.setAttribute('role', 'group');
+  const examples = el('div', { className: 'olv-ta-examples' }, [
+    exampleRow,
+    el('p', { className: 'olv-ta-examples-note', text: TERRAIN_ACCESS_EXAMPLES_NOTE }),
+  ]);
+
   const submitBtn = button('Apply profile', 'olv-ta-form-submit', 'Apply this traversability profile to the current run.');
   submitBtn.addEventListener('click', () => {
     state.name = name.input.value;
@@ -687,7 +753,8 @@ export function buildProfileForm(onSubmit: () => void, blockedReason: string | n
     ]),
   ]);
   const element = el('form', { className: 'olv-ta-form' }, [
-    el('p', { className: 'olv-ta-form-intro', text: 'Required. Nothing is filled in for you: enter the limits for the vehicle or walker you have in mind.' }),
+    el('p', { className: 'olv-ta-form-intro', text: 'Required. Enter the limits for the vehicle or walker you have in mind, or start from an example.' }),
+    examples,
     name.wrap, longGrade.wrap, crossSlope.wrap, stepHeight.wrap, vehicleWidth.wrap, confidence.wrap,
     advanced,
     problemsBox,
@@ -702,13 +769,8 @@ export function buildProfileForm(onSubmit: () => void, blockedReason: string | n
   return {
     element,
     values: () => ({ ...state }),
-    showProblems: (problems) => {
-      problemsBox.replaceChildren();
-      if (problems.length === 0) return;
-      const list = el('ul', { className: 'olv-ta-form-problems-list' });
-      for (const p of problems) list.append(el('li', { text: describeProfileProblem(p) }));
-      problemsBox.append(list);
-    },
+    showProblems,
+    applyExample,
   };
 }
 
@@ -1104,7 +1166,7 @@ export function mountTerrainAccessInteractive(
       preview = terrainAccessFailure(err);
     }
     renderPreview();
-  }, blocker && input ? `Apply profile is off. ${blocker.note}` : null, terrainAccessAboveGroundAvailable(input));
+  }, blocker && input ? `Apply profile is off. ${blocker.note}` : null, terrainAccessAboveGroundAvailable(input), announce);
 
   function renderRoot(): void {
     chip.set(terrainAccessChipFacts(input, outcome));

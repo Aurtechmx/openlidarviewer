@@ -31,7 +31,7 @@
  * Pure-data: returns ZIP bytes; no DOM.
  */
 
-import { safeEntryName } from './safeText';
+import { safeEntryName, singleLine } from './safeText';
 import { SOURCE_NOT_SUPPLIED_NOTE, sourceSha256Text, type ExportDigests } from '../science/exportDigestRecord';
 import { crsOriginLine } from '../science/crsOrigin';
 import { writeAsciiGrid } from '../terrain/export/demAsciiGrid';
@@ -275,6 +275,19 @@ function constraintLines(constraints: unknown): string[] {
     .map(([k, v]) => `  ${TERRAIN_ACCESS_CONSTRAINT_LABEL[k] ?? k}   ${String(v)}`);
 }
 
+/**
+ * The README's profile lines: its name, and whether it started from one of
+ * the Lab's examples (`TerrainAccessProfile.origin`) and was then edited.
+ */
+function profileLines(profile: unknown): string[] {
+  const p = (profile ?? {}) as { readonly name?: unknown; readonly origin?: { readonly example?: unknown; readonly edited?: unknown } };
+  const name = typeof p.name === 'string' ? singleLine(p.name) : 'not recorded';
+  const origin = p.origin && typeof p.origin.example === 'string'
+    ? `example:${singleLine(p.origin.example)}, ${p.origin.edited === true ? 'values edited before the run' : 'no value edited'}`
+    : 'a blank form, values entered by hand';
+  return [`  Name           ${name}`, `  Started from   ${origin}`];
+}
+
 /** The reproduction steps and honest limitations a reader needs, per §22/§23. */
 function buildTerrainAccessReadme(result: TerrainAccessResult, opts: {
   readonly basename: string;
@@ -339,6 +352,9 @@ function buildTerrainAccessReadme(result: TerrainAccessResult, opts: {
     'Method',
     `  Model          ${r.model.id}@${r.model.version}`,
     `  Methods run    ${r.methods.map((id) => methodTag(methodRef(id))).join(', ')}`,
+    '',
+    'Profile',
+    ...profileLines(r.parameters.profile),
     '',
     'Route',
     `  Cells                  ${d.cellCount}`,
