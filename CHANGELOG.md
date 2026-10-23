@@ -72,6 +72,7 @@ The format is based on Keep a Changelog and the project follows Semantic Version
 
 ### Fixed
 
+- A Flow Pulse run on a sampled scan records its input as sampled, with the sample caveat, rather than as full coverage. The figure under the grid reads Surface (cells with a height) instead of Routed, and the outlet note says an edge outlet can be where a stream enters.
 - Contour labels on the map sheet sit centred on their line at any angle and are kept apart by the space they take once rotated, so a steep label no longer drifts off its contour or covers a neighbour.
 - The terrain report no longer says every grid cell without ground returns will be interpolated: cells outside the survey stay empty, and the coverage rows give the split.
 - The Profile Workbench plots heights in the source's vertical coordinate, as the Measurements chart and the profile sheet do; the point card's coordinates read in the same frame, and a chainage label that would run into the axis title is left out.

@@ -185,7 +185,14 @@ export function runLabFlowPulse(
   input: FlowPulseLabInput | null,
   conditioning: FlowConditioning = FLOW_PULSE_DEFAULTS.conditioning,
 ): FlowPulseResult | FlowRefusal {
-  const params: FlowPulseParams = { ...FLOW_PULSE_DEFAULTS, conditioning };
+  // A display sample's DTM spans the extent, so its grid reads 'full'; the
+  // scan's own data basis says what was read.
+  const sampled = input?.sourceInterpretation?.dataBasis === 'sampled';
+  const params: FlowPulseParams = {
+    ...FLOW_PULSE_DEFAULTS,
+    conditioning,
+    ...(sampled ? { inputCoverage: 'sampled' as const } : {}),
+  };
   if (!input) {
     return runFlowPulse(null, NO_FRAME, params, NO_IDENTITY);
   }
@@ -336,7 +343,7 @@ export function renderFlowPulseLab(outcome: FlowPulseResult | FlowRefusal, flat 
   const metric = mayReportMetricArea(outcome.basis) && s.maxContributingAreaM2 != null;
   card.append(
     el('div', { className: 'olv-story-headline', text: 'D8 flow routing over the analysed DTM' }),
-    row('Cells routed', `${s.readableCells.toLocaleString('en-US')} of ${s.cells.toLocaleString('en-US')}`),
+    row('Cells read', `${s.readableCells.toLocaleString('en-US')} of ${s.cells.toLocaleString('en-US')}`),
     row('Outlets', String(s.outletCount)),
     row('Sinks', String(s.sinkCount)),
     row('Flats', String(s.flatCount)),
@@ -364,7 +371,7 @@ export function flowPulseStats(outcome: FlowPulseResult): HTMLElement {
   const s = outcome.summary;
   const area = mayReportMetricArea(outcome.basis) ? s.maxContributingAreaM2 : null;
   return labStatRow('Flow figures', [
-    { label: 'Routed', value: s.readableCells.toLocaleString('en-US'), unit: 'cells' },
+    { label: 'Surface', value: s.readableCells.toLocaleString('en-US'), unit: 'cells' },
     { label: 'Outlets', value: s.outletCount.toLocaleString('en-US') },
     area != null
       ? { label: 'Largest drainage', value: area >= 100 ? Math.round(area).toLocaleString('en-US') : area.toFixed(1), unit: 'm²' }
@@ -395,7 +402,7 @@ export function flowTerrainBanner(input: FlowPulseLabInput): HTMLElement | null 
 /** Plain lines beside a Flow Pulse result. */
 export const FLOW_HOW_TO_READ: readonly string[] = [
   'Each square is one ground cell. Water in a cell moves to the neighbour with the steepest drop.',
-  'Outlets are where flow leaves the surveyed area. Sinks are low spots where it stops.',
+  'Outlets are where flow leaves the surface at its edge, which can be where a stream enters it. Sinks are low spots where it stops.',
   'Upstream counts are numbers of cells, not volumes of water or rainfall.',
 ];
 

@@ -147,6 +147,8 @@ export interface FlowPulseParams {
   readonly maxCells: number;
   /** The caller's declaration about Withheld points behind the DTM. */
   readonly withheldExcluded: boolean | null;
+  /** The caller's declaration of how much of the source the DTM read; absent leaves the grid's own. */
+  readonly inputCoverage?: DtmGrid['coverageMode'];
 }
 
 /**
@@ -250,6 +252,7 @@ export function runFlowPulse(
   const { grid, basis } = terrainDtmToFlowGrid(dtm, scale, {
     interpolated: params.interpolated,
     withheldExcluded: params.withheldExcluded,
+    ...(params.inputCoverage ? { coverage: params.inputCoverage } : {}),
   });
 
   if (basis.measuredCells === 0) {

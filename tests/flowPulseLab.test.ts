@@ -47,6 +47,19 @@ describe('a completed run', () => {
     expect(text).toContain('3 cells');
   });
 
+  it('records a sampled scan as sampled, with the sample caveat', () => {
+    // A display sample's DTM spans the extent, so its grid alone reads 'full'.
+    const sampled = runLabFlowPulse(input({ sourceInterpretation: { dataBasis: 'sampled' } as never }));
+    expect(sampled.ok).toBe(true);
+    if (!sampled.ok) return;
+    expect(sampled.record.source.basis.coverage).toBe('sampled');
+    expect(sampled.record.source.basis.complete).toBe(false);
+    expect(sampled.limitations.some((l) => /built from a sample of the source/.test(l))).toBe(true);
+    const whole = runLabFlowPulse(input());
+    if (!whole.ok) throw new Error('the fixture must route');
+    expect(whole.record.source.basis.coverage).not.toBe('sampled');
+  });
+
   it('reports square metres once the scale is resolved', () => {
     const text = textOf(renderFlowPulseLab(runLabFlowPulse(input())));
     expect(text).toContain('m²');

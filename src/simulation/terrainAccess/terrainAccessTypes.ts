@@ -239,13 +239,13 @@ export function validateProfile(profile: TerrainAccessProfile): readonly Profile
  */
 export const TERRAIN_ACCESS_NEIGHBOURS: readonly (readonly [number, number])[] = Object.freeze([
   [1, 0],   // E
-  [1, 1],   // SE
-  [0, 1],   // S
-  [-1, 1],  // SW
+  [1, 1],   // NE
+  [0, 1],   // N
+  [-1, 1],  // NW
   [-1, 0],  // W
-  [-1, -1], // NW
-  [0, -1],  // N
-  [1, -1],  // NE
+  [-1, -1], // SW
+  [0, -1],  // S
+  [1, -1],  // SE
 ]);
 
 /** Reasons a cell (node) is hard-blocked regardless of the direction entered. */
