@@ -182,21 +182,22 @@ export class ProjectCard {
     if (this._timer !== null) clearTimeout(this._timer);
     this._onDismiss = info.onDismiss ?? null;
     // On a phone the card shares one lane with the other transient cards, and
-    // the first touch on the scan dismisses it; its timer starts once shown.
+    // the first touch anywhere but the card dismisses it, so what the user does
+    // next is not held behind it; its timer starts once shown.
     appTransientLane().claim(this.element, () => {
       if (this._timer !== null) clearTimeout(this._timer);
       this._timer = window.setTimeout(() => this._dismiss(), DISMISS_MS);
       if (!appTransientLane().active() || typeof document === 'undefined') return;
       this._dropGesture();
       const onGesture = (e: Event): void => {
-        if (e.target instanceof HTMLCanvasElement) this._dismiss();
+        if (!(e.target instanceof Node && this.element.contains(e.target))) this._dismiss();
       };
       document.addEventListener('pointerdown', onGesture, true);
       this._gesture = onGesture;
     }, { first: true });
   }
 
-  /** The canvas-gesture listener that dismisses the card on a phone. */
+  /** The touch listener that dismisses the card on a phone. */
   private _gesture: ((e: Event) => void) | null = null;
 
   private _dropGesture(): void {
