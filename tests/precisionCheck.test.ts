@@ -58,7 +58,7 @@ describe('the precision check', () => {
   it('certifies a loaded scan within 1 mm at this view, and says so in one sentence', () => {
     const r = readPrecision(deps(), 0.001);
     expect(r.state).toBe('PASS');
-    expect(r.line).toMatch(/^Rendering error at most .* mm at this view, inside the 1 mm limit\.$/);
+    expect(r.line).toMatch(/^Rendering error at most .* mm at this view \(round-to-nearest; .* mm worst case under the spec\), inside the 1 mm limit\.$/);
     expect(r.diagnostic?.boundMetres).toBeLessThan(0.001);
   });
 
@@ -80,12 +80,21 @@ describe('the precision certificate', () => {
     expect(json).not.toBeNull();
     const c = JSON.parse(json!);
     expect(c.kind).toBe('olv.draw-precision-certificate');
+    expect(c.version).toBe(2);
     expect(c.method).toBe('olv.render.draw-precision-bound@1');
     expect(c.result.boundState).toBe('PASS_BOUND');
     expect(c.requirement.toleranceMetres).toBe(0.001);
-    expect(c.draw.contract).toBe('rn');
+    expect(c.requirement.checkedUnder).toBe('rn');
+    expect(c.result.bounds.map((b: { contract: string }) => b.contract)).toEqual(['rn', 'faithful']);
+    expect(c.result.bounds[0].evidence.boundState).toBe('PASS_BOUND');
+    expect(c.result.bounds[1].boundMetres).toBeGreaterThan(c.result.bounds[0].boundMetres);
+    expect(c.holdsFor).toMatch(/^The 4000 points drawn, from this camera/);
+    // The translated view puts the camera at (500, 500, 800) in local coordinates.
+    expect(c.camera.positionInScanCoordinates[0]).toBeCloseTo(ORIGIN[0] + 500, 6);
+    expect(c.camera.positionInScanCoordinates[2]).toBeCloseTo(ORIGIN[2] + 800, 6);
+    expect(c.dataset.sourceSha256).toBeNull();
     expect(c.draw.backend).toBe('webgpu');
-    expect(c.draw.modelView64).toHaveLength(16);
+    expect(c.camera.modelView64).toHaveLength(16);
     expect(c.frame.crs).toBe(32633);
     expect(c.frame.origin).toEqual(ORIGIN);
     expect(c.dataset.name).toBe('tile.las');

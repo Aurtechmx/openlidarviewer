@@ -76,7 +76,7 @@
  * how any of them is computed.
  */
 export const QUALITY_SCOPE_NOTE =
-  'Display and streaming only — it changes how the scan is drawn, not how '
+  'Display and streaming only. It changes how the scan is drawn, not how '
   + 'anything is computed from it. On a streamed scan it also sets the '
   + 'resident-point budget, so a resident-only measurement, analysis or export '
   + 'reads whatever is resident when it runs.';

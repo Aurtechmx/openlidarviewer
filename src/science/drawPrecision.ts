@@ -42,7 +42,7 @@ export const DRAW_PRECISION_METHOD_ID = 'olv.render.draw-precision-bound';
 export const DRAW_PRECISION_TAU_METRES = 1e-3;
 
 /** The arithmetic contract the bound is stated under (round to nearest, ties to even). */
-export const DRAW_PRECISION_CONTRACT = 'rn';
+export const DRAW_PRECISION_CONTRACT: DrawContract = 'rn';
 
 /** The expression name passed for a draw path whose shader is not verified. */
 export const UNVERIFIED_EXPRESSION = 'olv-unverified-point-path';
@@ -101,6 +101,21 @@ export interface DrawPrecisionDiagnostic {
   readonly tileBasis: DrawTile['basis'];
   /** Why the state is NOT_TESTED or UNGRADED; null otherwise. */
   readonly reason: string | null;
+  /** The arithmetic contract the bound is stated under. */
+  readonly contract: DrawContract;
+  /** The checker's own evidence record for this draw, when it evaluated one. */
+  readonly evidence: DrawEvidence | null;
+}
+
+/** Round to nearest (`rn`), or the looser `faithful` rounding the WGSL and GLSL ES specs guarantee. */
+export type DrawContract = 'rn' | 'faithful';
+
+/** The checker's evidence states for one draw (the paper's Table 3). */
+export interface DrawEvidence {
+  readonly boundState: string;
+  readonly measuredState: string;
+  readonly verificationState: string;
+  readonly clean: boolean;
 }
 
 /** The expression a draw path evaluates, or the unverified marker. */
@@ -159,19 +174,20 @@ export function evaluateDrawPrecision(
   view: DrawPrecisionView,
   unit: DrawPrecisionUnit,
   tauMetres: number = DRAW_PRECISION_TAU_METRES,
+  contract: DrawContract = DRAW_PRECISION_CONTRACT,
 ): DrawPrecisionDiagnostic {
   const expression = shaderExpressionFor(view.backend, view.path);
   const f = unit.linearUnitToMetres;
   const mixedUnits = unit.verticalUnitToMetres !== undefined && unit.verticalUnitToMetres !== f;
   const graded = unit.linearUnitKnown && Number.isFinite(f) && f > 0 && !mixedUnits;
-  const base = { expression, backend: view.backend, tileBasis: tile.basis };
+  const base = { expression, backend: view.backend, tileBasis: tile.basis, contract, evidence: null };
   let res;
   try {
     res = preflightDraw({
       modelView64: view.modelView64,
       tile,
       tau: graded ? tauMetres / f : null,
-      contract: DRAW_PRECISION_CONTRACT,
+      contract,
       expression,
     });
   } catch (e) {
@@ -183,9 +199,13 @@ export function evaluateDrawPrecision(
       : (res.unsupportedReason ?? 'the draw is outside the checker domain');
     return { ...base, state: 'NOT_TESTED', boundSourceUnits: null, boundMetres: null, tauMetres: null, reason };
   }
+  const evidence: DrawEvidence = {
+    boundState: res.boundState, measuredState: res.measuredState, verificationState: res.verificationState, clean: res.clean,
+  };
   if (!graded) {
     return {
       ...base,
+      evidence,
       state: 'UNGRADED',
       boundSourceUnits: res.bound,
       boundMetres: null,
@@ -195,6 +215,7 @@ export function evaluateDrawPrecision(
   }
   return {
     ...base,
+    evidence,
     state: res.boundState === 'PASS_BOUND' ? 'PASS' : 'NOT_CERTIFIED',
     boundSourceUnits: res.bound,
     boundMetres: res.bound * f,

@@ -16,7 +16,7 @@ test('the Performance panel checks precision at this view and copies a certifica
   await expect(section).toBeVisible({ timeout: 10_000 });
   await expect(section).toContainText('Precision at this view');
   const line = section.locator('.olv-precision-line');
-  await expect(line).toHaveText(/^Rendering error at most .* at this view, inside the 1 mm limit\.$/);
+  await expect(line).toHaveText(/^Rendering error at most .* at this view \(round-to-nearest; .* worst case under the spec\), inside the 1 mm limit\.$/);
   await expect(line).toHaveAttribute('aria-live', 'polite');
   await expect(section.locator('.olv-chip', { hasText: '1 mm' })).toHaveAttribute('aria-pressed', 'true');
 
@@ -35,6 +35,9 @@ test('the Performance panel checks precision at this view and copies a certifica
     const certificate = JSON.parse(await page.evaluate(() => navigator.clipboard.readText()));
     expect(certificate.kind).toBe('olv.draw-precision-certificate');
     expect(certificate.result.boundState).toBe('PASS_BOUND');
+    expect(certificate.result.bounds.map((b: { contract: string }) => b.contract)).toEqual(['rn', 'faithful']);
+    expect(certificate.camera.positionInScanCoordinates).toHaveLength(3);
+    expect(certificate.dataset.sourceSha256).toMatch(/^[0-9a-f]{64}$/);
     expect(certificate.requirement.toleranceMetres).toBe(0.1);
     expect(certificate.scopeDigest).toMatch(/^[0-9a-f]{64}$/);
   } else {

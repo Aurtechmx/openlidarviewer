@@ -43,7 +43,7 @@ import {
   PRECISION_METHOD_NOTE,
   PRECISION_SCOPE,
   PRECISION_TOLERANCES,
-  precisionCertificate,
+  precisionCertificateWithHash,
   readPrecision,
   type PrecisionDeps,
 } from '../app/precisionCheck';
@@ -299,7 +299,7 @@ export class QualityPanel {
     const deps = this._callbacks.precision;
     if (!deps) return;
     this.refreshPrecision();
-    const json = precisionCertificate(deps, this._tolerance);
+    const json = await precisionCertificateWithHash(deps, this._tolerance, () => this._note('Checking the source file for the certificate…'));
     if (!json) return;
     try {
       await navigator.clipboard.writeText(json);
