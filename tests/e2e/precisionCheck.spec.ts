@@ -25,6 +25,9 @@ test('the Performance panel checks precision at this view and copies a certifica
   await expect(section.locator('.olv-chip', { hasText: '10 cm' })).toHaveAttribute('aria-pressed', 'true');
   await section.getByRole('button', { name: 'Check precision' }).click();
   await expect(line).toContainText('inside the 10 cm limit');
+  // The click says what it checked and when.
+  await expect(section.locator('.olv-precision-note')).toHaveText(/^Checked [\d,]+ points from this camera at .+\.$/);
+  await expect(line).toHaveClass(/is-checked/);
 
   const copy = section.getByRole('button', { name: 'Copy certificate' });
   await expect(copy).toBeEnabled();

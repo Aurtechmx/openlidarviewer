@@ -70,6 +70,8 @@ export interface PrecisionReading {
   /** One plain sentence for the panel. */
   readonly line: string;
   readonly diagnostic: DrawPrecisionDiagnostic | null;
+  /** The points the bound covers: those drawn for the open scan. */
+  readonly pointsDrawn: number;
 }
 
 interface Evaluated {
@@ -140,8 +142,8 @@ export function precisionLine(d: DrawPrecisionDiagnostic, tauMetres: number, fai
 /** Check the active scan at the current view against `tauMetres`. */
 export function readPrecision(deps: PrecisionDeps, tauMetres: number): PrecisionReading {
   const e = evaluate(deps, tauMetres);
-  if (typeof e === 'string') return { state: 'NO_SCAN', line: e, diagnostic: null };
-  return { state: e.diagnostic.state, line: precisionLine(e.diagnostic, tauMetres, e.faithful), diagnostic: e.diagnostic };
+  if (typeof e === 'string') return { state: 'NO_SCAN', line: e, diagnostic: null, pointsDrawn: 0 };
+  return { state: e.diagnostic.state, line: precisionLine(e.diagnostic, tauMetres, e.faithful), diagnostic: e.diagnostic, pointsDrawn: e.cloud.pointCount };
 }
 
 /** The evidence state as the paper's Table 3 names it. */

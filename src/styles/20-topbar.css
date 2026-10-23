@@ -168,6 +168,13 @@
 .olv-quality-subtitle { font-weight: 600; color: var(--text); }
 .olv-precision-line { color: var(--text); line-height: 1.45; }
 .olv-precision-line[data-state="NOT_CERTIFIED"] { color: var(--warn); }
+/* A click on Check precision briefly marks the line it confirmed. */
+.olv-precision-line.is-checked { animation: olv-precision-checked 1.2s ease-out; }
+@keyframes olv-precision-checked {
+  from { background: var(--accent-soft); box-shadow: 0 0 0 2px var(--accent); }
+  to { background: transparent; box-shadow: 0 0 0 2px transparent; }
+}
+@media (prefers-reduced-motion: reduce) { .olv-precision-line.is-checked { animation: none; } }
 .olv-precision-actions { display: flex; flex-wrap: wrap; gap: var(--space-sm); }
 .olv-precision-check, .olv-precision-copy {
   color: var(--text-dim); background: transparent;

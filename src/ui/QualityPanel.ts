@@ -46,6 +46,7 @@ import {
   precisionCertificateWithHash,
   readPrecision,
   type PrecisionDeps,
+  type PrecisionReading,
 } from '../app/precisionCheck';
 
 /** The streaming presets, in slider order. */
@@ -201,7 +202,17 @@ export class QualityPanel {
       tip: 'Bound each point’s rendering error against its reference position, computed in double precision from the stored coordinates, before projection.',
     }) as HTMLButtonElement;
     checkButton.type = 'button';
-    checkButton.addEventListener('click', () => this.refreshPrecision());
+    // The line follows the camera on its own; a click is the reader asking for
+    // this view's check, so it says what it covered and when.
+    checkButton.addEventListener('click', () => {
+      const reading = this.refreshPrecision();
+      if (!reading || reading.diagnostic === null) return;
+      this._precisionLine.classList.remove('is-checked');
+      void this._precisionLine.offsetWidth; // restart the highlight
+      this._precisionLine.classList.add('is-checked');
+      const time = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+      this._note(`Checked ${formatCount(reading.pointsDrawn)} points from this camera at ${time}.`);
+    });
     this._copyButton = el('button', {
       className: 'olv-precision-copy', text: 'Copy certificate',
       tip: 'Copy a record of this check: the bound, the limit, and the data, view and shader it covers.',
@@ -279,9 +290,9 @@ export class QualityPanel {
   }
 
   /** Check the active scan at the current view against the chosen limit. */
-  refreshPrecision(): void {
+  refreshPrecision(): PrecisionReading | null {
     const deps = this._callbacks.precision;
-    if (!deps) return;
+    if (!deps) return null;
     for (const [metres, chip] of this._toleranceChips) {
       const active = metres === this._tolerance;
       chip.classList.toggle('olv-chip-active', active);
@@ -292,6 +303,7 @@ export class QualityPanel {
     if (this._precisionLine.textContent !== reading.line) this._precisionLine.textContent = reading.line;
     this._precisionLine.dataset.state = reading.state;
     this._copyButton.disabled = reading.diagnostic === null;
+    return reading;
   }
 
   /** Copy the certificate, or save it as a file where the clipboard is refused. */
