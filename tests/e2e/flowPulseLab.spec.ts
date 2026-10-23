@@ -81,16 +81,17 @@ test('run, conditioning, click-to-pulse, catchment, keyboard path, and the overl
   await expect(labPage.locator('.olv-story-card')).toContainText('D8 flow routing over the analysed DTM');
   await expect(labPage.locator('.olv-story-card')).toContainText('olv.simulation.terrain-flow.d8');
 
-  // CONDITIONING: raw is the default, both options offered, raw is pressed.
+  // CONDITIONING: Priority-Flood is the default, both options offered, it is pressed.
   const rawBtn = labPage.locator('.olv-flow-cond-btn', { hasText: 'Raw terrain' });
   const floodBtn = labPage.locator('.olv-flow-cond-btn', { hasText: 'Priority-Flood conditioned' });
-  await expect(rawBtn).toHaveAttribute('aria-pressed', 'true');
-  await expect(floodBtn).toHaveAttribute('aria-pressed', 'false');
+  await expect(floodBtn).toHaveAttribute('aria-pressed', 'true');
+  await expect(rawBtn).toHaveAttribute('aria-pressed', 'false');
+  await expect(labPage.locator('.olv-story-card')).toContainText('priority-flood');
   await expect(floodBtn).toHaveAttribute('data-tip', 'Fill closed hollows first, so most flow reaches an outlet; flats may remain.');
   await expect(labPage.locator('.olv-flow-cond-hint')).toContainText('Use Raw to see where water pools');
 
   // Switching conditioning re-runs the model: the pressed state flips and the
-  // record's own method list changes to name Priority-Flood.
+  // record's own method list no longer names Priority-Flood.
   await page.evaluate(() => {
     const w = window as unknown as { __emblemSeen: string | null };
     w.__emblemSeen = null;
@@ -102,10 +103,10 @@ test('run, conditioning, click-to-pulse, catchment, keyboard path, and the overl
     });
     obs.observe(document.body, { subtree: true, childList: true });
   });
-  await floodBtn.click();
-  await expect(floodBtn).toHaveAttribute('aria-pressed', 'true', { timeout: 10_000 });
-  await expect(rawBtn).toHaveAttribute('aria-pressed', 'false');
-  await expect(labPage.locator('.olv-story-card')).toContainText('priority-flood', { timeout: 10_000 });
+  await rawBtn.click();
+  await expect(rawBtn).toHaveAttribute('aria-pressed', 'true', { timeout: 10_000 });
+  await expect(floodBtn).toHaveAttribute('aria-pressed', 'false');
+  await expect(labPage.locator('.olv-story-card')).not.toContainText('priority-flood', { timeout: 10_000 });
   expect(await page.evaluate(() => (window as unknown as { __emblemSeen: string | null }).__emblemSeen), 'the emblem waited while it ran').toBe('true');
   await expect(labPage.locator('.olv-flow-busy')).toHaveCount(0);
 
@@ -151,8 +152,8 @@ test('run, conditioning, click-to-pulse, catchment, keyboard path, and the overl
 
   // Switching conditioning re-runs the model and clears the trace and
   // catchment drawn above; the live region says so.
-  await rawBtn.click();
-  await expect(rawBtn).toHaveAttribute('aria-pressed', 'true', { timeout: 10_000 });
+  await floodBtn.click();
+  await expect(floodBtn).toHaveAttribute('aria-pressed', 'true', { timeout: 10_000 });
   await expect(labPage.locator('.olv-flow-live')).toHaveText('Flow Pulse run complete. The traced path and catchment were cleared.', { timeout: 10_000 });
 
   // ACCUMULATION OVERLAY: offered (the Analyse panel wired real scene

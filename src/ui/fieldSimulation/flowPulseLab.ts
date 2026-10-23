@@ -179,8 +179,7 @@ const NO_IDENTITY = {
 
 /**
  * Run Flow Pulse on the analysed surface, or report that there is none.
- * `conditioning` defaults to {@link FLOW_PULSE_DEFAULTS}'s (raw), so an
- * existing single-argument call keeps its prior behaviour exactly.
+ * `conditioning` defaults to {@link FLOW_PULSE_DEFAULTS}'s (Priority-Flood).
  */
 export function runLabFlowPulse(
   input: FlowPulseLabInput | null,

@@ -114,14 +114,14 @@ describe('the grid digest', () => {
 });
 
 describe('the conditioning control', () => {
-  it('defaults to raw — an unspecified second argument matches the prior single-argument call', () => {
+  it('defaults to Priority-Flood — an unspecified second argument matches an explicit one', () => {
     const withDefault = runLabFlowPulse(input());
-    const explicitRaw = runLabFlowPulse(input(), 'raw');
+    const explicit = runLabFlowPulse(input(), 'priority-flood');
     expect(withDefault.ok).toBe(true);
-    expect(explicitRaw.ok).toBe(true);
-    if (!withDefault.ok || !explicitRaw.ok) return;
-    expect(withDefault.record.parameters.conditioning).toBe('raw');
-    expect(withDefault.record.digest).toBe(explicitRaw.record.digest);
+    expect(explicit.ok).toBe(true);
+    if (!withDefault.ok || !explicit.ok) return;
+    expect(withDefault.record.parameters.conditioning).toBe('priority-flood');
+    expect(withDefault.record.digest).toBe(explicit.record.digest);
   });
 
   it('names the method actually used: raw omits Priority-Flood, conditioned includes it', () => {

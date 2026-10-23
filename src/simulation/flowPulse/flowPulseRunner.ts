@@ -149,9 +149,14 @@ export interface FlowPulseParams {
   readonly withheldExcluded: boolean | null;
 }
 
-/** Defaults a panel can offer, all of them declared rather than hidden. */
+/**
+ * Defaults a panel can offer, all of them declared rather than hidden.
+ * Conditioning defaults to Priority-Flood: on a LiDAR surface raw D8 stops in
+ * every small hollow, so the first view a reader sees is the connected
+ * drainage. Raw stays one choice away and every record names which was used.
+ */
 export const FLOW_PULSE_DEFAULTS: FlowPulseParams = Object.freeze({
-  conditioning: 'raw',
+  conditioning: 'priority-flood',
   routing: 'd8',
   interpolated: 'route',
   fillEpsilon: 0.001,
