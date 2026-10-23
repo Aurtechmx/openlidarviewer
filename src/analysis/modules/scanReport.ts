@@ -349,6 +349,7 @@ export const scanReport: AnalysisModule = {
         linearUnitKnown: basis.unitKnown,
         linearUnitToMetres: ctx.linearUnitToMetres,
         verticalUnitToMetres: zUp ? ctx.verticalUnitToMetres : undefined,
+        verticalScaleInvalid: ctx.verticalScaleState === 'invalid',
       },
     });
     // Both rows come from the one formatter the streaming report also uses, so
