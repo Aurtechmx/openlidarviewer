@@ -16,7 +16,9 @@ async function openScan(page: Page, size: { width: number; height: number }): Pr
   await page.goto('/?test=1');
   await dropDenseGridPly(page);
   await expect(page.locator('.olv-empty')).toBeHidden({ timeout: 30_000 });
-  await expect(bar(page)).toBeVisible({ timeout: 10_000 });
+  // On a phone with the sheet collapsed, a mode home's location is named by
+  // the active tab and its line is not drawn; the line still holds the path.
+  await expect(bar(page).first()).toHaveAttribute('data-path', /\S/, { timeout: 10_000 });
 }
 
 test.describe('mode home and Continue', () => {
