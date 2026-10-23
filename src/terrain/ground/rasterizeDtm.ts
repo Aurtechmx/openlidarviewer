@@ -306,7 +306,9 @@ export function rasterizeDtm(
   }
   if (filledCellCount < nCells) {
     warnings.push(
-      `${nCells - filledCellCount} of ${nCells} cells have no ground data (will need interpolation)`,
+      // Only the fill knows the footprint: a cell here may be a gap it fills
+      // or ground outside the survey it leaves empty, so neither is claimed.
+      `${(nCells - filledCellCount).toLocaleString('en-US')} of ${nCells.toLocaleString('en-US')} grid cells hold no ground returns`,
     );
   }
 

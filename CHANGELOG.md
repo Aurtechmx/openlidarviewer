@@ -72,6 +72,7 @@ The format is based on Keep a Changelog and the project follows Semantic Version
 
 ### Fixed
 
+- The terrain report no longer says every grid cell without ground returns will be interpolated: cells outside the survey stay empty, and the coverage rows give the split.
 - The Profile Workbench plots heights in the source's vertical coordinate, as the Measurements chart and the profile sheet do; the point card's coordinates read in the same frame, and a chainage label that would run into the axis title is left out.
 - The source file's checksum, which every report and terrain export records, is computed in the background once a scan opens and about a sixth faster, so the first contour map or report of a large file no longer waits for it. While it is still running, the export says so: the Report PDF button reads "Building report…" and the contour map dialog "Checking the source file…".
 - On a phone, a page inside the sheet shows one Back: the sheet's location line carries it, so the page's own Back is hidden when both lead to the same place.
