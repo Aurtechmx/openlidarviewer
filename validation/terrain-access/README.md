@@ -1,8 +1,9 @@
 # Terrain Access: cross-implementation check
 
 Horn slope/aspect, Vector Ruggedness Measure, hard eligibility, width
-dilation, directional grade and least-cost routing are computed twice here,
-and the two results are compared on a small set of frozen terrains.
+dilation, directional grade, the step of a move and least-cost routing are
+computed twice here, and the two results are compared on a small set of
+frozen terrains.
 
 ## What is compared
 
@@ -26,6 +27,11 @@ definitions rather than from the TypeScript:
   band search (`footprintClearance.ts`).
 - Directional longitudinal grade and cross slope, the gradient decomposition
   `src/simulation/terrainAccess/directionalGrade.ts` documents.
+- The step of a move, the definition `src/simulation/terrainAccess/localStep.ts`
+  documents: how far the move's rise falls outside the bracket of the
+  one-sided rises just behind its start and just past its end along the same
+  heading, and for a diagonal move the easier of its two paths through the
+  corner cells. A smooth slope has no step; a ledge has its own height.
 - Least-cost routing, by Dijkstra, where the viewer runs A* with a
   planimetric-distance heuristic and a different tie-break rule. Two
   different search algorithms over the same declared cost graph; if they

@@ -59,6 +59,13 @@ import { methodRef, methodTag } from '../science/methodRegistry';
 import { BUILD_IDENTITY, buildIdentityProvenance, type BuildIdentity } from '../build/buildIdentity';
 import type { FlowPulseResult } from '../simulation/flowPulse/flowPulseRunner';
 import type { FlowGrid } from '../simulation/flowPulse/flowTypes';
+import { edgeContamination, EDGE_CONTAMINATED_NOTE } from '../simulation/flowPulse/edgeContamination';
+import { POUR_POINT_SNAP_RADIUS_CELLS } from '../simulation/flowPulse/pourPointSnap';
+import {
+  areaLimitWarning, formatRunoffC, peakFlowEstimate, peakFlowText, presetOf, rationalAssumptions,
+  type PeakFlowEstimate, type RainfallSetting,
+} from '../simulation/flowPulse/rationalDischarge';
+import { mayReportMetricArea } from '../simulation/simulationInputBasis';
 import { interpolatedShareText, type FlowTerrainCaveat } from '../process/flowTerrainCaveat';
 
 /** A caller-supplied downstream path (from `pulseFrom`), for the optional GeoJSON. */
@@ -70,8 +77,10 @@ export interface FlowPulsePathInput {
 /** A caller-supplied catchment mask (from `catchmentFrom`), for the optional raster. */
 export interface FlowPulseCatchmentInput {
   readonly mask: Uint8Array;
-  /** The outlet cell the catchment was queried for, named in the README. */
+  /** The outlet cell the catchment was queried for, named in the README and the catchment JSON. */
   readonly outletCell: number;
+  /** The cell a pointer click picked, when the outlet was snapped from it to a stronger channel. */
+  readonly snappedFrom?: number | null;
 }
 
 /** No CRS is known for the rasters/GeoJSON; every coordinate is local grid metres. */
@@ -136,6 +145,12 @@ export interface FlowPulsePackageOptions {
    * only when it did, so outlet elevations add `elevationOrigin` back only then.
    */
   readonly verticalResolved?: boolean;
+  /**
+   * The rainfall intensity and runoff coefficient set in the Lab. With a
+   * catchment or a path, the package records the rational-method peak flow at
+   * the outlet or the path's end; without either, the setting alone.
+   */
+  readonly rainfall?: RainfallSetting | null;
 }
 
 /** A DTM raster frame: corner offset and cell size, in source units. */
@@ -199,7 +214,7 @@ function coverageOf(grid: FlowGrid): Uint8Array {
 }
 
 /** Every registered method's params from the sealed record, for the manifest. */
-function manifestOps(result: FlowPulseResult): ProcessingOpInput[] {
+function manifestOps(result: FlowPulseResult, extra: readonly ProcessingOpInput[] = []): ProcessingOpInput[] {
   const p = result.record.parameters;
   const ops: ProcessingOpInput[] = [];
   for (const id of result.record.methods) {
@@ -207,7 +222,7 @@ function manifestOps(result: FlowPulseResult): ProcessingOpInput[] {
       ops.push({
         method: methodTag(methodRef(id)),
         params: {
-          fillEpsilon: (p.fillEpsilon as number | 'float32-step' | null) ?? null,
+          fillEpsilon: (p.fillEpsilon as number | 'float64-step' | null) ?? null,
           fillNoData: (p.fillNoData as string | null) ?? null,
         },
       });
@@ -235,7 +250,81 @@ function manifestOps(result: FlowPulseResult): ProcessingOpInput[] {
       params: {},
     });
   }
+  ops.push(...extra);
   return ops;
+}
+
+/** A cell as the README and the JSON name it: column from the west, row from the south. */
+interface NamedCell {
+  readonly col: number;
+  readonly row: number;
+}
+
+/** What the package states about one selected cell's drainage. */
+export interface FlowSelectionFacts {
+  readonly cell: NamedCell & { readonly index: number; readonly x: number; readonly y: number };
+  readonly cells: number;
+  readonly areaM2: number | null;
+  readonly edgeContaminated: boolean;
+  readonly peakFlow: PeakFlowEstimate | null;
+}
+
+/**
+ * Cells, area, edge contamination and peak flow for the drainage of `cell`.
+ * The area is cells times the cell area, withheld when the basis forbids
+ * square metres; edge contamination makes it, and the peak flow, a lower bound.
+ */
+export function selectionFacts(
+  result: FlowPulseResult,
+  cell: number,
+  cells: number,
+  contaminated: Uint8Array,
+  place: (col: number, row: number) => [number, number],
+  rainfall: RainfallSetting | null,
+): FlowSelectionFacts {
+  const g = result.grid;
+  const col = cell % g.cols, row = (cell - col) / g.cols;
+  const [x, y] = place(col, row);
+  const metric = mayReportMetricArea(result.basis) && result.contributingAreaM2 != null;
+  const areaM2 = metric ? cells * g.cellMetresX * g.cellMetresY : null;
+  const edge = contaminated[cell] === 1;
+  return {
+    cell: { col, row, index: cell, x, y },
+    cells,
+    areaM2,
+    edgeContaminated: edge,
+    peakFlow: rainfall ? peakFlowEstimate(areaM2, rainfall, edge) : null,
+  };
+}
+
+/** The peak flow as JSON: the setting, the figure, its flags and the assumptions, or why it is withheld. */
+function peakFlowJson(e: PeakFlowEstimate | null, conditioning: 'raw' | 'priority-flood'): Record<string, unknown> | null {
+  if (!e) return null;
+  if (!e.ok) return { withheld: e.reason };
+  const preset = presetOf(e.setting);
+  return {
+    method: methodTag(methodRef('olv.simulation.terrain-flow.rational-peak')),
+    intensityMmH: e.setting.intensityMmH,
+    runoffC: e.setting.runoffC,
+    runoffPreset: preset ? { id: preset.id, label: preset.label, range: preset.range, source: preset.source } : null,
+    areaM2: e.areaM2,
+    qM3s: e.qM3s,
+    qLitresPerSecond: e.qM3s * 1000,
+    lowerBound: e.lowerBound,
+    aboveAreaLimit: e.aboveAreaLimit,
+    assumptions: rationalAssumptions(conditioning),
+  };
+}
+
+/** README lines for one selection's peak flow; each sentence ends with a full stop. */
+function peakFlowLines(label: string, e: PeakFlowEstimate | null): string[] {
+  if (!e) return [];
+  if (!e.ok) return [`  ${label}  not estimated: ${e.reason.replace(/^Withheld: /, '')}.`];
+  const warn = areaLimitWarning(e);
+  return [
+    `  ${label}  ${peakFlowText(e)} (${fig(e.qM3s, 6)} m3/s)${e.lowerBound ? ', a lower bound, as its area is' : ''}.`,
+    ...(warn ? [`    ${warn}`] : []),
+  ];
 }
 
 /** The reproducible `*.olv-field-sim.json` config: re-running it reproduces `fieldDigest`. */
@@ -311,6 +400,9 @@ function buildFlowReadme(result: FlowPulseResult, opts: {
   readonly rasterCellSize: number | null;
   readonly pathFrame: string;
   readonly placed: boolean;
+  readonly catchment: (FlowSelectionFacts & { readonly snappedFrom: NamedCell | null }) | null;
+  readonly pathEnd: FlowSelectionFacts | null;
+  readonly rainfall: RainfallSetting | null;
 }): string {
   const r = result.record;
   const s = result.summary;
@@ -320,6 +412,10 @@ function buildFlowReadme(result: FlowPulseResult, opts: {
     '',
     'SIMULATED. A topographic routing graph over the declared surface — not rainfall,',
     'runoff, infiltration or flood modelling. Accumulation counts cells, not water.',
+    ...(opts.rainfall ? [
+      'The peak-flow section applies the rational method to the routed contributing area:',
+      'a steady-state estimate, not a model of runoff over time.',
+    ] : []),
     '',
     ...(opts.terrainCaveat ? [
       'TERRAIN RUN NOT USABLE: read this result as illustration only.',
@@ -333,6 +429,7 @@ function buildFlowReadme(result: FlowPulseResult, opts: {
     `  ${opts.basename}-sinks-depressions.csv   Depression inventory (§10.10), largest first; seedCol counts from the west column and seedRow from the south row, both from 0`,
     opts.hasPath ? `  ${opts.basename}-flow-path.geojson   Downstream path from a click-to-pulse` : null,
     opts.hasCatchment ? `  ${opts.basename}-catchment.asc      Upstream catchment mask (1 = contributing)` : null,
+    opts.hasCatchment ? `  ${opts.basename}-catchment-outlet.json   The catchment's outlet cell and position, cells, area, edge contamination and any peak-flow estimate` : null,
     opts.hasWkt ? `  ${opts.basename}.prj                 Coordinate reference system (WKT)` : null,
     `  ${opts.basename}-summary.csv         The figures above, flat`,
     `  ${opts.basename}-simulation-run.json The sealed run record`,
@@ -392,6 +489,8 @@ function buildFlowReadme(result: FlowPulseResult, opts: {
     `  Field digest            ${r.result.fieldDigest}`,
     `  Run record digest       ${r.digest}`,
     '',
+    ...catchmentSection(opts),
+    ...rainfallSection(opts, r.parameters.conditioning === 'raw' ? 'raw' : 'priority-flood'),
     'Assumptions',
     '  D8 single-flow-direction routing: each cell drains to the one neighbour with the',
     '  steepest descent per unit of physical distance. Real water divides across a',
@@ -426,6 +525,53 @@ function buildFlowReadme(result: FlowPulseResult, opts: {
   return lines.filter((l): l is string => l !== null).join('\n');
 }
 
+/** The README's catchment-outlet section, or nothing without a catchment. */
+function catchmentSection(opts: {
+  readonly catchment: (FlowSelectionFacts & { readonly snappedFrom: NamedCell | null }) | null;
+  readonly pathFrame: string;
+}): string[] {
+  const c = opts.catchment;
+  if (!c) return [];
+  return [
+    'Catchment outlet',
+    `  Outlet cell        col ${c.cell.col}, row ${c.cell.row} (col counts from the west column, row from the south row, both from 0).`,
+    `  Outlet position    ${fig(c.cell.x, 3)}, ${fig(c.cell.y, 3)}: the cell centre, coordinateFrame ${opts.pathFrame}.`,
+    c.snappedFrom
+      ? `  Snapped            from the picked cell col ${c.snappedFrom.col}, row ${c.snappedFrom.row}, to the highest upstream count within ${POUR_POINT_SNAP_RADIUS_CELLS} cells.`
+      : '  Snapped            no: the outlet is the cell that was picked.',
+    `  Cells              ${c.cells}.`,
+    `  Contributing area  ${c.areaM2 == null ? 'withheld (horizontal scale unresolved).' : `${c.edgeContaminated ? 'at least ' : ''}${fig(c.areaM2, 1)} m2.`}`,
+    c.edgeContaminated
+      ? `  Edge contaminated  yes: ${EDGE_CONTAMINATED_NOTE.replace(/^at least: /, '')}; the area is a lower bound.`
+      : '  Edge contaminated  no: no survey-edge cell routes into this catchment.',
+    '',
+  ];
+}
+
+/** The README's rainfall section: the setting, the peak flows, the assumptions. */
+function rainfallSection(opts: {
+  readonly rainfall: RainfallSetting | null;
+  readonly catchment: FlowSelectionFacts | null;
+  readonly pathEnd: FlowSelectionFacts | null;
+}, conditioning: 'raw' | 'priority-flood'): string[] {
+  const s = opts.rainfall;
+  if (!s) return [];
+  const preset = presetOf(s);
+  const lines = [
+    'Peak flow estimate (rational method, Q = C x i x A)',
+    `  Rainfall intensity   ${s.intensityMmH} mm/h, uniform over the catchment.`,
+    `  Coefficient C        ${formatRunoffC(s.runoffC)}${preset ? `: ${preset.label}, the midpoint of ${preset.range[0]} to ${preset.range[1]} (${preset.source})` : ', set by hand'}; a lumped loss factor, not a measured value.`,
+    ...peakFlowLines('At the outlet  ', opts.catchment?.peakFlow ?? null),
+    ...(opts.pathEnd ? peakFlowLines(`At the path end (col ${opts.pathEnd.cell.col}, row ${opts.pathEnd.cell.row})`, opts.pathEnd.peakFlow) : []),
+    ...(!opts.catchment && !opts.pathEnd ? ['  No outlet or path was selected, so no peak flow was estimated.'] : []),
+    '  Assumptions',
+    ...rationalAssumptions(conditioning).map((a) => `    - ${a}`),
+    '  A textbook estimate on top of the routing graph: not a measurement, not a hydrograph and not a flood prediction.',
+    '',
+  ];
+  return lines;
+}
+
 /** Build the Flow Pulse ZIP package from a completed run. */
 export function buildFlowPulsePackage(
   result: FlowPulseResult,
@@ -458,6 +604,21 @@ export function buildFlowPulsePackage(
   const coverage = coverageOf(grid);
   const hasPath = !!options.path;
   const hasCatchment = !!options.catchment;
+  const rainfall = options.rainfall ?? null;
+  const placeCell = (col: number, row: number): [number, number] => [ox + (col + 0.5) * pathCellX, oy + (row + 0.5) * pathCellY];
+  const contaminated = hasPath || hasCatchment ? edgeContamination(grid, result.routed).contaminated : null;
+  let catchmentCells = 0;
+  if (options.catchment) for (let i = 0; i < options.catchment.mask.length; i++) if (options.catchment.mask[i] === 1) catchmentCells++;
+  const snappedFrom = options.catchment?.snappedFrom != null && options.catchment.snappedFrom !== options.catchment.outletCell
+    ? { col: options.catchment.snappedFrom % grid.cols, row: Math.floor(options.catchment.snappedFrom / grid.cols) }
+    : null;
+  const catchmentFacts = options.catchment && contaminated
+    ? { ...selectionFacts(result, options.catchment.outletCell, catchmentCells, contaminated, placeCell, rainfall), snappedFrom }
+    : null;
+  const pathEndCell = options.path && options.path.cells.length > 0 ? options.path.cells[options.path.cells.length - 1]! : -1;
+  const pathEndFacts = pathEndCell >= 0 && contaminated
+    ? selectionFacts(result, pathEndCell, result.accumulation.upstreamCells[pathEndCell]!, contaminated, placeCell, rainfall)
+    : null;
   const elevationOrigin = options.verticalResolved === false ? null : options.elevationOrigin ?? null;
 
   const entries: ZipEntry[] = [];
@@ -502,7 +663,17 @@ export function buildFlowPulsePackage(
       coordinateFrame: pathFrameName(placedOrigin, options.crsName != null),
       features: [{
         type: 'Feature',
-        properties: { cells: options.path.cells.length },
+        properties: {
+          cells: options.path.cells.length,
+          ...(pathEndFacts ? {
+            endCol: pathEndFacts.cell.col,
+            endRow: pathEndFacts.cell.row,
+            endUpstreamCells: pathEndFacts.cells,
+            endContributingAreaM2: pathEndFacts.areaM2,
+            endEdgeContaminated: pathEndFacts.edgeContaminated,
+            ...(pathEndFacts.peakFlow ? { endPeakFlow: peakFlowJson(pathEndFacts.peakFlow, result.record.parameters.conditioning === 'raw' ? 'raw' : 'priority-flood') } : {}),
+          } : {}),
+        },
         geometry: { type: 'LineString', coordinates: coords },
       }],
     };
@@ -520,6 +691,36 @@ export function buildFlowPulsePackage(
         cols: grid.cols, rows: grid.rows, cellSize: rasterCell,
         xllCorner: ox, yllCorner: oy, noData: NO_DATA, precision: 0,
       })),
+    });
+  }
+
+  if (catchmentFacts) {
+    const conditioning = result.record.parameters.conditioning === 'raw' ? 'raw' : 'priority-flood';
+    const outletJson = {
+      schemaVersion: 1,
+      outlet: {
+        col: catchmentFacts.cell.col,
+        row: catchmentFacts.cell.row,
+        index: catchmentFacts.cell.index,
+        x: catchmentFacts.cell.x,
+        y: catchmentFacts.cell.y,
+        coordinateFrame: pathFrameName(placedOrigin, options.crsName != null),
+        cellConvention: 'col counts from the west column and row from the south row, both from 0; x, y is the cell centre',
+      },
+      snappedFrom: catchmentFacts.snappedFrom
+        ? { ...catchmentFacts.snappedFrom, radiusCells: POUR_POINT_SNAP_RADIUS_CELLS, method: methodTag(methodRef('olv.simulation.terrain-flow.pour-point-snap')) }
+        : null,
+      cells: catchmentFacts.cells,
+      areaM2: catchmentFacts.areaM2,
+      areaIsLowerBound: catchmentFacts.areaM2 != null && catchmentFacts.edgeContaminated,
+      edgeContaminated: catchmentFacts.edgeContaminated,
+      edgeContaminationMethod: methodTag(methodRef('olv.simulation.terrain-flow.edge-contamination')),
+      peakFlow: peakFlowJson(catchmentFacts.peakFlow, conditioning),
+      rainfall: rainfall ? { intensityMmH: rainfall.intensityMmH, runoffC: rainfall.runoffC } : null,
+    };
+    entries.push({
+      name: `${basename}-catchment-outlet.json`,
+      bytes: new TextEncoder().encode(`${JSON.stringify(outletJson, null, 2)}\n`),
     });
   }
 
@@ -550,10 +751,26 @@ export function buildFlowPulsePackage(
       parameters: { ...result.record.parameters, __hasPath: hasPath, __hasCatchment: hasCatchment },
     },
   };
+  const extraOps: ProcessingOpInput[] = [];
+  if (catchmentFacts?.snappedFrom) {
+    extraOps.push({
+      method: methodTag(methodRef('olv.simulation.terrain-flow.pour-point-snap')),
+      params: { radiusCells: POUR_POINT_SNAP_RADIUS_CELLS },
+    });
+  }
+  if (contaminated) {
+    extraOps.push({ method: methodTag(methodRef('olv.simulation.terrain-flow.edge-contamination')), params: {} });
+  }
+  if (catchmentFacts?.peakFlow?.ok || pathEndFacts?.peakFlow?.ok) {
+    extraOps.push({
+      method: methodTag(methodRef('olv.simulation.terrain-flow.rational-peak')),
+      params: { intensityMmH: rainfall!.intensityMmH, runoffC: rainfall!.runoffC },
+    });
+  }
   const manifest = buildProcessingManifest({
     build: softwareVersion,
     source: result.record.source.filename,
-    ops: manifestOps(opsSource),
+    ops: manifestOps(opsSource, extraOps),
     sourceInterpretation,
   });
   entries.push({
@@ -573,6 +790,9 @@ export function buildFlowPulsePackage(
     elevationOrigin, terrainCaveat: options.terrainCaveat ?? null, rasterCellSize: frame?.cellSize ?? null,
     pathFrame: pathFrameName(placedOrigin, options.crsName != null),
     placed: placedOrigin != null,
+    catchment: catchmentFacts,
+    pathEnd: pathEndFacts,
+    rainfall,
     sourceSha256Text: options.sourceSha256 ?? (options.digests ? sourceSha256Text(options.digests) : (result.record.source.sourceDigest ?? SOURCE_NOT_SUPPLIED_NOTE)),
   });
   entries.push({

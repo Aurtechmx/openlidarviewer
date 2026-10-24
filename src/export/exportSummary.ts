@@ -75,6 +75,13 @@ export interface ExportSummaryInput {
   readonly legacyClassWrap?: LegacyClassWrapNote | null;
   /** User ticked the LAS 1.2 opt-in that writes such classes wrapped. */
   readonly allowLegacyClassWrap?: boolean;
+  /**
+   * An active clip box: how many of the loaded points it keeps, of how many.
+   * The export writes only those. A display-resolution export writes exactly
+   * `kept`; a full-resolution one keeps about `kept / total` of the source,
+   * which is an estimate and says so.
+   */
+  readonly clip?: { readonly kept: number; readonly total: number } | null;
 }
 
 export interface ExportWarning {
@@ -99,6 +106,10 @@ export interface ExportSummary {
   readonly line: string;
   /** Which points the export holds: "Point basis: full file (N points)" or the display sample. */
   readonly basisLabel: string;
+  /** The clip box keeps no points, so there is nothing to write. */
+  readonly clipKeepsNone: boolean;
+  /** The point count is an estimate (a clipped full-resolution export). */
+  readonly pointCountApproximate: boolean;
 }
 
 /** Public header block sizes (a fixed allowance; VLRs are negligible here). */
@@ -144,8 +155,17 @@ export function buildExportSummary(input: ExportSummaryInput): ExportSummary {
   const spec = CONVERT_FORMATS[input.format];
   const src = input.sourcePointCount ?? null;
   const fullFile = input.fullRes === true && src !== null && src > 0;
-  const n = Math.max(0, Math.floor(fullFile ? src : input.pointCount));
-  const basisLabel = input.viewDecimated || fullFile ? pointBasisLine(fullFile, n, src) : pointBasisLine(true, n, null);
+  const clip = input.clip && input.clip.total > 0 ? input.clip : null;
+  const clipKeepsNone = input.clip != null && input.clip.kept === 0;
+  // A clipped full-resolution export keeps about the clip's share of the
+  // source: the clip was counted on the loaded points, not on every return.
+  const approximate = fullFile && clip !== null;
+  const n = clipKeepsNone
+    ? 0
+    : Math.max(0, Math.floor(fullFile ? (clip ? roundEstimate((clip.kept / clip.total) * src) : src) : input.pointCount));
+  const basisLabel = approximate
+    ? `Point basis: full file, clipped (about ${n.toLocaleString('en-US')} of ${src.toLocaleString('en-US')} points)`
+    : input.viewDecimated || fullFile ? pointBasisLine(fullFile, n, src) : pointBasisLine(true, n, null);
   const hasRgb = input.hasRgb === true;
   const hasGps = input.hasGpsTime === true;
   const includeClass = input.includeClassification !== false;
@@ -285,15 +305,19 @@ export function buildExportSummary(input: ExportSummaryInput): ExportSummary {
     });
   }
 
+  if (clipKeepsNone) {
+    warnings.unshift({ level: 'error', message: 'Move or resize the clip box, or turn the clip off, to export points.' });
+  }
+
   // ── composed one-liner ───────────────────────────────────────────────────
-  const pointCountLabel = `${n.toLocaleString()} point${n === 1 ? '' : 's'}`;
+  const pointCountLabel = `${approximate ? 'about ' : ''}${n.toLocaleString()} point${n === 1 ? '' : 's'}`;
   const crsLabel = crsLabelFor(input);
   const formatLabel = gzip ? `${spec.label} (.gz)` : spec.label;
   const parts = [pointCountLabel, formatLabel];
   if (sizeLabel) parts.push(sizeLabel);
   parts.push(crsLabel);
   if (classificationLabel) parts.push(classificationLabel);
-  const line = n > 0 ? parts.join(' · ') : 'Open a scan to export.';
+  const line = clipKeepsNone ? 'The clip keeps no points.' : n > 0 ? parts.join(' · ') : 'Open a scan to export.';
 
   return {
     pointCountLabel,
@@ -306,7 +330,16 @@ export function buildExportSummary(input: ExportSummaryInput): ExportSummary {
     warnings,
     line,
     basisLabel,
+    clipKeepsNone,
+    pointCountApproximate: approximate,
   };
+}
+
+/** An estimate shown as one: three significant figures (82,557,113 → 82,600,000). */
+function roundEstimate(v: number): number {
+  if (!(v >= 1000)) return Math.round(v);
+  const k = 10 ** (Math.floor(Math.log10(v)) - 2);
+  return Math.round(v / k) * k;
 }
 
 // ─── Display-sample disclosure ──────────────────────────────────────────────

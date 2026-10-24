@@ -6,8 +6,8 @@ import { dropDenseGridPly, openToolPage, railChromeSettled } from './helpers';
  * Clip flow and the result card.
  *
  * Journey 1: open a scan, Clip page → Draw clipping box → draw → Isolate this
- * box → the "Clipping on" chip shows → Inside/Outside → an Advanced numeric
- * edit → Clear. Journey 2: a finished measurement leaves a compact result card
+ * box → the "Clipping on" chip shows → Keep inside/outside → an Advanced
+ * numeric edit → Turn off. Journey 2: a finished measurement leaves a compact result card
  * beside the viewport with Copy, Open details and (for a Box) the clip action.
  *
  * Set OLV_FLOW_SHOTS=<dir> to also write before/after screenshots at the four
@@ -38,7 +38,7 @@ async function placeBox(page: Page): Promise<void> {
   });
 }
 
-test('Clip page: Draw clipping box → Isolate this box → chip → Inside/Outside → Advanced edit → Clear', async ({ page }) => {
+test('Clip page: Draw clipping box → Isolate this box → chip → Keep inside/outside → Advanced edit → Turn off', async ({ page }) => {
   await openScan(page);
   await openToolPage(page, 'Clip box');
   const clip = page.locator('.olv-clip-panel');
@@ -57,23 +57,24 @@ test('Clip page: Draw clipping box → Isolate this box → chip → Inside/Outs
   await card.getByRole('button', { name: /Isolate this box/ }).click();
 
   await expect(chip).toBeVisible();
-  await expect(chip.locator('[role="status"]')).toHaveText('Clipping on · Inside');
+  await expect(chip.locator('[role="status"]')).toHaveText('Clipping on · Showing inside box');
   await expect(card).toBeHidden();
   await expect(page.locator('.olv-ss-clip')).toContainText(/Clipped: [\d,]+ of 3,600 points/);
 
   await openToolPage(page, 'Clip box');
   await clip.locator('.olv-bc-pill', { hasText: 'Outside' }).click();
-  await expect(chip.locator('[role="status"]')).toHaveText('Clipping on · Outside');
+  await expect(chip.locator('[role="status"]')).toHaveText('Clipping on · Showing outside box');
 
   await clip.locator('summary', { hasText: 'Advanced' }).click();
   const xMax = clip.locator('input.olv-clip-num').nth(1);
   await expect(xMax).toBeVisible();
-  await expect(xMax).toHaveValue('2');
+  await expect(xMax).toHaveValue('2.000');
   await xMax.fill('0');
+  await xMax.press('Enter');
   await expect(clip.locator('[role="status"]')).toContainText(/of 3,600 points kept/);
   await expect(chip).toBeVisible();
 
-  await chip.getByRole('button', { name: 'Clear clipping' }).click();
+  await chip.getByRole('button', { name: 'Turn off clipping' }).click();
   await expect(chip).toBeHidden();
   await expect(clip.locator('.olv-clip-enable input')).not.toBeChecked();
   await expect(page.locator('.olv-ss-clip')).toBeHidden();

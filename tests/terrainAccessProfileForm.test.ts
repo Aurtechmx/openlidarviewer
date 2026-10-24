@@ -110,6 +110,28 @@ describe('EMPTY_TERRAIN_ACCESS_PROFILE_FORM', () => {
     if (!result.ok) expect(result.problems.some((p) => p.field === 'minimumTerrainConfidence')).toBe(true);
   });
 
+  it('accepts a degree limit only strictly between 0° and 90°, and says so in degrees', () => {
+    // 190° has the tangent of 10°, 270° is effectively no limit and 100° a
+    // negative tangent: each would apply a limit other than the one typed.
+    for (const raw of ['190', '270', '100', '90', '0', '-20', '1e3', '-170']) {
+      for (const field of ['maxLongitudinalGradeDeg', 'maxCrossSlopeDeg'] as const) {
+        const result = parseTerrainAccessProfileForm({ ...FILLED, [field]: raw });
+        expect(result.ok).toBe(false);
+        if (result.ok) continue;
+        expect(result.problems).toHaveLength(1);
+        expect(result.problems[0].field).toBe(field);
+        const text = describeProfileProblem(result.problems[0]);
+        expect(text).toMatch(/must be more than 0° and less than 90°; got -?[\d.]+°$/);
+        expect(text).not.toMatch(/finite value|tangent/);
+      }
+    }
+    for (const raw of ['0.5', '20', '89.9']) {
+      expect(parseTerrainAccessProfileForm({ ...FILLED, maxLongitudinalGradeDeg: raw, maxCrossSlopeDeg: raw }).ok).toBe(true);
+    }
+    const one = parseTerrainAccessProfileForm({ ...FILLED, maxLongitudinalGradeDeg: '190' });
+    if (!one.ok) expect(describeProfileProblem(one.problems[0])).toBe('Max longitudinal grade must be more than 0° and less than 90°; got 190°');
+  });
+
   it('reports vehicle length and obstacle height only when their toggles are on', () => {
     const result = parseTerrainAccessProfileForm({
       ...FILLED,

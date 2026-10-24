@@ -13,7 +13,9 @@ test('an active clip is stated on the strip, in Export and in the written file',
   await panel.locator('label', { hasText: 'Clip the scan to this box' }).click();
   await panel.locator('summary', { hasText: 'Advanced' }).click();
   const xMax = panel.locator('input.olv-clip-num').nth(1);
+  // Typed text applies on Enter (or leaving the field), not per keystroke.
   await xMax.fill('0');
+  await xMax.press('Enter');
   const kept = panel.locator('[role="status"]');
   await expect(kept).toContainText(/of 3,600 points kept/);
   await expect(kept).not.toContainText(/^3,600 of/);

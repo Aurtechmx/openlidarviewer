@@ -68,7 +68,7 @@ import {
 import { collectForOpenScan, findingsScanOpen, sameExportTarget, EXPORT_SCAN_CHANGED_REFUSAL } from '../export/exportScanIdentity';
 import { prepareExportScope } from '../render/clip/clipExportScope';
 import type { ClipBox } from '../render/clip/clipBox';
-import { clipScope, clipScopeText, subscribeClipScope } from '../render/clip/clipScope';
+import { clipScope, clipStatusText, subscribeClipScope } from '../render/clip/clipScope';
 import type { ExportFormat } from '../io/exporters';
 import type { ExportMode } from '../export/types';
 import { buildExportDeliverables, type ExportDeliverables } from './export/exportDeliverables';
@@ -388,6 +388,8 @@ export class ExportPanel {
   /** The last fetch attempt failed — surfaced once, then cleared on retry. */
   private _wrapPreviewFailed = false;
   private _busy = false;
+  /** The active clip box keeps no points: Export stays off until it keeps some. */
+  private _clipEmpty = false;
   /**
    * Whether the active scan carries a real-world CRS (projected / geographic).
    * When false the Coordinate-System step is collapsed — a local-coordinate scan
@@ -580,7 +582,7 @@ export class ExportPanel {
     const clip = clipScope();
     this._health.append(renderExportHealthPanel(health, {
       fullResolution: canFullRes ? () => this._useFullRes() : undefined,
-      scope: clip ? clipScopeText(clip) : undefined,
+      scope: clip ? clipStatusText(clip) : undefined,
     }));
   }
 
@@ -853,9 +855,12 @@ export class ExportPanel {
       this._summaryNote.classList.add('olv-hidden');
       return;
     }
-    const clip = this._fullRes ? null : clipScope();
+    // An active clip limits what either export writes: the loaded points it
+    // keeps, or (at full resolution) about its share of the source's points.
+    const clip = clipScope();
     const input: ExportSummaryInput = {
       pointCount: clip ? clip.kept : info.pointCount,
+      clip,
       format: this._format,
       hasRgb: info.hasRgb,
       hasGpsTime: info.hasGpsTime,
@@ -881,7 +886,11 @@ export class ExportPanel {
         s.warnings.find((w) => w.level === 'info');
     // A scan is open but holds no points yet (a stream before its first node):
     // "Open a scan to export" would say the opposite of what is on screen.
-    this._summary.textContent = input.pointCount === 0 && !clip && this._cb.isStreamingPending?.() ? WAITING_FOR_POINTS : `${s.line} · ${s.basisLabel}`;
+    this._summary.textContent = input.pointCount === 0 && !clip && this._cb.isStreamingPending?.() ? WAITING_FOR_POINTS : s.clipKeepsNone ? s.line : `${s.line} · ${s.basisLabel}`;
+    // Nothing to write while the clip keeps no points; a run in progress keeps its own lock.
+    this._clipEmpty = s.clipKeepsNone;
+    this._exportBtn.disabled = this._busy || this._clipEmpty;
+    this._exportBtn.title = this._clipEmpty ? 'The clip keeps no points. Move or resize the clip box, or turn the clip off.' : EXPORT_BUTTON_TOOLTIP;
     this._summary.className = 'olv-export-summary';
     this._summaryNote.textContent = note ? note.message : '';
     this._summaryNote.className = note
@@ -1459,6 +1468,10 @@ export class ExportPanel {
 
   private async _export(): Promise<void> {
     if (this._busy) return;
+    if (this._clipEmpty) {
+      this._setStatus('The clip keeps no points. Move or resize the clip box, or turn the clip off, to export.', 'warn');
+      return;
+    }
     // Existence check via the lightweight summary so opening the panel / pressing
     // export doesn't materialize a streaming snapshot before we've committed to it.
     const exportable = this._cb.summaryInfo
@@ -1679,7 +1692,7 @@ export class ExportPanel {
       this._setStatus(offline ? `Export failed. ${OFFLINE_CHUNK_MESSAGE}` : `Export failed: ${err instanceof Error ? err.message : String(err)}`, 'error');
     } finally {
       this._busy = false;
-      this._exportBtn.disabled = false;
+      this._exportBtn.disabled = this._clipEmpty;
       this._exportBtn.textContent = 'Export';
     }
   }

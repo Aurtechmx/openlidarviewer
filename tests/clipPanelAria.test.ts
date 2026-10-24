@@ -82,18 +82,18 @@ async function makePanel(cb: ClipPanelCallbacks = noopCallbacks()) {
 }
 
 describe('ClipPanel — mode buttons expose aria-pressed (ANALYSIS-F4)', () => {
-  it('Inside starts pressed, Outside does not', async () => {
+  it('Keep inside starts pressed, Keep outside does not', async () => {
     const { root } = await makePanel();
-    const inside = root.byClass('olv-bc-pill').find((b) => b.textContent === 'Inside')!;
-    const outside = root.byClass('olv-bc-pill').find((b) => b.textContent === 'Outside')!;
+    const inside = root.byClass('olv-bc-pill').find((b) => b.textContent === 'Keep inside')!;
+    const outside = root.byClass('olv-bc-pill').find((b) => b.textContent === 'Keep outside')!;
     expect(inside.attrs['aria-pressed']).toBe('true');
     expect(outside.attrs['aria-pressed']).toBe('false');
   });
 
-  it('clicking Outside flips aria-pressed on both buttons', async () => {
+  it('clicking Keep outside flips aria-pressed on both buttons', async () => {
     const { root } = await makePanel();
-    const inside = root.byClass('olv-bc-pill').find((b) => b.textContent === 'Inside')!;
-    const outside = root.byClass('olv-bc-pill').find((b) => b.textContent === 'Outside')!;
+    const inside = root.byClass('olv-bc-pill').find((b) => b.textContent === 'Keep inside')!;
+    const outside = root.byClass('olv-bc-pill').find((b) => b.textContent === 'Keep outside')!;
     outside.click();
     expect(outside.attrs['aria-pressed']).toBe('true');
     expect(inside.attrs['aria-pressed']).toBe('false');
@@ -107,8 +107,8 @@ describe('ClipPanel — mode buttons expose aria-pressed (ANALYSIS-F4)', () => {
       enabled: true,
     };
     panel.setState(clip);
-    const inside = root.byClass('olv-bc-pill').find((b) => b.textContent === 'Inside')!;
-    const outside = root.byClass('olv-bc-pill').find((b) => b.textContent === 'Outside')!;
+    const inside = root.byClass('olv-bc-pill').find((b) => b.textContent === 'Keep inside')!;
+    const outside = root.byClass('olv-bc-pill').find((b) => b.textContent === 'Keep outside')!;
     expect(outside.attrs['aria-pressed']).toBe('true');
     expect(inside.attrs['aria-pressed']).toBe('false');
   });

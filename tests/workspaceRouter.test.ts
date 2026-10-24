@@ -51,6 +51,22 @@ async function make(store: MemStore = new MemStore()) {
   return { ws, router, host, launcher, launcherBtn, measure, annotate, clip, data, refresh, measureEl, header, title, off, store };
 }
 
+describe('workspaceRouter: the page a mode shows when selected', () => {
+  it('showing() is the page left open, and null once the mode went home', async () => {
+    const t = await make();
+    t.router.navigate({ mode: 'work', page: 'clip' });
+    t.router.navigate({ mode: 'data', page: null });
+    // Away from Tools, it still holds the Clip page it left open.
+    expect(t.router.showing('work')).toBe('clip');
+    t.router.navigate({ mode: 'work', page: 'clip' });
+    t.router.back();
+    t.router.navigate({ mode: 'data', page: null });
+    // It went home before leaving: Continue offers the page, but it is not showing.
+    expect(t.router.showing('work')).toBeNull();
+    expect(t.router.remembered('work')).toBe('clip');
+  });
+});
+
 describe('workspaceRouter', () => {
   it('Tools home shows the launcher alone, with no task header', async () => {
     const t = await make();

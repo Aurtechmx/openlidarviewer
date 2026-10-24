@@ -41,6 +41,8 @@ export interface WorkspacePage {
   readonly parent?: string;
   /** False when the palette reaches the page through its own action, not Go to. */
   readonly palette?: boolean;
+  /** A mode tab returns to this page (not the home) when it was the page left open. */
+  readonly keepOnReturn?: boolean;
 }
 
 /** The slice of {@link DesktopWorkspace} the router drives. */
@@ -63,6 +65,8 @@ export interface WorkspaceRouter {
   sync(): void;
   /** The page a mode remembers, shown or not; null when it has none. */
   remembered(mode: WorkspaceMode): string | null;
+  /** The page a mode shows when it is selected: null at its home or when the page cannot show. */
+  showing(mode: WorkspaceMode): string | null;
   /** Stop the router: clear its timer, marks and headers. Safe to call twice. */
   dispose(): void;
 }
@@ -182,6 +186,7 @@ export function createWorkspaceRouter(
       const id = memory.get(m) ?? null;
       return id && pages[m]?.[id] ? id : null;
     },
+    showing: (m) => active(m),
     dispose() {
       disposed = true;
       unmark();

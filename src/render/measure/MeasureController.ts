@@ -830,14 +830,13 @@ export class MeasureController {
   }
 
   /** Whether measurement mode is currently on. */
-  get active(): boolean {
-    return this._active;
-  }
+  get active(): boolean { return this._active; }
 
   /** Whether a measurement is open for editing (at least one point placed). */
-  get drafting(): boolean {
-    return this._draft !== null;
-  }
+  get drafting(): boolean { return this._draft !== null; }
+
+  /** Set while a clipping box is drawn: the clip keeps its footprint at the scan's full height (clipFlow.ts). */
+  boxFootprint = false;
 
   /** The active measurement kind. */
   get kind(): MeasurementKind {
@@ -2546,9 +2545,9 @@ export class MeasureController {
       case 'profile':
         return n === 1 ? `${VERB} the second point` : `${VERB} the first point`;
       case 'box': {
-        if (n === 1) return `${VERB} the opposite corner. The box spans the height between the two corners`;
+        if (n === 1) return `${VERB} the opposite corner. ${this.boxFootprint ? "The clip keeps this footprint at the scan's full height" : 'The box spans the height between the two corners'}`;
         const last = this._measurements[this._measurements.length - 1];
-        if (last?.kind === 'box' && last.points.length >= 2 && flatBox(last.points[0], last.points[1], this._worldUp)) {
+        if (!this.boxFootprint && last?.kind === 'box' && last.points.length >= 2 && flatBox(last.points[0], last.points[1], this._worldUp)) {
           return `That box is flat: both corners are at one height, so its volume is 0. ${VERB} the second corner on a higher surface`;
         }
         return `${VERB} one corner of the box`;

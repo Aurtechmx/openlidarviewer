@@ -125,8 +125,10 @@ const frozenExample = (e: TerrainAccessExample): TerrainAccessExample => Object.
  *    0.37 m), the usual rule-of-thumb ceiling for a wheel climbing a ledge;
  *    2.0 m is a full-size 4x4's body width.
  *
- * The step limit is compared with the height difference between neighbouring
- * cells, so on a coarse grid it also limits grade.
+ * The step limit is compared with the part of a move's rise the slope on
+ * either side of it does not explain (a ledge, a bank, a kerb), not with the
+ * rise itself, so it does not limit grade on any cell size. A step is only
+ * seen when the DTM resolves it within one cell; see `localStep.ts`.
  */
 export const TERRAIN_ACCESS_EXAMPLES: readonly TerrainAccessExample[] = Object.freeze([
   frozenExample({
@@ -202,6 +204,17 @@ function parseRequired(field: string, raw: string, problems: TerrainAccessProfil
 
 const degToTan = (deg: number): number => Math.tan((deg * Math.PI) / 180);
 
+/**
+ * A grade or cross-slope limit in degrees must lie strictly between 0° and
+ * 90°: the tangent of 190° is the tangent of 10°, of 270° effectively no
+ * limit, and of 100° a negative number, so a value outside that range would
+ * apply a limit other than the one typed. Pushes a problem worded in degrees.
+ */
+function checkDegrees(field: string, deg: number | null, problems: TerrainAccessProfileFormProblem[]): void {
+  if (deg == null) return;
+  if (!(deg > 0 && deg < 90)) problems.push({ field, reason: `must be more than 0° and less than 90°; got ${deg}°` });
+}
+
 /** Whether any limit or policy of `profile` differs from what `example` filled in. The name is not compared. */
 function editedFromExample(profile: TerrainAccessProfile, example: TerrainAccessExample): boolean {
   const blank = EMPTY_TERRAIN_ACCESS_PROFILE_FORM;
@@ -219,9 +232,10 @@ function editedFromExample(profile: TerrainAccessProfile, example: TerrainAccess
 
 /**
  * Parse and validate the form. Every required field is checked for being a
- * finite number before {@link validateProfile}'s own cross-field/range checks
- * run, so a reader sees "this field is empty" separately from "this field's
- * value is out of range". A form filled from an example yields a profile
+ * finite number, and each degree field for lying between 0° and 90°, before
+ * {@link validateProfile}'s own cross-field/range checks run, so a reader
+ * sees "this field is empty" separately from "this field's value is out of
+ * range", and a degree field's problem in degrees. A form filled from an example yields a profile
  * whose `origin` names the example and says whether any limit was changed.
  */
 export function parseTerrainAccessProfileForm(values: TerrainAccessProfileFormValues): TerrainAccessProfileFormResult {
@@ -232,6 +246,8 @@ export function parseTerrainAccessProfileForm(values: TerrainAccessProfileFormVa
 
   const maxLongitudinalGradeDeg = parseRequired('maxLongitudinalGradeDeg', values.maxLongitudinalGradeDeg, problems);
   const maxCrossSlopeDeg = parseRequired('maxCrossSlopeDeg', values.maxCrossSlopeDeg, problems);
+  checkDegrees('maxLongitudinalGradeDeg', maxLongitudinalGradeDeg, problems);
+  checkDegrees('maxCrossSlopeDeg', maxCrossSlopeDeg, problems);
   const maxStepHeightM = parseRequired('maxStepHeightM', values.maxStepHeightM, problems);
   const vehicleWidthM = parseRequired('vehicleWidthM', values.vehicleWidthM, problems);
   const minimumTerrainConfidence = parseRequired('minimumTerrainConfidence', values.minimumTerrainConfidence, problems);

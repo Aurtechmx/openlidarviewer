@@ -56,7 +56,7 @@ const flowsSouthAccumulation: AccumulationResult = {
 
 function conditionedOf(z: readonly number[]): PriorityFloodResult {
   return {
-    z: Float32Array.from(z),
+    z: Float64Array.from(z),
     cellsRaised: 1,
     maxFillDepth: 0.5,
     fillDepthSum: 0.5,
@@ -104,6 +104,22 @@ describe('the field digest catches what the summary cannot', () => {
     const a = flowFieldDigest(grid, flowsEast, flowsEastAccumulation, conditionedOf([2, 1, 2, 1]));
     const b = flowFieldDigest(grid, flowsEast, flowsEastAccumulation, conditionedOf([2, 1.5, 2, 1]));
     expect(a).not.toBe(b);
+  });
+
+  it('writes the Float64 conditioned surface at Float32, the precision of the DTM it came from', () => {
+    // The rise that orders a filled flat is far below a Float32 step, so it
+    // rounds away here; the receivers carry the routing it produced. A
+    // difference a Float32 value can hold still moves the digest.
+    const level = Math.fround(603.25);
+    const flat = flowFieldDigest(grid, flowsEast, flowsEastAccumulation, conditionedOf([level, level, level, level]));
+    const tilted = flowFieldDigest(grid, flowsEast, flowsEastAccumulation, conditionedOf([
+      level + 3 * 2 ** -43, level + 2 ** -43, level + 2 * 2 ** -43, level,
+    ]));
+    expect(tilted).toBe(flat);
+    const stepped = flowFieldDigest(grid, flowsEast, flowsEastAccumulation, conditionedOf([
+      level + 2 ** -14, level, level, level,
+    ]));
+    expect(stepped).not.toBe(flat);
   });
 
   it('rejects an array that does not match cols×rows rather than hashing past its end', () => {

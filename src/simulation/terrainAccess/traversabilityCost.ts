@@ -28,12 +28,17 @@
  * with `maxRuggedness: null`) or zero contributes 0 rather than dividing by
  * zero. The weights are declared and bounded, not implied.
  *
+ * Grade enters the cost once, through the longitudinal term. The step term
+ * reads the move's step as `localStep.ts` defines it, the part of its rise
+ * the slope on either side does not explain, so a smooth slope adds nothing
+ * to it; the grade limit is the only limit on slope.
+ *
  * Pure data: no DOM, no three.js, no I/O. Deterministic.
  */
 
 import { hornSlopeAspect, synthesisedNeighbourMask } from '../../terrain/ground/terrainDerivatives';
 import { computeVRM } from '../../terrain/complexity/vectorRuggedness';
-import { computeLocalStep, edgeStep } from './localStep';
+import { computeLocalStep, computeOrthogonalSteps, edgeRise, moveStep, type OrthogonalSteps } from './localStep';
 import { classifyObstruction, type ObstructionState } from './obstacleEvidence';
 import { diagonalSweepClear, dilateBlocked } from './footprintClearance';
 import { directionalSlope, gradientField, headingUnit, type GradientField } from './directionalGrade';
@@ -47,7 +52,7 @@ import {
   type TerrainAccessProfile,
 } from './terrainAccessTypes';
 
-/** The 3×3 (1-cell-radius) window Horn slope, VRM and the local-step metric
+/** The 3×3 (1-cell-radius) window Horn slope, VRM and the local relief
  * all share by default in this module, so "local" means one neighbourhood
  * everywhere a Terrain Access feature says it. */
 const LOCAL_WINDOW_CELLS = 3;
@@ -59,8 +64,10 @@ export interface TerrainAccessFeatures {
   readonly gradient: GradientField;
   /** Vector Ruggedness Measure, [0, 1] or NaN at an invalid cell. */
   readonly vrm: Float32Array;
-  /** The §12.4 local-step diagnostic (3×3 footprint), metres. */
+  /** Local relief: the largest raw height difference in each cell's 3×3 footprint, metres. Reported, never gated. */
   readonly localStep: Float32Array;
+  /** The step of every orthogonal move (`computeOrthogonalSteps`), read by `moveStep` for each move and corner path. */
+  readonly orthogonalSteps: OrthogonalSteps;
   readonly obstruction: readonly ObstructionState[];
   /**
    * 1 where the cell's Horn window used a synthesised neighbour (the grid's
@@ -152,11 +159,12 @@ export function prepareTerrainAccessFeatures(
     valid: grid.valid,
   });
   const localStep = computeLocalStep(grid, (LOCAL_WINDOW_CELLS - 1) / 2);
+  const orthogonalSteps = computeOrthogonalSteps(grid, gradient);
   const obstruction = classifyObstruction(grid, profile.obstacleHeightThreshold);
   const derivativeSynthesised = synthesisedNeighbourMask(maskedZ, grid.cols, grid.rows);
   const supportCause = derivativeSupportCause(maskedZ, derivativeSynthesised, grid.cols, grid.rows);
   return {
-    slope, aspect, gradient, vrm: vrmResult.vrm, localStep, obstruction, derivativeSynthesised,
+    slope, aspect, gradient, vrm: vrmResult.vrm, localStep, orthogonalSteps, obstruction, derivativeSynthesised,
     derivativeSupportCause: supportCause,
   };
 }
@@ -296,14 +304,21 @@ export interface EdgeGeometry {
   readonly distanceM: number;
   readonly longitudinalGrade: number;
   readonly crossSlope: number;
+  /**
+   * The move's step, metres: the part of its rise the terrain on either side
+   * does not explain, and for a diagonal the easier path through its corner
+   * cells (`moveStep`, `localStep.ts`). Not the rise itself. NaN when either
+   * endpoint has no elevation.
+   */
   readonly stepM: number;
 }
 
 /**
  * The geometry of the directed move `from → to` along raster offset
- * `(dx, dy)`: physical distance, longitudinal grade, cross slope and the edge
- * step. Independent of any profile, so a caller that only wants the numbers —
- * `routeDiagnostics.ts`, a UI inspector — is not required to fabricate one.
+ * `(dx, dy)`: physical distance, longitudinal grade, cross slope and the
+ * move's step. Independent of any profile, so a caller that only wants the
+ * numbers — `routeDiagnostics.ts`, a UI inspector — is not required to
+ * fabricate one.
  *
  * Longitudinal grade is the edge's conservative, direction-symmetric grade:
  * the largest of the Horn gradient projected on the heading at `from`, the
@@ -312,7 +327,10 @@ export interface EdgeGeometry {
  * move out of a V-valley floor (zero gradient there) read as level although
  * the edge itself climbs steeply, and made `a → b` and `b → a` disagree.
  * Cross slope is the larger perpendicular Horn component of the two
- * endpoints. Both are symmetric under reversing the move.
+ * endpoints. The step is `moveStep` (`localStep.ts`): the part of the rise
+ * the terrain on either side of the move does not explain, and for a
+ * diagonal also the easier path through its corner cells. All three are
+ * symmetric under reversing the move.
  */
 export function edgeGeometry(
   grid: TerrainAccessGrid,
@@ -329,9 +347,10 @@ export function edgeGeometry(
   const atTo = directionalSlope(
     { east: features.gradient.east[toIndex], north: features.gradient.north[toIndex] }, heading,
   );
-  const stepM = edgeStep(grid, fromIndex, toIndex);
+  const stepM = moveStep(grid, features.gradient, fromIndex, dx, dy, features.orthogonalSteps);
+  const riseM = edgeRise(grid, fromIndex, toIndex);
   const distanceM = Math.hypot(dx * grid.cellMetresX, dy * grid.cellMetresY);
-  const edgeGrade = Number.isFinite(stepM) && distanceM > 0 ? stepM / distanceM : 0;
+  const edgeGrade = Number.isFinite(riseM) && distanceM > 0 ? riseM / distanceM : 0;
   const longitudinalGrade = Math.max(atFrom.longitudinalGrade, atTo.longitudinalGrade, edgeGrade);
   const crossSlope = Math.max(atFrom.crossSlope, atTo.crossSlope);
   return { distanceM, longitudinalGrade, crossSlope, stepM };
@@ -513,6 +532,98 @@ export function buildTraversabilityMap(
   return out;
 }
 
+/** Why a move out of a closed area is not taken: a declared reason, or a diagonal refused at a corner. */
+export type ClosedMoveReason = BlockReason | 'corner';
+
+/** The connected area one endpoint can reach, and why every move out of it is closed. */
+export interface ClosedArea {
+  /** Which endpoint the area was grown from. */
+  readonly seed: 'start' | 'goal';
+  /** Eligible cells reachable from that endpoint, itself included. */
+  readonly cells: number;
+  /**
+   * Moves from a cell in the area to an in-grid cell outside it, by the
+   * reason each is closed: the destination's node reason, an edge limit
+   * (`evaluateEdge`'s first reason), or `'corner'` for a diagonal the shared
+   * transition rule refuses at an unsupported corner or for its swept width.
+   * Moves off the grid are not counted: the survey edge is not a limit.
+   */
+  readonly closedMoves: ReadonlyMap<ClosedMoveReason, number>;
+}
+
+/**
+ * When no route joins `startIndex` and `endIndex`, grow the area each can
+ * reach over the same moves the search takes, one cell from each in turn,
+ * and stop when one is exhausted: that smaller area is the one the limits
+ * close, found in work proportional to its size. Then tally why each move out
+ * of it is closed. Null when the two endpoints are in fact connected, or
+ * either is not an eligible cell.
+ */
+export function closedAreaBetween(
+  grid: TerrainAccessGrid,
+  features: TerrainAccessFeatures,
+  eligibility: NodeEligibility,
+  profile: TerrainAccessProfile,
+  startIndex: number,
+  endIndex: number,
+): ClosedArea | null {
+  const { cols, rows } = grid;
+  const n = cols * rows;
+  const ok = (i: number): boolean => Number.isInteger(i) && i >= 0 && i < n && eligibility.blocked[i] === 0;
+  if (!ok(startIndex) || !ok(endIndex) || startIndex === endIndex) return null;
+  const label = new Uint8Array(n);
+  const queues: number[][] = [[startIndex], [endIndex]];
+  const heads = [0, 0];
+  label[startIndex] = 1;
+  label[endIndex] = 2;
+  const opens = (i: number, dx: number, dy: number, j: number): boolean =>
+    transitionAllowed(grid, eligibility, profile, i, dx, dy)
+    && !evaluateEdge(grid, features, profile, i, j, dx, dy).blocked;
+
+  let done = -1;
+  while (done < 0) {
+    for (let k = 0; k < 2 && done < 0; k++) {
+      if (heads[k] >= queues[k].length) { done = k; break; }
+      const i = queues[k][heads[k]++];
+      const row = Math.floor(i / cols);
+      const col = i - row * cols;
+      for (const [dx, dy] of TERRAIN_ACCESS_NEIGHBOURS) {
+        const c = col + dx;
+        const r = row + dy;
+        if (c < 0 || c >= cols || r < 0 || r >= rows) continue;
+        const j = r * cols + c;
+        if (label[j] === k + 1) continue;
+        if (!opens(i, dx, dy, j)) continue;
+        if (label[j] !== 0) return null; // the other area: the two are connected
+        label[j] = k + 1;
+        queues[k].push(j);
+      }
+    }
+  }
+
+  const mine = done + 1;
+  const closedMoves = new Map<ClosedMoveReason, number>();
+  const add = (reason: ClosedMoveReason): void => { closedMoves.set(reason, (closedMoves.get(reason) ?? 0) + 1); };
+  for (const i of queues[done]) {
+    const row = Math.floor(i / cols);
+    const col = i - row * cols;
+    for (const [dx, dy] of TERRAIN_ACCESS_NEIGHBOURS) {
+      const c = col + dx;
+      const r = row + dy;
+      if (c < 0 || c >= cols || r < 0 || r >= rows) continue;
+      const j = r * cols + c;
+      if (label[j] === mine) continue;
+      if (!transitionAllowed(grid, eligibility, profile, i, dx, dy)) {
+        add(eligibility.blocked[j] === 1 ? (eligibility.reason[j] ?? 'no-data') : 'corner');
+        continue;
+      }
+      const reason = evaluateEdge(grid, features, profile, i, j, dx, dy).reason;
+      if (reason) add(reason);
+    }
+  }
+  return { seed: done === 0 ? 'start' : 'goal', cells: queues[done].length, closedMoves };
+}
+
 /** One reason line for the why-not inspector. */
 export interface WhyNotReason {
   readonly reason: BlockReason;
@@ -620,7 +731,9 @@ function nodeDetail(
 
 function edgeDetail(evalr: EdgeEvaluation, profile: TerrainAccessProfile): string {
   switch (evalr.reason) {
-    case 'step-height': return `step ${evalr.stepM.toFixed(3)} m > limit ${profile.maxStepHeight.toFixed(3)} m`;
+    case 'step-height':
+      return `step ${evalr.stepM.toFixed(3)} m (height change the slope on either side does not explain) `
+        + `> limit ${profile.maxStepHeight.toFixed(3)} m`;
     case 'longitudinal-grade':
       return `longitudinal grade ${tangentToDeg(evalr.longitudinalGrade)}° > limit ${tangentToDeg(profile.maxLongitudinalGrade)}°`;
     case 'cross-slope':

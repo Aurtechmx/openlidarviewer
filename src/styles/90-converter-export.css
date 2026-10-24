@@ -224,6 +224,17 @@
 .olv-clip-advanced-summary:hover { color: var(--text); }
 .olv-clip-advanced-summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 @media (max-width: 767px) { .olv-clip-panel { width: auto; } }
+/* A recount keeps the last figure on screen, dimmed, until the new one lands. */
+.olv-clip-readout { transition: opacity var(--dur-fast) var(--ease-standard); }
+.olv-clip-readout.is-stale { opacity: 0.55; }
+/* Draw clipping box: the Box tool's corner hint, on this page. */
+.olv-clip-draw.is-active { border-color: var(--accent); color: var(--text); }
+.olv-clip-draw-hint { margin: 0; font-size: var(--text-xs); color: var(--accent); line-height: 1.35; }
+/* The frame and unit of the bounds, and how they step. */
+.olv-clip-frame { margin: 0; font-size: var(--text-2xs); color: var(--text-faint); line-height: 1.35; }
+.olv-clip-num { font-variant-numeric: tabular-nums; }
+/* Typed but not applied yet (Enter or leaving the field applies it). */
+.olv-clip-num.is-pending { border-style: dashed; border-color: var(--accent); }
 .olv-export-body .olv-bc-section-label { margin-bottom: var(--space-xs); margin-top: var(--space-sm); }
 .olv-export-btn { margin-top: var(--space-sm); padding: var(--space-md) var(--space-xl); width: 100%; }
 .olv-export-status { font-size: var(--text-xs); color: var(--text-dim); margin: var(--space-xs) 0 0; line-height: 1.45; }

@@ -42,21 +42,27 @@
 import type { AboveGroundSurface, HorizontalScale, InterpolatedPolicy } from './dtmTerrainAccessGrid';
 import {
   buildTraversabilityMap,
+  closedAreaBetween,
+  whyNotEligible,
   type CostWeights,
   type NodeEligibility,
   type TerrainAccessFeatures,
   type TraversabilityMapCell,
 } from './traversabilityCost';
-import { prepareTerrainAccessRun } from './terrainAccessPrepare';
+import { prepareTerrainAccessRun, type TerrainAccessPrepared } from './terrainAccessPrepare';
+import {
+  TERRAIN_ACCESS_METHODS, TERRAIN_ACCESS_MODEL, terrainAccessPreparationDigest,
+} from './terrainAccessInputDigest';
+import type { TerrainAccessPreview } from './terrainAccessPreview';
 import { aStarTerrain, type AStarOutcome } from './aStarTerrain';
 import { computeRouteDiagnostics, type RouteDiagnostics } from './routeDiagnostics';
 import { terrainAccessResultDigest } from './terrainAccessDigest';
 import {
-  derivativeEstimateStatement, obstructionEstimateStatement, type DerivativeEstimatedConstraint,
+  closedAreaSentence, derivativeEstimateStatement, obstructionEstimateStatement, stepEstimateStatement,
+  type DerivativeEstimatedConstraint,
 } from './terrainAccessExplain';
 import { basisLimitations } from '../simulationInputBasis';
 import { sealRunRecord, type FieldSimulationRunRecord } from '../simulationRunRecord';
-import { methodRef } from '../../science/methodRegistry';
 import {
   resolveEvidenceGapPolicy, type EvidenceGapPolicy, type TerrainAccessGrid, type TerrainAccessProfile,
 } from './terrainAccessTypes';
@@ -82,7 +88,9 @@ export type TerrainAccessRefusalCode =
   /** A supplied above-ground surface was built with a different terrain surface. */
   | 'SURFACE_STALE'
   /** A declared region-of-interest mask does not fit the terrain grid. */
-  | 'INVALID_ROI';
+  | 'INVALID_ROI'
+  /** The terrain grid's dimensions or cell size are not usable (a cell size of 0 or NaN, say). */
+  | 'INVALID_GRID';
 
 /** A run that did not happen, and the precondition that stopped it. */
 export interface TerrainAccessRefusal {
@@ -169,7 +177,8 @@ export type TerrainAccessConstraintStatus =
 /** The route figures {@link terrainAccessConstraintStatus} reads to decide `estimated`. */
 export type DerivativeRouteSupport = Pick<RouteDiagnostics,
   | 'derivativeSynthesisedRouteCells' | 'derivativeSynthesisedBoundaryRouteCells'
-  | 'derivativeSynthesisedHoleRouteCells' | 'ruggednessSynthesisedRouteCells'>;
+  | 'derivativeSynthesisedHoleRouteCells' | 'ruggednessSynthesisedRouteCells'>
+  & Partial<Pick<RouteDiagnostics, 'stepOneSidedRouteMoves'>>;
 
 /**
  * The per-constraint status a run record carries under `result.constraints`.
@@ -177,7 +186,8 @@ export type DerivativeRouteSupport = Pick<RouteDiagnostics,
  * With it, longitudinal grade and cross slope read `estimated` when any route
  * cell's slope used a substituted neighbour, and an evaluated ruggedness limit
  * reads `estimated` when any route cell's VRM window holds such a cell. Step
- * height is a raw height difference between two cells and is never estimated.
+ * height reads `estimated` when any route move read the terrain on one side
+ * only (`stepOneSidedRouteMoves`), which only the exploratory policy allows.
  * An evaluated obstruction limit reads `estimated` when the surface basis is
  * a sample, or when `obstructionUnevaluatedRouteCells` is above zero. The
  * minimum terrain confidence reads `evaluated` under the `block` unknown
@@ -197,7 +207,7 @@ export function terrainAccessConstraintStatus(
   return {
     longitudinalGrade: slopeStatus,
     crossSlope: slopeStatus,
-    stepHeight: 'evaluated',
+    stepHeight: (route?.stepOneSidedRouteMoves ?? 0) > 0 ? 'estimated' : 'evaluated',
     // Only the 'block' policy turns the minimum into a hard block; under
     // 'penalize' it changes neither eligibility nor cost and only sets the
     // reported share of route cells below it.
@@ -240,6 +250,9 @@ export function constraintEstimateStatements(
       holeRouteCells: route.derivativeSynthesisedHoleRouteCells,
     });
   }
+  if (constraints.stepHeight === 'estimated') {
+    out.stepHeight = stepEstimateStatement(route.stepOneSidedRouteMoves ?? 0, Math.max(0, route.cellCount - 1));
+  }
   if (constraints.aboveGroundObstruction === 'estimated') {
     const basis = grid?.aboveGroundBasis;
     out.aboveGroundObstruction = obstructionEstimateStatement({
@@ -272,22 +285,37 @@ export function evidenceGapTreatment(profile: TerrainAccessProfile, grid: Terrai
   };
 }
 
-/** The model a run record names, at the version the registry declares. */
-export const TERRAIN_ACCESS_MODEL = Object.freeze(methodRef('olv.simulation.terrain-access.astar'));
+export { TERRAIN_ACCESS_METHODS, TERRAIN_ACCESS_MODEL } from './terrainAccessInputDigest';
 
-/** The registered methods a run uses, in the order it uses them. */
-export const TERRAIN_ACCESS_METHODS: readonly string[] = Object.freeze([
-  'olv.simulation.terrain-access.local-step',
-  'olv.simulation.terrain-access.directional-grade',
-  'olv.simulation.terrain-access.cost-map',
-  'olv.simulation.terrain-access.astar',
-]);
+/**
+ * The preview's preparation and map when `preview` was built from exactly the
+ * inputs this run reads (same `terrainAccessPreparationDigest`), else null.
+ */
+function reusablePreview(
+  preview: TerrainAccessPreview | null,
+  dtm: DtmGrid | null,
+  scale: HorizontalScale,
+  profile: TerrainAccessProfile,
+  params: TerrainAccessParams,
+): (TerrainAccessPrepared & { readonly map: readonly TraversabilityMapCell[] }) | null {
+  if (!preview?.ok || !dtm) return null;
+  if (preview.preparationDigest !== terrainAccessPreparationDigest(dtm, scale, profile, params)) return null;
+  const { grid, features, eligibility, basis, gridWarnings, weights, map } = preview;
+  return { ok: true, grid, features, eligibility, basis, gridWarnings, weights, map };
+}
 
 /**
  * Run one Terrain Access simulation from `startIndex` to `endIndex` over
  * `dtm`. Order is fixed and is the processing manifest: build the grid,
  * prepare terrain features (slope/aspect, VRM, local step, obstruction),
  * compute hard eligibility, apply width clearance, then search.
+ *
+ * `preview` is the traversability-map preview the caller already built, if
+ * any. When it was built from exactly these inputs (the same preparation
+ * digest: terrain, scale, above-ground surface, ROI, profile, weights and
+ * parameters), its grid, features, eligibility and map are used rather than
+ * built again; they are the same values a fresh preparation would build.
+ * Otherwise it is ignored.
  */
 export function runTerrainAccess(
   dtm: DtmGrid | null,
@@ -297,24 +325,28 @@ export function runTerrainAccess(
   endIndex: number,
   params: TerrainAccessParams,
   identity: TerrainAccessRunIdentity,
+  preview: TerrainAccessPreview | null = null,
 ): TerrainAccessResult | TerrainAccessRefusal {
-  const prepared = prepareTerrainAccessRun(dtm, scale, profile, params);
+  const reused = reusablePreview(preview, dtm, scale, profile, params);
+  const prepared = reused ?? prepareTerrainAccessRun(dtm, scale, profile, params);
   if (!prepared.ok) return prepared;
   const { grid, features, eligibility, basis, gridWarnings, weights } = prepared;
 
   const search = aStarTerrain(grid, features, eligibility, profile, startIndex, endIndex, weights);
 
   if (search.outcome !== 'FOUND') {
-    const reasonByOutcome: Record<Exclude<AStarOutcome, 'FOUND'>, string> = {
-      START_BLOCKED: 'The start cell is not eligible under the declared mobility profile.',
-      END_BLOCKED: 'The end cell is not eligible under the declared mobility profile.',
-      NO_ROUTE: 'No eligible path connects the start and end cells under the declared mobility profile.',
-    };
-    return {
-      ok: false,
-      code: search.outcome,
-      reason: reasonByOutcome[search.outcome],
-    };
+    let reason: string;
+    if (search.outcome === 'NO_ROUTE') {
+      const closed = closedAreaSentence(closedAreaBetween(grid, features, eligibility, profile, startIndex, endIndex));
+      reason = 'No eligible path connects the start and end cells under the declared mobility profile.'
+        + (closed ? ` ${closed}` : '');
+    } else {
+      reason = endpointRefusalReason(
+        search.outcome === 'START_BLOCKED' ? 'start' : 'end', grid, features, eligibility, profile,
+        search.outcome === 'START_BLOCKED' ? startIndex : endIndex,
+      );
+    }
+    return { ok: false, code: search.outcome, reason };
   }
 
   const diagnostics = computeRouteDiagnostics(grid, features, search.path, weights, profile);
@@ -336,7 +368,7 @@ export function runTerrainAccess(
   }
   let gapBlockedCells = 0;
   for (const r of eligibility.reason) if (r === 'derivative-support' || r === 'obstruction-unknown') gapBlockedCells++;
-  const map = buildTraversabilityMap(grid, features, eligibility, profile, weights);
+  const map = reused?.map ?? buildTraversabilityMap(grid, features, eligibility, profile, weights);
   const resultDigest = terrainAccessResultDigest(grid.cols, grid.rows, eligibility.blocked, search.path, search.cost);
 
   const limitations = [
@@ -384,6 +416,7 @@ export function runTerrainAccess(
       maxLongitudinalGrade: diagnostics.maxLongitudinalGrade,
       maxCrossSlope: diagnostics.maxCrossSlope,
       maxEdgeStepM: diagnostics.maxEdgeStepM,
+      stepOneSidedRouteMoves: diagnostics.stepOneSidedRouteMoves,
       maxLocalReliefM: diagnostics.maxLocalReliefM,
       maxVrm: diagnostics.maxVrm,
       minTerrainConfidence: diagnostics.minTerrainConfidence,
@@ -427,6 +460,31 @@ export function runTerrainAccess(
     limitations,
     record,
   };
+}
+
+/**
+ * Why an endpoint cannot start or end a route, in the words a reader can act
+ * on: not on the grid, no elevation (NoData), or the declared limit that
+ * blocks the cell, as the why-not inspector words it.
+ */
+function endpointRefusalReason(
+  which: 'start' | 'end',
+  grid: TerrainAccessGrid,
+  features: TerrainAccessFeatures,
+  eligibility: NodeEligibility,
+  profile: TerrainAccessProfile,
+  index: number,
+): string {
+  const n = grid.cols * grid.rows;
+  if (!(Number.isInteger(index) && index >= 0 && index < n)) {
+    return `The ${which} cell is not on the terrain grid. Choose a ${which} cell on the map.`;
+  }
+  if (grid.valid[index] === 0) {
+    return `The ${which} cell has no elevation (NoData), so no route can ${which} there. Choose a cell with data.`;
+  }
+  const detail = whyNotEligible(grid, features, eligibility, profile, index).reasons[0]?.detail;
+  return `The ${which} cell is not eligible under the declared mobility profile`
+    + (detail ? `: ${detail}.` : '.');
 }
 
 /**

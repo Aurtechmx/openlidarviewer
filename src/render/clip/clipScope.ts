@@ -35,3 +35,14 @@ export function subscribeClipScope(fn: () => void): () => void {
 export function clipScopeText(s: ClipScope): string {
   return `Clipped: ${s.kept.toLocaleString()} of ${s.total.toLocaleString()} points`;
 }
+
+/**
+ * The scope as the state strip and the Export panel state it: "Clipped: k of
+ * n points", or, when the box keeps every point, that the clip is on and
+ * clips nothing (never "Clipped: n of n").
+ */
+export function clipStatusText(s: ClipScope): string {
+  return s.kept === s.total && s.total > 0
+    ? `Clip on: keeps all ${s.total.toLocaleString()} points`
+    : clipScopeText(s);
+}

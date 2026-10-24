@@ -68,9 +68,10 @@ test('a clip over a placed tile exports the points it shows', async ({ page }) =
   await expect(panel).toBeVisible({ timeout: 20_000 });
   if (await panel.evaluate((el) => el.classList.contains('olv-collapsed'))) await panel.locator('.olv-panel-head').click();
   await panel.locator('label', { hasText: 'Clip the scan to this box' }).click();
-  // Fit to scan on a tile placed away from the origin encloses the whole tile.
+  // Fit to scan covers both visible tiles, the placed one included, and the
+  // readout counts both, with the active tile (the one the export writes) named.
   await panel.getByRole('button', { name: 'Fit to scan' }).click();
-  await expect(panel.locator('[role="status"]')).toContainText(/^16 of 16 points kept/);
+  await expect(panel.locator('[role="status"]')).toContainText(/^32 of 32 points kept across 2 visible scans\. In the active scan \(utm33-b\.las\): 16 of 16;/);
   await panel.locator('summary', { hasText: 'Advanced' }).click();
   const set = async (label: string, v: number): Promise<void> => {
     const input = panel.getByLabel(label, { exact: true });
@@ -84,7 +85,7 @@ test('a clip over a placed tile exports the points it shows', async ({ page }) =
   await set('Z max', off![2] + 50);
   await set('Z min', off![2] - 50);
   const kept = panel.locator('[role="status"]');
-  await expect(kept).toContainText(/^8 of 16 points kept/);
+  await expect(kept).toContainText(/^8 of 32 points kept across 2 visible scans\. In the active scan \(utm33-b\.las\): 8 of 16;/);
 
   await showWorkspaceMode(page, 'output');
   const exp = page.locator('.olv-export-panel');

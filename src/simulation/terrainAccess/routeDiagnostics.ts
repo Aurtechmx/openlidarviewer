@@ -33,6 +33,7 @@ import {
   DERIVATIVE_CAUSE_BOUNDARY, DERIVATIVE_CAUSE_HOLE, edgeGeometry, utilization, windowHoldsFlagged,
   type CostWeights, type TerrainAccessFeatures,
 } from './traversabilityCost';
+import { stepOneSided } from './localStep';
 import type { TerrainAccessGrid } from './terrainAccessTypes';
 
 const MEASURED = 2;
@@ -69,19 +70,27 @@ export interface RouteDiagnostics {
   /** 95th percentile of the per-edge cross slope, weighted by edge length. */
   readonly p95CrossSlope: number;
   /**
-   * The largest adjacent-cell elevation jump actually crossed along the
-   * route (`edgeStep`/`evalr.stepM` in `traversabilityCost.ts`) — the exact
-   * quantity `maxStepHeight` gates a move against. This is the figure a
-   * reader should compare to their declared step limit.
+   * The largest step actually crossed along the route (`moveStep`, read as
+   * `evalr.stepM` in `traversabilityCost.ts`): the part of a move's rise the
+   * terrain on either side does not explain, so a smooth slope adds nothing to
+   * it. The exact quantity `maxStepHeight` gates a move against, and the
+   * figure a reader should compare to their declared step limit.
    */
   readonly maxEdgeStepM: number;
   /**
-   * The largest windowed-footprint relief (`features.localStep`, the worst
-   * discontinuity in a route cell's whole 3x3 neighbourhood, whether or not
-   * the route crosses it) touched by the route. NOT the quantity the step
-   * limit applies to — a route can pass near a discontinuity it never
-   * crosses — so this is reported separately and never compared to
-   * `maxStepHeight` by name.
+   * Route moves whose step read the terrain on one side of the move only
+   * (`stepOneSided`): a cell behind the start or past the end along a trend
+   * it reads is off the grid or NoData. There a change of grade can read as a
+   * step. Zero under the conservative evidence policy, which blocks every
+   * cell such a move could start or end on.
+   */
+  readonly stepOneSidedRouteMoves: number;
+  /**
+   * The largest windowed-footprint relief (`features.localStep`, the largest
+   * raw height difference in a route cell's whole 3x3 neighbourhood, slope
+   * included, whether or not the route crosses it) touched by the route. NOT
+   * the quantity the step limit applies to, so this is reported separately
+   * and never compared to `maxStepHeight` by name.
    */
   readonly maxLocalReliefM: number;
   readonly maxVrm: number;
@@ -140,7 +149,7 @@ export function computeRouteDiagnostics(
     return {
       cellCount: 0, horizontalLengthM: 0, length3dM: 0, totalAscentM: 0, totalDescentM: 0,
       maxLongitudinalGrade: 0, p95LongitudinalGrade: 0, maxCrossSlope: 0, p95CrossSlope: 0,
-      maxEdgeStepM: 0, maxLocalReliefM: 0, maxVrm: 0, minTerrainConfidence: Number.NaN,
+      maxEdgeStepM: 0, stepOneSidedRouteMoves: 0, maxLocalReliefM: 0, maxVrm: 0, minTerrainConfidence: Number.NaN,
       fractionMeasured: null, fractionInterpolated: null, fractionBelowProfileConfidence: null,
       profileMinimumTerrainConfidence: profile.minimumTerrainConfidence,
       derivativeSynthesisedRouteCells: 0, fractionDerivativeSynthesised: null,
@@ -158,6 +167,7 @@ export function computeRouteDiagnostics(
   const crossSlopes: number[] = [];
   const edgeLengths: number[] = [];
   let maxEdgeStepM = 0;
+  let stepOneSidedRouteMoves = 0;
   let maxLocalReliefM = 0;
   let minTerrainConfidence = Number.POSITIVE_INFINITY;
   let maxVrm = 0;
@@ -183,6 +193,7 @@ export function computeRouteDiagnostics(
 
     const evalr = edgeGeometry(grid, features, prev, i, dx, dy);
     if (Number.isFinite(evalr.stepM) && evalr.stepM > maxEdgeStepM) maxEdgeStepM = evalr.stepM;
+    if (stepOneSided(grid, prev, dx, dy)) stepOneSidedRouteMoves++;
     horizontalLengthM += evalr.distanceM;
     const rise = grid.z[i] - grid.z[prev];
     length3dM += Math.hypot(evalr.distanceM, rise);
@@ -239,7 +250,7 @@ export function computeRouteDiagnostics(
     p95LongitudinalGrade: weightedQuantile(longitudinalGrades, edgeLengths, 0.95),
     maxCrossSlope: crossSlopes.length ? Math.max(...crossSlopes) : 0,
     p95CrossSlope: weightedQuantile(crossSlopes, edgeLengths, 0.95),
-    maxEdgeStepM, maxLocalReliefM,
+    maxEdgeStepM, stepOneSidedRouteMoves, maxLocalReliefM,
     maxVrm,
     minTerrainConfidence: Number.isFinite(minTerrainConfidence) ? minTerrainConfidence : Number.NaN,
     fractionMeasured: coverageKnown ? measured / path.length : null,

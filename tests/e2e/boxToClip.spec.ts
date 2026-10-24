@@ -42,9 +42,9 @@ test('Box measurement → Use as clipping region → the Clip page shows its bou
   await clip.locator('summary', { hasText: 'Advanced' }).click();
   const nums = clip.locator('input.olv-clip-num');
   await expect(nums.nth(0)).toBeVisible();
-  await expect(nums.nth(0)).toHaveValue('-2');
-  await expect(nums.nth(1)).toHaveValue('2');
-  await expect(nums.nth(5)).toHaveValue('2');
+  await expect(nums.nth(0)).toHaveValue('-2.000');
+  await expect(nums.nth(1)).toHaveValue('2.000');
+  await expect(nums.nth(5)).toHaveValue('2.000');
   await expect(clip.locator('.olv-clip-enable input')).toBeChecked();
   await expect(clip.locator('.olv-bc-pill', { hasText: 'Inside' })).toHaveAttribute('aria-pressed', 'true');
   await expect(clip.locator('[role="status"]')).toContainText(/of 3,600 points kept/);

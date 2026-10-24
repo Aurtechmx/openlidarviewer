@@ -13,13 +13,15 @@ import {
 import { gridOf, PERMISSIVE } from './helpers/terrainAccessFixtures';
 
 /**
- * A 3×1 strip around the centre cell 1. The move west climbs a 0.05 m step
- * over a 0.01 m limit (0.04 m over, 4× the limit). The move east is level but
- * reads a 0.6 Horn grade at its end cell over a 0.5 limit (0.1 over, 0.2× the
- * limit). Raw, 0.04 < 0.1 named the step; relative, the grade is closer.
+ * A 4×1 strip around cell 1. The move west climbs a 0.05 m ledge (nothing
+ * beyond it to explain the rise) over a 0.01 m limit (0.04 m over, 4× the
+ * limit). The move east is level, with the ledge behind it and flat ground
+ * ahead, so it has no step, but reads a 0.6 Horn grade at its end cell over a
+ * 0.5 limit (0.1 over, 0.2× the limit). Raw, 0.04 < 0.1 named the step;
+ * relative, the grade is closer.
  */
 function strip(maxStepHeight: number) {
-  const grid = gridOf([[0.05, 0, 0]]);
+  const grid = gridOf([[0.05, 0, 0, 0]]);
   const profile = { ...PERMISSIVE, maxStepHeight, maxLongitudinalGrade: 0.5, maxCrossSlope: 10 };
   const features = prepareTerrainAccessFeatures(grid, profile);
   features.gradient.east.fill(0);
@@ -48,11 +50,15 @@ describe('why-not closest miss compares margins relative to each limit', () => {
   });
 
   it('a 0 m step limit still yields a named miss, never a missing reason', () => {
-    const { grid, features, eligibility, profile } = strip(0);
-    // Both moves climb (west 0.05 m, east 0.02 m) over a 0 m step limit, so
-    // each excess is infinite relative to the limit.
-    features.gradient.east[2] = 0;
-    grid.z[2] = 0.02;
+    // Both moves carry a step (west 0.05 m; east a 0.02 m rise between a
+    // ledge behind and a 0.02 m drop ahead) over a 0 m step limit, so each
+    // excess is infinite relative to the limit.
+    const grid = gridOf([[0.05, 0, 0.02, 0]]);
+    const profile = { ...PERMISSIVE, maxStepHeight: 0, maxLongitudinalGrade: 0.5, maxCrossSlope: 10 };
+    const features = prepareTerrainAccessFeatures(grid, profile);
+    features.gradient.east.fill(0);
+    features.gradient.north.fill(0);
+    const eligibility = nodeEligibility(grid, features, profile);
     const out = whyNotEligible(grid, features, eligibility, profile, 1);
     expect(out.eligible).toBe(false);
     expect(out.reasons[0].reason).toBe('step-height');

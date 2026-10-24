@@ -33,9 +33,11 @@ const SUPPORTING_TESTS: Readonly<Record<string, readonly string[]>> = {
   ],
   'olv.simulation.terrain-flow.priority-flood': [
     'tests/priorityFlood.test.ts',
+    'tests/priorityFloodEpsilonChain.test.ts',
   ],
   'olv.simulation.terrain-flow.priority-flood.gap-outlet': [
     'tests/priorityFlood.test.ts',
+    'tests/priorityFloodEpsilonChain.test.ts',
     'tests/flowPulseRunner.test.ts',
   ],
   'olv.simulation.terrain-flow.accumulation': [
@@ -48,8 +50,21 @@ const SUPPORTING_TESTS: Readonly<Record<string, readonly string[]>> = {
   'olv.simulation.terrain-flow.depression-inventory': [
     'tests/depressionInventory.test.ts',
   ],
+  'olv.simulation.terrain-flow.rational-peak': [
+    'tests/rationalDischarge.test.ts',
+  ],
+  'olv.simulation.terrain-flow.edge-contamination': [
+    'tests/edgeContamination.test.ts',
+  ],
+  'olv.simulation.terrain-flow.flow-length': [
+    'tests/flowLength.test.ts',
+  ],
+  'olv.simulation.terrain-flow.pour-point-snap': [
+    'tests/pourPointSnap.test.ts',
+  ],
   'olv.simulation.terrain-access.local-step': [
     'tests/terrainAccessLocalStep.test.ts',
+    'tests/terrainAccessStepRouting.test.ts',
   ],
   'olv.simulation.terrain-access.directional-grade': [
     'tests/terrainAccessDirectionalGrade.test.ts',

@@ -36,6 +36,7 @@ const { prepareTerrainAccessPreview } = await import('../src/simulation/terrainA
 const { whyNotSentence } = await import('../src/simulation/terrainAccess/terrainAccessGridCursor');
 const { buildTerrainAccessPackage } = await import('../src/export/terrainAccessPackage');
 const lab = await import('../src/ui/fieldSimulation/terrainAccessLab');
+const { stepEstimateStatement } = await import('../src/simulation/terrainAccess/terrainAccessExplain');
 
 function dtmOf(values: readonly (readonly (number | null)[])[], over: Partial<DtmGrid> = {}): DtmGrid {
   const rows = values.length;
@@ -86,14 +87,18 @@ describe('reproduction: one-cell-wide corridor', () => {
     expect(r.path).toEqual([1, 4, 7]);
     expect(r.diagnostics.maxCrossSlope).toBe(0);
     const c = r.record.result.constraints as Record<string, string>;
+    const notes = r.record.result.constraintEstimates as Record<string, string>;
     expect(c.crossSlope).toBe('estimated');
     expect(c.longitudinalGrade).toBe('estimated');
-    // Step height is a raw height difference between two cells: no Horn window.
-    expect(c.stepHeight).toBe('evaluated');
+    // Each move along the corridor has a cell on one side only (the grid
+    // edge), so its step reads the terrain on that side alone.
+    expect(c.stepHeight).toBe('estimated');
+    expect(r.diagnostics.stepOneSidedRouteMoves).toBe(2);
+    expect(notes.stepHeight).toBe(stepEstimateStatement(2, 2));
+    expect(r.limitations).toContain(stepEstimateStatement(2, 2));
     // All three cells touch NoData that reaches the grid edge, or leave the grid.
     expect(r.record.result.derivativeSynthesisedBoundaryRouteCells).toBe(3);
     expect(r.record.result.derivativeSynthesisedHoleRouteCells).toBe(0);
-    const notes = r.record.result.constraintEstimates as Record<string, string>;
     expect(notes.crossSlope).toBe(statement('Cross-slope', 3, 3, 0));
     expect(notes.longitudinalGrade).toBe(statement('Longitudinal grade', 3, 3, 0));
     expect(r.limitations).toContain(statement('Cross-slope', 3, 3, 0));
@@ -112,7 +117,8 @@ describe('reproduction: one-cell-wide corridor', () => {
     const zip = buildTerrainAccessPackage(r, { basename: 'd' });
     const csv = textOf(zip, 'd-diagnostics.csv');
     expect(csv).toContain('constraint.crossSlope,estimated\n');
-    expect(csv).toContain('constraint.stepHeight,evaluated\n');
+    expect(csv).toContain('constraint.stepHeight,estimated\n');
+    expect(csv).toContain('stepOneSidedRouteMoves,2\n');
     expect(csv).toContain(`constraintEstimate.crossSlope,"${sentence}"\n`);
     expect(csv).toContain('derivativeSynthesisedBoundaryRouteCells,3\n');
     expect(csv).toContain('derivativeSynthesisedHoleRouteCells,0\n');

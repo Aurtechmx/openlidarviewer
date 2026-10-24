@@ -49,10 +49,24 @@ import type { FlowGrid } from '../../simulation/flowPulse/flowTypes';
 
 const CANVAS_MAX = 320;
 
+/** How a cell was activated: a pointer click, or Enter/Space on the keyboard cursor. */
+export type ActivationSource = 'pointer' | 'keyboard';
+
+/**
+ * Which cells the drainage lines draw, and how strongly: 1 in `channel` for a
+ * drawn cell, its ramp position in `strength`. The Lab passes the cells whose
+ * estimated peak flow reaches the display threshold; absent, the grid draws
+ * the log-scaled upstream count.
+ */
+export interface FlowChannelField {
+  readonly channel: Uint8Array;
+  readonly strength: Float32Array;
+}
+
 export interface FlowResultGridOptions {
   readonly ariaLabel: string;
   /** A cell was activated — a click, or Enter/Space on the keyboard cursor. */
-  readonly onActivate: (cell: GridCell) => void;
+  readonly onActivate: (cell: GridCell, source: ActivationSource) => void;
   /** The keyboard/pointer cursor moved to a new cell (no activation). */
   readonly onMove: (cell: GridCell, report: CellReport) => void;
   /**
@@ -146,6 +160,49 @@ function markItem(kind: 'hatch' | 'dots' | 'line' | 'ring' | 'dash', glyph: stri
   ]);
 }
 
+/** The marks drawn over the drainage lines, with a glyph and a word each. */
+function gridMarks(): HTMLElement {
+  const marks = legend('Grid legend', []);
+  marks.append(
+    markItem('line', '━', 'Path', PATH_COLOR),
+    markItem('dash', '┅', 'Catchment edge', CATCHMENT_COLOR),
+    markItem('ring', '○', 'Outlet (flow leaves the survey)', OUTLET_COLOR),
+    markItem('ring', '▼', 'Sink (flow stops)', SINK_COLOR),
+    markItem('dash', '–', 'Flat', LAB_LINE),
+    markItem('dots', '?', 'No ground data', LAB_WITHHELD),
+  );
+  return marks;
+}
+
+/** Peak-flow ticks on the display ramp, in L/s: one per decade from the threshold. */
+export const PEAK_FLOW_TICKS_LPS: readonly number[] = [1, 10, 100, 1000];
+
+/**
+ * The legend while a rainfall estimate draws the lines: the water ramp on a
+ * fixed log scale from 1 L/s to 1,000 L/s of estimated peak flow.
+ */
+export function flowDischargeLegend(): HTMLElement {
+  const bar = el('div', { className: 'olv-lab-ramp-bar' });
+  bar.style.background = rampGradient(waterRampColor);
+  const ticks = el('div', { className: 'olv-lab-ramp-ticks' }, PEAK_FLOW_TICKS_LPS.map((v, k) => {
+    const t = el('span', { className: 'olv-lab-ramp-tick', text: v.toLocaleString('en-US') });
+    t.style.left = `${(k / (PEAK_FLOW_TICKS_LPS.length - 1)) * 100}%`;
+    return t;
+  }));
+  const ramp = el('div', { className: 'olv-lab-ramp' }, [
+    el('p', { className: 'olv-lab-ramp-title', text: 'Estimated peak flow at the set rainfall, L/s (rational method, log scale)' }),
+    bar,
+    ticks,
+    el('p', {
+      className: 'olv-chips-note',
+      text: 'Lines start where the estimate reaches 1 L/s, so more rain draws more of the network; wider and brighter lines carry more, up to 1,000 L/s. Particle speed shows the upstream cell count, not water velocity. Grey relief is lit from the north-west.',
+    }),
+  ]);
+  ramp.setAttribute('role', 'img');
+  ramp.setAttribute('aria-label', 'Peak-flow scale on a log scale: thin deep-blue lines are 1 L/s, wide near-white lines are 1,000 L/s or more. Particle speed shows upstream cell count, not water velocity.');
+  return el('div', { className: 'olv-flow-legend olv-lab-legend-panel' }, [ramp, gridMarks()]);
+}
+
 /**
  * The grid legend: the water ramp of the drainage lines on its log scale,
  * from the smallest count drawn as a line to `maxUpstream`, then the marks
@@ -172,16 +229,7 @@ export function flowGridLegend(maxUpstream = 1): HTMLElement {
   ]);
   ramp.setAttribute('role', 'img');
   ramp.setAttribute('aria-label', `Drainage-line scale on a log scale: thin deep-blue lines are ${first.toLocaleString('en-US')} upstream cells, wide near-white lines are ${max.toLocaleString('en-US')} cells. It counts cells, not water. Grey relief shading darkens cells facing away from a north-west light.`);
-  const marks = legend('Grid legend', []);
-  marks.append(
-    markItem('line', '━', 'Path', PATH_COLOR),
-    markItem('dash', '┅', 'Catchment edge', CATCHMENT_COLOR),
-    markItem('ring', '○', 'Outlet (flow leaves the survey)', OUTLET_COLOR),
-    markItem('ring', '▼', 'Sink (flow stops)', SINK_COLOR),
-    markItem('dash', '–', 'Flat', LAB_LINE),
-    markItem('dots', '?', 'No ground data', LAB_WITHHELD),
-  );
-  return el('div', { className: 'olv-flow-legend olv-lab-legend-panel' }, [ramp, marks]);
+  return el('div', { className: 'olv-flow-legend olv-lab-legend-panel' }, [ramp, gridMarks()]);
 }
 
 export class FlowResultGrid {
@@ -205,6 +253,7 @@ export class FlowResultGrid {
   private readonly _stopResize: () => void;
   private _shade: Float32Array | null = null;
   private _maxUpstream = 1;
+  private _channelField: FlowChannelField | null = null;
   /** Moving marks along the D8 directions; see flowParticles.ts. */
   readonly particles: FlowParticles;
 
@@ -258,17 +307,45 @@ export class FlowResultGrid {
     this._pathMask = null;
     this._pathOrder = null;
     this._catchmentMask = null;
+    this._channelField = null;
     this._shade = hillshade(grid);
     let max = 1;
     for (const v of accumulation.upstreamCells) if (v > max) max = v;
     this._maxUpstream = max;
-    this.particles.load({
-      cols: grid.cols, rows: grid.rows, receiver: routed.receiver,
-      upstreamCells: accumulation.upstreamCells, maxUpstream: max,
-    });
+    this._loadParticles();
     this._cursor = clampCell(grid.cols, grid.rows, 0, 0);
     this._redraw();
     this._updateStatus(false);
+  }
+
+  /**
+   * Draw (and animate) the lines from `field` instead of the upstream count,
+   * or go back to the count with `null`. Redraws at once.
+   */
+  setChannelField(field: FlowChannelField | null): void {
+    this._channelField = field;
+    this._loadParticles(true);
+    this._redraw();
+  }
+
+  /** Move the cursor to `cell` without activating it (an outlet snapped elsewhere). */
+  setCursor(cell: GridCell): void {
+    if (!this._grid) return;
+    this._cursor = clampCell(this._grid.cols, this._grid.rows, cell.col, cell.row);
+    this._redraw();
+    this._updateStatus(true);
+  }
+
+  /** Hand the particles the current field; `keep` keeps particles still on a channel. */
+  private _loadParticles(keep = false): void {
+    const grid = this._grid, routed = this._routed, acc = this._accumulation;
+    if (!grid || !routed || !acc) return;
+    this.particles[keep ? 'update' : 'load']({
+      cols: grid.cols, rows: grid.rows, receiver: routed.receiver,
+      upstreamCells: acc.upstreamCells, maxUpstream: this._maxUpstream,
+      channel: this._channelField?.channel ?? null,
+      strength: this._channelField?.strength ?? null,
+    });
   }
 
   /** The largest upstream count on the loaded grid, for the legend's scale. */
@@ -313,7 +390,7 @@ export class FlowResultGrid {
     this._cursor = cell;
     this._redraw();
     this._updateStatus(true);
-    this._onActivate(cell);
+    this._onActivate(cell, 'pointer');
   }
 
   private _handleKey(e: KeyboardEvent): void {
@@ -329,7 +406,7 @@ export class FlowResultGrid {
       case ' ':
         e.preventDefault();
         this._updateStatus(true);
-        this._onActivate(this._cursor);
+        this._onActivate(this._cursor, 'keyboard');
         return;
       default:
         return;
@@ -406,11 +483,19 @@ export class FlowResultGrid {
     ctx: CanvasRenderingContext2D, grid: FlowGrid, routed: D8Result, acc: AccumulationResult, s: number,
   ): void {
     const buckets: number[][] = Array.from({ length: NETWORK_BUCKETS }, () => []);
+    const field = this._channelField;
     for (let i = 0; i < grid.cols * grid.rows; i++) {
       if (routed.status[i] === CELL_NODATA) continue;
-      const t = logScale(acc.upstreamCells[i]!, this._maxUpstream);
-      if (!isChannel(t)) continue;
-      buckets[Math.min(NETWORK_BUCKETS - 1, Math.floor(channelStrength(t) * NETWORK_BUCKETS))]!.push(i);
+      let strength: number;
+      if (field) {
+        if (field.channel[i] !== 1) continue;
+        strength = field.strength[i]!;
+      } else {
+        const t = logScale(acc.upstreamCells[i]!, this._maxUpstream);
+        if (!isChannel(t)) continue;
+        strength = channelStrength(t);
+      }
+      buckets[Math.min(NETWORK_BUCKETS - 1, Math.floor(strength * NETWORK_BUCKETS))]!.push(i);
     }
     const trace = (cells: readonly number[]): void => {
       ctx.beginPath();

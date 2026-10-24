@@ -7,7 +7,9 @@
  * Pure: no DOM, no three.js. Deterministic.
  */
 
-import { MAP_COST_BUCKETS, type MapCellState, type NodeEligibility } from './traversabilityCost';
+import {
+  MAP_COST_BUCKETS, type ClosedArea, type ClosedMoveReason, type MapCellState, type NodeEligibility,
+} from './traversabilityCost';
 import type { CostContributor } from './routeDiagnostics';
 import type { NodeBlockReason, TerrainAccessProfile } from './terrainAccessTypes';
 
@@ -40,12 +42,23 @@ export const COST_TERM_LABEL: Readonly<Record<CostContributor['term'], string>> 
 });
 
 /**
+ * Below this many metres of added cost a term is rounding, not terrain (a
+ * plane's step reads a few Float32 units in the last place, not 0).
+ */
+const NEGLIGIBLE_COST_M = 1e-6;
+/** A term adding less than this share of a route's extra cost is not named. */
+const NEGLIGIBLE_COST_SHARE = 0.01;
+
+/**
  * The one or two terms that explain most of a route's extra cost, from
  * `RouteDiagnostics.dominantCostContributors` (already sorted, largest
- * first). A second term is named only when it adds a non-zero share.
+ * first). A term is named only when it adds at least 1% of the route's extra
+ * cost and more than {@link NEGLIGIBLE_COST_M}.
  */
 export function costDriversSentence(contributors: readonly CostContributor[]): string {
-  const nonZero = contributors.filter((c) => c.total > 0);
+  const sum = contributors.reduce((acc, c) => acc + Math.max(0, c.total), 0);
+  const floor = Math.max(NEGLIGIBLE_COST_M, NEGLIGIBLE_COST_SHARE * sum);
+  const nonZero = contributors.filter((c) => c.total > 0 && c.total >= floor);
   // Cost terms describe the configured penalties, not how well the terrain is
   // supported; support is stated by the evidence rows and the estimated limits.
   if (nonZero.length === 0) return 'Cost is distance alone under the configured weights.';
@@ -94,6 +107,47 @@ export function topBlockReasonSentence(eligibility: NodeEligibility, profile: Te
   const noun = one ? 'cell' : 'cells';
   return `${countText(topCount)} ${noun} ${reasonClause(top, profile, one)}.`;
 }
+
+/** Plain names for why a move out of a closed area is not taken. */
+const CLOSED_MOVE_LABEL: Readonly<Record<ClosedMoveReason, string>> = Object.freeze({
+  'step-height': 'step height',
+  'longitudinal-grade': 'longitudinal grade',
+  'cross-slope': 'cross slope',
+  'no-data': 'NoData cells',
+  'outside-roi': 'cells outside the region of interest',
+  'low-confidence': 'cells below the minimum confidence',
+  ruggedness: 'ruggedness',
+  obstruction: 'above-ground obstruction',
+  'obstruction-unknown': 'cells with no above-ground return',
+  'derivative-support': 'cells whose slope used a synthesised neighbour',
+  'vehicle-width': 'vehicle width clearance',
+  corner: 'diagonals past an unsupported corner',
+});
+
+/**
+ * Which limits close the way, from {@link ClosedArea}: the area one endpoint
+ * can reach and the share of the moves out of it each reason closes, the
+ * three largest, e.g. "The start can reach 1,234 cells; the moves out of
+ * that area are closed by step height (61%), cross slope (22%) and NoData
+ * cells (17%)." Null when nothing was tallied.
+ */
+export function closedAreaSentence(area: ClosedArea | null): string | null {
+  if (!area) return null;
+  let total = 0;
+  for (const n of area.closedMoves.values()) total += n;
+  if (total === 0) return null;
+  const top = [...area.closedMoves.entries()]
+    .sort((a, b) => b[1] - a[1] || CLOSED_ORDER.indexOf(a[0]) - CLOSED_ORDER.indexOf(b[0]))
+    .slice(0, 3)
+    .map(([reason, n]) => `${CLOSED_MOVE_LABEL[reason]} (${Math.round((100 * n) / total)}%)`);
+  const list = top.length === 1 ? top[0] : `${top.slice(0, -1).join(', ')} and ${top[top.length - 1]}`;
+  const who = area.seed === 'start' ? 'The start' : 'The goal';
+  return `${who} can reach ${countText(area.cells)} ${area.cells === 1 ? 'cell' : 'cells'}; `
+    + `the moves out of that area are closed by ${list}.`;
+}
+
+/** Tie order for {@link closedAreaSentence}: the declared limits first. */
+const CLOSED_ORDER: readonly ClosedMoveReason[] = Object.keys(CLOSED_MOVE_LABEL) as ClosedMoveReason[];
 
 /** The slope-derived limits whose status can be `estimated`. */
 export type DerivativeEstimatedConstraint = 'longitudinalGrade' | 'crossSlope' | 'ruggedness';
@@ -158,11 +212,23 @@ export function obstructionEstimateStatement(counts: ObstructionEstimateCounts):
   return parts.join(' ');
 }
 
+/**
+ * The sentence for a step-height limit marked `estimated`: how many route
+ * moves read the terrain on one side only. One string for the run card,
+ * limitations, CSV, README and run record.
+ */
+export function stepEstimateStatement(oneSidedMoves: number, routeMoves: number): string {
+  return `Step height estimated from the terrain on one side of the move on ${countText(oneSidedMoves)} of `
+    + `${countText(routeMoves)} route ${routeMoves === 1 ? 'move' : 'moves'} (beside the grid edge or NoData), `
+    + 'where a change of grade can read as a step.';
+}
+
 /** The preview's grid-wide form of {@link derivativeEstimateStatement}, under the exploratory policy. */
 export function derivativeEstimateGridStatement(cells: number, boundary: number, hole: number): string {
   return `Longitudinal grade and cross-slope estimated from substituted neighbours on ${cellsText(cells, 'grid')} `
     + `(${countText(boundary)} at the outer boundary, ${countText(hole)} beside interior NoData holes). `
-    + 'The exploratory evidence policy allows these cells; a route over them reports those limits as estimated.';
+    + 'The exploratory evidence policy allows these cells; a route over them reports those limits as estimated, '
+    + 'and so does the step of a move that reads the terrain on one side only.';
 }
 
 /** The why-not inspector's clause for one cell whose slope used a substituted neighbour. */

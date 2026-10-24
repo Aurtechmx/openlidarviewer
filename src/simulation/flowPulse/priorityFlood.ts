@@ -15,24 +15,41 @@
  * and this is the declared alternative, which is why the result carries what
  * it changed rather than only the new heights.
  *
- * ── THE EPSILON, AND WHY IT IS COUNTED ──────────────────────────────────────
+ * ── THE EPSILON, AND WHY THE SURFACE IS FLOAT64 ─────────────────────────────
  * Filling to exactly the spill level leaves a plateau, and a plateau has no
  * descent, so D8 would report flats across every filled depression. The
- * standard remedy raises each filled cell a hair above its spill parent, which
- * gives a deterministic path out. The flood is ordered by the raised heights,
- * so a rise larger than it needs to be can carry a depression's interior above
- * a rim it should spill over and overstate its spill level. Barnes, Lehman and
- * Mulla take the smallest representable step for that reason, and
- * `'float32-step'` is that step; a fixed rise is still accepted.
+ * standard remedy raises each filled cell a hair above the cell it was
+ * reached from, which gives a deterministic path out. Barnes, Lehman and
+ * Mulla take the smallest representable step for it (nextafter), and
+ * `'float64-step'` is that step.
  *
- * That remedy has a failure mode worth naming. Elevations are held as Float32,
- * and at a magnitude of a few hundred thousand metres the gap between
- * neighbouring Float32 values exceeds a millimetre-scale epsilon, so the
- * increment is absorbed and the cell does not rise at all. The flat then
- * survives, and a caller reading only "cellsRaised" would believe the surface
- * was resolved. The arithmetic here runs in double and every absorbed
- * increment is counted, so the result can say plainly that part of the
- * surface could not be resolved at this epsilon.
+ * The rises chain. A cell k cells into a filled flat sits k steps above its
+ * spill level, so the far end of a long flat is the highest part of it. If
+ * that climb passes the height of a competing exit that is only slightly
+ * higher than the true spill point, D8 drains the far end over the wrong
+ * exit. On a Float32 surface one step is 6.1e-5 m at 600 m and 2.4e-4 m at
+ * 3000 m, so a few hundred cells climb centimetres and that happens on real
+ * lakes. The conditioned copy is therefore Float64. A Float64 step is 2^-29
+ * of a Float32 step at the same height, so a chain shorter than 2^29 cells
+ * stays below the next Float32 value above its spill level. A chain never
+ * holds more cells than the grid, every DTM the runner reads is Float32, and
+ * the runner refuses a grid above its cell budget (4,000,000 by default), so
+ * no input height above a spill level can be overtaken and the flood's
+ * lowest-spill answer survives routing.
+ *
+ * The flood itself is ordered by the spill level without the epsilon, and
+ * cells at one level leave the queue in the order they joined it, first in,
+ * first out, as the plain "pit" queue of Barnes, Lehman and Mulla's
+ * Priority-Flood+ε drains. Which exit a depression reaches therefore never
+ * depends on how far an epsilon chain has climbed, whatever rise was asked
+ * for.
+ *
+ * A fixed rise in the vertical unit is still accepted. It chains the same
+ * way, and on a long flat it can climb past a nearby higher exit, which the
+ * step cannot. The arithmetic runs in Float64, and a rise too small to change
+ * the value it is added to (a fixed rise below the Float64 spacing at that
+ * height) is counted in `epsilonAbsorbed`, so a result whose surface is still
+ * flat in places says so rather than leaving a reader to assume it drains.
  *
  * ── NODATA IS A WALL, AS ROUTING READS IT ───────────────────────────────────
  * D8 routes nothing into an invalid cell, so the flood seeds only at the edge
@@ -54,10 +71,21 @@
 import { CELL_NODATA } from './flowTypes';
 import { assertFlowGrid, D8_NEIGHBOURS, outsideSurface, type FlowGrid } from './flowTypes';
 
+/**
+ * How far above the cell it was reached from a filled cell is placed: one
+ * Float64 step, or a fixed rise in the vertical unit. See
+ * {@link PriorityFloodOptions.epsilon}.
+ */
+export type FillEpsilon = number | 'float64-step';
+
 /** A conditioned surface, and what conditioning it cost. */
 export interface PriorityFloodResult {
-  /** The conditioned elevations. The input grid is untouched. */
-  readonly z: Float32Array;
+  /**
+   * The conditioned elevations, in Float64 so the rises that give a filled
+   * flat its descent stay far below the spacing of the Float32 input. The
+   * input grid is untouched.
+   */
+  readonly z: Float64Array;
   /**
    * Cells that lie in a depression: their original elevation is strictly
    * below the spill level they were reached at. A cell on a flat, level with
@@ -95,9 +123,11 @@ export interface PriorityFloodResult {
    */
   readonly fillDepthSum: number;
   /**
-   * Cells whose epsilon increment was absorbed by Float32 precision and which
-   * therefore did not rise above their spill parent. Non-zero means part of
-   * the surface is still flat after conditioning.
+   * Cells whose rise could not be represented: the raised value equals the
+   * one it was added to, so the cell did not rise above the cell it was
+   * reached from. A fixed rise below the Float64 spacing at that height does
+   * this; the step does not at any finite height. Non-zero means part of the
+   * surface is still flat after conditioning.
    */
   readonly epsilonAbsorbed: number;
   /**
@@ -120,27 +150,35 @@ export type NoDataReading = 'wall' | 'outlet';
 /** Options for a conditioning pass. */
 export interface PriorityFloodOptions {
   /**
-   * How far above its spill parent a filled cell is placed. `'float32-step'`
-   * places it on the next Float32 value above, the smallest rise the surface
-   * can hold (Barnes, Lehman & Mulla 2014 take it with nextafter): it gives a
-   * flat a way out without lifting a depression's interior above ground it
-   * should spill over, and it is never absorbed. A number is a fixed rise in
-   * the vertical unit. Zero fills to the exact spill level and leaves
-   * plateaux, which is a legitimate choice when the caller wants fill depths
-   * rather than a drainable surface.
+   * How far above the cell it was reached from a filled cell is placed.
+   * `'float64-step'` places it on the next Float64 value above, the smallest
+   * rise the conditioned surface can hold (Barnes, Lehman & Mulla 2014 take
+   * it with nextafter). The rises add up along a flat, one per cell, so the
+   * far end of a long flat sits highest; with the Float64 step that climb
+   * stays below the next Float32 value above the spill level for any chain
+   * shorter than 2^29 cells, so over a Float32 DTM it cannot lift a flat
+   * above ground it should spill over. A number is a fixed rise in the
+   * vertical unit; it adds up the same way, and on a long flat it can climb
+   * past a nearby exit that is only slightly higher than the true one. Zero
+   * fills to the exact spill level and leaves plateaux, which is a
+   * legitimate choice when the caller wants fill depths rather than a
+   * drainable surface, and is the default here.
    */
-  readonly epsilon?: number | 'float32-step';
+  readonly epsilon?: FillEpsilon;
   /** How a NoData cell is read. Defaults to `wall`. */
   readonly noData?: NoDataReading;
 }
 
 /**
- * A binary heap ordered by elevation, then by insertion order.
+ * A binary heap ordered by spill level, then by insertion order.
  *
- * The second key is what makes the result reproducible. Two cells reached at
- * the same elevation are ordered by when they entered rather than by where
- * the sift happened to leave them, so the conditioned surface does not depend
- * on heap internals.
+ * The key is the level a cell was reached at without the epsilon, so the
+ * order the flood advances in never depends on how far an epsilon chain has
+ * climbed. The second key makes the cells at one level leave in the order
+ * they joined, first in, first out within the level, as Barnes, Lehman and
+ * Mulla's pit queue does. It is also what makes the result reproducible: two
+ * cells at the same level are ordered by when they entered rather than by
+ * where the sift left them.
  */
 class CellHeap {
   private readonly _cell: Int32Array;
@@ -218,11 +256,15 @@ export function priorityFlood(
 ): PriorityFloodResult {
   assertFlowGrid(grid);
   const epsilon = options.epsilon ?? 0;
-  const step = epsilon === 'float32-step';
-  if (!step && !(Number.isFinite(epsilon) && epsilon >= 0)) {
-    throw new RangeError(`priorityFlood: epsilon must be 'float32-step' or a finite non-negative rise; got ${String(epsilon)}`);
+  const step = epsilon === 'float64-step';
+  if (!step && !(typeof epsilon === 'number' && Number.isFinite(epsilon) && epsilon >= 0)) {
+    // A record written before the surface became Float64 names the old step.
+    const renamed = String(epsilon) === 'float32-step' ? ' (\'float32-step\' was replaced by \'float64-step\')' : '';
+    throw new RangeError(
+      `priorityFlood: epsilon must be 'float64-step' or a finite non-negative rise; got ${String(epsilon)}${renamed}`,
+    );
   }
-  const rise = (zc: number): number => (step ? nextFloat32Up(zc) : zc + (epsilon as number));
+  const rise = (zc: number): number => (step ? nextFloat64Up(zc) : zc + (epsilon as number));
   const rises = step || (epsilon as number) > 0;
   const noData = options.noData ?? 'wall';
   if (noData !== 'wall' && noData !== 'outlet') {
@@ -232,9 +274,15 @@ export function priorityFlood(
 
   const { z: source, valid, cols, rows } = grid;
   const n = cols * rows;
-  const z = new Float32Array(source); // the conditioned copy; source is untouched
+  const z = new Float64Array(source); // the conditioned copy; source is untouched
   const closed = new Uint8Array(n);
   const heap = new CellHeap(n);
+
+  // The spill level each cell was reached at, without the epsilon gradient,
+  // per Barnes, Lehman & Mulla (2014): a cell is in a depression only when
+  // its ORIGINAL height is strictly below this level. It is also the key the
+  // flood is ordered by.
+  const spill = new Float64Array(source);
 
   const outside = outsideSurface(grid);
   const isEdgeSeed = (col: number, row: number): boolean => {
@@ -253,15 +301,10 @@ export function priorityFlood(
       const i = row * cols + col;
       if (valid[i] !== 1 || !isEdgeSeed(col, row)) continue;
       closed[i] = 1;
-      heap.push(i, z[i]);
+      heap.push(i, spill[i]);
     }
   }
 
-  // The spill level each cell was reached at, without the epsilon gradient,
-  // per Barnes, Lehman & Mulla (2014): a cell is in a depression only when
-  // its ORIGINAL height is strictly below this level.
-  const spill = new Float64Array(n);
-  for (let i = 0; i < n; i++) spill[i] = z[i];
   const depressionMask = new Uint8Array(n);
   let flatCellsResolved = 0;
   let cellsRaised = 0;
@@ -272,6 +315,7 @@ export function priorityFlood(
   while (heap.size > 0) {
     const c = heap.pop();
     const zc = z[c];
+    const level = spill[c];
     const col = c % cols;
     const row = (c - col) / cols;
 
@@ -283,8 +327,7 @@ export function priorityFlood(
       if (valid[nb] !== 1 || closed[nb] === 1) continue;
 
       closed[nb] = 1;
-      const original = z[nb];
-      const level = spill[c];
+      const original = source[nb];
       if (original < level) {
         // In a depression: the fill depth is the spill level minus the
         // original height, not inflated by the epsilon chain.
@@ -295,17 +338,19 @@ export function priorityFlood(
         fillDepthSum += depth;
         if (depth > maxFillDepth) maxFillDepth = depth;
       }
-      // Reached from below or level: raise to just above the level it was
-      // reached at so D8 has a descent (flats included).
+      // Not above the cell it was reached from: raise it just above that
+      // cell so D8 has a descent (flats included). Compared with the raised
+      // height, not the spill level, so a cell a fixed rise has climbed past
+      // still drains back down the way the flood came.
       if (original <= zc) {
-        const before = z[nb];
         z[nb] = rise(zc);
-        if (depressionMask[nb] !== 1 && z[nb] > before) flatCellsResolved++;
-        // The epsilon vanished into Float32: the cell is level with its
-        // parent and the flat it was meant to break survives.
+        if (depressionMask[nb] !== 1 && z[nb] > original) flatCellsResolved++;
+        // The rise vanished into the spacing of Float64 at this height: the
+        // cell is level with its parent and the flat it was meant to break
+        // survives.
         if (rises && z[nb] <= zc) epsilonAbsorbed++;
       }
-      heap.push(nb, z[nb]);
+      heap.push(nb, spill[nb]);
     }
   }
 
@@ -320,23 +365,32 @@ export function priorityFlood(
   };
 }
 
-const F32 = new Float32Array(1);
-const F32_BITS = new Int32Array(F32.buffer);
+const F64 = new DataView(new ArrayBuffer(8));
 
 /**
- * The next Float32 value above `x`, itself a Float32 value. Moving the bit
- * pattern by one is the step: up for a positive value, down (toward zero) for
- * a negative one, and from either zero to the smallest positive subnormal.
+ * The next Float64 value above `x`. Moving the bit pattern by one is the
+ * step: up for a positive value, down (toward zero) for a negative one, from
+ * either zero to the smallest positive subnormal, and from -Infinity to the
+ * most negative finite value. NaN and +Infinity have nothing above them and
+ * come back unchanged. The 64-bit pattern is handled as two 32-bit words,
+ * carrying or borrowing between them, so no BigInt is involved.
  */
-export function nextFloat32Up(x: number): number {
+export function nextFloat64Up(x: number): number {
   if (Number.isNaN(x) || x === Infinity) return x;
-  F32[0] = x;
-  if (F32[0] === 0) {
-    F32_BITS[0] = 1;
-    return F32[0];
+  if (x === 0) return Number.MIN_VALUE;
+  F64.setFloat64(0, x); // big-endian: the high word first
+  let hi = F64.getUint32(0);
+  let lo = F64.getUint32(4);
+  if (x > 0) {
+    lo = (lo + 1) >>> 0;
+    if (lo === 0) hi = (hi + 1) >>> 0;
+  } else {
+    if (lo === 0) hi = (hi - 1) >>> 0;
+    lo = (lo - 1) >>> 0;
   }
-  F32_BITS[0] += F32[0] > 0 ? 1 : -1;
-  return F32[0];
+  F64.setUint32(0, hi);
+  F64.setUint32(4, lo);
+  return F64.getFloat64(0);
 }
 
 /**

@@ -34,6 +34,7 @@ async function make(over: Partial<{
   async: boolean;
   counts: () => { measurements: number; annotations: number };
   disabledReason: () => string | null;
+  stateOf: (id: string) => string | null;
 }> = {}): Promise<Harness> {
   const { createToolLauncher } = await import('../src/ui/toolLauncher');
   const actions = over.actions ?? buildTestActionRegistry();
@@ -41,6 +42,7 @@ async function make(over: Partial<{
     getActions: () => (over.async ? Promise.resolve(actions) : actions),
     counts: over.counts ?? (() => ({ measurements: 0, annotations: 0 })),
     disabledReason: over.disabledReason,
+    stateOf: over.stateOf,
   });
   const root = launcher.element as unknown as FakeEl;
   const rows = (): FakeEl[] => root.findAll((e) => e.hasClass('olv-tl-row'));
@@ -53,6 +55,23 @@ async function make(over: Partial<{
     countsText: () => root.findAll((e) => e.hasClass('olv-tl-counts'))[0].textContent,
   };
 }
+
+describe('tool launcher: a running clip box shows on its row', () => {
+  it('the Clip box row says it is on, and stops saying so when it is off', async () => {
+    let on = true;
+    const h = await make({ stateOf: (id) => (id === 'tool.clip' && on ? 'On · Keep inside' : null) });
+    const clipRow = () => h.rows().find((r) => r.textContent.includes('Clip box'))!;
+    const state = () => clipRow().findAll((e) => e.hasClass('olv-tl-state'))[0];
+    expect(state().ownText).toBe('On · Keep inside');
+    expect(clipRow().hasClass('is-on')).toBe(true);
+    // Other rows carry no state.
+    expect(h.rows()[0].hasClass('is-on')).toBe(false);
+    on = false;
+    h.refresh();
+    expect(state().ownText).toBe('');
+    expect(clipRow().hasClass('is-on')).toBe(false);
+  });
+});
 
 describe('tool launcher', () => {
   it('lists the registry tools in the card order, skipping ids the build has not got', async () => {

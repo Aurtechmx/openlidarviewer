@@ -13,19 +13,22 @@
  * call `prepareTerrainAccessRun` (`terrainAccessPrepare.ts`), the one place
  * those checks and the grid/features/eligibility build live.
  *
- * `runTerrainAccess` itself is unchanged: it still performs its own checks
- * independently (a caller that skips the preview and calls it directly still
- * gets every refusal), and this module composes the same shared preparation
- * rather than the reverse being the case, so the two can never disagree
- * about what stops a run.
+ * `runTerrainAccess` still performs its own checks independently (a caller
+ * that skips the preview and calls it directly still gets every refusal), and
+ * this module composes the same shared preparation rather than the reverse
+ * being the case, so the two can never disagree about what stops a run. A
+ * caller that does hold a preview may hand it to the run: the run reuses its
+ * grid, features, eligibility and map only when its own inputs give the same
+ * `preparationDigest`, and otherwise prepares afresh.
  *
  * Pure: no DOM, no three.js, no I/O.
  */
 
 import {
   buildTraversabilityMap, DERIVATIVE_CAUSE_BOUNDARY, DERIVATIVE_CAUSE_HOLE,
-  type NodeEligibility, type TerrainAccessFeatures, type TraversabilityMapCell,
+  type CostWeights, type NodeEligibility, type TerrainAccessFeatures, type TraversabilityMapCell,
 } from './traversabilityCost';
+import { terrainAccessPreparationDigest } from './terrainAccessInputDigest';
 import { derivativeEstimateGridStatement } from './terrainAccessExplain';
 import { prepareTerrainAccessRun, type TerrainAccessPrepareParams } from './terrainAccessPrepare';
 import { resolveEvidenceGapPolicy, type TerrainAccessGrid, type TerrainAccessProfile } from './terrainAccessTypes';
@@ -45,13 +48,23 @@ export interface TerrainAccessPreview {
   readonly map: readonly TraversabilityMapCell[];
   readonly basis: SimulationInputBasis;
   readonly limitations: readonly string[];
+  /** The grid adapter's own warnings, which a run reusing this preview repeats in its limitations. */
+  readonly gridWarnings: readonly string[];
+  /** The cost weights the map was built with. */
+  readonly weights: CostWeights;
+  /**
+   * `terrainAccessPreparationDigest` of the inputs this preview was built
+   * from. `runTerrainAccess` reuses the grid, features, eligibility and map
+   * above only when its own inputs give the same digest.
+   */
+  readonly preparationDigest: string;
 }
 
 /** Refuse for exactly the codes a caller might reasonably act on before a search. */
 export type TerrainAccessPreviewRefusalCode = Extract<
   TerrainAccessRefusalCode,
   | 'NO_DTM' | 'UNITS_UNRESOLVED' | 'INVALID_PROFILE' | 'INVALID_WEIGHTS' | 'TOO_LARGE' | 'INSUFFICIENT_EVIDENCE'
-  | 'OBSTRUCTION_EVIDENCE_UNAVAILABLE' | 'SURFACE_MISALIGNED' | 'SURFACE_STALE' | 'INVALID_ROI'
+  | 'OBSTRUCTION_EVIDENCE_UNAVAILABLE' | 'SURFACE_MISALIGNED' | 'SURFACE_STALE' | 'INVALID_ROI' | 'INVALID_GRID'
 >;
 
 export function prepareTerrainAccessPreview(
@@ -73,6 +86,9 @@ export function prepareTerrainAccessPreview(
     eligibility,
     map,
     basis,
+    gridWarnings,
+    weights,
+    preparationDigest: terrainAccessPreparationDigest(dtm as DtmGrid, scale, profile, params),
     limitations: [
       ...basisLimitations(basis, 'terrain-access'),
       ...gridWarnings,

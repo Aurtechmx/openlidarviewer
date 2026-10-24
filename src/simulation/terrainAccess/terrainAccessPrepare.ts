@@ -2,8 +2,8 @@
  * terrainAccessPrepare.ts — the up-front preparation `runTerrainAccess` and
  * `prepareTerrainAccessPreview` both need before they diverge: refuse for
  * every precondition a route search or a traversability-map preview shares
- * (no DTM, an unresolved scale, an invalid profile or cost weights, a grid too large, no
- * measured cell, no eligible cell), then hand back the grid/features/
+ * (no DTM, an unresolved scale, an invalid profile or cost weights, a grid too large or
+ * malformed, no measured cell, no eligible cell), then hand back the grid/features/
  * eligibility a caller can build either a search or a map from.
  *
  * Extracted so the two callers cannot silently drift on what counts as a
@@ -26,7 +26,9 @@ import {
   type NodeEligibility,
   type TerrainAccessFeatures,
 } from './traversabilityCost';
-import { validateProfile, type TerrainAccessGrid, type TerrainAccessProfile } from './terrainAccessTypes';
+import {
+  assertTerrainAccessGrid, validateProfile, type TerrainAccessGrid, type TerrainAccessProfile,
+} from './terrainAccessTypes';
 import { topBlockReasonSentence } from './terrainAccessExplain';
 import type { SimulationInputBasis } from '../simulationInputBasis';
 import type { TerrainAccessRefusal } from './terrainAccessRunner';
@@ -95,7 +97,7 @@ export function prepareTerrainAccessRun(
     };
   }
   const verticalUnitToMetres = dtm.verticalUnitToMetres;
-  if (verticalUnitToMetres == null || !(verticalUnitToMetres > 0)) {
+  if (verticalUnitToMetres == null || !(verticalUnitToMetres > 0) || !Number.isFinite(verticalUnitToMetres)) {
     return {
       ok: false, code: 'UNITS_UNRESOLVED',
       reason: 'The vertical unit is unresolved, so an elevation difference cannot be interpreted '
@@ -131,6 +133,15 @@ export function prepareTerrainAccessRun(
     };
   }
 
+  if (!(Number.isInteger(dtm.cols) && Number.isInteger(dtm.rows) && dtm.cols > 0 && dtm.rows > 0)
+    || !(Number.isFinite(dtm.cellSizeM) && dtm.cellSizeM > 0)) {
+    return {
+      ok: false, code: 'INVALID_GRID',
+      reason: `The terrain grid is not usable: it is ${dtm.cols} × ${dtm.rows} cells of ${dtm.cellSizeM} units. `
+        + 'A run needs a positive whole number of columns and rows and a finite cell size above 0. Re-run terrain analysis.',
+    };
+  }
+
   const built = terrainDtmToAccessGrid(dtm, scale, {
     interpolated: params.interpolated,
     withheldExcluded: params.withheldExcluded,
@@ -139,6 +150,16 @@ export function prepareTerrainAccessRun(
   });
   if (!built.ok) return built;
   const { grid, basis, warnings: gridWarnings } = built;
+  try {
+    // The contract every module below reads: dimensions and arrays agree, and
+    // the metric cell lengths are finite and positive.
+    assertTerrainAccessGrid(grid);
+  } catch (err) {
+    return {
+      ok: false, code: 'INVALID_GRID',
+      reason: `The terrain grid is not usable: ${err instanceof Error ? err.message : String(err)}. Re-run terrain analysis.`,
+    };
+  }
 
   // An obstruction limit with no above-ground layer would leave every cell
   // 'not-evaluated', which eligibility does not block: the run would carry the

@@ -204,7 +204,7 @@ describe('adversarial: the reported route step is the one the limit actually app
     // Middle row is flat (the route); one cell just off the route, but
     // inside the 3x3 footprint window of a route cell, carries a large
     // elevation jump. Eligibility (traversabilityCost.ts) gates a move on
-    // `edgeStep` (the adjacent-cell jump actually crossed); this proves the
+    // `moveStep` (the discontinuity the move itself crosses); this proves the
     // diagnostic must agree with that gate rather than with
     // `features.localStep` (footprint relief), which a route can be near
     // without ever crossing.

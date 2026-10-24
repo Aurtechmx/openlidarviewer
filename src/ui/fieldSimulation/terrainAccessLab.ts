@@ -262,12 +262,18 @@ export function buildLabPreview(
   });
 }
 
-/** Run Terrain Access from `startIndex` to `endIndex` on the analysed surface. */
+/**
+ * Run Terrain Access from `startIndex` to `endIndex` on the analysed surface.
+ * `preview` is the map the reader picked the cells on: the run reuses its
+ * grid, features, eligibility and map when they were built from the same
+ * inputs (see `runTerrainAccess`).
+ */
 export function runLabTerrainAccess(
   input: TerrainAccessLabInput | null,
   profile: TerrainAccessProfile,
   startIndex: number,
   endIndex: number,
+  preview: TerrainAccessPreview | null = null,
 ): TerrainAccessResult | TerrainAccessRefusal {
   if (!input) {
     return runTerrainAccess(null, { isGeographic: false, latitudeDeg: null, unitToMetres: 1, resolved: false }, profile, startIndex, endIndex, PREVIEW_PARAMS(), NO_IDENTITY);
@@ -275,7 +281,7 @@ export function runLabTerrainAccess(
   return runTerrainAccess(input.dtm, input.scale, profile, startIndex, endIndex, {
     ...PREVIEW_PARAMS(),
     dsm: input.dsm ?? null,
-  }, labIdentity(input, profile));
+  }, labIdentity(input, profile), preview);
 }
 
 /** Result of {@link buildTerrainAccessExport}: bytes/filename to download, or a refusal reason. */
@@ -397,6 +403,24 @@ export function derivativeSupportText(d: RouteDiagnostics, policy: unknown): str
 }
 
 /**
+ * The limits a run applied, in the units the form takes them in: grade and
+ * cross slope in degrees, step and width in metres, and the minimum terrain
+ * confidence. Reads a recorded profile, so it takes `unknown`; null when the
+ * profile does not carry those five numbers.
+ */
+export function appliedLimitsText(profile: unknown): string | null {
+  const p = profile as Partial<Record<
+    'maxLongitudinalGrade' | 'maxCrossSlope' | 'maxStepHeight' | 'vehicleWidth' | 'minimumTerrainConfidence', unknown
+  >> | null;
+  if (!p) return null;
+  const nums = [p.maxLongitudinalGrade, p.maxCrossSlope, p.maxStepHeight, p.vehicleWidth, p.minimumTerrainConfidence];
+  if (!nums.every((v) => typeof v === 'number' && Number.isFinite(v))) return null;
+  const [grade, cross, step, width, confidence] = nums as number[];
+  return `grade ${tangentToDegrees(grade)}, cross slope ${tangentToDegrees(cross)}, step ${step} m, `
+    + `vehicle width ${width} m, minimum confidence ${confidence}`;
+}
+
+/**
  * One row per limit the run record marks `estimated`, then the record's own
  * sentence for each as a warning, so the card and the export say the same thing.
  */
@@ -415,14 +439,22 @@ function estimatedConstraintNodes(constraints: unknown, estimates: unknown): HTM
 
 /** The run's answer as a card: a refusal's named reason, or the route diagnostics.
  * `flat` writes the method as a plain section, for a card that may sit inside Details.
+ * `profile` is the profile a refused run was asked to apply, so its limits show
+ * beside the reason; a found route shows the limits its record holds.
  * §22: never a safety/passability word appears here. */
-export function renderTerrainAccessRunCard(outcome: TerrainAccessLabOutcome | null, flat = false): HTMLElement {
+export function renderTerrainAccessRunCard(
+  outcome: TerrainAccessLabOutcome | null,
+  flat = false,
+  profile: TerrainAccessProfile | null = null,
+): HTMLElement {
   const card = el('aside', { className: 'olv-story-card' });
   if (!outcome) return card;
   if (!outcome.ok) {
+    const limits = appliedLimitsText(profile);
     card.append(
       el('div', { className: 'olv-story-headline olv-lab-refusal', text: 'Terrain Access did not run' }),
       el('div', { className: 'olv-story-next', text: outcome.reason }),
+      ...(limits ? [row('Limits applied', limits)] : []),
       methodDetails([row('Reason code', outcome.code)], flat),
     );
     return card;
@@ -430,10 +462,12 @@ export function renderTerrainAccessRunCard(outcome: TerrainAccessLabOutcome | nu
   const d = outcome.diagnostics;
   const recordedProfile = outcome.record.parameters.profile as { readonly name?: unknown } | undefined;
   const origin = profileOriginText(recordedProfile);
+  const limits = appliedLimitsText(recordedProfile);
   card.append(
     el('div', { className: 'olv-story-headline olv-lab-caveat', text: TERRAIN_ACCESS_SCREENING }),
     row('Profile', typeof recordedProfile?.name === 'string' ? recordedProfile.name : 'not recorded'),
     ...(origin ? [row('Started from', origin)] : []),
+    ...(limits ? [row('Limits applied', limits)] : []),
     row('Route cells', String(d.cellCount)),
     row('Horizontal length', `${d.horizontalLengthM.toFixed(1)} m`),
     row('Ascent / descent', `${d.totalAscentM.toFixed(1)} m / ${d.totalDescentM.toFixed(1)} m`),
@@ -502,6 +536,7 @@ export const TERRAIN_ACCESS_HOW_TO_READ: readonly string[] = [
   'Coloured cells show where the vehicle or walker you described could go, and at what cost.',
   'The route is the lowest-cost path between start and goal on this map.',
   'Each move\'s grade is the steepest of the ground slope along it at either end cell and its own rise over run, so it reads the same both ways.',
+  'A step is the part of a move\'s rise the slope on either side does not explain, such as a ledge or a bank; a smooth slope has none.',
   'Grades and steps come from the ground surface alone. Check the site before relying on a route.',
 ];
 
@@ -646,7 +681,7 @@ export function buildProfileForm(
     'Weak-evidence policy',
     [
       { value: 'block', label: 'Block weak-evidence cells', tip: 'Treat cells below the minimum confidence as impassable.' },
-      { value: 'penalize', label: 'Allow, cost-penalize', tip: 'Allow cells below the minimum confidence, at an extra route cost.' },
+      { value: 'penalize', label: 'Allow, cost-penalize', tip: 'Allow cells below the minimum confidence and report their share. Cost follows each cell\'s confidence; the minimum does not change it.' },
     ],
     () => state.unknownPolicy,
     (value) => { state.unknownPolicy = value; unknownPolicyCtl.sync(); },
@@ -1031,7 +1066,7 @@ export function mountTerrainAccessInteractive(
       head.setStage(1);
       chip.set(terrainAccessChipFacts(input, preview));
       body.replaceChildren(
-        renderTerrainAccessRunCard(preview),
+        renderTerrainAccessRunCard(preview, false, profile),
         makeEditProfileButton(editProfile),
         labDetails([head.element]),
       );
@@ -1084,7 +1119,7 @@ export function mountTerrainAccessInteractive(
       const startIndex = startCell.row * readyPreview.grid.cols + startCell.col;
       const endIndex = goalCell.row * readyPreview.grid.cols + goalCell.col;
       try {
-        outcome = runLabTerrainAccess(input, profile, startIndex, endIndex);
+        outcome = runLabTerrainAccess(input, profile, startIndex, endIndex, readyPreview);
       } catch (err) {
         outcome = terrainAccessFailure(err);
       } finally {
@@ -1101,7 +1136,7 @@ export function mountTerrainAccessInteractive(
         overlay?.clearRoute();
         announce(`Terrain Access did not run: ${outcome.reason}`);
       }
-      runCard.replaceChildren(renderTerrainAccessRunCard(outcome, true));
+      runCard.replaceChildren(renderTerrainAccessRunCard(outcome, true, profile));
       placeRunCard();
       statsHost.replaceChildren(...[terrainAccessStats(outcome)].filter((n): n is HTMLElement => n !== null));
       // The Run button's tip sits over the card that just filled in.

@@ -38,7 +38,7 @@ const baseInput = (over: object = {}) => ({ facts, view: undefined, produced: ne
 
 describe('purpose lines', () => {
   it('are the agreed plain sentences', () => {
-    expect(copy.LAB_PURPOSE['flow-pulse']).toBe('See which way water would run downhill over the ground surface, and which area drains to a point. Counts cells, not rainfall.');
+    expect(copy.LAB_PURPOSE['flow-pulse']).toBe('See which way water would run downhill over the ground surface, which area drains to a point, and a rough peak flow for a rainfall you set.');
     expect(copy.LAB_PURPOSE['terrain-access']).toBe('Screen a possible route over the ground for a vehicle or walker you describe. Not a safety guarantee.');
     expect(copy.LAB_PURPOSE.observatory).toBe('Shows what the scanner saw from each setup, what was hidden behind objects, and where another setup would help.');
   });

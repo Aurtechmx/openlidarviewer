@@ -9,18 +9,20 @@
  *   a depression rises to its spill level and no further
  *   ground that already drains is left alone
  *   the conditioned surface actually has no interior pits left
- *   an epsilon absorbed by Float32 is reported rather than hidden
+ *   a rise too small to represent is reported rather than hidden
  *   NoData is a wall, as routing reads it, unless a gap is declared an exit
  *
- * The last one is the reason this file exists in its current shape. A test
- * suite that only checked "cellsRaised > 0" would pass on a surface that is
- * still full of unresolvable flats at a large coordinate magnitude.
+ * A test suite that only checked "cellsRaised > 0" would pass on a surface
+ * that is still full of unresolvable flats, which is why the absorbed rise
+ * is pinned at a height where it really is absorbed. The epsilon chain along
+ * a long flat, and the flood order that must not depend on it, are pinned in
+ * `priorityFloodEpsilonChain.test.ts`.
  */
 import { describe, expect, it } from 'vitest';
 
 import { CELL_ROUTED, CELL_SINK, d8Flow } from '../src/simulation/flowPulse/d8Flow';
 import { CELL_OUTLET } from '../src/simulation/flowPulse/flowTypes';
-import { filledCells, nextFloat32Up, priorityFlood } from '../src/simulation/flowPulse/priorityFlood';
+import { filledCells, nextFloat64Up, priorityFlood } from '../src/simulation/flowPulse/priorityFlood';
 import type { FlowGrid } from '../src/simulation/flowPulse/flowTypes';
 
 function gridOf(rows: readonly (readonly (number | null)[])[]): FlowGrid {
@@ -119,10 +121,35 @@ describe('the conditioned surface drains', () => {
 });
 
 describe('an absorbed epsilon is reported, not hidden', () => {
-  it('counts increments Float32 cannot represent at a large magnitude', () => {
-    // At 5e6 metres the gap between neighbouring Float32 values is about
-    // 0.5 m, so a millimetre epsilon cannot move the value at all. The fill
-    // still happens; what fails is the hair of descent on top of it.
+  // A pit at 600 m. The conditioned surface is Float64, where neighbouring
+  // values at 600 m are 1.1e-13 apart.
+  const pit = () => gridOf([
+    [605, 605, 605],
+    [605, 600, 605],
+    [605, 605, 605],
+  ]);
+
+  it('counts a fixed rise below the Float64 spacing at that height', () => {
+    // 1e-14 m is under half that spacing, so adding it cannot move the
+    // value at all. The fill still happens; what fails is the hair of
+    // descent on top of it, and D8 then finds the filled cell flat.
+    const g = pit();
+    const res = priorityFlood(g, { epsilon: 1e-14 });
+    expect(res.cellsRaised).toBe(1);
+    expect(res.epsilonAbsorbed).toBe(1);
+    expect(d8Flow({ ...g, z: res.z }).flatCount).toBeGreaterThan(0);
+  });
+
+  it('reports none at an ordinary magnitude, so the count means something', () => {
+    // The discrimination case. If this also reported absorptions the counter
+    // would be measuring the wrong thing.
+    expect(priorityFlood(bowl(), { epsilon: 0.001 }).epsilonAbsorbed).toBe(0);
+    expect(priorityFlood(pit(), { epsilon: 0.001 }).epsilonAbsorbed).toBe(0);
+  });
+
+  it('no longer loses a millimetre at a projected coordinate magnitude, as Float32 did', () => {
+    // At 5e6 m neighbouring Float32 values are 0.5 m apart, so a Float32
+    // surface absorbed a millimetre here. Float64 values are 9.3e-10 m apart.
     const base = 5_000_000;
     const g = gridOf([
       [base + 5, base + 5, base + 5],
@@ -131,13 +158,8 @@ describe('an absorbed epsilon is reported, not hidden', () => {
     ]);
     const res = priorityFlood(g, { epsilon: 0.001 });
     expect(res.cellsRaised).toBe(1);
-    expect(res.epsilonAbsorbed).toBeGreaterThan(0);
-  });
-
-  it('reports none at an ordinary magnitude, so the count means something', () => {
-    // The discrimination case. If this also reported absorptions the counter
-    // would be measuring the wrong thing.
-    expect(priorityFlood(bowl(), { epsilon: 0.001 }).epsilonAbsorbed).toBe(0);
+    expect(res.epsilonAbsorbed).toBe(0);
+    expect(res.z[4]).toBe(base + 5 + 0.001);
   });
 });
 
@@ -345,32 +367,70 @@ describe('the options are checked', () => {
     expect(() => priorityFlood(bowl(), { epsilon: -1 })).toThrow(/non-negative/);
   });
 
+  it('refuses the Float32 step it replaced, and names the replacement', () => {
+    const old = 'float32-step' as unknown as 'float64-step';
+    expect(() => priorityFlood(bowl(), { epsilon: old })).toThrow(/'float32-step' was replaced by 'float64-step'/);
+  });
+
   it('refuses a NoData reading it does not know', () => {
     const noData = 'edge' as unknown as 'wall';
     expect(() => priorityFlood(bowl(), { noData })).toThrow(/wall.*outlet/);
   });
 });
 
-describe('the Float32-step rise', () => {
-  it('steps to the next Float32 value above, through zero and for negatives', () => {
-    const f = (x: number): number => Math.fround(x);
-    for (const x of [f(1), f(10.0035), f(603.25), f(-2.5), f(1e-30), f(300_000.5)]) {
-      const up = nextFloat32Up(x);
-      expect(up).toBeGreaterThan(x);
-      expect(Math.fround(up)).toBe(up);
-      // Nothing Float32 lies strictly between.
-      expect(Math.fround((x + up) / 2) === x || Math.fround((x + up) / 2) === up).toBe(true);
+/** The same Float64 step computed from the 64-bit pattern as a BigInt, for comparison. */
+function nextUpByBigInt(x: number): number {
+  if (Number.isNaN(x) || x === Infinity) return x;
+  if (x === 0) return Number.MIN_VALUE;
+  const f = new Float64Array([x]);
+  const bits = new BigInt64Array(f.buffer);
+  bits[0] += x > 0 ? 1n : -1n;
+  return f[0];
+}
+
+describe('the Float64-step rise', () => {
+  it('steps to the next Float64 value above, through zero, for negatives and subnormals', () => {
+    const cases = [1, 10.0035, 603.25, -2.5, 1e-30, 300_000.5, 4_117_519.25, Math.fround(600.1),
+      2 ** 52 - 1, 2 ** 31, -(2 ** 32), 5e-324, 2.2250738585072014e-308, -2.2250738585072014e-308,
+      1 - Number.EPSILON / 2, -1];
+    for (const x of cases) {
+      const up = nextFloat64Up(x);
+      expect(up, `${x}`).toBeGreaterThan(x);
+      expect(up, `${x}`).toBe(nextUpByBigInt(x));
+      // Nothing Float64 lies strictly between.
+      const mid = x / 2 + up / 2;
+      expect(mid === x || mid === up, `${x}`).toBe(true);
     }
-    expect(nextFloat32Up(0)).toBe(1.401298464324817e-45);
-    expect(nextFloat32Up(-0)).toBe(1.401298464324817e-45);
-    expect(nextFloat32Up(-1.401298464324817e-45)).toBe(-0);
-    expect(nextFloat32Up(Infinity)).toBe(Infinity);
+    // The low word carries into the high word and borrows back out of it.
+    expect(nextFloat64Up(1 + 2 ** -20 - 2 ** -52)).toBe(1 + 2 ** -20);
+    expect(nextFloat64Up(-(1 + 2 ** -20))).toBe(-(1 + 2 ** -20 - 2 ** -52));
+    expect(nextFloat64Up(0)).toBe(5e-324);
+    expect(nextFloat64Up(-0)).toBe(5e-324);
+    expect(Object.is(nextFloat64Up(-5e-324), -0)).toBe(true);
+    expect(nextFloat64Up(Number.MAX_VALUE)).toBe(Infinity);
+    expect(nextFloat64Up(-Infinity)).toBe(-Number.MAX_VALUE);
+    expect(nextFloat64Up(Infinity)).toBe(Infinity);
+    expect(nextFloat64Up(Number.NaN)).toBeNaN();
+  });
+
+  it('agrees with the BigInt bit step over 20,000 random doubles of every sign and scale', () => {
+    let seed = 0x9e3779b9;
+    const rand = (): number => {
+      seed = (seed + 0x6d2b79f5) >>> 0;
+      let t = seed;
+      t = Math.imul(t ^ (t >>> 15), t | 1);
+      t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+      return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    };
+    for (let i = 0; i < 20_000; i++) {
+      const x = (rand() < 0.5 ? -1 : 1) * rand() * 2 ** Math.floor(rand() * 2100 - 1075);
+      expect(nextFloat64Up(x)).toBe(nextUpByBigInt(x));
+    }
   });
 
   // Row 1 holds the only routes: an outlet at 10 on the west edge, a flat run
   // at 10, a lip n at 10.0035, a pit p at 9, and an edge cell r at 10.004 on
-  // the east. Water in p spills over n, the lower rim. A 1 mm rise lifts the
-  // flat run past 10.004, so the flood reaches p from r first.
+  // the east. Water in p spills over n, the lower rim.
   const W = 100;
   const lip = (): FlowGrid => gridOf([
     [W, W, W, W, W, W, W, W, W, W],
@@ -379,11 +439,12 @@ describe('the Float32-step rise', () => {
   ]);
   const p = 1 * 10 + 8;
   const n = 1 * 10 + 7;
+  const r = 1 * 10 + 9;
 
   it('spills a depression at its true level and over the lower rim', () => {
     const g = lip();
     const exact = priorityFlood(g, { epsilon: 0 });
-    const res = priorityFlood(g, { epsilon: 'float32-step' });
+    const res = priorityFlood(g, { epsilon: 'float64-step' });
     expect(res.spillLevel[p]).toBe(exact.spillLevel[p]);
     expect(res.spillLevel[p]).toBe(Math.fround(10.0035));
     expect(res.epsilonAbsorbed).toBe(0);
@@ -393,19 +454,28 @@ describe('the Float32-step rise', () => {
     expect(routed.flatCount).toBe(0);
   });
 
-  it('a fixed 1 mm rise overstates the same spill level, the reason it is not the default', () => {
-    const res = priorityFlood(lip(), { epsilon: 0.001 });
-    expect(res.spillLevel[p]).toBe(Math.fround(10.004));
+  it('a fixed 1 mm rise keeps the true spill level but still drains the pit over the higher rim', () => {
+    // The flood is ordered by spill level, so a fixed rise no longer reaches
+    // p from r first and overstates its level (the Float32 surface did:
+    // 10.004). The rises still chain along the flat, though, six of them by
+    // the time they reach n, which puts p above r and lets D8 send it east.
+    // That is the reason a fixed rise is not the default.
+    const g = lip();
+    const res = priorityFlood(g, { epsilon: 0.001 });
+    expect(res.spillLevel[p]).toBe(Math.fround(10.0035));
+    expect(d8Flow({ ...g, z: res.z }).receiver[p]).toBe(r);
   });
 
-  it('is never absorbed, even where a millimetre is', () => {
+  it('is never absorbed, even where a fixed rise is', () => {
+    // At 300 km neighbouring Float64 values are 5.8e-11 m apart, so a fixed
+    // 1e-12 m rise vanishes; the step is one of those gaps by definition.
     const g = gridOf([
       [300_000, 300_000, 300_000],
       [300_000, 299_000, 300_000],
       [300_000, 300_000, 300_000],
     ]);
-    expect(priorityFlood(g, { epsilon: 0.001 }).epsilonAbsorbed).toBeGreaterThan(0);
-    const res = priorityFlood(g, { epsilon: 'float32-step' });
+    expect(priorityFlood(g, { epsilon: 1e-12 }).epsilonAbsorbed).toBeGreaterThan(0);
+    const res = priorityFlood(g, { epsilon: 'float64-step' });
     expect(res.epsilonAbsorbed).toBe(0);
     expect(d8Flow({ ...g, z: res.z }).flatCount).toBe(0);
   });

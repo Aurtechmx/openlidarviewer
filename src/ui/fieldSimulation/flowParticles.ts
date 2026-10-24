@@ -5,10 +5,14 @@
  * What the motion encodes: each particle sits on a channel cell and moves
  * towards that cell's D8 receiver, at a speed proportional to the cell's
  * log-scaled upstream count (the same `logScale` the grid lines and the 3D
- * overlay use). Faster, larger, brighter particles therefore mark cells more
- * cells drain through; it counts cells, not water. Particles spawn only on
- * channel cells (`FLOW_CHANNEL_THRESHOLD`), so motion follows the drawn
- * drainage lines rather than covering hillslopes. Between cells a particle
+ * overlay use). Speed is a display encoding of that count, never a water
+ * velocity: nothing in Flow Pulse computes one. Particles spawn only on
+ * channel cells, so motion follows the drawn drainage lines rather than
+ * covering hillslopes. Without a rainfall estimate the channel cells are the
+ * log-scaled count threshold (`FLOW_CHANNEL_THRESHOLD`) and brightness follows
+ * the count; with one, the caller passes the cells whose estimated peak flow
+ * reaches the display threshold and a strength on a log scale of that flow,
+ * and stronger channels get brighter particles and more of them. Between cells a particle
  * follows a curve through the link midpoints, so turns are smooth. At the end
  * of a path (outlet, sink, flat) a particle respawns.
  *
@@ -48,7 +52,14 @@ export interface FlowParticleField {
   readonly receiver: Int32Array;
   readonly upstreamCells: Uint32Array;
   readonly maxUpstream: number;
+  /** 1 for each channel cell; absent, the log-scaled count threshold decides. */
+  readonly channel?: Uint8Array | null;
+  /** Display strength per channel cell in [0, 1]; absent, the log-scaled count. */
+  readonly strength?: Float32Array | null;
 }
+
+/** Extra spawn weight per unit of strength: a full-strength channel draws four times the particles of a faint one. */
+const SPAWN_WEIGHT_PER_STRENGTH = 3;
 
 export interface Particle {
   cell: number;
@@ -81,14 +92,37 @@ export function particleSpeed(field: FlowParticleField, cell: number): number {
   return MAX_SPEED_CELLS_PER_S * cellT(field, cell);
 }
 
-/** Cells a particle may spawn on: routed, with a receiver, and drawn as a channel. */
+/** True when a cell is drawn as a channel in this field. */
+export function isChannelCell(field: FlowParticleField, i: number): boolean {
+  return field.channel ? field.channel[i] === 1 : isChannel(cellT(field, i));
+}
+
+/** Channel strength of a cell in [0, 1], as the colour ramp reads it. */
+export function cellStrength(field: FlowParticleField, i: number): number {
+  return field.strength ? field.strength[i]! : channelStrength(cellT(field, i));
+}
+
+/**
+ * Cells a particle may spawn on: routed, with a receiver, and drawn as a
+ * channel. With a strength field each cell appears 1 + round(3 × strength)
+ * times, so sampling the list uniformly favours the stronger channels.
+ */
 export function spawnCells(field: FlowParticleField): Int32Array {
   const out: number[] = [];
   for (let i = 0; i < field.cols * field.rows; i++) {
     if (field.receiver[i]! < 0) continue;
-    if (isChannel(cellT(field, i))) out.push(i);
+    if (!isChannelCell(field, i)) continue;
+    const copies = field.strength ? 1 + Math.round(SPAWN_WEIGHT_PER_STRENGTH * field.strength[i]!) : 1;
+    for (let k = 0; k < copies; k++) out.push(i);
   }
   return Int32Array.from(out);
+}
+
+/** Distinct channel cells with a receiver: what the particle count scales with. */
+export function channelCellCount(field: FlowParticleField): number {
+  let n = 0;
+  for (let i = 0; i < field.cols * field.rows; i++) if (field.receiver[i]! >= 0 && isChannelCell(field, i)) n++;
+  return n;
 }
 
 function spawn(cells: Int32Array, rand: () => number): Particle {
@@ -231,10 +265,28 @@ export class FlowParticles {
     this._field = field;
     this._cells = spawnCells(field);
     this._rand = seededRandom(field.cols * 73856093 ^ field.rows * 19349663);
-    this._count = particleCount(this._cells.length);
+    this._count = particleCount(field.strength ? channelCellCount(field) : this._cells.length);
     this._particles = [];
     for (let i = 0; i < this._count && this._cells.length > 0; i++) this._particles.push(spawn(this._cells, this._rand));
     this._clear();
+    this._sync();
+  }
+
+  /**
+   * Swap in a new channel field over the same grid (a rainfall change) without
+   * restarting the motion: particles still on a channel keep their place, the
+   * rest respawn, and the count follows the new number of channel cells.
+   */
+  update(field: FlowParticleField): void {
+    if (this._disposed) return;
+    if (!this._field || this._field.cols !== field.cols || this._field.rows !== field.rows) { this.load(field); return; }
+    this._field = field;
+    this._cells = spawnCells(field);
+    this._count = particleCount(field.strength ? channelCellCount(field) : this._cells.length);
+    const kept = this._particles.filter((p) => field.receiver[p.cell]! >= 0 && isChannelCell(field, p.cell));
+    if (kept.length > this._count) kept.length = this._count;
+    while (kept.length < this._count && this._cells.length > 0) kept.push(spawn(this._cells, this._rand));
+    this._particles = kept;
     this._sync();
   }
 
@@ -302,7 +354,7 @@ export class FlowParticles {
     for (const p of this._particles) {
       const pos = particlePosition(field, p);
       if (!pos) continue;
-      const s = channelStrength(cellT(field, p.cell));
+      const s = cellStrength(field, p.cell);
       // North-up: row 0 is the southern row, drawn at the bottom.
       buckets[Math.min(DRAW_BUCKETS - 1, Math.floor(s * DRAW_BUCKETS))]!.push([pos[0] * sx, h - pos[1] * sy]);
     }

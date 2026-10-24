@@ -11,6 +11,10 @@ import { dropBytes, geomFixtures, towerLas, towerPoints } from './geomFixtures';
  *
  * Coordinates are the scan's local frame (origin floor(min)), so the ground
  * sits near local height 1. Set OLV_CLIP_SHOTS=<dir> to write screenshots.
+ *
+ * The pixel probes read points, so those specs keep the box's drawn edges out
+ * of the frame (as a snapshot does); an edge passing a probe would otherwise
+ * count as a drawn point.
  */
 const SHOTS = process.env.OLV_CLIP_SHOTS;
 const GZ = 1; // ground height, local frame
@@ -27,6 +31,7 @@ interface Api {
   projectToClient: (p: { x: number; y: number; z: number }) => { x: number; y: number } | null;
   pickAtClient: (x: number, y: number) => boolean;
   layerProjectPoints: (i: number) => Array<{ id: string; project: [number, number, number] }>;
+  setClipOutlineHidden: (hidden: boolean) => void;
 }
 const api = <T>(page: Page, fn: (a: Api) => T): Promise<T> =>
   page.evaluate(`(${fn.toString()})(window.__OLV_TEST_API__)`) as Promise<T>;
@@ -181,6 +186,7 @@ test('a box drawn on the ground isolates a 3D volume, not a slab, and the points
   test.skip(browserName === 'webkit', 'WebKit on CI returns a blank canvas screenshot, so drawn pixels cannot be read back');
   test.setTimeout(150_000);
   await openTower(page);
+  await api(page, (a) => a.setClipOutlineHidden(true));
   const before = await lit(page, [ROOF, WALL, GROUND_IN_BOX, GROUND_FAR, GROUND_FAR2]);
   for (const n of before) expect(n, `baseline pixels ${before}`).toBeGreaterThan(8);
   const totalBefore = await litTotal(page);
@@ -230,6 +236,7 @@ test('Outside mode removes the volume; Fit to scan, a numeric edit and Clear all
   test.skip(browserName === 'webkit', 'WebKit on CI returns a blank canvas screenshot, so drawn pixels cannot be read back');
   test.setTimeout(360_000);
   await openTower(page);
+  await api(page, (a) => a.setClipOutlineHidden(true));
   const pose0 = await api(page, (a) => a.getCameraPose());
   await openToolPage(page, 'Measure');
   await drawGroundBox(page);
@@ -256,6 +263,7 @@ test('Outside mode removes the volume; Fit to scan, a numeric edit and Clear all
   await clip.locator('summary', { hasText: 'Advanced' }).click();
   const xMax = clip.locator('input.olv-clip-num').nth(1);
   await xMax.fill('16');
+  await xMax.press('Enter');
   // The roof at x 17.5 is now outside the box; the ground at x 13 is still inside.
   const edit = await drawn(page, probe, (n) => n[0] === 0 && n[2] > 8, 'an Advanced edit moves the clip');
   await snap(page, '4-edited-xmax');
@@ -265,8 +273,8 @@ test('Outside mode removes the volume; Fit to scan, a numeric edit and Clear all
   await clip.getByRole('button', { name: 'Fit to scan' }).click();
   await drawn(page, probe, allLit, 'Fit to scan draws everything again');
 
-  // Clear: off, everything draws, the readout is gone.
-  await clip.getByRole('button', { name: 'Clear' }).click();
+  // Turn off: off, everything draws.
+  await clip.getByRole('button', { name: 'Turn off' }).click();
   await drawn(page, probe, allLit, 'Clear draws everything');
   expect((await api(page, (a) => a.getClipState())).clip?.enabled === true).toBe(false);
 });
@@ -282,7 +290,7 @@ test('Draw clipping box and the Box row action build the same clip', async ({ pa
   await expect(page.locator('.olv-clip-indicator')).toBeVisible();
   const viaCard = (await api(page, (a) => a.getClipState())).clip!;
 
-  await page.locator('.olv-clip-indicator').getByRole('button', { name: 'Clear clipping' }).click();
+  await page.locator('.olv-clip-indicator').getByRole('button', { name: 'Turn off clipping' }).click();
   await openToolPage(page, 'Measure');
   await page.locator('.olv-mp-use-clip').click();
   await expect(page.locator('.olv-clip-indicator')).toBeVisible();
@@ -391,7 +399,7 @@ test('orbiting near the clipped area is not materially slower than without a cli
     const enabled = (await api(page, (a) => a.getClipState())).clip?.enabled === true;
     if (enabled === on) return;
     if (on) await page.locator('.olv-clip-panel .olv-clip-enable input').check();
-    else await chip.getByRole('button', { name: 'Clear clipping' }).click();
+    else await chip.getByRole('button', { name: 'Turn off clipping' }).click();
     await page.waitForTimeout(600);
   };
   const phase = async (label: string): Promise<{ off: number[]; on: number[] }> => {
@@ -432,6 +440,7 @@ test('a clip over a placed layer draws where that layer is (Inside keeps it, Out
   await expect(page.locator('.olv-layer')).toHaveCount(2, { timeout: 30_000 });
   await page.waitForFunction(() => !!(window as unknown as { __OLV_TEST_API__?: unknown }).__OLV_TEST_API__);
   await page.waitForTimeout(3000);
+  await api(page, (a) => a.setClipOutlineHidden(true));
   // Index 0 of each layer, in the project frame the clip box and the drawing share.
   const [pA, pB] = (await api(page, (a) => a.layerProjectPoints(0))).map((l) => l.project);
   expect(Math.abs(pB[0] - pA[0]), 'layer B sits away from layer A').toBeGreaterThan(50);

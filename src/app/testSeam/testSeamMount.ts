@@ -44,6 +44,9 @@ export function mountTestSeam(deps: TestSeamDeps): void {
     }
     v.measure.addPoint([x, y, z], layer ? v.getCloud(v.clouds().find((id) => v.getCloud(id)?.name === layer) ?? '') : undefined);
   };
+  type Outline = { box: { min: number[]; max: number[] } | null; object: { visible: boolean; parent: unknown }; without(fn: () => Promise<void>): Promise<void> };
+  const outline = (): Outline | null => (v as unknown as { _clipOutline: Outline | null })._clipOutline;
+  let releaseOutline: (() => void) | null = null;
   (window as unknown as { __OLV_TEST_API__: unknown }).__OLV_TEST_API__ = {
     version: '1',
     setMeasureMode: (on: boolean) => v.setMeasureMode(on),
@@ -63,7 +66,21 @@ export function mountTestSeam(deps: TestSeamDeps): void {
     getClipState: () => {
       const id = deps.getActiveScanId();
       const clip = v.getClip();
-      return { clip: clip ? { box: clip.box, mode: clip.mode, enabled: clip.enabled } : null, count: id ? v.clipKeptCount(id) : null };
+      const own = id ? v.clipKeptCounts(id).find((l) => l.id === id) : undefined;
+      return { clip: clip ? { box: clip.box, mode: clip.mode, enabled: clip.enabled } : null, count: own ? { kept: own.kept, total: own.total } : null };
+    },
+    // The clip box drawn in the scene: its box, and whether its object is in the scene and drawn.
+    getClipOutline: () => {
+      const o = outline();
+      return o ? { box: o.box, visible: o.object.visible, inScene: o.object.parent !== null } : null;
+    },
+    // Specs that read drawn point pixels back keep the box's edges out of the frame,
+    // the way a snapshot does (`ClipOutline.without`).
+    setClipOutlineHidden: (hidden: boolean): void => {
+      if (!outline()) v.setClipOutline(null, false);
+      const o = outline();
+      if (hidden && o && !releaseOutline) void o.without(() => new Promise<void>((done) => { releaseOutline = done; }));
+      else if (!hidden && releaseOutline) { releaseOutline(); releaseOutline = null; }
     },
     clearMeasurements: () => v.clearMeasurements(),
     getMeasurementCount: () => v.measure.getMeasurements().length,

@@ -669,6 +669,18 @@ export const METHOD_REGISTRY: Readonly<Record<string, MethodEntry>> = {
     category: 'simulation',
     implementation: ['src/simulation/flowPulse/d8Flow.ts'],
   },
+  // v6 conditions a Float64 copy of the surface, raising a filled cell one
+  // Float64 step above the cell it was reached from, and orders the flood by
+  // the spill level without that rise, first in first out within a level.
+  // The v5 Float32 steps added up along a long flat (6.1e-5 m a cell at
+  // 600 m) until its far end stood above a nearby exit only centimetres
+  // higher than the true spill point, and D8 drained that end over it; the
+  // flood, ordered by the raised heights, could also reach that exit first
+  // and report its level as the flat's spill level. Spill levels now equal
+  // those of a flood with no rise at all, whatever rise is asked for, and a
+  // Float64 chain cannot climb to the next height a Float32 DTM can hold.
+  // The conditioned surface changes; `fillEpsilon: 'float32-step'` is now
+  // `'float64-step'`.
   // v5 raises a filled cell one Float32 step above the cell it was reached
   // from, the increment Barnes, Lehman & Mulla take with nextafter, instead of
   // a fixed 1 mm: the flood is ordered by the raised heights, and the larger
@@ -687,27 +699,33 @@ export const METHOD_REGISTRY: Readonly<Record<string, MethodEntry>> = {
   // declared `.gap-outlet` variant below.
   'olv.simulation.terrain-flow.priority-flood': {
     id: 'olv.simulation.terrain-flow.priority-flood',
-    version: 5,
+    version: 6,
     name: 'Priority-Flood depression conditioning',
     summary:
       'Floods inward from the edge of the survey (the grid boundary and NoData that '
       + 'reaches it), raising each cell reached from below to its spill level, and '
       + 'returns a second surface rather than modifying the DTM. NoData the survey '
       + 'encloses is a wall, as D8 reads it; cells NoData encloses are left as '
-      + 'they are and counted. Each filled cell sits one Float32 step above the cell '
-      + 'it was reached from, which breaks the resulting plateaux without lifting a '
-      + 'depression above its true spill point; a fixed increment can be asked for '
-      + 'instead, and increments lost to Float32 precision are then counted and '
-      + 'reported rather than assumed to have applied. Only a cell whose original '
-      + 'height is strictly below its spill level counts as filled; a flat lifted by '
-      + 'the epsilon alone is counted separately, and fill depth excludes the epsilon.',
+      + 'they are and counted. The flood is ordered by the spill level without any '
+      + 'epsilon rise, first in, first out within a level. The conditioned surface '
+      + 'is Float64 and each filled cell sits one Float64 step above the cell it was '
+      + 'reached from, which breaks the resulting plateaux; along any flat shorter than '
+      + '2^29 cells those steps stay below the next height a Float32 DTM can represent, '
+      + 'so routing cannot drain a flat over an exit higher than its true spill point. A '
+      + 'fixed increment can be asked for instead; it adds up the same way and can '
+      + 'climb past a nearby higher exit, and increments too small to represent are '
+      + 'counted and reported rather than assumed to have applied. Only a cell whose '
+      + 'original height is strictly below its spill level counts as filled; a flat '
+      + 'lifted by the epsilon alone is counted separately, and fill depth excludes the '
+      + 'epsilon.',
     citation: 'Barnes, Lehman & Mulla (2014), doi:10.1016/j.cageo.2013.04.024',
     category: 'simulation',
     implementation: ['src/simulation/flowPulse/priorityFlood.ts'],
   },
+  // v4 takes the v6 Float64 surface and spill-level flood order above.
   'olv.simulation.terrain-flow.priority-flood.gap-outlet': {
     id: 'olv.simulation.terrain-flow.priority-flood.gap-outlet',
-    version: 3,
+    version: 4,
     name: 'Priority-Flood conditioning with NoData gaps as exits',
     summary:
       'The same flood, also seeded at every cell beside NoData, so a gap drains '
@@ -764,15 +782,90 @@ export const METHOD_REGISTRY: Readonly<Record<string, MethodEntry>> = {
     category: 'simulation',
     implementation: ['src/simulation/flowPulse/depressionInventory.ts'],
   },
+  'olv.simulation.terrain-flow.rational-peak': {
+    id: 'olv.simulation.terrain-flow.rational-peak',
+    version: 1,
+    name: 'Rational-method peak flow estimate',
+    summary:
+      'Steady-state peak flow Q = C · i · A from a user-set rainfall intensity i (mm/h '
+      + 'converted to m/s by dividing by 3.6e6), a runoff coefficient C and the D8 '
+      + 'contributing area A in square metres. Assumes uniform rain over the whole '
+      + 'catchment lasting at least its time of concentration; C lumps every loss; no '
+      + 'storage or timing. Withheld when the area has no metres; flagged above 0.8 km²; '
+      + 'a lower bound where the catchment is edge-contaminated. Coefficient presets are '
+      + 'midpoints of published ranges.',
+    citation:
+      'Kuichling (1889), Transactions of the ASCE 20, 1-56; FHWA HEC-22, 3rd ed. '
+      + '(FHWA-NHI-10-009, 2009), Eq. 3-1, Table 3-1 (after ASCE 1960) and the 80 ha limit; '
+      + 'Schwab, Fangmeier, Elliot & Frevert (1993), Soil and Water Conservation Engineering, '
+      + 'for woodland.',
+    category: 'simulation',
+    implementation: ['src/simulation/flowPulse/rationalDischarge.ts'],
+  },
+  'olv.simulation.terrain-flow.edge-contamination': {
+    id: 'olv.simulation.terrain-flow.edge-contamination',
+    version: 1,
+    name: 'D8 edge contamination',
+    summary:
+      'Flags each cell whose D8 upslope area holds a survey-edge cell (grid border, or '
+      + 'beside NoData that reaches it) that routes into the surface, so ground outside '
+      + 'the survey may also drain through it; its contributing area is then a lower '
+      + 'bound. Seeds are pushed downstream in dependency order; a catchment is '
+      + 'contaminated exactly when its outlet cell is.',
+    citation:
+      'Edge-contamination criterion as in the WhiteboxTools EdgeContamination tool '
+      + '(Lindsay 2016, Computers & Geosciences 95, 75-84, doi:10.1016/j.cageo.2016.07.003); '
+      + 'internal D8 implementation.',
+    category: 'simulation',
+    implementation: ['src/simulation/flowPulse/edgeContamination.ts'],
+  },
+  'olv.simulation.terrain-flow.flow-length': {
+    id: 'olv.simulation.terrain-flow.flow-length',
+    version: 1,
+    name: 'D8 flow length to an outlet',
+    summary:
+      'Distance along each cell\'s D8 path to a selected outlet, summing the physical '
+      + 'step between cell centres (one cell size orthogonally, √2 cell sizes diagonally '
+      + 'on a square grid, hypot of the two axis lengths in general), in one pass up the '
+      + 'reverse D8 tree from the outlet. A distance, not a travel time.',
+    citation:
+      "Downstream flow length over the D8 graph of O'Callaghan & Mark (1984); internal "
+      + 'implementation.',
+    category: 'simulation',
+    implementation: ['src/simulation/flowPulse/flowLength.ts'],
+  },
+  'olv.simulation.terrain-flow.pour-point-snap': {
+    id: 'olv.simulation.terrain-flow.pour-point-snap',
+    version: 1,
+    name: 'Pour-point snapping',
+    summary:
+      'Moves a pointer-picked catchment outlet to the cell of highest upstream count '
+      + 'within a square window of 2 cells, ties kept on the picked cell, then the '
+      + 'nearest, then the lowest index; NoData is never chosen. A keyboard selection '
+      + 'is exact and not snapped.',
+    citation:
+      'Highest-accumulation search within a fixed distance, as in the WhiteboxTools '
+      + 'SnapPourPoints tool (Lindsay 2016, doi:10.1016/j.cageo.2016.07.003); internal '
+      + 'implementation.',
+    category: 'simulation',
+    implementation: ['src/simulation/flowPulse/pourPointSnap.ts'],
+  },
   'olv.simulation.terrain-access.local-step': terrainAccessMethod(
     'olv.simulation.terrain-access.local-step',
-    'Local step-height metric',
-    'Maximum absolute elevation discontinuity between a cell and its valid '
-      + 'neighbours within a 3×3 footprint, plus the pairwise edge form used to '
-      + 'gate one directed move. A geometric discontinuity measure, not a '
+    'Step height of a move',
+    'The step one directed move is gated on: how far its rise falls outside the '
+      + 'bracket of the one-sided rises just behind its start and just past its end '
+      + 'along the same heading (that one rise where only one side has data, the Horn '
+      + 'gradient at both ends where neither does). A diagonal move also takes the '
+      + 'easier of its two paths through the corner cells, so it cannot pass between '
+      + 'the cells of a one-cell berm or ditch. A plane of any slope has no step and a '
+      + 'ledge reads its own height; v1 gated the raw height difference between the '
+      + 'two cells, which on coarse cells limited grade. The 3×3 local relief is '
+      + 'reported alongside, never gated. A geometric discontinuity measure, not a '
       + 'classification of what caused it.',
-    'Internal composition (footprint-maximum finite difference); no single source method.',
+    'Internal composition (one-sided finite differences along the move); no single source method.',
     ['src/simulation/terrainAccess/localStep.ts'],
+    2,
   ),
   'olv.simulation.terrain-access.directional-grade': terrainAccessMethod(
     'olv.simulation.terrain-access.directional-grade',
@@ -799,10 +892,12 @@ export const METHOD_REGISTRY: Readonly<Record<string, MethodEntry>> = {
       + 'evidence-gap policy decides cells whose slope used a synthesised Horn '
       + 'neighbour (outer ring or beside a void) and, when the obstruction limit is '
       + 'evaluated, cells with no above-ground return: conservative blocks them, '
-      + 'exploratory allows them and reports their share of the route.',
+      + 'exploratory allows them and reports their share of the route. v4 gates and '
+      + 'costs the step limit on the local-step v2 discontinuity, so grade enters the '
+      + 'cost once and the grade limit is the only limit on slope.',
     'Internal composition (declared multi-term utilization cost); no single source method.',
     ['src/simulation/terrainAccess/traversabilityCost.ts', 'src/simulation/terrainAccess/footprintClearance.ts'],
-    3,
+    4,
   ),
   'olv.simulation.terrain-access.astar': terrainAccessMethod(
     'olv.simulation.terrain-access.astar',
