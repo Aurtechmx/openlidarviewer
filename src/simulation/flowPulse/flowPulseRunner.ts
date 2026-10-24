@@ -412,7 +412,8 @@ export function modelLimitations(
         'Conditioning read every NoData gap as a drainage exit, as for open water, '
         + 'so a depression beside a gap drains into it rather than filling. Where '
         + 'a gap is a survey hole this invents an exit. Routing still sends no flow '
-        + 'into NoData, so a cell on a gap\'s rim with no lower neighbour is a sink.',
+        + 'into NoData, so a cell on a gap\'s rim with no lower neighbour keeps its flow: '
+        + 'it is reported as a sink, or as a flat where a neighbour is level with it.',
       );
     }
     if ((summary.cellsUnreachable ?? 0) > 0) {

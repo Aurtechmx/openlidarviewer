@@ -782,6 +782,74 @@ export const METHOD_REGISTRY: Readonly<Record<string, MethodEntry>> = {
     category: 'simulation',
     implementation: ['src/simulation/flowPulse/depressionInventory.ts'],
   },
+  'olv.simulation.terrain-flow.rational-peak': {
+    id: 'olv.simulation.terrain-flow.rational-peak',
+    version: 1,
+    name: 'Rational-method peak flow estimate',
+    summary:
+      'Steady-state peak flow Q = C · i · A from a user-set rainfall intensity i (mm/h '
+      + 'converted to m/s by dividing by 3.6e6), a runoff coefficient C and the D8 '
+      + 'contributing area A in square metres. Assumes uniform rain over the whole '
+      + 'catchment lasting at least its time of concentration; C lumps every loss; no '
+      + 'storage or timing. Withheld when the area has no metres; flagged above 0.8 km²; '
+      + 'a lower bound where the catchment is edge-contaminated. Coefficient presets are '
+      + 'midpoints of published ranges.',
+    citation:
+      'Kuichling (1889), Transactions of the ASCE 20, 1-56; FHWA HEC-22, 3rd ed. '
+      + '(FHWA-NHI-10-009, 2009), Eq. 3-1, Table 3-1 (after ASCE 1960) and the 80 ha limit; '
+      + 'Schwab, Fangmeier, Elliot & Frevert (1993), Soil and Water Conservation Engineering, '
+      + 'for woodland.',
+    category: 'simulation',
+    implementation: ['src/simulation/flowPulse/rationalDischarge.ts'],
+  },
+  'olv.simulation.terrain-flow.edge-contamination': {
+    id: 'olv.simulation.terrain-flow.edge-contamination',
+    version: 1,
+    name: 'D8 edge contamination',
+    summary:
+      'Flags each cell whose D8 upslope area holds a survey-edge cell (grid border, or '
+      + 'beside NoData that reaches it) that routes into the surface, so ground outside '
+      + 'the survey may also drain through it; its contributing area is then a lower '
+      + 'bound. Seeds are pushed downstream in dependency order; a catchment is '
+      + 'contaminated exactly when its outlet cell is.',
+    citation:
+      'Edge-contamination criterion as in the WhiteboxTools EdgeContamination tool '
+      + '(Lindsay 2016, Computers & Geosciences 95, 75-84, doi:10.1016/j.cageo.2016.07.003); '
+      + 'internal D8 implementation.',
+    category: 'simulation',
+    implementation: ['src/simulation/flowPulse/edgeContamination.ts'],
+  },
+  'olv.simulation.terrain-flow.flow-length': {
+    id: 'olv.simulation.terrain-flow.flow-length',
+    version: 1,
+    name: 'D8 flow length to an outlet',
+    summary:
+      'Distance along each cell\'s D8 path to a selected outlet, summing the physical '
+      + 'step between cell centres (one cell size orthogonally, √2 cell sizes diagonally '
+      + 'on a square grid, hypot of the two axis lengths in general), in one pass up the '
+      + 'reverse D8 tree from the outlet. A distance, not a travel time.',
+    citation:
+      "Downstream flow length over the D8 graph of O'Callaghan & Mark (1984); internal "
+      + 'implementation.',
+    category: 'simulation',
+    implementation: ['src/simulation/flowPulse/flowLength.ts'],
+  },
+  'olv.simulation.terrain-flow.pour-point-snap': {
+    id: 'olv.simulation.terrain-flow.pour-point-snap',
+    version: 1,
+    name: 'Pour-point snapping',
+    summary:
+      'Moves a pointer-picked catchment outlet to the cell of highest upstream count '
+      + 'within a square window of 2 cells, ties kept on the picked cell, then the '
+      + 'nearest, then the lowest index; NoData is never chosen. A keyboard selection '
+      + 'is exact and not snapped.',
+    citation:
+      'Highest-accumulation search within a fixed distance, as in the WhiteboxTools '
+      + 'SnapPourPoints tool (Lindsay 2016, doi:10.1016/j.cageo.2016.07.003); internal '
+      + 'implementation.',
+    category: 'simulation',
+    implementation: ['src/simulation/flowPulse/pourPointSnap.ts'],
+  },
   'olv.simulation.terrain-access.local-step': terrainAccessMethod(
     'olv.simulation.terrain-access.local-step',
     'Step height of a move',
