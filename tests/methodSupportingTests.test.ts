@@ -52,6 +52,7 @@ const SUPPORTING_TESTS: Readonly<Record<string, readonly string[]>> = {
   ],
   'olv.simulation.terrain-access.local-step': [
     'tests/terrainAccessLocalStep.test.ts',
+    'tests/terrainAccessStepRouting.test.ts',
   ],
   'olv.simulation.terrain-access.directional-grade': [
     'tests/terrainAccessDirectionalGrade.test.ts',

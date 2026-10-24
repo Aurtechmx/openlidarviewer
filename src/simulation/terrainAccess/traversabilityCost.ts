@@ -28,12 +28,17 @@
  * with `maxRuggedness: null`) or zero contributes 0 rather than dividing by
  * zero. The weights are declared and bounded, not implied.
  *
+ * Grade enters the cost once, through the longitudinal term. The step term
+ * reads the move's step as `localStep.ts` defines it, the part of its rise
+ * the slope on either side does not explain, so a smooth slope adds nothing
+ * to it; the grade limit is the only limit on slope.
+ *
  * Pure data: no DOM, no three.js, no I/O. Deterministic.
  */
 
 import { hornSlopeAspect, synthesisedNeighbourMask } from '../../terrain/ground/terrainDerivatives';
 import { computeVRM } from '../../terrain/complexity/vectorRuggedness';
-import { computeLocalStep, edgeStep } from './localStep';
+import { computeLocalStep, edgeRise, moveStep } from './localStep';
 import { classifyObstruction, type ObstructionState } from './obstacleEvidence';
 import { diagonalSweepClear, dilateBlocked } from './footprintClearance';
 import { directionalSlope, gradientField, headingUnit, type GradientField } from './directionalGrade';
@@ -47,7 +52,7 @@ import {
   type TerrainAccessProfile,
 } from './terrainAccessTypes';
 
-/** The 3×3 (1-cell-radius) window Horn slope, VRM and the local-step metric
+/** The 3×3 (1-cell-radius) window Horn slope, VRM and the local relief
  * all share by default in this module, so "local" means one neighbourhood
  * everywhere a Terrain Access feature says it. */
 const LOCAL_WINDOW_CELLS = 3;
@@ -59,7 +64,7 @@ export interface TerrainAccessFeatures {
   readonly gradient: GradientField;
   /** Vector Ruggedness Measure, [0, 1] or NaN at an invalid cell. */
   readonly vrm: Float32Array;
-  /** The §12.4 local-step diagnostic (3×3 footprint), metres. */
+  /** Local relief: the largest raw height difference in each cell's 3×3 footprint, metres. Reported, never gated. */
   readonly localStep: Float32Array;
   readonly obstruction: readonly ObstructionState[];
   /**
@@ -296,14 +301,21 @@ export interface EdgeGeometry {
   readonly distanceM: number;
   readonly longitudinalGrade: number;
   readonly crossSlope: number;
+  /**
+   * The move's step, metres: the part of its rise the terrain on either side
+   * does not explain, and for a diagonal the easier path through its corner
+   * cells (`moveStep`, `localStep.ts`). Not the rise itself. NaN when either
+   * endpoint has no elevation.
+   */
   readonly stepM: number;
 }
 
 /**
  * The geometry of the directed move `from → to` along raster offset
- * `(dx, dy)`: physical distance, longitudinal grade, cross slope and the edge
- * step. Independent of any profile, so a caller that only wants the numbers —
- * `routeDiagnostics.ts`, a UI inspector — is not required to fabricate one.
+ * `(dx, dy)`: physical distance, longitudinal grade, cross slope and the
+ * move's step. Independent of any profile, so a caller that only wants the
+ * numbers — `routeDiagnostics.ts`, a UI inspector — is not required to
+ * fabricate one.
  *
  * Longitudinal grade is the edge's conservative, direction-symmetric grade:
  * the largest of the Horn gradient projected on the heading at `from`, the
@@ -312,7 +324,10 @@ export interface EdgeGeometry {
  * move out of a V-valley floor (zero gradient there) read as level although
  * the edge itself climbs steeply, and made `a → b` and `b → a` disagree.
  * Cross slope is the larger perpendicular Horn component of the two
- * endpoints. Both are symmetric under reversing the move.
+ * endpoints. The step is `moveStep` (`localStep.ts`): the part of the rise
+ * the terrain on either side of the move does not explain, and for a
+ * diagonal also the easier path through its corner cells. All three are
+ * symmetric under reversing the move.
  */
 export function edgeGeometry(
   grid: TerrainAccessGrid,
@@ -329,9 +344,10 @@ export function edgeGeometry(
   const atTo = directionalSlope(
     { east: features.gradient.east[toIndex], north: features.gradient.north[toIndex] }, heading,
   );
-  const stepM = edgeStep(grid, fromIndex, toIndex);
+  const stepM = moveStep(grid, features.gradient, fromIndex, dx, dy);
+  const riseM = edgeRise(grid, fromIndex, toIndex);
   const distanceM = Math.hypot(dx * grid.cellMetresX, dy * grid.cellMetresY);
-  const edgeGrade = Number.isFinite(stepM) && distanceM > 0 ? stepM / distanceM : 0;
+  const edgeGrade = Number.isFinite(riseM) && distanceM > 0 ? riseM / distanceM : 0;
   const longitudinalGrade = Math.max(atFrom.longitudinalGrade, atTo.longitudinalGrade, edgeGrade);
   const crossSlope = Math.max(atFrom.crossSlope, atTo.crossSlope);
   return { distanceM, longitudinalGrade, crossSlope, stepM };
@@ -620,7 +636,9 @@ function nodeDetail(
 
 function edgeDetail(evalr: EdgeEvaluation, profile: TerrainAccessProfile): string {
   switch (evalr.reason) {
-    case 'step-height': return `step ${evalr.stepM.toFixed(3)} m > limit ${profile.maxStepHeight.toFixed(3)} m`;
+    case 'step-height':
+      return `step ${evalr.stepM.toFixed(3)} m (height change the slope on either side does not explain) `
+        + `> limit ${profile.maxStepHeight.toFixed(3)} m`;
     case 'longitudinal-grade':
       return `longitudinal grade ${tangentToDeg(evalr.longitudinalGrade)}° > limit ${tangentToDeg(profile.maxLongitudinalGrade)}°`;
     case 'cross-slope':
