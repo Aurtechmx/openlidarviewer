@@ -397,6 +397,24 @@ export function derivativeSupportText(d: RouteDiagnostics, policy: unknown): str
 }
 
 /**
+ * The limits a run applied, in the units the form takes them in: grade and
+ * cross slope in degrees, step and width in metres, and the minimum terrain
+ * confidence. Reads a recorded profile, so it takes `unknown`; null when the
+ * profile does not carry those five numbers.
+ */
+export function appliedLimitsText(profile: unknown): string | null {
+  const p = profile as Partial<Record<
+    'maxLongitudinalGrade' | 'maxCrossSlope' | 'maxStepHeight' | 'vehicleWidth' | 'minimumTerrainConfidence', unknown
+  >> | null;
+  if (!p) return null;
+  const nums = [p.maxLongitudinalGrade, p.maxCrossSlope, p.maxStepHeight, p.vehicleWidth, p.minimumTerrainConfidence];
+  if (!nums.every((v) => typeof v === 'number' && Number.isFinite(v))) return null;
+  const [grade, cross, step, width, confidence] = nums as number[];
+  return `grade ${tangentToDegrees(grade)}, cross slope ${tangentToDegrees(cross)}, step ${step} m, `
+    + `vehicle width ${width} m, minimum confidence ${confidence}`;
+}
+
+/**
  * One row per limit the run record marks `estimated`, then the record's own
  * sentence for each as a warning, so the card and the export say the same thing.
  */
@@ -415,14 +433,22 @@ function estimatedConstraintNodes(constraints: unknown, estimates: unknown): HTM
 
 /** The run's answer as a card: a refusal's named reason, or the route diagnostics.
  * `flat` writes the method as a plain section, for a card that may sit inside Details.
+ * `profile` is the profile a refused run was asked to apply, so its limits show
+ * beside the reason; a found route shows the limits its record holds.
  * §22: never a safety/passability word appears here. */
-export function renderTerrainAccessRunCard(outcome: TerrainAccessLabOutcome | null, flat = false): HTMLElement {
+export function renderTerrainAccessRunCard(
+  outcome: TerrainAccessLabOutcome | null,
+  flat = false,
+  profile: TerrainAccessProfile | null = null,
+): HTMLElement {
   const card = el('aside', { className: 'olv-story-card' });
   if (!outcome) return card;
   if (!outcome.ok) {
+    const limits = appliedLimitsText(profile);
     card.append(
       el('div', { className: 'olv-story-headline olv-lab-refusal', text: 'Terrain Access did not run' }),
       el('div', { className: 'olv-story-next', text: outcome.reason }),
+      ...(limits ? [row('Limits applied', limits)] : []),
       methodDetails([row('Reason code', outcome.code)], flat),
     );
     return card;
@@ -430,10 +456,12 @@ export function renderTerrainAccessRunCard(outcome: TerrainAccessLabOutcome | nu
   const d = outcome.diagnostics;
   const recordedProfile = outcome.record.parameters.profile as { readonly name?: unknown } | undefined;
   const origin = profileOriginText(recordedProfile);
+  const limits = appliedLimitsText(recordedProfile);
   card.append(
     el('div', { className: 'olv-story-headline olv-lab-caveat', text: TERRAIN_ACCESS_SCREENING }),
     row('Profile', typeof recordedProfile?.name === 'string' ? recordedProfile.name : 'not recorded'),
     ...(origin ? [row('Started from', origin)] : []),
+    ...(limits ? [row('Limits applied', limits)] : []),
     row('Route cells', String(d.cellCount)),
     row('Horizontal length', `${d.horizontalLengthM.toFixed(1)} m`),
     row('Ascent / descent', `${d.totalAscentM.toFixed(1)} m / ${d.totalDescentM.toFixed(1)} m`),
@@ -1031,7 +1059,7 @@ export function mountTerrainAccessInteractive(
       head.setStage(1);
       chip.set(terrainAccessChipFacts(input, preview));
       body.replaceChildren(
-        renderTerrainAccessRunCard(preview),
+        renderTerrainAccessRunCard(preview, false, profile),
         makeEditProfileButton(editProfile),
         labDetails([head.element]),
       );
@@ -1101,7 +1129,7 @@ export function mountTerrainAccessInteractive(
         overlay?.clearRoute();
         announce(`Terrain Access did not run: ${outcome.reason}`);
       }
-      runCard.replaceChildren(renderTerrainAccessRunCard(outcome, true));
+      runCard.replaceChildren(renderTerrainAccessRunCard(outcome, true, profile));
       placeRunCard();
       statsHost.replaceChildren(...[terrainAccessStats(outcome)].filter((n): n is HTMLElement => n !== null));
       // The Run button's tip sits over the card that just filled in.
