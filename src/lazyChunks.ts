@@ -798,6 +798,13 @@ export function invalidateFlowOverlay(): void {
 export const loadFlowPulsePackage = () => import('./export/flowPulsePackage');
 
 /**
+ * The Flow Pulse watershed GIF: the GIF89a encoder and the frame renderer.
+ * Reached only from the Lab's Export GIF button, so a session that never
+ * exports a GIF never downloads either.
+ */
+export const loadWatershedGif = () => import('./export/watershedGif');
+
+/**
  * The Field Simulation Lab's Terrain Access view and the routing core behind
  * it. Opened only from the command palette, so neither rides the startup shell.
  */
