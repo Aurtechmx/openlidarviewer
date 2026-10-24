@@ -48,7 +48,7 @@ describe('Flow Pulse legend', () => {
 
   it('gives each mark a glyph and a word', () => {
     const l = rec(grid.flowGridLegend(10));
-    for (const [glyph, word] of [['━', 'Path'], ['○', 'Outlet (flow leaves the grid)'], ['▼', 'Sink (flow stops)'], ['?', 'No ground data']]) {
+    for (const [glyph, word] of [['━', 'Path'], ['○', 'Outlet (flow leaves the survey)'], ['▼', 'Sink (flow stops)'], ['?', 'No ground data']]) {
       expect(l.findByText(glyph).length).toBeGreaterThan(0);
       expect(l.findByText(word)).toHaveLength(1);
     }

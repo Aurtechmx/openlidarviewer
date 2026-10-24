@@ -20,6 +20,7 @@
 import { el } from './dom';
 import { loadQualityPanel } from '../lazyChunks';
 import type { QualityPanel } from './QualityPanel';
+import type { PrecisionDeps } from '../app/precisionCheck';
 import {
   QUALITY_SCOPE_NOTE,
   resolveQualitySettings,
@@ -67,6 +68,8 @@ export interface QualityControlOptions {
    * until that wiring lands.
    */
   toast?: LazyLoadToast;
+  /** The scene the panel's precision check reads. */
+  precision?: PrecisionDeps;
 }
 
 export class QualityControl {
@@ -98,7 +101,7 @@ export class QualityControl {
       // The label alone said nothing about what the control changes. It trades
       // rendering speed against visual detail, and the second sentence is the
       // one people actually need: it does not touch a measured figure.
-      title: `Performance — trade rendering speed against visual detail. ${QUALITY_SCOPE_NOTE}`,
+      title: `Performance: trade rendering speed against visual detail. ${QUALITY_SCOPE_NOTE}`,
       ariaLabel: 'Performance settings',
     }) as HTMLButtonElement;
     this._button.type = 'button';
@@ -168,6 +171,7 @@ export class QualityControl {
       };
     }
     panel.render(this._preference, this.settings());
+    panel.refreshPrecision();
     panel.element.hidden = false;
     this._setOpenState(true);
   }
@@ -186,6 +190,7 @@ export class QualityControl {
 
   /** Drop the document listeners this control installed. */
   dispose(): void {
+    if (this._precisionTimer !== null) clearInterval(this._precisionTimer);
     document.removeEventListener('pointerdown', this._onDocumentPointerDown, true);
     document.removeEventListener('keydown', this._onDocumentKeyDown);
   }
@@ -215,6 +220,7 @@ export class QualityControl {
       const panel = new QualityPanelCtor({
         onPreference: (patch) => this._update(patch),
         onPin: (field) => this._update({ overrides: { ...this._preference.overrides, ...field } }),
+        ...(this._options.precision ? { precision: this._options.precision } : {}),
       });
       panel.element.hidden = true;
       this.element.append(panel.element);
@@ -232,8 +238,13 @@ export class QualityControl {
     this._options.onPersist?.(this._preference);
   }
 
+  /** While the panel is open its precision line follows the scene and the camera. */
+  private _precisionTimer: ReturnType<typeof setInterval> | null = null;
+
   private _setOpenState(open: boolean): void {
     this._open = open;
+    if (this._precisionTimer !== null) clearInterval(this._precisionTimer);
+    this._precisionTimer = open && this._options.precision ? setInterval(() => this._panel?.refreshPrecision(), 500) : null;
     this._button.setAttribute('aria-expanded', open ? 'true' : 'false');
     this._button.classList.toggle('olv-quality-button-open', open);
     // The header carries its own z-index, which makes it a stacking context: a

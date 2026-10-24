@@ -47,6 +47,19 @@ describe('a completed run', () => {
     expect(text).toContain('3 cells');
   });
 
+  it('records a sampled scan as sampled, with the sample caveat', () => {
+    // A display sample's DTM spans the extent, so its grid alone reads 'full'.
+    const sampled = runLabFlowPulse(input({ sourceInterpretation: { dataBasis: 'sampled' } as never }));
+    expect(sampled.ok).toBe(true);
+    if (!sampled.ok) return;
+    expect(sampled.record.source.basis.coverage).toBe('sampled');
+    expect(sampled.record.source.basis.complete).toBe(false);
+    expect(sampled.limitations.some((l) => /built from a sample of the source/.test(l))).toBe(true);
+    const whole = runLabFlowPulse(input());
+    if (!whole.ok) throw new Error('the fixture must route');
+    expect(whole.record.source.basis.coverage).not.toBe('sampled');
+  });
+
   it('reports square metres once the scale is resolved', () => {
     const text = textOf(renderFlowPulseLab(runLabFlowPulse(input())));
     expect(text).toContain('m²');
@@ -114,14 +127,14 @@ describe('the grid digest', () => {
 });
 
 describe('the conditioning control', () => {
-  it('defaults to raw — an unspecified second argument matches the prior single-argument call', () => {
+  it('defaults to Priority-Flood — an unspecified second argument matches an explicit one', () => {
     const withDefault = runLabFlowPulse(input());
-    const explicitRaw = runLabFlowPulse(input(), 'raw');
+    const explicit = runLabFlowPulse(input(), 'priority-flood');
     expect(withDefault.ok).toBe(true);
-    expect(explicitRaw.ok).toBe(true);
-    if (!withDefault.ok || !explicitRaw.ok) return;
-    expect(withDefault.record.parameters.conditioning).toBe('raw');
-    expect(withDefault.record.digest).toBe(explicitRaw.record.digest);
+    expect(explicit.ok).toBe(true);
+    if (!withDefault.ok || !explicit.ok) return;
+    expect(withDefault.record.parameters.conditioning).toBe('priority-flood');
+    expect(withDefault.record.digest).toBe(explicit.record.digest);
   });
 
   it('names the method actually used: raw omits Priority-Flood, conditioned includes it', () => {

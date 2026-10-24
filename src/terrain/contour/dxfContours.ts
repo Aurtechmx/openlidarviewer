@@ -7,12 +7,15 @@
  * the polyline's Z — so contours arrive at the right height without the
  * 3D-POLYLINE/VERTEX verbosity.
  *
- * Honesty by layer: index contours → CONTOUR_INDEX, confident
- * intermediate → CONTOUR_INTER, anything interpolated or unsupported →
- * CONTOUR_UNCERTAIN, so a surveyor can freeze the uncertain layer and
- * see only what the data supports. Elevation labels (when supplied) land
- * on their own CONTOUR_TEXT layer as TEXT entities, so they can be frozen
- * / restyled independently of the linework. A minimal LAYER table is
+ * Honesty by layer: index contours → CONTOUR_INDEX, confident measured
+ * intermediate → CONTOUR_INTER, measured but sparse intermediate ground →
+ * CONTOUR_SPARSE, anything interpolated, unsupported or without provenance
+ * → CONTOUR_UNCERTAIN, so a surveyor can freeze the uncertain layer (and the
+ * sparse one) and see only what the data supports. For intermediate contours
+ * the layer is the DXF form of the per-feature basis the GeoJSON carries; index
+ * contours stay on CONTOUR_INDEX whatever their basis. Elevation labels (when
+ * supplied) land on their own CONTOUR_TEXT layer as TEXT entities, so they can
+ * be frozen / restyled independently of the linework. A minimal LAYER table is
  * emitted so the layers exist on import.
  *
  * Units: a minimal HEADER section declares `$INSUNITS` so CAD imports stop
@@ -28,7 +31,7 @@
  * Pure data: no DOM, no three.js, no I/O. Returns a DXF string.
  */
 
-import type { ContourFeature, ContourFeatureModel } from './contourFeatureModel';
+import { contourBasis, type ContourFeature, type ContourFeatureModel } from './contourFeatureModel';
 import { contourShapeStyleLabel } from './contourShapeStyle';
 import { decimalsForInterval, type ContourLabel } from './labelPlacement';
 import { provenanceLines, type ExportProvenance } from '../export/exportProvenance';
@@ -42,13 +45,17 @@ interface LayerDef {
 const LAYERS: ReadonlyArray<LayerDef> = [
   { name: 'CONTOUR_INDEX', color: 1 }, // red
   { name: 'CONTOUR_INTER', color: 3 }, // green
+  { name: 'CONTOUR_SPARSE', color: 9 }, // light grey — measured, below the solid threshold
   { name: 'CONTOUR_UNCERTAIN', color: 8 }, // dark grey
   { name: 'CONTOUR_TEXT', color: 7 }, // white/black — elevation labels
 ];
 
 function layerFor(f: ContourFeature): string {
   if (f.isIndex) return 'CONTOUR_INDEX';
-  return f.grade === 'solid' ? 'CONTOUR_INTER' : 'CONTOUR_UNCERTAIN';
+  // A solid run keeps CONTOUR_INTER on its grade, as before; only the dashed
+  // runs are sorted by what they stand on.
+  if (f.grade === 'solid') return 'CONTOUR_INTER';
+  return contourBasis(f) === 'sparse' ? 'CONTOUR_SPARSE' : 'CONTOUR_UNCERTAIN';
 }
 
 /** The drawing's linear unit, for the `$INSUNITS` header variable. */

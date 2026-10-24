@@ -201,22 +201,17 @@ const modeScope = (page: Page, vp: Viewport, mode: string): Locator =>
 const labPage = (page: Page, id: string): Locator => page.locator(`.olv-analyse-page[data-page="${id}"]`);
 
 /**
- * Open a lab from its Analyse home row. A lab page without a ground surface
- * offers the terrain run itself; follow it the way a first-time user would:
- * the run, then the Terrain page's way back to the lab.
+ * Open a lab from its Analyse home row with the row's one action, the way a
+ * first-time user would. Flow Pulse and Terrain Access run terrain first, on
+ * their own page, when the scan has no ground surface yet.
  */
 async function openLabFromHome(rec: Recorder, page: Page, id: string, name: string): Promise<void> {
   const row = page.locator(`#olv-ws-mode-analyse .olv-ah-row[data-analysis="${id}"]`);
   rec.fact('statusAtStart', (await row.locator('.olv-ah-badge').innerText()).trim());
-  await rec.click(row.locator('.olv-ah-open'), `${name} row`);
+  const run = row.locator('.olv-ah-run');
+  if (await run.count()) await rec.click(run, `Run ${name}`);
+  else await rec.click(row.locator('.olv-ah-open'), `${name} row`);
   await expect(labPage(page, id)).toBeVisible({ timeout: 20_000 });
-  const fix = labPage(page, id).locator('.olv-lab-fix', { hasText: 'Run terrain analysis' });
-  if (!(await fix.isVisible())) return;
-  rec.fact('remedy', 'Run terrain analysis (lab page)');
-  await rec.click(fix, 'Run terrain analysis');
-  const back = page.locator('.olv-at-back', { hasText: `Back to ${name}` });
-  await expect(back).toBeVisible({ timeout: 60_000 });
-  await rec.click(back, `Back to ${name}`);
 }
 
 async function j1(page: Page, vp: Viewport, id: string): Promise<void> {
@@ -352,8 +347,7 @@ test.describe('CE wayfinding journeys', () => {
     await page.locator('.olv-ah-row[data-analysis="terrain"] .olv-ah-open').click();
     await page.locator('.olv-analyse-run').click();
     await expect(page.locator('.olv-fit-verdict-text')).toBeVisible({ timeout: 60_000 });
-    await page.locator('.olv-at-link', { hasText: 'Contours' }).click();
-    await page.locator('.olv-analyse-contour-launcher .olv-contour-launcher-action').click();
+    await page.locator('.olv-at-link', { hasText: 'Contours' }).click(); // Make contours: Contour Studio opens
     await expect(page.locator('.olv-cs-export-btn', { hasText: /^GeoJSON$/ })).toBeVisible({ timeout: 30_000 });
     await page.locator('.olv-rail-tab').click();
     await expect(page.locator('#olv-left-panels')).toHaveClass(/olv-rail-collapsed/);

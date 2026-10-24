@@ -1,7 +1,8 @@
 /**
  * terrainAccessProfileForm.test.ts: the mobility-profile form's own parse/
  * validate rules — required fields, numeric parsing, the degrees→tangent
- * conversion, and that no field ships a preset value (§21).
+ * conversion, that the form opens blank (§21), and that an example profile
+ * fills it only when picked, is labelled as an example and is recorded as one.
  */
 import { describe, expect, it } from 'vitest';
 
@@ -9,8 +10,16 @@ import {
   describeProfileProblem,
   EMPTY_TERRAIN_ACCESS_PROFILE_FORM,
   parseTerrainAccessProfileForm,
+  profileOriginText,
+  TERRAIN_ACCESS_EXAMPLES,
+  TERRAIN_ACCESS_EXAMPLES_NOTE,
+  terrainAccessExampleForm,
+  type TerrainAccessExampleId,
   type TerrainAccessProfileFormValues,
 } from '../src/ui/fieldSimulation/terrainAccessProfileForm';
+import { validateProfile, type TerrainAccessProfile } from '../src/simulation/terrainAccess/terrainAccessTypes';
+
+const tan = (deg: number): number => Math.tan((deg * Math.PI) / 180);
 
 const FILLED: TerrainAccessProfileFormValues = {
   ...EMPTY_TERRAIN_ACCESS_PROFILE_FORM,
@@ -23,7 +32,8 @@ const FILLED: TerrainAccessProfileFormValues = {
 };
 
 describe('EMPTY_TERRAIN_ACCESS_PROFILE_FORM', () => {
-  it('has no preset value in any required numeric field (§21: no preset presented as safe)', () => {
+  it('is the initial state: no value in any required field and no example picked (§21)', () => {
+    expect(EMPTY_TERRAIN_ACCESS_PROFILE_FORM.example).toBeNull();
     expect(EMPTY_TERRAIN_ACCESS_PROFILE_FORM.name).toBe('');
     expect(EMPTY_TERRAIN_ACCESS_PROFILE_FORM.maxLongitudinalGradeDeg).toBe('');
     expect(EMPTY_TERRAIN_ACCESS_PROFILE_FORM.maxCrossSlopeDeg).toBe('');
@@ -33,6 +43,10 @@ describe('EMPTY_TERRAIN_ACCESS_PROFILE_FORM', () => {
     expect(EMPTY_TERRAIN_ACCESS_PROFILE_FORM.maxRuggednessEnabled).toBe(false);
     expect(EMPTY_TERRAIN_ACCESS_PROFILE_FORM.vehicleLengthEnabled).toBe(false);
     expect(EMPTY_TERRAIN_ACCESS_PROFILE_FORM.obstacleHeightEnabled).toBe(false);
+    // No example's numbers hide in the blank form.
+    for (const ex of TERRAIN_ACCESS_EXAMPLES) {
+      expect(EMPTY_TERRAIN_ACCESS_PROFILE_FORM).not.toEqual(terrainAccessExampleForm(ex.id));
+    }
   });
 
   it('refuses to build a profile with every field blank', () => {
@@ -63,6 +77,8 @@ describe('EMPTY_TERRAIN_ACCESS_PROFILE_FORM', () => {
       expect(result.profile.vehicleLength).toBeNull();
       expect(result.profile.obstacleHeightThreshold).toBeNull();
       expect(result.profile.unknownPolicy).toBe('block');
+      // Typed by hand: no origin key at all, so the record is unchanged.
+      expect('origin' in result.profile).toBe(false);
     }
   });
 
@@ -127,5 +143,89 @@ describe('describeProfileProblem', () => {
 
   it('falls back to the key for a field it does not know', () => {
     expect(describeProfileProblem({ field: 'other', reason: 'is odd' })).toBe('other is odd');
+  });
+});
+
+/** The example values this release states a basis for, in the form's units. */
+const STATED: Record<TerrainAccessExampleId, readonly [string, number, number, number, number, number]> = {
+  walker: ['Walker', 20, 15, 0.3, 0.6, 40],
+  atv: ['ATV', 20, 12, 0.2, 1.2, 50],
+  '4x4': ['4x4 vehicle', 25, 15, 0.3, 2.0, 50],
+};
+
+function parsedExample(id: TerrainAccessExampleId, over: Partial<TerrainAccessProfileFormValues> = {}): TerrainAccessProfile {
+  const result = parseTerrainAccessProfileForm({ ...terrainAccessExampleForm(id), ...over });
+  if (!result.ok) throw new Error(result.problems.map(describeProfileProblem).join('; '));
+  return result.profile;
+}
+
+describe('example profiles', () => {
+  it('offers Walker, ATV and 4x4 vehicle, in that order, with the stated values', () => {
+    expect(TERRAIN_ACCESS_EXAMPLES.map((e) => e.label)).toEqual(['Walker', 'ATV', '4x4 vehicle']);
+    for (const ex of TERRAIN_ACCESS_EXAMPLES) {
+      const [label, grade, cross, step, width, confidence] = STATED[ex.id];
+      expect([ex.label, ex.maxLongitudinalGradeDeg, ex.maxCrossSlopeDeg, ex.maxStepHeightM, ex.vehicleWidthM, ex.minimumTerrainConfidence])
+        .toEqual([label, grade, cross, step, width, confidence]);
+    }
+  });
+
+  it.each(Object.keys(STATED) as TerrainAccessExampleId[])('%s fills a form that validates with exactly its values, as tangents', (id) => {
+    const [label, grade, cross, step, width, confidence] = STATED[id];
+    const form = terrainAccessExampleForm(id);
+    expect(form.example).toBe(id);
+    expect(form.name).toBe(`${label} (example)`);
+    const profile = parsedExample(id);
+    expect(profile).toEqual({
+      name: `${label} (example)`,
+      maxLongitudinalGrade: tan(grade),
+      maxCrossSlope: tan(cross),
+      maxStepHeight: step,
+      maxRuggedness: null,
+      vehicleWidth: width,
+      vehicleLength: null,
+      minimumTerrainConfidence: confidence,
+      unknownPolicy: 'block',
+      obstacleHeightThreshold: null,
+      evidenceGapPolicy: EMPTY_TERRAIN_ACCESS_PROFILE_FORM.evidenceGapPolicy,
+      origin: { example: id, edited: false },
+    });
+    expect(validateProfile(profile)).toEqual([]);
+  });
+
+  it('marks the origin edited when a limit or policy changes, not when only the name does', () => {
+    expect(parsedExample('walker', { name: 'My walk' }).origin).toEqual({ example: 'walker', edited: false });
+    // The same number written differently is not an edit.
+    expect(parsedExample('walker', { maxLongitudinalGradeDeg: '20.0' }).origin?.edited).toBe(false);
+    expect(parsedExample('walker', { maxLongitudinalGradeDeg: '18' }).origin).toEqual({ example: 'walker', edited: true });
+    expect(parsedExample('atv', { vehicleWidthM: '1.3' }).origin?.edited).toBe(true);
+    expect(parsedExample('4x4', { minimumTerrainConfidence: '60' }).origin?.edited).toBe(true);
+    expect(parsedExample('4x4', { maxRuggednessEnabled: true, maxRuggedness: '0.5' }).origin?.edited).toBe(true);
+    expect(parsedExample('atv', { unknownPolicy: 'penalize' }).origin?.edited).toBe(true);
+    expect(parsedExample('atv', { evidenceGapPolicy: 'conservative' }).origin?.edited).toBe(true);
+  });
+
+  it('a filled example still refuses an invalid edit, field by field', () => {
+    const result = parseTerrainAccessProfileForm({ ...terrainAccessExampleForm('walker'), maxStepHeightM: '' });
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.problems.map(describeProfileProblem)).toContain('Max step height is required');
+  });
+
+  it('says in one line that the values are examples to confirm, never a rating or a limit to rely on', () => {
+    expect(TERRAIN_ACCESS_EXAMPLES_NOTE).toBe('Example values to confirm for your own platform, not a rating or a safety limit.');
+    expect(TERRAIN_ACCESS_EXAMPLES_NOTE).not.toMatch(/\bsafe\b/i);
+    for (const ex of TERRAIN_ACCESS_EXAMPLES) expect(terrainAccessExampleForm(ex.id).name).toMatch(/\(example\)$/);
+  });
+
+  it('describes the origin in words, and nothing for a profile typed by hand', () => {
+    expect(profileOriginText(parsedExample('walker'))).toBe('Walker example, no value changed');
+    expect(profileOriginText(parsedExample('4x4', { maxCrossSlopeDeg: '10' }))).toBe('4x4 vehicle example, then edited');
+    expect(profileOriginText(parsedExample('walker', { example: null }))).toBeNull();
+    expect(profileOriginText(undefined)).toBeNull();
+  });
+
+  it('validateProfile refuses a malformed origin', () => {
+    const profile = parsedExample('walker');
+    expect(validateProfile({ ...profile, origin: { example: '', edited: false } }).map((p) => p.field)).toEqual(['origin']);
+    expect(validateProfile({ ...profile, origin: { example: 'walker' } as never }).map((p) => p.field)).toEqual(['origin']);
   });
 });

@@ -39,8 +39,8 @@ async function runTerrainAndOpenContourStudio(page: Page): Promise<void> {
   await openAnalysePage(page, 'terrain');
   await page.locator('.olv-analyse-run').click();
   await expect(page.locator('.olv-fit-verdict-text')).toBeVisible({ timeout: 90_000 });
+  // Make contours opens Contour Studio on the Contours page.
   await page.locator('.olv-at-link', { hasText: 'Contours' }).click();
-  await page.locator('.olv-analyse-contour-launcher .olv-contour-launcher-action').click();
   await expect(page.locator('.olv-cs-export-btn', { hasText: /^GeoJSON$/ })).toBeVisible({ timeout: 30_000 });
 }
 

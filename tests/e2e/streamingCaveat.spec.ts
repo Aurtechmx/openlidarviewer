@@ -68,12 +68,15 @@ test.describe('streaming caveats', () => {
     // Each re-run is started only after the previous one has finished: a
     // click while the button reads "Analysing…" restarts the run, and a
     // software renderer can need more than a minute per run.
+    // The scope line is matched, not the word alone: the panel's Why section
+    // lists every product, and Footprints there is rightly blocked for any
+    // streaming view, resident-only in its own reason.
     const panel = page.locator('.olv-analyse-panel');
     let scopeFull = false;
     for (let attempt = 0; attempt < 3 && !scopeFull; attempt++) {
       await run.click();
       await expect(run).toHaveText('Re-run analysis', { timeout: 180_000 });
-      scopeFull = !((await panel.textContent()) ?? '').includes('resident-only');
+      scopeFull = !((await panel.textContent()) ?? '').includes(PARTIAL);
     }
     expect(scopeFull, 'scan scope still reads resident-only after three full re-runs').toBe(true);
     await expect(page.locator('.olv-analyse-dem-note', { hasText: 'resident-only' })).toHaveCount(0);

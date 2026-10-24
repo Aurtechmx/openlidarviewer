@@ -25,8 +25,8 @@ export interface TerrainAnalysisEntryDeps {
   }>;
   /** Show an Analyse page once the panel is up, when the shell has pages. */
   readonly showPage?: (page: 'terrain' | 'contours') => void;
-  /** Run terrain analysis over the active scan. */
-  readonly run: () => void;
+  /** Run terrain analysis over the active scan; settles when the run has finished or stopped. */
+  readonly run: () => Promise<void> | void;
 }
 
 /**
@@ -43,5 +43,6 @@ export async function openTerrainAnalysis(
   const { hasResult } = await deps.showPanel();
   // Contours land on their page only when a result exists; a run shows on Terrain.
   deps.showPage?.(!rerun && hasResult ? 'contours' : 'terrain');
-  if (rerun || !hasResult) deps.run();
+  // Fire-and-forget: the run reports its own failure on the panel and never rejects.
+  if (rerun || !hasResult) void deps.run();
 }

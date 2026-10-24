@@ -443,3 +443,36 @@ describe('the README CRS line', () => {
     expect(readme).toMatch(/CRS {12}EPSG:6342\n/);
   });
 });
+
+describe('the direction legend names where each code points', () => {
+  // Grid row 0 is the southern row and the .asc rasters list the northern row
+  // first, so a code that moves to row + 1 points north.
+  const planeFalling = (east: number, north: number) => dtmOf(
+    Array.from({ length: 5 }, (_, row) => Array.from({ length: 5 }, (_, col) => -(east * col + north * row))),
+  );
+  const legendOf = (readme: string): Map<number, string> => {
+    const line = readme.split('\n').find((l) => l.includes('Direction legend'))!;
+    return new Map([...line.matchAll(/(-?\d)=([NSEW]{1,2})\b/g)].map((m) => [Number(m[1]), m[2]!]));
+  };
+  const compass: readonly [string, number, number][] = [
+    ['E', 1, 0], ['NE', 1, 1], ['N', 0, 1], ['NW', -1, 1],
+    ['W', -1, 0], ['SW', -1, -1], ['S', 0, -1], ['SE', 1, -1],
+  ];
+
+  it.each(compass)('a plane falling %s reads as that direction in the README', (name, east, north) => {
+    const r = runFlowPulse(planeFalling(east, north), projected, params({ conditioning: 'raw' }), identity);
+    if (!r.ok) throw new Error(`fixture run refused: ${r.code}`);
+    const code = r.routed.direction[2 * 5 + 2]!;
+    const zip = buildFlowPulsePackage(r, { basename: 'flow' });
+    expect(legendOf(textOf(zip, 'flow-README.txt')).get(code)).toBe(name);
+  });
+
+  it('a plane falling north accumulates toward the top line of the .asc', () => {
+    const r = runFlowPulse(planeFalling(0, 1), projected, params({ conditioning: 'raw' }), identity);
+    if (!r.ok) throw new Error(`fixture run refused: ${r.code}`);
+    const body = textOf(buildFlowPulsePackage(r, { basename: 'flow' }), 'flow-accumulation.asc')
+      .trim().split('\n').slice(6).map((l) => l.trim().split(/\s+/).map(Number));
+    expect(body[0]![2]).toBe(5);
+    expect(body[4]![2]).toBe(1);
+  });
+});

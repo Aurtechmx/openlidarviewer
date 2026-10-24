@@ -38,7 +38,9 @@ export function inMemoryPrecisionRows(precision: InMemoryPrecision): AnalysisRow
           value:
             `${formatPrecisionMetres(pm.worstCaseSpacing)} worst case, `
             + `${formatPrecisionMetres(pm.typicalSpacing)} mean over the reach `
-            + `(${precisionGradeLabel(precision.grade)})`,
+            + (precision.metresCover === 'horizontal'
+              ? `on the horizontal axes; the vertical unit could not be interpreted (${precisionGradeLabel(precision.grade)})`
+              : `(${precisionGradeLabel(precision.grade)})`),
           status: precision.grade === 'fine' ? 'info' : 'warn',
         }
       : {

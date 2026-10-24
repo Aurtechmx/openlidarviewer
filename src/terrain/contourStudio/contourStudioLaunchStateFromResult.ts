@@ -99,10 +99,13 @@ export function contourStudioPrerequisitesFromResult(
   ctx: LaunchFrameContext,
 ): ContourStudioPrerequisites {
   const tally = result.cellStatusTally;
-  const total = Math.max(0, tally.total);
-  // Unsupported = empty cells over the whole grid. Conservative: unknown total
-  // reads as fully unsupported so a degenerate grid can't look deliverable.
-  const unsupportedFraction = total > 0 ? tally.empty / total : 1;
+  // Unsupported = gaps in the surveyed area over the surveyed area. No-data
+  // outside it (the rest of a strip survey's bounding grid) is not part of the
+  // surface the deliverable draws. Conservative: an empty survey reads as fully
+  // unsupported so a degenerate grid can't look deliverable.
+  const outside = tally.outsideCoverage ?? 0;
+  const total = Math.max(0, tally.total - outside);
+  const unsupportedFraction = total > 0 ? Math.max(0, tally.empty - outside) / total : 1;
 
   const readiness = result.quality.readiness;
   const covered = tally.measured + tally.interpolated + tally.lowConfidence + tally.edgeRisk;

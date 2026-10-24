@@ -6,9 +6,10 @@
  * marginalia a field deliverable is expected to carry: a neat-line, a graphic
  * scale bar (in real ground units), a north arrow, a line-grade legend, and a
  * title block (source, interval, datum, CRS, vertical RMSEz, survey-grade
- * caveat, date). Each contour run is styled by its evidence grade (solid /
- * dashed for interpolated / faint dashed for gap) and index contours are
- * weighted heavier. World +Y maps to up so north stays up.
+ * caveat, date). Each contour run is styled by its basis (solid for measured,
+ * thinner and lighter for sparse measured ground, dashed for interpolated,
+ * faint dashed for gap) and index contours are weighted heavier. World +Y maps
+ * to up so north stays up.
  *
  * Earlier versions sized the canvas in raw source units (an 80 m field rendered
  * as an 80 px postage stamp with no map furniture). This scales the map into a
@@ -18,7 +19,15 @@
  * Pure data: no DOM, no three.js, no I/O. Returns an SVG string.
  */
 
-import type { ContourFeature, ContourFeatureModel } from './contourFeatureModel';
+import {
+  contourBasis,
+  contourLineKind,
+  modelLengthShares,
+  type ContourFeature,
+  type ContourFeatureModel,
+  type ContourLineKind,
+} from './contourFeatureModel';
+import { contourShareLine } from './evidenceGrade';
 import { decimalsForInterval, type ContourLabel } from './labelPlacement';
 import { contourShapeStyleLabel } from './contourShapeStyle';
 import { provenanceLines, type ExportProvenance } from '../export/exportProvenance';
@@ -61,16 +70,29 @@ function xmlEscape(s: string): string {
   return s.replaceAll(/&/g, '&amp;').replaceAll(/</g, '&lt;').replaceAll(/>/g, '&gt;');
 }
 
-function strokeStyle(f: ContourFeature, stroke: string, indexW: number, baseW: number): string {
-  const width = f.isIndex ? indexW : baseW;
+/**
+ * Stroke attributes for one line kind; the map paths and the legend share it.
+ * Sparse measured ground is a thinner, fainter continuous line; interpolated is
+ * dashed; gap is a faint short dash.
+ */
+function lineStroke(kind: ContourLineKind, stroke: string, base: number): string {
+  let width = base;
   let dash = '';
   let opacity = 1;
-  if (f.grade === 'dashed') dash = ` stroke-dasharray="${(width * 6).toFixed(2)} ${(width * 4).toFixed(2)}"`;
-  else if (f.grade === 'gap') {
-    dash = ` stroke-dasharray="${(width * 2).toFixed(2)} ${(width * 5).toFixed(2)}"`;
+  if (kind === 'sparse') {
+    width = Number((base * 0.8).toFixed(3));
+    opacity = 0.6;
+  } else if (kind === 'interpolated') {
+    dash = ` stroke-dasharray="${(base * 6).toFixed(2)} ${(base * 4).toFixed(2)}"`;
+  } else if (kind === 'gap') {
+    dash = ` stroke-dasharray="${(base * 2).toFixed(2)} ${(base * 5).toFixed(2)}"`;
     opacity = 0.45;
   }
   return `stroke="${stroke}" stroke-width="${width}" fill="none" stroke-opacity="${opacity}"${dash}`;
+}
+
+function strokeStyle(f: ContourFeature, stroke: string, indexW: number, baseW: number): string {
+  return lineStroke(contourLineKind(f), stroke, f.isIndex ? indexW : baseW);
 }
 
 /** Largest 1 / 2 / 5 × 10ⁿ that is ≤ v — for a round graphic-scale-bar length. */
@@ -125,13 +147,15 @@ function northArrow(cx: number, top: number, stroke: string): string {
   );
 }
 
-/** Legend rows: one line sample per evidence grade + index weight. */
+/** Legend rows: one line sample per line kind + index weight, drawn as the map draws them. */
+const LEGEND_ROWS = 5;
 function legend(x: number, y: number, stroke: string, indexW: number, baseW: number): string {
   const rows: Array<[string, string]> = [
-    [`stroke="${stroke}" stroke-width="${indexW}"`, 'Index contour'],
-    [`stroke="${stroke}" stroke-width="${baseW}"`, 'Intermediate'],
-    [`stroke="${stroke}" stroke-width="${baseW}" stroke-dasharray="${(baseW * 6).toFixed(1)} ${(baseW * 4).toFixed(1)}"`, 'Interpolated'],
-    [`stroke="${stroke}" stroke-width="${baseW}" stroke-opacity="0.45" stroke-dasharray="${(baseW * 2).toFixed(1)} ${(baseW * 5).toFixed(1)}"`, 'Gap / uncertain'],
+    [lineStroke('measured', stroke, indexW), 'Index contour'],
+    [lineStroke('measured', stroke, baseW), 'Intermediate'],
+    [lineStroke('sparse', stroke, baseW), 'Sparse ground (measured)'],
+    [lineStroke('interpolated', stroke, baseW), 'Interpolated'],
+    [lineStroke('gap', stroke, baseW), 'Low-confidence gap'],
   ];
   return rows
     .map(([attrs, label], i) => {
@@ -222,7 +246,10 @@ export function svgContours(model: ContourFeatureModel, params: SvgContourParams
       if (i < f.coordinates.length - 1) d += ' ';
     }
     if (f.closed) d += ' Z';
-    paths.push(`  <path d="${d}" ${strokeStyle(f, stroke, indexW, baseW)} data-elevation="${f.value}" data-grade="${f.grade}"/>`);
+    paths.push(
+      `  <path d="${d}" ${strokeStyle(f, stroke, indexW, baseW)} data-elevation="${f.value}" ` +
+        `data-grade="${f.grade}" data-basis="${contourBasis(f)}"/>`,
+    );
   }
 
   // ── haloed elevation labels ───────────────────────────────────────────────
@@ -246,7 +273,7 @@ export function svgContours(model: ContourFeatureModel, params: SvgContourParams
   // ── marginalia layout ─────────────────────────────────────────────────────
   const tLines = titleLines(model, prov, unit, labelDecimals);
   const footerTop = margin + mapH + 18;
-  const legendBottom = footerTop + 44 + 3 * 16 + 6;
+  const legendBottom = footerTop + 44 + (LEGEND_ROWS - 1) * 16 + 6;
   const titleBottom = footerTop + 12 + tLines.length * 14;
   const footerBottom = Math.max(legendBottom, titleBottom);
   const W = mapW + margin * 2;
@@ -266,7 +293,7 @@ export function svgContours(model: ContourFeatureModel, params: SvgContourParams
 
   const caption =
     Number.isFinite(model.interpolatedFraction) && model.interpolatedFraction > 0
-      ? `<!-- ${Math.round(model.interpolatedFraction * 100)}% of contour length is interpolated/uncertain. ${NOT_SURVEY_GRADE_NOTE} -->`
+      ? `<!-- ${commentText(`${contourShareLine(modelLengthShares(model))}. ${NOT_SURVEY_GRADE_NOTE}`)} -->`
       : `<!-- ${NOT_SURVEY_GRADE_NOTE} -->`;
 
   return [

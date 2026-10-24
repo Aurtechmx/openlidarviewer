@@ -65,19 +65,54 @@ export interface FlowGrid {
  * makes the choice reproducible across runs and platforms. A different order
  * would be equally defensible and would produce a different flow field, which
  * is why it is frozen here and pinned by test rather than left to the loop.
+ *
+ * Offsets are [dcol, drow]. Row 0 is the southern row, so +drow is north.
  */
 export const D8_NEIGHBOURS: readonly (readonly [number, number])[] = Object.freeze([
   [1, 0],   // E
-  [1, 1],   // SE
-  [0, 1],   // S
-  [-1, 1],  // SW
+  [1, 1],   // NE
+  [0, 1],   // N
+  [-1, 1],  // NW
   [-1, 0],  // W
-  [-1, -1], // NW
-  [0, -1],  // N
-  [1, -1],  // NE
+  [-1, -1], // SW
+  [0, -1],  // S
+  [1, -1],  // SE
 ]);
 
-/** Throws unless the grid's dimensions and arrays agree. */
+/**
+ * 1 for each NoData cell that reaches the grid border through other NoData
+ * cells (4-connected), 0 elsewhere.
+ *
+ * Such a cell lies outside the mapped surface, as the area around a survey
+ * strip does, so water that reaches it has left the surface the way it leaves
+ * past the grid edge. NoData the surface encloses (a hole under a building, a
+ * gap in a swath) is not outside and stays a wall.
+ */
+export function outsideSurface(grid: FlowGrid): Uint8Array {
+  const { valid, cols, rows } = grid;
+  const n = cols * rows;
+  const outside = new Uint8Array(n);
+  const stack: number[] = [];
+  const seed = (i: number): void => {
+    if (valid[i] === 1 || outside[i] === 1) return;
+    outside[i] = 1;
+    stack.push(i);
+  };
+  for (let c = 0; c < cols; c++) { seed(c); seed((rows - 1) * cols + c); }
+  for (let r = 0; r < rows; r++) { seed(r * cols); seed(r * cols + cols - 1); }
+  while (stack.length > 0) {
+    const i = stack.pop()!;
+    const col = i % cols;
+    const row = (i - col) / cols;
+    if (col > 0) seed(i - 1);
+    if (col < cols - 1) seed(i + 1);
+    if (row > 0) seed(i - cols);
+    if (row < rows - 1) seed(i + cols);
+  }
+  return outside;
+}
+
+
 export function assertFlowGrid(grid: FlowGrid): void {
   const { cols, rows, z, valid, cellMetresX, cellMetresY } = grid;
   if (!Number.isInteger(cols) || !Number.isInteger(rows) || cols <= 0 || rows <= 0) {

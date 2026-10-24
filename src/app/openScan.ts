@@ -25,6 +25,7 @@ import { scanFactsFromStatic } from './sessionScanFacts';
 import { heldSessionWork, takePendingSessionRestore } from './pendingSessionRestore';
 export { clearPendingSessionRestore, heldSessionWork } from './pendingSessionRestore';
 import { rememberCloudFile } from '../io/sourceFiles';
+export { sourceDigestReady } from '../io/sourceFiles';
 import { detectCopc } from '../io/copc/copcDetect';
 import { formatProgress, loadStageLabel } from '../io/loadProgress';
 import { loadContextFacts, streamingContextFacts } from '../io/loadScope';
@@ -60,7 +61,7 @@ import type { LayerIdentityService } from './layerIdentityService';
 import type { InspectorCardRefreshers } from './inspectorCardRefreshers';
 import type { CrsCoordinator } from './crsCoordinator';
 import type { ViewBookmarksService } from './viewBookmarks';
-import { loadPreviewCloud, loadLoadDiagnostics } from '../lazyChunks';
+import { loadPreviewCloud, loadLoadDiagnostics, loadExportDigests } from '../lazyChunks';
 import type { PreviewCloudHandle, PreviewCloudViewer } from './previewCloud';
 import type { PreviewChunk } from '../io/loadLas';
 import { PREVIEW_MAX_POINTS } from '../render/previewLimits';
@@ -273,7 +274,11 @@ export async function openScan(file: File, deps: OpenScanDeps): Promise<void> {
   }
   const controller = new AbortController();
   // A reload at higher density hands this open a raised budget; any other open uses the device's.
-  const renderBudget = takeReloadBudget(file) ?? deps.renderBudget;
+  const reloadBudget = takeReloadBudget(file);
+  const renderBudget = reloadBudget ?? deps.renderBudget;
+  // A reload replaces a loaded layer, so it never routes out of core: a file too
+  // large to read whole is read again by ranges at the raised budget.
+  const reloading = reloadBudget !== null;
   let preview: PreviewCloudHandle | null = null;
   // Whether a streaming scan was already on screen when this open began.
   //
@@ -324,7 +329,7 @@ export async function openScan(file: File, deps: OpenScanDeps): Promise<void> {
     // loader would face the same too-large allocation, so this REFUSES with a
     // named reason instead of falling through into an out-of-memory crash.
     let streamed = false;
-    const heavy = await openLocalHeavyLas(file, controller.signal, {
+    const heavy = reloading ? { status: 'not-heavy' as const } : await openLocalHeavyLas(file, controller.signal, {
       viewerReady: deps.viewerReady,
       getViewer: deps.getViewer,
       isPhone: deps.isTouchFirst ?? deps.isPhone,
@@ -359,12 +364,9 @@ export async function openScan(file: File, deps: OpenScanDeps): Promise<void> {
       finishLoad(deps).catch(() => false);
       return;
     }
-    if (heavy.status === 'sampled') {
-      // A sample of the file is on screen: finish like an attached scan, then say it is a sample.
-      deps.dropZone.setCancelHandler(null);
-      finishLoad(deps).catch(() => false).finally(() => deps.showToast(heavy.notice));
-      return;
-    }
+    // No room for the index: the loader below opens a stratified sample of the
+    // whole file by ranged reads, as an ordinary scan, and says so once it is open.
+    const sample = heavy.status === 'sample' ? heavy : null;
     if (heavy.status === 'cancelled') {
       deps.dropZone.setCancelHandler(null);
       showCancelled(deps);
@@ -374,7 +376,7 @@ export async function openScan(file: File, deps: OpenScanDeps): Promise<void> {
     // reach the whole-file loader. Surface the named reason on the drop zone the
     // same way a load failure is surfaced, and stop. `not-heavy` (and a
     // defensive `heavy: false`) still falls through to the loader below.
-    if (heavy.status !== 'not-heavy' && heavy.heavy) {
+    if (heavy.status !== 'not-heavy' && heavy.status !== 'sample' && heavy.heavy) {
       deps.dropZone.setCancelHandler(null);
       deps.dropZone.setProgress(null);
       const message = describeHeavyRefusal(heavy);
@@ -427,9 +429,11 @@ export async function openScan(file: File, deps: OpenScanDeps): Promise<void> {
         deviceMemoryGB: deps.deviceMemoryGB(),
         signal: controller.signal,
         head: headSlice,
+        rangedSample: sample !== null || reloading,
       },
     );
-    await attachStaticCloud(result, { file, signal: controller.signal, preview, sourceDigest }, deps);
+    await attachStaticCloud(result, { file, signal: controller.signal, preview, sourceDigest, replaced: sample?.replaced }, deps);
+    if (sample && !controller.signal.aborted) deps.showToast(sample.notice(result.cloud.pointCount, result.originalPointCount));
   } catch (err) {
     deps.dropZone.setCancelHandler(null);
     if (preview) takeDownPreview(deps, preview);
@@ -450,6 +454,17 @@ export async function openScan(file: File, deps: OpenScanDeps): Promise<void> {
   } finally {
     deps.setLoading(false);
   }
+}
+
+/**
+ * Hash the scan's source file once the open has settled, so the first report
+ * or contour export does not stall on a whole-file checksum. The hash runs in
+ * a worker; a large file takes tens of seconds, which this hides.
+ */
+function prefetchDigestWhenIdle(cloud: object): void {
+  const start = (): void => { void loadExportDigests().then((m) => m.prefetchSourceDigest(cloud), () => {}); };
+  const idle = (globalThis as { requestIdleCallback?: (cb: () => void, o?: { timeout: number }) => number }).requestIdleCallback;
+  setTimeout(() => (idle ? idle(start, { timeout: 5000 }) : start()), 2000);
 }
 
 /** Hide the status for a cancelled open, saying so politely where supported. */
@@ -520,6 +535,8 @@ export interface AttachedCloudSource {
   readonly preview?: PreviewCloudHandle | null;
   /** The source's content fingerprint, stamped on the cloud before its CRS resolves. */
   readonly sourceDigest?: Promise<string | null>;
+  /** The answer to the replace question when the open already asked it, so it is not asked twice. */
+  readonly replaced?: ReplaceOutcome;
 }
 
 /**
@@ -585,7 +602,7 @@ export async function attachStaticCloud(
   // caps that overlap.
   // A static scan opened over a stream replaces it, and its measurements and
   // annotations belong to the stream: ask before they are lost.
-  const replaced: ReplaceOutcome = viewer.hasStreamingCloud ? (await deps.replaceGuard?.({ kind: 'scan', name: result.cloud.name })) ?? 'none' : 'none';
+  const replaced: ReplaceOutcome = !viewer.hasStreamingCloud ? 'none' : source.replaced ?? (await deps.replaceGuard?.({ kind: 'scan', name: result.cloud.name })) ?? 'none';
   if (replaced === 'cancel') throw new LoadCancelledError();
   const prior = viewer.clouds();
   const id = viewer.addCloud(result.cloud);
@@ -633,7 +650,7 @@ export async function attachStaticCloud(
   deps.inspector.setCoverageAvailable(false);
   // Retain the source file + whether the display cloud was reduced, so the
   // Export panel can offer a full-resolution re-decode.
-  if (source.file) { deps.rememberSourceFile(id, source.file); rememberCloudFile(result.cloud, source.file, sourcePositions(result.cloud)); }
+  if (source.file) { deps.rememberSourceFile(id, source.file); rememberCloudFile(result.cloud, source.file, sourcePositions(result.cloud)); prefetchDigestWhenIdle(result.cloud); }
   deps.rememberReduced(id, result.downsampled);
   // Local-first counter — categorical source format only; never the file name.
   try { recordUsage('scan-open', result.cloud.sourceFormat); }

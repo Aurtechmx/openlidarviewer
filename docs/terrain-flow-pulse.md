@@ -69,17 +69,21 @@ result is called a conditioned drainage surface, never corrected terrain.
 ### Priority-Flood
 
 `src/simulation/flowPulse/priorityFlood.ts` implements Barnes, Lehman and
-Mulla (2014). It floods inward from the mapped surface's boundary, always
+Mulla (2014). It floods inward from the edge of the mapped surface, always
 advancing from the lowest cell reached so far, and raises a cell reached
 from below to the level it was reached at: the elevation water would have to
 reach to spill out of the depression holding it. One pass, a binary
 min-heap ordered by elevation then by insertion order, so two cells reached
 at the same elevation resolve the same way on every run, runs in O(n log n).
 
-An optional epsilon parameter raises each filled cell a small amount above
-its spill parent, turning what would otherwise be a plateau (no descent, so
-D8 would report it flat) into a surface with a deterministic path out. The
-epsilon is not fill. Following Barnes, Lehman and Mulla, a cell counts as
+Each filled cell is raised a small amount above the cell it was reached
+from, turning what would otherwise be a plateau (no descent, so D8 would
+report it flat) into a surface with a deterministic path out. By default the
+rise is one Float32 step (`fillEpsilon: 'float32-step'`), the smallest the
+surface can hold, as Barnes, Lehman and Mulla specify with `nextafter`. The
+flood is ordered by the raised heights, so a larger rise can carry a
+depression's interior above a rim it should spill over; a fixed rise in the
+vertical unit can still be asked for. The epsilon is not fill. Following Barnes, Lehman and Mulla, a cell counts as
 filled only when its original height is strictly below the spill level it
 was reached from; a cell level with that spill level (a flat) rises by the
 epsilon alone and is counted separately as `flatCellsResolved`. The
@@ -91,10 +95,11 @@ does not actually rise; every such absorption is counted in
 `epsilonAbsorbed` rather than assumed to have applied.
 
 D8 treats NoData as a wall, and conditioning is seeded consistently with
-that. By default, when `fillNoData` is set to `wall`, only the cells on the
-grid's own boundary seed the flood, so a survey hole is never read as a
-drainage exit. A region NoData fully encloses has no route to the boundary
-and keeps its elevations, counted in `cellsUnreachable` rather than silently
+that. By default, when `fillNoData` is set to `wall`, the flood is seeded at
+the edge of the mapped surface: the cells on the grid's boundary and the
+cells beside NoData that reaches it, which lies outside the survey. A survey
+hole the data encloses is never read as a drainage exit. A region NoData
+fully encloses has no route to that edge and keeps its elevations, counted in `cellsUnreachable` rather than silently
 left out of the total. The declared alternative, `fillNoData: outlet`
 (registered as `olv.simulation.terrain-flow.priority-flood.gap-outlet`),
 also seeds every cell touching a gap. That reading suits a gap that is open
@@ -105,7 +110,7 @@ genuine survey hole it invents an exit that was never surveyed.
 
 `src/simulation/flowPulse/d8Flow.ts` implements O'Callaghan and Mark (1984).
 For each valid cell, the eight neighbours are inspected in a fixed order:
-east, southeast, south, southwest, west, northwest, north, northeast. The
+east, northeast, north, northwest, west, southwest, south, southeast. The
 cell drains to whichever neighbour offers the strictly greatest drop per
 metre of physical distance, with ties broken by that fixed order rather than
 by array layout. The diagonal distance is computed as
@@ -119,9 +124,11 @@ A cell with no downslope neighbour is a sink, a flat or an outlet, and raw
 mode reports which one rather than choosing for it. A sink has every neighbour
 strictly higher or invalid, and flow stops. A flat has no neighbour lower
 but at least one equal, and is reported unresolved rather than given an
-arbitrary direction from iteration order. An outlet sits on the grid
-boundary with nowhere lower to go on the mapped surface, so flow leaves the
-analysed extent.
+arbitrary direction from iteration order. An outlet sits on the edge of the
+mapped surface, on the grid boundary or beside NoData outside the survey,
+with nowhere lower to go on it, so flow leaves the analysed extent. An
+outlet can be where a stream enters the survey when the ground inside is
+higher than the edge it came in by.
 
 A cell with no elevation is neither routed nor routed into: flow does not
 cross NoData.
@@ -187,7 +194,7 @@ position instead. Both tie-break on the lowest member cell index, never on
 component-discovery order.
 
 The method is registered as `olv.simulation.terrain-flow.depression-inventory`,
-version 1. Do not call every single-cell sink a natural pond. A one-cell raw
+version 2. Do not call every single-cell sink a natural pond. A one-cell raw
 candidate is a pinpoint, and even a catalogued conditioned depression is a
 topographic computation, not a field-surveyed pond.
 
@@ -195,8 +202,9 @@ topographic computation, not a field-surveyed pond.
 
 `pulseFrom()` traces the already-computed downstream path from a start cell
 to a sink or an outlet, using `traceDownstream` in `d8Flow.ts`, with a
-visited guard: a conditioned surface can produce a two-cell cycle where each
-of a pair routes to the other, and the tracer stops rather than looping.
+visited guard. Every D8 step is strictly downhill, so the receiver graph has
+no cycle; the guard is a defence against a corrupted field, not a case the
+routing produces.
 Animation speed, where a caller draws one, is presentation only. The path
 itself carries the scientific identity.
 
@@ -251,15 +259,15 @@ inventory's evidence is weaker than the routing claim's evidence; see
 ## Method registry
 
 Six methods are registered under the `terrain-flow` prefix.
-`olv.simulation.terrain-flow.d8`, version 1, performs single-flow-direction
-routing. `olv.simulation.terrain-flow.priority-flood`, version 2, performs
+`olv.simulation.terrain-flow.d8`, version 2, performs single-flow-direction
+routing. `olv.simulation.terrain-flow.priority-flood`, version 5, performs
 depression conditioning with NoData treated as a wall.
-`olv.simulation.terrain-flow.priority-flood.gap-outlet`, version 1, performs
+`olv.simulation.terrain-flow.priority-flood.gap-outlet`, version 3, performs
 the same conditioning with NoData gaps read as drainage exits.
 `olv.simulation.terrain-flow.accumulation`, version 1, computes flow
 accumulation over the D8 graph. `olv.simulation.terrain-flow.catchment`,
 version 1, performs upstream catchment extraction.
-`olv.simulation.terrain-flow.depression-inventory`, version 1, is the
+`olv.simulation.terrain-flow.depression-inventory`, version 2, is the
 depression inventory described above. See `docs/science/METHOD_REGISTRY.md`
 for the full catalogue entry per id, including citations.
 

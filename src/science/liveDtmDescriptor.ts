@@ -10,8 +10,9 @@
  *
  * Every value below is RESOLVED from the production source of truth, not
  * re-typed: the method id/version from {@link METHOD_REGISTRY}, the void-fill
- * method and extrapolation guard from `surfaceFromRaster.ts`
- * ({@link LIVE_INTERPOLATION}, {@link LIVE_EXTRAPOLATION_GUARD}), the per-cell
+ * method, extrapolation guard and data footprint from `surfaceFromRaster.ts`
+ * ({@link LIVE_INTERPOLATION}, {@link LIVE_EXTRAPOLATION_GUARD},
+ * {@link LIVE_COVERAGE_RADIUS_CELLS}), the per-cell
  * aggregation and the trusted-classification decision from the documented
  * production path in `analyseContours.computeTerrainCore`. Where a value is a
  * call-site choice rather than an exported constant, the comment cites the
@@ -32,6 +33,7 @@ import { canonicalize, sha256 } from '../render/measure/auditLog';
 import {
   LIVE_INTERPOLATION,
   LIVE_EXTRAPOLATION_GUARD,
+  LIVE_COVERAGE_RADIUS_CELLS,
 } from '../terrain/ground/surfaceFromRaster';
 import {
   LIVE_DTM_AGGREGATION,
@@ -95,6 +97,8 @@ export interface LiveDtmDescriptor {
   readonly interpolation: typeof LIVE_INTERPOLATION;
   /** One-sided-fill demotion guard. */
   readonly extrapolationGuard: ExtrapolationGuardDescriptor;
+  /** Data-footprint radius in cells: cells outside the footprint stay no data. */
+  readonly coverageRadiusCells: number;
   /** Metres per source horizontal unit; method default 1 (identity). */
   readonly horizontalUnitToMetres: number;
   /** Metres per source vertical unit; method default 1 (identity). */
@@ -162,6 +166,7 @@ export function resolveLiveDtmDescriptor(
       radiusCells: LIVE_EXTRAPOLATION_GUARD.radiusCells,
       penalty: LIVE_EXTRAPOLATION_GUARD.penalty,
     },
+    coverageRadiusCells: LIVE_COVERAGE_RADIUS_CELLS,
     horizontalUnitToMetres: opts.horizontalUnitToMetres ?? 1,
     verticalUnitToMetres: opts.verticalUnitToMetres ?? 1,
     samplingConvention: LIVE_SAMPLING_CONVENTION,
@@ -190,6 +195,7 @@ function methodBehaviourFields(d: LiveDtmDescriptor): Record<string, unknown> {
       radiusCells: d.extrapolationGuard.radiusCells,
       penalty: d.extrapolationGuard.penalty,
     },
+    coverageRadiusCells: d.coverageRadiusCells,
     horizontalUnitToMetres: d.horizontalUnitToMetres,
     verticalUnitToMetres: d.verticalUnitToMetres,
     samplingConvention: d.samplingConvention,

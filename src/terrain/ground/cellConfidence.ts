@@ -43,6 +43,7 @@ import { idwFill } from './idwFill';
 import { geodesicFillWithReport, GEODESIC_NODE_BUDGET } from './geodesicFill';
 import { hornSlope } from './terrainDerivatives';
 import { horizontalCellMetresXY } from './horizontalScale';
+import { coverageFootprint } from './coverageFootprint';
 
 /** Per-cell provenance: how the elevation in this cell came to be. */
 export type CellCoverage =
@@ -186,6 +187,14 @@ export interface CellConfidenceParams {
    */
   readonly nearestFallbackMaxCells?: number;
   /**
+   * Data footprint: when set, only cells inside the closing of the measured
+   * cells by a disc of this radius (in cells), or inside a void the measured
+   * cells enclose, may be filled (see `coverageFootprint.ts`). Every other
+   * cell stays NaN with coverage 0, however close the fill's radius would
+   * reach. Undefined = no footprint (every reachable cell is filled).
+   */
+  readonly coverageRadiusCells?: number;
+  /**
    * DTM hardening — withhold interpolated cells whose local surface slope
    * (rise/run, Horn) exceeds this: interpolating across steep ground invents
    * the least trustworthy surface. Undefined = no limit (the default).
@@ -314,6 +323,12 @@ export function buildDtmGrid(raster: DemRaster, params: CellConfidenceParams = {
     params.horizontalUnitToMetres,
   );
 
+  // Footprint first, so the fill never spends work on (or gives a height to)
+  // ground outside the data's coverage.
+  const footprint = params.coverageRadiusCells != null
+    ? coverageFootprint(hadData, cols, rows, params.coverageRadiusCells)
+    : undefined;
+
   const nearest = inpaintNearest(raster.z, hadData, cols, rows);
   let idw: Float32Array;
   if (params.interpolation === 'geodesic') {
@@ -325,6 +340,7 @@ export function buildDtmGrid(raster: DemRaster, params: CellConfidenceParams = {
       cellMetresY: cellM.y,
       verticalUnitToMetres: params.verticalUnitToMetres,
       nodeBudget: params.geodesicNodeBudget,
+      fillMask: footprint,
     });
     idw = filled.z;
     if (filled.report.abandoned) {
@@ -361,7 +377,7 @@ export function buildDtmGrid(raster: DemRaster, params: CellConfidenceParams = {
       );
     }
   } else {
-    idw = idwFill(raster.z, hadData, cols, rows, {});
+    idw = idwFill(raster.z, hadData, cols, rows, { fillMask: footprint });
   }
 
   // Distance-to-data in cells (multi-source BFS, 8-connectivity).
@@ -379,7 +395,10 @@ export function buildDtmGrid(raster: DemRaster, params: CellConfidenceParams = {
   for (let i = 0; i < nCells; i++) {
     if (hadData[i] === 1) { z[i] = raster.z[i]; continue; }
     if (Number.isFinite(idw[i])) { z[i] = idw[i]; continue; }
-    z[i] = nearestBound != null && interpDistanceCells[i] <= nearestBound ? nearest[i] : Number.NaN;
+    const inFootprint = footprint === undefined || footprint[i] === 1;
+    z[i] = inFootprint && nearestBound != null && interpDistanceCells[i] <= nearestBound
+      ? nearest[i]
+      : Number.NaN;
   }
 
   // Target density: explicit, else median of measured counts.

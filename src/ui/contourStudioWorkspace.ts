@@ -241,10 +241,11 @@ function renderLadder(launch: ContourStudioLaunchState, claim?: WorkspaceClaim):
 
 /**
  * The premium export section (§7.4): one honesty-gated surface, Gestalt-grouped
- * by deliverable kind (Vector / Map sheet / Data package / Report). Each button
- * fires `onExport(product)`; the host runs the real, gated exporter. A blocked
- * launch disables every product and says why — no polished deliverable is
- * offered when the surface can't support one.
+ * by deliverable kind (Map sheet / Vector / Data package / Report). The map
+ * sheet leads as the one primary product; each other group is one joined
+ * button row. Each button fires `onExport(product)`; the host runs the real,
+ * gated exporter. A blocked launch disables every product and says why — no
+ * polished deliverable is offered when the surface can't support one.
  */
 function renderExportBar(
   launch: ContourStudioLaunchState,
@@ -257,12 +258,12 @@ function renderExportBar(
     label: string;
     items: ReadonlyArray<{ id: ContourStudioExportProduct; label: string }>;
   }> = [
+    { label: 'Map sheet', items: [{ id: 'pdf', label: 'PDF' }] },
     { label: 'Vector', items: [
       { id: 'geojson', label: 'GeoJSON' },
       { id: 'dxf', label: 'DXF' },
       { id: 'svg', label: 'SVG' },
     ] },
-    { label: 'Map sheet', items: [{ id: 'pdf', label: 'PDF' }] },
     { label: 'Data package', items: [
       { id: 'package', label: 'DEM (ZIP)' },
       { id: 'deliverable', label: 'Complete (ZIP)' },
@@ -273,9 +274,11 @@ function renderExportBar(
     const group = el('div', { className: 'olv-cs-export-group' });
     group.append(el('div', { className: 'olv-cs-export-group-label', text: g.label }));
     const btns = el('div', { className: 'olv-cs-export-btns' });
+    btns.setAttribute('role', 'group');
+    btns.setAttribute('aria-label', g.label);
     for (const it of g.items) {
       const b = el('button', {
-        className: 'olv-cs-export-btn',
+        className: it.id === 'pdf' ? 'olv-cs-export-btn is-primary' : 'olv-cs-export-btn',
         text: it.label,
         title: `Export the contour lines as ${it.label} in the "${g.label}" group.`,
       });

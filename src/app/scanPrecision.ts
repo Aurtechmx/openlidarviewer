@@ -83,6 +83,10 @@ export interface PrecisionCrsFacts {
   readonly linearUnit?: string;
   readonly linearUnitToMetres?: number;
   readonly verticalUnitToMetres?: number;
+  /** The vertical unit token; `'unknown'` with no factor is a declared unit that cannot be read. */
+  readonly verticalLinearUnit?: string;
+  /** A spatial context's verdict on the vertical unit, when the facts are one. */
+  readonly verticalScaleState?: 'valid' | 'absent' | 'invalid';
 }
 
 export interface ScanPrecisionInputs {
@@ -151,6 +155,10 @@ function precisionOfFrame(frame: LocalFrame, inputs: ScanPrecisionInputs): InMem
       linearUnitKnown: unitKnown,
       linearUnitToMetres: inputs.crs?.linearUnitToMetres ?? 1,
       verticalUnitToMetres: inputs.crs?.verticalUnitToMetres,
+      // The context's own verdict where there is one; from a bare CRS, the
+      // same rule: an 'unknown' token with no factor is unreadable, not absent.
+      verticalScaleInvalid: inputs.crs?.verticalScaleState === 'invalid'
+        || (inputs.crs?.verticalUnitToMetres === undefined && inputs.crs?.verticalLinearUnit === 'unknown'),
     },
   });
 }

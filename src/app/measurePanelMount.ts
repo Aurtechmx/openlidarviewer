@@ -172,6 +172,8 @@ export function createMeasurePanelMount(deps: MeasurePanelMountDeps): MeasurePan
       // coordinates, so the seam is asked for one specific source point.
       locateReturn: (ref, out) => deps.getViewer().profileSeam.locateReturn(ref, out),
       crs: () => deps.crsService.current() ?? undefined,
+      heightDatum: () => deps.getViewer().measure.elevationDatum,
+      sceneOrigin: () => deps.getViewer().measure.sceneOrigin,
     };
   }
 

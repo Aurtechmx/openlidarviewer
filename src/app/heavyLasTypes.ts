@@ -12,7 +12,7 @@ import type { RangeSource } from '../io/range/RangeSource';
 import type { TileSchema } from '../io/heavy/tileRecord';
 import type { PointAttributes } from '../io/loadPlan';
 import type { OpfsDirHandle } from '../io/heavy/opfsSpillStore';
-import type { StorageEstimateReader } from '../io/heavy/storagePreflight';
+import type { StorageEstimateReader, StoragePreflightVerdict } from '../io/heavy/storagePreflight';
 import type {
   LocalOocIndexRequest,
 } from '../io/heavy/worker/localOocIndexerWorkerClient';
@@ -25,6 +25,7 @@ import type {
   RevealNavBar,
 } from '../ui/streamingScanReveal';
 import type { LoadError } from '../io/loadErrors';
+import type { ReplaceOutcome } from './discardGuard';
 import type { Viewer } from '../render/Viewer';
 import type { OpenStreamingDeps } from './openStreaming';
 
@@ -141,12 +142,20 @@ export type HeavyOpenResult =
   /** A streaming source was attached — the file is open. */
   | { readonly status: 'attached'; readonly source: OlvTileSource; readonly decoder: TileChunkDecoder }
   /**
-   * The tile store could not be built here (browser storage too small, or none),
-   * so an even sample of the file is on screen instead. `notice` says so, with
-   * the figures. The sample is not a finished scan: no scan report, provenance
-   * or Analyse surfaces are revealed for it.
+   * The tile store cannot be built here (browser storage too small, or none),
+   * so the caller opens the file as a sample read by ranges: a stratified stride
+   * of all its records, loaded as an ordinary scan whose source count is the
+   * file's. `verdict` is the storage reading behind it, null when there is no
+   * storage at all; `replaced` is the replace answer when the open already asked.
+   * `notice` words the sample for the user once the loader knows how many points
+   * it holds.
    */
-  | { readonly status: 'sampled'; readonly notice: string }
+  | {
+      readonly status: 'sample';
+      readonly verdict: StoragePreflightVerdict | null;
+      readonly replaced?: ReplaceOutcome;
+      readonly notice: (shownPoints: number, declaredPoints: number | null) => string;
+    }
   /** The plan did not route this file out of core; the caller loads it whole. */
   | { readonly status: 'not-heavy' }
   /** OPFS or workers were unavailable. Fall through only when `heavy` is false. */

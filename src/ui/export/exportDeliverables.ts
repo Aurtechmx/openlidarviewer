@@ -170,7 +170,9 @@ export function buildExportDeliverables(cb: ExportDeliverablesCallbacks): Export
     return button;
   });
   const formatRow = el('div', { className: 'olv-export' }, formatButtons);
-  const formatSection = collapsibleSection('Export', formatRow);
+  // Named for what it writes, apart from the converter's formats above: the
+  // points on screen, clip box applied, as a mesh or text file.
+  const formatSection = collapsibleSection('Points on screen (PLY, OBJ, XYZ, CSV)', formatRow);
 
   // Visual Export Studio — one button per PNG mode. Start disabled so a user
   // cannot fire an export with nothing to draw; the class matches the format
@@ -227,14 +229,23 @@ export function buildExportDeliverables(cb: ExportDeliverablesCallbacks): Export
       }, 1500);
       return;
     }
-    guardDuplicateClicks([reportButton, reportSelect], () => cb.onExportReport(templateId));
+    // The button says it is working for as long as the report builds: the first
+    // report of a large file also waits for the source file's checksum.
+    guardDuplicateClicks([reportButton, reportSelect], () => {
+      const out = cb.onExportReport(templateId);
+      if (out == null || typeof (out as PromiseLike<unknown>).then !== 'function') return out;
+      reportButton.textContent = 'Building report…';
+      reportButton.setAttribute('aria-busy', 'true');
+      const restore = (): void => { reportButton.textContent = 'Report PDF'; reportButton.removeAttribute('aria-busy'); };
+      return Promise.resolve(out).finally(restore);
+    });
   });
   const reportRow = el('div', { className: 'olv-report-row' }, [reportSelect, reportButton]);
 
   const element = el('div', {}, [
     formatSection,
     collapsibleSection('Image export', imageRow),
-    collapsibleSection('Report PDF', reportRow),
+    collapsibleSection('PDF report', reportRow),
   ]);
 
   const setImageExportEnabled = (enabled: boolean): void => {

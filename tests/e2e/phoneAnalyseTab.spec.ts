@@ -8,6 +8,7 @@ import { dropTerrainAccessUtmLas, showWorkspaceMode } from './helpers';
  * live in the bottom sheet, so Analyse is the sheet's `.olv-msheet-tab`, not the
  * rail's `.olv-ws-tab`. A real touch tap on it opens the Analyse home, and Flow
  * Pulse opens from there. Checked at the three phone sizes the layout targets.
+ * Terrain Access's example buttons are checked as touch targets at one size.
  */
 
 const SIZES = [
@@ -52,12 +53,43 @@ for (const viewport of SIZES) {
       const row = slot.locator('.olv-ah-row[data-analysis="flow-pulse"]');
       await expect(row).toBeVisible({ timeout: 20_000 });
 
-      await row.locator('.olv-ah-open').tap();
+      // The row's one action runs terrain first, then shows the map.
+      await row.locator('.olv-ah-run', { hasText: 'Run Flow Pulse' }).tap();
       await expect(page.locator('.olv-analyse-page[data-page="flow-pulse"]')).toBeVisible({ timeout: 20_000 });
       await expect(slot.locator('.olv-ws-task-title')).toHaveText('Flow Pulse');
+      await expect(page.locator('.olv-analyse-page[data-page="flow-pulse"] .olv-flow-grid-canvas')).toBeVisible({ timeout: 60_000 });
     });
   });
 }
+
+test.describe('phone Terrain Access examples 390x844', () => {
+  test.use({ viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true });
+
+  test('the example buttons are 44 px touch targets and a tap fills the fields', async ({ page }) => {
+    test.setTimeout(120_000);
+    await openScan(page);
+    await page.locator('.olv-mobile-sheet .olv-msheet-tab[data-tab="analyse"]').tap();
+    const slot = page.locator('.olv-msheet-slot[data-tab="analyse"]');
+    const row = slot.locator('.olv-ah-row[data-analysis="terrain-access"]');
+    await expect(row).toBeVisible({ timeout: 20_000 });
+    await row.locator('.olv-ah-run', { hasText: 'Run Terrain Access' }).tap();
+    const lab = page.locator('.olv-analyse-page[data-page="terrain-access"]');
+    await expect(lab.locator('.olv-ta-form')).toBeVisible({ timeout: 60_000 });
+
+    const buttons = lab.getByRole('group', { name: 'Example profiles' }).getByRole('button');
+    await expect(buttons).toHaveCount(3);
+    for (const b of await buttons.all()) {
+      await b.scrollIntoViewIfNeeded();
+      const box = await b.boundingBox();
+      expect(box, 'the example button has a box').not.toBeNull();
+      expect(box!.width).toBeGreaterThanOrEqual(44 - 1);
+      expect(box!.height).toBeGreaterThanOrEqual(44 - 1);
+      expect(box!.x + box!.width).toBeLessThanOrEqual(390);
+    }
+    await buttons.first().tap();
+    await expect(lab.locator('.olv-ta-field-input').first()).toHaveValue('Walker (example)');
+  });
+});
 
 test.describe('showWorkspaceMode at a phone width', () => {
   test.use({ viewport: { width: 375, height: 812 } });

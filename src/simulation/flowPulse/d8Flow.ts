@@ -23,7 +23,10 @@
  *
  * NoData is a wall. Flow neither enters nor leaves an invalid cell, and a
  * cell that would route off the grid edge is an OUTLET, which is a real
- * answer about where water leaves the mapped surface.
+ * answer about where water leaves the mapped surface. NoData that reaches the
+ * grid border lies outside the mapped surface (see {@link outsideSurface}), so
+ * its rim is an edge in the same sense: a survey strip drains out of its sides
+ * rather than ponding against the empty ground around it.
  */
 
 import {
@@ -34,6 +37,7 @@ import {
   CELL_SINK,
   D8_NEIGHBOURS,
   assertFlowGrid,
+  outsideSurface,
   type FlowCellStatus,
   type FlowGrid,
 } from './flowTypes';
@@ -62,6 +66,7 @@ export function d8Flow(grid: FlowGrid): D8Result {
   const { z, valid, cols, rows, cellMetresX, cellMetresY } = grid;
   const n = cols * rows;
 
+  const outside = outsideSurface(grid);
   const receiver = new Int32Array(n).fill(-1);
   const direction = new Int8Array(n).fill(-1);
   const status = new Uint8Array(n);
@@ -96,7 +101,7 @@ export function d8Flow(grid: FlowGrid): D8Result {
         const nr = row + dy;
         if (nc < 0 || nc >= cols || nr < 0 || nr >= rows) { sawEdge = true; continue; }
         const there = nr * cols + nc;
-        if (valid[there] !== 1) continue;
+        if (valid[there] !== 1) { if (outside[there] === 1) sawEdge = true; continue; }
 
         const drop = zHere - z[there];
         if (drop === 0) { sawEqual = true; continue; }

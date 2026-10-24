@@ -8,7 +8,11 @@ import {
   tallySegments,
   tallyContourSet,
   interpolatedCaption,
+  contourShareCaption,
+  contourShareLine,
+  contourShareParts,
 } from '../src/terrain/contour/evidenceGrade';
+import type { ContourFeatureModel } from '../src/terrain/contour/contourFeatureModel';
 import type { ContourSegment, ContourSet } from '../src/terrain/contour/contoursAt';
 
 const seg = (len: number, grade: ContourSegment['grade']): ContourSegment => ({
@@ -69,5 +73,29 @@ describe('interpolatedCaption', () => {
     expect(interpolatedCaption(tallySegments([seg(3, 'solid'), seg(1, 'gap')]))).toMatch(/25%/);
     expect(interpolatedCaption(tallySegments([seg(1, 'solid')]))).toMatch(/measured terrain/i);
     expect(interpolatedCaption(tallySegments([]))).toMatch(/no contours/i);
+  });
+});
+
+describe('contour share line', () => {
+  const model = (interpolated: number, sparse: number, gap: number): ContourFeatureModel => ({
+    features: [], interpolatedFraction: interpolated + sparse + gap,
+    interpolatedLengthFraction: interpolated, sparseLengthFraction: sparse, gapLengthFraction: gap,
+  }) as unknown as ContourFeatureModel;
+
+  it('names interpolated and sparse ground apart, by contour length', () => {
+    expect(contourShareLine({ interpolated: 0.04, sparse: 0.45, gap: 0 }))
+      .toBe('4% interpolated \u00b7 45% sparse ground (by contour length)');
+    expect(contourShareParts({ interpolated: 0.04, sparse: 0.45, gap: 0.004 }))
+      .toEqual(['4% interpolated', '45% sparse ground', '1% gap']);
+  });
+
+  it('always states both shares, even when one is zero', () => {
+    expect(contourShareLine({ interpolated: 0, sparse: 0.3, gap: 0 })).toBe('0% interpolated \u00b7 30% sparse ground (by contour length)');
+  });
+
+  it('the panel caption is the same line, or the all-confident sentence when nothing is below solid', () => {
+    expect(contourShareCaption(model(0.04, 0.45, 0.01))).toBe(contourShareLine({ interpolated: 0.04, sparse: 0.45, gap: 0.01 }));
+    expect(contourShareCaption(model(0, 0, 0))).toBe('All contour length is from confident, measured terrain.');
+    expect(contourShareCaption(model(Number.NaN, Number.NaN, Number.NaN))).toBe('No contours drawn.');
   });
 });

@@ -4,8 +4,9 @@
  * the cheapest real downstream path. Emits the contour feature
  * model as GeoJSON that GIS software ingest directly. Each
  * single-grade run becomes a LineString Feature carrying its elevation,
- * evidence grade, index flag, and confidence, so the recipient can style
- * or filter the uncertain spans rather than trusting one flat line.
+ * display grade, provenance, basis, index flag, and confidence, so the
+ * recipient can style or filter the uncertain spans rather than trusting one
+ * flat line.
  *
  * In the NATIVE writer elevation goes into the coordinate Z (3D positions) AS
  * WELL AS the `elevation` property — a 2D LineString with attribute-only
@@ -27,7 +28,9 @@
  */
 
 import {
+  contourBasis,
   featureEvidence,
+  modelLengthShares,
   modelVerticalReference,
   type ContourFeatureModel,
 } from './contourFeatureModel';
@@ -76,6 +79,13 @@ export function toGeoJSON(
       // replaces the former `evidenceGrade`, which fabricated provenance from
       // stroke style.
       provenance: serializeProvenance(featureEvidence(f)),
+      // What the run stands on, grade and provenance read together:
+      // measured | sparse | interpolated | gap | unavailable. A dashed run is
+      // `sparse` on measured cells and `interpolated` on cells touching
+      // interpolated ground. `provenance` above is the union over the run's
+      // vertices, so a sparse run ending where interpolated ground begins
+      // reads `mixed` there.
+      basis: contourBasis(f),
       index: f.isIndex,
       meanConfidence: Math.round(f.meanConfidence),
       coverageMode: model.coverageMode,
@@ -91,6 +101,8 @@ export function toGeoJSON(
     },
   }));
 
+  const shares = modelLengthShares(model);
+  const fraction = (v: number): number | null => (Number.isFinite(v) ? Math.round(v * 1000) / 1000 : null);
   // Foreign members carry honest provenance into the file itself.
   const metadata: Record<string, unknown> = {
       intervalM: model.intervalM,
@@ -111,9 +123,13 @@ export function toGeoJSON(
         model.contourStyle === 'crisp'
           ? 'Geometry is the raw marching-squares vertices (no smoothing or simplification).'
           : `Geometry is smoothed/generalized (style: ${contourShapeStyleLabel(model.contourStyle)}); low-confidence and gap vertices are preserved exactly.`,
-      interpolatedFraction: Number.isFinite(model.interpolatedFraction)
-        ? Math.round(model.interpolatedFraction * 1000) / 1000
-        : null,
+      interpolatedFraction: fraction(model.interpolatedFraction),
+      interpolatedLengthFraction: fraction(shares.interpolated),
+      sparseLengthFraction: fraction(shares.sparse),
+      gapLengthFraction: fraction(shares.gap),
+      lengthFractionNote:
+        'Shares are by contour length. interpolatedFraction is everything below the solid threshold ' +
+        '(sparse ground, interpolated and gap together) and is kept for compatibility.',
       warnings: model.warnings,
       // The one canonical wording, shared with the text stamp every DXF / SVG /
       // README / PDF carries. A single claim in two strings, split by artifact

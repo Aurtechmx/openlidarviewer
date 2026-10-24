@@ -29,7 +29,7 @@
 
 import { blockedCiClause } from '../terrain/validate/holdoutCiText';
 import type { LocalToLonLatSourceZ } from '../export/lonLatMapper';
-import { terrainExportDigests, type TerrainExportDigests } from '../export/terrainExportDigests';
+import { terrainExportDigests, terrainSourceDigestReady, type TerrainExportDigests } from '../export/terrainExportDigests';
 import { sourceInterpretationOf, type SourceInterpretationRecord } from '../science/sourceInterpretation';
 import { showBusyScan, clearBusyScan, createBusyScan, createBusyScanController, type BusyScanController } from './busyScan';
 import type { AnalyseContoursResult } from '../terrain/contour/analyseContours';
@@ -84,7 +84,7 @@ import { triggerDownload } from '../io/download';
 // Colourblind-safe twin of the coverage tile: same confidence buckets on the
 // Cividis palette, so a colour-vision-deficient viewer isn't left with the
 // green/yellow/red ramp. Selected when the colourblind-safe palette is active.
-import { interpolatedShareCaption } from '../terrain/contour/evidenceGrade';
+import { contourShareCaption } from '../terrain/contour/evidenceGrade';
 import {
   computeTerrainReadiness,
   type ReadinessIndicator,
@@ -457,6 +457,8 @@ export class AnalysePanel {
   readonly element: HTMLElement;
   private readonly _cb: AnalysePanelCallbacks;
   private readonly _fitnessRow: HTMLElement;
+  /** The verdict's validation detail and notes, after the host's links. */
+  private readonly _fitnessMore: HTMLElement;
   private readonly _readinessRow: HTMLElement;
   private readonly _recommendRow: HTMLElement;
   private readonly _qualityRow: HTMLElement;
@@ -688,6 +690,7 @@ export class AnalysePanel {
     this._scoreRow = el('div', { className: 'olv-analyse-score' });
     this._surfaceRow = el('div', { className: 'olv-analyse-surface' });
     this._fitnessRow = el('div', { className: 'olv-analyse-fitness' });
+    this._fitnessMore = el('div', { className: 'olv-analyse-fitness-more' });
     this._readinessRow = el('div', { className: 'olv-analyse-readiness' });
     this._recommendRow = el('div', { className: 'olv-analyse-recommend-box' });
     this._qualityRow = el('div', { className: 'olv-analyse-quality' });
@@ -798,11 +801,14 @@ export class AnalysePanel {
     const method = el('details', { className: 'olv-analyse-method' });
     method.append(el('summary', { className: 'olv-analyse-method-summary', text: 'Method' }), this._roadmap, this._scanTypeControl.element);
 
+    // The verdict leads (after a stale caveat), then the host's next step,
+    // then the verdict's own detail.
     this._resultsRegion.append(
       this._staleNotice,
+      this._fitnessRow,
       this._links,
       this._parts.contours,
-      this._fitnessRow,
+      this._fitnessMore,
       this._assessmentRow,
       details,
     );
@@ -2212,10 +2218,13 @@ export class AnalysePanel {
     this._body.replaceChildren();
     if (!this._result) return;
     this._body.append(
-      el('div', {
-        className: 'olv-analyse-caption',
-        text: interpolatedShareCaption(this._result.model.interpolatedFraction),
-      }),
+      this._hint(
+        el('div', {
+          className: 'olv-analyse-caption',
+          text: contourShareCaption(this._result.model),
+        }),
+        'Sparse ground: measured, but with fewer ground returns than a typical cell. Interpolated: filled from nearby ground. Gap: too little support to trust.',
+      ),
     );
     if (this._result.excludedByClassification > 0) {
       this._body.append(
@@ -3063,7 +3072,8 @@ export class AnalysePanel {
         exportBtn.disabled = true;
         cancelBtn.disabled = true;
         const restoreLabel = exportBtn.textContent ?? 'Export PDF';
-        showBusyScan(exportBtn, 'Exporting…');
+        // The first export of a file waits for its source checksum; say so.
+        showBusyScan(exportBtn, terrainSourceDigestReady(this._cb) ? 'Exporting…' : 'Checking the source file…');
         try {
           const chosenInterval = Number(intervalSel.value);
           const chosenStyle = styleSel.value as ContourShapeStyle;
@@ -3274,6 +3284,7 @@ export class AnalysePanel {
    */
   private _renderFitness(): void {
     this._fitnessRow.replaceChildren();
+    this._fitnessMore.replaceChildren();
     const r = this._result;
     this._runUsability = null;
     if (!r) {
@@ -3377,7 +3388,7 @@ export class AnalysePanel {
       el('summary', { className: 'olv-fit-caveats-summary', text: `Validation detail (${f.dimensions.length} checks)` }),
       grid,
     );
-    this._fitnessRow.append(checks);
+    this._fitnessMore.append(checks);
 
     if (f.caveats.length > 0) {
       // Collapsed by default: the caveats restate the checklist dimensions above
@@ -3393,7 +3404,7 @@ export class AnalysePanel {
       for (const c of f.caveats) {
         notes.append(el('div', { className: 'olv-fit-caveat', text: c }));
       }
-      this._fitnessRow.append(notes);
+      this._fitnessMore.append(notes);
     }
   }
 

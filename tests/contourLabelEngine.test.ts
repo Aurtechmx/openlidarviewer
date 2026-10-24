@@ -77,6 +77,17 @@ describe('placeContourLabels', () => {
     expect(audit.suppressedByCollision).toBe(1);
   });
 
+  it('tests a steep label on the space it covers once rotated', () => {
+    // Two upright (vertical) lines half a label height apart, their midpoints
+    // offset along the line by less than a label's length. Unrotated boxes
+    // would sit one above the other; the drawn labels overlap.
+    const a = feature([[50, 20], [50, 50], [50, 80]], { value: 10000 });
+    const b = feature([[51, 23], [51, 53], [51, 83]], { value: 10001 });
+    const { labels, audit } = placeContourLabels([a, b], params);
+    expect(labels).toHaveLength(1);
+    expect(audit.suppressedByCollision).toBe(1);
+  });
+
   it('prioritises index contours first', () => {
     const intermediate = straightLong(30, { value: 3 });
     const index = straightLong(70, { value: 5, isIndex: true });

@@ -58,7 +58,9 @@ import { buildIdentityProvenance } from '../../build/buildIdentity';
 import { FlowResultGrid, flowGridLegend, maskFromIndices } from './flowResultGrid';
 import { labStatRow } from './labStats';
 import { prefersReducedMotion } from './labColormaps';
-import { howToRead, labHeader, methodDetails, needsGround, readinessList } from '../labGuide';
+import {
+  howToRead, labDetails, labHeader, methodDetails, needsGround, preparingGround, readinessList, statusChip, type ChipFacts,
+} from '../labGuide';
 import { labReadiness } from '../../process/labGuideCopy';
 import { flowTerrainBannerText, flowTerrainCaveat, type FlowTerrainCaveat } from '../../process/flowTerrainCaveat';
 import {
@@ -177,14 +179,20 @@ const NO_IDENTITY = {
 
 /**
  * Run Flow Pulse on the analysed surface, or report that there is none.
- * `conditioning` defaults to {@link FLOW_PULSE_DEFAULTS}'s (raw), so an
- * existing single-argument call keeps its prior behaviour exactly.
+ * `conditioning` defaults to {@link FLOW_PULSE_DEFAULTS}'s (Priority-Flood).
  */
 export function runLabFlowPulse(
   input: FlowPulseLabInput | null,
   conditioning: FlowConditioning = FLOW_PULSE_DEFAULTS.conditioning,
 ): FlowPulseResult | FlowRefusal {
-  const params: FlowPulseParams = { ...FLOW_PULSE_DEFAULTS, conditioning };
+  // A display sample's DTM spans the extent, so its grid reads 'full'; the
+  // scan's own data basis says what was read.
+  const sampled = input?.sourceInterpretation?.dataBasis === 'sampled';
+  const params: FlowPulseParams = {
+    ...FLOW_PULSE_DEFAULTS,
+    conditioning,
+    ...(sampled ? { inputCoverage: 'sampled' as const } : {}),
+  };
   if (!input) {
     return runFlowPulse(null, NO_FRAME, params, NO_IDENTITY);
   }
@@ -317,8 +325,11 @@ function row(label: string, value: string): HTMLElement {
   ]);
 }
 
-/** The run's answer as a card: a refusal's reason, or the figures and every limitation. */
-export function renderFlowPulseLab(outcome: FlowPulseResult | FlowRefusal): HTMLElement {
+/**
+ * The run's answer as a card: a refusal's reason, or the figures and every
+ * limitation. `flat` writes the method as a plain section, for a card inside Details.
+ */
+export function renderFlowPulseLab(outcome: FlowPulseResult | FlowRefusal, flat = false): HTMLElement {
   const card = el('aside', { className: 'olv-story-card' });
   if (!outcome.ok) {
     card.append(
@@ -332,7 +343,7 @@ export function renderFlowPulseLab(outcome: FlowPulseResult | FlowRefusal): HTML
   const metric = mayReportMetricArea(outcome.basis) && s.maxContributingAreaM2 != null;
   card.append(
     el('div', { className: 'olv-story-headline', text: 'D8 flow routing over the analysed DTM' }),
-    row('Cells routed', `${s.readableCells.toLocaleString('en-US')} of ${s.cells.toLocaleString('en-US')}`),
+    row('Cells read', `${s.readableCells.toLocaleString('en-US')} of ${s.cells.toLocaleString('en-US')}`),
     row('Outlets', String(s.outletCount)),
     row('Sinks', String(s.sinkCount)),
     row('Flats', String(s.flatCount)),
@@ -346,19 +357,25 @@ export function renderFlowPulseLab(outcome: FlowPulseResult | FlowRefusal): HTML
   for (const sentence of outcome.limitations) list.append(el('li', { text: sentence }));
   card.append(
     el('span', { className: 'olv-story-k', text: 'Limitations' }), list,
-    methodDetails([row('Method', outcome.record.methods.join(' → '))]),
+    methodDetails([row('Method', outcome.record.methods.join(' → '))], flat),
   );
   return card;
 }
 
-/** The figure row under the grid for a routed result. */
+/**
+ * The three figures under the grid for a routed result. The largest drainage
+ * area is in square metres only when the basis permits a metric area, and in
+ * cells otherwise; sinks, flats and the rest stay in the result card.
+ */
 export function flowPulseStats(outcome: FlowPulseResult): HTMLElement {
   const s = outcome.summary;
+  const area = mayReportMetricArea(outcome.basis) ? s.maxContributingAreaM2 : null;
   return labStatRow('Flow figures', [
-    { label: 'Routed', value: String(s.readableCells), unit: 'cells' },
-    { label: 'Outlets', value: String(s.outletCount) },
-    { label: 'Sinks', value: String(s.sinkCount) },
-    { label: 'Max upstream', value: String(s.maxUpstreamCells), unit: 'cells' },
+    { label: 'Surface', value: s.readableCells.toLocaleString('en-US'), unit: 'cells' },
+    { label: 'Outlets', value: s.outletCount.toLocaleString('en-US') },
+    area != null
+      ? { label: 'Largest drainage', value: area >= 100 ? Math.round(area).toLocaleString('en-US') : area.toFixed(1), unit: 'm²' }
+      : { label: 'Largest drainage', value: s.maxUpstreamCells.toLocaleString('en-US'), unit: 'cells' },
   ]);
 }
 
@@ -370,7 +387,7 @@ export function flowMotionControlState(reducedMotion: boolean, paused: boolean):
 }
 
 /**
- * The banner above the result card when the terrain run is Blocked or
+ * The banner inside the status chip when the terrain run is Blocked or
  * Preview, or null when the surface is usable.
  */
 export function flowTerrainBanner(input: FlowPulseLabInput): HTMLElement | null {
@@ -385,7 +402,7 @@ export function flowTerrainBanner(input: FlowPulseLabInput): HTMLElement | null 
 /** Plain lines beside a Flow Pulse result. */
 export const FLOW_HOW_TO_READ: readonly string[] = [
   'Each square is one ground cell. Water in a cell moves to the neighbour with the steepest drop.',
-  'Outlets are where flow leaves the grid. Sinks are low spots where it stops.',
+  'Outlets are where flow leaves the surface at its edge, which can be where a stream enters it. Sinks are low spots where it stops.',
   'Upstream counts are numbers of cells, not volumes of water or rainfall.',
 ];
 
@@ -406,6 +423,22 @@ export function rerunAnnouncement(outcome: FlowPulseResult | FlowRefusal, hadSel
 /** The readiness list for an input, or for none. */
 function flowReadiness(input: FlowPulseLabInput | null) {
   return labReadiness('flow-pulse', !!input, !!input && flowScaleOf(input).resolved, flowTerrainCaveat(input?.result.quality));
+}
+
+/**
+ * The status chip for a routed surface: a few words, and behind them the
+ * terrain banner and the readiness checklist, word for word.
+ */
+export function flowChipFacts(input: FlowPulseLabInput, outcome: FlowPulseResult | FlowRefusal): ChipFacts {
+  const caveat = flowTerrainCaveat(input.result.quality);
+  const banner = flowTerrainBanner(input);
+  const lines = [...(banner ? [banner] : []), readinessList(flowReadiness(input))];
+  if (!outcome.ok) return { tone: 'blocked', summary: 'Flow Pulse did not run', lines };
+  if (caveat) {
+    return { tone: caveat.verdict === 'Blocked' ? 'blocked' : 'review', summary: `Illustration only · ${caveat.interpolatedPercent}% interpolated`, lines };
+  }
+  if (!mayReportMetricArea(outcome.basis)) return { tone: 'review', summary: 'Areas withheld: scale not resolved', lines };
+  return { tone: 'ready', summary: 'Ground surface from the latest terrain run', lines };
 }
 
 // ── interactive layer ───────────────────────────────────────────────────────
@@ -500,7 +533,8 @@ export function acquireFlowOverlay(
     persistentFlowOverlay = null;
   }
   if (!persistentFlowOverlay) {
-    persistentFlowOverlay = { overlay: new FlowOverlay(host), isStale, overlayOn: false };
+    // On by default: the drainage in 3D is the result most readers came for.
+    persistentFlowOverlay = { overlay: new FlowOverlay(host), isStale, overlayOn: true };
   } else {
     persistentFlowOverlay.isStale = isStale;
   }
@@ -549,9 +583,10 @@ function mountFlowPulseInteractive(
   const root = el('div', { className: 'olv-flow-lab' });
   const live = liveRegion();
   const body = el('div', { className: 'olv-flow-body' });
-  root.append(live, body);
+  // Every caveat folds into one chip above the map; it opens to the full text.
+  const chip = statusChip('flow-pulse');
+  root.append(chip.element, live, body);
   const announce = (msg: string): void => { live.textContent = msg; };
-  const ready = readinessList(flowReadiness(input));
 
   let conditioning: FlowConditioning = FLOW_PULSE_DEFAULTS.conditioning;
   let outcome = initialOutcome;
@@ -566,9 +601,8 @@ function mountFlowPulseInteractive(
 
   const overlayHost = input.overlayHost ?? null;
   const flowOverlay = acquireFlowOverlay(overlayHost, input.isStale ?? null);
-  // Reflects whatever the persisted overlay is already showing: reopening
-  // the Lab after leaving the overlay on picks the toggle back up in the
-  // "on" state rather than forgetting it was ever shown.
+  // Reflects whatever the persisted overlay is already showing (on for a new
+  // one): reopening the Lab after turning the overlay off keeps it off.
   let overlayOn = persistentFlowOverlay?.overlayOn ?? false;
 
   const grid = new FlowResultGrid({
@@ -603,7 +637,7 @@ function mountFlowPulseInteractive(
     (value) => { mode = value; modeCtl.sync(); renderSelection(); },
   );
 
-  const overlayToggle = button('Show flow accumulation', 'olv-flow-overlay-toggle', 'Toggle the flow-accumulation overlay on the 3D view.');
+  const overlayToggle = button('Drainage in 3D', 'olv-flow-overlay-toggle', 'Show or hide the flow-accumulation drainage lines on the 3D view.');
   overlayToggle.setAttribute('aria-pressed', overlayOn ? 'true' : 'false');
   overlayToggle.addEventListener('click', () => {
     overlayOn = !overlayOn;
@@ -618,12 +652,12 @@ function mountFlowPulseInteractive(
   });
   const overlayUnavailable = el('div', {
     className: 'olv-flow-overlay-unavailable',
-    text: 'The 3D accumulation overlay is not available in this view; the result grid below still traces paths and catchments.',
+    text: 'The 3D accumulation overlay is not available in this view; the map above still traces paths and catchments.',
   });
 
   const selectionPanel = el('div', { className: 'olv-flow-selection' });
-  // The next step sits above the grid, where the click lands.
-  const gridHint = el('div', { className: 'olv-flow-selection-empty' });
+  // The one hint under the map: what a click on it does.
+  const gridHint = el('p', { className: 'olv-flow-selection-empty' });
   const head = labHeader('flow-pulse', 1);
 
   function applyOverlayVisibility(): void {
@@ -649,8 +683,8 @@ function mountFlowPulseInteractive(
     selectionPanel.replaceChildren();
     if (!outcome.ok) return;
     gridHint.textContent = mode === 'pulse'
-      ? 'Next: click a cell, or move the cursor and press Enter, to trace its downstream path.'
-      : 'Next: click a cell, or move the cursor and press Enter, to set it as a catchment outlet.';
+      ? 'Click a cell on the map (or use the arrow keys and Enter) to trace where water runs from it.'
+      : 'Click a cell on the map (or use the arrow keys and Enter) to see the area that drains to it.';
     const current = mode === 'pulse' ? lastTrace : lastCatchment;
     head.setStage(current ? 3 : 2);
     if (!current) return;
@@ -781,10 +815,12 @@ function mountFlowPulseInteractive(
   }
 
   function renderReady(): void {
-    const staticCard = renderFlowPulseLab(outcome);
+    // Inside Details, the card's method is a plain section, not a second accordion.
+    const staticCard = renderFlowPulseLab(outcome, outcome.ok);
+    chip.set(flowChipFacts(input, outcome));
     if (!outcome.ok) {
       head.setStage(1);
-      body.replaceChildren(staticCard);
+      body.replaceChildren(staticCard, labDetails([head.element]));
       return;
     }
 
@@ -797,12 +833,6 @@ function mountFlowPulseInteractive(
     renderSelection();
     applyOverlayVisibility();
 
-    const overlaySection = el('div', { className: 'olv-flow-overlay-section' }, [
-      overlayHost ? overlayToggle : overlayUnavailable,
-      overlayLegend,
-    ]);
-
-    const banner = flowTerrainBanner(input);
     const motion = el('button', {
       className: 'olv-flow-motion-toggle', type: 'button',
       text: 'Pause flow motion',
@@ -818,22 +848,27 @@ function mountFlowPulseInteractive(
       syncMotion();
     });
     syncMotion();
-    // The grid leads, then its figures and legend; the full card and reading notes follow.
+    // The map leads, then three figures, the click hint and the actions;
+    // the legend, the full card and the reading notes fold into Details.
     body.replaceChildren(
-      ...(banner ? [banner] : []),
-      conditioningCtl.element,
-      conditioningHint,
-      modeCtl.element,
-      gridHint,
       grid.element,
-      motion,
       flowPulseStats(outcome),
-      flowGridLegend(grid.maxUpstream),
+      el('div', { className: 'olv-lab-controls' }, [modeCtl.element, gridHint]),
       selectionPanel,
-      staticCard,
-      howToRead(FLOW_HOW_TO_READ),
-      overlaySection,
-      exportButton,
+      el('div', { className: 'olv-lab-actions' }, [
+        conditioningCtl.element,
+        exportButton,
+        ...(overlayHost ? [overlayToggle] : []),
+      ]),
+      labDetails([
+        flowGridLegend(grid.maxUpstream),
+        motion,
+        conditioningHint,
+        el('div', { className: 'olv-flow-overlay-section' }, [...(overlayHost ? [] : [overlayUnavailable]), overlayLegend]),
+        howToRead(FLOW_HOW_TO_READ),
+        head.element,
+        staticCard,
+      ]),
     );
   }
 
@@ -865,7 +900,6 @@ function mountFlowPulseInteractive(
   }
 
   renderReady();
-  root.prepend(head.element, ready);
 
   return {
     element: root,
@@ -878,6 +912,7 @@ function mountFlowPulseInteractive(
     // leave the first orphaned in the scene.
     dispose: () => {
       grid.dispose();
+      chip.dispose();
       if (!overlayOn && persistentFlowOverlay) {
         persistentFlowOverlay.overlay.dispose();
         persistentFlowOverlay = null;
@@ -888,20 +923,24 @@ function mountFlowPulseInteractive(
 
 /** What the host offers a lab opened without a ground surface. */
 export interface LabOpenOptions {
-  /** Start the terrain run; the lab closes first. Absent: the notice has no button. */
+  /** Run terrain and reopen the lab on its result. Absent: the notice has no button. */
   readonly onRunTerrain?: () => void;
 }
 
 /**
- * The lab with no ground surface: the purpose, the stages, the checklist and
- * a plain notice with the terrain run, in place of a refusal.
+ * The lab with no ground surface: a plain notice with the terrain run, in
+ * place of a refusal; the purpose, stages and checklist sit in Details.
  */
 export function renderFlowPulseNeedsGround(onRunTerrain: (() => void) | null): HTMLElement {
   return el('div', { className: 'olv-flow-lab' }, [
-    labHeader('flow-pulse', 0).element,
-    readinessList(flowReadiness(null)),
     needsGround(onRunTerrain),
+    labDetails([labHeader('flow-pulse', 0).element, readinessList(flowReadiness(null))]),
   ]);
+}
+
+/** Show Flow Pulse's page while the terrain run it needs builds the ground surface. */
+export function openFlowPulsePreparing(onClose?: () => void): { close(): void } {
+  return openLabSurface('flow-pulse', 'Flow Pulse', el('div', { className: 'olv-flow-lab' }, [preparingGround('flow-pulse')]), onClose);
 }
 
 /** Run and show Flow Pulse on its Analyse page. */
@@ -909,11 +948,8 @@ export function openFlowPulseLab(input: FlowPulseLabInput | null, opts: LabOpenO
   // A shelf Focus reopens the published run on the same layer as it is.
   const prior = takeResultReopen('flow-pulse') ? labRun('flow-pulse') : null;
   if (!input) {
-    let handle: ModalHandle | null = null;
-    const run = opts.onRunTerrain;
-    const body = renderFlowPulseNeedsGround(run ? () => { handle?.close(); run(); } : null);
-    handle = openLabSurface('flow-pulse', 'Flow Pulse', body);
-    return handle;
+    // The terrain run reopens this page on its result, replacing this notice.
+    return openLabSurface('flow-pulse', 'Flow Pulse', renderFlowPulseNeedsGround(opts.onRunTerrain ?? null));
   }
   const reuse = prior && prior.layerId === input.layerId ? (prior.outcome as FlowPulseResult) : null;
   const interactive = mountFlowPulseInteractive(input, reuse ?? runLabFlowPulse(input));

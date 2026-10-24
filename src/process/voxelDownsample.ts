@@ -395,9 +395,10 @@ export function voxelSizeForBudget(cloud: PointCloud, maxPoints: number): number
  * proportionally (point count scales about `1 / size²` for surface-like
  * data). A pass that fails to move the count by a tenth means the voxel is
  * still below the point spacing, which a proportional step cannot cross; the
- * size then doubles instead. Once the count is under budget, at most two
- * passes aimed by the local count-versus-size exponent recover points a
- * large step gave away. The pass count is hard-capped at
+ * size then doubles instead. A first pass far under budget (a cloud filling a
+ * fraction of its bounding box) shrinks the voxel the same way. Once the
+ * count is under budget, at most two passes aimed by the local
+ * count-versus-size exponent recover points a large step gave away. The pass count is hard-capped at
  * {@link MAX_DOWNSAMPLE_PASSES}; the doubling phase reaches one voxel per axis
  * inside that cap for any cloud, so the result never exceeds `maxPoints`.
  *
@@ -466,6 +467,22 @@ export function downsampleToBudgetReport(cloud: PointCloud, maxPoints: number): 
         reduced = pass(size);
       }
     }
+  }
+  // Far under budget on the first pass: the estimate reads the bounding box,
+  // so a cloud filling a fraction of it (a strip, a corridor) lands well
+  // short. Shrink the voxel for surface-like data until a pass goes over or
+  // the count is close, so the recovery below has a bracket to aim within.
+  while (overSize === 0 && reduced.pointCount < maxPoints * 0.6 && passes < MAX_DOWNSAMPLE_PASSES - 2) {
+    const next = size * Math.sqrt(reduced.pointCount / (maxPoints * 0.85));
+    const candidate = pass(next);
+    if (candidate.pointCount > maxPoints) {
+      overSize = next;
+      overCount = candidate.pointCount;
+      break;
+    }
+    if (candidate.pointCount <= reduced.pointCount) break;
+    size = next;
+    reduced = candidate;
   }
   if (reduced.pointCount > maxPoints) {
     // Unreachable by the cap arithmetic (16 doublings exceed any extent the

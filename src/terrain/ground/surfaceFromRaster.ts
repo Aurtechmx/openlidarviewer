@@ -32,6 +32,15 @@ export const LIVE_INTERPOLATION = 'geodesic' as const;
 export const LIVE_EXTRAPOLATION_GUARD = { radiusCells: 8, penalty: 0.5 } as const;
 
 /**
+ * Data-footprint radius, in cells, every production surface is built with: a
+ * cell over which an empty disc of this radius fits, and which no data
+ * encloses, is left as no data rather than filled (see `coverageFootprint.ts`).
+ * The same reach as the extrapolation guard, so gaps up to twice it across are
+ * bridged and the data edge is never grown outward.
+ */
+export const LIVE_COVERAGE_RADIUS_CELLS = 8;
+
+/**
  * Blunder-only despike thresholds (6σ MAD, ≥ 30 cm absolute) — conservative so
  * legitimate small features in flat terrain are kept; only gross outliers go.
  */
@@ -97,7 +106,7 @@ export interface SurfaceFromRasterResult {
 /**
  * Build the delivered DTM grid from a rasterised DEM: blunder-only despike
  * (with the 2 % safety cap), then `buildDtmGrid` with the production
- * interpolation + extrapolation guard + unit parameters. Identical inputs ⇒
+ * interpolation + extrapolation guard + data footprint + unit parameters. Identical inputs ⇒
  * identical surface, wherever it is called from.
  */
 export function buildSurfaceFromRaster(
@@ -154,6 +163,7 @@ export function buildSurfaceFromRaster(
     verticalUnitToMetres: params.verticalUnitToMetres,
     interpolation: params.interpolation ?? LIVE_INTERPOLATION,
     extrapolationGuard: LIVE_EXTRAPOLATION_GUARD,
+    coverageRadiusCells: LIVE_COVERAGE_RADIUS_CELLS,
   });
 
   return { dtm, raster: workingRaster, despikedCellCount, cappedOutlierCount };

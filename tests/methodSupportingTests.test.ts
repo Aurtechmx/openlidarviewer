@@ -89,7 +89,11 @@ const SUPPORTING_TESTS: Readonly<Record<string, readonly string[]>> = {
   ],
   'olv.terrain.vrm': ['tests/vrmCrossCheck.test.ts', 'tests/terrainDescriptorSyntheticTruth.test.ts'],
   'olv.terrain.tpi': ['tests/tpiCrossCheck.test.ts', 'tests/terrainDescriptorSyntheticTruth.test.ts'],
-  'olv.dtm.idw-fill': ['tests/surfaceFromRaster.test.ts', 'tests/geodesicFillAccuracy.test.ts'],
+  'olv.dtm.idw-fill': [
+    'tests/surfaceFromRaster.test.ts',
+    'tests/geodesicFillAccuracy.test.ts',
+    'tests/terrainCoverageFootprint.test.ts',
+  ],
   'olv.terrain.evidence.support': ['tests/demEvidence.test.ts'],
   'olv.terrain.evidence.sensitivity': ['tests/demSensitivity.test.ts'],
   'olv.terrain.evidence.residual': ['tests/demAttention.test.ts'],
@@ -116,6 +120,7 @@ const SUPPORTING_TESTS: Readonly<Record<string, readonly string[]>> = {
   ],
   'olv.volume.stockpile-area-grid': ['tests/stockpileAreaGrid.test.ts'],
   'olv.render.draw-precision-bound': ['tests/drawPrecision.test.ts', 'tests/speCheckVendor.test.ts'],
+  'olv.render.draw-precision-lod': ['tests/drawPrecisionLod.test.ts'],
   'olv.topology.linkage-record': ['tests/sourceTopologyManifest.test.ts'],
   'olv.provenance.source-interpretation': ['tests/exportSourceInterpretation.test.ts'],
   'olv.change.dtm-difference': [

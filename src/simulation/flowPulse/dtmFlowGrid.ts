@@ -143,6 +143,12 @@ export function terrainDtmToFlowGrid(
   options: {
     readonly interpolated?: InterpolatedPolicy;
     readonly withheldExcluded?: boolean | null;
+    /**
+     * What the analysis read, when the caller knows better than the grid: a
+     * strided read of a large cloud spans the whole extent, so the grid's own
+     * mode says 'full' for what was a sample.
+     */
+    readonly coverage?: DtmGrid['coverageMode'];
   } = {},
 ): DtmFlowGrid {
   const policy = options.interpolated ?? 'route';
@@ -188,7 +194,7 @@ export function terrainDtmToFlowGrid(
       // same word; reading that one here would put a Uint8Array where a mode
       // belongs. Hardcoding 'full' would be worse still, since a DTM built
       // from a resident streamed subset would then claim the whole survey.
-      coverage: dtm.coverageMode,
+      coverage: options.coverage ?? dtm.coverageMode,
       // The caller's declaration first, then what the gather stamped on the DTM.
       withheldExcluded: options.withheldExcluded ?? dtm.withheldExcluded ?? null,
       horizontalScaleResolved: scale.resolved,

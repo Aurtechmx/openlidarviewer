@@ -880,9 +880,9 @@ export class MeasureController {
   }
 
   /** The scene's datum along up (`elevationDatumOffset` of its render origin), or null when the clouds share none. */
-  get elevationDatum(): number | null {
-    return this._originUp;
-  }
+  get elevationDatum(): number | null { return this._originUp; }
+  /** The scene's render origin, or null when the clouds share none: a render position plus this is its source coordinate. */
+  get sceneOrigin(): Vec3 | null { return this._origin ?? null; }
 
   /**
    * Inject the scan CRS's linear-unit → metres factor — the SAME seam the

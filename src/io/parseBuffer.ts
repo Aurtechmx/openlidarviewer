@@ -147,8 +147,16 @@ export async function parseFile(
     const { loadLazFromFile } = await import('./loadLas');
     const cloud = await loadLazFromFile(
       file, name, stride, onProgress, onPreviewChunk, onStats, policy, previewBudget, pointSemantics,
+      plan.rangedRead !== true,
     );
     return budgetedLas(cloud, plan, onProgress);
+  }
+  if (plan?.rangedRead && format === 'las') {
+    // A heavy LAS opened as a sample: read by ranges, never whole.
+    onProgress?.({ stage: 'decoding' });
+    const stride = plan.mode === 'stride' ? plan.stride : 1;
+    const { loadLasFromFile } = await import('./loadLas');
+    return budgetedLas(await loadLasFromFile(file, name, stride, onProgress, pointSemantics), plan, onProgress);
   }
   onProgress?.({ stage: 'reading-file' });
   const buffer = await file.arrayBuffer();

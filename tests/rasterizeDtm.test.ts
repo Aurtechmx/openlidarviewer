@@ -57,7 +57,9 @@ describe('rasterizeDtm', () => {
     expect(r.counts[1]).toBe(0);
     expect(Number.isNaN(r.z[1])).toBe(true);
     expect(r.filledCellCount).toBe(2);
-    expect(r.warnings.join(' ')).toMatch(/interpolation/i);
+    expect(r.warnings.join(' ')).toMatch(/2 of 4 grid cells hold no ground returns/);
+    // The rasterizer cannot tell a gap from ground outside the survey.
+    expect(r.warnings.join(' ')).not.toMatch(/interpolat/i);
   });
 
   it('aligns to a supplied grid spec', () => {

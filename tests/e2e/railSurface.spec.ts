@@ -160,7 +160,7 @@ test.describe('what the rail and the dock say after a terrain run', () => {
     await openAnalysePage(page, 'terrain');
     const link = page.locator('#olv-ws-mode-analyse .olv-at-link');
     await expect(link).toHaveAttribute('data-made', 'true', { timeout: 20_000 });
-    await expect(link.locator('.olv-ah-name')).toHaveText('Contours');
+    await expect(link.locator('.olv-ah-name')).toHaveText('Make contours');
     await expect(link).not.toContainText('Create contours');
     const fit = (await page.locator('.olv-fit-verdict-text').textContent()) ?? '';
     const header = page.locator('#olv-ws-mode-analyse .olv-analyse-page[data-page="terrain"] .olv-at-reason');

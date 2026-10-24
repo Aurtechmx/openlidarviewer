@@ -49,6 +49,16 @@ export interface InstantAnswerInput {
   readonly compareReady?: boolean;
 }
 
+/**
+ * True when exactly two layers are open and both were read from the same file:
+ * a reload swapping a layer in, not a before/after pair to compare.
+ */
+export function sameSourcePair(layers: readonly string[], sourceOf: ReadonlyMap<string, File>): boolean {
+  if (layers.length !== 2) return false;
+  const a = sourceOf.get(layers[0]);
+  return a !== undefined && a === sourceOf.get(layers[1]);
+}
+
 /** The terrain prompt for a scan whose CRS is unknown. */
 export const TERRAIN_UNKNOWN_CRS_MESSAGE =
   'Terrain scan ready, CRS unknown: results in source units. Nothing uploaded.';

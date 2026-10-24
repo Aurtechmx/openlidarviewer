@@ -39,6 +39,16 @@ import {
   MAX_PIXEL_RATIO_MIN,
 } from '../render/quality/pixelRatioCeiling';
 import type { StreamingQuality } from '../render/streaming/streamingBudget';
+import {
+  PRECISION_METHOD_NOTE,
+  PRECISION_SCOPE,
+  PRECISION_TOLERANCES,
+  precisionCertificateWithHash,
+  readPrecision,
+  lodLine,
+  type PrecisionDeps,
+  type PrecisionReading,
+} from '../app/precisionCheck';
 
 /** The streaming presets, in slider order. */
 const STREAMING_PRESETS: readonly StreamingQuality[] = ['low', 'balanced', 'high'];
@@ -64,6 +74,8 @@ export interface QualityPanelCallbacks {
    * not the rest of the set, and a replace here would silently unpin the others.
    */
   onPin(field: QualityOverrides): void;
+  /** The scene the precision check reads; without it the section is not shown. */
+  readonly precision?: PrecisionDeps;
 }
 
 /** Title-case a preset id for a chip label. */
@@ -108,6 +120,16 @@ export class QualityPanel {
   private readonly _edlInput: HTMLInputElement;
   private readonly _aaInput: HTMLInputElement;
   private readonly _followButton: HTMLButtonElement;
+  private _tolerance: number = PRECISION_TOLERANCES[0].metres;
+  private readonly _toleranceChips = new Map<number, HTMLButtonElement>();
+  private readonly _precisionLine: HTMLElement;
+  /** The coarsest certified level at this view, selected with every reading. */
+  private readonly _lodLine: HTMLElement;
+  private readonly _precisionNote: HTMLElement;
+  private readonly _copyButton: HTMLButtonElement;
+  private _noteTimer: ReturnType<typeof setTimeout> | null = null;
+  /** A certificate is being prepared; a second request waits for it. */
+  private _certificatePending = false;
 
   constructor(callbacks: QualityPanelCallbacks) {
     this._callbacks = callbacks;
@@ -164,6 +186,57 @@ export class QualityPanel {
     this._followButton.type = 'button';
     this._followButton.addEventListener('click', () => this._callbacks.onPreference({ overrides: {} }));
 
+    // Precision at this view: the per-draw bound against a chosen tolerance,
+    // and a certificate of it to copy (app/precisionCheck.ts).
+    this._precisionLine = el('div', { className: 'olv-precision-line' });
+    this._precisionLine.setAttribute('role', 'status');
+    this._precisionLine.setAttribute('aria-live', 'polite');
+    this._lodLine = el('div', { className: 'olv-precision-lod' });
+    this._precisionNote = el('div', { className: 'olv-precision-note' });
+    this._precisionNote.setAttribute('aria-live', 'polite');
+    for (const t of PRECISION_TOLERANCES) {
+      const chip = el('button', {
+        className: 'olv-chip', text: t.label,
+        title: `Check positions against a ${t.label} limit.`,
+      }) as HTMLButtonElement;
+      chip.type = 'button';
+      chip.addEventListener('click', () => { this._tolerance = t.metres; this.refreshPrecision(); });
+      this._toleranceChips.set(t.metres, chip);
+    }
+    const checkButton = el('button', {
+      className: 'olv-precision-check', text: 'Check precision',
+      tip: 'Bound each point’s rendering error against its reference position, computed in double precision from the stored coordinates, before projection.',
+    }) as HTMLButtonElement;
+    checkButton.type = 'button';
+    // The line follows the camera on its own; a click is the reader asking for
+    // this view's check, so it says what it covered and when.
+    checkButton.addEventListener('click', () => {
+      const reading = this.refreshPrecision(true);
+      if (!reading || reading.diagnostic === null) return;
+      this._precisionLine.classList.remove('is-checked');
+      void this._precisionLine.offsetWidth; // restart the highlight
+      this._precisionLine.classList.add('is-checked');
+      const time = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+      this._note(`Checked ${formatCount(reading.pointsDrawn)} points from this camera at ${time}.`);
+    });
+    this._copyButton = el('button', {
+      className: 'olv-precision-copy', text: 'Copy certificate',
+      tip: 'Copy a record of this check: the bound, the limit, and the data, view and shader it covers.',
+    }) as HTMLButtonElement;
+    this._copyButton.type = 'button';
+    this._copyButton.addEventListener('click', () => { void this._copyCertificate(); });
+    const precisionSection = callbacks.precision
+      ? el('section', { className: 'olv-precision' }, [
+        el('div', { className: 'olv-quality-subtitle', text: 'Precision at this view' }),
+        row('Limit', el('div', { className: 'olv-quality-chips' }, [...this._toleranceChips.values()])),
+        this._precisionLine,
+        this._lodLine,
+        el('div', { className: 'olv-precision-actions' }, [checkButton, this._copyButton]),
+        this._precisionNote,
+        el('p', { className: 'olv-quality-note', text: `${PRECISION_SCOPE} ${PRECISION_METHOD_NOTE}` }),
+      ])
+      : null;
+
     this.element = el('div', { className: 'olv-quality-pop' }, [
       el('div', { className: 'olv-quality-title', text: 'Performance' }),
       el('div', { className: 'olv-quality-track' }, [
@@ -174,6 +247,7 @@ export class QualityPanel {
       this._positionLabel,
       auto.element,
       this._summary,
+      ...(precisionSection ? [precisionSection] : []),
       collapsibleSection(
         'Advanced',
         el('div', { className: 'olv-quality-advanced' }, [
@@ -220,6 +294,66 @@ export class QualityPanel {
     this._edlInput.checked = settings.edlEnabled;
     this._aaInput.checked = settings.antialiasing;
     this._followButton.disabled = !pinned;
+  }
+
+  /** Check the active scan at the current view against the chosen limit. */
+  /** Re-read the check at this view; `count` (a press of Check) also counts the certified level's points. */
+  refreshPrecision(count = false): PrecisionReading | null {
+    const deps = this._callbacks.precision;
+    if (!deps) return null;
+    for (const [metres, chip] of this._toleranceChips) {
+      const active = metres === this._tolerance;
+      chip.classList.toggle('olv-chip-active', active);
+      chip.setAttribute('aria-pressed', active ? 'true' : 'false');
+    }
+    const reading = readPrecision(deps, this._tolerance, { lod: count ? 'count' : 'live' });
+    // Rewritten only on a change, so a live refresh does not re-announce the same line.
+    if (this._precisionLine.textContent !== reading.line) this._precisionLine.textContent = reading.line;
+    // The level is selected again with every reading, so it always holds for this camera.
+    const lod = lodLine(reading.lod) ?? '';
+    if (this._lodLine.textContent !== lod) this._lodLine.textContent = lod;
+    this._precisionLine.dataset.state = reading.state;
+    this._copyButton.disabled = reading.diagnostic === null || this._certificatePending;
+    return reading;
+  }
+
+  /** Copy the certificate, or save it as a file where the clipboard is refused. */
+  private async _copyCertificate(): Promise<void> {
+    const deps = this._callbacks.precision;
+    if (!deps || this._certificatePending) return;
+    this.refreshPrecision();
+    this._certificatePending = true;
+    this._copyButton.disabled = true;
+    let json: string | null;
+    try {
+      // The note stays up while the source file is hashed, however long that takes.
+      json = await precisionCertificateWithHash(deps, this._tolerance, () => this._note('Preparing the certificate: checking the source file…', true));
+    } catch (e) {
+      this._note(`The certificate could not be prepared: ${e instanceof Error ? e.message : String(e)}`);
+      return;
+    } finally {
+      this._certificatePending = false;
+      this.refreshPrecision();
+    }
+    if (!json) return;
+    try {
+      await navigator.clipboard.writeText(json);
+      this._note('Certificate copied.');
+    } catch {
+      const url = URL.createObjectURL(new Blob([json], { type: 'application/json' }));
+      const a = el('a', { href: url }) as HTMLAnchorElement;
+      a.download = 'precision-certificate.json';
+      a.click();
+      setTimeout(() => URL.revokeObjectURL(url), 0);
+      this._note('The clipboard was not available, so the certificate was saved as a file.');
+    }
+  }
+
+  /** Show a note; it clears after a few seconds unless `persist`, which holds it until the next note. */
+  private _note(text: string, persist = false): void {
+    this._precisionNote.textContent = text;
+    if (this._noteTimer !== null) clearTimeout(this._noteTimer);
+    this._noteTimer = persist ? null : setTimeout(() => { this._precisionNote.textContent = ''; }, 4000);
   }
 
   /** Emit one pinned Advanced field for the controller to merge. */

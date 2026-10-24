@@ -196,15 +196,23 @@ export const METHOD_REGISTRY: Readonly<Record<string, MethodEntry>> = {
   // summary describe the actual algorithm, not just the prefill.
   'olv.dtm.idw-fill': {
     id: 'olv.dtm.idw-fill',
-    version: 1,
+    // v2: only cells inside the data footprint (the closing of the measured
+    // cells by an 8-cell disc, plus voids the data encloses) are filled; v1
+    // filled every void within the fill radius, outside the survey too.
+    version: 2,
     name: 'DTM rasterisation with geodesic-distance void fill',
     summary:
       'Bins ground returns to a grid, then fills interior voids by geodesic-distance ' +
       'propagation from measured cells (an Euclidean IDW prefill seeds a provisional ' +
-      'surface, refined along in-surface geodesic distance), tracking measured vs interpolated cells.',
+      'surface, refined along in-surface geodesic distance), tracking measured vs interpolated cells. ' +
+      'Cells outside the data footprint are left as no data.',
     citation: 'Internal composition (geodesic-distance void fill with an IDW prefill); no single source method.',
     category: 'dtm',
-    implementation: ['src/terrain/ground/surfaceFromRaster.ts', 'src/terrain/ground/geodesicFill.ts'],
+    implementation: [
+      'src/terrain/ground/surfaceFromRaster.ts',
+      'src/terrain/ground/geodesicFill.ts',
+      'src/terrain/ground/coverageFootprint.ts',
+    ],
   },
   'olv.terrain.evidence.support': {
     id: 'olv.terrain.evidence.support',
@@ -475,6 +483,21 @@ export const METHOD_REGISTRY: Readonly<Record<string, MethodEntry>> = {
     // The checker itself is src/vendor/spe-check/ (spe_check.mjs, olv_preflight.mjs), reached through this module.
     implementation: ['src/science/drawPrecision.ts'],
   },
+  'olv.render.draw-precision-lod': {
+    id: 'olv.render.draw-precision-lod',
+    version: 1,
+    name: 'Certified level-of-detail selection for one draw',
+    summary:
+      'The single-node case of the per-draw controller: the whole draw is one node, and level k '
+      + 'keeps one point per occupied cell of 1 mm * 2^k at the cell centre. Selects the coarsest level '
+      + 'with sigma * H_k + B_k <= tau, where H_k bounds the two-way distance between the stored points '
+      + 'and the level, sigma the model-view stretch and B_k the faithful-rounding eye-space bound. '
+      + 'Selected and certified at a check; the level is not drawn. No camera regions, no multi-node selection.',
+    citation:
+      'A. Urias, "Per-Draw Precision Bounds for Large-Coordinate Rendering in WebGL2 and WebGPU" (controller, single-node case).',
+    category: 'precision',
+    implementation: ['src/science/drawPrecisionLod.ts'],
+  },
   'olv.topology.linkage-record': {
     id: 'olv.topology.linkage-record',
     version: 1,
@@ -624,22 +647,35 @@ export const METHOD_REGISTRY: Readonly<Record<string, MethodEntry>> = {
       'src/render/measure/profileSectionExtract.ts',
     ],
   },
+  // v2 reads NoData that reaches the grid edge through NoData as ground outside
+  // the survey: a cell beside it with no lower neighbour is an outlet, as at
+  // the grid edge. v1 read all NoData as a wall, so a survey strip's own edge
+  // reported its downhill cells as pits.
   'olv.simulation.terrain-flow.d8': {
     id: 'olv.simulation.terrain-flow.d8',
-    version: 1,
+    version: 2,
     name: 'D8 single-flow-direction routing',
     summary:
       'Routes each grid cell to whichever of its eight neighbours offers the steepest '
       + 'descent per unit of horizontal distance, measured in metres per axis so an '
       + 'anisotropic grid ranks diagonals correctly. Cells with no lower neighbour are '
       + 'reported as pits, flats or outlets rather than drained; ties break on a fixed '
-      + 'neighbour order. A topographic routing graph, not a discharge field.',
+      + 'neighbour order. NoData the survey encloses is a wall; NoData that reaches the '
+      + 'grid edge lies outside the survey, and a cell beside it drains out as at the '
+      + 'grid edge. A topographic routing graph, not a discharge field.',
     citation:
       "O'Callaghan & Mark (1984), Computer Vision, Graphics, and Image Processing 28(3), "
       + '323-344.',
     category: 'simulation',
     implementation: ['src/simulation/flowPulse/d8Flow.ts'],
   },
+  // v5 raises a filled cell one Float32 step above the cell it was reached
+  // from, the increment Barnes, Lehman & Mulla take with nextafter, instead of
+  // a fixed 1 mm: the flood is ordered by the raised heights, and the larger
+  // rise overstated spill levels by up to centimetres and let a few small
+  // depressions spill over the wrong rim. The conditioned surface changes.
+  // v4 also seeds the rim of NoData that reaches the grid edge, which lies
+  // outside the survey, matching D8 v2; NoData the survey encloses stays a wall.
   // v3 counts a cell as filled only when its original height is strictly
   // below the spill level it was reached from (Barnes, Lehman & Mulla 2014):
   // cells lifted only by the epsilon gradient across a flat are reported as
@@ -651,15 +687,18 @@ export const METHOD_REGISTRY: Readonly<Record<string, MethodEntry>> = {
   // declared `.gap-outlet` variant below.
   'olv.simulation.terrain-flow.priority-flood': {
     id: 'olv.simulation.terrain-flow.priority-flood',
-    version: 3,
+    version: 5,
     name: 'Priority-Flood depression conditioning',
     summary:
-      'Floods inward from the grid boundary, raising each cell reached from below '
-      + 'to its spill level, and returns a second surface rather than modifying the '
-      + 'DTM. NoData is a wall, as D8 reads it; cells NoData encloses are left as '
-      + 'they are and counted. An optional increment above the spill parent breaks '
-      + 'the resulting plateaux; increments lost to Float32 precision are counted '
-      + 'and reported rather than assumed to have applied. Only a cell whose original '
+      'Floods inward from the edge of the survey (the grid boundary and NoData that '
+      + 'reaches it), raising each cell reached from below to its spill level, and '
+      + 'returns a second surface rather than modifying the DTM. NoData the survey '
+      + 'encloses is a wall, as D8 reads it; cells NoData encloses are left as '
+      + 'they are and counted. Each filled cell sits one Float32 step above the cell '
+      + 'it was reached from, which breaks the resulting plateaux without lifting a '
+      + 'depression above its true spill point; a fixed increment can be asked for '
+      + 'instead, and increments lost to Float32 precision are then counted and '
+      + 'reported rather than assumed to have applied. Only a cell whose original '
       + 'height is strictly below its spill level counts as filled; a flat lifted by '
       + 'the epsilon alone is counted separately, and fill depth excludes the epsilon.',
     citation: 'Barnes, Lehman & Mulla (2014), doi:10.1016/j.cageo.2013.04.024',
@@ -668,7 +707,7 @@ export const METHOD_REGISTRY: Readonly<Record<string, MethodEntry>> = {
   },
   'olv.simulation.terrain-flow.priority-flood.gap-outlet': {
     id: 'olv.simulation.terrain-flow.priority-flood.gap-outlet',
-    version: 2,
+    version: 3,
     name: 'Priority-Flood conditioning with NoData gaps as exits',
     summary:
       'The same flood, also seeded at every cell beside NoData, so a gap drains '

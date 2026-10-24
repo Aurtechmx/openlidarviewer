@@ -118,12 +118,14 @@ describe('buildExportDeliverables — duplicate-click guard (OUTPUT-F5)', () => 
     reportBtn.click();
     vi.advanceTimersByTime(10_000); // far past the fixed window; the report is still running
     expect(reportBtn.disabled).toBe(true);
+    expect(reportBtn.textContent, 'the button says it is working').toBe('Building report…');
     reportBtn.click();
     expect(calls, 'a click while the report runs must not start a second one').toBe(1);
 
     finish();
     await vi.runAllTimersAsync();
     expect(reportBtn.disabled).toBe(false);
+    expect(reportBtn.textContent).toBe('Report PDF');
     expect(select.disabled).toBe(false);
     vi.useRealTimers();
   });

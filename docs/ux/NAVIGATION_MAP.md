@@ -55,8 +55,8 @@ goes on leaving.
 | Annotate page | Dock **Annotate**, launcher row, `A`, palette | `← Tools` | No | First home button | Page "Annotate", panel "Annotations" |
 | Clip page | Launcher row, palette "Clip box" | `← Tools` | No | First home button | Page "Clip box", panel "Clip box" |
 | Analyse home | Rail tab **Analyse**, dock **Analyse** | Home | No | n/a | Tab "Analyse" |
-| Terrain page | Home row **Terrain**, remedy "Prepare terrain" | `← Analyse` | No | First home button | Page "Terrain", panel "Analyse" |
-| Contours page | Terrain link "Create contours" or "Contours", home child row | `← Terrain` | No | First home button | Page "Contours" |
+| Terrain page | Home row **Terrain**, "Run terrain analysis" | `← Analyse` | No | First home button | Page "Terrain", panel "Analyse" |
+| Contours page | Terrain page "Make contours" (opens Contour Studio) or "Contours" when blocked, home child row | `← Terrain` | No | First home button | Page "Contours" |
 | Objects page | Home row | `← Analyse` | No | First home button | Page "Objects & Space", panel "Object scan" |
 | Features page | Home row | `← Analyse` | No | First home button | Page "Feature candidates" |
 | Range page | Home row | `← Analyse` | No | First home button | Page "Range frames" |
@@ -114,7 +114,7 @@ the palette then takes a dialog. Short questions inside a lab stay dialogs.
 
 | Surface | Entered by | Back | Esc | Focus on leaving | Visible names |
 | --- | --- | --- | --- | --- | --- |
-| Contour Studio | Contours page launcher "Create Contour Deliverable"; palette "Create contours" | None of its own; the page's `← Terrain` | No | First home button | Region "Contour Studio", launcher head "Terrain Products" |
+| Contour Studio | Terrain page "Make contours"; home child row "Contours"; Contours page launcher "Create Contour Deliverable"; palette "Create contours" | "Close Contour Studio" at its top; the page's `← Terrain` | No | First home button | Region "Contour Studio", launcher group "Terrain products" |
 | Profile Workbench | **Expand** on a profile row, desktop only | "Collapse" and "Close" ("Close the profile workbench") | From inside: first press collapses, second closes | Not restored | Region named after the measurement |
 | Range Workbench | Range page launcher "Open Range Frame Workbench" | None of its own; the page's `← Analyse` | No | First home button | Launcher "Structured Data", region "Range frame workbench" |
 | ResultFocus | **Expand** on a result (the phone's substitute for the Profile Workbench) | `×`, named "Close dialog" | Yes | The opener | Title is the measurement name |
@@ -199,9 +199,9 @@ The list has 25 rows.
 | 7 | `tool.share` "Copy view link" | Dock "Copy view link"; palette |
 | 8 | Analyse mode (dock `tool.analyse`, no registry title) | Dock "Analyse" (toggles the panel and switches mode); rail tab "Analyse"; phone tab "Analyse". Decided: the dock copy opens the Analyse home |
 | 9 | `analyse.run` "Run terrain analysis" | Analyse home button; Terrain page button; palette |
-| 10 | `analyse.contours` "Create contours" | Terrain link "Create contours" or "Contours"; home child row "Contours"; launcher "Create Contour Deliverable"; palette |
-| 11 | `analyse.flowPulse` | Home row "Flow Pulse"; palette "Flow Pulse (Field Simulation Lab)"; shelf Focus |
-| 12 | `analyse.terrainAccess` | Home row "Terrain Access"; palette "Terrain Access (Field Simulation Lab)"; shelf Focus |
+| 10 | `analyse.contours` "Create contours" | Terrain page "Make contours" or "Contours"; home child row "Contours"; launcher "Create Contour Deliverable"; palette |
+| 11 | `analyse.flowPulse` | Home row "Flow Pulse" and its "Run Flow Pulse"; palette "Flow Pulse (Field Simulation Lab)"; shelf Focus. With no terrain run it runs terrain first on the lab page |
+| 12 | `analyse.terrainAccess` | Home row "Terrain Access" and its "Run Terrain Access"; palette "Terrain Access (Field Simulation Lab)"; shelf Focus. With no terrain run it runs terrain first on the lab page |
 | 13 | `analyse.observatory` | Home row "Observatory"; palette "Observatory (observation evidence)"; shelf Focus |
 | 14 | Command palette (no registry id) | Dock "Commands"; Ctrl or Cmd+K |
 | 15 | `help.shortcuts` "Show keyboard shortcuts" | Key `?`; palette |
@@ -366,14 +366,14 @@ exists yet, so every SS element currently lives somewhere else.
 | Lab | Element | Role |
 | --- | --- | --- |
 | All three | The modal frame | MOD, holding a whole workspace |
-| Flow Pulse | Surface choice, click action, retry, "Export package (ZIP)" | CTX |
-| Flow Pulse | Result grid, selection | WS |
-| Flow Pulse | "Show flow accumulation", legend | RS |
-| Flow Pulse | Story card, Limitations | SS |
-| Terrain Access | Profile form, "Run Terrain Access", latest route, export | CTX |
-| Terrain Access | Grid, inspector, selection | WS |
-| Terrain Access | "Show traversability map" | RS |
-| Terrain Access | Story, Limitations | SS |
+| Flow Pulse | Status line, surface choice, click action, retry, "Export package (ZIP)" | CTX |
+| Flow Pulse | Result grid, figures, selection | WS |
+| Flow Pulse | "Drainage in 3D", legend (in Details) | RS |
+| Flow Pulse | Story card, Limitations (in Details) | SS |
+| Terrain Access | Status line, profile form, "Find route", latest route, export | CTX |
+| Terrain Access | Grid, figures, inspector, selection | WS |
+| Terrain Access | "Map in 3D" | RS |
+| Terrain Access | Story, Limitations (in Details) | SS |
 | Observatory | Run, Sources, Evidence, Planning, Record and export | CTX |
 | Observatory | 3D marker key | VP |
 | Observatory | Shadow and its slice level | RS |

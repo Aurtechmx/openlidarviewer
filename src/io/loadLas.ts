@@ -35,13 +35,14 @@
 import { PointCloud } from '../model/PointCloud';
 import type { CloudMetadata } from '../model/PointCloud';
 import { parseLasHeader } from './lasHeader';
-import { bufferRangeReader, resolveLasCrs, type ByteRangeReader } from './crs';
+import { bufferRangeReader, MAX_RANGE_VLR_BLOCK_BYTES, resolveLasCrs, type ByteRangeReader } from './crs';
 import { LoadError } from './loadErrors';
 import { compressedBytesPerPointFloor, validateDeclaredPointCount } from './validateCount';
 import type { LasHeader } from './lasHeader';
 import { lasOriginFor, lasRecord0, type LasOriginChoice } from './lasDataOrigin';
 import { sanitizeLocalCloud, withLoadWarning } from './sanitizeCloud';
 import { truncationText, type Truncation } from './truncation';
+import { exceedsWholeFileCap } from './loadPlan';
 import { makePrng, pickInBucket, STRIDE_SAMPLE_SEED } from './strideSample';
 import type { ProgressUpdate } from './loadProgress';
 import type { RangeSource } from './range/RangeSource';
@@ -273,6 +274,48 @@ export async function attachEvlrCrs(
 const LAZ_HEAD_PEEK_BYTES = 64 * 1024;
 /** Where the LAS public header records the offset to point data. */
 const OFFSET_TO_POINT_DATA = 96;
+/** Where the LAS public header records its own size and the VLR count. */
+const OFFSET_HEADER_SIZE = 94;
+const OFFSET_NUM_VLR = 100;
+/** A VLR's header, and where in it the length of the record after it sits. */
+const VLR_HEADER_BYTES = 54;
+const VLR_RECORD_LENGTH_OFFSET = 20;
+
+/** Whether the header's VLRs all end inside `head`. Each step moves at least a VLR header, so the walk is bounded by `head`. */
+function vlrsFitIn(head: ArrayBuffer): boolean {
+  const view = new DataView(head);
+  let at = view.getUint16(OFFSET_HEADER_SIZE, true);
+  const count = view.getUint32(OFFSET_NUM_VLR, true);
+  for (let i = 0; i < count; i++) {
+    if (at + VLR_HEADER_BYTES > head.byteLength) return false;
+    at += VLR_HEADER_BYTES + view.getUint16(at + VLR_RECORD_LENGTH_OFFSET, true);
+  }
+  return at <= head.byteLength;
+}
+
+/**
+ * The public header and its VLRs, read in bounded ranges. A peek covers most
+ * files; past it the read goes up to the point data but never beyond
+ * {@link MAX_RANGE_VLR_BLOCK_BYTES}, so a corrupt or hostile offset cannot
+ * size an allocation, and padding after the last VLR is not read. VLRs that
+ * themselves run past that budget are refused by name rather than dropped,
+ * since the CRS or the compression record may be among them.
+ */
+async function readLasHead(file: File, name: string): Promise<ArrayBuffer> {
+  const head = await file.slice(0, LAZ_HEAD_PEEK_BYTES).arrayBuffer();
+  if (head.byteLength < OFFSET_NUM_VLR + 4) return head;
+  const toPoints = new DataView(head).getUint32(OFFSET_TO_POINT_DATA, true);
+  if (toPoints <= head.byteLength || toPoints > file.size || vlrsFitIn(head)) return head;
+  const block = await file.slice(0, Math.min(toPoints, MAX_RANGE_VLR_BLOCK_BYTES)).arrayBuffer();
+  if (toPoints > block.byteLength && !vlrsFitIn(block)) {
+    throw new LoadError(
+      'malformed-file',
+      `${name} declares header records (VLRs) that run past ${MAX_RANGE_VLR_BLOCK_BYTES / (1 << 20)} MiB before its points. `
+        + 'Real files keep these to a few KiB; rewrite the file with LAStools or PDAL to repair its header.',
+    );
+  }
+  return block;
+}
 
 /**
  * Load a `.laz` straight from its `File`, reading what each step needs.
@@ -294,16 +337,11 @@ export async function loadLazFromFile(
   policy?: DecodePoolPolicy,
   previewBudget?: number,
   pointSemantics?: boolean,
+  /** False when the plan read the file by ranges and left its bytes out of the memory estimate. */
+  wholeFileAllowed = true,
 ): Promise<PointCloud> {
-  let head = await file.slice(0, LAZ_HEAD_PEEK_BYTES).arrayBuffer();
-  // The VLRs sit between the public header and the point data; a file whose
-  // VLR block outgrows the peek is re-read up to where the points start.
-  if (head.byteLength >= OFFSET_TO_POINT_DATA + 4) {
-    const toPoints = new DataView(head).getUint32(OFFSET_TO_POINT_DATA, true);
-    if (toPoints > head.byteLength && toPoints <= file.size) {
-      head = await file.slice(0, toPoints).arrayBuffer();
-    }
-  }
+  // The VLRs sit between the public header and the point data.
+  const head = await readLasHead(file, name);
   const header = parseLasHeader(head);
   // EVLR bytes read for the CRS, recorded in the ledger below.
   const evlrReads: Array<[number, number]> = [];
@@ -403,6 +441,25 @@ export async function loadLazFromFile(
     return toCloud(pooled);
   }
 
+  // A ranged plan sized the load without the file's bytes, so reading it
+  // whole here could need more memory than the plan allowed: refuse instead.
+  if (!wholeFileAllowed) {
+    const why = stats.poolFallbackReason ? ` (${stats.poolFallbackReason})` : '';
+    throw new LoadError(
+      'memory-constraint',
+      `${name} was planned as a sample read in pieces, and its compressed chunks could not be decoded separately here${why}. `
+        + 'Reading it whole would need more memory than that plan allowed.',
+    );
+  }
+  // Past the whole-file cap the file cannot be read into one buffer: refuse
+  // rather than try, since the parallel chunk decode was the only way to read it.
+  if (exceedsWholeFileCap(file.size)) {
+    const why = stats.poolFallbackReason ? ` (${stats.poolFallbackReason})` : '';
+    throw new LoadError(
+      'memory-constraint',
+      `${name} is too large to read whole, and its compressed chunks could not be decoded separately here${why}.`,
+    );
+  }
   const { decodeLaz } = await import('./lazDecode');
   const buffer = await file.arrayBuffer();
   // The whole-file read covers the file once more, prefix included.
@@ -411,6 +468,73 @@ export async function loadLazFromFile(
   settleLedger();
   onStats?.(stats);
   return toCloud(await decodeLaz(buffer, header, origin, stride, onProgress, pointSemantics));
+}
+
+/** Bytes of point records read per range when a `.las` is sampled by ranges. */
+const LAS_RANGE_WINDOW_BYTES = 8 * 1024 * 1024;
+
+/**
+ * Sample an uncompressed `.las` straight from its `File` by bounded range reads.
+ *
+ * The same stratified stride as {@link decodeLas} (one record per bucket of
+ * `stride`, at the seeded jitter of `strideSample.ts`), so the kept records do
+ * not depend on how the file was read. Records are read a window at a time,
+ * or one record at a time when buckets are wider than a window, so the file is
+ * never held whole.
+ */
+export async function loadLasFromFile(
+  file: File,
+  name = 'cloud.las',
+  stride = 1,
+  onProgress?: (u: ProgressUpdate) => void,
+  pointSemantics?: boolean,
+): Promise<PointCloud> {
+  const head = await readLasHead(file, name);
+  const header = parseLasHeader(head);
+  await attachEvlrCrs(header, head, async (offset, length) => file.slice(offset, offset + length).arrayBuffer(), file.size);
+
+  const recordLength = header.pointDataRecordLength;
+  const pointsOffset = header.offsetToPointData;
+  const available = recordLength > 0 ? Math.floor((file.size - pointsOffset) / recordLength) : 0;
+  const count = Math.min(header.pointCount, Math.max(0, available));
+  if (header.pointCount > 0 && count === 0) {
+    throw new LoadError(
+      'malformed-file',
+      `malformed LAS: the header declares ${header.pointCount} points of ${recordLength} bytes, ` +
+        `but the body holds no complete record.`,
+    );
+  }
+  const first = count > 0 ? await file.slice(pointsOffset, pointsOffset + recordLength).arrayBuffer() : new ArrayBuffer(0);
+  const choice = lasOriginFor(header, lasRecord0(first, { ...header, offsetToPointData: 0 }));
+  const ctx = decodeContext(header, choice.origin);
+
+  const step = Math.max(1, Math.floor(stride));
+  const total = Math.ceil(count / step);
+  const out = allocRawPoints(total, ctx.gpsTimeOffset !== null, ctx.rgbOffset !== null, ctx.extended, {
+    pointSemantics,
+  });
+  const windowRecords = Math.max(1, Math.floor(LAS_RANGE_WINDOW_BYTES / recordLength));
+  // Buckets wider than a window would read a window to keep one record; read the record alone.
+  const span = step > windowRecords ? 1 : windowRecords;
+  const reportEvery = Math.max(1, Math.floor(total / 50));
+  const rand = step > 1 ? makePrng(STRIDE_SAMPLE_SEED) : undefined;
+  let windowStart = 0;
+  let windowEnd = 0;
+  let view = new DataView(new ArrayBuffer(0));
+  for (let b = 0; b < total; b++) {
+    const i = rand ? pickInBucket(b, step, count, rand) : b;
+    if (i >= windowEnd) {
+      windowStart = i;
+      windowEnd = Math.min(count, i + span);
+      const from = pointsOffset + windowStart * recordLength;
+      view = new DataView(await file.slice(from, pointsOffset + windowEnd * recordLength).arrayBuffer());
+    }
+    decodeRecord(view, (i - windowStart) * recordLength, b, ctx, out);
+    if (onProgress && (b + 1) % reportEvery === 0) onProgress(decodingUpdate(b + 1, total));
+  }
+  finalizeRawColors(out);
+  const truncation = count < header.pointCount ? { read: count, declared: header.pointCount } : undefined;
+  return cloudFromRaw(out, header, choice.origin, 'las', name, stride, truncation, choice.warning);
 }
 
 /** Which file a LAZ load read, what it read of it, and which decoder produced it. */

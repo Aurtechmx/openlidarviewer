@@ -132,7 +132,7 @@ describe('a completed run', () => {
   });
 
   it('names every method it ran, conditioning included', () => {
-    expect(methodsFor(params())).toEqual([
+    expect(methodsFor(params({ conditioning: 'raw' }))).toEqual([
       'olv.simulation.terrain-flow.d8',
       'olv.simulation.terrain-flow.accumulation',
       'olv.simulation.terrain-flow.depression-inventory',
@@ -359,7 +359,7 @@ describe('conditioning reads NoData as routing does, unless told otherwise', () 
   });
 
   it('leaves the reading out of a raw run, where nothing reads it', () => {
-    const r = runFlowPulse(holeSlope(), projected, params({ fillNoData: 'outlet' }), identity);
+    const r = runFlowPulse(holeSlope(), projected, params({ conditioning: 'raw', fillNoData: 'outlet' }), identity);
     expect(r.ok).toBe(true);
     if (!r.ok) return;
     expect(r.record.parameters.fillNoData).toBeNull();

@@ -20,7 +20,7 @@ import {
 } from '../src/science/drawPrecision';
 import { drawPrecisionRows } from '../src/analysis/drawPrecisionRows';
 import { scanReport } from '../src/analysis/modules/scanReport';
-import { drawPrecisionViewFor } from '../src/app/drawPrecisionView';
+import { drawPrecisionViewFor, withExactAffineRow } from '../src/app/drawPrecisionView';
 import { PointCloud } from '../src/model/PointCloud';
 import { composeModelView64, EXPRESSION_GLSL, EXPRESSION_WGSL } from '../src/vendor/spe-check/olv_preflight.mjs';
 import type { CrsInfo } from '../src/io/crs';
@@ -156,7 +156,7 @@ describe('report rows', () => {
   it('state the outcome, the scope, and the citation', () => {
     const rows = drawPrecisionRows(evaluateDrawPrecision(tileFromLocalFloat32(local), view('webgpu'), METRES));
     expect(rows[0].label).toBe('Draw precision bound');
-    expect(rows[0].value).toMatch(/within 1\.00 mm \(WebGPU, WGSL f32\)/);
+    expect(rows[0].value).toMatch(/within 1\.00 mm \(WebGPU, WGSL f32; round-to-nearest\)/);
     expect(rows[1].advanced).toBe(true);
     expect(rows[1].value).toMatch(/eye-space point position before projection/);
     expect(rows[1].value).toMatch(/divide by w/);
@@ -181,6 +181,14 @@ describe('scan report wiring', () => {
     expect(row?.value).toMatch(/within 1\.00 mm/);
   });
 
+  it('leaves the row ungraded when the vertical unit is declared but unreadable', () => {
+    // The token survives a session round trip that drops a non-finite factor.
+    const bad = new PointCloud({ positions: local, origin: ORIGIN, sourceFormat: 'las', name: 'far', metadata: { crs: { ...METRE_CRS, verticalLinearUnit: 'unknown' } } });
+    const row = scanReport.run(bad, undefined, { drawPrecision: view('webgpu') }).rows.find((r) => r.label === 'Draw precision bound');
+    expect(row?.value).toMatch(/source units\) at this view; the vertical unit could not be interpreted, not graded/);
+    expect(row?.value).not.toMatch(/within/);
+  });
+
   it('omits them without a draw, leaving the report unchanged', () => {
     const rows = scanReport.run(cloud).rows;
     expect(rows.some((r) => r.label.startsWith('Draw '))).toBe(false);
@@ -201,5 +209,20 @@ describe('drawPrecisionViewFor', () => {
   it('returns undefined for no id or a cloud the viewer does not draw under that id', () => {
     expect(drawPrecisionViewFor(viewer, null, cloud)).toBeUndefined();
     expect(drawPrecisionViewFor(viewer, 'cloud_1', cloud)).toBeUndefined();
+  });
+});
+
+describe('withExactAffineRow', () => {
+  it('reads a bottom row within rounding of (0, 0, 0, 1) as exact, which only sets w', () => {
+    const m = Float64Array.from(IDENTITY);
+    m[3] = 1e-17; m[15] = 1 - 1e-16;
+    const out = withExactAffineRow(m);
+    expect([out[3], out[7], out[11], out[15]]).toEqual([0, 0, 0, 1]);
+    expect(evaluateDrawPrecision(tileFromLocalFloat32(farCloud(10).local), { modelView64: out, backend: 'webgpu', path: 'instanced-quad-highp' }, METRES).state).not.toBe('NOT_TESTED');
+  });
+  it('leaves a projective row for the checker to refuse', () => {
+    const m = Float64Array.from(IDENTITY);
+    m[11] = -1;
+    expect(withExactAffineRow(m)).toBe(m);
   });
 });

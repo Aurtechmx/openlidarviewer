@@ -141,6 +141,21 @@ export interface TerrainAccessProfile {
    * resolved value (see {@link resolveEvidenceGapPolicy}).
    */
   readonly evidenceGapPolicy?: EvidenceGapPolicy;
+  /**
+   * Which example profile the values started from, when the reader picked
+   * one in the Lab, and whether any limit or policy was changed before the
+   * profile was applied. Absent for a profile entered from a blank form.
+   * Recorded with the profile in the run record; the model never reads it.
+   */
+  readonly origin?: TerrainAccessProfileOrigin;
+}
+
+/** Where a profile's values came from; see {@link TerrainAccessProfile.origin}. */
+export interface TerrainAccessProfileOrigin {
+  /** The example's id, e.g. `walker`. */
+  readonly example: string;
+  /** True when any limit or policy differed from the example's own value. The name is not compared. */
+  readonly edited: boolean;
 }
 
 /** How a cell with an evidence gap is treated; see {@link TerrainAccessProfile.evidenceGapPolicy}. */
@@ -204,6 +219,12 @@ export function validateProfile(profile: TerrainAccessProfile): readonly Profile
       reason: `must be 'conservative' or 'exploratory'; got ${String(profile.evidenceGapPolicy)}`,
     });
   }
+  if (profile.origin !== undefined) {
+    const o = profile.origin as Partial<TerrainAccessProfileOrigin> | null;
+    if (!o || typeof o.example !== 'string' || o.example.trim() === '' || typeof o.edited !== 'boolean') {
+      problems.push({ field: 'origin', reason: 'must name an example and say whether it was edited' });
+    }
+  }
 
   return problems;
 }
@@ -218,13 +239,13 @@ export function validateProfile(profile: TerrainAccessProfile): readonly Profile
  */
 export const TERRAIN_ACCESS_NEIGHBOURS: readonly (readonly [number, number])[] = Object.freeze([
   [1, 0],   // E
-  [1, 1],   // SE
-  [0, 1],   // S
-  [-1, 1],  // SW
+  [1, 1],   // NE
+  [0, 1],   // N
+  [-1, 1],  // NW
   [-1, 0],  // W
-  [-1, -1], // NW
-  [0, -1],  // N
-  [1, -1],  // NE
+  [-1, -1], // SW
+  [0, -1],  // S
+  [1, -1],  // SE
 ]);
 
 /** Reasons a cell (node) is hard-blocked regardless of the direction entered. */

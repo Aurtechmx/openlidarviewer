@@ -19,6 +19,7 @@ import {
   PRECISION_BUDGET_M,
   type InMemoryPrecisionInput,
 } from '../src/geo/inMemoryPrecision';
+import { inMemoryPrecisionRows } from '../src/analysis/inMemoryPrecisionRows';
 
 const METRE_UNIT = { linearUnitKnown: true, linearUnitToMetres: 1 } as const;
 
@@ -381,5 +382,39 @@ describe('resolvePrecisionPermit — the refusal', () => {
       const text = permit.ok ? '' : permit.reasons.join(' ');
       expect(text).not.toMatch(banned);
     }
+  });
+});
+
+describe('a vertical unit that cannot be read', () => {
+  // Z reaches furthest here, so a borrowed horizontal factor would make it govern.
+  const extent = { min: [0, 0, 0] as const, max: [100, 100, 900_000] as const };
+  const strategy = { kind: 'shared-origin' as const, origin: [0, 0, 0] as const };
+  const metres = { linearUnitKnown: true, linearUnitToMetres: 1 };
+
+  it('states the metre figure over X and Y only, and says so', () => {
+    for (const unit of [
+      { ...metres, verticalScaleInvalid: true },
+      { ...metres, verticalUnitToMetres: 0 },
+      { ...metres, verticalUnitToMetres: Number.NaN },
+      { ...metres, verticalUnitToMetres: -1 },
+    ]) {
+      const p = estimateInMemoryPrecision({ extent, strategy, unit });
+      expect(p.metresCover).toBe('horizontal');
+      expect(p.governingAxis).not.toBe('z');
+      expect(p.metres?.worstCaseSpacing).toBeCloseTo(float32Spacing(100), 12);
+    }
+  });
+
+  it('leaves a readable or undeclared vertical unit covering all three axes', () => {
+    for (const unit of [metres, { ...metres, verticalUnitToMetres: 1 }]) {
+      const p = estimateInMemoryPrecision({ extent, strategy, unit });
+      expect(p.metresCover).toBeUndefined();
+      expect(p.governingAxis).toBe('z');
+    }
+  });
+
+  it('names the horizontal-only basis in the report row', () => {
+    const p = estimateInMemoryPrecision({ extent, strategy, unit: { ...metres, verticalScaleInvalid: true } });
+    expect(inMemoryPrecisionRows(p)[0]!.value).toMatch(/on the horizontal axes; the vertical unit could not be interpreted/);
   });
 });

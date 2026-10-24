@@ -111,11 +111,8 @@ test('Export mode: the contour map sheet button downloads the PDF', async ({ pag
 
   // The Contour Studio PDF of the same scan, with the Studio's starting
   // purpose, is the same sheet: only the generated time differs.
-  await openAnalysePage(page, 'contours');
-  const launch = page.locator('.olv-analyse-contour-launcher .olv-contour-launcher-action');
-  await expect(launch).toBeVisible({ timeout: 20_000 });
-  await launch.click();
-  await page.locator('.olv-cs-export-btn', { hasText: /^PDF$/ }).click();
+  await openAnalysePage(page, 'contours'); // Make contours: Contour Studio opens
+  await page.locator('.olv-cs-export-btn', { hasText: /^PDF$/ }).click({ timeout: 20_000 });
   await expect(dialog).toBeVisible({ timeout: 20_000 });
   const [studio] = await Promise.all([
     page.waitForEvent('download', { timeout: 60_000 }),

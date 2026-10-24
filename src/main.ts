@@ -35,7 +35,7 @@ import { findDuplicateIds, type Action } from './ui/actionRegistry';
 import { runSceneTool, type SceneTool } from './app/toggleTool';
 import type { SessionIoDeps } from './app/sessionIo';
 import type { SessionSnapshotDeps } from './app/sessionSnapshot';
-import { openScan, clearPendingSessionRestore, heldSessionWork, type OpenScanDeps } from './app/openScan';
+import { openScan, clearPendingSessionRestore, heldSessionWork, sourceDigestReady, type OpenScanDeps } from './app/openScan';
 import {
   openStreamingCopc as runOpenStreamingCopc,
   handleRemoteEpt as runHandleRemoteEpt,
@@ -114,7 +114,7 @@ import { ClipPanel, fitBoundsInProject } from './ui/ClipPanel';
 import type { ClipBox } from './render/clip/clipBox';
 // Two-epoch change detection is loaded on demand (it pulls the terrain
 // ground-filter + rasteriser): see compareLoadedLayers' dynamic import.
-import { planInstantAnswer } from './intelligence/instantAnswer';
+import { planInstantAnswer, sameSourcePair } from './intelligence/instantAnswer';
 import { decodeFull } from './convert/decodeFull';
 import { createHelpOverlayLazy, createLazySingleton, createLazySurfaceLoader, buttonLazyTrigger, dialogOpen, retryableOnce, mountPanelOnce } from './app/helpOverlayLazy';
 import {
@@ -789,7 +789,7 @@ let _lastInstantScanLabel: string | undefined;
  */
 function showInstantAnswer(scanLabel: string): void {
   const answer = planInstantAnswer({
-    cloudCount: viewer.clouds().length, compareReady: compareSuggestionAllowed(crsService, viewer.clouds().map((id) => viewer.getCloud(id))),
+    cloudCount: viewer.clouds().length, compareReady: !sameSourcePair(viewer.clouds(), sourceFileById) && compareSuggestionAllowed(crsService, viewer.clouds().map((id) => viewer.getCloud(id))),
     scanShape: captureProvenance.verdict(),
     scanLabel, priorScanLabel: _lastInstantScanLabel,
     crsKnown: crsIsKnown(crsService.current()),
@@ -1418,7 +1418,7 @@ const ensureActionRegistry = retryableOnce((): Promise<Action[]> => loadActionRe
   terrainAnalysisEntry: {
     showAnalyseMode: () => showWorkspaceMode('analyse'), showPage: (page) => workspaceShell?.openAnalysePage(page),
     showPanel: () => ensureAnalysePanel().then((p) => { p.setVisible(true); return { hasResult: p.currentResultForProvenance() != null, flowInput: p.flowPulseInput(), terrainAccessInput: p.terrainAccessInput() }; }),
-    run: () => void terrainRunner.run(),
+    run: () => terrainRunner.run(),
   }, observatoryEntry: { showAnalyseMode: () => showWorkspaceMode('analyse'), scans, crs: crsService, buildTag: __APP_VERSION__, overlayHost: () => viewer.derivedLayerHost() },
   showTouchGestures: () => navBar.flashTouchHint(),
   saveCurrentView,
@@ -2219,9 +2219,9 @@ const terrainRunner = createTerrainAnalysisRunner({
     inspectorCards.noteTerrainComplexity(
       cx && cx.band ? { bucket: cx.band, label: cx.bandLabel, detail: cx.detail } : null,
     );
-    // On a phone the panel that produced this sits in the bottom sheet at 'peek',
-    // so the verdict lands below the fold. Open it on the assessment (no-op on desktop).
-    phoneSheet?.revealResult('analyse', '.olv-analyse-assessment');
+    // On a phone the sheet sits at 'peek', so the verdict lands below the fold.
+    // Open it at the top of its page, where the verdict leads (no-op on desktop).
+    phoneSheet?.revealResult('analyse', '.olv-ws-task');
   },
 });
 
@@ -2351,9 +2351,9 @@ const exportPanel = new ExportPanel({
     // report covers what the scan-report card already does on PNG
     // exports, but as a multi-page PDF with the full Inspector context.
     // The progress toast surfaces while the lazy module loads and the PDF
-    // renders; failures route through the same toast UI as every other
-    // export.
-    dropZone.setProgress('Generating report…');
+    // renders, and says when it waits for the source file's checksum;
+    // failures route through the same toast UI as every other export.
+    dropZone.setProgress(sourceDigestReady(scans.activeCloud()) ? 'Generating report…' : 'Generating report: checking the source file first…');
     return generateReportPdf(templateId)
       .then(() => {
         recordUsage('report', templateId);
@@ -3335,7 +3335,7 @@ function mountPerformanceControl(): void {
     getViewer: () => viewer, getStreamingQuality: () => streamingUi.quality(),
     device: () => ({ tier: deviceCapsValue.tier, isMobile: isPhone(), backend: viewer.activeBackend() }),
     onStreamingQuality: (q) => streamingUi.noteQualityFromControl(q),
-    onUserChange: () => { visuals.syncRendering(); persistPrefs(); },
+    onUserChange: () => { visuals.syncRendering(); persistPrefs(); }, precision: { viewer: () => viewer, activeId: () => scans.activeId, activeCloud: () => scans.activeCloud(), context: () => crsService.context() },
   });
 }
 

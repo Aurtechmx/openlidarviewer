@@ -20,6 +20,7 @@
 
 import type { DtmGrid } from '../ground/cellConfidence';
 import { EVIDENCE_THRESHOLDS } from '../ground/cellConfidence';
+import { outsideCoverageMask } from '../ground/coverageFootprint';
 
 /** The five mutually-exclusive cell statuses. */
 export type CellStatus = 'measured' | 'interpolated' | 'empty' | 'lowConfidence' | 'edgeRisk';
@@ -49,6 +50,15 @@ export interface CellStatusTally {
   readonly lowConfidence: number;
   readonly edgeRisk: number;
   readonly total: number;
+  /**
+   * The `empty` cells that lie OUTSIDE the surveyed area (no-data reaching the
+   * grid border), as opposed to gaps the data surrounds. A strip survey in a
+   * square grid leaves most of the grid here; it is not a gap in the surface.
+   * Shares of the surveyed area divide by `total − outsideCoverage` and count
+   * `empty − outsideCoverage` as its gaps. Absent on a tally built without the
+   * grid (treated as 0).
+   */
+  readonly outsideCoverage?: number;
 }
 
 /**
@@ -91,8 +101,17 @@ export function classifyCellStatus(dtm: DtmGrid, params: CellStatusParams = {}):
   return out;
 }
 
-/** Tally a status array into per-status counts. */
-export function tallyCellStatus(statuses: Uint8Array): CellStatusTally {
+/** Classify and tally a DTM grid, separating no-data outside the surveyed area. */
+export function tallyDtmCellStatus(dtm: DtmGrid, params: CellStatusParams = {}): CellStatusTally {
+  return tallyCellStatus(classifyCellStatus(dtm, params), outsideCoverageMask(dtm.coverage, dtm.cols, dtm.rows));
+}
+
+/**
+ * Tally a status array into per-status counts. `outside` (1 = outside the
+ * surveyed area, parallel to `statuses`) counts the empty cells that are not
+ * gaps in the survey; omitted, none are.
+ */
+export function tallyCellStatus(statuses: Uint8Array, outside?: Uint8Array): CellStatusTally {
   let measured = 0;
   let interpolated = 0;
   let empty = 0;
@@ -116,5 +135,10 @@ export function tallyCellStatus(statuses: Uint8Array): CellStatusTally {
         empty++;
     }
   }
-  return { measured, interpolated, empty, lowConfidence, edgeRisk, total: statuses.length };
+  if (!outside) return { measured, interpolated, empty, lowConfidence, edgeRisk, total: statuses.length };
+  let outsideCoverage = 0;
+  for (let i = 0; i < statuses.length; i++) {
+    if (outside[i] === 1 && statuses[i] === CELL_STATUS_CODE.empty) outsideCoverage++;
+  }
+  return { measured, interpolated, empty, lowConfidence, edgeRisk, total: statuses.length, outsideCoverage };
 }

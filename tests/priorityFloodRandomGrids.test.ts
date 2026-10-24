@@ -178,16 +178,53 @@ function earlierSeedingFlood(grid: FlowGrid, epsilon: number): {
  * `wall` reading's reachable set, computed without the conditioning pass's
  * elevation-ordered heap.
  */
+/** NoData joined to the grid border through NoData (4-connected), found by its own breadth-first search. */
+function outsideByBfs(grid: FlowGrid): Uint8Array {
+  const { valid, cols, rows } = grid;
+  const out = new Uint8Array(cols * rows);
+  const queue: number[] = [];
+  for (let row = 0; row < rows; row++) {
+    for (let col = 0; col < cols; col++) {
+      const i = row * cols + col;
+      const onBoundary = col === 0 || row === 0 || col === cols - 1 || row === rows - 1;
+      if (onBoundary && valid[i] !== 1) { out[i] = 1; queue.push(i); }
+    }
+  }
+  let head = 0;
+  while (head < queue.length) {
+    const c = queue[head++];
+    const col = c % cols;
+    const row = (c - col) / cols;
+    for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]] as const) {
+      const nc = col + dx;
+      const nr = row + dy;
+      if (nc < 0 || nc >= cols || nr < 0 || nr >= rows) continue;
+      const nb = nr * cols + nc;
+      if (valid[nb] === 1 || out[nb] === 1) continue;
+      out[nb] = 1;
+      queue.push(nb);
+    }
+  }
+  return out;
+}
+
 function reachableUnderWall(grid: FlowGrid): Uint8Array {
   const { valid, cols, rows } = grid;
   const n = cols * rows;
   const reached = new Uint8Array(n);
   const queue: number[] = [];
+  const outside = outsideByBfs(grid);
+  // The edge of the surface: the grid boundary, and the rim of NoData outside it.
+  const touchesOutside = (col: number, row: number): boolean => D8_NEIGHBOURS.some(([dx, dy]) => {
+    const nc = col + dx;
+    const nr = row + dy;
+    return nc >= 0 && nc < cols && nr >= 0 && nr < rows && outside[nr * cols + nc] === 1;
+  });
   for (let row = 0; row < rows; row++) {
     for (let col = 0; col < cols; col++) {
       const onBoundary = col === 0 || row === 0 || col === cols - 1 || row === rows - 1;
       const i = row * cols + col;
-      if (onBoundary && valid[i] === 1 && reached[i] === 0) {
+      if ((onBoundary || touchesOutside(col, row)) && valid[i] === 1 && reached[i] === 0) {
         reached[i] = 1;
         queue.push(i);
       }
@@ -276,6 +313,29 @@ describe('the wall leaves no sink or flat on any cell it reached', () => {
         if (grid.valid[i] !== 1 || reached[i] !== 1) continue;
         expect(routed.status[i], `seed ${seed}: cell ${i} reached but SINK`).not.toBe(CELL_SINK);
         expect(routed.status[i], `seed ${seed}: cell ${i} reached but FLAT`).not.toBe(CELL_FLAT);
+      }
+    }
+  });
+});
+
+describe('the Float32-step rise on random grids', () => {
+  it('reaches the exact spill levels and leaves no sink or flat', () => {
+    const rand = mulberry32(20261023);
+    for (let trial = 0; trial < 40; trial++) {
+      // Fractional heights near the real file's magnitude, where a fixed
+      // rise and the flood order interact.
+      const g = randomGrid(rand, 12 + (trial % 7), 9 + (trial % 5), 0, 0.15);
+      for (let i = 0; i < g.z.length; i++) g.z[i] = Math.fround(600 + g.z[i] * 0.0037);
+      const exact = priorityFlood(g, { epsilon: 0 });
+      const res = priorityFlood(g, { epsilon: 'float32-step' });
+      expect(Array.from(res.spillLevel)).toEqual(Array.from(exact.spillLevel));
+      expect(res.cellsRaised).toBe(exact.cellsRaised);
+      expect(res.epsilonAbsorbed).toBe(0);
+      const routed = d8Flow({ ...g, z: res.z });
+      // Cells NoData encloses keep their heights and may stay pits.
+      if (res.cellsUnreachable === 0) {
+        expect(routed.sinkCount, `trial ${trial}`).toBe(0);
+        expect(routed.flatCount, `trial ${trial}`).toBe(0);
       }
     }
   });

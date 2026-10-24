@@ -187,8 +187,11 @@ function outletColumn(base: string, origin: number | null): string {
   return origin == null ? `${base}Local` : base;
 }
 
-/** Direction-index legend, matching `D8_NEIGHBOURS` in `flowTypes.ts`. */
-const DIRECTION_LEGEND = ['E', 'SE', 'S', 'SW', 'W', 'NW', 'N', 'NE'];
+/**
+ * Direction-index legend, matching `D8_NEIGHBOURS` in `flowTypes.ts`. Grid row
+ * 0 is the southern row, so a step to row + 1 is a step north.
+ */
+const DIRECTION_LEGEND = ['E', 'NE', 'N', 'NW', 'W', 'SW', 'S', 'SE'];
 
 /** cols/rows-only coverage: every cell the flow grid marks valid. */
 function coverageOf(grid: FlowGrid): Uint8Array {
@@ -204,7 +207,7 @@ function manifestOps(result: FlowPulseResult): ProcessingOpInput[] {
       ops.push({
         method: methodTag(methodRef(id)),
         params: {
-          fillEpsilon: (p.fillEpsilon as number | null) ?? null,
+          fillEpsilon: (p.fillEpsilon as number | 'float32-step' | null) ?? null,
           fillNoData: (p.fillNoData as string | null) ?? null,
         },
       });
@@ -327,7 +330,7 @@ function buildFlowReadme(result: FlowPulseResult, opts: {
     'Files',
     `  ${opts.basename}-accumulation.asc   Upstream cell count per cell (Esri ASCII Grid)`,
     `  ${opts.basename}-direction.asc      D8 receiver direction index per cell (-1 to 7)`,
-    `  ${opts.basename}-sinks-depressions.csv   Depression inventory (§10.10), largest first`,
+    `  ${opts.basename}-sinks-depressions.csv   Depression inventory (§10.10), largest first; seedCol counts from the west column and seedRow from the south row, both from 0`,
     opts.hasPath ? `  ${opts.basename}-flow-path.geojson   Downstream path from a click-to-pulse` : null,
     opts.hasCatchment ? `  ${opts.basename}-catchment.asc      Upstream catchment mask (1 = contributing)` : null,
     opts.hasWkt ? `  ${opts.basename}.prj                 Coordinate reference system (WKT)` : null,
@@ -379,7 +382,7 @@ function buildFlowReadme(result: FlowPulseResult, opts: {
     `  Conditioning   ${r.parameters.conditioning}`,
     '',
     'Results',
-    `  Cells routed           ${s.readableCells} of ${s.cells}`,
+    `  Cells read             ${s.readableCells} of ${s.cells}`,
     `  Sinks                  ${s.sinkCount}`,
     `  Flats (unresolved)     ${s.flatCount}`,
     `  Outlets                ${s.outletCount}`,

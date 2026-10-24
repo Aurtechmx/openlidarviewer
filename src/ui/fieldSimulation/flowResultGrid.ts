@@ -176,7 +176,7 @@ export function flowGridLegend(maxUpstream = 1): HTMLElement {
   marks.append(
     markItem('line', '━', 'Path', PATH_COLOR),
     markItem('dash', '┅', 'Catchment edge', CATCHMENT_COLOR),
-    markItem('ring', '○', 'Outlet (flow leaves the grid)', OUTLET_COLOR),
+    markItem('ring', '○', 'Outlet (flow leaves the survey)', OUTLET_COLOR),
     markItem('ring', '▼', 'Sink (flow stops)', SINK_COLOR),
     markItem('dash', '–', 'Flat', LAB_LINE),
     markItem('dots', '?', 'No ground data', LAB_WITHHELD),

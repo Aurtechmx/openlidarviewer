@@ -4,8 +4,10 @@
  * Four things are checked: the frame placement (a cell lands at the DTM's
  * own world position, rotated for a Y-up scene exactly as contours are),
  * NoData handling (skipped, never drawn as a zero elevation), the drainage
- * network contract (only channel cells, width-scaled ribbons to the D8
- * receiver, water-ramp colours, lifted off the terrain), and — the §17
+ * network contract (only channel cells, traced into lines that meet at
+ * confluences, smoothed with their ends kept, width-scaled ribbons in the
+ * water ramp, draped and lifted off the terrain, within a vertex budget,
+ * deterministic), and — the §17
  * proof this feature must carry — that building every overlay's buffers from
  * a real run's arrays never mutates them: `flowFieldDigest` over the SAME
  * `FlowPulseResult` is identical before and after.
@@ -16,13 +18,19 @@ import {
   buildFlowAccumulationBuffers,
   buildFlowCatchmentBuffers,
   buildFlowPathBuffers,
+  flowNetworkLines,
   flowOverlayFrame,
+  flowRibbonShades,
   logScale,
+  traceFlowNetwork,
   CATCHMENT_RGB,
   FLOW_CASING_EXTRA_CELLS,
   FLOW_CASING_RGB,
+  FLOW_LINE_STRIDE,
   FLOW_NETWORK_LIFT_CELLS,
   FLOW_CHANNEL_THRESHOLD,
+  FLOW_RIBBON_CORE_LIFT,
+  FLOW_RIBBON_EDGE_SHADE,
   channelStrength,
   ribbonWidthCells,
   waterRampColor,
@@ -81,16 +89,66 @@ function slope(): ReturnType<typeof runFlowPulse> {
 }
 
 // Slope fixture: upstream counts 1 (cell 0) and 2 (cell 1), max 2, so both
-// are channel cells; cell 0 links to cell 1, cell 1 is the outlet. Buffer
-// order: casing joint 0, casing ribbon 0→1, casing joint 1, then the same
-// three quads for the line pass. 18 floats per quad.
-const QUAD = 18;
+// are channel cells and form one line, cell 0 to the outlet at cell 1. It is
+// straight, so smoothing leaves two points: two rows of 5 vertices (casing
+// left/right, line left/centre/right) and a round cap at each end.
+const ROW = 5;
 const t0 = logScale(1, 2);
-const casingWidth0 = ribbonWidthCells(t0) + 2 * FLOW_CASING_EXTRA_CELLS;
+const s0 = channelStrength(t0);
+const hw0 = ribbonWidthCells(t0) / 2;
+
+/** Vertex `v`'s (column, row, elevation) back in grid terms, for a Z-up frame. */
+function gridOf(verts: Float32Array, v: number, frame: { originH1: number; originH2: number; cellSizeM: number }): [number, number, number] {
+  return [
+    (verts[v * 3]! - frame.originH1) / frame.cellSizeM,
+    (verts[v * 3 + 1]! - frame.originH2) / frame.cellSizeM,
+    verts[v * 3 + 2]!,
+  ];
+}
+
+/**
+ * A rolling 64x64 surface with a winding valley: enough relief for a
+ * branching network with confluences. `hole` cuts a disc of NoData into it.
+ */
+function rolling(hole = false): Extract<ReturnType<typeof runFlowPulse>, { ok: true }> {
+  const N = 64;
+  const waves = [
+    [0.21, 0.83, 0.55, 1.9], [0.37, -0.64, 0.77, 1.1], [0.52, 0.31, -0.95, 0.7],
+    [0.83, -0.9, -0.42, 0.45], [1.21, 0.12, 0.99, 0.3], [1.77, -0.58, 0.81, 0.18],
+  ] as const;
+  const rows: (number | null)[][] = [];
+  for (let r = 0; r < N; r++) {
+    const row: (number | null)[] = [];
+    for (let c = 0; c < N; c++) {
+      if (hole && (c - 22) ** 2 + (r - 38) ** 2 < 25) { row.push(null); continue; }
+      const yc = 32 + 9 * Math.sin(c / 8);
+      let h = 100 - 0.12 * c - 3 * Math.exp(-((r - yc) ** 2) / 50) + 0.03 * Math.abs(r - yc);
+      for (const [f, cx, cy, a] of waves) h += a * Math.sin(f * (c * cx + r * cy));
+      row.push(h);
+    }
+    rows.push(row);
+  }
+  const result = runFlowPulse(dtmOf(rows), projected, { ...FLOW_PULSE_DEFAULTS }, identity);
+  if (!result.ok) throw new Error('fixture must run');
+  return result;
+}
+
+/** Shortest distance from (c, r) to the polyline through `points`. */
+function distanceToLine(points: Float64Array, c: number, r: number): number {
+  let best = Infinity;
+  for (let o = 0; o + FLOW_LINE_STRIDE < points.length; o += FLOW_LINE_STRIDE) {
+    const ac = points[o]!, ar = points[o + 1]!;
+    const dc = points[o + FLOW_LINE_STRIDE]! - ac, dr = points[o + FLOW_LINE_STRIDE + 1]! - ar;
+    const len2 = dc * dc + dr * dr;
+    const t = len2 > 0 ? Math.min(Math.max(((c - ac) * dc + (r - ar) * dr) / len2, 0), 1) : 0;
+    best = Math.min(best, Math.hypot(c - ac - t * dc, r - ar - t * dr));
+  }
+  return points.length === FLOW_LINE_STRIDE ? Math.hypot(c - points[0]!, r - points[1]!) : best;
+}
 
 describe('buildFlowAccumulationBuffers — placement and NoData', () => {
 
-  it('places a Z-up cell at originH + index·cellSize, lifted elevation on Z', () => {
+  it('places a Z-up cell at originH + index·cellSize, lifted off the terrain on Z', () => {
     const result = slope();
     expect(result.ok).toBe(true);
     if (!result.ok) return;
@@ -98,12 +156,15 @@ describe('buildFlowAccumulationBuffers — placement and NoData', () => {
     const buffers = buildFlowAccumulationBuffers(result.grid, result.routed, result.accumulation, frame);
     // 2 channel cells ((0,0) and (1,0)); the two NoData cells are skipped.
     expect(buffers.cellsDrawn).toBe(2);
-    // 2 passes x (2 joints + 1 ribbon) quads.
-    expect(buffers.verts.length).toBe(6 * QUAD);
-    // First vertex: the (-w/2, -w/2) corner of cell (0,0)'s casing joint.
-    expect(buffers.verts[0]).toBeCloseTo(100 + (-0.5 * casingWidth0) * 2); // x
-    expect(buffers.verts[1]).toBeCloseTo(200 + (-0.5 * casingWidth0) * 2); // y (north, un-negated)
-    expect(buffers.verts[2]).toBeCloseTo(4 + FLOW_NETWORK_LIFT_CELLS * 2); // z = elevation + lift
+    // Two rows plus two caps of 3 new casing and 3 new line vertices each.
+    expect(buffers.verts.length / 3).toBe(2 * ROW + 2 * 6);
+    // Vertex 3: the line centre at cell (0,0), draped at its elevation plus the lift.
+    expect(buffers.verts[9]).toBeCloseTo(100); // x
+    expect(buffers.verts[10]).toBeCloseTo(200); // y (north, un-negated)
+    expect(buffers.verts[11]).toBeCloseTo(4 + FLOW_NETWORK_LIFT_CELLS * 2); // z = elevation + lift
+    // Vertex 0: the casing's left edge there, half the casing width across the line.
+    expect(buffers.verts[0]).toBeCloseTo(100);
+    expect(buffers.verts[1]).toBeCloseTo(200 + (hw0 + FLOW_CASING_EXTRA_CELLS) * 2);
   });
 
   it('rotates into a Y-up scene: elevation on Y, northing negated', () => {
@@ -111,10 +172,9 @@ describe('buildFlowAccumulationBuffers — placement and NoData', () => {
     if (!result.ok) throw new Error('fixture must run');
     const frame = flowOverlayFrame('y', 100, 200, 2);
     const buffers = buildFlowAccumulationBuffers(result.grid, result.routed, result.accumulation, frame);
-    expect(buffers.verts[0]).toBeCloseTo(100 + (-0.5 * casingWidth0) * 2); // x unchanged
-    expect(buffers.verts[1]).toBeCloseTo(4 + FLOW_NETWORK_LIFT_CELLS * 2); // elevation now on Y
-    expect(buffers.verts[2]).toBeCloseTo(-(200 + (-0.5 * casingWidth0) * 2)); // northing negated
-    // The line-pass ribbon 0→1 ends at cell (1,0)'s centre, also negated.
+    expect(buffers.verts[9]).toBeCloseTo(100); // x unchanged
+    expect(buffers.verts[10]).toBeCloseTo(4 + FLOW_NETWORK_LIFT_CELLS * 2); // elevation now on Y
+    expect(buffers.verts[11]).toBeCloseTo(-200); // northing negated
     const z = flowOverlayFrame('z', 100, 200, 2);
     const zb = buildFlowAccumulationBuffers(result.grid, result.routed, result.accumulation, z);
     for (let v = 0; v < zb.verts.length; v += 3) {
@@ -122,41 +182,73 @@ describe('buildFlowAccumulationBuffers — placement and NoData', () => {
       expect(buffers.verts[v + 1]).toBeCloseTo(zb.verts[v + 2]!);
       expect(buffers.verts[v + 2]).toBeCloseTo(-zb.verts[v + 1]!);
     }
+    expect(Array.from(buffers.index!)).toEqual(Array.from(zb.index!));
   });
 
-  it('skips NoData cells outright, not as a zero elevation', () => {
+  it('never drapes over a NoData cell: no zero elevation, no vertex over the empty row', () => {
     const result = slope();
     if (!result.ok) throw new Error('fixture must run');
     const frame = flowOverlayFrame('z', 0, 0, 1);
     const buffers = buildFlowAccumulationBuffers(result.grid, result.routed, result.accumulation, frame);
-    // Every drawn elevation is 4 or 2 plus the lift — never the 0 the NoData
-    // rows carry in the raw `z` array (NaN-free storage defaults an unread cell to 0).
-    for (let i = 2; i < buffers.verts.length; i += 3) {
-      expect([4 + FLOW_NETWORK_LIFT_CELLS, 2 + FLOW_NETWORK_LIFT_CELLS].some((e) => Math.abs(e - buffers.verts[i]!) < 1e-6)).toBe(true);
+    // Every drawn elevation lies between the two measured cells' (4 and 2)
+    // plus the lift, never at the 0 the NoData row carries in the raw `z`.
+    for (let v = 0; v < buffers.verts.length / 3; v++) {
+      const [col, row, z] = gridOf(buffers.verts, v, frame);
+      expect(z).toBeGreaterThanOrEqual(2 + FLOW_NETWORK_LIFT_CELLS - 1e-5);
+      expect(z).toBeLessThanOrEqual(4 + FLOW_NETWORK_LIFT_CELLS + 1e-5);
+      // The cell under every vertex is row 0, the measured one, and on the grid.
+      expect(Math.round(row) === 0).toBe(true);
+      expect(Math.round(col)).toBeGreaterThanOrEqual(0);
+      expect(Math.round(col)).toBeLessThanOrEqual(1);
     }
   });
 });
 
 describe('buildFlowAccumulationBuffers — drainage network', () => {
-  it('draws a ribbon to the D8 receiver as wide as the scaled value, in the water ramp', () => {
+  it('draws a ribbon as wide as the scaled value, shaded along the water ramp', () => {
     const result = slope();
     if (!result.ok) throw new Error('fixture must run');
-    const buffers = buildFlowAccumulationBuffers(result.grid, result.routed, result.accumulation, flowOverlayFrame('z', 0, 0, 1));
-    // Line-pass ribbon 0→1 is quad 4. Its first two vertices are A ± n·w/2.
-    const r = 4 * QUAD;
-    const width = Math.hypot(buffers.verts[r]! - buffers.verts[r + 3]!, buffers.verts[r + 1]! - buffers.verts[r + 4]!);
-    expect(width).toBeCloseTo(ribbonWidthCells(t0), 6);
-    // Its far end sits at cell (1,0)'s centre: vertices 2 and 5 average to (1, 0).
-    expect((buffers.verts[r + 6]! + buffers.verts[r + 15]!) / 2).toBeCloseTo(1);
-    expect((buffers.verts[r + 7]! + buffers.verts[r + 16]!) / 2).toBeCloseTo(0);
-    // Colours: casing first, then the ramp; the trunk (t = 1) is near white.
-    expect(buffers.colors[0]).toBeCloseTo(FLOW_CASING_RGB[0] / 255);
-    const rill = waterRampColor(channelStrength(t0));
-    expect(buffers.colors[3 * QUAD]).toBeCloseTo(rill[0] / 255);
-    expect(buffers.colors[3 * QUAD + 2]).toBeCloseTo(rill[2] / 255);
+    const frame = flowOverlayFrame('z', 0, 0, 1);
+    const buffers = buildFlowAccumulationBuffers(result.grid, result.routed, result.accumulation, frame);
+    const v = buffers.verts, col = buffers.colors;
+    // Row 0, line left (2) and right (4): the width at the head cell.
+    expect(Math.hypot(v[6]! - v[12]!, v[7]! - v[13]!)).toBeCloseTo(2 * hw0, 6);
+    // Row 1, line centre (vertex 8) sits on the outlet cell's centre.
+    expect(v[24]).toBeCloseTo(1);
+    expect(v[25]).toBeCloseTo(0);
+    // Colours: casing dark; the line's edges a step down the ramp, its centre a step up.
+    expect(col[0]).toBeCloseTo(FLOW_CASING_RGB[0] / 255);
+    const { edge, core } = flowRibbonShades(s0);
+    expect(edge).toEqual(waterRampColor(s0 - FLOW_RIBBON_EDGE_SHADE));
+    expect(core).toEqual(waterRampColor(s0 + FLOW_RIBBON_CORE_LIFT));
+    for (let d = 0; d < 3; d++) {
+      expect(col[6 + d]).toBeCloseTo(edge[d]! / 255, 6);
+      expect(col[9 + d]).toBeCloseTo(core[d]! / 255, 6);
+      expect(col[12 + d]).toBeCloseTo(edge[d]! / 255, 6);
+    }
+    // The trunk end (strength 1) has a near-white centre, brighter than the head's.
     const trunk = waterRampColor(1);
-    expect(buffers.colors[5 * QUAD]).toBeCloseTo(trunk[0] / 255);
-    expect(buffers.colors[5 * QUAD + 1]).toBeCloseTo(trunk[1] / 255);
+    expect(col[24]).toBeCloseTo(trunk[0] / 255, 6);
+    expect(col[25]).toBeCloseTo(trunk[1] / 255, 6);
+    expect(trunk[0]).toBeGreaterThan(core[0]!);
+  });
+
+  it('indexes triangles over shared vertices, every casing triangle before every line triangle', () => {
+    const result = rolling();
+    const buffers = buildFlowAccumulationBuffers(result.grid, result.routed, result.accumulation, flowOverlayFrame('z', 0, 0, 1));
+    const index = buffers.index!;
+    const vertices = buffers.verts.length / 3;
+    expect(buffers.colors.length).toBe(buffers.verts.length);
+    expect(index.length % 3).toBe(0);
+    let seenLine = false;
+    for (let k = 0; k < index.length; k += 3) {
+      for (let d = 0; d < 3; d++) expect(index[k + d]).toBeLessThan(vertices);
+      const casing = [0, 1, 2].every((d) => Math.abs(buffers.colors[index[k + d]! * 3]! - FLOW_CASING_RGB[0] / 255) < 1e-6
+        && Math.abs(buffers.colors[index[k + d]! * 3 + 2]! - FLOW_CASING_RGB[2] / 255) < 1e-6);
+      if (!casing) seenLine = true;
+      else expect(seenLine).toBe(false);
+    }
+    expect(seenLine).toBe(true);
   });
 
   it('draws nothing below the channel threshold', () => {
@@ -170,15 +262,18 @@ describe('buildFlowAccumulationBuffers — drainage network', () => {
     let max = 0;
     for (let i = 0; i < up.length; i++) if (result.routed.status[i] !== CELL_NODATA && up[i]! > max) max = up[i]!;
     const below: number[] = [];
-    let channel = 0, links = 0;
+    let channel = 0;
     for (let i = 0; i < up.length; i++) {
-      if (logScale(up[i]!, max) < FLOW_CHANNEL_THRESHOLD) { below.push(i); continue; }
-      channel++;
-      if (result.routed.receiver[i]! >= 0) links++;
+      if (logScale(up[i]!, max) < FLOW_CHANNEL_THRESHOLD) below.push(i);
+      else channel++;
     }
     expect(below.length).toBeGreaterThan(0);
     expect(buffers.cellsDrawn).toBe(channel);
-    expect(buffers.verts.length).toBe(2 * (channel + links) * QUAD);
+    // One straight line: a row at least every cell, and two caps.
+    const rows = (buffers.verts.length / 3 - 2 * 6) / ROW;
+    expect(Number.isInteger(rows)).toBe(true);
+    expect(rows).toBeGreaterThanOrEqual(channel);
+    expect(rows).toBeLessThanOrEqual(2 * channel);
     // No vertex reaches into a below-threshold cell's centre half.
     for (const i of below) {
       const cx = i % result.grid.cols;
@@ -198,6 +293,154 @@ describe('buildFlowAccumulationBuffers — drainage network', () => {
     const buffers = buildFlowAccumulationBuffers(grid as never, routed as never, acc as never, flowOverlayFrame('z', 0, 0, 1));
     expect(buffers.cellsDrawn).toBe(0);
     expect(buffers.verts.length).toBe(0);
+    expect(buffers.index!.length).toBe(0);
+  });
+
+  it('is deterministic: the same run gives the same buffers', () => {
+    const result = rolling(true);
+    const frame = flowOverlayFrame('z', 100, 200, 0.5);
+    const a = buildFlowAccumulationBuffers(result.grid, result.routed, result.accumulation, frame);
+    const b = buildFlowAccumulationBuffers(result.grid, result.routed, result.accumulation, frame);
+    expect(Array.from(a.verts)).toEqual(Array.from(b.verts));
+    expect(Array.from(a.colors)).toEqual(Array.from(b.colors));
+    expect(Array.from(a.index!)).toEqual(Array.from(b.index!));
+    expect(a.cellsDrawn).toBe(b.cellsDrawn);
+  });
+
+  it('keeps every vertex on the grid, over a cell that carries an elevation, draped near the cells around it', () => {
+    const result = rolling(true);
+    const { grid, routed } = result;
+    const frame = flowOverlayFrame('z', 0, 0, 1);
+    const buffers = buildFlowAccumulationBuffers(grid, routed, result.accumulation, frame);
+    let holes = 0;
+    for (let i = 0; i < grid.cols * grid.rows; i++) if (routed.status[i] === CELL_NODATA) holes++;
+    expect(holes).toBeGreaterThan(0);
+    for (let v = 0; v < buffers.verts.length / 3; v++) {
+      const [c, r, z] = gridOf(buffers.verts, v, frame);
+      const col = Math.round(c), row = Math.round(r);
+      expect(col).toBeGreaterThanOrEqual(0);
+      expect(row).toBeGreaterThanOrEqual(0);
+      expect(col).toBeLessThan(grid.cols);
+      expect(row).toBeLessThan(grid.rows);
+      expect(routed.status[row * grid.cols + col]).not.toBe(CELL_NODATA);
+      // Its elevation comes from measured cells within two of it, plus the lift.
+      let lo = Infinity, hi = -Infinity;
+      for (let dr = -2; dr <= 2; dr++) {
+        for (let dc = -2; dc <= 2; dc++) {
+          const cc = col + dc, rr = row + dr;
+          if (cc < 0 || rr < 0 || cc >= grid.cols || rr >= grid.rows) continue;
+          const i = rr * grid.cols + cc;
+          if (routed.status[i] === CELL_NODATA) continue;
+          lo = Math.min(lo, grid.z[i]!); hi = Math.max(hi, grid.z[i]!);
+        }
+      }
+      expect(z - FLOW_NETWORK_LIFT_CELLS).toBeGreaterThanOrEqual(lo - 1e-3);
+      expect(z - FLOW_NETWORK_LIFT_CELLS).toBeLessThanOrEqual(hi + 1e-3);
+    }
+  });
+
+  it('stays within a vertex budget well under one quad pair per cell', () => {
+    const result = rolling();
+    const buffers = buildFlowAccumulationBuffers(result.grid, result.routed, result.accumulation, flowOverlayFrame('z', 0, 0, 1));
+    expect(buffers.cellsDrawn).toBeGreaterThan(100);
+    // The per-cell drawing this replaced used 24 vertices a channel cell.
+    expect(buffers.verts.length / 3).toBeLessThanOrEqual(12 * buffers.cellsDrawn);
+  });
+});
+
+describe('traceFlowNetwork / flowNetworkLines — lines through the channel cells', () => {
+  it('puts every channel cell in exactly one stem, each stem following its D8 receivers', () => {
+    const result = rolling(true);
+    const { routed } = result;
+    const network = traceFlowNetwork(result.grid, routed, result.accumulation);
+    const channel = new Set<number>();
+    for (const stem of network.stems) {
+      for (const i of stem.cells) {
+        expect(channel.has(i)).toBe(false);
+        channel.add(i);
+      }
+    }
+    expect(channel.size).toBe(network.channelCells);
+    network.stems.forEach((stem, k) => {
+      for (let p = 0; p + 1 < stem.cells.length; p++) expect(routed.receiver[stem.cells[p]!]).toBe(stem.cells[p + 1]);
+      const last = stem.cells[stem.cells.length - 1]!;
+      if (stem.parent >= 0) {
+        expect(stem.parent).toBeLessThan(k); // parents come first
+        expect(routed.receiver[last]).toBe(network.stems[stem.parent]!.cells[stem.joinAt]);
+      } else {
+        // An outlet: its receiver is not a channel cell.
+        expect(channel.has(routed.receiver[last]!)).toBe(false);
+      }
+    });
+    const buffers = buildFlowAccumulationBuffers(result.grid, routed, result.accumulation, flowOverlayFrame('z', 0, 0, 1));
+    expect(buffers.cellsDrawn).toBe(network.channelCells);
+  });
+
+  it('carries a trunk on up its largest donor at a confluence', () => {
+    const result = rolling();
+    const up = result.accumulation.upstreamCells;
+    const network = traceFlowNetwork(result.grid, result.routed, result.accumulation);
+    const tributaries = network.stems.filter((s) => s.parent >= 0);
+    expect(tributaries.length).toBeGreaterThan(0);
+    for (const stem of tributaries) {
+      const parent = network.stems[stem.parent]!;
+      expect(stem.joinAt).toBeGreaterThan(0);
+      const mainDonor = parent.cells[stem.joinAt - 1]!;
+      expect(up[mainDonor]).toBeGreaterThanOrEqual(up[stem.cells[stem.cells.length - 1]!]!);
+    }
+  });
+
+  it('keeps each line\'s ends: its head cell, and its outlet cell or a point on the line it joins', () => {
+    const result = rolling(true);
+    const { grid } = result;
+    const network = traceFlowNetwork(grid, result.routed, result.accumulation);
+    const lines = flowNetworkLines(grid, result.routed, result.accumulation, network);
+    expect(lines).toHaveLength(network.stems.length);
+    let joins = 0;
+    lines.forEach((line, k) => {
+      const stem = network.stems[k]!;
+      const p = line.points;
+      const head = stem.cells[0]!;
+      expect(p[0]).toBe(head % grid.cols);
+      expect(p[1]).toBe(Math.floor(head / grid.cols));
+      const end = p.length - FLOW_LINE_STRIDE;
+      if (stem.parent < 0) {
+        const outlet = stem.cells[stem.cells.length - 1]!;
+        expect(p[end]).toBe(outlet % grid.cols);
+        expect(p[end + 1]).toBe(Math.floor(outlet / grid.cols));
+      } else {
+        // The tributary ends on its parent's smoothed line, so the two meet.
+        expect(distanceToLine(lines[stem.parent]!.points, p[end]!, p[end + 1]!)).toBeLessThan(0.03);
+        // It keeps its own width there: no point is stronger than its own strongest cell.
+        let own = 0;
+        for (const i of stem.cells) own = Math.max(own, channelStrength(logScale(result.accumulation.upstreamCells[i]!, network.maxUpstream)));
+        for (let o = 2; o < p.length; o += FLOW_LINE_STRIDE) expect(p[o]!).toBeLessThanOrEqual(own + 1e-9);
+        joins++;
+      }
+    });
+    expect(joins).toBeGreaterThan(0);
+  });
+
+  it('smooths a D8 staircase: no bend sharper than the cell steps it replaces, strength tapering', () => {
+    const result = rolling();
+    const lines = flowNetworkLines(result.grid, result.routed, result.accumulation);
+    let maxTurn = 0, maxStep = 0;
+    for (const line of lines) {
+      const p = line.points;
+      for (let o = FLOW_LINE_STRIDE; o + FLOW_LINE_STRIDE < p.length; o += FLOW_LINE_STRIDE) {
+        const a = Math.atan2(p[o + 1]! - p[o - FLOW_LINE_STRIDE + 1]!, p[o]! - p[o - FLOW_LINE_STRIDE]!);
+        const b = Math.atan2(p[o + FLOW_LINE_STRIDE + 1]! - p[o + 1]!, p[o + FLOW_LINE_STRIDE]! - p[o]!);
+        let turn = Math.abs(b - a);
+        if (turn > Math.PI) turn = 2 * Math.PI - turn;
+        maxTurn = Math.max(maxTurn, turn);
+        maxStep = Math.max(maxStep, Math.abs(p[o + 2]! - p[o - FLOW_LINE_STRIDE + 2]!));
+        // Never more than a cell between points, so the line keeps meeting the terrain.
+        expect(Math.hypot(p[o]! - p[o - FLOW_LINE_STRIDE]!, p[o + 1]! - p[o - FLOW_LINE_STRIDE + 1]!)).toBeLessThanOrEqual(1 + 1e-9);
+      }
+    }
+    // A D8 path turns by 45 degrees or more at a step; the smoothed lines turn by far less per point.
+    expect(maxTurn).toBeLessThan(Math.PI / 8);
+    expect(maxStep).toBeLessThan(0.25);
   });
 });
 

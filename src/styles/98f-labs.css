@@ -153,3 +153,127 @@
   background: var(--lab-field); border: 0.5px solid var(--lab-frame); border-radius: var(--radius-sm);
 }
 .olv-lab-north::before { content: "▲"; font-size: var(--text-micro); }
+
+/* ── Map first: one status chip, the map, three figures, the actions, one Details ──
+   (labGuide.ts statusChip / labDetails). Every caveat stays on the page, folded:
+   the chip opens to the verdict and its reasons, Details to the method, the
+   limitations and the reading notes. */
+.olv-flow-lab, .olv-ta-lab { gap: var(--space-xl); }
+.olv-flow-body, .olv-ta-body { gap: var(--space-xl); }
+
+.olv-lab-chip-wrap { min-width: 0; }
+.olv-lab-chip {
+  border: 0.5px solid var(--hairline); border-radius: var(--radius-md);
+  background: var(--panel-raised); font-size: var(--text-xs); color: var(--text);
+}
+.olv-lab-chip.is-review, .olv-lab-chip.is-needs { border-color: color-mix(in srgb, var(--state-review) 50%, var(--hairline)); }
+.olv-lab-chip.is-blocked { border-color: color-mix(in srgb, var(--state-blocked) 50%, var(--hairline)); }
+.olv-lab-chip-summary {
+  display: flex; align-items: center; gap: var(--space-md);
+  min-height: 32px; padding: var(--space-xs) var(--space-md); box-sizing: border-box;
+  cursor: pointer; list-style: none; user-select: none;
+}
+.olv-lab-chip-summary::-webkit-details-marker { display: none; }
+/* A drawn caret at the end: the line opens. */
+.olv-lab-chip-summary::after {
+  content: ''; flex-shrink: 0; margin-left: auto; width: 0; height: 0;
+  border-top: 4px solid var(--text-faint); border-left: 4px solid transparent; border-right: 4px solid transparent;
+  transition: transform var(--dur-fast) var(--ease-standard);
+}
+.olv-lab-chip[open] > .olv-lab-chip-summary::after { transform: rotate(180deg); }
+.olv-lab-chip-summary:focus-visible { outline: var(--focus-ring); outline-offset: var(--focus-ring-offset); border-radius: var(--radius-md); }
+.olv-lab-chip-text { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.olv-lab-chip[open] .olv-lab-chip-text { white-space: normal; }
+.olv-lab-chip-body { display: flex; flex-direction: column; gap: var(--space-md); padding: 0 var(--space-md) var(--space-md); }
+.olv-lab-chip-reason { margin: 0; color: var(--text-dim); line-height: 1.4; text-wrap: pretty; }
+.olv-lab-chip-lines { display: flex; flex-direction: column; gap: var(--space-md); }
+.olv-lab-chip-lines .olv-lab-caveat { margin: 0; }
+
+/* The one hint under the map, with the control it explains. */
+.olv-lab-controls { display: flex; flex-direction: column; align-items: flex-start; gap: var(--space-sm); min-width: 0; }
+.olv-lab-controls .olv-lab-next, .olv-lab-controls .olv-flow-selection-empty {
+  margin: 0; font-size: var(--text-xs); color: var(--text-dim); line-height: 1.4; text-wrap: pretty;
+}
+/* The click-mode choice spans the column, its options sharing the width. */
+.olv-lab-controls > :is(.olv-flow-mode, .olv-ta-segmented) { align-self: stretch; flex-wrap: nowrap; }
+.olv-lab-controls > :is(.olv-flow-mode, .olv-ta-segmented) > button { flex: 1 1 0; min-width: 0; }
+.olv-lab-actions { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-sm); min-width: 0; }
+.olv-lab-actions > .olv-flow-cond { flex: 1 0 100%; align-self: stretch; justify-content: stretch; }
+.olv-lab-actions > .olv-flow-cond > .olv-flow-cond-btn { flex: 1 1 0; }
+/* The page's main action reads as one: Export on Flow Pulse, Find route on Terrain Access. */
+.olv-lab-actions > :is(.olv-flow-export, .olv-ta-run) {
+  font: 600 var(--text-sm) / 1.2 var(--font); color: var(--on-accent);
+  background: var(--accent); border: 1px solid var(--accent); border-radius: var(--radius-sm);
+  padding: var(--space-sm) var(--space-xl); min-height: 32px; cursor: pointer;
+}
+.olv-lab-actions > :is(.olv-flow-export, .olv-ta-run):disabled { opacity: 0.45; cursor: not-allowed; }
+.olv-lab-actions > :is(.olv-flow-export, .olv-ta-run):focus-visible { outline: var(--focus-ring); outline-offset: var(--focus-ring-offset); }
+.olv-lab-actions > :is(.olv-flow-overlay-toggle, .olv-ta-overlay-toggle, .olv-ta-export, .olv-ta-retry) { min-height: 32px; }
+.olv-ta-retry {
+  font: inherit; font-size: var(--text-xs); color: var(--text-dim);
+  background: none; border: 0.5px solid var(--hairline); border-radius: var(--radius-sm);
+  padding: var(--space-xs) var(--space-md); cursor: pointer;
+}
+.olv-ta-retry:focus-visible, .olv-flow-export:focus-visible { outline: var(--focus-ring); outline-offset: var(--focus-ring-offset); }
+
+.olv-lab-details { border-top: 0.5px solid var(--hairline); padding-top: var(--space-md); font-size: var(--text-xs); color: var(--text-dim); }
+.olv-lab-details-summary {
+  display: flex; align-items: center; gap: var(--space-sm);
+  min-height: 32px; cursor: pointer; list-style: none; user-select: none;
+  font-weight: 600; color: var(--text-dim);
+}
+.olv-lab-details-summary::-webkit-details-marker { display: none; }
+.olv-lab-details-summary::before {
+  content: ''; flex-shrink: 0; width: 0; height: 0;
+  border-left: 4px solid currentColor; border-top: 3px solid transparent; border-bottom: 3px solid transparent;
+  transition: transform var(--dur-fast) var(--ease-standard);
+}
+.olv-lab-details[open] > .olv-lab-details-summary::before { transform: rotate(90deg); }
+.olv-lab-details-summary:focus-visible { outline: var(--focus-ring); outline-offset: var(--focus-ring-offset); }
+@media (hover: hover) { .olv-lab-details-summary:hover, .olv-lab-chip-summary:hover { color: var(--text); } }
+.olv-lab-details-body { display: flex; flex-direction: column; gap: var(--space-2xl); padding-top: var(--space-md); }
+.olv-lab-details-body ul.olv-story-v { margin: var(--space-xs) 0 0; padding-left: var(--space-2xl); }
+.olv-lab-method.is-flat > .olv-lab-method-summary { margin: 0 0 var(--space-xs); cursor: default; font-weight: 600; }
+
+/* While the terrain run a lab needs is building the ground surface. */
+.olv-lab-preparing { display: flex; flex-direction: column; gap: var(--space-sm); padding: var(--space-2xl) 0; }
+.olv-lab-preparing-line { margin: 0; display: flex; align-items: center; gap: var(--space-md); font-size: var(--text-sm); font-weight: 600; color: var(--text); }
+.olv-lab-preparing-note { margin: 0; font-size: var(--text-xs); color: var(--text-dim); text-wrap: pretty; }
+
+/* The Analyse home's one action on a card: Run (or Open) a lab, Run terrain
+   analysis. The rail's filled button, the same size as the labs' own. */
+.olv-ah-run {
+  align-self: flex-start; appearance: none;
+  display: inline-flex; align-items: center; justify-content: center;
+  background: var(--accent); border: 1px solid var(--accent); color: var(--on-accent);
+  border-radius: var(--radius-sm); padding: var(--space-xs) var(--space-xl); min-height: 32px;
+  font: 600 var(--text-sm) / 1.2 var(--font); cursor: pointer;
+  transition: background var(--dur-fast) var(--ease-standard);
+}
+.olv-ah-run:hover { background: color-mix(in srgb, var(--accent) 88%, white); }
+.olv-ah-run:focus-visible { outline: var(--focus-ring); outline-offset: var(--focus-ring-offset); }
+
+/* Three figures sit in one row at every width. */
+.olv-lab-stats { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+@container (min-width: 300px) { .olv-lab-stats { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+
+/* Desktop: a lab page widens the rail so its map can lead. A width the user
+   dragged (an inline value on the root) still wins. */
+@media (min-width: 1100px) {
+  :root:has(#olv-ws-mode-analyse.is-active > .olv-analyse-page:is([data-page="flow-pulse"], [data-page="terrain-access"]):not(.olv-ws-off):not(.olv-hidden)) {
+    --olv-rail-width: clamp(312px, 28vw, 440px);
+  }
+}
+
+/* Touch: every lab control meets the 44 px floor. */
+@media (pointer: coarse) {
+  .olv-lab-chip-summary, .olv-lab-details-summary, .olv-ah-run, .olv-ah-open, .olv-at-link, .olv-at-link.is-primary,
+  .olv-flow-cond-btn, .olv-flow-mode-btn, .olv-flow-overlay-toggle, .olv-flow-export,
+  .olv-ta-segmented-btn, .olv-ta-run, .olv-ta-export, .olv-ta-retry, .olv-ta-overlay-toggle, .olv-ta-form-submit, .olv-ta-example {
+    min-height: 44px;
+  }
+  .olv-flow-cond-btn, .olv-flow-mode-btn, .olv-ta-segmented-btn, .olv-ta-example { min-width: 44px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .olv-lab-chip-summary::after, .olv-lab-details-summary::before { transition: none; }
+}

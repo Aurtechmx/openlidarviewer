@@ -18,7 +18,7 @@
 
 // Round constants: first 32 bits of the fractional parts of the cube roots of
 // the first 64 primes (FIPS 180-4 §4.2.2).
-const K = new Uint32Array([
+const K = new Int32Array([
   0x428a2f98, 0x71374491, 0xb5c0fbcf, 0xe9b5dba5, 0x3956c25b, 0x59f111f1, 0x923f82a4, 0xab1c5ed5,
   0xd807aa98, 0x12835b01, 0x243185be, 0x550c7dc3, 0x72be5d74, 0x80deb1fe, 0x9bdc06a7, 0xc19bf174,
   0xe49b69c1, 0xefbe4786, 0x0fc19dc6, 0x240ca1cc, 0x2de92c6f, 0x4a7484aa, 0x5cb0a9dc, 0x76f988da,
@@ -29,7 +29,6 @@ const K = new Uint32Array([
   0x748f82ee, 0x78a5636f, 0x84c87814, 0x8cc70208, 0x90befffa, 0xa4506ceb, 0xbef9a3f7, 0xc67178f2,
 ]);
 
-const rotr = (x: number, n: number): number => (x >>> n) | (x << (32 - n));
 
 /** A streaming SHA-256 hasher. Feed bytes with {@link update}, finish with
  *  {@link digestBytes} / {@link digestHex}. One-shot after finishing. */
@@ -51,33 +50,41 @@ export class IncrementalSha256 {
   private totalBytes = 0;
   private finished = false;
   /** Reused 64-word message schedule, so update() allocates nothing per block. */
-  private readonly w = new Uint32Array(64);
+  private readonly w = new Int32Array(64);
 
-  /** Compress one full 64-byte block starting at `off` in `data`. */
+  /**
+   * Compress one full 64-byte block starting at `off` in `data`.
+   *
+   * Arithmetic stays in signed 32-bit integers (`| 0`) rather than unsigned
+   * (`>>> 0`): an unsigned word above 2^31 is not a small integer to the
+   * engine and is boxed as a double, which made this loop several times
+   * slower. The bits are the same either way; the state is read back unsigned.
+   */
   private compress(data: Uint8Array, off: number): void {
     const w = this.w;
     for (let i = 0; i < 16; i++) {
-      const j = off + i * 4;
-      w[i] = ((data[j] << 24) | (data[j + 1] << 16) | (data[j + 2] << 8) | data[j + 3]) >>> 0;
+      const j = off + (i << 2);
+      w[i] = (data[j] << 24) | (data[j + 1] << 16) | (data[j + 2] << 8) | data[j + 3];
     }
     for (let i = 16; i < 64; i++) {
-      const s0 = rotr(w[i - 15], 7) ^ rotr(w[i - 15], 18) ^ (w[i - 15] >>> 3);
-      const s1 = rotr(w[i - 2], 17) ^ rotr(w[i - 2], 19) ^ (w[i - 2] >>> 10);
-      w[i] = (w[i - 16] + s0 + w[i - 7] + s1) >>> 0;
+      const x = w[i - 15], y = w[i - 2];
+      const s0 = ((x >>> 7) | (x << 25)) ^ ((x >>> 18) | (x << 14)) ^ (x >>> 3);
+      const s1 = ((y >>> 17) | (y << 15)) ^ ((y >>> 19) | (y << 13)) ^ (y >>> 10);
+      w[i] = (w[i - 16] + s0 + w[i - 7] + s1) | 0;
     }
-    let a = this.h0, b = this.h1, c = this.h2, d = this.h3;
-    let e = this.h4, f = this.h5, g = this.h6, h = this.h7;
+    let a = this.h0 | 0, b = this.h1 | 0, c = this.h2 | 0, d = this.h3 | 0;
+    let e = this.h4 | 0, f = this.h5 | 0, g = this.h6 | 0, h = this.h7 | 0;
     for (let i = 0; i < 64; i++) {
-      const S1 = rotr(e, 6) ^ rotr(e, 11) ^ rotr(e, 25);
+      const S1 = ((e >>> 6) | (e << 26)) ^ ((e >>> 11) | (e << 21)) ^ ((e >>> 25) | (e << 7));
       const ch = (e & f) ^ (~e & g);
-      const t1 = (h + S1 + ch + K[i] + w[i]) >>> 0;
-      const S0 = rotr(a, 2) ^ rotr(a, 13) ^ rotr(a, 22);
+      const t1 = (h + S1 + ch + K[i] + w[i]) | 0;
+      const S0 = ((a >>> 2) | (a << 30)) ^ ((a >>> 13) | (a << 19)) ^ ((a >>> 22) | (a << 10));
       const maj = (a & b) ^ (a & c) ^ (b & c);
-      const t2 = (S0 + maj) >>> 0;
+      const t2 = (S0 + maj) | 0;
       h = g; g = f; f = e;
-      e = (d + t1) >>> 0;
+      e = (d + t1) | 0;
       d = c; c = b; b = a;
-      a = (t1 + t2) >>> 0;
+      a = (t1 + t2) | 0;
     }
     this.h0 = (this.h0 + a) >>> 0;
     this.h1 = (this.h1 + b) >>> 0;

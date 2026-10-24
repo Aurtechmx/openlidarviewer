@@ -34,3 +34,37 @@ export function openLabSurface(lab: LabId, title: string, body: HTMLElement, onC
   m.element?.classList.add('olv-surface-dialog'); // the location bar gives it a named Back
   return m;
 }
+
+/**
+ * What the Analyse home says about a lab (its badge, tone and reason), so the
+ * lab's own status chip can carry it. The workspace publishes it on every
+ * refresh; a lab opened in a dialog simply never hears one.
+ */
+export interface LabPageStatus {
+  /** `ready`, `review`, `blocked` or `needs`, as the home row's tone. */
+  readonly tone: string;
+  readonly badge: string;
+  readonly reason: string;
+}
+
+const statuses = new Map<LabId, LabPageStatus>();
+const listeners = new Set<() => void>();
+
+/** Publish (or clear) a lab's page status; listeners hear only a change. */
+export function setLabPageStatus(lab: LabId, s: LabPageStatus | null): void {
+  const prev = statuses.get(lab);
+  if (s ? prev?.tone === s.tone && prev.badge === s.badge && prev.reason === s.reason : !prev) return;
+  if (s) statuses.set(lab, s);
+  else statuses.delete(lab);
+  for (const fn of [...listeners]) fn();
+}
+
+export function labPageStatus(lab: LabId): LabPageStatus | null {
+  return statuses.get(lab) ?? null;
+}
+
+/** Hear page-status changes; returns the unsubscribe. */
+export function onLabPageStatus(fn: () => void): () => void {
+  listeners.add(fn);
+  return () => { listeners.delete(fn); };
+}

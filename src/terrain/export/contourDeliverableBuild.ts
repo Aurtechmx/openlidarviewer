@@ -41,6 +41,7 @@ import { validationDeliverableJson, contourStudioDeliverableJson } from './conto
 import { verticalUnitLabel, horizontalUnitLabel } from '../../units/units';
 import { writeGeoTiff, writeGeoTiffDroppingVerticalConflict, verticalUnitGeoKeyCode } from './demGeoTiff';
 import { parseEpsg } from './demPackage';
+import { outsideCoverageMask } from '../ground/coverageFootprint';
 import {
   buildContourPackageManifest,
   type PackageRole,
@@ -294,14 +295,20 @@ function gatherDeliverable(
     );
 
     // Coverage percentages for the README, tallied from the SAME array the
-    // raster serializes, so the two never disagree.
+    // raster serializes, so the two never disagree. Shares are of the surveyed
+    // area: no-data reaching the grid border lies outside the survey and is
+    // not unsupported surface.
+    const outside = outsideCoverageMask(cov, dtm.cols, dtm.rows);
     let measured = 0;
     let interpolated = 0;
+    let surveyed = 0;
     for (let i = 0; i < cov.length; i++) {
+      if (outside[i] === 1) continue;
+      surveyed++;
       if (cov[i] === 2) measured++;
       else if (cov[i] === 1) interpolated++;
     }
-    const total = cov.length > 0 ? cov.length : 1;
+    const total = surveyed > 0 ? surveyed : 1;
     const measuredPct = (measured / total) * 100;
     const interpolatedPct = (interpolated / total) * 100;
     supportPct = {
@@ -424,9 +431,11 @@ export async function buildContourDeliverableFromResultAsync(
   const g = gatherDeliverable(result, opts);
 
   // Honest support split from the DTM cell tally (measured / interpolated /
-  // everything-else-unsupported), as percentages of all cells.
+  // everything-else-unsupported), as percentages of the surveyed area: no-data
+  // outside the survey is not unsupported surface.
   const tally = result.cellStatusTally;
-  const total = tally.total > 0 ? tally.total : 1;
+  const surveyed = tally.total - (tally.outsideCoverage ?? 0);
+  const total = surveyed > 0 ? surveyed : 1;
   const measuredPct = (tally.measured / total) * 100;
   const interpolatedPct = (tally.interpolated / total) * 100;
   const unsupportedPct = Math.max(0, 100 - measuredPct - interpolatedPct);

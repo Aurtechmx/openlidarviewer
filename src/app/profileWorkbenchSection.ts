@@ -58,6 +58,7 @@ import {
   GROUND_BASIS_UNVERIFIED_NOTE,
 } from '../render/measure/profileProvenance';
 import {
+  axisLabelWidth,
   axisSpanCaption,
   CHAINAGE_TICK_SPACING_PX,
   fitAxisLabels,
@@ -212,6 +213,12 @@ function canDrawText(ctx: ProfileRenderingContext): ctx is AxisTextContext {
   return typeof (ctx as Partial<AxisTextContext>).fillText === 'function';
 }
 
+/** A label's width: measured where the context can, estimated from its length where not. */
+function textWidth(ctx: ProfileRenderingContext, label: string): number {
+  const measure = (ctx as { measureText?: (t: string) => { width: number } }).measureText;
+  return measure ? measure.call(ctx, label).width : axisLabelWidth(label, AXIS_FONT_PX);
+}
+
 /**
  * Draw both axes over a plot that has already been rendered.
  *
@@ -265,8 +272,12 @@ export function drawWorkbenchAxes(
   text.fillStyle = AXIS_TEXT_COLOUR;
   text.textAlign = 'center';
   text.textBaseline = 'bottom';
+  // The axis title sits at the right end of the same baseline; a label that
+  // would run into it is left out rather than printed through it.
+  const titleLeft = width - AXIS_LABEL_INSET_PX - textWidth(text, axes.x.title) - AXIS_FONT_PX;
   for (let i = 0; i < axes.x.labels.length; i++) {
     if (!keepX[i]) continue;
+    if (axes.x.pixels[i]! + textWidth(text, axes.x.labels[i]!) / 2 > titleLeft) continue;
     text.fillText(axes.x.labels[i]!, axes.x.pixels[i]!, height - AXIS_LABEL_INSET_PX);
   }
 
@@ -772,6 +783,28 @@ export function composeWorkbenchSection(options: ComposeSectionOptions): Workben
   return prepareWorkbenchSection(options).view;
 }
 
+/**
+ * The section with its heights in the source's vertical coordinate: each
+ * project-frame height plus the scene's datum along up, the shift the
+ * Measurements chart and the profile sheet apply. Unchanged for a zero or
+ * unknown datum. Heights are float64, so the shift loses nothing.
+ */
+export function sectionOnDatum(section: ProfileSectionResult, datum: number | null): ProfileSectionResult {
+  if (datum === null || datum === 0 || !Number.isFinite(datum)) return section;
+  const h = section.points.height;
+  const out = new Float64Array(h.length);
+  for (let i = 0; i < h.length; i++) out[i] = h[i]! + datum;
+  return { ...section, points: { ...section.points, height: out } };
+}
+
+/**
+ * The vertical reference the plotted heights carry. With no shared datum they
+ * stay in the project frame and name no surface.
+ */
+function sectionReference(scene: WorkbenchSectionScene): VerticalReference {
+  return scene.heightDatum?.() === null ? 'unknown' : pointVerticalReference(scene.crs?.());
+}
+
 /** What the presenter needs to read a section out of the live scene. */
 export interface WorkbenchSectionScene {
   /** The measurement's render-space endpoints and corridor, or null. */
@@ -826,6 +859,19 @@ export interface WorkbenchSectionScene {
   focusPoint?(position: readonly [number, number, number]): void;
   /** Resolved CRS of the section frame, for the height wording. */
   crs?(): ResolvedCrs | undefined;
+  /**
+   * The scene's datum along up: what a project-frame height adds to read in
+   * the source's own vertical coordinate, as the Measurements chart and the
+   * profile sheet read. Null when the loaded clouds share no render origin.
+   * Absent leaves the heights in the project frame.
+   */
+  heightDatum?(): number | null;
+  /**
+   * The scene's render origin, added to a located return for the point card's
+   * coordinate rows so they read in the source's frame as the height does.
+   * Null when the clouds share none; absent leaves them in render space.
+   */
+  sceneOrigin?(): readonly [number, number, number] | null;
   /** Subscribe to pointer input on the plot. Absent ⇒ DOM listeners. */
   observePointer?(canvas: HTMLCanvasElement, handlers: WorkbenchPointerHandlers): () => void;
   /** One frame for the pointer flush. Absent ⇒ a frame callback. */
@@ -960,7 +1006,9 @@ export function presentWorkbenchSection(
       unitScale: metres ?? 1,
       // The SAME reference the detail card's height row is worded from, so the
       // axis title and the row beside it cannot name two different surfaces.
-      reference: pointVerticalReference(scene.crs?.()),
+      // With no shared datum the heights stay in the project frame, so they
+      // name no surface at all.
+      reference: sectionReference(scene),
     });
     handle.setScope(plot.view.scope);
     handle.setGroundBasis(plot.view.groundBasisNote);
@@ -1039,7 +1087,7 @@ export function presentWorkbenchSection(
             handle.setStatus('No layer is currently eligible for a section.');
             return;
           }
-          section = step.value;
+          section = sectionOnDatum(step.value, scene.heightDatum ? scene.heightDatum() : 0);
           select = selectProfileSectionLodChunks(section.points, {
             cap: MAX_DRAWN_RETURNS,
             chunkSize: SECTION_CHUNK_SIZE,
@@ -1187,7 +1235,7 @@ export function attachSectionPointLink(
   if (!locateReturn) return null;
 
   const points = section.points;
-  const reference = pointVerticalReference(scene.crs?.());
+  const reference = sectionReference(scene);
   const unitToMetres = options.unitToMetres ?? undefined;
   // The card reads its world coordinates through the SAME locator the marker
   // uses, so an evicted node blanks the coordinate rows instead of showing
@@ -1200,7 +1248,21 @@ export function attachSectionPointLink(
       { kind: identity.kind, id: identity.sourceId, pointIndex: identity.pointIndex },
       out,
     );
-  const detailSources = profileDetailSources(section.sources, locator);
+  // The card's rows add the scene origin, the shift the plotted heights took;
+  // the marker keeps the render-space position it is drawn at.
+  const origin = scene.sceneOrigin?.() ?? null;
+  const cardLocator: typeof locator = origin
+    ? (identity, out) => {
+        const state = locator(identity, out);
+        if (state === 'linked') {
+          out[0] = out[0]! + origin[0];
+          out[1] = out[1]! + origin[1];
+          out[2] = out[2]! + origin[2];
+        }
+        return state;
+      }
+    : locator;
+  const detailSources = profileDetailSources(section.sources, cardLocator);
   const markerSize = profileMarkerSize(section.band);
 
   let index: ProfileHitTestIndex | null = null;

@@ -83,15 +83,18 @@ describe('FlowOverlay — accumulation layer', () => {
     overlay.dispose();
   });
 
-  it('counts channel cells, not quads, and draws the network over the catchment fill', () => {
+  it('counts channel cells, not triangles, uploads the shared-vertex index, and draws the network over the catchment fill', () => {
     const host = fakeHost();
     const overlay = new FlowOverlay(host);
     const result = slope();
     const buffers = buildFlowAccumulationBuffers(result.grid, result.routed, result.accumulation, frame);
     overlay.setAccumulation(buffers);
-    // 6 quads (casing + line, 2 joints + 1 ribbon each) for 2 channel cells.
-    expect(buffers.verts.length / 18).toBe(6);
+    // One line over 2 channel cells: 20 triangles over 22 shared vertices.
+    expect(buffers.index!.length / 3).toBe(20);
+    expect(buffers.verts.length / 3).toBe(22);
     expect(overlay.accumulationCellCount).toBe(2);
+    const geometry = (host.objects[0] as THREE.Mesh).geometry;
+    expect(geometry.getIndex()?.count).toBe(buffers.index!.length);
     const trace = catchmentClick(result, { col: 1, row: 0 }, false);
     if (!trace.ok) throw new Error('fixture catchment must resolve');
     overlay.setCatchment(buildFlowCatchmentBuffers(result.grid, trace.mask, frame));

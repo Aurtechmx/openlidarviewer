@@ -4,7 +4,8 @@
  * card, the named top reason on the "no eligible cell" refusal, the
  * confidence hint and policy tooltips, square grid cells, one set of bucket
  * names, hint wiring on the inputs, the inspect mode's name, export gating
- * and the route GeoJSON frame label.
+ * and the route GeoJSON frame label; and the example profiles, applied only
+ * on a click, labelled as examples and recorded as such.
  */
 import { beforeAll, describe, expect, it } from 'vitest';
 import { installRecordingDom, type RecordingEl } from './helpers/recordingDom';
@@ -28,6 +29,7 @@ const { extractEntry } = await import('./helpers/zipReader');
 const { buildDemPackage } = await import('../src/terrain/export/demPackage');
 const { demResultAround, DEM_PKG_OPTS } = await import('./helpers/demPackageFixture');
 const { placedWorldOrigin } = await import('../src/terrain/canonicalFrame');
+const profileForm = await import('../src/ui/fieldSimulation/terrainAccessProfileForm');
 
 const rec = (n: unknown): RecordingEl => n as RecordingEl;
 
@@ -142,6 +144,108 @@ describe('profile form', () => {
       'Allow cells at the grid edge, beside a void or with no above-ground return, and report their share.',
       'Treat cells at the grid edge, beside a void or with no above-ground return as impassable.',
     ]);
+  });
+});
+
+describe('example profiles in the form', () => {
+  const fieldInputs = (form: RecordingEl): RecordingEl[] => {
+    const out: RecordingEl[] = [];
+    const walk = (n: RecordingEl): void => {
+      if (n.className === 'olv-ta-field-input') out.push(n);
+      n.children.forEach(walk);
+    };
+    walk(form);
+    return out;
+  };
+  const valueOf = (n: RecordingEl): string => String((n as unknown as { value?: string }).value ?? '');
+
+  it('offers one labelled button per example above the fields, with the note under them', () => {
+    const built = lab.buildProfileForm(() => {}, null);
+    const form = rec(built.element);
+    const row = form.find('olv-ta-examples-row')!;
+    expect(row.getAttribute('role')).toBe('group');
+    expect(row.getAttribute('aria-label')).toBe('Example profiles');
+    const buttons = row.children;
+    expect(buttons.map((b) => b.textContent)).toEqual(['Walker', 'ATV', '4x4 vehicle']);
+    for (const b of buttons) {
+      // A real <button> (its type="button" is checked in the browser spec).
+      expect(b.tagName).toBe('button');
+      expect(b.className).toBe('olv-ta-example');
+      expect(b.dataset.tip).toMatch(/^Fill the fields with the .+ example\. Check each value before you apply the profile\.$/);
+    }
+    expect(form.find('olv-ta-examples-note')!.textContent).toBe(profileForm.TERRAIN_ACCESS_EXAMPLES_NOTE);
+    // The buttons and the note come before the first field.
+    const order = form.children.map((c) => c.className);
+    expect(order.indexOf('olv-ta-examples')).toBeLessThan(order.indexOf('olv-ta-field'));
+  });
+
+  it('opens blank: nothing is filled in until an example is picked', () => {
+    const built = lab.buildProfileForm(() => {}, null);
+    expect(built.values()).toEqual(profileForm.EMPTY_TERRAIN_ACCESS_PROFILE_FORM);
+    for (const input of fieldInputs(rec(built.element))) expect(valueOf(input)).toBe('');
+  });
+
+  it('a pick fills every required field visibly, keeps them editable, announces it and applies nothing', () => {
+    const announced: string[] = [];
+    let submitted = 0;
+    const built = lab.buildProfileForm(() => { submitted += 1; }, null, false, (m) => announced.push(m));
+    built.applyExample('walker');
+    const expected = profileForm.terrainAccessExampleForm('walker');
+    expect(built.values()).toEqual(expected);
+    const inputs = fieldInputs(rec(built.element));
+    expect(inputs.slice(0, 6).map(valueOf)).toEqual([
+      'Walker (example)', '20', '15', '0.3', '0.6', '40',
+    ]);
+    for (const input of inputs.slice(0, 6)) expect(input.disabled).toBe(false);
+    // The optional limits stay off.
+    for (const input of inputs.slice(6)) expect(input.disabled).toBe(true);
+    expect(announced).toEqual(['Walker example filled in. Check each value, then apply the profile.']);
+    expect(submitted).toBe(0);
+  });
+});
+
+describe('example profiles in the run record', () => {
+  function exampleRun(over: Partial<import('../src/ui/fieldSimulation/terrainAccessProfileForm').TerrainAccessProfileFormValues> = {}) {
+    const parsed = profileForm.parseTerrainAccessProfileForm({ ...profileForm.terrainAccessExampleForm('walker'), ...over });
+    if (!parsed.ok) throw new Error('example did not parse');
+    const r = runTerrainAccess(dtmOf(4, 3, 60), RESOLVED, parsed.profile, 0, 11, TERRAIN_ACCESS_DEFAULTS, identity);
+    if (!r.ok) throw new Error(r.reason);
+    return r;
+  }
+
+  it('records the example the profile started from and whether a value was edited', () => {
+    const run = exampleRun();
+    const profile = run.record.parameters.profile as TerrainAccessProfile;
+    expect(profile.name).toBe('Walker (example)');
+    expect(profile.origin).toEqual({ example: 'walker', edited: false });
+    expect((exampleRun({ maxStepHeightM: '0.25' }).record.parameters.profile as TerrainAccessProfile).origin)
+      .toEqual({ example: 'walker', edited: true });
+  });
+
+  it('a profile typed by hand carries no origin, so its record and digest are as before', () => {
+    const typed = weakSupportRun();
+    expect('origin' in (typed.record.parameters.profile as object)).toBe(false);
+    const sameValues = runTerrainAccess(dtmOf(4, 3, 60), RESOLVED, { ...profileOf(), origin: undefined }, 0, 11, TERRAIN_ACCESS_DEFAULTS, identity);
+    if (!sameValues.ok) throw new Error(sameValues.reason);
+    expect(sameValues.record.digest).toBe(typed.record.digest);
+  });
+
+  it('the run card and the export README say which example was used', () => {
+    const run = exampleRun();
+    const card = rec(lab.renderTerrainAccessRunCard(run)).textContent;
+    expect(card).toContain('Profile Walker (example)');
+    expect(card).toContain('Started from Walker example, no value changed');
+    const readme = new TextDecoder().decode(extractEntry(buildTerrainAccessPackage(run, { basename: 'ta' }), 'ta-README.txt')!);
+    expect(readme).toContain('  Name           Walker (example)');
+    expect(readme).toContain('  Started from   example:walker, no value edited');
+    const edited = new TextDecoder().decode(extractEntry(
+      buildTerrainAccessPackage(exampleRun({ vehicleWidthM: '0.8' }), { basename: 'ta' }), 'ta-README.txt')!);
+    expect(edited).toContain('  Started from   example:walker, values edited before the run');
+    const typedCard = rec(lab.renderTerrainAccessRunCard(weakSupportRun())).textContent;
+    expect(typedCard).toContain('Profile test');
+    expect(typedCard).not.toContain('Started from');
+    const typedReadme = new TextDecoder().decode(extractEntry(buildTerrainAccessPackage(weakSupportRun(), { basename: 'ta' }), 'ta-README.txt')!);
+    expect(typedReadme).toContain('  Started from   a blank form, values entered by hand');
   });
 });
 

@@ -22,7 +22,6 @@
  */
 
 import { el, formatCount } from './dom';
-import { sampleActionLinks } from '../app/fullFileActions';
 import {
   summariseDataset,
   signalTier,
@@ -398,8 +397,8 @@ export class DatasetIntelligenceCard {
     this._coverageValue.dataset.tier = signalTier('coverage', intel.coverage.bucket);
 
     if (intel.coverage.streamingWarning) {
+      // The sample's actions sit in the status bar and Layer Health; repeating them here put a third copy in view.
       this._coverageWarning.textContent = intel.coverage.streamingWarning;
-      for (const link of intel.coverage.bucket === 'display-sample' ? sampleActionLinks() : []) this._coverageWarning.append(' ', link);
       this._coverageWarning.classList.remove('olv-hidden');
     } else {
       this._coverageWarning.textContent = '';

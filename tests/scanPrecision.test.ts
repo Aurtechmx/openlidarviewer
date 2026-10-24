@@ -34,6 +34,13 @@ describe('the permit measures the frame the accumulator sees', () => {
     expect(placed!.reach).toBeGreaterThan(own!.reach * 10);
   });
 
+  it('reads an unknown vertical token with no factor as unreadable, from a bare CRS or a context', () => {
+    const metre = { linearUnit: 'metre', linearUnitToMetres: 1 };
+    expect(scanPrecision({ cloud: tile as never, crs: { ...metre, verticalLinearUnit: 'unknown' } })!.metresCover).toBe('horizontal');
+    expect(scanPrecision({ cloud: tile as never, crs: { ...metre, verticalScaleState: 'invalid' } })!.metresCover).toBe('horizontal');
+    expect(scanPrecision({ cloud: tile as never, crs: metre })!.metresCover).toBeUndefined();
+  });
+
   it('is unchanged when the layer is not placed', () => {
     const own = scanPrecision({ cloud: tile as never, crs });
     for (const off of [null, undefined, [0, 0, 0] as const]) {

@@ -25,7 +25,11 @@ async function frameFor(getScanFacts?: () => ScanFacts | null): Promise<LaunchFr
   return h.frames[0];
 }
 
-describe('terrainAnalysisRunner hands the facts to Contour Studio', () => {
+// The main-thread fallback is compute-bound, and v8 coverage instrumentation
+// makes that compute far slower than the 60 s the coverage run allows.
+const INSTRUMENTED_COMPUTE_TIMEOUT_MS = 120_000;
+
+describe('terrainAnalysisRunner hands the facts to Contour Studio', { timeout: INSTRUMENTED_COMPUTE_TIMEOUT_MS }, () => {
   let warnSpy: ReturnType<typeof vi.spyOn>;
   beforeEach(() => {
     clearTerrainCoreCache();

@@ -488,8 +488,12 @@ export function storagePreflightRefusal(
 }
 
 /** "210.9 million points", "850,000 points". */
+function countPhrase(count: number): string {
+  return count >= 1_000_000 ? `${(count / 1_000_000).toFixed(1)} million` : groupDigits(count);
+}
+
 function pointsPhrase(count: number): string {
-  return count >= 1_000_000 ? `${(count / 1_000_000).toFixed(1)} million points` : `${groupDigits(count)} points`;
+  return `${countPhrase(count)} points`;
 }
 
 const COPC_REMEDY =
@@ -541,10 +545,11 @@ export function storageSampleNotice(
   declaredPoints: number | null,
 ): string {
   const whole = declaredPoints != null && shownPoints >= declaredPoints;
-  const of = declaredPoints != null ? ` of ${pointsPhrase(declaredPoints)}` : '';
   const head = whole
     ? `Opened all ${pointsPhrase(shownPoints)} of ${name} without its streaming index.`
-    : `Opened a sample of ${pointsPhrase(shownPoints)}${of} from ${name}, spread evenly across the file.`;
+    : declaredPoints != null
+      ? `Opened an even sample of ${countPhrase(shownPoints)} of the ${pointsPhrase(declaredPoints)} in ${name}.`
+      : `Opened an even sample of ${pointsPhrase(shownPoints)} from ${name}.`;
   const required = result ? formatByteSize(result.requiredBytes) : null;
   let why: string;
   switch (result?.outcome) {

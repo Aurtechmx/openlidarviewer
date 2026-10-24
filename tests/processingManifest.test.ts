@@ -30,7 +30,7 @@ import { canonicalize, sha256 } from '../src/render/measure/auditLog';
 function sampleOps(): ProcessingOpInput[] {
   return [
     { method: 'olv.ground.smrf@1', params: {}, note: 'params not captured in this slice' },
-    { method: 'olv.dtm.idw-fill@1', params: { coverageMode: 'full' } },
+    { method: 'olv.dtm.idw-fill@2', params: { coverageMode: 'full' } },
     { method: 'olv.terrain.vrm@1', params: { windowCells: 3, windowGroundM: 3.2 } },
   ];
 }
@@ -103,12 +103,12 @@ describe('buildProcessingManifest — shape and chain construction', () => {
     const withUndef = buildProcessingManifest({
       build: 'b',
       source: null,
-      ops: [{ method: 'olv.dtm.idw-fill@1', params: { coverageMode: 'full' }, note: undefined }],
+      ops: [{ method: 'olv.dtm.idw-fill@2', params: { coverageMode: 'full' }, note: undefined }],
     });
     const without = buildProcessingManifest({
       build: 'b',
       source: null,
-      ops: [{ method: 'olv.dtm.idw-fill@1', params: { coverageMode: 'full' } }],
+      ops: [{ method: 'olv.dtm.idw-fill@2', params: { coverageMode: 'full' } }],
     });
     expect(withUndef.head).toBe(without.head);
   });

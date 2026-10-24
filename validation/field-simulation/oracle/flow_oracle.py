@@ -31,6 +31,7 @@ import argparse
 import json
 import math
 import sys
+from collections import deque
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
@@ -43,20 +44,50 @@ EXPECTED = HERE.parent / "expected"
 # than imported so that a change on either side shows up as a disagreement.
 NEIGHBOURS = [
     (1, 0),    # E
-    (1, 1),    # SE
-    (0, 1),    # S
-    (-1, 1),   # SW
+    (1, 1),    # NE
+    (0, 1),    # N
+    (-1, 1),   # NW
     (-1, 0),   # W
-    (-1, -1),  # NW
-    (0, -1),   # N
-    (1, -1),   # NE
+    (-1, -1),  # SW
+    (0, -1),   # S
+    (1, -1),   # SE
 ]
 
 ROUTED, SINK, FLAT, NODATA, OUTLET = 0, 1, 2, 3, 4
 
 
+def outside_surface(valid, cols, rows):
+    """NoData cells joined to the grid border through NoData, 4-connected.
+
+    Such a cell lies outside the mapped surface, so a cell beside it drains off
+    the surface the way a cell on the grid border does. NoData the surface
+    encloses is a hole in it and stays a wall.
+    """
+    outside = [False] * (cols * rows)
+    queue = deque()
+    for row in range(rows):
+        for col in range(cols):
+            i = row * cols + col
+            on_border = col in (0, cols - 1) or row in (0, rows - 1)
+            if on_border and not valid[i]:
+                outside[i] = True
+                queue.append(i)
+    while queue:
+        i = queue.popleft()
+        col, row = i % cols, i // cols
+        for dx, dy in ((1, 0), (-1, 0), (0, 1), (0, -1)):
+            nc, nr = col + dx, row + dy
+            if 0 <= nc < cols and 0 <= nr < rows:
+                j = nr * cols + nc
+                if not valid[j] and not outside[j]:
+                    outside[j] = True
+                    queue.append(j)
+    return outside
+
+
 def route(z, valid, cols, rows, mx, my):
     """Return (receiver, direction, status) for a grid, as flat lists."""
+    outside = outside_surface(valid, cols, rows)
     receiver = [-1] * (cols * rows)
     direction = [-1] * (cols * rows)
     status = [0] * (cols * rows)
@@ -82,6 +113,8 @@ def route(z, valid, cols, rows, mx, my):
                     continue
                 there = nr * cols + nc
                 if not valid[there]:
+                    if outside[there]:
+                        saw_edge = True
                     continue
                 drop = z[here] - z[there]
                 if drop == 0:

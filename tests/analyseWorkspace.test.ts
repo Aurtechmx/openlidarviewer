@@ -2,8 +2,8 @@
  * analyseWorkspace.test.ts
  *
  * The Analyse home and its pages over the real router and workspace: one row
- * per analysis from Process Studio's state, a blocked lab row whose fix lands
- * on the Terrain page, lab rows that run their entry, labs registered as pages
+ * per analysis from Process Studio's state, lab rows whose one action runs
+ * their entry (terrain first when there is none), labs registered as pages
  * (Flow Pulse and Terrain Access under Terrain, Observatory on its own),
  * Contours as the one child page (Back returns to Terrain, then home), the
  * depth limit, and that the live panels are moved, never rebuilt.
@@ -82,33 +82,63 @@ describe('Analyse home', () => {
     for (const id of ['terrain', 'flow-pulse', 'terrain-access', 'observatory', 'objects']) {
       const r = t.row(id);
       expect(r).toBeDefined();
-      expect(r.find((e) => e.hasClass('olv-ah-badge'))?.ownText).toMatch(/^(Ready|Review|Blocked|Needs .+)$/);
-      expect(r.find((e) => e.hasClass('olv-ah-reason'))?.ownText.length).toBeGreaterThan(0);
+      expect(r.find((e) => e.hasClass('olv-ah-badge'))?.ownText).toMatch(/^(Ready|Review|Blocked|Needs .+|Runs terrain first)$/);
+    }
+    for (const id of ['terrain', 'observatory', 'objects']) {
+      expect(t.row(id).find((e) => e.hasClass('olv-ah-reason'))?.ownText.length).toBeGreaterThan(0);
     }
     const access = t.row('terrain-access');
     expect(access.hasClass('is-needs')).toBe(true);
-    expect(access.find((e) => e.hasClass('olv-ah-badge'))?.ownText).toBe('Needs terrain');
+    expect(access.find((e) => e.hasClass('olv-ah-badge'))?.ownText).toBe('Runs terrain first');
   });
 
-  it('a BLOCKED lab row offers Prepare terrain, which lands on the Terrain page', async () => {
+  it('a lab row with no terrain run offers one Run, which runs its entry; no Prepare terrain', async () => {
     const t = await make();
-    const remedy = t.row('terrain-access').find((e) => e.hasClass('olv-ah-remedy'))!;
-    expect(remedy.ownText).toBe('Prepare terrain');
-    remedy.fire('click');
-    await tick();
-    expect(t.showTerrain).toHaveBeenCalledTimes(1);
-    expect(t.router.route()).toEqual({ mode: 'analyse', page: 'terrain' });
-    const title = t.host.find((e) => e.hasClass('olv-ws-task-title'))!;
-    expect(title.ownText).toBe('Terrain');
-    expect(title.focused).toBe(true);
+    for (const [id, name, action] of [['flow-pulse', 'Flow Pulse', 'analyse.flowPulse'], ['terrain-access', 'Terrain Access', 'analyse.terrainAccess']]) {
+      const r = t.row(id);
+      expect(r.find((e) => e.hasClass('olv-ah-remedy'))).toBeUndefined();
+      const run = r.find((e) => e.hasClass('olv-ah-run'))!;
+      expect(run.ownText).toBe(`Run ${name}`);
+      run.fire('click');
+      expect(t.runAction).toHaveBeenLastCalledWith(action);
+    }
+    expect(t.showTerrain).not.toHaveBeenCalled();
+    expect(t.router.route().page).toBeNull();
+  });
+
+  it('a lab row a Preview run caps reads Review with the run verdict, and still runs the lab', async () => {
+    const t = await make(['dtm', 'contours'], { tier: 'Preview', verdict: 'Still streaming: preview only.' });
+    const r = t.row('flow-pulse');
+    expect(r.find((e) => e.hasClass('olv-ah-badge'))?.ownText).toBe('Review');
+    expect(r.find((e) => e.hasClass('olv-ah-reason'))?.ownText).toBe('Terrain run: Still streaming: preview only.');
+    expect(r.find((e) => e.hasClass('olv-ah-remedy'))).toBeUndefined();
+    r.find((e) => e.hasClass('olv-ah-run'))!.fire('click');
+    expect(t.runAction).toHaveBeenLastCalledWith('analyse.flowPulse');
   });
 
   it('a lab row runs its palette entry; the lab then places itself on its page', async () => {
     const t = await make(['dtm', 'contours']);
-    t.row('flow-pulse').find((e) => e.hasClass('olv-ah-open'))!.fire('click');
+    // One action per card: a lab with a Run button has a plain heading, not a second control.
+    expect(t.row('flow-pulse').find((e) => e.hasClass('olv-ah-open'))).toBeUndefined();
+    expect(t.row('flow-pulse').find((e) => e.hasClass('olv-ah-head'))).toBeDefined();
+    t.row('flow-pulse').find((e) => e.hasClass('olv-ah-run'))!.fire('click');
     t.row('observatory').find((e) => e.hasClass('olv-ah-open'))!.fire('click');
     expect(t.runAction.mock.calls.map((c) => c[0])).toEqual(['analyse.flowPulse', 'analyse.observatory']);
     expect(t.router.route().page).toBeNull();
+  });
+
+  it('a lab blocked by something terrain cannot clear offers no control, not even its heading', async () => {
+    const t = await make();
+    // A scan with no points: terrain cannot build a surface for the labs.
+    t.setState({ facts: { ...facts, pointCount: 0 } as ScanFacts, view: undefined, produced: new Set<ProductId>() });
+    for (const id of ['flow-pulse', 'terrain-access']) {
+      const r = t.row(id);
+      expect(r.hasClass('is-blocked'), id).toBe(true);
+      expect(r.find((e) => e.hasClass('olv-ah-run'))).toBeUndefined();
+      expect(r.find((e) => e.hasClass('olv-ah-open'))).toBeUndefined();
+      expect(r.find((e) => e.hasClass('olv-ah-head'))).toBeDefined();
+    }
+    expect(t.runAction).not.toHaveBeenCalled();
   });
 
   it('labs are registered pages: Flow Pulse and Terrain Access under Terrain, Observatory top level', async () => {
@@ -138,6 +168,14 @@ describe('Analyse home', () => {
     await t.aw.open('flow-pulse');
     expect(t.runAction).not.toHaveBeenCalled();
     expect(t.router.route().page).toBe('flow-pulse');
+    // With its result on the page, the row's action opens it as it is.
+    const open = t.row('flow-pulse').find((e) => e.hasClass('olv-ah-run'))!;
+    expect(open.ownText).toBe('Open Flow Pulse');
+    t.router.back();
+    open.fire('click');
+    await tick();
+    expect(t.runAction).not.toHaveBeenCalled();
+    expect(t.router.route().page).toBe('flow-pulse');
     handle.close();
     handle.close();
     expect(onClose).toHaveBeenCalledTimes(1);
@@ -145,6 +183,25 @@ describe('Analyse home', () => {
     // An empty lab page is opened through its entry, which loads the lab.
     await t.aw.open('observatory');
     expect(t.runAction).toHaveBeenCalledWith('analyse.observatory');
+  });
+
+  it('a lab that finishes after its progress page was left lands without pulling the reader back', async () => {
+    const { openLabSurface } = await import('../src/ui/labSurface');
+    const t = await make(['dtm']);
+    const preparing = () => { const b = new FakeEl('div'); b.append(new FakeEl('div')); b.children[0]!.className = 'olv-lab-preparing'; return b as unknown as HTMLElement; };
+    openLabSurface('flow-pulse', 'Flow Pulse', preparing());
+    expect(t.router.route().page).toBe('flow-pulse');
+    // Stayed on the page: the result replaces the progress in place.
+    openLabSurface('flow-pulse', 'Flow Pulse', new FakeEl('div') as unknown as HTMLElement);
+    expect(t.router.route().page).toBe('flow-pulse');
+    // Left for Terrain while it ran: the result lands on its page, and the reader stays.
+    openLabSurface('flow-pulse', 'Flow Pulse', preparing());
+    t.router.back();
+    expect(t.router.route().page).toBe('terrain');
+    const result = new FakeEl('div');
+    openLabSurface('flow-pulse', 'Flow Pulse', result as unknown as HTMLElement);
+    expect(t.router.route().page).toBe('terrain');
+    expect(t.host.find((e) => e.dataset.page === 'flow-pulse')!.find((e) => e === result)).toBe(result);
   });
 
   it('reopening a lab replaces its body and closes the previous one', async () => {
@@ -223,6 +280,8 @@ describe('Analyse home shortcuts', () => {
     expect(r.find((e) => e.hasClass('olv-ah-reason'))?.ownText).toBe('Not usable for terrain products as-is.');
     const header = t.host.find((e) => e.dataset.page === 'terrain')!.find((e) => e.hasClass('olv-at-verdict'))!;
     expect(header.find((e) => e.hasClass('olv-ah-badge'))?.ownText).toBe('Blocked');
+    // A verdict stricter than the run's own line stays in view after the run.
+    expect(header.hidden).not.toBe(true);
   });
 });
 
@@ -248,17 +307,16 @@ describe('Analyse home: lab first use', () => {
     expect(t.row('terrain').find((e) => e.hasClass('olv-ah-hint'))).toBeUndefined();
   });
 
-  it('after a terrain run a lab started, the Terrain page offers the way back', async () => {
-    const { setLabReturn, labReturn } = await import('../src/app/labReturn');
-    const t = await make();
-    setLabReturn('terrain-access');
-    const back = () => t.host.find((e) => e.hasClass('olv-at-back'));
-    t.setState({ facts, view: undefined, produced: new Set<ProductId>() });
-    expect(back()).toBeUndefined();
-    t.setState({ facts, view: undefined, produced: new Set<ProductId>(['dtm']) });
-    expect(back()?.ownText).toBe('Back to Terrain Access');
-    back()!.fire('click');
-    expect(t.runAction).toHaveBeenLastCalledWith('analyse.terrainAccess');
-    expect(labReturn()).toBeNull();
+  it('a lab page leads with the lab: its status goes to the lab chip, not a page header', async () => {
+    const { labPageStatus } = await import('../src/ui/labSurface');
+    const t = await make(['dtm', 'contours'], { tier: 'Preview', verdict: 'Still streaming: preview only.' });
+    for (const id of ['flow-pulse', 'terrain-access'] as const) {
+      const shell = t.host.find((e) => e.dataset.page === id)!;
+      expect(shell.find((e) => e.hasClass('olv-at-verdict'))!.hidden).toBe(true);
+      expect(shell.find((e) => e.hasClass('olv-why'))!.hidden).toBe(true);
+      expect(labPageStatus(id)).toEqual({ tone: 'review', badge: 'Review', reason: 'Terrain run: Still streaming: preview only.' });
+    }
+    // Other pages keep their header.
+    expect(t.host.find((e) => e.dataset.page === 'observatory')!.find((e) => e.hasClass('olv-at-verdict'))!.hidden).not.toBe(true);
   });
 });

@@ -42,18 +42,32 @@ test('a point-cloud format button disables itself for its own export and release
   // disclosure nested inside the panel body (closed by default), distinct
   // from the panel's own expand/collapse and from the converter's "Export"
   // button above it.
-  const exportDisclosure = panel.locator('summary.olv-section-summary', { hasText: /^Export$/ });
+  const exportDisclosure = panel.locator('summary.olv-section-summary', { hasText: /^Points on screen/ });
   await exportDisclosure.click();
 
   const xyz = panel.locator('.olv-export-btn', { hasText: /^XYZ$/ });
   await expect(xyz).toBeVisible();
   await expect(xyz).toBeEnabled();
 
+  // With the source already hashed in the background, a small export can
+  // finish within the task of its own click, before a poll could see the
+  // button disabled. An observer set up before the click records it instead:
+  // a record whose old value is null is the attribute being added.
+  await xyz.evaluate((button) => {
+    const w = window as unknown as { __xyzWasDisabled?: boolean };
+    w.__xyzWasDisabled = false;
+    new MutationObserver((records) => {
+      if (records.some((r) => r.oldValue === null)) w.__xyzWasDisabled = true;
+    }).observe(button, { attributes: true, attributeFilter: ['disabled'], attributeOldValue: true });
+  });
+
   const downloadPromise = page.waitForEvent('download');
   await xyz.click();
   // Guards the literal rapid-double-click: disabled for its own run rather
   // than staying clickable throughout, as it did before the fix.
-  await expect(xyz).toBeDisabled();
+  await expect
+    .poll(() => page.evaluate(() => (window as unknown as { __xyzWasDisabled?: boolean }).__xyzWasDisabled))
+    .toBe(true);
 
   // The export itself still completes normally (the guard does not break the
   // happy path) and the button releases once it settles.

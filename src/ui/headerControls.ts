@@ -7,6 +7,7 @@
  * dial. All mount left of the GitHub link, and all are no-ops in embed mode,
  * where there is no top bar to mount into.
  */
+import type { PrecisionDeps } from '../app/precisionCheck';
 import { ThemeToggle } from './ThemeToggle';
 import { QualityControl } from './qualityControl';
 import { readQualityPreference, writeQualityPreference } from './qualityPreferenceStore';
@@ -64,6 +65,8 @@ export interface QualityControlDeps {
    * boot defaults over preferences that have not been read back yet.
    */
   onUserChange: () => void;
+  /** The scene the panel's precision check reads. */
+  precision?: PrecisionDeps;
 }
 
 /**
@@ -85,6 +88,7 @@ export function mountQualityControl(
       if (userInitiated) deps.onUserChange();
     },
     onPersist: writeQualityPreference,
+    ...(deps.precision ? { precision: deps.precision } : {}),
   });
   if (host.fillQualitySlot) host.fillQualitySlot(control.element);
   else host.mountHeaderControl(control.element);

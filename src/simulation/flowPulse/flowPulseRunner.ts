@@ -136,8 +136,8 @@ export interface FlowPulseParams {
   readonly routing: FlowRoutingMethod;
   /** How a cell whose height was interpolated is treated. */
   readonly interpolated: InterpolatedPolicy;
-  /** Rise above the spill parent when conditioning, in the vertical unit. */
-  readonly fillEpsilon: number;
+  /** Rise above the spill parent when conditioning: one Float32 step, or a fixed rise in the vertical unit. */
+  readonly fillEpsilon: number | 'float32-step';
   /**
    * How conditioning reads a NoData cell. Routing always treats one as a
    * wall; `outlet` makes conditioning treat a gap as a drainage exit.
@@ -147,14 +147,21 @@ export interface FlowPulseParams {
   readonly maxCells: number;
   /** The caller's declaration about Withheld points behind the DTM. */
   readonly withheldExcluded: boolean | null;
+  /** The caller's declaration of how much of the source the DTM read; absent leaves the grid's own. */
+  readonly inputCoverage?: DtmGrid['coverageMode'];
 }
 
-/** Defaults a panel can offer, all of them declared rather than hidden. */
+/**
+ * Defaults a panel can offer, all of them declared rather than hidden.
+ * Conditioning defaults to Priority-Flood: on a LiDAR surface raw D8 stops in
+ * every small hollow, so the first view a reader sees is the connected
+ * drainage. Raw stays one choice away and every record names which was used.
+ */
 export const FLOW_PULSE_DEFAULTS: FlowPulseParams = Object.freeze({
-  conditioning: 'raw',
+  conditioning: 'priority-flood',
   routing: 'd8',
   interpolated: 'route',
-  fillEpsilon: 0.001,
+  fillEpsilon: 'float32-step',
   fillNoData: 'wall',
   maxCells: 4_000_000,
   withheldExcluded: null,
@@ -245,6 +252,7 @@ export function runFlowPulse(
   const { grid, basis } = terrainDtmToFlowGrid(dtm, scale, {
     interpolated: params.interpolated,
     withheldExcluded: params.withheldExcluded,
+    ...(params.inputCoverage ? { coverage: params.inputCoverage } : {}),
   });
 
   if (basis.measuredCells === 0) {

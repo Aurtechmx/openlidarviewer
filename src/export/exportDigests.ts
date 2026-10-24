@@ -16,7 +16,7 @@ import {
   type ExportDigests,
   type SourceDigest,
 } from '../science/exportDigestRecord';
-import { cloudFileOf } from '../io/sourceFiles';
+import { cloudFileOf, markSourceDigestSettled } from '../io/sourceFiles';
 import { analysisInputsOf, isStreamedCloud } from '../io/streamedClouds';
 import { sourceContentDigestFromRange } from '../io/heavy/fileFingerprint';
 import { LocalOocIndexerClient } from '../io/heavy/worker/localOocIndexerWorkerClient';
@@ -63,6 +63,7 @@ export function sourceDigestOf(
     const own = digest(file, signal);
     pending = own;
     cache.set(file, own);
+    void own.then((sha256) => { if (sha256) markSourceDigestSettled(file); }, () => {});
     // Drop a cancelled hash at once, so the next export starts its own.
     signal?.addEventListener('abort', () => { if (cache.get(file) === own) cache.delete(file); }, { once: true });
   }
@@ -71,6 +72,15 @@ export function sourceDigestOf(
     if (cache.get(file) === pending) cache.delete(file);
     return { sha256: null, note: signal?.aborted ? SOURCE_CANCELLED_NOTE : SOURCE_NOT_COMPUTED_NOTE };
   });
+}
+
+/**
+ * Start hashing `cloud`'s source file in the background, so the first export
+ * does not wait for it. The hash runs in a worker and is the one every export
+ * of this file reads afterwards.
+ */
+export function prefetchSourceDigest(cloud: object): void {
+  void sourceDigestOf({ key: cloud, streamed: false });
 }
 
 /** Why a terrain export names no single source file. */

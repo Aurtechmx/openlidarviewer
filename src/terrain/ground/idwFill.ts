@@ -38,6 +38,11 @@ export interface IdwParams {
    * bounded so the search stays O(cells · radius^2) in the worst case.
    */
   readonly maxRadiusCells?: number;
+  /**
+   * Cells allowed to receive a fill (1 = fill). An empty cell outside it stays
+   * NaN whatever data lies within the radius. Omitted = every empty cell.
+   */
+  readonly fillMask?: Uint8Array;
 }
 
 /**
@@ -60,6 +65,7 @@ export function idwFill(
   const power = Number.isFinite(params.power) && (params.power as number) > 0 ? (params.power as number) : 2;
   const kNearest = Math.max(1, Math.floor(params.kNearest ?? 12));
   const maxRadius = Math.max(1, Math.floor(params.maxRadiusCells ?? 32));
+  const fillMask = params.fillMask;
 
   // Quick exit if there is nothing to interpolate from.
   let anyData = false;
@@ -78,6 +84,7 @@ export function idwFill(
     for (let col = 0; col < cols; col++) {
       const i = row * cols + col;
       if (hadData[i] === 1) continue; // measured — keep as-is
+      if (fillMask && fillMask[i] !== 1) { out[i] = Number.NaN; continue; }
 
       // Expanding square-ring search for measured cells.
       let wSum = 0;

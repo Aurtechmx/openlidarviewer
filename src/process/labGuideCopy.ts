@@ -35,7 +35,7 @@ export const LAB_STAGES: Readonly<Record<LabId, readonly string[]>> = {
 export const NEEDS_STATIONS = 'Needs scanner setups (station positions), for example from PTX files.';
 
 /** The text the lab shows in place of a refusal when the ground surface is missing. */
-export const NEEDS_GROUND = 'This lab reads the ground surface, which comes from a terrain run. Run terrain analysis, then come back here.';
+export const NEEDS_GROUND = 'This lab reads the ground surface, which comes from a terrain run. Run terrain analysis here and the lab opens when it is done.';
 
 export interface ReadinessItem {
   readonly label: string;

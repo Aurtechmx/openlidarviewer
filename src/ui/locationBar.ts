@@ -152,6 +152,12 @@ export function createLocationBar(d: LocationBarDeps): LocationBar {
 
   /** Root class while the header bar shows a Back to the page's parent. */
   const HEADER_ROUTE_BACK = 'olv-has-header-back';
+  /** The same, for the phone sheet's location line. */
+  const SHEET_ROUTE_BACK = 'olv-has-sheet-back';
+  /** Root class while an Analyse page's own Back is the one Back on a desktop. */
+  const PAGE_ROUTE_BACK = 'olv-has-page-back';
+  /** Root class while the phone sheet's location line closes an open workspace. */
+  const SHEET_CLOSE = 'olv-has-sheet-close';
 
   // ── rendering ─────────────────────────────────────────────────────────────
   function buildBar(): { nav: HTMLElement; back: HTMLButtonElement; list: HTMLElement } {
@@ -235,9 +241,20 @@ export function createLocationBar(d: LocationBarDeps): LocationBar {
     lastKey = key;
     paint(top, crumbs, route, ws, scan && !mobile);
     paint(phone, crumbs, route, ws, scan && mobile);
-    // A header Back to the parent names the place the rail's task Back does, so
-    // the stylesheet hides the rail's (wayfinding.css). The phone has no header bar.
-    doc.documentElement?.classList?.toggle(HEADER_ROUTE_BACK, scan && !mobile && backTarget(route, registry, ws)?.kind === 'route');
+    // One Back per page in each layout (wayfinding.css). A header Back to the
+    // parent names the place the rail's task Back does, so one of the two is
+    // hidden: on an Analyse page the page's own controls stay (its Back, and a
+    // workspace's own Close) and the header's goes while the rail is open; on
+    // every other page the header's stays. On the phone the sheet's location
+    // line carries the Back, or a workspace's Close, and the page's own copy
+    // of it is hidden the same way.
+    const back = scan ? backTarget(route, registry, ws) : null;
+    const routeBack = back?.kind === 'route';
+    const pageBack = !!back && !mobile && route.mode === 'analyse';
+    doc.documentElement?.classList?.toggle(HEADER_ROUTE_BACK, routeBack && !mobile && !pageBack);
+    doc.documentElement?.classList?.toggle(PAGE_ROUTE_BACK, pageBack);
+    doc.documentElement?.classList?.toggle(SHEET_ROUTE_BACK, routeBack && mobile);
+    doc.documentElement?.classList?.toggle(SHEET_CLOSE, back?.kind === 'workspace' && mobile);
     for (const inst of Object.keys(WORKSPACE_DOM)) closeControl(inst);
     const path = crumbs[crumbs.length - 1]?.path ?? '';
     if (path !== lastPath) {
@@ -273,11 +290,14 @@ export function createLocationBar(d: LocationBarDeps): LocationBar {
     bar.nav.querySelector<HTMLElement>('.olv-loc-back:not([hidden])')?.focus({ preventScroll: true });
   }
 
-  /** The live node for an opener: itself, or the same Analyse row's button after a repaint. */
+  /** The live node for an opener: itself, or the same Analyse row's control after a repaint. */
   function current(node: HTMLElement | undefined): HTMLElement | undefined {
     if (!node || node.isConnected) return node;
     const id = node.closest<HTMLElement>('[data-analysis]')?.dataset.analysis;
-    return (id && doc.querySelector<HTMLElement>(`.olv-ah-row[data-analysis="${id}"] .olv-ah-open`)) || node;
+    if (!id) return node;
+    const row = `.olv-ah-row[data-analysis="${id}"]`;
+    const same = node.classList.contains('olv-ah-run') ? '.olv-ah-run' : '.olv-ah-open';
+    return doc.querySelector<HTMLElement>(`${row} ${same}`) ?? doc.querySelector<HTMLElement>(`${row} :is(.olv-ah-open, .olv-ah-run)`) ?? node;
   }
 
   // ── navigation ────────────────────────────────────────────────────────────
@@ -485,7 +505,7 @@ export function createLocationBar(d: LocationBarDeps): LocationBar {
       win?.removeEventListener('keydown', onEscapeBubble);
       top.nav.remove();
       phone.nav.remove();
-      doc.documentElement?.classList?.remove(HEADER_ROUTE_BACK);
+      doc.documentElement?.classList?.remove(HEADER_ROUTE_BACK, PAGE_ROUTE_BACK, SHEET_ROUTE_BACK, SHEET_CLOSE);
     },
   };
 }

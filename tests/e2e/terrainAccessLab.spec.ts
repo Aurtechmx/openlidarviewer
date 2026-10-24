@@ -22,27 +22,31 @@ async function openTerrainAccess(page: Page): Promise<void> {
   await expect(page.locator('.olv-analyse-page[data-page="terrain-access"]')).toBeVisible();
 }
 
-test('without a ground surface: no form, the terrain run, the way back, and Apply off with its reason', async ({ page }) => {
+test('without a ground surface: one click runs terrain first, then the form with Apply off and its reason', async ({ page }) => {
   await page.goto('/?test=1');
   await dropDenseGridPly(page);
   await expect(page.locator('.olv-empty')).toBeHidden({ timeout: 20_000 });
   await expect(page.locator('.olv-dock .olv-tool', { hasText: /^Analyse$/ })).toBeEnabled({ timeout: 20_000 });
 
+  // The lab's page shows progress while terrain runs, never a refusal or the Terrain page.
+  await page.evaluate(() => {
+    const w = window as unknown as { __preparingSeen: boolean };
+    w.__preparingSeen = false;
+    const obs = new MutationObserver(() => {
+      if (!document.querySelector('.olv-analyse-page[data-page="terrain-access"] .olv-lab-preparing [role="status"]')) return;
+      w.__preparingSeen = true;
+      obs.disconnect();
+    });
+    obs.observe(document.body, { subtree: true, childList: true });
+  });
   await openTerrainAccess(page);
   const labPage = page.locator('.olv-analyse-page[data-page="terrain-access"]');
-  // The ground surface is checked before the form: no form, a plain notice.
-  await expect(labPage.locator('.olv-lab-purpose')).toContainText('Not a safety guarantee.');
-  await expect(labPage.locator('.olv-lab-ready[data-state="missing"]')).toContainText('Ground surface (terrain run)');
-  await expect(labPage.locator('.olv-ta-form')).toHaveCount(0);
+  await expect(labPage.locator('.olv-ta-form')).toBeVisible({ timeout: 30_000 });
+  expect(await page.evaluate(() => (window as unknown as { __preparingSeen: boolean }).__preparingSeen), 'progress showed on the lab page').toBe(true);
   await expect(labPage).not.toContainText('NO_DTM');
-
-  await labPage.locator('.olv-lab-fix', { hasText: 'Run terrain analysis' }).click();
-  await expect(page.locator('.olv-analyse-page[data-page="terrain-access"]')).toBeHidden();
-  await expect(page.locator('.olv-analyse-readiness .olv-analyse-ready:not(.is-skeleton)')).toHaveCount(3, { timeout: 20_000 });
-  const back = page.locator('.olv-at-back', { hasText: 'Back to Terrain Access' });
-  await expect(back).toBeVisible({ timeout: 20_000 });
-  await back.click();
-  await expect(page.locator('.olv-analyse-page[data-page="terrain-access"]')).toBeVisible();
+  await expect(page.locator('.olv-at-back')).toHaveCount(0);
+  await expect(labPage.locator('.olv-lab-chip .olv-lab-ready[data-state="met"]')).toContainText('Ground surface (terrain run)');
+  await expect(labPage.locator('.olv-lab-purpose')).toContainText('Not a safety guarantee.');
 
   // This local fixture has no known units: the form shows, Apply is off and says why.
   await expect(labPage.locator('.olv-ta-form')).toBeVisible();
@@ -74,6 +78,76 @@ test('blank profile refuses with named field problems, per field', async ({ page
   await expect(labPage.locator('.olv-ta-form')).toBeVisible();
 });
 
+test('an example fills the blank form on request; applying it reaches a route or a named refusal', async ({ page }) => {
+  test.slow();
+  await page.goto('/?test=1');
+  await dropTerrainAccessUtmLas(page);
+  await expect(page.locator('.olv-empty')).toBeHidden({ timeout: 20_000 });
+  await expect(page.locator('.olv-dock .olv-tool', { hasText: /^Analyse$/ })).toBeEnabled({ timeout: 20_000 });
+  await openAnalyse(page);
+  await page.locator('.olv-analyse-run').click();
+  await expect(page.locator('.olv-analyse-readiness .olv-analyse-ready:not(.is-skeleton)')).toHaveCount(3, {
+    timeout: 20_000,
+  });
+
+  await openTerrainAccess(page);
+  const labPage = page.locator('.olv-analyse-page[data-page="terrain-access"]');
+  const fields = labPage.locator('.olv-ta-field-input');
+  // Blank until an example is picked.
+  for (let i = 0; i < 6; i++) await expect(fields.nth(i)).toHaveValue('');
+
+  const examples = labPage.getByRole('group', { name: 'Example profiles' });
+  await expect(examples.getByRole('button')).toHaveText(['Walker', 'ATV', '4x4 vehicle']);
+  for (const b of await examples.getByRole('button').all()) await expect(b).toHaveAttribute('type', 'button');
+  await expect(labPage.locator('.olv-ta-examples-note')).toHaveText(
+    'Example values to confirm for your own platform, not a rating or a safety limit.',
+  );
+
+  // Keyboard: Enter on a focused example fills the fields.
+  await examples.getByRole('button', { name: 'ATV' }).focus();
+  await page.keyboard.press('Enter');
+  await expect(fields.nth(0)).toHaveValue('ATV (example)');
+  await expect(fields.nth(2)).toHaveValue('12');
+
+  await examples.getByRole('button', { name: 'Walker' }).click();
+  const filled = ['Walker (example)', '20', '15', '0.3', '0.6', '40'];
+  for (let i = 0; i < filled.length; i++) {
+    await expect(fields.nth(i)).toHaveValue(filled[i]!);
+    await expect(fields.nth(i)).toBeEditable();
+  }
+  await expect(labPage.locator('.olv-ta-live')).toHaveText('Walker example filled in. Check each value, then apply the profile.');
+  // Picking an example runs nothing: the form is still there.
+  await expect(labPage.locator('.olv-ta-form')).toBeVisible();
+  await expect(labPage.locator('.olv-ta-grid-canvas')).toHaveCount(0);
+
+  await labPage.locator('.olv-ta-form-submit').click();
+  const grid = labPage.locator('.olv-ta-grid-canvas');
+  const refusal = labPage.locator('.olv-lab-refusal');
+  await expect(grid.or(refusal).first()).toBeVisible({ timeout: 10_000 });
+  if (await refusal.isVisible()) {
+    // A refusal names its reason.
+    await expect(labPage.locator('.olv-story-card')).toContainText('Reason code');
+    return;
+  }
+  await labPage.locator('.olv-ta-segmented-btn', { hasText: 'Set start' }).click();
+  await grid.click({ position: { x: 4, y: 4 } });
+  await labPage.locator('.olv-ta-segmented-btn', { hasText: 'Set goal' }).click();
+  await grid.focus();
+  await page.keyboard.press('ArrowRight');
+  await page.keyboard.press('ArrowDown');
+  await page.keyboard.press('Enter');
+  await labPage.locator('.olv-ta-run').click();
+  const card = labPage.locator('.olv-ta-run-card');
+  await expect(card).toContainText(/geometric traversability screening|Terrain Access did not run/, { timeout: 10_000 });
+  if (await card.getByText('Terrain Access did not run').count() > 0) {
+    await expect(card).toContainText('Reason code');
+  } else {
+    // The card says which example the profile started from.
+    await expect(card).toContainText('Walker (example)');
+    await expect(card).toContainText('Walker example, no value changed');
+  }
+});
+
 test('profile, start/goal by keyboard and click, run, route shown, why-not, export', async ({ page }) => {
   // The whole workflow (load, profile, run, route, explanation, export) takes
   // 27 to 29 s in WebKit on CI, close to the default 30 s budget.
@@ -95,8 +169,8 @@ test('profile, start/goal by keyboard and click, run, route shown, why-not, expo
   await openTerrainAccess(page);
   const labPage = page.locator('.olv-analyse-page[data-page="terrain-access"]');
 
-  // MOBILITY PROFILE: a permissive, explicit profile — no preset, every
-  // field typed. Field order matches `buildProfileForm` in terrainAccessLab.ts.
+  // MOBILITY PROFILE: a permissive, explicit profile, every field typed (no
+  // example). Field order matches `buildProfileForm` in terrainAccessLab.ts.
   await labPage.locator('input[type=text]').nth(0).fill('Illustrative — confirm for your platform');
   await labPage.locator('input[type=text]').nth(1).fill('80');
   await labPage.locator('input[type=text]').nth(2).fill('80');
@@ -275,6 +349,8 @@ test('obstruction limit from the same terrain run: enabled, and the route goes r
   });
   await expect(card).toContainText(/Slope from a synthesised neighbour\s*\d+% of route cells, allowed and disclosed \(exploratory\)/);
   // A straight crossing would be about 9.6 m; going round the box is longer.
+  // The full run card is under Details, behind the three figures.
+  await labPage.locator('.olv-lab-details > summary').click();
   const lengthText = await card.locator('.olv-story-row', { hasText: 'Horizontal length' }).innerText();
   const lengthM = Number(/([\d.]+) m/.exec(lengthText)?.[1]);
   expect(lengthM).toBeGreaterThan(12);

@@ -141,6 +141,13 @@ export interface PrecisionUnitBasis {
   readonly linearUnitKnown: boolean;
   readonly linearUnitToMetres: number;
   readonly verticalUnitToMetres?: number;
+  /**
+   * The source declares a vertical unit that cannot be read. Z then has no
+   * metre factor, and borrowing the horizontal one would state a length the
+   * file contradicts, so the metre figure covers X and Y only. A declared
+   * factor that is zero, negative or not finite is read the same way.
+   */
+  readonly verticalScaleInvalid?: boolean;
 }
 
 export interface InMemoryPrecisionInput {
@@ -210,6 +217,12 @@ export interface InMemoryPrecision {
   readonly typicalError: number;
   /** Metres, or `null` when the linear unit is not established. */
   readonly metres: PrecisionMetres | null;
+  /**
+   * `'horizontal'` when the vertical unit cannot be read: the metre figure and
+   * the governing axis are then taken over X and Y only. Absent, they cover
+   * all three axes.
+   */
+  readonly metresCover?: 'horizontal';
   readonly grade: PrecisionGrade;
 }
 
@@ -322,9 +335,15 @@ export function estimateInMemoryPrecision(input: InMemoryPrecisionInput): InMemo
   const mpu = unitKnown ? unit.linearUnitToMetres : 1;
   // The vertical factor never borrows the horizontal unit's value; it falls
   // back to it only when the CRS declared no separate vertical unit at all,
-  // which is the same rule `scanReportUnitBasis` applies.
-  const vmpu = unitKnown ? (unit.verticalUnitToMetres ?? mpu) : 1;
+  // which is the same rule `scanReportUnitBasis` applies. A declared vertical
+  // unit that cannot be read leaves Z with no metre factor: the metre figure
+  // then covers the horizontal axes only, and says so.
+  const v = unit?.verticalUnitToMetres;
+  const verticalUnreadable = unitKnown
+    && (unit.verticalScaleInvalid === true || (v !== undefined && !(Number.isFinite(v) && v > 0)));
+  const vmpu = unitKnown ? (v ?? mpu) : 1;
   const toMetres = [mpu, mpu, vmpu];
+  const ranked = verticalUnreadable ? 2 : 3;
 
   const axes = AXIS_NAMES.map((axis, a): AxisPrecision => {
     const reach = Math.max(Math.abs(extent.min[a] - origin[a]), Math.abs(extent.max[a] - origin[a]));
@@ -339,7 +358,7 @@ export function estimateInMemoryPrecision(input: InMemoryPrecisionInput): InMemo
   // Rank on the METRE step when there is one, so a large number in a small unit
   // cannot outrank a small number in a large one; on the raw step otherwise.
   let governing = 0;
-  for (let a = 1; a < 3; a++) {
+  for (let a = 1; a < ranked; a++) {
     const rank = unitKnown ? axes[a].worstCaseSpacing * toMetres[a] : axes[a].worstCaseSpacing;
     const best = unitKnown
       ? axes[governing].worstCaseSpacing * toMetres[governing]
@@ -371,6 +390,7 @@ export function estimateInMemoryPrecision(input: InMemoryPrecisionInput): InMemo
     worstCaseError: worstCaseSpacing / 2,
     typicalError: typicalSpacing / 2,
     metres,
+    ...(verticalUnreadable ? { metresCover: 'horizontal' as const } : {}),
     grade: gradeInMemoryPrecision(metres?.worstCaseSpacing ?? null),
   };
 }

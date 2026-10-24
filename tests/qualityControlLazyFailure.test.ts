@@ -96,10 +96,11 @@ beforeAll(() => {
 let loadResult: 'success' | 'reject' | 'undefined' | 'pending' = 'success';
 let releasePending: (() => void) | null = null;
 let chunkRequests = 0;
-const QualityPanelCtor = vi.fn(function (this: { element: FakeEl; render: () => void }) {
+const QualityPanelCtor = vi.fn(function (this: { element: FakeEl; render: () => void; refreshPrecision: () => void }) {
   this.element = new FakeEl('div');
   this.element.className = 'olv-quality-pop';
   this.render = vi.fn();
+  this.refreshPrecision = vi.fn();
 });
 vi.mock('../src/lazyChunks', () => ({
   loadQualityPanel: () => {

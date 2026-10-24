@@ -935,3 +935,4 @@ export const loadRemoteDeepLink = () => import('./app/remoteDeepLink');
 // transform, so the rules join the startup stylesheet without changing the
 // startup script: the palette and dialogs are styled before any of them opens.
 import './ui/wayfinding.css';
+export const loadExportDigests = () => import('./export/exportDigests');

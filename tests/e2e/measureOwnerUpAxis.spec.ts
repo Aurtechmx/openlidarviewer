@@ -79,7 +79,7 @@ async function technicalPdf(page: Page): Promise<string> {
   await showWorkspaceMode(page, 'output');
   const panel = page.locator('.olv-export-panel');
   if (await panel.evaluate((e) => e.classList.contains('olv-collapsed'))) await panel.locator('.olv-panel-head').click();
-  await panel.locator('summary', { hasText: 'Report PDF' }).click();
+  await panel.locator('summary', { hasText: 'PDF report' }).click();
   await panel.getByRole('combobox', { name: 'PDF report template' }).selectOption('technical-report');
   const w = page.waitForEvent('download');
   await panel.getByRole('button', { name: 'Report PDF', exact: true }).click();

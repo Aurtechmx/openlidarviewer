@@ -16,9 +16,11 @@ import type { SceneOverlayHost } from './sceneLineOverlay';
 export interface QuadLayerBuffers {
   readonly verts: Float32Array;
   readonly colors: Float32Array;
+  /** Triangles over shared vertices; absent, every three vertices are a triangle. */
+  readonly index?: Uint32Array;
   /**
    * Grid cells the buffers stand for, when that is not one quad per cell
-   * (the flow network draws several quads per cell). Defaults to quads.
+   * (the flow network draws ribbons along its channel cells). Defaults to quads.
    */
   readonly cellsDrawn?: number;
 }
@@ -65,6 +67,7 @@ export class QuadLayer {
     if (!this._geometry) this._geometry = new THREE.BufferGeometry();
     this._geometry.setAttribute('position', new THREE.BufferAttribute(buffers.verts, 3));
     this._geometry.setAttribute('color', new THREE.BufferAttribute(buffers.colors, 3));
+    this._geometry.setIndex(buffers.index ? new THREE.BufferAttribute(buffers.index, 1) : null);
     if (!this._mesh) {
       this._mesh = new THREE.Mesh(this._geometry, this._material);
       this._mesh.frustumCulled = false;
