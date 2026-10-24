@@ -147,6 +147,74 @@ describe('§30 refusals', () => {
     const noRoute = runTerrainAccess(dtm3, RESOLVED, PERMISSIVE, 0, 8, TERRAIN_ACCESS_DEFAULTS, identity);
     expect(!noRoute.ok && noRoute.code).toBe('NO_ROUTE');
   });
+
+  it('INVALID_GRID for a cell size of 0 or NaN; UNITS_UNRESOLVED for an infinite vertical factor', () => {
+    for (const cellSizeM of [0, Number.NaN, -1, Number.POSITIVE_INFINITY]) {
+      const r = runTerrainAccess(dtmOf([[0, 0, 0]], { cellSizeM }), RESOLVED, PERMISSIVE, 0, 2, TERRAIN_ACCESS_DEFAULTS, identity);
+      expect(r.ok).toBe(false);
+      if (!r.ok) {
+        expect(r.code).toBe('INVALID_GRID');
+        expect(r.reason).toMatch(/^The terrain grid is not usable/);
+      }
+    }
+    const inf = runTerrainAccess(dtmOf([[0, 0, 0]], { verticalUnitToMetres: Number.POSITIVE_INFINITY }),
+      RESOLVED, PERMISSIVE, 0, 2, TERRAIN_ACCESS_DEFAULTS, identity);
+    expect(!inf.ok && inf.code).toBe('UNITS_UNRESOLVED');
+  });
+});
+
+describe('refusals say which cell or limit stops the run', () => {
+  it('an endpoint off the grid, on NoData, or blocked by a declared limit is named as such', () => {
+    const dtm = dtmOf([[null, 0, 0, 0]], { confidence: new Float32Array([0, 100, 100, 30]) });
+    const profile = { ...PERMISSIVE, minimumTerrainConfidence: 50 };
+    for (const start of [-1, 4, 1.5, Number.NaN]) {
+      const r = runTerrainAccess(dtm, RESOLVED, profile, start, 2, TERRAIN_ACCESS_DEFAULTS, identity);
+      expect(r.ok).toBe(false);
+      if (!r.ok) expect(r.reason).toBe('The start cell is not on the terrain grid. Choose a start cell on the map.');
+    }
+    const noData = runTerrainAccess(dtm, RESOLVED, profile, 0, 2, TERRAIN_ACCESS_DEFAULTS, identity);
+    expect(!noData.ok && noData.reason).toBe(
+      'The start cell has no elevation (NoData), so no route can start there. Choose a cell with data.',
+    );
+    const weak = runTerrainAccess(dtm, RESOLVED, profile, 1, 3, TERRAIN_ACCESS_DEFAULTS, identity);
+    expect(!weak.ok && weak.code).toBe('END_BLOCKED');
+    expect(!weak.ok && weak.reason).toBe(
+      'The end cell is not eligible under the declared mobility profile: terrain support 30 < required 50.',
+    );
+  });
+
+  it('NO_ROUTE names the limit that closes the smaller reachable area', () => {
+    // A 1 m ledge across a flat 6×6 grid between rows 2 and 3; nothing else.
+    const grid = Array.from({ length: 6 }, (_, r) => Array(6).fill(r >= 3 ? 1 : 0));
+    const r = runTerrainAccess(dtmOf(grid), RESOLVED, { ...PERMISSIVE, maxStepHeight: 0.3 }, 1, 5 * 6 + 1,
+      TERRAIN_ACCESS_DEFAULTS, identity);
+    expect(r.ok).toBe(false);
+    if (r.ok) return;
+    expect(r.code).toBe('NO_ROUTE');
+    expect(r.reason).toBe(
+      'No eligible path connects the start and end cells under the declared mobility profile. '
+      + 'The start can reach 18 cells; the moves out of that area are closed by step height (100%).',
+    );
+  });
+
+  it('NO_ROUTE lists up to three reasons with their shares', () => {
+    // The goal sits in a pocket: NoData west and south, a 1 m ledge north and
+    // east of it (the grid's NE corner, cells (4..5, 4..5) raised).
+    const grid: (number | null)[][] = Array.from({ length: 6 }, (_, r) => Array.from({ length: 6 }, (_, c) => {
+      if (c === 3 && r >= 3) return null;
+      if (r === 3 && c >= 3) return null;
+      return 0;
+    }));
+    grid[4][4] = 0; grid[4][5] = 1; grid[5][4] = 1; grid[5][5] = 1;
+    const r = runTerrainAccess(dtmOf(grid), RESOLVED, { ...PERMISSIVE, maxStepHeight: 0.3 }, 0, 4 * 6 + 4,
+      TERRAIN_ACCESS_DEFAULTS, identity);
+    expect(r.ok).toBe(false);
+    if (r.ok) return;
+    expect(r.code).toBe('NO_ROUTE');
+    expect(r.reason).toMatch(/The goal can reach 1 cell; the moves out of that area are closed by (no elevation \(NoData\)|step height) \(\d+%\)(, [^,]+ \(\d+%\))? and [^,]+ \(\d+%\)\.$/);
+    expect(r.reason).toContain('no elevation (NoData)');
+    expect(r.reason).toContain('step height');
+  });
 });
 
 describe('a successful run', () => {

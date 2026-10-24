@@ -674,7 +674,7 @@ export function buildProfileForm(
     'Weak-evidence policy',
     [
       { value: 'block', label: 'Block weak-evidence cells', tip: 'Treat cells below the minimum confidence as impassable.' },
-      { value: 'penalize', label: 'Allow, cost-penalize', tip: 'Allow cells below the minimum confidence, at an extra route cost.' },
+      { value: 'penalize', label: 'Allow, cost-penalize', tip: 'Allow cells below the minimum confidence and report their share. Cost follows each cell\'s confidence; the minimum does not change it.' },
     ],
     () => state.unknownPolicy,
     (value) => { state.unknownPolicy = value; unknownPolicyCtl.sync(); },

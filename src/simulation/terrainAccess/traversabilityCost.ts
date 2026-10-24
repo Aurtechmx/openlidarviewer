@@ -529,6 +529,98 @@ export function buildTraversabilityMap(
   return out;
 }
 
+/** Why a move out of a closed area is not taken: a declared reason, or a diagonal refused at a corner. */
+export type ClosedMoveReason = BlockReason | 'corner';
+
+/** The connected area one endpoint can reach, and why every move out of it is closed. */
+export interface ClosedArea {
+  /** Which endpoint the area was grown from. */
+  readonly seed: 'start' | 'goal';
+  /** Eligible cells reachable from that endpoint, itself included. */
+  readonly cells: number;
+  /**
+   * Moves from a cell in the area to an in-grid cell outside it, by the
+   * reason each is closed: the destination's node reason, an edge limit
+   * (`evaluateEdge`'s first reason), or `'corner'` for a diagonal the shared
+   * transition rule refuses at an unsupported corner or for its swept width.
+   * Moves off the grid are not counted: the survey edge is not a limit.
+   */
+  readonly closedMoves: ReadonlyMap<ClosedMoveReason, number>;
+}
+
+/**
+ * When no route joins `startIndex` and `endIndex`, grow the area each can
+ * reach over the same moves the search takes, one cell from each in turn,
+ * and stop when one is exhausted: that smaller area is the one the limits
+ * close, found in work proportional to its size. Then tally why each move out
+ * of it is closed. Null when the two endpoints are in fact connected, or
+ * either is not an eligible cell.
+ */
+export function closedAreaBetween(
+  grid: TerrainAccessGrid,
+  features: TerrainAccessFeatures,
+  eligibility: NodeEligibility,
+  profile: TerrainAccessProfile,
+  startIndex: number,
+  endIndex: number,
+): ClosedArea | null {
+  const { cols, rows } = grid;
+  const n = cols * rows;
+  const ok = (i: number): boolean => Number.isInteger(i) && i >= 0 && i < n && eligibility.blocked[i] === 0;
+  if (!ok(startIndex) || !ok(endIndex) || startIndex === endIndex) return null;
+  const label = new Uint8Array(n);
+  const queues: number[][] = [[startIndex], [endIndex]];
+  const heads = [0, 0];
+  label[startIndex] = 1;
+  label[endIndex] = 2;
+  const opens = (i: number, dx: number, dy: number, j: number): boolean =>
+    transitionAllowed(grid, eligibility, profile, i, dx, dy)
+    && !evaluateEdge(grid, features, profile, i, j, dx, dy).blocked;
+
+  let done = -1;
+  while (done < 0) {
+    for (let k = 0; k < 2 && done < 0; k++) {
+      if (heads[k] >= queues[k].length) { done = k; break; }
+      const i = queues[k][heads[k]++];
+      const row = Math.floor(i / cols);
+      const col = i - row * cols;
+      for (const [dx, dy] of TERRAIN_ACCESS_NEIGHBOURS) {
+        const c = col + dx;
+        const r = row + dy;
+        if (c < 0 || c >= cols || r < 0 || r >= rows) continue;
+        const j = r * cols + c;
+        if (label[j] === k + 1) continue;
+        if (!opens(i, dx, dy, j)) continue;
+        if (label[j] !== 0) return null; // the other area: the two are connected
+        label[j] = k + 1;
+        queues[k].push(j);
+      }
+    }
+  }
+
+  const mine = done + 1;
+  const closedMoves = new Map<ClosedMoveReason, number>();
+  const add = (reason: ClosedMoveReason): void => { closedMoves.set(reason, (closedMoves.get(reason) ?? 0) + 1); };
+  for (const i of queues[done]) {
+    const row = Math.floor(i / cols);
+    const col = i - row * cols;
+    for (const [dx, dy] of TERRAIN_ACCESS_NEIGHBOURS) {
+      const c = col + dx;
+      const r = row + dy;
+      if (c < 0 || c >= cols || r < 0 || r >= rows) continue;
+      const j = r * cols + c;
+      if (label[j] === mine) continue;
+      if (!transitionAllowed(grid, eligibility, profile, i, dx, dy)) {
+        add(eligibility.blocked[j] === 1 ? (eligibility.reason[j] ?? 'no-data') : 'corner');
+        continue;
+      }
+      const reason = evaluateEdge(grid, features, profile, i, j, dx, dy).reason;
+      if (reason) add(reason);
+    }
+  }
+  return { seed: done === 0 ? 'start' : 'goal', cells: queues[done].length, closedMoves };
+}
+
 /** One reason line for the why-not inspector. */
 export interface WhyNotReason {
   readonly reason: BlockReason;

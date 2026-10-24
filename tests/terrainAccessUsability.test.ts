@@ -166,7 +166,7 @@ describe('profile form', () => {
     walk(form);
     expect(tips.slice(0, 2)).toEqual([
       'Treat cells below the minimum confidence as impassable.',
-      'Allow cells below the minimum confidence, at an extra route cost.',
+      'Allow cells below the minimum confidence and report their share. Cost follows each cell\'s confidence; the minimum does not change it.',
     ]);
     // The evidence-gap policy follows, exploratory first.
     expect(tips.slice(2)).toEqual([

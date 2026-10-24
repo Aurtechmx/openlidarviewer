@@ -42,6 +42,8 @@
 import type { AboveGroundSurface, HorizontalScale, InterpolatedPolicy } from './dtmTerrainAccessGrid';
 import {
   buildTraversabilityMap,
+  closedAreaBetween,
+  whyNotEligible,
   type CostWeights,
   type NodeEligibility,
   type TerrainAccessFeatures,
@@ -52,7 +54,8 @@ import { aStarTerrain, type AStarOutcome } from './aStarTerrain';
 import { computeRouteDiagnostics, type RouteDiagnostics } from './routeDiagnostics';
 import { terrainAccessResultDigest } from './terrainAccessDigest';
 import {
-  derivativeEstimateStatement, obstructionEstimateStatement, stepEstimateStatement, type DerivativeEstimatedConstraint,
+  closedAreaSentence, derivativeEstimateStatement, obstructionEstimateStatement, stepEstimateStatement,
+  type DerivativeEstimatedConstraint,
 } from './terrainAccessExplain';
 import { basisLimitations } from '../simulationInputBasis';
 import { sealRunRecord, type FieldSimulationRunRecord } from '../simulationRunRecord';
@@ -82,7 +85,9 @@ export type TerrainAccessRefusalCode =
   /** A supplied above-ground surface was built with a different terrain surface. */
   | 'SURFACE_STALE'
   /** A declared region-of-interest mask does not fit the terrain grid. */
-  | 'INVALID_ROI';
+  | 'INVALID_ROI'
+  /** The terrain grid's dimensions or cell size are not usable (a cell size of 0 or NaN, say). */
+  | 'INVALID_GRID';
 
 /** A run that did not happen, and the precondition that stopped it. */
 export interface TerrainAccessRefusal {
@@ -310,16 +315,18 @@ export function runTerrainAccess(
   const search = aStarTerrain(grid, features, eligibility, profile, startIndex, endIndex, weights);
 
   if (search.outcome !== 'FOUND') {
-    const reasonByOutcome: Record<Exclude<AStarOutcome, 'FOUND'>, string> = {
-      START_BLOCKED: 'The start cell is not eligible under the declared mobility profile.',
-      END_BLOCKED: 'The end cell is not eligible under the declared mobility profile.',
-      NO_ROUTE: 'No eligible path connects the start and end cells under the declared mobility profile.',
-    };
-    return {
-      ok: false,
-      code: search.outcome,
-      reason: reasonByOutcome[search.outcome],
-    };
+    let reason: string;
+    if (search.outcome === 'NO_ROUTE') {
+      const closed = closedAreaSentence(closedAreaBetween(grid, features, eligibility, profile, startIndex, endIndex));
+      reason = 'No eligible path connects the start and end cells under the declared mobility profile.'
+        + (closed ? ` ${closed}` : '');
+    } else {
+      reason = endpointRefusalReason(
+        search.outcome === 'START_BLOCKED' ? 'start' : 'end', grid, features, eligibility, profile,
+        search.outcome === 'START_BLOCKED' ? startIndex : endIndex,
+      );
+    }
+    return { ok: false, code: search.outcome, reason };
   }
 
   const diagnostics = computeRouteDiagnostics(grid, features, search.path, weights, profile);
@@ -433,6 +440,31 @@ export function runTerrainAccess(
     limitations,
     record,
   };
+}
+
+/**
+ * Why an endpoint cannot start or end a route, in the words a reader can act
+ * on: not on the grid, no elevation (NoData), or the declared limit that
+ * blocks the cell, as the why-not inspector words it.
+ */
+function endpointRefusalReason(
+  which: 'start' | 'end',
+  grid: TerrainAccessGrid,
+  features: TerrainAccessFeatures,
+  eligibility: NodeEligibility,
+  profile: TerrainAccessProfile,
+  index: number,
+): string {
+  const n = grid.cols * grid.rows;
+  if (!(Number.isInteger(index) && index >= 0 && index < n)) {
+    return `The ${which} cell is not on the terrain grid. Choose a ${which} cell on the map.`;
+  }
+  if (grid.valid[index] === 0) {
+    return `The ${which} cell has no elevation (NoData), so no route can ${which} there. Choose a cell with data.`;
+  }
+  const detail = whyNotEligible(grid, features, eligibility, profile, index).reasons[0]?.detail;
+  return `The ${which} cell is not eligible under the declared mobility profile`
+    + (detail ? `: ${detail}.` : '.');
 }
 
 /**

@@ -7,7 +7,9 @@
  * Pure: no DOM, no three.js. Deterministic.
  */
 
-import { MAP_COST_BUCKETS, type MapCellState, type NodeEligibility } from './traversabilityCost';
+import {
+  MAP_COST_BUCKETS, type ClosedArea, type ClosedMoveReason, type MapCellState, type NodeEligibility,
+} from './traversabilityCost';
 import type { CostContributor } from './routeDiagnostics';
 import type { NodeBlockReason, TerrainAccessProfile } from './terrainAccessTypes';
 
@@ -105,6 +107,47 @@ export function topBlockReasonSentence(eligibility: NodeEligibility, profile: Te
   const noun = one ? 'cell' : 'cells';
   return `${countText(topCount)} ${noun} ${reasonClause(top, profile, one)}.`;
 }
+
+/** Plain names for why a move out of a closed area is not taken. */
+const CLOSED_MOVE_LABEL: Readonly<Record<ClosedMoveReason, string>> = Object.freeze({
+  'step-height': 'step height',
+  'longitudinal-grade': 'longitudinal grade',
+  'cross-slope': 'cross slope',
+  'no-data': 'no elevation (NoData)',
+  'outside-roi': 'outside the region of interest',
+  'low-confidence': 'terrain confidence below the minimum',
+  ruggedness: 'ruggedness',
+  obstruction: 'above-ground obstruction',
+  'obstruction-unknown': 'no above-ground return',
+  'derivative-support': 'slope from a synthesised neighbour',
+  'vehicle-width': 'vehicle width clearance',
+  corner: 'a diagonal past an unsupported corner',
+});
+
+/**
+ * Which limits close the way, from {@link ClosedArea}: the area one endpoint
+ * can reach and the share of the moves out of it each reason closes, the
+ * three largest, e.g. "The start can reach 1,234 cells; the moves out of
+ * that area are closed by step height (61%), cross slope (22%) and no
+ * elevation (NoData) (17%)." Null when nothing was tallied.
+ */
+export function closedAreaSentence(area: ClosedArea | null): string | null {
+  if (!area) return null;
+  let total = 0;
+  for (const n of area.closedMoves.values()) total += n;
+  if (total === 0) return null;
+  const top = [...area.closedMoves.entries()]
+    .sort((a, b) => b[1] - a[1] || CLOSED_ORDER.indexOf(a[0]) - CLOSED_ORDER.indexOf(b[0]))
+    .slice(0, 3)
+    .map(([reason, n]) => `${CLOSED_MOVE_LABEL[reason]} (${Math.round((100 * n) / total)}%)`);
+  const list = top.length === 1 ? top[0] : `${top.slice(0, -1).join(', ')} and ${top[top.length - 1]}`;
+  const who = area.seed === 'start' ? 'The start' : 'The goal';
+  return `${who} can reach ${countText(area.cells)} ${area.cells === 1 ? 'cell' : 'cells'}; `
+    + `the moves out of that area are closed by ${list}.`;
+}
+
+/** Tie order for {@link closedAreaSentence}: the declared limits first. */
+const CLOSED_ORDER: readonly ClosedMoveReason[] = Object.keys(CLOSED_MOVE_LABEL) as ClosedMoveReason[];
 
 /** The slope-derived limits whose status can be `estimated`. */
 export type DerivativeEstimatedConstraint = 'longitudinalGrade' | 'crossSlope' | 'ruggedness';
