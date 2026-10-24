@@ -3,10 +3,11 @@
  *
  * The pure region logic behind a clipping box ("show only the points inside
  * this box" / "hide the points inside this box"). It is the data-and-math core
- * that the live GPU clip shader and the drag gizmo build on; keeping it pure
- * means the keep/cull decision is unit-testable and — crucially — the clip
- * STATE is serialisable, so a clip survives in a shared `.olvsession` recipe
- * even though the interactive gizmo is a browser-only layer.
+ * that the live GPU clip (`clipGpu.ts`), the kept-point counts and the export
+ * scope build on; keeping it pure means the keep/cull decision is
+ * unit-testable and the clip STATE is serialisable, so a clip survives in a
+ * shared `.olvsession` recipe. The box is edited on the Clip page (numeric
+ * bounds, or a Box drawn on the scan) and drawn in the scene as an outline.
  *
  * Reuses the existing axis-aligned {@link BoxBounds} + {@link pointInBox} so a
  * clip box and a Box measurement share one geometry definition (no second,
@@ -76,6 +77,33 @@ export function clipMaskArray(clip: ClipBox, positions: Float32Array): Uint8Arra
     mask[i] = keep ? 1 : 0;
   }
   return mask;
+}
+
+/** The clip's kept-point count for one layer, as the viewer reports it per layer. */
+export interface ClipLayerCount {
+  readonly id: string;
+  /** Whether the layer is drawn; the count also covers the active layer when hidden. */
+  readonly visible: boolean;
+  readonly kept: number;
+  readonly total: number;
+}
+
+/**
+ * Sum per-layer counts into what the Clip page shows: the active layer's own
+ * kept/total (what an export writes) and, when several layers are drawn, the
+ * figure over all of them. Null when the active layer was not counted.
+ */
+export function sumClipCounts(
+  layers: readonly ClipLayerCount[],
+  activeId: string | null,
+): { kept: number; total: number; visible: { kept: number; total: number; scans: number } | null } | null {
+  const active = layers.find((l) => l.id === activeId);
+  if (!active) return null;
+  const shown = layers.filter((l) => l.visible);
+  const visible = shown.length > 1
+    ? { kept: shown.reduce((a, l) => a + l.kept, 0), total: shown.reduce((a, l) => a + l.total, 0), scans: shown.length }
+    : null;
+  return { kept: active.kept, total: active.total, visible };
 }
 
 /** How many points of an interleaved x/y/z buffer the clip keeps (renders). */

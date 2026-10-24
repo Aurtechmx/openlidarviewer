@@ -34,7 +34,7 @@ import { retryableOnce, mountPanelOnce } from './lazySurfaceLoad';
 export { createAnalyseProfileVisibility } from './analyseProfileVisibility';
 // Same reason: the Box → clip flow (the row's "Use as clipping region" and
 // the Clip page's "Isolate this box" both run its one conversion).
-export { createClipFlowFromShell } from './clipFlow';
+export { mountClip } from './clipMount';
 export type {
   AnalyseProfileVisibility,
   AnalyseProfileVisibilityDeps,

@@ -1,6 +1,6 @@
 /**
  * clipPanelAdvanced.test.ts: the simplified Clip page. Primary controls are
- * Draw clipping box, Enable, Inside/Outside, Fit to scan and Clear; the six
+ * Draw clipping box, Enable, Keep inside/Keep outside, Fit to scan and Turn off; the six
  * numeric fields sit in an Advanced disclosure that is closed by default, is
  * never rebuilt, and still drives the debounced apply and the generation-token
  * count.
@@ -40,7 +40,7 @@ describe('Clip page: Advanced disclosure', () => {
     expect(t.panel.advancedOpen).toBe(false);
     expect(adv.querySelectorAll('.olv-clip-num')).toHaveLength(6);
     // None of the primary controls live inside the disclosure.
-    for (const text of ['Inside', 'Outside', 'Fit to scan', 'Clear']) {
+    for (const text of ['Keep inside', 'Keep outside', 'Fit to scan', 'Turn off']) {
       expect(adv.querySelectorAll('.olv-bc-pill').some((b) => b.textContent === text)).toBe(false);
     }
     expect(adv.querySelectorAll('summary')[0].textContent).toBe('Advanced');
@@ -57,12 +57,12 @@ describe('Clip page: Advanced disclosure', () => {
     const after = t.find('.olv-clip-num');
     expect(after).toEqual(before);
     expect(after.every((n, i) => n === before[i])).toBe(true);
-    expect(after.map((n) => (n as FakeEl & { value: string }).value)).toEqual(['1', '4', '2', '5', '3', '6']);
+    expect(after.map((n) => (n as FakeEl & { value: string }).value)).toEqual(['1.000', '4.000', '2.000', '5.000', '3.000', '6.000']);
     // Adopting a clip does not pop the disclosure open.
     expect(t.panel.advancedOpen).toBe(false);
   });
 
-  it('numeric edits still apply at once and count once after the debounce', async () => {
+  it('numeric steps still apply at once and count once after the debounce', async () => {
     const t = await make();
     t.panel.adoptBounds({ box: { min: [0, 0, 0], max: [1, 1, 1] }, mode: 'keep-inside', enabled: true });
     vi.advanceTimersByTime(t.wait);
@@ -81,16 +81,19 @@ describe('Clip page: Advanced disclosure', () => {
 });
 
 describe('Clip page: primary controls', () => {
-  it('Clear turns the clip off through the normal apply path and keeps the bounds', async () => {
+  it('Turn off turns the clip off through the normal apply path and keeps the bounds', async () => {
     const t = await make();
     t.panel.adoptBounds({ box: { min: [1, 1, 1], max: [2, 2, 2] }, mode: 'keep-outside', enabled: true });
     t.applied.length = 0;
-    t.pill('Clear').click();
+    expect(t.pill('Turn off').disabled).toBe(false);
+    t.pill('Turn off').click();
     expect(t.panel.enabled).toBe(false);
     expect(t.applied).toEqual([null]);
     expect(clipScope()).toBeNull();
     const nums = t.find('.olv-clip-num') as (FakeEl & { value: string })[];
-    expect(nums.map((n) => n.value)).toEqual(['1', '2', '1', '2', '1', '2']);
+    expect(nums.map((n) => n.value)).toEqual(['1.000', '2.000', '1.000', '2.000', '1.000', '2.000']);
+    // Off already: Turn off has nothing to do.
+    expect(t.pill('Turn off').disabled).toBe(true);
   });
 
   it('Draw clipping box stays hidden until the shell wires it, then calls the handler', async () => {
@@ -109,15 +112,15 @@ describe('Clip page: primary controls', () => {
     const seen: Array<[boolean, string]> = [];
     const off = t.panel.subscribe(() => seen.push([t.panel.enabled, t.panel.mode]));
     t.panel.toggleEnabled();
-    t.pill('Outside').click();
-    t.pill('Clear').click();
+    t.pill('Keep outside').click();
+    t.pill('Turn off').click();
     t.panel.adoptBounds({ box: { min: [0, 0, 0], max: [1, 1, 1] }, mode: 'keep-inside', enabled: true });
     t.panel.setVisible(false);
     expect(seen).toEqual([
       [true, 'keep-inside'], [true, 'keep-outside'], [false, 'keep-outside'], [true, 'keep-inside'], [false, 'keep-inside'],
     ]);
     off();
-    t.pill('Inside').click();
+    t.pill('Keep inside').click();
     expect(seen).toHaveLength(5);
   });
 });

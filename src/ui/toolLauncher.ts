@@ -57,6 +57,12 @@ export interface ToolLauncherDeps {
    * a way back into a running tool; the palette and keys keep their toggle.
    */
   resume?: (actionId: string) => boolean;
+  /**
+   * A short state for a row whose tool keeps running off its page, for
+   * example "On · Keep inside" for the clip box; null for none. Read on every
+   * refresh, never stored here.
+   */
+  stateOf?: (actionId: string) => string | null;
 }
 
 export interface ToolLauncher {
@@ -88,7 +94,7 @@ export function createToolLauncher(deps: ToolLauncherDeps): ToolLauncher {
    * focus and hover, and its one click listener. The listener reads the row's
    * current action, so it never needs rebinding.
    */
-  interface Row { button: HTMLButtonElement; title: HTMLElement; hint: HTMLElement; key: HTMLElement; action: Action; fn: () => void }
+  interface Row { button: HTMLButtonElement; title: HTMLElement; hint: HTMLElement; key: HTMLElement; state: HTMLElement; action: Action; fn: () => void }
   const byId = new Map<string, Row>();
   let disposed = false;
   /** Bumped per refresh; an async registry read applies only if still current. */
@@ -100,8 +106,9 @@ export function createToolLauncher(deps: ToolLauncherDeps): ToolLauncher {
     const title = el('span', { className: 'olv-tl-title' });
     const hint = el('span', { className: 'olv-tl-hint' });
     const key = el('kbd', { className: 'olv-tl-key' });
-    button.append(title, hint, key);
-    const row: Row = { button, title, hint, key, action, fn: () => {} };
+    const state = el('span', { className: 'olv-tl-state' });
+    button.append(title, hint, key, state);
+    const row: Row = { button, title, hint, key, state, action, fn: () => {} };
     row.fn = (): void => {
       if (button.disabled) return;
       if (!deps.resume?.(row.action.id)) row.action.run();
@@ -130,6 +137,9 @@ export function createToolLauncher(deps: ToolLauncherDeps): ToolLauncher {
       setText(row.title, action.title);
       setText(row.hint, action.hint ?? '');
       setText(row.key, action.keys ?? '');
+      const on = deps.stateOf?.(id) ?? null;
+      setText(row.state, on ?? '');
+      row.button.classList.toggle('is-on', on !== null);
       row.button.disabled = !!reason;
       row.button.title = reason ?? '';
       order.push(row.button);

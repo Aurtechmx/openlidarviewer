@@ -89,6 +89,8 @@ export interface WorkspaceShellDeps {
   setMeasureMountElement: (fn: (el: HTMLElement) => void) => void;
   hasScan: () => boolean;
   onModeChange: () => void;
+  /** Every route change, after it is applied (the Clip page draws its box while it is open). */
+  onRoute?: (route: { readonly mode: WorkspaceMode; readonly page: string | null }) => void;
   /** The owners the Results shelf reads. Absent: no shelf. */
   results?: ResultsShelfSources;
   /** The CRS service the state strip reads. Absent: no strip. */
@@ -112,6 +114,8 @@ export interface WorkspaceShell {
    * and return true, so the row does not switch the tool off.
    */
   resumeToolPage(actionId: string): boolean;
+  /** On a phone, lower the sheet to its head so the scene takes taps; nothing on desktop. */
+  revealScene(): void;
   /** Re-apply the route and re-read the Results shelf's owners. */
   sync(): void;
   /** How many Ready results the owners hold that are not measurements. */
@@ -139,6 +143,8 @@ export function mountWorkspaceShell(d: WorkspaceShellDeps): WorkspaceShell {
   // panels. measure/analyse/object lazy-mount into their modes below.
   let router: WorkspaceRouter | null = null;
   let mobileSheet: MobileSheet | null = null;
+  // Declared before the router, whose sync reads it.
+  let mobileApplied = false;
   let refreshDataHome = (): void => {};
   // Set once the Session log is wired below; the router and `sync` call them earlier.
   let refreshLogPage = (): void => {};
@@ -165,7 +171,9 @@ export function mountWorkspaceShell(d: WorkspaceShellDeps): WorkspaceShell {
   const pages: Partial<Record<string, WorkspacePage>> = {
     measure: { title: 'Measure', element: () => d.measurePanel()?.element },
     annotate: { title: 'Annotate', element: () => d.annotation },
-    clip: { title: 'Clip box', element: () => d.clip },
+    // The Clip page has its own switch and no tool to resume, so returning to
+    // Tools lands back on it when it was the page left open.
+    clip: { title: 'Clip box', element: () => d.clip, keepOnReturn: true },
   };
   // The Session log page's host is built now and filled on first open. The
   // palette reaches it through its registry action, so it has no Go to entry.
@@ -202,7 +210,17 @@ export function mountWorkspaceShell(d: WorkspaceShellDeps): WorkspaceShell {
   let modeHome: ModeHome | null = null;
   // Set once both rails are wired below; the router's sync reaches it earlier.
   let focus: FocusMode | null = null;
-  router = createWorkspaceRouter(workspace, allPages, storage(), () => { modeHome?.refresh(); refreshLogPage(); focus?.sync(); });
+  let lastRoute = '';
+  router = createWorkspaceRouter(workspace, allPages, storage(), () => {
+    modeHome?.refresh(); refreshLogPage(); focus?.sync();
+    const r = router?.route();
+    if (!r) return;
+    const key = `${r.mode}/${r.page ?? ''}`;
+    // Arriving on the Clip page on a phone: half height, so its controls and the scene both show.
+    if (key !== lastRoute && key === 'work/clip' && mobileApplied && mobileSheet?.getDetent() === 'full') mobileSheet.setDetent('half');
+    lastRoute = key;
+    d.onRoute?.(r);
+  });
   analyse.attach(router);
   d.addTeardown(() => router?.dispose());
   const live = router;
@@ -230,8 +248,14 @@ export function mountWorkspaceShell(d: WorkspaceShellDeps): WorkspaceShell {
   // remembered page back. Captured before the tab's own handler switches.
   workspace.element.addEventListener('click', (e) => {
     const m = (e.target as Element | null)?.closest?.<HTMLElement>('.olv-ws-tab')?.dataset.mode;
-    if (m && m !== workspace.getMode()) router?.navigate({ mode: m as WorkspaceMode, page: null });
+    if (m && m !== workspace.getMode()) router?.navigate({ mode: m as WorkspaceMode, page: returnPage(m as WorkspaceMode) });
   }, true);
+  /** The page a mode tab returns to: one marked keepOnReturn that was still open when the mode was left, else home. */
+  function returnPage(m: WorkspaceMode): string | null {
+    const page = router?.showing(m) ?? null;
+    const list = (allPages as Partial<Record<WorkspaceMode, Record<string, WorkspacePage>>>)[m];
+    return page && list?.[page]?.keepOnReturn ? page : null;
+  }
   const placeAnalyse = (): void => analyse.place(workspace.mode('analyse'));
   const leftPanels = workspace.element;
   const railIntent = createRailIntent(leftPanels);
@@ -322,7 +346,7 @@ export function mountWorkspaceShell(d: WorkspaceShellDeps): WorkspaceShell {
     initialTab: sheetTabForMode(workspace.getMode()),
     onTabChange: (tab) => {
       const m = modeForSheetTab(tab);
-      if (m) router?.navigate({ mode: m, page: null }); // the mode's home, with Continue
+      if (m) router?.navigate({ mode: m, page: returnPage(m) }); // the mode's home (with Continue), or the page kept open
     },
   });
   mobileSheet = sheet;
@@ -453,7 +477,6 @@ export function mountWorkspaceShell(d: WorkspaceShellDeps): WorkspaceShell {
   document.addEventListener(SESSION_LOG_OPEN_EVENT, onOpenLog);
   d.addTeardown(() => document.removeEventListener(SESSION_LOG_OPEN_EVENT, onOpenLog));
 
-  let mobileApplied = false;
   let located = false;
   const applyMobileSheet = (): void => {
     const isMobile = mobileMql ? mobileMql.matches : false;
@@ -517,8 +540,10 @@ export function mountWorkspaceShell(d: WorkspaceShellDeps): WorkspaceShell {
       live.navigate({ mode: 'work', page }, railIntent.startedInRail());
       // A tool just started: on a phone, drop the sheet so the scene is free to
       // tap. The Tools tab keeps the page, so opening the sheet again shows it.
-      if (mobileApplied) sheet.setDetent('peek');
+      // The Clip page opens at half height: its switch and the scene both show.
+      if (mobileApplied) sheet.setDetent(page === 'clip' ? 'half' : 'peek');
     },
+    revealScene: () => { if (mobileApplied) sheet.setDetent('peek'); },
     applyMobileSheet,
     focus: focusMode,
     openAnalysePage: (page) => { void analyse.open(page); },

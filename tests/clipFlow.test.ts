@@ -27,6 +27,8 @@ const summary = (over: Partial<MeasurementSummary>): MeasurementSummary =>
 class FakePanel {
   enabled = false;
   mode: ClipMode = 'keep-inside';
+  hints: Array<string | null> = [];
+  setDrawHint(t: string | null) { this.hints.push(t); }
   private fns = new Set<() => void>();
   subscribe(fn: () => void) { this.fns.add(fn); return () => { this.fns.delete(fn); }; }
   adoptBounds(c: ClipBox) { this.enabled = c.enabled; this.mode = c.mode; this.emit(); }
@@ -35,10 +37,10 @@ class FakePanel {
   get listeners() { return this.fns.size; }
 }
 
-async function make(opts: { ms?: BoxMeasurementLike[]; ctx?: typeof one; measureOn?: boolean } = {}) {
+async function make(opts: { ms?: BoxMeasurementLike[]; ctx?: typeof one; measureOn?: boolean; vertical?: { axis: 0 | 1 | 2; min: number; max: number }; down?: boolean } = {}) {
   const { createClipFlow } = await import('../src/app/clipFlow');
-  const log = { adopted: [] as ClipBox[], pages: [] as string[], toasts: [] as string[], runs: 0, opens: 0, kinds: [] as string[], copies: [] as string[], details: [] as string[] };
-  const state = { ms: opts.ms ?? [], sums: [] as MeasurementSummary[], on: opts.measureOn ?? false };
+  const log = { adopted: [] as ClipBox[], pages: [] as string[], toasts: [] as string[], runs: 0, stops: 0, reveals: 0, footprint: [] as boolean[], kinds: [] as string[], copies: [] as string[], details: [] as string[] };
+  const state = { ms: opts.ms ?? [], sums: [] as MeasurementSummary[], on: opts.measureOn ?? false, down: opts.down ?? false, hintFn: null as ((t: string) => void) | null };
   const panel = new FakePanel();
   const overlay = new FakeEl('div');
   const ctx = opts.ctx ?? one;
@@ -49,12 +51,17 @@ async function make(opts: { ms?: BoxMeasurementLike[]; ctx?: typeof one; measure
       measurements: () => state.ms, activeLayerId: () => ctx.activeLayerId, layerCount: () => ctx.layerCount,
       adoptClip: (c) => { log.adopted.push(c); panel.adoptBounds(c); },
       openClipPage: () => log.pages.push('clip'), toast: (m) => log.toasts.push(m),
+      verticalExtent: () => opts.vertical ?? null,
     },
+    lookingDown: () => state.down,
+    setFootprintHint: (on) => { log.footprint.push(on); },
+    watchHint: (fn) => { state.hintFn = fn; fn('Click one corner of the box'); return () => { state.hintFn = null; }; },
+    revealScene: () => { log.reveals++; },
     summaries: () => state.sums,
     scene: () => ({ datumResolved: true, layers: 'single', verticalReferenceKnown: true }),
     measureOn: () => state.on,
-    runMeasureTool: () => { log.runs++; state.on = true; flow.dismissCard(); },
-    openMeasurePage: () => { log.opens++; },
+    armMeasureTool: () => { log.runs++; state.on = true; flow.dismissCard(); },
+    stopMeasureTool: () => { log.stops++; state.on = false; },
     setBoxKind: () => log.kinds.push('box'),
     openDetails: (id) => log.details.push(id),
     copy: async (t) => { log.copies.push(t); return true; },
@@ -70,20 +77,104 @@ async function make(opts: { ms?: BoxMeasurementLike[]; ctx?: typeof one; measure
 }
 
 describe('Draw clipping box', () => {
-  it('arms the Box tool through the canonical command when Measure is off', async () => {
+  it('arms the Box tool when Measure is off, and stays on the Clip page', async () => {
     const t = await make();
     t.flow.drawClippingBox();
     expect(t.log.runs).toBe(1);
-    expect(t.log.opens).toBe(0);
+    expect(t.log.pages).toEqual([]);
     expect(t.log.kinds).toEqual(['box']);
   });
 
-  it('never toggles Measure off when it is already on; it only routes to the page', async () => {
+  it('never toggles Measure off when it is already on', async () => {
     const t = await make({ measureOn: true });
     t.flow.drawClippingBox();
     expect(t.log.runs).toBe(0);
-    expect(t.log.opens).toBe(1);
+    expect(t.log.stops).toBe(0);
+    expect(t.log.pages).toEqual([]);
     expect(t.log.kinds).toEqual(['box']);
+  });
+});
+
+describe('Draw clipping box: footprint, hint, and the tool after', () => {
+  const scan = { axis: 2 as const, min: 0, max: 20 };
+
+  it('mirrors the Box hint on the Clip page, says the clip is full height, and lowers a phone sheet', async () => {
+    const t = await make();
+    t.flow.drawClippingBox();
+    expect(t.log.footprint).toEqual([true]);
+    expect(t.panel.hints.at(-1)).toBe('Click one corner of the box');
+    t.state.hintFn?.('Click the opposite corner');
+    expect(t.panel.hints.at(-1)).toBe('Click the opposite corner');
+    expect(t.log.reveals).toBe(1);
+  });
+
+  it("the drawn box clips at the scan's full height, not the height between the two clicks", async () => {
+    const t = await make({ vertical: scan });
+    t.flow.drawClippingBox();
+    // Two clicks 4.7 m apart on a 20 m scan: well over the 5 % flat rule.
+    t.complete(summary({ id: 'b1', kind: 'box' }), box('b1', [1, 1, 3.5], [5, 6, 8.2]));
+    t.btn('Isolate this box').click();
+    const c = t.log.adopted[0];
+    expect(c.box.min[2]).toBeLessThan(0);
+    expect(c.box.max[2]).toBeGreaterThan(20);
+    expect(c.box.min.slice(0, 2)).toEqual([1, 1]);
+    expect(t.log.toasts[0]).toMatch(/full height/);
+    expect(t.log.toasts[0]).toMatch(/Tools → Clip box/);
+  });
+
+  it('a box measured on the Measure page keeps the height it was drawn with', async () => {
+    const t = await make({ vertical: scan, ms: [box('b1', [1, 1, 3.5], [5, 6, 8.2])] });
+    expect(t.flow.isolate('b1')).toBe(true);
+    expect(t.log.adopted[0].box.min[2]).toBe(3.5);
+    expect(t.log.adopted[0].box.max[2]).toBe(8.2);
+  });
+
+  it('a box completed looking straight down (a plan box) is a footprint too', async () => {
+    const t = await make({ vertical: scan, down: true });
+    t.complete(summary({ id: 'b1', kind: 'box' }), box('b1', [1, 1, 3.5], [5, 6, 8.2]));
+    t.btn('Use as clipping region').click();
+    expect(t.log.adopted[0].box.max[2]).toBeGreaterThan(20);
+  });
+
+  it('after Isolate the Measure tool is off, so the next clicks do not start Box 2', async () => {
+    const t = await make();
+    t.flow.drawClippingBox();
+    expect(t.state.on).toBe(true);
+    t.complete(summary({ id: 'b1', kind: 'box' }), box('b1', [0, 0, 0], [4, 4, 4]));
+    t.btn('Isolate this box').click();
+    expect(t.log.stops).toBe(1);
+    expect(t.state.on).toBe(false);
+    expect(t.log.footprint.at(-1)).toBe(false);
+    expect(t.panel.hints.at(-1)).toBeNull();
+  });
+
+  it('a box measured on purpose and used as the clip leaves the Measure tool on', async () => {
+    const t = await make({ measureOn: true });
+    t.complete(summary({ id: 'b1', kind: 'box' }), box('b1', [0, 0, 0], [4, 4, 4]));
+    t.btn('Use as clipping region').click();
+    expect(t.log.adopted).toHaveLength(1);
+    expect(t.log.stops).toBe(0);
+    expect(t.state.on).toBe(true);
+  });
+
+  it('Esc (the tool turned off) ends the drawing hint', async () => {
+    const t = await make();
+    t.flow.drawClippingBox();
+    t.state.on = false;
+    t.flow.onMeasurementsChanged();
+    expect(t.panel.hints.at(-1)).toBeNull();
+    expect(t.state.hintFn).toBeNull();
+  });
+});
+
+describe('looksDown', () => {
+  it('within 15 degrees of straight down along the scene up', async () => {
+    const { looksDown } = await import('../src/app/clipFlow');
+    expect(looksDown({ position: [0, 0, 100], target: [0, 0, 0] }, [0, 0, 1])).toBe(true);
+    expect(looksDown({ position: [10, 0, 100], target: [0, 0, 0] }, [0, 0, 1])).toBe(true);
+    expect(looksDown({ position: [100, 0, 100], target: [0, 0, 0] }, [0, 0, 1])).toBe(false);
+    expect(looksDown({ position: [0, 100, 0], target: [0, 0, 0] }, [0, 1, 0])).toBe(true);
+    expect(looksDown({ position: [0, 0, 0], target: [0, 0, 0] }, [0, 0, 1])).toBe(false);
   });
 });
 
@@ -239,12 +330,12 @@ describe('active-clip chip', () => {
     expect(chip(t).classList.contains('olv-hidden')).toBe(true);
     t.panel.enabled = true; t.panel.emit();
     expect(chip(t).classList.contains('olv-hidden')).toBe(false);
-    expect(chip(t).textContent).toContain('Clipping on · Inside');
+    expect(chip(t).textContent).toContain('Clipping on · Showing inside box');
     t.panel.mode = 'keep-outside'; t.panel.emit();
-    expect(chip(t).textContent).toContain('Clipping on · Outside');
+    expect(chip(t).textContent).toContain('Clipping on · Showing outside box');
   });
 
-  it('is a polite status, and its Clear turns the clip off and hides the chip', async () => {
+  it('is a polite status, and its Turn off turns the clip off and hides the chip', async () => {
     const t = await make();
     t.panel.enabled = true; t.panel.emit();
     const status = chip(t).querySelectorAll('span')[0];
