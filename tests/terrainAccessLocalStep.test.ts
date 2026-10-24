@@ -70,7 +70,7 @@ describe('computeLocalStep (local relief, reported only)', () => {
   });
 });
 
-/** The user's DTM cell size, and the others the step must be indifferent to. */
+/** Cell sizes from fine to coarse (2.566 m); the step must be indifferent to all of them. */
 const CELL_SIZES = [0.5, 1, 2.5661413613706827, 5] as const;
 const SLOPES_DEG = [2, 6, 10, 19] as const;
 

@@ -22,7 +22,7 @@ const IDENTITY = {
   layerId: null, filename: null, sourceDigest: null, analysisInputDigest: 'digest',
   build: 'test-build', id: 'run-1', generatedAt: '2026-01-01T00:00:00.000Z', processingManifestHead: null,
 };
-const USER_CELL = 2.5661413613706827;
+const COARSE_CELL = 2.5661413613706827;
 
 /** A rise per cell rounded to 1/4096 m, so the plane's heights and their differences are exact in Float32. */
 const dyadic = (v: number): number => Math.round(v * 4096) / 4096;
@@ -59,7 +59,7 @@ function stepOnly(maxStepHeight: number): TerrainAccessProfile {
 
 describe('a smooth slope inside the grade limit routes straight up under the Walker example', () => {
   const N = 21;
-  for (const cell of [0.5, 1, USER_CELL, 5]) {
+  for (const cell of [0.5, 1, COARSE_CELL, 5]) {
     for (const deg of [2, 6, 10, 19]) {
       it(`${deg}° on ${cell} m cells`, () => {
         const rise = dyadic(tanDeg(deg) * cell);
@@ -82,8 +82,8 @@ describe('a smooth slope inside the grade limit routes straight up under the Wal
 
   it('the grade limit, not the step limit, refuses a slope steeper than it', () => {
     // 25° under a 20° grade and 15° cross-slope limit: no heading fits.
-    const rise = dyadic(tanDeg(25) * USER_CELL);
-    const r = runTerrainAccess(dtm(N, N, USER_CELL, (_c, row) => rise * row), SCALE, walker(),
+    const rise = dyadic(tanDeg(25) * COARSE_CELL);
+    const r = runTerrainAccess(dtm(N, N, COARSE_CELL, (_c, row) => rise * row), SCALE, walker(),
       1 * N + 10, 19 * N + 10, TERRAIN_ACCESS_DEFAULTS, IDENTITY);
     expect(r.ok).toBe(false);
     if (r.ok) return;
@@ -96,8 +96,8 @@ describe('a ledge is a step whatever slope it sits on', () => {
   // A full-width ledge between rows 9 and 10, on 2.566 m cells.
   const N = 21;
   for (const deg of [0, 10]) {
-    const rise = dyadic(tanDeg(deg) * USER_CELL);
-    const grid = dtm(N, N, USER_CELL, (_c, row) => rise * row + (row >= 10 ? 0.5 : 0));
+    const rise = dyadic(tanDeg(deg) * COARSE_CELL);
+    const grid = dtm(N, N, COARSE_CELL, (_c, row) => rise * row + (row >= 10 ? 0.5 : 0));
 
     it(`0.5 m ledge on a ${deg}° slope is refused under a 0.3 m step limit`, () => {
       const r = runTerrainAccess(grid, SCALE, stepOnly(0.3), 2 * N + 10, 18 * N + 10, TERRAIN_ACCESS_DEFAULTS, IDENTITY);
@@ -120,8 +120,8 @@ describe('a diagonal move cannot slip through a one-cell berm or ditch', () => {
   const start = 12 * N + 4;
   const goal = 4 * N + 12;
   const cases = [
-    { label: '2 m berm, 2.566 m cells', cell: USER_CELL, h: 2 },
-    { label: '2 m ditch, 2.566 m cells', cell: USER_CELL, h: -2 },
+    { label: '2 m berm, 2.566 m cells', cell: COARSE_CELL, h: 2 },
+    { label: '2 m ditch, 2.566 m cells', cell: COARSE_CELL, h: -2 },
     { label: '0.5 m berm, 1 m cells', cell: 1, h: 0.5 },
   ];
   for (const { label, cell, h } of cases) {
