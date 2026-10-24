@@ -146,7 +146,7 @@ here for transparency.
 | @stryker-mutator/vitest-runner | ^10.0.0 | 10.0.0 | Apache-2.0 | https://github.com/stryker-mutator/stryker-js |
 | @types/proj4 | ^2.19.0 | 2.19.0 | MIT | https://github.com/DefinitelyTyped/DefinitelyTyped |
 | @loaders.gl/las | ^4.5.4 | 4.5.4 | MIT | https://github.com/visgl/loaders.gl |
-| @axe-core/playwright | 4.13.0 | 4.13.0 | MPL-2.0 | https://github.com/dequelabs/axe-core-npm |
+| @axe-core/playwright | 4.14.0 | 4.14.0 | MPL-2.0 | https://github.com/dequelabs/axe-core-npm |
 
 ## License texts
 
