@@ -30,7 +30,11 @@ const INPUTS: ScanStoryInputs = {
   classification: 'source',
 };
 
-describe('the runner mounts the Dataset Story on the panel', () => {
+// The main-thread fallback is compute-bound, and v8 coverage instrumentation
+// makes that compute far slower than the 60 s the coverage run allows.
+const INSTRUMENTED_COMPUTE_TIMEOUT_MS = 120_000;
+
+describe('the runner mounts the Dataset Story on the panel', { timeout: INSTRUMENTED_COMPUTE_TIMEOUT_MS }, () => {
   let warnSpy: ReturnType<typeof vi.spyOn>;
   beforeEach(() => {
     clearTerrainCoreCache();
