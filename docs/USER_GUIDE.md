@@ -218,7 +218,7 @@ The comparison refuses rather than guessing. If the two scans are in provably di
 
 ## Clip and slice
 
-The Clip box draws a box around part of the scan and hides everything outside it, or inside it for a cut-away. Type the six extents (minimum and maximum on X, Y and Z), or press Fit to scan to reset the box to the whole scan and work inwards. The panel counts how many points the box keeps.
+The Clip box draws a box around part of the scan and shows only what is inside it (Keep inside), or hides what is inside it for a cut-away (Keep outside). The box itself is drawn in the scene while the clip is on or the Clip page is open. Draw clipping box takes two opposite corners on the scan and keeps that footprint at the scan's full height. Under Advanced, the six extents (minimum and maximum on X, Y and Z) are in local scene coordinates: a typed value applies when you press Enter or leave the field, and the arrow keys step a bound by 0.1 (1 with Shift). Fit to scan resets the box to every visible scan. The panel counts how many points the box keeps; on a display sample it counts the points shown and estimates what a full-resolution export keeps.
 
 The clip changes what you see, not what you have. A point-cloud export made with the converter's Export button carries the clipped points, and so do the quick format buttons: they add `-clip` to the file name and state the kept count in the PLY, OBJ and XYZ header. A clip that keeps no points is refused with a message.
 
