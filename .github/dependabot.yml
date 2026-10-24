@@ -37,6 +37,11 @@ updates:
       # ignored, so the release that fixes the peer range is still offered.
       - dependency-name: "@loaders.gl/core"
         versions: ["4.5.1"]
+      # The WebKit build in @playwright/test 1.64.1 stalls camera moves, view
+      # button clicks and orbit drags in the Linux end-to-end runs. Only this
+      # version is ignored, so the next release is still offered.
+      - dependency-name: "@playwright/test"
+        versions: ["1.64.1"]
     labels:
       - "dependencies"
 
