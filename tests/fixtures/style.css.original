@@ -3743,8 +3743,8 @@ body:has(.olv-colorbar.olv-colorbar-floating) .olv-project-card {
   animation: olv-measure-pulse 1.5s ease-in-out infinite;
 }
 @keyframes olv-measure-pulse {
-  0%, 100% { r: 4.5; opacity: 1; }
-  50% { r: 7; opacity: 0.6; }
+  0%, 100% { r: 4.5px; opacity: 1; }
+  50% { r: 7px; opacity: 0.6; }
 }
 /*
  * v0.3.8 / v0.3.9 click-first-vertex affordance — the first vertex of
@@ -3780,8 +3780,8 @@ body:has(.olv-colorbar.olv-colorbar-floating) .olv-project-card {
   transform-origin: center;
 }
 @keyframes olv-measure-snap-pulse {
-  0%, 100% { r: 10; opacity: 0.85; }
-  50% { r: 13; opacity: 0.45; }
+  0%, 100% { r: 10px; opacity: 0.85; }
+  50% { r: 13px; opacity: 0.45; }
 }
 .olv-measure-label {
   fill: var(--accent);
