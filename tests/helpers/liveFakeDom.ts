@@ -59,8 +59,18 @@ export class FakeEl {
     if (i >= 0) p.children.splice(i, 1);
     this.parent = null;
   }
-  append(...kids: FakeEl[]): void {
-    for (const k of kids) { k._detach(); k.parent = this; this.children.push(k); }
+  /** A string becomes a text node, as `Element.append` does in the DOM. */
+  append(...kids: (FakeEl | string)[]): void {
+    for (const kid of kids) {
+      let k: FakeEl;
+      if (typeof kid === 'string') {
+        k = new FakeEl('#text');
+        k.textContent = kid;
+      } else k = kid;
+      k._detach();
+      k.parent = this;
+      this.children.push(k);
+    }
   }
   /** Detach from the parent, as `Element.remove()` does. */
   remove(): void { this._detach(); }

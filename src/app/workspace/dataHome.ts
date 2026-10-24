@@ -36,9 +36,14 @@ export interface DataHome {
 
 function row(label: string, onClick: () => void): { root: HTMLButtonElement; value: HTMLElement } {
   const value = el('span', { className: 'olv-data-row-value' });
+  // The spaces between the spans draw nothing in the flex row, but they keep
+  // the label and the value two words in the button's text, so the visible
+  // text reads the same as the aria-label set in refresh().
   const root = el('button', { className: 'olv-data-row', type: 'button' }, [
     el('span', { className: 'olv-data-row-label', text: label }),
+    ' ',
     value,
+    ' ',
     el('span', { className: 'olv-data-row-go', text: '→' }),
   ]) as HTMLButtonElement;
   root.addEventListener('click', onClick);
@@ -68,7 +73,7 @@ export function createDataHome(d: DataHomeDeps): DataHome {
   const toggleValue = el('span', { className: 'olv-data-row-value' });
   const chevron = el('span', { className: 'olv-data-row-go olv-data-class-chevron', text: '▾' });
   chevron.setAttribute('aria-hidden', 'true');
-  const toggle = el('button', { className: 'olv-data-class-toggle', type: 'button' }, [toggleLabel, toggleValue, chevron]) as HTMLButtonElement;
+  const toggle = el('button', { className: 'olv-data-class-toggle', type: 'button' }, [toggleLabel, ' ', toggleValue, chevron]) as HTMLButtonElement;
   const list = el('ul', { className: 'olv-data-class-list' });
   list.id = 'olv-data-class-list';
   list.setAttribute('aria-label', 'Classes');

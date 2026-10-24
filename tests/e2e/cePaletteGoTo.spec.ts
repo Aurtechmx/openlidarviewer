@@ -58,7 +58,9 @@ test.describe('palette Go to', () => {
         unavailable += 1;
         const reason = (await row.locator('.olv-palette-row-hint').innerText()).trim();
         expect(reason.length).toBeGreaterThan(5);
-        await expect(row).toHaveAttribute('aria-label', new RegExp(`^Go to ${e.title}, unavailable: `));
+        // Named by what it shows: the title, then the reason (aria-disabled says unavailable).
+        const esc = (s: string): string => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        await expect(row).toHaveAttribute('aria-label', new RegExp(`^Go to ${esc(e.title)}, ${esc(reason)}`));
         await row.dispatchEvent('click'); // a disabled entry does nothing
         await expect(page.locator('.olv-palette')).toBeVisible();
         await page.locator('.olv-palette-close').click();

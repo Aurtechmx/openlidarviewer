@@ -193,7 +193,7 @@ describe('strip UI', () => {
     expect(open).toHaveBeenCalledWith('clip');
   });
 
-  it('shows the elapsed time and the estimate in their own span, out of the accessible name', async () => {
+  it('shows the elapsed time and the estimate in their own span, out of the accessible name and the button text', async () => {
     const { createStateStrip } = await import('../src/ui/stateStrip');
     const strip = createStateStrip({ open: vi.fn() });
     const root = strip.element as unknown as FakeEl;
@@ -204,13 +204,15 @@ describe('strip UI', () => {
     expect(btn().querySelector('.olv-ss-wait')).toBeNull();
     strip.render(task({ elapsedMs: 12_000 }));
     expect(btn().querySelector('.olv-ss-text')!.textContent).toBe('Analysing…');
-    expect(btn().querySelector('.olv-ss-wait')!.textContent).toBe('· 12 s elapsed');
+    expect(btn().querySelector('.olv-ss-wait')!.dataset.wait).toBe('· 12 s elapsed');
+    expect(btn().querySelector('.olv-ss-wait')!.getAttribute('aria-hidden')).toBe('true');
+    expect(btn().textContent).not.toContain('elapsed');
     const name = btn().getAttribute('aria-label');
     expect(name).toBe('Processing: Analysing…. Opens Analyse');
     strip.render(task({ elapsedMs: 13_000 }));
     expect(btn().getAttribute('aria-label')).toBe(name);
     strip.render(task({ label: 'Exporting', progress: 0.25, elapsedMs: 6000, remainingMs: 18_000 }));
     expect(btn().querySelector('.olv-ss-text')!.textContent).toBe('Exporting 25%');
-    expect(btn().querySelector('.olv-ss-wait')!.textContent).toBe('· 6 s elapsed, about 20 s left');
+    expect(btn().querySelector('.olv-ss-wait')!.dataset.wait).toBe('· 6 s elapsed, about 20 s left');
   });
 });

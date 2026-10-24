@@ -53,6 +53,8 @@
 .olv-ss-dataset .olv-ss-text { color: var(--text); }
 .olv-ss-glyph { flex: none; }
 .olv-ss-wait { flex: none; font-variant-numeric: tabular-nums; }
+/* The elapsed time stays out of the button's text (stateStrip.ts). */
+.olv-ss-wait::before { content: attr(data-wait); }
 .olv-ss-short { display: none; }
 .olv-ss-glyph.is-review { color: var(--state-review); }
 .olv-ss-glyph.is-blocked { color: var(--state-blocked); }
