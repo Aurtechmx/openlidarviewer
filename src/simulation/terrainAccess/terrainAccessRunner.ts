@@ -49,7 +49,11 @@ import {
   type TerrainAccessFeatures,
   type TraversabilityMapCell,
 } from './traversabilityCost';
-import { prepareTerrainAccessRun } from './terrainAccessPrepare';
+import { prepareTerrainAccessRun, type TerrainAccessPrepared } from './terrainAccessPrepare';
+import {
+  TERRAIN_ACCESS_METHODS, TERRAIN_ACCESS_MODEL, terrainAccessPreparationDigest,
+} from './terrainAccessInputDigest';
+import type { TerrainAccessPreview } from './terrainAccessPreview';
 import { aStarTerrain, type AStarOutcome } from './aStarTerrain';
 import { computeRouteDiagnostics, type RouteDiagnostics } from './routeDiagnostics';
 import { terrainAccessResultDigest } from './terrainAccessDigest';
@@ -59,7 +63,6 @@ import {
 } from './terrainAccessExplain';
 import { basisLimitations } from '../simulationInputBasis';
 import { sealRunRecord, type FieldSimulationRunRecord } from '../simulationRunRecord';
-import { methodRef } from '../../science/methodRegistry';
 import {
   resolveEvidenceGapPolicy, type EvidenceGapPolicy, type TerrainAccessGrid, type TerrainAccessProfile,
 } from './terrainAccessTypes';
@@ -282,22 +285,37 @@ export function evidenceGapTreatment(profile: TerrainAccessProfile, grid: Terrai
   };
 }
 
-/** The model a run record names, at the version the registry declares. */
-export const TERRAIN_ACCESS_MODEL = Object.freeze(methodRef('olv.simulation.terrain-access.astar'));
+export { TERRAIN_ACCESS_METHODS, TERRAIN_ACCESS_MODEL } from './terrainAccessInputDigest';
 
-/** The registered methods a run uses, in the order it uses them. */
-export const TERRAIN_ACCESS_METHODS: readonly string[] = Object.freeze([
-  'olv.simulation.terrain-access.local-step',
-  'olv.simulation.terrain-access.directional-grade',
-  'olv.simulation.terrain-access.cost-map',
-  'olv.simulation.terrain-access.astar',
-]);
+/**
+ * The preview's preparation and map when `preview` was built from exactly the
+ * inputs this run reads (same `terrainAccessPreparationDigest`), else null.
+ */
+function reusablePreview(
+  preview: TerrainAccessPreview | null,
+  dtm: DtmGrid | null,
+  scale: HorizontalScale,
+  profile: TerrainAccessProfile,
+  params: TerrainAccessParams,
+): (TerrainAccessPrepared & { readonly map: readonly TraversabilityMapCell[] }) | null {
+  if (!preview?.ok || !dtm) return null;
+  if (preview.preparationDigest !== terrainAccessPreparationDigest(dtm, scale, profile, params)) return null;
+  const { grid, features, eligibility, basis, gridWarnings, weights, map } = preview;
+  return { ok: true, grid, features, eligibility, basis, gridWarnings, weights, map };
+}
 
 /**
  * Run one Terrain Access simulation from `startIndex` to `endIndex` over
  * `dtm`. Order is fixed and is the processing manifest: build the grid,
  * prepare terrain features (slope/aspect, VRM, local step, obstruction),
  * compute hard eligibility, apply width clearance, then search.
+ *
+ * `preview` is the traversability-map preview the caller already built, if
+ * any. When it was built from exactly these inputs (the same preparation
+ * digest: terrain, scale, above-ground surface, ROI, profile, weights and
+ * parameters), its grid, features, eligibility and map are used rather than
+ * built again; they are the same values a fresh preparation would build.
+ * Otherwise it is ignored.
  */
 export function runTerrainAccess(
   dtm: DtmGrid | null,
@@ -307,8 +325,10 @@ export function runTerrainAccess(
   endIndex: number,
   params: TerrainAccessParams,
   identity: TerrainAccessRunIdentity,
+  preview: TerrainAccessPreview | null = null,
 ): TerrainAccessResult | TerrainAccessRefusal {
-  const prepared = prepareTerrainAccessRun(dtm, scale, profile, params);
+  const reused = reusablePreview(preview, dtm, scale, profile, params);
+  const prepared = reused ?? prepareTerrainAccessRun(dtm, scale, profile, params);
   if (!prepared.ok) return prepared;
   const { grid, features, eligibility, basis, gridWarnings, weights } = prepared;
 
@@ -348,7 +368,7 @@ export function runTerrainAccess(
   }
   let gapBlockedCells = 0;
   for (const r of eligibility.reason) if (r === 'derivative-support' || r === 'obstruction-unknown') gapBlockedCells++;
-  const map = buildTraversabilityMap(grid, features, eligibility, profile, weights);
+  const map = reused?.map ?? buildTraversabilityMap(grid, features, eligibility, profile, weights);
   const resultDigest = terrainAccessResultDigest(grid.cols, grid.rows, eligibility.blocked, search.path, search.cost);
 
   const limitations = [

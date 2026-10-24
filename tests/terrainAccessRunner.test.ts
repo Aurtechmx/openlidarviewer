@@ -6,6 +6,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { runTerrainAccess, TERRAIN_ACCESS_DEFAULTS } from '../src/simulation/terrainAccess/terrainAccessRunner';
+import { prepareTerrainAccessPreview } from '../src/simulation/terrainAccess/terrainAccessPreview';
 import type { HorizontalScale } from '../src/simulation/terrainAccess/dtmTerrainAccessGrid';
 import type { TerrainAccessProfile } from '../src/simulation/terrainAccess/terrainAccessTypes';
 import type { DtmGrid } from '../src/terrain/ground/cellConfidence';
@@ -316,5 +317,56 @@ describe('a successful run', () => {
       expect(eastWest.diagnostics.horizontalLengthM).toBeCloseTo(2 * 55_799.979, 2);
       expect(northSouth.diagnostics.horizontalLengthM).toBeCloseTo(2 * 111_412.2402, 2);
     }
+  });
+});
+
+describe('a run reuses the preview built from the same inputs', () => {
+  const rough = (): (number | null)[][] => Array.from({ length: 7 }, (_, r) => Array.from({ length: 7 }, (_, c) =>
+    (r === 3 && c === 3 ? null : 0.05 * c + 0.03 * r + ((r * 7 + c) % 3) * 0.02)));
+  const profile = { ...PERMISSIVE, maxStepHeight: 0.3, vehicleWidth: 0.5 };
+
+  it('same inputs: the preview\'s grid, features, eligibility and map are used, and the result is unchanged', () => {
+    const dtm = dtmOf(rough());
+    const preview = prepareTerrainAccessPreview(dtm, RESOLVED, profile, TERRAIN_ACCESS_DEFAULTS);
+    if (!preview.ok) throw new Error(preview.reason);
+    expect(preview.preparationDigest).toMatch(/^[0-9a-f]{64}$/);
+    const reused = runTerrainAccess(dtm, RESOLVED, profile, 0, 48, TERRAIN_ACCESS_DEFAULTS, identity, preview);
+    const fresh = runTerrainAccess(dtm, RESOLVED, profile, 0, 48, TERRAIN_ACCESS_DEFAULTS, identity);
+    if (!reused.ok || !fresh.ok) throw new Error('refused');
+    expect(reused.features).toBe(preview.features);
+    expect(reused.eligibility).toBe(preview.eligibility);
+    expect(reused.map).toBe(preview.map);
+    expect(fresh.features).not.toBe(preview.features);
+    expect(reused.path).toEqual(fresh.path);
+    expect(reused.cost).toBe(fresh.cost);
+    expect(reused.limitations).toEqual(fresh.limitations);
+    expect(reused.record.result).toEqual(fresh.record.result);
+    expect(reused.record.digest).toBe(fresh.record.digest);
+  });
+
+  it('a different profile, weights, terrain or parameter: the preview is ignored', () => {
+    const dtm = dtmOf(rough());
+    const preview = prepareTerrainAccessPreview(dtm, RESOLVED, profile, TERRAIN_ACCESS_DEFAULTS);
+    if (!preview.ok) throw new Error(preview.reason);
+    const otherDtm = dtmOf(rough());
+    otherDtm.z[10] += 0.5;
+    const cases = [
+      runTerrainAccess(dtm, RESOLVED, { ...profile, maxStepHeight: 0.31 }, 0, 48, TERRAIN_ACCESS_DEFAULTS, identity, preview),
+      runTerrainAccess(dtm, RESOLVED, { ...profile, evidenceGapPolicy: 'exploratory' }, 0, 48, TERRAIN_ACCESS_DEFAULTS, identity, preview),
+      runTerrainAccess(dtm, RESOLVED, profile, 0, 48,
+        { ...TERRAIN_ACCESS_DEFAULTS, weights: { longitudinal: 2, cross: 1, ruggedness: 0.5, step: 1, support: 1 } }, identity, preview),
+      runTerrainAccess(dtm, RESOLVED, profile, 0, 48, { ...TERRAIN_ACCESS_DEFAULTS, interpolated: 'block' }, identity, preview),
+      runTerrainAccess(otherDtm, RESOLVED, profile, 0, 48, TERRAIN_ACCESS_DEFAULTS, identity, preview),
+      runTerrainAccess(dtm, { ...RESOLVED, unitToMetres: 0.3048 }, profile, 0, 48, TERRAIN_ACCESS_DEFAULTS, identity, preview),
+    ];
+    for (const r of cases) {
+      if (!r.ok) continue;
+      expect(r.features).not.toBe(preview.features);
+      expect(r.eligibility).not.toBe(preview.eligibility);
+    }
+    // An invalid profile is refused, never run on the preview's preparation.
+    const invalid = runTerrainAccess(dtm, RESOLVED, { ...profile, maxRuggedness: Number.NaN }, 0, 48,
+      TERRAIN_ACCESS_DEFAULTS, identity, preview);
+    expect(!invalid.ok && invalid.code).toBe('INVALID_PROFILE');
   });
 });

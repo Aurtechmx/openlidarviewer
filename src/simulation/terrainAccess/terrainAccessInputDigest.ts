@@ -50,11 +50,28 @@ import { sha256Hex } from '../../terrain/export/sha256';
 import { dtmProductDigest } from '../../science/dtmProductDigest';
 import { GEOGRAPHIC_DEGREE_MODEL } from '../../terrain/ground/horizontalScale';
 import { methodRef } from '../../science/methodRegistry';
-import { TERRAIN_ACCESS_METHODS, TERRAIN_ACCESS_MODEL } from './terrainAccessRunner';
 import type { AboveGroundSurface, HorizontalScale } from './dtmTerrainAccessGrid';
 import { aboveGroundBasisOf } from './aboveGroundSurface';
-import type { EvidenceGapPolicy } from './terrainAccessTypes';
+import { resolveEvidenceGapPolicy, type EvidenceGapPolicy, type TerrainAccessProfile } from './terrainAccessTypes';
+import { DEFAULT_COST_WEIGHTS, type CostWeights } from './traversabilityCost';
+import type { InterpolatedPolicy } from './dtmTerrainAccessGrid';
 import type { DtmGrid } from '../../terrain/ground/cellConfidence';
+
+/**
+ * The model a run record names, at the version the registry declares. Kept
+ * here, with the digest that binds it, so `terrainAccessRunner.ts` can read
+ * the digest without the two modules importing each other; the runner
+ * re-exports it.
+ */
+export const TERRAIN_ACCESS_MODEL = Object.freeze(methodRef('olv.simulation.terrain-access.astar'));
+
+/** The registered methods a run uses, in the order it uses them. Re-exported by the runner. */
+export const TERRAIN_ACCESS_METHODS: readonly string[] = Object.freeze([
+  'olv.simulation.terrain-access.local-step',
+  'olv.simulation.terrain-access.directional-grade',
+  'olv.simulation.terrain-access.cost-map',
+  'olv.simulation.terrain-access.astar',
+]);
 
 /** Names this digest and its encoding version. Recorded beside the digest in the run record. */
 export const TERRAIN_ACCESS_INPUT_DIGEST_SCHEME = 'olv.simulation.terrain-access.input-digest.v5';
@@ -133,4 +150,63 @@ export function terrainAccessSimulationInputDigest(input: TerrainAccessDigestInp
     model: methodRef(TERRAIN_ACCESS_MODEL.id),
   });
   return sha256Hex(new TextEncoder().encode(header));
+}
+
+/** Names the preparation digest's encoding. Never recorded; it only decides whether a preview can be reused. */
+export const TERRAIN_ACCESS_PREPARATION_SCHEME = 'olv.simulation.terrain-access.preparation.v1';
+
+/** What a preparation reads besides the terrain: the run or preview parameters. */
+export interface TerrainAccessPreparationParams {
+  readonly interpolated: InterpolatedPolicy;
+  readonly maxCells: number;
+  readonly withheldExcluded: boolean | null;
+  readonly dsm?: AboveGroundSurface | null;
+  readonly roi?: Uint8Array | null;
+  readonly weights?: CostWeights;
+}
+
+/**
+ * JSON with every object's keys sorted, so two equal values always serialise
+ * the same. A non-finite number is written as its name ("NaN", "Infinity"),
+ * not as JSON's `null`, so it cannot stand in for a field that is null.
+ */
+function canonicalJson(value: unknown): string {
+  if (value === undefined) return 'null';
+  if (typeof value === 'number' && !Number.isFinite(value)) return JSON.stringify(String(value));
+  if (value === null || typeof value !== 'object') return JSON.stringify(value);
+  if (Array.isArray(value)) return `[${value.map(canonicalJson).join(',')}]`;
+  const entries = Object.entries(value as Record<string, unknown>)
+    .filter(([, v]) => v !== undefined)
+    .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0));
+  return `{${entries.map(([k, v]) => `${JSON.stringify(k)}:${canonicalJson(v)}`).join(',')}}`;
+}
+
+/**
+ * SHA-256 (lowercase hex) over everything `prepareTerrainAccessRun` reads:
+ * the run's input digest ({@link terrainAccessSimulationInputDigest}), the
+ * whole profile, the cost weights and the interpolated-cell, cell-budget and
+ * Withheld parameters. Two preparations with the same digest build the same
+ * grid, features, eligibility and traversability map, so a run may reuse the
+ * preview's instead of building them again.
+ */
+export function terrainAccessPreparationDigest(
+  dtm: DtmGrid,
+  scale: HorizontalScale,
+  profile: TerrainAccessProfile,
+  params: TerrainAccessPreparationParams,
+): string {
+  const dsm = params.dsm ?? null;
+  const roi = params.roi ?? null;
+  const body = canonicalJson({
+    scheme: TERRAIN_ACCESS_PREPARATION_SCHEME,
+    input: terrainAccessSimulationInputDigest({
+      dtm, scale, dsm, roi, evidenceGapPolicy: resolveEvidenceGapPolicy(profile),
+    }),
+    profile,
+    weights: params.weights ?? DEFAULT_COST_WEIGHTS,
+    interpolated: params.interpolated,
+    maxCells: params.maxCells,
+    withheldExcluded: params.withheldExcluded,
+  });
+  return sha256Hex(new TextEncoder().encode(body));
 }

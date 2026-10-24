@@ -262,12 +262,18 @@ export function buildLabPreview(
   });
 }
 
-/** Run Terrain Access from `startIndex` to `endIndex` on the analysed surface. */
+/**
+ * Run Terrain Access from `startIndex` to `endIndex` on the analysed surface.
+ * `preview` is the map the reader picked the cells on: the run reuses its
+ * grid, features, eligibility and map when they were built from the same
+ * inputs (see `runTerrainAccess`).
+ */
 export function runLabTerrainAccess(
   input: TerrainAccessLabInput | null,
   profile: TerrainAccessProfile,
   startIndex: number,
   endIndex: number,
+  preview: TerrainAccessPreview | null = null,
 ): TerrainAccessResult | TerrainAccessRefusal {
   if (!input) {
     return runTerrainAccess(null, { isGeographic: false, latitudeDeg: null, unitToMetres: 1, resolved: false }, profile, startIndex, endIndex, PREVIEW_PARAMS(), NO_IDENTITY);
@@ -275,7 +281,7 @@ export function runLabTerrainAccess(
   return runTerrainAccess(input.dtm, input.scale, profile, startIndex, endIndex, {
     ...PREVIEW_PARAMS(),
     dsm: input.dsm ?? null,
-  }, labIdentity(input, profile));
+  }, labIdentity(input, profile), preview);
 }
 
 /** Result of {@link buildTerrainAccessExport}: bytes/filename to download, or a refusal reason. */
@@ -1112,7 +1118,7 @@ export function mountTerrainAccessInteractive(
       const startIndex = startCell.row * readyPreview.grid.cols + startCell.col;
       const endIndex = goalCell.row * readyPreview.grid.cols + goalCell.col;
       try {
-        outcome = runLabTerrainAccess(input, profile, startIndex, endIndex);
+        outcome = runLabTerrainAccess(input, profile, startIndex, endIndex, readyPreview);
       } catch (err) {
         outcome = terrainAccessFailure(err);
       } finally {
