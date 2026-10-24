@@ -358,7 +358,8 @@ export function areaOfCells(outcome: FlowPulseResult, cells: number): number | n
 /** "3905.0 m²", "at least 3905.0 m² — …", or the withheld sentence. */
 export function contributingAreaText(areaM2: number | null, lowerBound: boolean): string {
   if (areaM2 == null) return 'Withheld: the horizontal scale is not resolved';
-  return lowerBound ? `${areaM2.toFixed(1)} m² — ${EDGE_CONTAMINATED_NOTE}` : `${areaM2.toFixed(1)} m²`;
+  const text = `${areaM2.toLocaleString('en-US', { minimumFractionDigits: 1, maximumFractionDigits: 1 })} m²`;
+  return lowerBound ? `${text} — ${EDGE_CONTAMINATED_NOTE}` : text;
 }
 
 /** The peak flow for a drainage of `cells` cells at `setting`; withheld without metres. */
@@ -893,7 +894,7 @@ function mountFlowPulseInteractive(
       const endCells = outcome.accumulation.upstreamCells[end]!;
       const open = edge?.contaminated[end] === 1;
       selectionPanel.append(
-        row('Path cells', String(t.path.length)),
+        row('Path cells', t.path.length.toLocaleString('en-US')),
         row('Ends at', `${statusLabel(t.endStatus)}, col ${end % cols}, row ${Math.floor(end / cols)}`),
         row('Area draining to the end', contributingAreaText(areaOfCells(outcome, endCells), open)),
         ...peakFlowRows('Peak flow at the end', labPeakFlow(outcome, endCells, rainfall, open)),
@@ -908,7 +909,7 @@ function mountFlowPulseInteractive(
           className: 'olv-flow-snap-note',
           text: `Snapped to the strongest channel within ${POUR_POINT_SNAP_RADIUS_CELLS} cells, from col ${lastSnap.from.col}, row ${lastSnap.from.row}.`,
         })] : []),
-        row('Contributing cells', String(c.cells)),
+        row('Contributing cells', c.cells.toLocaleString('en-US')),
         row('Contributing area', contributingAreaText(areaOfCells(outcome, c.cells), open)),
         ...peakFlowRows('Peak flow at the outlet', labPeakFlow(outcome, c.cells, rainfall, open)),
         el('div', { className: 'olv-lab-actions olv-flow-gif-actions' }, [gifButton, gifError]),

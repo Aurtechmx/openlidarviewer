@@ -70,8 +70,8 @@ describe('edge contamination on screen', () => {
   });
 
   it('writes the area plainly when the catchment is closed, and withholds it without metres', () => {
-    expect(lab.contributingAreaText(3905, false)).toBe('3905.0 m²');
-    expect(lab.contributingAreaText(3905, true)).toBe('3905.0 m² — at least: the catchment reaches the survey edge, so ground outside the survey may also drain here');
+    expect(lab.contributingAreaText(3905, false)).toBe('3,905.0 m²');
+    expect(lab.contributingAreaText(3905, true)).toBe('3,905.0 m² — at least: the catchment reaches the survey edge, so ground outside the survey may also drain here');
     expect(lab.contributingAreaText(null, true)).toBe('Withheld: the horizontal scale is not resolved');
   });
 });

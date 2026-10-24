@@ -320,10 +320,10 @@ export function watershedCaption(f: WatershedFacts, unit: FlowLengthUnit, downsa
     `Cell ${cell}${downsample > 1 ? ` (1 pixel block per ${downsample} x ${downsample} cells)` : ''} · ${f.cells.toLocaleString('en-US')} cells · ${area}.`,
     ...(flow ? [flow] : []),
     `Lines: ${f.channelRule}. Outlet ringed${f.snappedFrom ? ` (snapped from col ${f.snappedFrom.col}, row ${f.snappedFrom.row})` : ''}. NoData dotted. Outside the catchment shaded darker.`,
-    `CRS ${f.crsName ?? 'not resolved'} · ${north} · OpenLiDARViewer ${f.version} · ${f.dateIso.slice(0, 10)}`,
+    `Cells: col counts from the west, row from the south, both from 0. CRS ${f.crsName ?? 'not resolved'} · ${north} · OpenLiDARViewer ${f.version} · ${f.dateIso.slice(0, 10)}`,
   ];
   const title = `Catchment of outlet col ${f.outletCol}, row ${f.outletRow}`;
-  const subtitle = `${f.sourceName ?? 'Unnamed scan'} · col counts from the west, row from the south, from 0`;
+  const subtitle = f.sourceName ?? 'Unnamed scan';
   const commentText = [
     'OpenLiDARViewer Flow Pulse watershed animation (SIMULATED).',
     title, subtitle, ...footer,
