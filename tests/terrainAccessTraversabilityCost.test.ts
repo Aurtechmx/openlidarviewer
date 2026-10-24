@@ -135,10 +135,25 @@ describe('evaluateEdge / edgeCost', () => {
   });
 
   it('never returns a cost for a hard-blocked edge', () => {
-    const grid = gridOf([[0, 5]]); // 5 m step
+    const grid = gridOf([[0, 0, 5, 5]]); // a 5 m ledge between cells 1 and 2
     const profile = { ...PERMISSIVE, maxStepHeight: 0.2 };
     const features = prepareTerrainAccessFeatures(grid, profile);
-    expect(edgeCost(grid, features, profile, 0, 1, 1, 0)).toBeNull();
+    expect(evaluateEdge(grid, features, profile, 1, 2, 1, 0).reason).toBe('step-height');
+    expect(edgeCost(grid, features, profile, 1, 2, 1, 0)).toBeNull();
+  });
+
+  it('a smooth slope costs its grade once: the step term adds nothing on a plane', () => {
+    // A 0.2 tangent plane rising east. The step of every move is 0, so the
+    // cost is distance · (1 + grade utilization), with no second grade term.
+    const grid = gridOf(Array.from({ length: 5 }, () => [0, 0.2, 0.4, 0.6, 0.8]));
+    const profile = { ...PERMISSIVE, maxLongitudinalGrade: 0.4, maxStepHeight: 0.3 };
+    const features = prepareTerrainAccessFeatures(grid, profile);
+    const centre = 2 * 5 + 2;
+    const e = evaluateEdge(grid, features, profile, centre, centre + 1, 1, 0);
+    expect(e.stepM).toBeLessThan(1e-6);
+    expect(e.longitudinalGrade).toBeCloseTo(0.2, 5);
+    const weights = { longitudinal: 1, cross: 0, ruggedness: 0, step: 1, support: 0 };
+    expect(edgeCost(grid, features, profile, centre, centre + 1, 1, 0, weights) as number).toBeCloseTo(1.5, 5);
   });
 
   it('cost rises monotonically with utilization of the declared limits', () => {

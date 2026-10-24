@@ -323,7 +323,7 @@ exists yet, so every SS element currently lives somewhere else.
 | Measure | Profile CSV and PDF export | CTX |
 | Measure | Session "Export" and "Open" (`ui/MeasurePanel.ts:401`) | CTX, a copy of Export mode |
 | Annotate | Sort, search, list, Edit, Clear all | CTX |
-| Clip | Enable, Inside or Outside, axis limits, Fit to scan, readout | CTX |
+| Clip | Enable, Keep inside or Keep outside, Draw clipping box, axis limits, Fit to scan, Turn off, readout | CTX |
 | Analyse home | Rows with status and reason, remedies | LR |
 | Analyse home | Inline "Run terrain analysis" | CTX |
 | Analyse home | Lab rows | LR, opening MOD |

@@ -24,6 +24,13 @@
  *     decision falls back to refusing a box with a zero extent on any axis, so a
  *     truly degenerate box is never accepted. The measurement itself is never
  *     touched;
+ *   - a FOOTPRINT box always takes the scan's full height. A box drawn with
+ *     "Draw clipping box", or drawn looking straight down, is two clicks on
+ *     whatever surface was under the cursor: its height is an accident of
+ *     where those clicks landed, not a choice. The caller says so with
+ *     `fullHeight`, and the result names the reason (`'footprint'`). A box
+ *     measured on the Measure page keeps the height it was drawn with (unless
+ *     flat), and an explicit Z typed on the Clip page afterwards is the user's;
  *   - the corners are normalised with `boxFromCorners`, so reversed corners give
  *     the same box.
  *
@@ -59,6 +66,8 @@ export interface ClipTargetContext {
    * project frame). Absent when unknown: only an exactly flat box is refused.
    */
   readonly vertical?: VerticalExtent | null;
+  /** The box is a footprint (drawn to clip, or drawn looking straight down): use the scan's full height. */
+  readonly fullHeight?: boolean;
 }
 
 /** A box thinner than this fraction of the scan's vertical range counts as flat. */
@@ -71,10 +80,22 @@ export type ClipFromBoxResult =
   | {
       readonly ok: true;
       readonly clip: ClipBox;
-      /** Set when a flat box was given the scan's full height: the drawn height and the one used. */
-      readonly heightExtended?: { readonly axis: 0 | 1 | 2; readonly drawn: number; readonly min: number; readonly max: number };
+      /**
+       * Set when the box was given the scan's full height: the drawn height,
+       * the one used, and why (a flat box, or a footprint drawn to clip).
+       */
+      readonly heightExtended?: HeightExtension;
     }
   | { readonly ok: false; readonly reason: string };
+
+/** How a box's height was replaced by the scan's. */
+export interface HeightExtension {
+  readonly axis: 0 | 1 | 2;
+  readonly drawn: number;
+  readonly min: number;
+  readonly max: number;
+  readonly reason: 'flat' | 'footprint';
+}
 
 const finite3 = (p: Vec3 | undefined): p is Vec3 =>
   !!p && p.length >= 3 && Number.isFinite(p[0]) && Number.isFinite(p[1]) && Number.isFinite(p[2]);
@@ -111,15 +132,16 @@ export function clipFromBoxMeasurement(
   }
   const min: [number, number, number] = [...box.min];
   const max: [number, number, number] = [...box.max];
-  let heightExtended: { axis: 0 | 1 | 2; drawn: number; min: number; max: number } | undefined;
+  let heightExtended: HeightExtension | undefined;
   if (v && up !== null) {
     const drawn = box.max[up] - box.min[up];
-    if (drawn < (v.max - v.min) * FLAT_BOX_FRACTION) {
+    const flat = drawn < (v.max - v.min) * FLAT_BOX_FRACTION;
+    if (flat || ctx.fullHeight === true) {
       // A little margin so a rounding step never trims the top or bottom points.
       const pad = (v.max - v.min) * 0.01;
       min[up] = Math.min(box.min[up], v.min - pad);
       max[up] = Math.max(box.max[up], v.max + pad);
-      heightExtended = { axis: v.axis, drawn, min: min[up], max: max[up] };
+      heightExtended = { axis: v.axis, drawn, min: min[up], max: max[up], reason: ctx.fullHeight === true ? 'footprint' : 'flat' };
     }
   }
   const clip: ClipBox = { box: { min, max }, mode: 'keep-inside', enabled: true };

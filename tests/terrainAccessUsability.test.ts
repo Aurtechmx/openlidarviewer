@@ -79,6 +79,22 @@ describe('run card', () => {
     expect(text).toContain('100% measured, 0% interpolated; 0% below the profile\'s minimum confidence (0)');
   });
 
+  it('shows the limits the run applied, in the form\'s units', () => {
+    const text = rec(lab.renderTerrainAccessRunCard(weakSupportRun())).textContent;
+    // profileOf: grade and cross-slope tangent 1 (45°), step 1 m, width 0 m, minimum confidence 0.
+    expect(text).toContain('Limits applied');
+    expect(text).toContain('grade 45.0°, cross slope 45.0°, step 1 m, vehicle width 0 m, minimum confidence 0');
+  });
+
+  it('a refused run shows the limits it was asked to apply, when the caller passes them', () => {
+    const refusal = { ok: false as const, code: 'NO_ROUTE' as const, reason: 'No route.' };
+    const walker = profileForm.parseTerrainAccessProfileForm(profileForm.terrainAccessExampleForm('walker'));
+    if (!walker.ok) throw new Error('walker');
+    const withLimits = rec(lab.renderTerrainAccessRunCard(refusal, true, walker.profile)).textContent;
+    expect(withLimits).toContain('grade 20.0°, cross slope 15.0°, step 0.3 m, vehicle width 0.6 m, minimum confidence 40');
+    expect(rec(lab.renderTerrainAccessRunCard(refusal, true)).textContent).not.toContain('Limits applied');
+  });
+
   it('a route with no extra cost says the cost is distance alone', () => {
     expect(explain.costDriversSentence([{ term: 'support', total: 0 }])).toBe(
       'Cost is distance alone under the configured weights.',
@@ -86,6 +102,19 @@ describe('run card', () => {
     expect(explain.costDriversSentence([
       { term: 'cross-slope', total: 2 }, { term: 'step', total: 1 }, { term: 'support', total: 0 },
     ])).toBe('Cost driven mostly by: cross slope, then step height.');
+  });
+
+  it('does not name a term that adds only rounding or under 1% of the extra cost', () => {
+    // A plane's step reads a few Float32 units in the last place, not 0.
+    expect(explain.costDriversSentence([
+      { term: 'longitudinal-grade', total: 12 }, { term: 'step', total: 3e-7 }, { term: 'support', total: 0 },
+    ])).toBe('Cost driven mostly by: grade along the route.');
+    expect(explain.costDriversSentence([
+      { term: 'longitudinal-grade', total: 12 }, { term: 'cross-slope', total: 0.05 },
+    ])).toBe('Cost driven mostly by: grade along the route.');
+    expect(explain.costDriversSentence([{ term: 'step', total: 4e-7 }])).toBe(
+      'Cost is distance alone under the configured weights.',
+    );
   });
 });
 
@@ -137,7 +166,7 @@ describe('profile form', () => {
     walk(form);
     expect(tips.slice(0, 2)).toEqual([
       'Treat cells below the minimum confidence as impassable.',
-      'Allow cells below the minimum confidence, at an extra route cost.',
+      'Allow cells below the minimum confidence and report their share. Cost follows each cell\'s confidence; the minimum does not change it.',
     ]);
     // The evidence-gap policy follows, exploratory first.
     expect(tips.slice(2)).toEqual([

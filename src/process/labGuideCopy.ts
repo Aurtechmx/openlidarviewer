@@ -19,7 +19,7 @@ export const LAB_NAME: Readonly<Record<LabId, string>> = {
 
 /** One line: what the lab is for, shown at its top and on its Analyse home row. */
 export const LAB_PURPOSE: Readonly<Record<LabId, string>> = {
-  'flow-pulse': 'See which way water would run downhill over the ground surface, and which area drains to a point. Counts cells, not rainfall.',
+  'flow-pulse': 'See which way water would run downhill over the ground surface, which area drains to a point, and a rough peak flow for a rainfall you set.',
   'terrain-access': 'Screen a possible route over the ground for a vehicle or walker you describe. Not a safety guarantee.',
   observatory: 'Shows what the scanner saw from each setup, what was hidden behind objects, and where another setup would help.',
 };
@@ -73,7 +73,7 @@ export function labReadiness(
           ? 'Distances and heights are in known units.'
           : ta
             ? 'Missing: grades and distances need known units. Assign a coordinate system to the scan.'
-            : 'Not known: areas are withheld; cell counts still work. A scan in geographic degrees with no known latitude does not run.',
+            : 'Not known: areas are withheld, and so are peak-flow estimates; cell counts still work. A scan in geographic degrees with no known latitude does not run.',
     },
   ];
 }

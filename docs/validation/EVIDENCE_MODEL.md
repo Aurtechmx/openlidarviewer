@@ -58,7 +58,7 @@ been exercised over, it can move a claim to E4 against an independent
 implementation, and it is how a weakness gets found. It sits at E4, and a
 register entry should say so.
 
-Of the 38 registered claims, 21 currently sit below their required level. Eighteen
+Of the 39 registered claims, 21 currently sit below their required level. Eighteen
 of those require E5. Two require only E4: CONTOURS-CARTOGRAPHIC, where a
 generalized contour needs the same independent check the analytical line
 already has and does not have it, and TERRAIN-FLOW-PULSE, a new v0.7 field

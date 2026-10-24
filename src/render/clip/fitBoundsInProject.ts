@@ -31,3 +31,24 @@ export function fitBoundsInProject(
   }
   return { min, max };
 }
+
+/**
+ * Fit to scan over every visible layer: the viewer's merged, placed bounds
+ * (`[minx, miny, minz, maxx, maxy, maxz]`, project frame) as a box, widened by
+ * about one Float32 step of each coordinate for the same reason as
+ * {@link fitBoundsInProject} (a placed point can round just outside the exact
+ * sum). Null with nothing visible.
+ */
+export function fitMergedBounds(merged: readonly number[] | null): BoxBounds | null {
+  if (!merged || merged.length < 6 || !merged.every(Number.isFinite)) return null;
+  const min: [number, number, number] = [0, 0, 0];
+  const max: [number, number, number] = [0, 0, 0];
+  for (let a = 0; a < 3; a++) {
+    const lo = merged[a];
+    const hi = merged[3 + a];
+    const margin = Math.max(Math.abs(lo), Math.abs(hi)) * FLOAT32_MARGIN;
+    min[a] = lo - margin;
+    max[a] = hi + margin;
+  }
+  return { min, max };
+}

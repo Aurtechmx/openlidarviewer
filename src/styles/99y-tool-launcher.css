@@ -24,6 +24,12 @@
 .olv-tl-row:disabled { opacity: 0.55; cursor: not-allowed; }
 .olv-tl-row .olv-tl-title { font-size: var(--text-xs); font-weight: 600; }
 .olv-tl-row .olv-tl-key { grid-row: 1; grid-column: 2; }
+/* A tool that keeps running off its page (the clip box) says so on its row. */
+.olv-tl-row.is-on { border-color: var(--accent); }
+.olv-tl-row .olv-tl-state {
+  grid-row: 1; grid-column: 2; font-size: var(--text-2xs); font-weight: 600;
+  color: var(--accent); white-space: nowrap;
+}
 .olv-tl-hint {
   grid-column: 1 / -1; font-size: var(--text-body); color: var(--text-dim);
   line-height: 1.35; text-wrap: pretty;

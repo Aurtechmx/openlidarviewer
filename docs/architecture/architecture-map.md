@@ -29,10 +29,10 @@ from the tree and fails when a cell drifts.
 | Science domain | `src/terrain`, `src/validation`, `src/analysis`, `src/science` | ~54k | Ground filtering, DTM, contours, derivatives, hold-out RMSE, evidence model. UI-free by lint. |
 | I/O | `src/io` | ~42k | Format loaders (LAS/LAZ/PLY/PCD/PTX/E57/…), COPC + EPT streaming sources, range transports, session. |
 | Render | `src/render` | ~84k | three.js/WebGPU scene, streaming scheduler, measurement tools, colour modes. |
-| Export / report | `src/export`, `src/report`, `src/convert` | ~20k | Studio exporters, PDF/report builders, batch conversion. |
+| Export / report | `src/export`, `src/report`, `src/convert` | ~21k | Studio exporters, PDF/report builders, batch conversion. |
 | Application services | `src/app` | ~32k | Composition root and the services that own shared state. |
-| UI | `src/ui` | ~46k | Panels, Inspector, Studio surfaces, onboarding. |
-| Shell | `src/main.ts` | 4,244 | Wiring. A monolith under decomposition. |
+| UI | `src/ui` | ~47k | Panels, Inspector, Studio surfaces, onboarding. |
+| Shell | `src/main.ts` | 4,237 | Wiring. A monolith under decomposition. |
 
 ## Composition root
 
@@ -102,7 +102,7 @@ Recorded so the next pass does not re-derive them:
   `applyPolygonReclassify`) is ALREADY extracted and tested. What remains on the
   Viewer is a thin GPU-upload wrapper.
 
-`src/main.ts` (4,244): the largest blocks, which are the extraction
+`src/main.ts` (4,237): the largest blocks, which are the extraction
 candidates:
 
 `buildActionRegistry` is a thin assembler in `src/app/actionDefinitions.ts` over
@@ -269,7 +269,7 @@ in `main.ts`, which reaches the module through `loadTestSeamMount()` in
 and the chunk
 (`npm run check:no-test-seam`). `main.ts` went from 4,426 to 4,348 lines.
 
-`src/render/Viewer.ts` (5,936): the constructor and a handful of large
+`src/render/Viewer.ts` (5,935): the constructor and a handful of large
 methods dominate:
 
 Done: the renderer, scene, cameras and EDL pipeline are built by

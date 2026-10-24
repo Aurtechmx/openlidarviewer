@@ -64,7 +64,7 @@ import { noteEdit, pickUndo, pickRedo, withSuppressed } from './ui/undoRouter';
 // The Measurements panel is lazy-mounted on the first scan load (never in the
 // empty-state shell); its whole mount lifecycle lives in `measurePanelMount.ts`,
 // which pulls the panel class through `loadMeasurePanel()` inside `ensure()`.
-import { createMeasurePanelMount, createAnalyseProfileVisibility, createClipFlowFromShell } from './app/measurePanelMount';
+import { createMeasurePanelMount, createAnalyseProfileVisibility, mountClip } from './app/measurePanelMount';
 import { createProcessStudioFromShell } from './app/processStudioMount';
 import { readTerrainComputePath } from './app/terrainComputePath';
 import { lazyCoordinateHud } from './app/coordinateHudLazy';
@@ -110,8 +110,6 @@ import { makeExportCrsResolver, resolvedExportCrs } from './app/exportCrsResolve
 import { createInspectorVisualCoordinator } from './app/inspectorVisualCoordinator';
 import type { MeasurementExportActionDeps } from './app/measurementExportActions';
 import { exportImageAction, runPointExport } from './app/exportImageAction';
-import { ClipPanel, fitBoundsInProject } from './ui/ClipPanel';
-import type { ClipBox } from './render/clip/clipBox';
 // Two-epoch change detection is loaded on demand (it pulls the terrain
 // ground-filter + rasteriser): see compareLoadedLayers' dynamic import.
 import { planInstantAnswer, sameSourcePair } from './intelligence/instantAnswer';
@@ -2483,18 +2481,11 @@ wireFrameChange({
 });
 exportPanel.setCrsKnown(crsIsKnown(crsService.current()));
 
-// Clip box — an axis-aligned box the viewer renders through (a GPU per-point
-// keep test in the size graph) with an exact CPU kept-count. The keep/cull math is the pure
-// `clipBox` core; this panel + the viewer wiring realise it.
-const clipPanel = new ClipPanel({
-  // `viewer?.`: the constructor's setVisible(false) → onApply(null) fires before
-  // the deferred Viewer exists, and clearing a clip on none is a no-op.
-  onApply: (clip: ClipBox | null) => viewer?.setClip(clip),
-  fitBounds: () => fitBoundsInProject(scans.activeCloud()?.bounds() ?? null, scans.activeId ? viewer?.layerProjectOffset(scans.activeId) ?? null : null),
-  keptCount: () => (scans.activeId ? viewer.clipKeptCount(scans.activeId) : null),
-});
-const clipFlow = createClipFlowFromShell({ clipPanel, overlay: stage.overlay, viewer: () => viewer, ready: () => viewerReady, toast: showLassoToast, runTool,
-  activeLayerId: () => (scans.activeId ? runtime.layerIdentity.stableIdFor(scans.activeId) : null),
+// Clip box: an axis-aligned box the viewer renders through (a GPU per-point keep test in the
+// size graph) and draws in the scene, with an exact CPU kept-count; the panel, the Box → clip flow
+// and their viewer wiring are built in clipMount.ts over the pure `clipBox` core.
+const { clipPanel, clipFlow } = mountClip({ overlay: stage.overlay, viewer: () => viewer, ready: () => viewerReady, toast: showLassoToast, workflow: workflowController,
+  activeId: () => scans.activeId, activeLayerId: () => (scans.activeId ? runtime.layerIdentity.stableIdFor(scans.activeId) : null), revealScene: () => workspaceShell?.revealScene(),
   openPage: (p) => workspaceShell?.openToolPage(p), measurePanel: () => measureMount.panel, crs: crsService });
 
 // The Tools tab held only the Clip box until a tool had been used, so it could
@@ -2514,7 +2505,9 @@ async function fillToolLauncher(): Promise<void> {
     }),
     resume: (id) => workspaceShell?.resumeToolPage(id) ?? false,
     disabledReason: () => (viewerReady && hasScan() ? null : 'Load a scan to use the tools.'),
+    stateOf: (id) => (id === 'tool.clip' && clipPanel.enabled ? `On · ${clipPanel.mode === 'keep-inside' ? 'Keep inside' : 'Keep outside'}` : null),
   });
+  clipPanel.subscribe(() => toolLauncherCard?.refresh());
   toolLauncherHost.append(toolLauncherCard.element);
 }
 
@@ -2882,7 +2875,7 @@ void viewerLoaded.then(() => {
         results: { viewer, identity: runtime.layerIdentity, scans, terrainRunner },
         measurePanel: () => measureMount.panel, setMeasureMountElement: (fn) => measureMount.setMountElement(fn),
         hasScan, crsService,
-        onModeChange: refreshToolLauncher,
+        onModeChange: refreshToolLauncher, onRoute: (r) => clipPanel.setPageOpen(r.mode === 'work' && r.page === 'clip'),
     });
     void fillToolLauncher(); // the card fills its mounted host when its chunk lands
     workspaceShell = shell;

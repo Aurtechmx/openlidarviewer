@@ -15,7 +15,7 @@
     },
     "io->render": {
       "runtime": 5,
-      "typeOnly": 16,
+      "typeOnly": 18,
       "dynamic": 0,
       "edges": [
         "src/io/heavy/OlvTileSource.ts -> src/render/streaming/StreamingNodeStore.ts",
@@ -27,7 +27,7 @@
     },
     "export->render": {
       "runtime": 6,
-      "typeOnly": 8,
+      "typeOnly": 9,
       "dynamic": 0,
       "edges": [
         "src/export/kmlExport.ts -> src/render/measure/types.ts",
@@ -40,7 +40,7 @@
     },
     "report->render": {
       "runtime": 3,
-      "typeOnly": 5,
+      "typeOnly": 6,
       "dynamic": 0,
       "edges": [
         "src/report/ReportMeasurementSection.ts -> src/render/measure/format.ts",
@@ -51,9 +51,9 @@
   },
   "fanOut": {
     "src/main.ts": {
-      "runtime": 97,
-      "typeOnly": 27,
-      "dynamic": 6,
+      "runtime": 96,
+      "typeOnly": 26,
+      "dynamic": 7,
       "modules": [
         "@fontsource/jetbrains-mono/latin-400.css",
         "@fontsource/jetbrains-mono/latin-500.css",
@@ -72,10 +72,12 @@
         "src/app/inspectorCardRefreshers.ts",
         "src/app/inspectorVisualCoordinator.ts",
         "src/app/kmlActions.ts",
+        "src/app/layerUpFrames.ts",
         "src/app/measurePanelMount.ts",
         "src/app/navPaletteActions.ts",
         "src/app/openScan.ts",
         "src/app/openStreaming.ts",
+        "src/app/pcCatalogueCrs.ts",
         "src/app/processStudioMount.ts",
         "src/app/projectFrame.ts",
         "src/app/remoteSourceNaming.ts",
@@ -96,7 +98,6 @@
         "src/diagnostics/usageCounters.ts",
         "src/export/exportScanIdentity.ts",
         "src/export/lonLatMapper.ts",
-        "src/geo/CrsOverrideStore.ts",
         "src/geo/CrsService.ts",
         "src/geo/SpatialContext.ts",
         "src/intelligence/instantAnswer.ts",
@@ -107,7 +108,6 @@
         "src/io/loaderConfig.ts",
         "src/io/range/RangeSource.ts",
         "src/io/shareState.ts",
-        "src/io/sniffFormat.ts",
         "src/lazyChunks.ts",
         "src/prefs.ts",
         "src/render/camera/recommendView.ts",
@@ -128,7 +128,6 @@
         "src/ui/AnnotationPanel.ts",
         "src/ui/CatalogPanel.ts",
         "src/ui/ClassLegendPanel.ts",
-        "src/ui/ClipPanel.ts",
         "src/ui/DropZone.ts",
         "src/ui/ExportPanel.ts",
         "src/ui/Inspector.ts",
@@ -175,7 +174,7 @@
         "src/render/camera/cameraPresets.ts",
         "src/render/camera/orthoCamera.ts",
         "src/render/camera/orthoProjection.ts",
-        "src/render/clip/clipBox.ts",
+        "src/render/clip/clipGpu.ts",
         "src/render/colorEncode.ts",
         "src/render/colorLegend.ts",
         "src/render/colorModes.ts",
@@ -237,9 +236,9 @@
   },
   "watchFanOut": {
     "src/ui/AnalysePanel.ts": {
-      "runtime": 26,
-      "typeOnly": 18,
-      "dynamic": 1,
+      "runtime": 29,
+      "typeOnly": 19,
+      "dynamic": 2,
       "modules": [
         "src/export/exportScanIdentity.ts",
         "src/export/permitStamp.ts",
@@ -250,6 +249,7 @@
         "src/render/measure/mapSheetExportOptions.ts",
         "src/science/analysisFreshness.ts",
         "src/science/sourceInterpretation.ts",
+        "src/simulation/terrainAccess/aboveGroundSurface.ts",
         "src/terrain/contour/contourCopy.ts",
         "src/terrain/contour/contourShapeStyle.ts",
         "src/terrain/contour/evidenceGrade.ts",
@@ -259,7 +259,9 @@
         "src/terrain/contour/terrainReadiness.ts",
         "src/terrain/contour/whyNotReasons.ts",
         "src/terrain/datasetIntelligence.ts",
+        "src/terrain/export/analysedBasis.ts",
         "src/terrain/quality/scanFitness.ts",
+        "src/terrain/validate/holdoutCiText.ts",
         "src/ui/Modal.ts",
         "src/ui/analyseSurfaceTiles.ts",
         "src/ui/busyScan.ts",
@@ -270,10 +272,11 @@
       ]
     },
     "src/ui/Inspector.ts": {
-      "runtime": 14,
+      "runtime": 17,
       "typeOnly": 13,
       "dynamic": 0,
       "modules": [
+        "src/app/comparePair.ts",
         "src/diagnostics/usageCounters.ts",
         "src/lazyChunks.ts",
         "src/model/layerCompatibility.ts",
@@ -286,16 +289,19 @@
         "src/ui/collapsibleSection.ts",
         "src/ui/colorChipModel.ts",
         "src/ui/dom.ts",
+        "src/ui/inspector/detailMode.ts",
         "src/ui/politeAnnounce.ts",
+        "src/ui/referencePlaneSection.ts",
         "src/ui/streamingDetail.ts"
       ]
     },
     "src/render/measure/MeasureController.ts": {
-      "runtime": 16,
-      "typeOnly": 5,
+      "runtime": 18,
+      "typeOnly": 6,
       "dynamic": 0,
       "modules": [
         "src/render/measure/MeasureOverlay.ts",
+        "src/render/measure/areaValidity.ts",
         "src/render/measure/boxEdit.ts",
         "src/render/measure/format.ts",
         "src/render/measure/geometry.ts",
@@ -306,21 +312,23 @@
         "src/render/measure/profileSampler.ts",
         "src/render/measure/profileStations.ts",
         "src/render/measure/profileSummary.ts",
-        "src/render/measure/snap.ts",
+        "src/render/measure/projectSnap.ts",
         "src/render/measure/types.ts",
         "src/render/measure/volume.ts",
+        "src/render/touchTapGate.ts",
         "src/ui/dom.ts",
         "src/ui/safeStorage.ts"
       ]
     },
     "src/ui/MeasurePanel.ts": {
-      "runtime": 19,
+      "runtime": 20,
       "typeOnly": 1,
       "dynamic": 0,
       "modules": [
         "src/geo/height.ts",
         "src/io/download.ts",
         "src/lazyChunks.ts",
+        "src/render/measure/civilProfileStats.ts",
         "src/render/measure/format.ts",
         "src/render/measure/measureConfidence.ts",
         "src/render/measure/measurementChains.ts",
@@ -341,11 +349,12 @@
     },
     "src/render/measure/profilePdf.ts": {
       "runtime": 14,
-      "typeOnly": 1,
+      "typeOnly": 2,
       "dynamic": 0,
       "modules": [
         "pdf-lib",
         "src/geo/height.ts",
+        "src/io/truncation.ts",
         "src/pdfInfoDate.ts",
         "src/render/measure/civilProfileStats.ts",
         "src/render/measure/format.ts",
@@ -354,7 +363,6 @@
         "src/render/measure/profileProvenance.ts",
         "src/render/measure/profileSheetLayout.ts",
         "src/render/measure/profileSummary.ts",
-        "src/science/withheldCounts.ts",
         "src/terrain/export/exportNotes.ts",
         "src/units/units.ts",
         "src/winAnsiText.ts"
@@ -441,28 +449,32 @@
     "components": []
   },
   "context": {
-    "filesScanned": 1059,
+    "filesScanned": 1168,
     "inlineTypeOnlyImports": 3,
     "note": "inlineTypeOnlyImports counts declarations whose named bindings are all inline `type` specifiers. Under verbatimModuleSyntax the declaration survives as `import {} from \"x\"`, a module load with no binding, so it is counted as a runtime edge above.",
     "topFanIn": [
       {
         "file": "src/ui/dom.ts",
-        "importers": 78
+        "importers": 91
       },
       {
         "file": "src/lazyChunks.ts",
-        "importers": 32
+        "importers": 37
       },
       {
         "file": "src/units/units.ts",
-        "importers": 31
+        "importers": 37
       },
       {
         "file": "src/io/loadErrors.ts",
-        "importers": 25
+        "importers": 29
       },
       {
-        "file": "src/terrain/quantile.ts",
+        "file": "src/ui/Modal.ts",
+        "importers": 23
+      },
+      {
+        "file": "src/geo/height.ts",
         "importers": 22
       },
       {
@@ -470,40 +482,36 @@
         "importers": 21
       },
       {
-        "file": "src/ui/Modal.ts",
-        "importers": 19
+        "file": "src/model/PointCloud.ts",
+        "importers": 21
       },
       {
-        "file": "src/geo/height.ts",
-        "importers": 17
-      },
-      {
-        "file": "src/io/sniffFormat.ts",
-        "importers": 17
-      },
-      {
-        "file": "src/terrain/ground/cellConfidence.ts",
-        "importers": 17
-      },
-      {
-        "file": "src/model/pointFrames.ts",
-        "importers": 16
+        "file": "src/terrain/quantile.ts",
+        "importers": 21
       },
       {
         "file": "src/science/methodRegistry.ts",
+        "importers": 19
+      },
+      {
+        "file": "src/geo/SpatialContext.ts",
+        "importers": 18
+      },
+      {
+        "file": "src/model/pointFrames.ts",
+        "importers": 17
+      },
+      {
+        "file": "src/export/safeText.ts",
         "importers": 16
       },
       {
         "file": "src/io/download.ts",
-        "importers": 15
+        "importers": 16
       },
       {
-        "file": "src/model/PointCloud.ts",
-        "importers": 15
-      },
-      {
-        "file": "src/io/lasDecodeShared.ts",
-        "importers": 14
+        "file": "src/io/truncation.ts",
+        "importers": 16
       }
     ],
     "topFanInNote": "The most-imported files by distinct static importers, runtime edges only. Recorded so a review can see what the tree leans on; not enforced, because a widely imported pure module is a healthy hub and a widely imported stateful one is a defect, and this scan cannot tell them apart."

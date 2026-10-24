@@ -14,7 +14,7 @@ import { el } from './dom';
 import { fullFileAvailability, reloadAvailability, reviewSampleTip, sampleActionLinks } from '../app/fullFileActions';
 import { STATE_GLYPH, STATE_LABEL, type SciState } from './stateChip';
 import { linearUnitLabel } from '../io/crs';
-import { clipScopeText } from '../render/clip/clipScope';
+import { clipStatusText } from '../render/clip/clipScope';
 import type { StripSnapshot } from '../app/stateStrip/stripReads';
 import type { Coverage } from '../process/ProcessPlan';
 import { formatWait, WAIT_SHOWN_AFTER_MS } from '../process/waitClock';
@@ -174,7 +174,7 @@ export function createStateStrip(host: StateStripHost): StateStrip {
       buttons.get('basis')!.title = s.basis?.value === 'resident-only'
         ? 'Only the points currently in memory, not the whole file.'
         : '';
-      paint('clip', s.clip ? clipScopeText(s.clip) : null, s.clip ? 'info' : null);
+      paint('clip', s.clip ? clipStatusText(s.clip) : null, s.clip ? 'info' : null);
       const p = s.processing?.value;
       paint(
         'processing',

@@ -13,8 +13,14 @@ in another language, and by a different search algorithm:
                             algorithm rather than from its TypeScript.
   Vector Ruggedness       - Sappington, Longshore & Thompson (2007): dispersion
                             Measure (VRM)         of per-cell unit normals over a moving window.
-  Local step              - maximum absolute elevation discontinuity between a
-                            cell and its valid neighbours in a 3x3 footprint.
+  Step of a move          - the part of a move's rise that the one-sided
+                            rises just behind and just past it along the same
+                            heading do not explain: the distance from the rise
+                            to the bracket of those two (one of them when only
+                            one exists; the Horn gradient projected on the
+                            move at both ends when neither does). A diagonal
+                            move also takes the easier of its two paths
+                            through the corner cells.
   Directional grade       - the elevation gradient decomposed along a physical
                             heading (longitudinal) and perpendicular to it
                             (cross slope).
@@ -241,12 +247,69 @@ def compute_vrm(slope, aspect, valid, cols, rows, window=3):
     return vrm
 
 
-# ── local step (§12.4) ───────────────────────────────────────────────────────
+# ── step of a move (§12.4) ───────────────────────────────────────────────────
 
-def edge_step(z, valid, a, b):
+def edge_rise(z, valid, a, b):
+    """|z(b) - z(a)|, the rise a move's own grade is read from."""
     if valid[a] == 0 or valid[b] == 0:
         return NAN
     return abs(z[a] - z[b])
+
+
+def _height(terrain, col, row):
+    if col < 0 or row < 0 or col >= terrain.cols or row >= terrain.rows:
+        return None
+    i = row * terrain.cols + col
+    if terrain.valid[i] == 0 or not is_finite(terrain.z[i]):
+        return None
+    return terrain.z[i]
+
+
+def straight_step(terrain, col, row, dx, dy):
+    """Distance from the move's rise to the bracket of the terrain's own rise
+    per cell just behind the start and just past the end, along the same
+    heading. A plane gives 0 whatever its slope; a ledge on a plane gives its
+    height. None when either endpoint has no elevation."""
+    za = _height(terrain, col, row)
+    zb = _height(terrain, col + dx, row + dy)
+    if za is None or zb is None:
+        return None
+    rise = zb - za
+    trend = []
+    behind = _height(terrain, col - dx, row - dy)
+    if behind is not None:
+        trend.append(za - behind)
+    ahead = _height(terrain, col + 2 * dx, row + 2 * dy)
+    if ahead is not None:
+        trend.append(ahead - zb)
+    if not trend:
+        # No cell beyond either end: the Horn gradient at both ends, projected
+        # on the move's physical offset.
+        east = dx * terrain.mx
+        north = dy * terrain.my
+        for k in (row * terrain.cols + col, (row + dy) * terrain.cols + col + dx):
+            trend.append(terrain.grad_e[k] * east + terrain.grad_n[k] * north)
+    return max(0.0, rise - max(trend), min(trend) - rise)
+
+
+def move_step(terrain, a, dx, dy):
+    """The step a move is gated on: the straight step, and for a diagonal also
+    the easier of the two corner paths (each the larger of its two orthogonal
+    steps), so a one-cell berm or ditch across the diagonal is not slipped
+    through. NAN when either endpoint has no elevation."""
+    row, col = divmod(a, terrain.cols)
+    direct = straight_step(terrain, col, row, dx, dy)
+    if direct is None:
+        return NAN
+    if dx == 0 or dy == 0:
+        return direct
+    paths = []
+    for first, second, corner in (((dx, 0), (0, dy), (col + dx, row)), ((0, dy), (dx, 0), (col, row + dy))):
+        s1 = straight_step(terrain, col, row, *first)
+        s2 = straight_step(terrain, corner[0], corner[1], *second)
+        if s1 is not None and s2 is not None:
+            paths.append(max(s1, s2))
+    return max(direct, min(paths)) if paths else direct
 
 
 # ── directional grade (§12.5) ───────────────────────────────────────────────
@@ -465,9 +528,10 @@ def edge_geometry(terrain, a, b, dx, dy):
     h_e, h_n = heading_unit(dx, dy, terrain.mx, terrain.my)
     long_a, cross_a = directional_slope(terrain.grad_e[a], terrain.grad_n[a], h_e, h_n)
     long_b, cross_b = directional_slope(terrain.grad_e[b], terrain.grad_n[b], h_e, h_n)
-    step = edge_step(terrain.z, terrain.valid, a, b)
+    step = move_step(terrain, a, dx, dy)
+    rise = edge_rise(terrain.z, terrain.valid, a, b)
     distance = math.hypot(dx * terrain.mx, dy * terrain.my)
-    rise_run = step / distance if is_finite(step) and distance > 0 else 0.0
+    rise_run = rise / distance if is_finite(rise) and distance > 0 else 0.0
     longitudinal = max(long_a, long_b, rise_run)
     cross = max(cross_a, cross_b)
     return distance, longitudinal, cross, step

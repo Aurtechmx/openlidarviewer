@@ -151,6 +151,7 @@ function diagnosticsCsv(result: TerrainAccessResult): string {
     ['maxCrossSlope', String(d.maxCrossSlope)],
     ['p95CrossSlope', String(d.p95CrossSlope)],
     ['maxEdgeStepM', String(d.maxEdgeStepM)],
+    ['stepOneSidedRouteMoves', String(d.stepOneSidedRouteMoves)],
     ['maxLocalReliefM', String(d.maxLocalReliefM)],
     ['maxVrm', String(d.maxVrm)],
     ['minTerrainConfidence', String(d.minTerrainConfidence)],

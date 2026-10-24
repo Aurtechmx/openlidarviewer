@@ -68,7 +68,7 @@ test.describe('lab guidance on the lab pages', () => {
     await expect(lab.locator('.olv-lab-chip .olv-lab-ready[data-state="met"]')).toContainText('Ground surface (terrain run)');
     await expect(page.locator('.olv-at-back')).toHaveCount(0);
     await openDetails(lab);
-    await expectHeader(lab, /Counts cells, not rainfall\.$/);
+    await expectHeader(lab, /a rough peak flow for a rainfall you set\.$/);
     await expect(lab.locator('.olv-story-card')).toBeVisible();
     const read = lab.locator('.olv-lab-read');
     await expect(read.locator('.olv-lab-read-title')).toHaveText('How to read this');

@@ -87,7 +87,7 @@ import { computeSharedElevationRange, elevationOptsFor, applyElevationColors, up
 import { type ActiveColorbar } from './activeColorbar';
 import type { NoDataCapture, SizedCapture, SnapshotHost, SnapshotOptions } from './snapshot';
 import { runRenderFrame, feedFrameMs, governDpr, governPoints, type RenderLoopHost } from './renderLoop';
-import { type ClipBox, type VerticalExtent, ClipBoxGpu, clipFrameBounds, clipKeepsPoint, clipPickAccept, countKept, verticalExtentOf } from './clip/clipGpu';
+import { type BoxBounds, type ClipBox, type ClipLayerCount, type VerticalExtent, ClipBoxGpu, ClipOutline, clipFrameBounds, clipKeepsPoint, clipPickAccept, countKept, verticalExtentOf } from './clip/clipGpu';
 import { edlDefaultEnabled, EDL_DEFAULTS } from './edl';
 import { angularVelocity } from './angularVelocity';
 import { refinementDprTarget, shouldApplyDpr, DPR_MOTION_FLOOR } from './adaptiveDpr';
@@ -646,8 +646,8 @@ export class Viewer {
   readonly profileSeam: ProfileSectionSeam;
   /** The active clip box (GPU size-graph fold + CPU kept-count), or null. */
   private _clip: ClipBox | null = null;
-  /** The GPU half of the clip: a per-point keep multiplier in the size graph. */
-  private readonly _clipGpu = new ClipBoxGpu();
+  /** The GPU half of the clip: a per-point keep multiplier in the size graph; and the box drawn in the scene. */
+  private readonly _clipGpu = new ClipBoxGpu(); private _clipOutline: ClipOutline | null = null;
   private _nextId = 0;
 
   // ── Streaming COPC subsystem (set while a streaming cloud is open) ───────
@@ -2184,33 +2184,29 @@ export class Viewer {
   }
 
   /**
-   * Apply (or clear) an axis-aligned clip box. The keep/cull decision is the
-   * pure {@link clipKeepsPoint} contract; here it is realised on the GPU as a
-   * per-point keep multiplier in the size graph (`ClipBoxGpu`: a point outside
-   * the kept region collapses to a zero-size sprite). The box is in the project
-   * frame, the same frame as the measurement geometry it reuses.
-   * Pass `null` or a disabled clip to render everything again.
-   *
-   * The kept-count ({@link clipKeptCount}) is the exact CPU count; the e2e
-   * `clipRender` spec reads the drawn pixels back to prove the GPU agrees.
+   * Apply (or clear) an axis-aligned clip box in the project frame: the pure
+   * {@link clipKeepsPoint} rule as a per-point keep multiplier in the size graph
+   * (`ClipBoxGpu`; a clipped point is a zero-size sprite). `null` or a disabled
+   * clip draws everything. {@link clipKeptCounts} is the exact CPU count; the
+   * `clipRender` spec reads drawn pixels back to prove the GPU agrees.
    */
   setClip(clip: ClipBox | null): void {
     this._clip = clip;
-    const active = clip?.enabled === true;
     // Not `material.clippingPlanes`: WebGPURenderer ignores it (see clipGpu.ts).
-    const wasActive = this._clipGpu.isActive();
+    const wasFolded = this._clipGpu.folded();
     this._clipGpu.apply(clip);
-    // On/off changes the size graph's SHAPE, so rebuild pipelines on that
-    // transition only; moving the box or switching Inside/Outside while active
-    // is a uniform-only change.
-    if (wasActive !== active) this._reapplyAllSizeModes();
+    // The fold changes the size graph's SHAPE: it enters on the first clip and
+    // stays until a scan opens with the clip off (`_resetGpuErrorHistory`), so
+    // later toggles, moves and Inside/Outside are uniform-only (no rebuild).
+    if (wasFolded !== this._clipGpu.folded()) this._reapplyAllSizeModes();
     this._demand.changed('clip');
   }
 
+  /** Draw the clip box in the scene (`null` hides it), outside every clip; `active` while the clip is on. */
+  setClipOutline(box: BoxBounds | null, active: boolean): void { (this._clipOutline ??= new ClipOutline(this.derivedLayerHost())).show(box, active); }
+
   /** The visible scan's extent along its up axis in the clip's frame (see `clipFromBoxMeasurement`). */
-  clipVerticalExtent(): VerticalExtent | null {
-    return verticalExtentOf(this.mergedVisibleBounds(), this._worldUp.z === 1 ? 2 : 1);
-  }
+  clipVerticalExtent(): VerticalExtent | null { return verticalExtentOf(this.mergedVisibleBounds(), this._worldUp.z === 1 ? 2 : 1); }
 
   /**
    * Glide the camera to the kept volume of a keep-inside clip, so the orbit
@@ -2225,18 +2221,17 @@ export class Viewer {
   }
 
   /** The active clip box, or null when none is set. */
-  getClip(): ClipBox | null {
-    return this._clip;
-  }
+  getClip(): ClipBox | null { return this._clip; }
 
-  /** Live "kept of total" point count for the active clip against a cloud (CPU, exact). */
-  clipKeptCount(id: string): { kept: number; total: number } | null {
-    const entry = this._clouds.get(id);
-    if (!entry) return null;
-    const total = Math.trunc(entry.cloud.pointCount); // not `| 0`: pointCount can pass 2^31 and wrap negative (S7767)
-    const placed = copyPlacedPositions(entry.cloud, 1, entry.placement);
-    const kept = this._clip ? countKept(this._clip, placed) : total;
-    return { kept, total };
+  /** Whether layer `id` is drawn (the clip's counts and Fit to scan cover the drawn layers). */
+  isCloudVisible(id: string): boolean { return this._clouds.get(id)?.mesh.visible === true; }
+
+  /** The clip's exact CPU "kept of total" for every visible layer and for `id`, placed in the project frame. */
+  clipKeptCounts(id: string | null): ClipLayerCount[] {
+    return [...this._clouds].filter(([k, e]) => e.mesh.visible || k === id).map(([k, e]) => {
+      const total = Math.trunc(e.cloud.pointCount); // not `| 0`: pointCount can pass 2^31 and wrap negative (S7767)
+      return { id: k, visible: e.mesh.visible, total, kept: this._clip ? countKept(this._clip, copyPlacedPositions(e.cloud, 1, e.placement)) : total };
+    });
   }
 
   /** Exclude (or re-include) a cloud from picking / measuring / inspecting. */
@@ -4254,12 +4249,13 @@ export class Viewer {
   }
 
   /**
-   * Forget the GPU errors surfaced so far. Called when a new scan opens so a
-   * fresh scan's error is never silently suppressed because an earlier scan
-   * happened to emit the same message text.
+   * A new scan opens: forget the GPU errors surfaced so far, so its error is
+   * never suppressed for matching an earlier scan's text, and drop the clip
+   * fold unless the clip is on, so no scan opens with it in its size graph.
    */
   private _resetGpuErrorHistory(): void {
     this._gpuErrorLedger.reset();
+    if (this._clipGpu.forget()) this._reapplyAllSizeModes();
   }
 
   /**
@@ -4336,8 +4332,11 @@ export class Viewer {
    */
   async snapshot(options?: SnapshotOptions): Promise<Blob> {
     const snap = await loadSnapshot();
-    return this._lens.without(() => snap.captureSnapshot(this._buildSnapshotHost(), options));
+    return this._lens.without(() => this._noOutline(() => snap.captureSnapshot(this._buildSnapshotHost(), options)));
   }
+
+  /** Run `fn` with the clip box out of the picture: an export shows the clipped scan, not the editing aid. */
+  private _noOutline<T>(fn: () => Promise<T>): Promise<T> { return this._clipOutline ? this._clipOutline.without(fn) : fn(); }
 
   /** Bind the Viewer's live render state to the {@link SnapshotHost} contract. */
   private _buildSnapshotHost(): SnapshotHost {
@@ -4386,7 +4385,7 @@ export class Viewer {
   ): Promise<ExportResult> {
     const adapter = this._buildExportAdapter(); // LIVE closures: snapshots NOTHING (gate: exportImageAction)
     const studio = await loadExportStudio();
-    return this._lens.without(() => studio.renderExport(
+    return this._lens.without(() => this._noOutline(() => studio.renderExport(
       mode,
       {
         renderer: this._renderer,
@@ -4397,7 +4396,7 @@ export class Viewer {
         classScopeStamp, // empty when nothing is hidden
       },
       options,
-    ));
+    )));
   }
 
   /**
@@ -4636,9 +4635,9 @@ export class Viewer {
       try {
         camera.aspect = plan.aspect;
         camera.updateProjectionMatrix();
-        return await this._renderAtSize(plan.widthPx, plan.heightPx, () => {
+        return await this._noOutline(() => this._renderAtSize(plan.widthPx, plan.heightPx, () => {
           this._renderer.render(this._scene, camera);
-        });
+        }));
       } finally {
         camera.aspect = prevAspect;
         camera.updateProjectionMatrix();
@@ -4720,7 +4719,7 @@ export class Viewer {
     this._measure.dispose();
     this._inspect.dispose();
     this._annotate.dispose();
-    this._probe.dispose();
+    this._probe.dispose(); this._clipOutline?.dispose();
     this._controls.dispose();
     disposeViewerRenderCore({ renderer: this._renderer, pipeline: this._post, scenePass: this._scenePass });
   }
@@ -4766,7 +4765,7 @@ export class Viewer {
     const foldElev = this._materialsWithElev.has(material) && this._elevGpu.isActive();
     const foldInten = this._materialsWithInten.has(material) && this._intenFilterEnabled.value !== 0;
     // The clip needs `aPos`, which every mesh from the shared builder carries.
-    const foldClip = this._materialsWithElev.has(material) && this._clipGpu.isActive();
+    const foldClip = this._materialsWithElev.has(material) && this._clipGpu.folded();
     // A streaming node mid-dissolve folds a per-point opaque dither (same
     // size×mask shape as the filters); dropped again the moment it settles.
     const foldFade = this._materialsWithFade.has(material);

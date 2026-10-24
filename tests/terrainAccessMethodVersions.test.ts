@@ -45,6 +45,13 @@ describe('Terrain Access method versions', () => {
     expect(TERRAIN_ACCESS_MODEL).toEqual(methodRef('olv.simulation.terrain-access.astar'));
   });
 
+  it('the step is a discontinuity (local-step v2) and the cost map reads it (cost-map v4)', () => {
+    // v1 gated the raw height difference between a move's two cells; v2 gates
+    // the part of the rise the terrain on either side does not explain.
+    expect(METHOD_REGISTRY['olv.simulation.terrain-access.local-step'].version).toBe(2);
+    expect(METHOD_REGISTRY['olv.simulation.terrain-access.cost-map'].version).toBe(4);
+  });
+
   it('footprint clearance is inventoried under the method that calls it', () => {
     expect(METHOD_REGISTRY['olv.simulation.terrain-access.cost-map'].implementation)
       .toContain('src/simulation/terrainAccess/footprintClearance.ts');

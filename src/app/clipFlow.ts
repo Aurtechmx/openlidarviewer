@@ -2,10 +2,15 @@
  * clipFlow.ts: the Box → clip flow and the result card, over narrow ports.
  *
  *   - "Draw clipping box" (Clip page) arms the EXISTING Box measurement tool
- *     through the shell's canonical scene-tool command; it adds no tool state.
+ *     and stays on the Clip page, which shows the tool's corner hint; it adds
+ *     no tool state. The box it draws is a footprint: the clip takes the
+ *     scan's full height (so does a box drawn looking straight down).
  *   - "Isolate this box" and the Measurements row's "Use as clipping region"
  *     are the same function, {@link useBoxAsClip}, so the validation, the
  *     refusal messages and the independent-copy behaviour cannot drift apart.
+ *     Once a box drawn from the Clip page has become the clip, the Measure
+ *     tool is switched off, so the next clicks on the scene do not start
+ *     another box.
  *   - After a measurement completes, one compact result card shows the latest
  *     result (value, caveats, Copy / Open details / clip) beside the viewport.
  *     It is dismissed by the next tool activation and by closing the scan.
@@ -32,6 +37,8 @@ import type { MeasurePanel } from '../ui/MeasurePanel';
 /** The clip panel as the flow sees it. */
 export interface ClipFlowPanel extends ClipIndicatorSource {
   subscribe(fn: () => void): () => void;
+  /** The Box tool's corner hint on the Clip page while a clipping box is drawn; null hides it. */
+  setDrawHint?(text: string | null): void;
 }
 
 export interface ClipFlowDeps {
@@ -44,14 +51,23 @@ export interface ClipFlowDeps {
   /** The scene facts the Measurements panel grades each row against. */
   readonly scene: () => MeasureSceneContext;
   readonly measureOn: () => boolean;
-  /** The canonical scene-tool command for Measure (records, opens the page). */
-  readonly runMeasureTool: () => void;
-  readonly openMeasurePage: () => void;
+  /** Turn the Measure tool on (recorded, as every entry point does) without leaving the Clip page. */
+  readonly armMeasureTool: () => void;
+  /** Turn the Measure tool off (recorded) when it is on. */
+  readonly stopMeasureTool: () => void;
   readonly setBoxKind: () => void;
   /** Reveal and focus a measurement's row in the Measure page. */
   readonly openDetails: (id: string) => void;
   /** Defaults to the app's clipboard helper. */
   readonly copy?: (text: string) => Promise<boolean>;
+  /** True while the camera looks straight down: a box completed then is a footprint. */
+  readonly lookingDown?: () => boolean;
+  /** Make the Box tool's hint say the box drawn to clip spans the scan's full height. */
+  readonly setFootprintHint?: (on: boolean) => void;
+  /** Follow the Box tool's hint text; returns the unsubscribe. */
+  readonly watchHint?: (fn: (text: string) => void) => () => void;
+  /** On a phone, lower the sheet so the scene takes the corner taps. */
+  readonly revealScene?: () => void;
 }
 
 export interface ClipFlow {
@@ -72,10 +88,11 @@ export interface ClipFlow {
 }
 
 /**
- * What the lane stays below: the measurement toolbar, the progress toast and
- * the project card, wherever they share its column at the top of the stage.
+ * What the lane stays below: the measurement toolbar, the progress toast, the
+ * project card and the recommended-view chip, wherever they share its column
+ * at the top of the stage.
  */
-const LANE_CLEAR_OF = ['.olv-measure-bar:not(.olv-hidden)', '.olv-toast:not(.olv-hidden)', '.olv-project-card.olv-visible'];
+const LANE_CLEAR_OF = ['.olv-measure-bar:not(.olv-hidden)', '.olv-toast:not(.olv-hidden)', '.olv-project-card.olv-visible', '.olv-rvc:not(.olv-hidden)'];
 /** What the lane must end above: the active-tool pill, the navigation row and the dock at the bottom. */
 const LANE_FLOORS = ['.olv-ati:not(.olv-hidden)', '.olv-navbar', '.olv-dock'];
 
@@ -84,10 +101,31 @@ export function createClipFlow(deps: ClipFlowDeps): ClipFlow {
   let drawIntent = false;
   let lastCount = 0;
   let lastId: string | null = null;
+  /** Boxes that are footprints: drawn to clip, or completed looking straight down. */
+  const footprints = new Set<string>();
+  let unwatchHint: (() => void) | null = null;
+
+  /** Draw clipping box is over (a box became the clip, or the tool moved on). */
+  const endDraw = (): void => {
+    if (!drawIntent && !unwatchHint) return;
+    drawIntent = false;
+    unwatchHint?.();
+    unwatchHint = null;
+    deps.setFootprintHint?.(false);
+    deps.clipPanel.setDrawHint?.(null);
+  };
 
   const isolate = (id: string): boolean => {
-    const ok = useBoxAsClip(deps.box, id);
-    if (ok) { drawIntent = false; card.hide(); }
+    // Drawn from the Clip page: the Box tool was armed only to draw this box.
+    const fromDraw = drawIntent;
+    const ok = useBoxAsClip(deps.box, id, { fullHeight: footprints.has(id) });
+    if (ok) {
+      endDraw();
+      card.hide();
+      // The box is now the clip; further clicks on the scene must not start
+      // Box 2. A box measured on purpose leaves the user's Measure tool as it was.
+      if (fromDraw && deps.measureOn()) deps.stopMeasureTool();
+    }
     return ok;
   };
   const clipLabel = (): string => (drawIntent ? 'Isolate this box' : 'Use as clipping region');
@@ -115,7 +153,7 @@ export function createClipFlow(deps: ClipFlowDeps): ClipFlow {
   });
 
   function dismissCard(): void {
-    drawIntent = false;
+    endDraw();
     card.hide();
   }
 
@@ -127,21 +165,28 @@ export function createClipFlow(deps: ClipFlowDeps): ClipFlow {
   return {
     lane, card, indicator,
     drawClippingBox() {
-      if (deps.measureOn()) deps.openMeasurePage();
-      else deps.runMeasureTool();
+      // The Clip page stays: the tool is armed in place, never toggled off.
+      if (!deps.measureOn()) deps.armMeasureTool();
       deps.setBoxKind();
       // After the tool switch, which dismisses any previous result.
       drawIntent = true;
+      deps.setFootprintHint?.(true);
+      unwatchHint?.();
+      unwatchHint = deps.watchHint?.((text) => { if (drawIntent) deps.clipPanel.setDrawHint?.(text); }) ?? null;
+      deps.revealScene?.();
     },
     isolate,
     onMeasurementsChanged() {
+      // Esc or another tool ended the Box tool while a clipping box was being drawn.
+      if (drawIntent && !deps.measureOn()) endDraw();
       const all = deps.summaries();
       const grewByOne = all.length === lastCount + 1;
       lastCount = all.length;
       const s = latest();
-      if (!s) { lastId = null; dismissCard(); return; }
+      if (!s) { lastId = null; footprints.clear(); dismissCard(); return; }
       if (grewByOne && s.id !== lastId) {
         lastId = s.id;
+        if (s.kind === 'box' && (drawIntent || deps.lookingDown?.() === true)) footprints.add(s.id);
         // A box that follows Draw clipping box is the one being isolated;
         // any other result leaves that intent for the box still to come.
         card.show(buildResultModel(s, deps.scene()), s.kind === 'box' ? clipLabel() : 'Use as clipping region');
@@ -156,9 +201,11 @@ export function createClipFlow(deps: ClipFlowDeps): ClipFlow {
     reset() {
       lastCount = 0;
       lastId = null;
+      footprints.clear();
       dismissCard();
     },
     dispose() {
+      endDraw();
       unsubscribe();
       unwatch();
       card.hide();
@@ -177,11 +224,13 @@ export interface ClipFlowShell {
   readonly activeLayerId: () => string | null;
   readonly openPage: (page: 'clip' | 'measure') => void;
   readonly measurePanel: () => Pick<MeasurePanel, 'focusRow'> | null;
-  /** The shell's one scene-tool command (dock, key, palette, launcher). */
-  readonly runTool: (tool: 'measure') => void;
+  /** Flip Measure and record it, as the shell's scene-tool command does, without opening its page. */
+  readonly toggleMeasure: () => void;
   readonly toast: (message: string) => void;
   /** The CRS service the panel's scene facts are read from. */
   readonly crs: Pick<CrsService, 'current' | 'context'>;
+  /** On a phone, lower the sheet so the scene takes the corner taps. */
+  readonly revealScene?: () => void;
 }
 
 /** Build the flow from the shell and give the Clip page its entry point. */
@@ -203,11 +252,47 @@ export function createClipFlowFromShell(sh: ClipFlowShell): ClipFlow {
     summaries: () => (sh.ready() ? v().measure.getSummaries() : []),
     scene: () => buildMeasureConfidenceContext(v(), sh.crs.current(), sh.crs.context()),
     measureOn: () => sh.ready() && v().measureMode,
-    runMeasureTool: () => sh.runTool('measure'),
-    openMeasurePage: () => sh.openPage('measure'),
+    armMeasureTool: () => { if (!v().measureMode) sh.toggleMeasure(); },
+    stopMeasureTool: () => { if (v().measureMode) sh.toggleMeasure(); },
     setBoxKind: () => v().measure.setKind('box'),
     openDetails: (id) => { sh.openPage('measure'); sh.measurePanel()?.focusRow(id); },
+    lookingDown: () => sh.ready() && looksDown(v().getCameraPose(), v().measure.worldUp),
+    setFootprintHint: (on) => { if (sh.ready()) v().measure.boxFootprint = on; },
+    watchHint: (fn) => (sh.ready() ? watchHintText(v().measureElements.hint, fn) : () => {}),
+    revealScene: sh.revealScene,
   });
   sh.clipPanel.setOnDrawBox(() => flow.drawClippingBox());
   return flow;
+}
+
+/**
+ * Follow the Box tool's hint line (the measure bar's polite status text) and
+ * hand each new text to `fn`, now and on every change. Returns the stop.
+ */
+export function watchHintText(bar: HTMLElement, fn: (text: string) => void): () => void {
+  const read = (): string => (bar.querySelector('.olv-measure-hint-text')?.textContent ?? '').trim();
+  let last = read();
+  fn(last);
+  if (typeof MutationObserver !== 'function') return () => {};
+  const mo = new MutationObserver(() => {
+    const text = read();
+    if (text !== last) { last = text; fn(text); }
+  });
+  mo.observe(bar, { childList: true, characterData: true, subtree: true });
+  return () => mo.disconnect();
+}
+
+/** A box completed with the camera this close to straight down is a footprint (plan view and near it). */
+const PLAN_VIEW_DEGREES = 15;
+
+/** Whether a camera at `pose` looks within {@link PLAN_VIEW_DEGREES} of straight down the scene's `up`. */
+export function looksDown(
+  pose: { readonly position: readonly number[]; readonly target: readonly number[] },
+  up: readonly number[],
+): boolean {
+  const d = [0, 1, 2].map((i) => (pose.target[i] ?? 0) - (pose.position[i] ?? 0));
+  const len = Math.hypot(d[0], d[1], d[2]);
+  if (!(len > 0)) return false;
+  const along = (d[0] * (up[0] ?? 0) + d[1] * (up[1] ?? 0) + d[2] * (up[2] ?? 0)) / len;
+  return along < -Math.cos((PLAN_VIEW_DEGREES * Math.PI) / 180);
 }

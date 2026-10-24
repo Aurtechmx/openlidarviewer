@@ -2,13 +2,22 @@
  * ClipPanel.ts — the clip-box control.
  *
  * A compact left panel that drives the viewer's axis-aligned clip box. The
- * primary controls are Draw clipping box, Enable, keep-inside vs keep-outside,
- * Fit to scan and Clear, with a live "kept of total" readout; the six numeric
- * extents sit behind an Advanced disclosure (a native <details>, collapsed by
- * default, whose nodes are built once and never recreated).
+ * primary controls are Draw clipping box, the on/off switch, Keep inside vs
+ * Keep outside, Fit to scan and Turn off, with a live "kept of total"
+ * readout; the six numeric extents sit behind an Advanced disclosure (a native
+ * <details>, collapsed by default, whose nodes are built once and never
+ * recreated).
+ *
+ * Numeric edits: an arrow-key or wheel step on a focused field applies at
+ * once (0.1 of the scene unit, 1 with Shift). Typed text applies when it is
+ * committed (Enter, or leaving the field); a field left holding a value that
+ * cannot be applied returns to the last valid bound. Fields show three
+ * decimals, and a field the user did not touch keeps the bound's full
+ * precision when its axis is applied.
  *
  * The keep/cull decision and the count are the pure `clipBox` core; this panel
- * is only the DOM around it. The in-viewport GPU result is browser-verified.
+ * is only the DOM around it. The box itself is drawn in the scene by the
+ * viewer (`onOutline`) while the clip is on or this page is open.
  */
 
 import { el } from './dom';
@@ -18,13 +27,31 @@ import { setClipScope } from '../render/clip/clipScope';
 
 export { fitBoundsInProject } from '../render/clip/fitBoundsInProject';
 
+/** What a kept-point count knows about the scans under the clip. */
+export interface ClipKeptCount {
+  /** Points the clip keeps in the active scan (what a point-cloud export writes). */
+  readonly kept: number;
+  /** Points the active scan holds. */
+  readonly total: number;
+  /** The source file's declared point count when the active scan holds a display sample of it. */
+  readonly sourceTotal?: number | null;
+  /** Kept and total over every visible scan, when more than one is visible. */
+  readonly visible?: { readonly kept: number; readonly total: number; readonly scans: number } | null;
+  /** The active scan's name, shown when several scans are counted. */
+  readonly name?: string | null;
+}
+
 export interface ClipPanelCallbacks {
   /** Apply the clip (or `null`/disabled to clear it) to the viewer. */
   onApply: (clip: ClipBox | null) => void;
-  /** The active cloud's bounds, to seed the box from "Fit to scan". */
+  /** The visible scans' bounds, to seed the box from "Fit to scan". */
   fitBounds: () => BoxBounds | null;
-  /** Exact kept/total count for a clip against the active cloud (CPU). */
-  keptCount: (clip: ClipBox) => { kept: number; total: number } | null;
+  /** Exact kept/total count for a clip against the visible scans (CPU), or null when it cannot be counted. */
+  keptCount: (clip: ClipBox) => ClipKeptCount | null;
+  /** Draw the box in the scene (`null` hides it); `active` is true while the clip is on. */
+  onOutline?: (box: BoxBounds | null, active: boolean) => void;
+  /** The scene frame's unit per axis: 'm', 'ft', '°', or '' when unknown. */
+  units?: () => readonly [string, string, string];
 }
 
 type Axis = 0 | 1 | 2;
@@ -33,6 +60,11 @@ const AXES: ReadonlyArray<{ axis: Axis; label: string }> = [
   { axis: 1, label: 'Y' },
   { axis: 2, label: 'Z' },
 ];
+
+const MODE_LABEL: Record<ClipMode, string> = { 'keep-inside': 'Keep inside', 'keep-outside': 'Keep outside' };
+const OFF_TEXT = 'Clipping is off. Tick "Clip the scan to this box" to apply the box.';
+const COUNTING_TEXT = 'Counting the kept points…';
+const NO_COUNT_TEXT = 'The clip hides the points outside the box as they load. A kept-point count is not available for a streaming scan.';
 
 export class ClipPanel {
   readonly element: HTMLElement;
@@ -51,8 +83,12 @@ export class ClipPanel {
    * newer one.
    */
   private _countGen = 0;
+  /** True once a count has been shown for the current clip; a recount dims it rather than blanking it. */
+  private _hasCount = false;
   private readonly _minInputs: HTMLInputElement[] = [];
   private readonly _maxInputs: HTMLInputElement[] = [];
+  /** The text each field was last painted with: an untouched field keeps its bound's full precision. */
+  private readonly _painted = new Map<HTMLInputElement, string>();
   private readonly _enableBox: HTMLInputElement;
   private readonly _modeBtns = new Map<ClipMode, HTMLButtonElement>();
   private readonly _readout: HTMLElement;
@@ -61,8 +97,15 @@ export class ClipPanel {
   private readonly _fieldErrors = new Map<Axis, string>();
   private readonly _listeners = new Set<() => void>();
   private readonly _advanced: HTMLElement;
+  private readonly _frame: HTMLElement;
   private readonly _draw: HTMLButtonElement;
+  private readonly _drawHint: HTMLElement;
+  private readonly _turnOff: HTMLButtonElement;
   private _onDrawBox: (() => void) | null = null;
+  /** The Clip page is the one on screen: the box is drawn even while the clip is off. */
+  private _pageOpen = false;
+  /** Wheel travel not yet turned into a step (a trackpad sends many small deltas). */
+  private _wheelTravel = 0;
 
   constructor(callbacks: ClipPanelCallbacks) {
     this._cb = callbacks;
@@ -91,12 +134,12 @@ export class ClipPanel {
 
     // Mode
     const modeRow = el('div', { className: 'olv-bc-pills' });
-    ([['keep-inside', 'Inside'], ['keep-outside', 'Outside']] as const).forEach(([mode, label]) => {
+    (['keep-inside', 'keep-outside'] as const).forEach((mode) => {
       const btn = el('button', {
         className: `olv-bc-pill${this._mode === mode ? ' is-active' : ''}`,
         type: 'button',
-        text: label,
-        title: mode === 'keep-inside' ? 'Show only points inside the box' : 'Hide points inside the box',
+        text: MODE_LABEL[mode],
+        title: mode === 'keep-inside' ? 'Show only the points inside the box' : 'Hide the points inside the box',
       }) as HTMLButtonElement;
       btn.setAttribute('aria-pressed', this._mode === mode ? 'true' : 'false');
       btn.addEventListener('click', () => this._setMode(mode));
@@ -122,53 +165,65 @@ export class ClipPanel {
 
     const fit = el('button', {
       className: 'olv-bc-pill', type: 'button', text: 'Fit to scan',
-      title: 'Reset the box to the full extent of the open scan.',
+      title: 'Reset the box to the full extent of the visible scans.',
     }) as HTMLButtonElement;
     fit.addEventListener('click', () => this._fit());
-    const clear = el('button', {
-      className: 'olv-bc-pill olv-clip-clear', type: 'button', text: 'Clear',
-      title: 'Turn the clip off and show the whole scan. The bounds stay under Advanced.',
+    this._turnOff = el('button', {
+      className: 'olv-bc-pill olv-clip-clear', type: 'button', text: 'Turn off',
+      title: 'Turn the clip off and show the whole scan. The box and its bounds stay.',
     }) as HTMLButtonElement;
-    clear.addEventListener('click', () => this.clear());
-    const actions = el('div', { className: 'olv-bc-pills olv-clip-actions' }, [fit, clear]);
+    this._turnOff.addEventListener('click', () => this.clear());
+    const actions = el('div', { className: 'olv-bc-pills olv-clip-actions' }, [fit, this._turnOff]);
 
     this._draw = el('button', {
       className: 'olv-bc-pill olv-clip-draw olv-hidden', type: 'button', text: 'Draw clipping box',
-      title: 'Draw a box on the scan with the Box measurement tool, then isolate it.',
+      title: 'Click two opposite corners on the scan. The clip keeps that footprint at the scan\'s full height.',
     }) as HTMLButtonElement;
     this._draw.addEventListener('click', () => this._onDrawBox?.());
+    // Announced politely; not a second status role beside the readout.
+    this._drawHint = el('p', { className: 'olv-clip-draw-hint olv-hidden', text: '' });
+    this._drawHint.setAttribute('aria-live', 'polite');
 
-    // Advanced: the six numeric extents. A native disclosure, closed until opened.
-    const advanced = el('details', { className: 'olv-clip-advanced' });
-    advanced.append(
-      el('summary', { className: 'olv-clip-advanced-summary', text: 'Advanced' }),
-      el('div', { className: 'olv-clip-grid-head' }, [
-        el('span', { text: '' }), el('span', { text: 'min' }), el('span', { text: 'max' }),
-      ]),
-      grid,
-    );
-    this._advanced = advanced;
-
-    this._readout = el('p', { className: 'olv-export-fullres-hint', text: '' });
+    this._readout = el('p', { className: 'olv-export-fullres-hint olv-clip-readout', text: '' });
     this._readout.setAttribute('role', 'status');
     this._readout.setAttribute('aria-live', 'polite');
     this._error = el('p', { className: 'olv-flow-selection-error olv-clip-error', text: '' });
     this._error.setAttribute('role', 'alert');
+    this._frame = el('p', { className: 'olv-clip-frame', text: '' });
+
+    // Advanced: the six numeric extents. A native disclosure, closed until opened.
+    // The message for an edit that was not applied sits below the fields, so
+    // showing or clearing it never moves the field being typed in.
+    const advanced = el('details', { className: 'olv-clip-advanced' });
+    advanced.append(
+      el('summary', { className: 'olv-clip-advanced-summary', text: 'Advanced' }),
+      this._frame,
+      el('div', { className: 'olv-clip-grid-head' }, [
+        el('span', { text: '' }), el('span', { text: 'min' }), el('span', { text: 'max' }),
+      ]),
+      grid,
+      this._error,
+    );
+    this._advanced = advanced;
+    // A wheel anywhere on the panel but the focused field ends that field's
+    // edit, so scrolling the page can never step a bound the pointer has left.
+    this.element.addEventListener('wheel', (e) => this._onPanelWheel(e as WheelEvent), { passive: true });
 
     const body = el('div', { className: 'olv-clip-body' }, [
       this._draw,
+      this._drawHint,
       enableLabel,
       el('div', { className: 'olv-bc-section-label', text: 'Mode' }),
       modeRow,
       actions,
       this._readout,
-      this._error,
       advanced,
     ]);
 
-    // Open from the start: the Clip page's Draw clipping box and Clear are its
+    // Open from the start: the Clip page's Draw clipping box and Turn off are its
     // first controls, and a folded panel would hide them behind its own head.
     this.element.append(head, body);
+    this._paintFrame();
     this.setVisible(false);
   }
 
@@ -191,12 +246,32 @@ export class ClipPanel {
 
   /**
    * Give the Clip page its "Draw clipping box" entry point. The shell's
-   * handler arms the existing Box measurement tool through the canonical
-   * scene-tool command; until one is set the button stays hidden.
+   * handler arms the existing Box measurement tool; until one is set the
+   * button stays hidden.
    */
   setOnDrawBox(fn: (() => void) | null): void {
     this._onDrawBox = fn;
     this._draw.classList.toggle('olv-hidden', fn === null);
+  }
+
+  /**
+   * The Box tool's corner hint while a clipping box is being drawn, shown on
+   * this page under Draw clipping box; `null` when no box is being drawn.
+   */
+  setDrawHint(text: string | null): void {
+    const on = text !== null && text !== '';
+    if (this._drawHint.textContent !== (on ? text : '')) this._drawHint.textContent = on ? text : '';
+    this._drawHint.classList.toggle('olv-hidden', !on);
+    this._draw.classList.toggle('is-active', on);
+    this._draw.setAttribute('aria-pressed', on ? 'true' : 'false');
+  }
+
+  /** Whether the Clip page is the page on screen; the box is drawn while it is. */
+  setPageOpen(open: boolean): void {
+    if (this._pageOpen === open) return;
+    this._pageOpen = open;
+    this._paintFrame();
+    this._syncOutline();
   }
 
   /** Which side the clip keeps. */
@@ -211,8 +286,8 @@ export class ClipPanel {
 
   /**
    * Run `fn` after every change to the clip's on/off state or side, however it
-   * came about (checkbox, Clear, adopt, session restore, scan close). Returns
-   * the unsubscribe. The active-clipping indicator is the one subscriber.
+   * came about (checkbox, Turn off, adopt, session restore, scan close). Returns
+   * the unsubscribe. The active-clipping indicator is one subscriber.
    */
   subscribe(fn: () => void): () => void {
     this._listeners.add(fn);
@@ -235,15 +310,20 @@ export class ClipPanel {
     if (!on) {
       // Hiding the panel (scan closed) clears the clip so it can't persist.
       this._cancelCount();
+      this._hasCount = false;
       this._enabled = false;
       this._enableBox.checked = false;
       this._cb.onApply(null);
+      this._cb.onOutline?.(null, false);
       setClipScope(null);
+      this._renderOff();
       this._emit();
+    } else {
+      this._paintFrame();
     }
   }
 
-  /** Seed the box from the active cloud's bounds (also called on first reveal). */
+  /** Seed the box from the visible scans' bounds (also called on first reveal). */
   fitToScan(): void {
     this._fit();
   }
@@ -269,12 +349,18 @@ export class ClipPanel {
   }
 
   /**
-   * The data under the clip changed (active scan, placement, resident nodes):
-   * drop any pending count and, while the clip is on, count again.
+   * The data under the clip changed (active scan, a layer added or removed or
+   * shown or hidden, placement, a reload at another density): drop any pending
+   * count and, while the clip is on, count again. The last figure stays on
+   * screen, dimmed, until the new one lands.
    */
   invalidateCount(): void {
     this._cancelCount();
-    if (this._enabled) this._scheduleCount();
+    this._paintFrame();
+    if (this._enabled) {
+      this._markCounting();
+      this._scheduleCount();
+    }
   }
 
   /** Drop pending work; the panel stays usable but no queued count lands. */
@@ -301,12 +387,13 @@ export class ClipPanel {
     this._min = [clip.box.min[0], clip.box.min[1], clip.box.min[2]];
     this._max = [clip.box.max[0], clip.box.max[1], clip.box.max[2]];
     this._paintExtents();
+    this._syncOutline();
     // Same readout _apply would show, minus the onApply side effect. A restore
     // is a one-off, so its count is taken straight away.
     if (this._enabled) {
       this._showCount(this._cb.keptCount(this._current()));
     } else {
-      this._readout.textContent = 'Enable to clip the scan to the box.';
+      this._renderOff();
       setClipScope(null);
     }
     this._emit();
@@ -315,19 +402,103 @@ export class ClipPanel {
   private _numInput(axis: Axis): HTMLInputElement {
     const input = el('input', { className: 'olv-bc-input olv-clip-num', type: 'number' }) as HTMLInputElement;
     input.step = 'any';
-    input.addEventListener('input', () => this._editAxis(axis));
+    input.inputMode = 'decimal';
+    // Typed text (an InputEvent) waits for Enter or blur; a browser spin
+    // (a plain Event from the spin buttons) applies at once.
+    input.addEventListener('input', (e) => {
+      if (typedInput(e)) input.classList.toggle('is-pending', input.value !== this._painted.get(input));
+      else this._commitAxis(axis);
+    });
+    input.addEventListener('change', () => this._commitAxis(axis));
+    input.addEventListener('keydown', (e) => this._onFieldKey(e as KeyboardEvent, axis, input));
+    input.addEventListener('blur', (e) => this._onFieldBlur(e as FocusEvent, axis));
+    input.addEventListener('wheel', (e) => this._onFieldWheel(e as WheelEvent, axis, input), { passive: false });
     return input;
+  }
+
+  /** Arrow keys step the focused bound and apply at once; Enter applies; Escape puts the axis back. */
+  private _onFieldKey(e: KeyboardEvent, axis: Axis, input: HTMLInputElement): void {
+    if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
+      e.preventDefault();
+      this._step(axis, input, e.key === 'ArrowUp' ? 1 : -1, e.shiftKey === true);
+    } else if (e.key === 'Enter') {
+      e.preventDefault();
+      this._commitAxis(axis);
+    } else if (e.key === 'Escape' && this._axisDirty(axis)) {
+      e.preventDefault();
+      e.stopPropagation();
+      this._restoreAxis(axis, null);
+    }
+  }
+
+  /**
+   * A wheel over the focused field steps it like an arrow key; over an
+   * unfocused one it does nothing here, so the panel scrolls as usual.
+   */
+  private _onFieldWheel(e: WheelEvent, axis: Axis, input: HTMLInputElement): void {
+    if (!isFocused(input)) return;
+    e.preventDefault();
+    this._wheelTravel += e.deltaY;
+    if (Math.abs(this._wheelTravel) < WHEEL_STEP_TRAVEL) return;
+    const dir = this._wheelTravel < 0 ? 1 : -1;
+    this._wheelTravel = 0;
+    this._step(axis, input, dir, e.shiftKey === true);
+  }
+
+  /** A wheel elsewhere on the panel ends the focused field's edit before it can step it. */
+  private _onPanelWheel(e: WheelEvent): void {
+    const active = typeof document === 'undefined' ? null : (document.activeElement as HTMLInputElement | null);
+    if (!active || e.target === active) return;
+    if (this._minInputs.includes(active) || this._maxInputs.includes(active)) active.blur();
+  }
+
+  /**
+   * Leaving a field applies its axis. A value that cannot be applied returns
+   * to the last valid bound, unless focus is moving to the axis's other field
+   * (where the user is fixing the pair).
+   */
+  private _onFieldBlur(e: FocusEvent, axis: Axis): void {
+    this._wheelTravel = 0;
+    const next = e.relatedTarget as HTMLInputElement | null;
+    const pair = [this._minInputs[axis], this._maxInputs[axis]];
+    if (this._commitAxis(axis)) return;
+    if (next && pair.includes(next)) return;
+    this._restoreAxis(axis, this._fieldErrors.get(axis) ?? null);
+  }
+
+  /** Step a bound by 0.1 of the scene unit (1 with Shift) from what the field shows, and apply. */
+  private _step(axis: Axis, input: HTMLInputElement, dir: 1 | -1, coarse: boolean): void {
+    const isMin = this._minInputs[axis] === input;
+    const stored = isMin ? this._min[axis] : this._max[axis];
+    const from = this._readField(input, stored);
+    const base = Number.isFinite(from) ? from : stored;
+    const step = stepFor(this._unit(axis)) * (coarse ? 10 : 1);
+    const v = roundTo(base + dir * step, this._decimals(axis));
+    input.value = this._fmt(axis, v);
+    this._commitAxis(axis);
+  }
+
+  /** A field's value: the stored bound at full precision when the field still shows what was painted. */
+  private _readField(input: HTMLInputElement, stored: number): number {
+    if (input.value === this._painted.get(input)) return stored;
+    const t = String(input.value ?? '').trim();
+    return t === '' ? Number.NaN : Number(t);
+  }
+
+  private _axisDirty(axis: Axis): boolean {
+    return [this._minInputs[axis], this._maxInputs[axis]].some((i) => i.value !== this._painted.get(i));
   }
 
   /**
    * Take a numeric edit on one axis. Both of the axis's fields are read
    * together: the pair is applied only when each is a number and min is not
    * above max. Otherwise the clip keeps its last valid bounds and the message
-   * says so, instead of applying a box that keeps nothing.
+   * under the fields says so, instead of applying a box that keeps nothing.
+   * Returns true when the axis holds a valid pair (applied, or unchanged).
    */
-  private _editAxis(axis: Axis): void {
-    const lo = Number.parseFloat(this._minInputs[axis].value);
-    const hi = Number.parseFloat(this._maxInputs[axis].value);
+  private _commitAxis(axis: Axis): boolean {
+    const lo = this._readField(this._minInputs[axis], this._min[axis]);
+    const hi = this._readField(this._maxInputs[axis], this._max[axis]);
     const name = AXES[axis].label;
     let problem: string | null = null;
     if (!Number.isFinite(lo) || !Number.isFinite(hi)) problem = `${name} min or max is empty or not a number.`;
@@ -336,14 +507,33 @@ export class ClipPanel {
       input.setAttribute('aria-invalid', problem ? 'true' : 'false');
     }
     if (problem) {
-      this._fieldErrors.set(axis, `${problem} Not applied; the clip keeps ${name} ${fmt(this._min[axis])} to ${fmt(this._max[axis])}.`);
-    } else {
-      this._fieldErrors.delete(axis);
-      this._min[axis] = lo;
-      this._max[axis] = hi;
+      this._fieldErrors.set(axis, `${problem} Not applied; the clip keeps ${name} ${this._fmt(axis, this._min[axis], -1)} to ${this._fmt(axis, this._max[axis], 1)}.`);
+      this._paintErrors();
+      return false;
     }
+    this._fieldErrors.delete(axis);
+    this._paintErrors();
+    const changed = lo !== this._min[axis] || hi !== this._max[axis];
+    this._min[axis] = lo;
+    this._max[axis] = hi;
+    this._paintAxis(axis);
+    if (changed) this._apply();
+    return true;
+  }
+
+  /** Put an axis's fields back to the last valid bounds; `note` says why, or null for none. */
+  private _restoreAxis(axis: Axis, note: string | null): void {
+    this._fieldErrors.delete(axis);
+    this._paintAxis(axis);
+    const name = AXES[axis].label;
+    const back = note
+      ? `${note.replace(/ Not applied;.*$/, '')} ${name} is back to ${this._fmt(axis, this._min[axis], -1)} to ${this._fmt(axis, this._max[axis], 1)}.`
+      : '';
+    this._error.textContent = [...this._fieldErrors.values(), back].filter(Boolean).join(' ');
+  }
+
+  private _paintErrors(): void {
     this._error.textContent = [...this._fieldErrors.values()].join(' ');
-    if (!problem) this._apply();
   }
 
   private _setMode(mode: ClipMode): void {
@@ -359,16 +549,54 @@ export class ClipPanel {
     }
   }
 
+  private _paintAxis(axis: Axis): void {
+    for (const [input, v, side] of [[this._minInputs[axis], this._min[axis], -1], [this._maxInputs[axis], this._max[axis], 1]] as const) {
+      // Rounded outward, so the box the fields show always holds the box applied
+      // (typing a shown value back never trims a point at the edge).
+      const text = this._fmt(axis, v, side);
+      input.value = text;
+      this._painted.set(input, text);
+      input.setAttribute('aria-invalid', 'false');
+      input.classList.remove('is-pending');
+    }
+  }
+
   private _paintExtents(): void {
     // The fields are being set from a valid state, so any pending edit message is moot.
     this._fieldErrors.clear();
     this._error.textContent = '';
-    for (const { axis } of AXES) {
-      this._minInputs[axis].value = fmt(this._min[axis]);
-      this._maxInputs[axis].value = fmt(this._max[axis]);
-      this._minInputs[axis].setAttribute('aria-invalid', 'false');
-      this._maxInputs[axis].setAttribute('aria-invalid', 'false');
+    for (const { axis } of AXES) this._paintAxis(axis);
+  }
+
+  /** The frame and unit the bounds are in, and how the fields step. */
+  private _paintFrame(): void {
+    const text = frameText(this._units());
+    if (this._frame.textContent !== text) this._frame.textContent = text;
+  }
+
+  private _units(): readonly [string, string, string] {
+    try {
+      return this._cb.units?.() ?? ['', '', ''];
+    } catch {
+      return ['', '', ''];
     }
+  }
+
+  private _unit(axis: Axis): string {
+    return this._units()[axis] ?? '';
+  }
+
+  private _decimals(axis: Axis): number {
+    return this._unit(axis) === '°' ? 7 : 3;
+  }
+
+  /** A bound for display; `side` -1 rounds a minimum down, 1 a maximum up, 0 to nearest. */
+  private _fmt(axis: Axis, v: number, side: -1 | 0 | 1 = 0): string {
+    const d = this._decimals(axis);
+    if (side === 0) return fmt(v, d);
+    const k = 10 ** d;
+    // The epsilon keeps floating-point noise (0.1 + 0.2) from moving a value a whole step.
+    return fmt((side < 0 ? Math.floor(v * k + 1e-6) : Math.ceil(v * k - 1e-6)) / k, d);
   }
 
   private _fit(): void {
@@ -384,26 +612,60 @@ export class ClipPanel {
     return { box: { min: [...this._min], max: [...this._max] }, mode: this._mode, enabled: this._enabled };
   }
 
+  /** Draw the box while the clip is on or this page is open; hide it otherwise. */
+  private _syncOutline(): void {
+    const show = this._enabled || this._pageOpen;
+    this._cb.onOutline?.(show ? { min: [...this._min], max: [...this._max] } : null, this._enabled);
+  }
+
   /**
-   * Push the clip to the renderer NOW — the geometry is a handful of planes and
-   * must follow every valid edit without lag — and move only the expensive part,
-   * the O(N) kept-point count, behind a trailing timer so typing or holding a
-   * spinner on a big scan never stalls. Until the count lands the readout says
-   * it is updating rather than showing the previous number as current.
+   * Push the clip to the renderer NOW — the geometry is a handful of uniforms
+   * and must follow every applied edit without lag — and move only the
+   * expensive part, the O(N) kept-point count, behind a trailing timer so a
+   * held arrow key on a big scan never stalls. Until the count lands the
+   * previous figure stays, dimmed and marked busy, rather than reading as
+   * current or blinking out.
    */
   private _apply(): void {
     const clip = this._current();
     this._cancelCount();
     this._cb.onApply(this._enabled ? clip : null);
+    this._syncOutline();
+    this._syncTurnOff();
     this._emit();
     if (this._enabled) {
       // The clip scope keeps its last value until the new count lands, so its
       // consumers see one settled figure rather than a gap.
-      this._readout.textContent = 'Updating kept-point count…';
+      this._markCounting();
       this._scheduleCount();
     } else {
-      this._readout.textContent = 'Enable to clip the scan to the box.';
+      this._hasCount = false;
+      this._renderOff();
       setClipScope(null);
+    }
+  }
+
+  /** Turn off has nothing to do while the clip is off. */
+  private _syncTurnOff(): void {
+    this._turnOff.disabled = !this._enabled;
+    this._turnOff.classList.toggle('is-disabled', !this._enabled);
+  }
+
+  private _renderOff(): void {
+    this._readout.classList.remove('is-stale');
+    this._readout.removeAttribute('aria-busy');
+    this._readout.textContent = OFF_TEXT;
+    this._syncTurnOff();
+  }
+
+  /** The count is being redone: dim the last figure, or say it is counting when there is none. */
+  private _markCounting(): void {
+    if (this._hasCount) {
+      this._readout.classList.add('is-stale');
+      this._readout.setAttribute('aria-busy', 'true');
+    } else {
+      this._readout.classList.remove('is-stale');
+      this._readout.textContent = COUNTING_TEXT;
     }
   }
 
@@ -423,18 +685,101 @@ export class ClipPanel {
     }, CLIP_COUNT_DEBOUNCE_MS);
   }
 
-  private _showCount(c: { kept: number; total: number } | null): void {
-    this._readout.textContent = c
-      ? `${c.kept.toLocaleString()} of ${c.total.toLocaleString()} points kept.`
-      : '';
-    setClipScope(c);
+  private _showCount(c: ClipKeptCount | null): void {
+    this._readout.classList.remove('is-stale');
+    this._readout.removeAttribute('aria-busy');
+    this._readout.textContent = clipReadoutText(c, this._mode);
+    this._hasCount = c !== null;
+    this._syncTurnOff();
+    setClipScope(c ? { kept: c.kept, total: c.total } : null);
   }
 }
 
 /** Trailing quiet period before the kept-point count runs. */
 export const CLIP_COUNT_DEBOUNCE_MS = 120;
 
-/** A bound as typed: full precision, with only floating-point noise removed (0.0004 stays 0.0004). */
-function fmt(v: number): string {
-  return String(Number(v.toPrecision(12)));
+/** Wheel travel (in pixels of deltaY) per step on a focused field. */
+const WHEEL_STEP_TRAVEL = 50;
+
+/** True for an input event that carries typed, pasted or deleted text (an InputEvent), not a spin. */
+function typedInput(e: Event): boolean {
+  const t = (e as InputEvent).inputType;
+  return typeof t === 'string' && t !== '';
+}
+
+function isFocused(node: HTMLElement): boolean {
+  return typeof document !== 'undefined' && document.activeElement === node;
+}
+
+/** The fine arrow step for an axis unit: 0.1 of a linear unit, about 0.1 m in degrees. */
+function stepFor(unit: string): number {
+  return unit === '°' ? 0.000001 : 0.1;
+}
+
+/**
+ * The line above the fields: which frame the bounds are in, in which unit,
+ * and how they step. The frame is the scene's local one, the frame of the
+ * Inspect card's Local X, Y, Z (three decimals there too).
+ */
+export function frameText(u: readonly [string, string, string]): string {
+  const name = (x: string): string => (x === '°' ? '°' : x ? ` ${x}` : ' scene units');
+  const fine = (x: string): string => (x === '°' ? '0.000001°' : `0.1${name(x)}`);
+  const coarse = (x: string): string => (x === '°' ? '0.00001°' : `1${name(x)}`);
+  const same = u[0] === u[1] && u[1] === u[2];
+  const unit = same ? (u[0] === '°' ? 'degrees' : u[0] || 'scene units') : u.map((x) => x || 'scene units').join(', ');
+  const step = same ? `${fine(u[0])}, Shift ${coarse(u[0])}` : `${fine(u[0])} across and ${fine(u[2])} up, Shift ten times that`;
+  return `Bounds in local scene coordinates (${unit}). Arrow keys step ${step}. Typed values apply on Enter.`;
+}
+
+function roundTo(v: number, decimals: number): number {
+  const k = 10 ** decimals;
+  return Math.round(v * k) / k;
+}
+
+/** A bound for display: fixed decimals, and never "-0.000". */
+function fmt(v: number, decimals = 3): string {
+  const s = v.toFixed(decimals);
+  return /^-0\.?0*$/.test(s) ? s.slice(1) : s;
+}
+
+const count = (n: number): string => n.toLocaleString('en-US');
+
+/** "151.1 M" for millions, otherwise the exact count. */
+function approx(n: number): string {
+  return n >= 1_000_000 ? `${(n / 1_000_000).toFixed(1)} M` : count(Math.round(n));
+}
+
+/**
+ * The readout under the Clip page's controls, from a kept-point count. Says
+ * which points were counted (the shown display sample, several visible scans),
+ * what a full-resolution export would keep, and why the figure is all or
+ * nothing when it is.
+ */
+export function clipReadoutText(c: ClipKeptCount | null, mode: ClipMode): string {
+  if (!c) return NO_COUNT_TEXT;
+  const multi = c.visible && c.visible.scans > 1 ? c.visible : null;
+  const sample = c.sourceTotal != null && c.sourceTotal > c.total ? c.sourceTotal : null;
+  const kept = multi ? multi.kept : c.kept;
+  const total = multi ? multi.total : c.total;
+  const parts: string[] = [];
+  if (multi) {
+    parts.push(`${count(kept)} of ${count(total)} ${sample ? 'shown ' : ''}points kept across ${multi.scans} visible scans.`);
+    parts.push(`In the active scan${c.name ? ` (${c.name})` : ''}: ${count(c.kept)} of ${count(c.total)}; a point-cloud export writes these.`);
+  } else {
+    parts.push(`${count(kept)} of ${count(total)} ${sample ? 'shown ' : ''}points kept.`);
+  }
+  if (sample && c.total > 0 && c.kept > 0) {
+    parts.push(`A full-resolution export keeps about ${approx((c.kept / c.total) * sample)} of the file's ${approx(sample)} points.`);
+  }
+  const whole = multi ? 'every visible scan' : 'the whole scan';
+  if (total > 0 && kept === total && mode === 'keep-inside') {
+    parts.push(`The box covers ${whole}. Draw a clipping box, or edit the bounds under Advanced, to make it smaller.`);
+  } else if (total > 0 && kept === 0 && mode === 'keep-outside') {
+    parts.push(`The box covers ${whole} and Keep outside hides what is inside it. Draw a smaller box, or switch to Keep inside.`);
+  } else if (total > 0 && kept === 0) {
+    parts.push('No points are inside the box. Move or resize it, or use Fit to scan.');
+  } else if (total > 0 && kept === total) {
+    parts.push('No points are inside the box, so Keep outside hides nothing.');
+  }
+  return parts.join(' ');
 }

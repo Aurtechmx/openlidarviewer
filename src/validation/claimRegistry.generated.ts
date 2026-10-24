@@ -51,6 +51,7 @@ export const EVIDENCE_REGISTRY: Readonly<Record<string, RegistryEntry>> = {
   'ORG-PCD-ORGANIZATION': { current: 'E3_SYNTHETICALLY_VALIDATED', required: 'E3_SYNTHETICALLY_VALIDATED', exportAllowed: false },
   'TERRAIN-FLOW-PULSE': { current: 'E3_SYNTHETICALLY_VALIDATED', required: 'E4_CROSS_IMPLEMENTATION_VALIDATED', exportAllowed: true },
   'TERRAIN-FLOW-DEPRESSION-INVENTORY': { current: 'E2_ANALYTICALLY_VERIFIED', required: 'E3_SYNTHETICALLY_VALIDATED', exportAllowed: true },
+  'TERRAIN-FLOW-RATIONAL-PEAK': { current: 'E2_ANALYTICALLY_VERIFIED', required: 'E2_ANALYTICALLY_VERIFIED', exportAllowed: true },
   'TERRAIN-ACCESS': { current: 'E3_SYNTHETICALLY_VALIDATED', required: 'E3_SYNTHETICALLY_VALIDATED', exportAllowed: true },
 };
 
@@ -102,4 +103,5 @@ export type ClaimId =
   | 'ORG-PCD-ORGANIZATION'
   | 'TERRAIN-FLOW-PULSE'
   | 'TERRAIN-FLOW-DEPRESSION-INVENTORY'
+  | 'TERRAIN-FLOW-RATIONAL-PEAK'
   | 'TERRAIN-ACCESS';
