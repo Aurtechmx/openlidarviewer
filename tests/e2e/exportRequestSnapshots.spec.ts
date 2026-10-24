@@ -238,7 +238,9 @@ test.describe('quick-format export over placed tiles', () => {
     await setBound(clip, 'Z max', off[2] + 50);
     await setBound(clip, 'Z min', off[2] - 50);
     // One tile: "8 of 16 points kept."; two: counted over both, tile B named.
-    await expect(clip.locator('[role="status"]')).toContainText(/^8 of 16 points kept\.|In the active scan \(utm33-b\.las\): 8 of 16;/);
+    await expect(clip.locator('[role="status"]')).toContainText(
+      /^(?:8 of 16 points kept\.|8 of 32 points kept across 2 visible scans\. In the active scan \(utm33-b\.las\): 8 of 16;)/,
+    );
   }
 
   const expectedB = (): string[] => {
