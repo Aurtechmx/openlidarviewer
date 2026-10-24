@@ -212,8 +212,8 @@ describe('refusals say which cell or limit stops the run', () => {
     expect(r.ok).toBe(false);
     if (r.ok) return;
     expect(r.code).toBe('NO_ROUTE');
-    expect(r.reason).toMatch(/The goal can reach 1 cell; the moves out of that area are closed by (no elevation \(NoData\)|step height) \(\d+%\)(, [^,]+ \(\d+%\))? and [^,]+ \(\d+%\)\.$/);
-    expect(r.reason).toContain('no elevation (NoData)');
+    expect(r.reason).toMatch(/The goal can reach 1 cell; the moves out of that area are closed by (NoData cells|step height) \(\d+%\)(, [^,]+ \(\d+%\))? and [^,]+ \(\d+%\)\.$/);
+    expect(r.reason).toContain('NoData cells (');
     expect(r.reason).toContain('step height');
   });
 });

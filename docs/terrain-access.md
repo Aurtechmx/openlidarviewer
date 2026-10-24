@@ -249,7 +249,7 @@ inspector's words. `NO_ROUTE` grows the area each endpoint can reach over the
 moves the search takes, stops at the smaller one, and names the reasons that
 close the moves out of it with their shares, for example "The start can reach
 1,234 cells; the moves out of that area are closed by step height (61%), cross
-slope (22%) and no elevation (NoData) (17%)." The survey edge is not counted.
+slope (22%) and NoData cells (17%)." The survey edge is not counted.
 
 The Lab also refuses a stale preview or run (`STALE_INPUT`) the moment the
 terrain behind it may have changed since the profile was applied. That is a

@@ -113,23 +113,23 @@ const CLOSED_MOVE_LABEL: Readonly<Record<ClosedMoveReason, string>> = Object.fre
   'step-height': 'step height',
   'longitudinal-grade': 'longitudinal grade',
   'cross-slope': 'cross slope',
-  'no-data': 'no elevation (NoData)',
-  'outside-roi': 'outside the region of interest',
-  'low-confidence': 'terrain confidence below the minimum',
+  'no-data': 'NoData cells',
+  'outside-roi': 'cells outside the region of interest',
+  'low-confidence': 'cells below the minimum confidence',
   ruggedness: 'ruggedness',
   obstruction: 'above-ground obstruction',
-  'obstruction-unknown': 'no above-ground return',
-  'derivative-support': 'slope from a synthesised neighbour',
+  'obstruction-unknown': 'cells with no above-ground return',
+  'derivative-support': 'cells whose slope used a synthesised neighbour',
   'vehicle-width': 'vehicle width clearance',
-  corner: 'a diagonal past an unsupported corner',
+  corner: 'diagonals past an unsupported corner',
 });
 
 /**
  * Which limits close the way, from {@link ClosedArea}: the area one endpoint
  * can reach and the share of the moves out of it each reason closes, the
  * three largest, e.g. "The start can reach 1,234 cells; the moves out of
- * that area are closed by step height (61%), cross slope (22%) and no
- * elevation (NoData) (17%)." Null when nothing was tallied.
+ * that area are closed by step height (61%), cross slope (22%) and NoData
+ * cells (17%)." Null when nothing was tallied.
  */
 export function closedAreaSentence(area: ClosedArea | null): string | null {
   if (!area) return null;
