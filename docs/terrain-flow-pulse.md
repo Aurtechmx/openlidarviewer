@@ -73,26 +73,42 @@ Mulla (2014). It floods inward from the edge of the mapped surface, always
 advancing from the lowest cell reached so far, and raises a cell reached
 from below to the level it was reached at: the elevation water would have to
 reach to spill out of the depression holding it. One pass, a binary
-min-heap ordered by elevation then by insertion order, so two cells reached
-at the same elevation resolve the same way on every run, runs in O(n log n).
+min-heap ordered by that spill level then by insertion order, so cells at
+one level are taken first in, first out and two cells reached at the same
+level resolve the same way on every run, runs in O(n log n).
 
 Each filled cell is raised a small amount above the cell it was reached
 from, turning what would otherwise be a plateau (no descent, so D8 would
 report it flat) into a surface with a deterministic path out. By default the
-rise is one Float32 step (`fillEpsilon: 'float32-step'`), the smallest the
-surface can hold, as Barnes, Lehman and Mulla specify with `nextafter`. The
-flood is ordered by the raised heights, so a larger rise can carry a
-depression's interior above a rim it should spill over; a fixed rise in the
-vertical unit can still be asked for. The epsilon is not fill. Following Barnes, Lehman and Mulla, a cell counts as
-filled only when its original height is strictly below the spill level it
-was reached from; a cell level with that spill level (a flat) rises by the
-epsilon alone and is counted separately as `flatCellsResolved`. The
-`cellsRaised`, `maxFillDepth` and `fillDepthSum` figures cover filled cells
-only, and a fill depth is the spill level minus the original height, never
-inflated by the epsilon chain across a filled depression. At a
-large coordinate magnitude a Float32 increment can be absorbed and the cell
-does not actually rise; every such absorption is counted in
-`epsilonAbsorbed` rather than assumed to have applied.
+rise is one Float64 step (`fillEpsilon: 'float64-step'`), the smallest the
+conditioned surface can hold, as Barnes, Lehman and Mulla specify with
+`nextafter`. The conditioned surface is a Float64 copy of the Float32 DTM,
+and that is what D8 routes on. The rises add up along a flat, one per cell,
+so the far end of a long flat stands highest. On a Float32 surface one step
+is 6.1e-5 m at 600 m, so a few hundred cells would climb past an exit only a
+centimetre above the true spill point and D8 would drain the far end of the
+flat over that exit. A Float64 step is 2^-29 of a Float32 step at the
+same height, so a chain of fewer than 2^29 cells stays below the next height
+the Float32 DTM can hold, and no exit above the spill level can be
+overtaken. The flood itself is ordered by the spill level without the rise,
+so the order it advances in never depends on how far a chain has climbed,
+and the spill levels match those of a flood with no rise at all.
+
+A fixed rise in the vertical unit can still be asked for. It adds up the
+same way, and on a long flat it can carry the far end above a nearby exit
+that is only slightly higher than the true spill point, so D8 may then
+drain part of the flat over that exit; the spill levels and fill figures
+stay correct. The epsilon is not fill. Following Barnes, Lehman and Mulla, a
+cell counts as filled only when its original height is strictly below the
+spill level it was reached from; a cell level with that spill level (a flat)
+rises by the epsilon alone and is counted separately as
+`flatCellsResolved`. The `cellsRaised`, `maxFillDepth` and `fillDepthSum`
+figures cover filled cells only, and a fill depth is the spill level minus
+the original height, never inflated by the epsilon chain across a filled
+depression. A rise too small to change the value it is added to, such as a
+fixed rise below the Float64 spacing at that height, leaves the cell where
+it was; every such absorption is counted in `epsilonAbsorbed` rather than
+assumed to have applied.
 
 D8 treats NoData as a wall, and conditioning is seeded consistently with
 that. By default, when `fillNoData` is set to `wall`, the flood is seeded at
@@ -223,8 +239,11 @@ routing model this release ships: verified and offered, while multi-flow
 direction and D-infinity remain future work, not shipped. `interpolated` is
 `route`, which routes over interpolated DTM cells while disclosing the
 count, or `block`, which restricts routing to measured ground only.
-`fillEpsilon` is the rise above the spill parent when conditioning, in the
-vertical unit. `fillNoData` is `wall` by default, or `outlet`; it controls
+`fillEpsilon` is the rise above the cell a filled cell was reached from
+when conditioning: `float64-step` (the default) for one Float64 step, or a
+fixed rise in the vertical unit. The value `float32-step` names a Float32
+step this method no longer takes, and a run given it is refused with a
+message naming `float64-step`. `fillNoData` is `wall` by default, or `outlet`; it controls
 how conditioning reads a NoData cell, while routing always treats NoData as
 a wall regardless of this setting. `maxCells` refuses a grid above this cell
 budget, 4,000,000 by default, rather than silently striding it.
@@ -285,7 +304,11 @@ That digest deliberately does not cover the routed arrays byte for byte.
 That is a separate figure, `result.fieldDigest`, computed in
 `src/simulation/flowPulse/flowFieldDigest.ts`: a second SHA-256 over the
 receiver, direction and status arrays, the upstream counts, and the
-conditioned elevations when conditioning ran. Two runs can share every
+conditioned elevations when conditioning ran. The conditioned elevations
+are hashed at Float32, the precision of the DTM they came from, although
+routing ran on the Float64 surface: the filled levels survive that rounding
+exactly, and the Float64 rise that orders a filled flat, which does not, is
+recorded by the receivers it produced. Two runs can share every
 summary figure, such as an identical sink count, flat count, outlet count
 and maximum upstream count, while routing to opposite edges of the grid, and
 only the field digest tells them apart.
