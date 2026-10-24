@@ -39,13 +39,14 @@ compared with an independent field result.
 
 ## Evidence levels
 
-No existing claim changed evidence level. The register holds 38 claims, 17 of
-them at E4 and none at E5. Four claims are new:
+No existing claim changed evidence level. The register holds 39 claims, 17 of
+them at E4 and none at E5. Five claims are new:
 
 | Claim | Level |
 | --- | --- |
 | TERRAIN-FLOW-PULSE | E3 |
 | TERRAIN-FLOW-DEPRESSION-INVENTORY | E2 |
+| TERRAIN-FLOW-RATIONAL-PEAK | E2 |
 | TERRAIN-ACCESS | E3, internal oracle ceiling |
 | VVA-P95 | E3 |
 
