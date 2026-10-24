@@ -66,7 +66,7 @@ test('without a ground surface: one click runs terrain first on the lab page, th
   // Purpose and stages are kept, folded into Details.
   await expect(labPage.locator('.olv-lab-purpose')).toBeHidden();
   await labPage.locator('.olv-lab-details > summary').click();
-  await expect(labPage.locator('.olv-lab-purpose')).toContainText('Counts cells, not rainfall.');
+  await expect(labPage.locator('.olv-lab-purpose')).toContainText('a rough peak flow for a rainfall you set.');
   await expect(labPage.locator('.olv-lab-stages > .olv-lab-stage[aria-current="step"]')).toHaveText('3. Pick a cell');
 });
 

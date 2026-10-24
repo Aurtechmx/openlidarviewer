@@ -73,10 +73,22 @@ import {
 import { FlowOverlay, type FlowOverlayHost } from '../../render/FlowOverlay';
 import type { HorizontalScale } from '../../simulation/flowPulse/dtmFlowGrid';
 import type { AnalyseContoursResult } from '../../terrain/contour/analyseContours';
-import { loadFlowPulsePackage, registerFlowOverlayInvalidator } from '../../lazyChunks';
+import { loadFlowPulsePackage, loadWatershedGif, registerFlowOverlayInvalidator } from '../../lazyChunks';
 import { downloadBytes } from '../../io/download';
 import { labRun, publishLabRun, takeResultReopen } from '../../app/results/resultSignals';
 import type { buildFlowPulsePackage, FlowGridFrame } from '../../export/flowPulsePackage';
+import type { WatershedFacts, WatershedGifInput } from '../../export/watershedGif';
+import { edgeContamination, EDGE_CONTAMINATED_NOTE, type EdgeContamination } from '../../simulation/flowPulse/edgeContamination';
+import { POUR_POINT_SNAP_RADIUS_CELLS, snapPourPoint } from '../../simulation/flowPulse/pourPointSnap';
+import {
+  DISPLAY_THRESHOLD_M3S, PEAK_FLOW_WITHHELD, RAINFALL_DEFAULT, areaLimitWarning, flowDisplayField, peakFlowEstimate,
+  peakFlowText, rationalAssumptions, settingText, type PeakFlowEstimate, type RainfallSetting,
+} from '../../simulation/flowPulse/rationalDischarge';
+import { buildRainfallControl } from './flowRainfallControl';
+import { flowDischargeLegend, hillshade, type ActivationSource, type FlowChannelField } from './flowResultGrid';
+import { buildIdentityLabel } from '../../build/buildIdentity';
+import { channelMinCount, isChannel, logScale } from '../../render/flowOverlayGeometry';
+import { CELL_NODATA } from '../../simulation/flowPulse/flowTypes';
 
 /** The analysed surface and the frame facts the Analyse panel holds for it. */
 export interface FlowPulseLabInput {
@@ -147,8 +159,11 @@ export function flowScaleOf(input: FlowPulseLabInput): HorizontalScale {
   return {
     isGeographic: input.isGeographic,
     latitudeDeg: latitudeKnown ? latitudeDeg : null,
+    // Direction needs only the ratio of the two axes, so a missing unit routes
+    // at 1; square metres need the unit itself, so they are withheld without it.
     unitToMetres: input.resolvedUnitToMetres ?? 1,
-    resolved: input.result.horizontalScaleResolved && (!input.isGeographic || latitudeKnown),
+    resolved: input.result.horizontalScaleResolved && input.resolvedUnitToMetres != null
+      && (!input.isGeographic || latitudeKnown),
   };
 }
 
@@ -288,6 +303,7 @@ export function buildFlowPulseExport(
   layerId: string | null,
   build: typeof buildFlowPulsePackage,
   georef: FlowPulseGeoref | null = null,
+  extras: { readonly rainfall?: RainfallSetting | null; readonly snappedFrom?: number | null } = {},
 ): FlowPulseExportOutcome {
   if (!outcome.ok) {
     return { ok: false, reason: 'Flow Pulse has not produced a run to export.' };
@@ -297,7 +313,11 @@ export function buildFlowPulseExport(
   }
   const pathInput = path && path.ok ? { cells: path.path } : null;
   const catchmentInput = catchment && catchment.ok
-    ? { mask: catchment.mask, outletCell: catchment.cell.row * outcome.grid.cols + catchment.cell.col }
+    ? {
+      mask: catchment.mask,
+      outletCell: catchment.cell.row * outcome.grid.cols + catchment.cell.col,
+      snappedFrom: extras.snappedFrom ?? null,
+    }
     : null;
   const basename = filename ?? layerId ?? 'flow-pulse';
   const bytes = build(outcome, {
@@ -314,8 +334,123 @@ export function buildFlowPulseExport(
     verticalResolved: (georef?.verticalUnitLabel ?? 'units') !== 'units',
     sourceInterpretation: georef?.sourceInterpretation ?? null,
     digests: georef?.digests ?? null,
+    rainfall: extras.rainfall ?? null,
   });
   return { ok: true, bytes, filename: `${basename}-flow-pulse.zip` };
+}
+
+// ── edge contamination, rainfall and the watershed GIF ─────────────────────
+
+/** The cell with the largest upstream count (the lowest index on a tie). */
+export function largestDrainageCell(outcome: FlowPulseResult): number {
+  const up = outcome.accumulation.upstreamCells;
+  let best = 0;
+  for (let i = 1; i < up.length; i++) if (up[i]! > up[best]!) best = i;
+  return best;
+}
+
+/** Square metres for `cells` cells, or null when the basis forbids a metric area. */
+export function areaOfCells(outcome: FlowPulseResult, cells: number): number | null {
+  if (!mayReportMetricArea(outcome.basis) || outcome.contributingAreaM2 == null) return null;
+  return cells * outcome.grid.cellMetresX * outcome.grid.cellMetresY;
+}
+
+/** "3905.0 m²", "at least 3905.0 m² — …", or the withheld sentence. */
+export function contributingAreaText(areaM2: number | null, lowerBound: boolean): string {
+  if (areaM2 == null) return 'Withheld: the horizontal scale is not resolved';
+  return lowerBound ? `${areaM2.toFixed(1)} m² — ${EDGE_CONTAMINATED_NOTE}` : `${areaM2.toFixed(1)} m²`;
+}
+
+/** The peak flow for a drainage of `cells` cells at `setting`; withheld without metres. */
+export function labPeakFlow(outcome: FlowPulseResult, cells: number, setting: RainfallSetting, lowerBound: boolean): PeakFlowEstimate {
+  return peakFlowEstimate(areaOfCells(outcome, cells), setting, lowerBound);
+}
+
+/**
+ * The map's channel cells at `setting`: every cell whose estimated peak flow
+ * reaches the 1 L/s display threshold. Null when there are no square metres,
+ * and the map falls back to the upstream count.
+ */
+export function displayChannelField(outcome: FlowPulseResult, setting: RainfallSetting): (FlowChannelField & { channelCells: number }) | null {
+  const area = mayReportMetricArea(outcome.basis) ? outcome.contributingAreaM2 : null;
+  return area ? flowDisplayField(area, setting) : null;
+}
+
+/** The line under the rainfall sliders: what the map draws now, or why the estimate is withheld. */
+export function rainfallNote(field: { channelCells: number } | null, setting: RainfallSetting): string {
+  if (!field) return `${PEAK_FLOW_WITHHELD}, so no peak flow is estimated and the lines show upstream cell counts.`;
+  return `At ${settingText(setting)}, ${field.channelCells.toLocaleString('en-US')} cells reach the line threshold of ${DISPLAY_THRESHOLD_M3S * 1000} L/s estimated peak flow.`;
+}
+
+/** The count-scale channel cells, for a GIF drawn without a rainfall estimate. */
+export function countChannelMask(outcome: FlowPulseResult): Uint8Array {
+  const up = outcome.accumulation.upstreamCells;
+  let max = 1;
+  for (const v of up) if (v > max) max = v;
+  const mask = new Uint8Array(up.length);
+  for (let i = 0; i < up.length; i++) if (outcome.routed.status[i] !== CELL_NODATA && isChannel(logScale(up[i]!, max))) mask[i] = 1;
+  return mask;
+}
+
+/** The download name of a watershed GIF: `<base>-watershed-<col>-<row>.gif`. */
+export function watershedGifFilename(basename: string, col: number, row: number): string {
+  return `${basename}-watershed-${col}-${row}.gif`;
+}
+
+/** What the live region says about a snapped outlet. */
+export function snapSentence(from: GridCell, to: GridCell): string {
+  return `Outlet snapped to the strongest channel within ${POUR_POINT_SNAP_RADIUS_CELLS} cells: from col ${from.col}, row ${from.row} to col ${to.col}, row ${to.row}.`;
+}
+
+/**
+ * Everything the GIF renderer needs for one catchment, from the current run
+ * and the Lab's state. Pure, so the facts the GIF prints are testable without
+ * a canvas.
+ */
+export function watershedGifInputFor(
+  input: FlowPulseLabInput,
+  outcome: FlowPulseResult,
+  catchment: FlowCatchmentTrace,
+  setting: RainfallSetting,
+  edge: EdgeContamination,
+  snappedFrom: GridCell | null,
+  dateIso: string,
+  version: string = buildIdentityLabel(),
+): WatershedGifInput {
+  const g = outcome.grid;
+  const outlet = catchment.cell.row * g.cols + catchment.cell.col;
+  const lowerBound = edge.contaminated[outlet] === 1;
+  const areaM2 = areaOfCells(outcome, catchment.cells);
+  const field = displayChannelField(outcome, setting);
+  const conditioning = outcome.record.parameters.conditioning === 'raw' ? 'raw' : 'priority-flood';
+  const facts: WatershedFacts = {
+    outletCol: catchment.cell.col,
+    outletRow: catchment.cell.row,
+    sourceName: input.filename ?? input.layerId,
+    conditioning,
+    cellMetres: areaM2 != null ? { x: g.cellMetresX, y: g.cellMetresY } : null,
+    cells: catchment.cells,
+    areaM2,
+    edgeContaminated: lowerBound,
+    peakFlow: peakFlowEstimate(areaM2, setting, lowerBound),
+    channelRule: field
+      ? `estimated peak flow at least ${DISPLAY_THRESHOLD_M3S * 1000} L/s at ${settingText(setting)}`
+      : `upstream count at least ${channelMinCount(outcome.summary.maxUpstreamCells).toLocaleString('en-US')} cells (no rainfall estimate without metres)`,
+    crsName: input.crsName ?? null,
+    isGeographic: input.isGeographic,
+    version,
+    dateIso,
+    snappedFrom,
+  };
+  // Relief from the DTM itself, not the conditioned routing surface.
+  const dtmZ = input.result.dtm.z;
+  const shade = dtmZ.length === g.cols * g.rows ? hillshade({ ...g, z: dtmZ }) : hillshade(g);
+  return {
+    grid: g, routed: outcome.routed, outlet, shade,
+    channel: field ? field.channel : countChannelMask(outcome),
+    unit: areaM2 != null ? 'm' : 'cells',
+    facts,
+  };
 }
 
 function row(label: string, value: string): HTMLElement {
@@ -329,7 +464,11 @@ function row(label: string, value: string): HTMLElement {
  * The run's answer as a card: a refusal's reason, or the figures and every
  * limitation. `flat` writes the method as a plain section, for a card inside Details.
  */
-export function renderFlowPulseLab(outcome: FlowPulseResult | FlowRefusal, flat = false): HTMLElement {
+export function renderFlowPulseLab(
+  outcome: FlowPulseResult | FlowRefusal,
+  flat = false,
+  edge: EdgeContamination | null = null,
+): HTMLElement {
   const card = el('aside', { className: 'olv-story-card' });
   if (!outcome.ok) {
     card.append(
@@ -341,6 +480,8 @@ export function renderFlowPulseLab(outcome: FlowPulseResult | FlowRefusal, flat 
 
   const s = outcome.summary;
   const metric = mayReportMetricArea(outcome.basis) && s.maxContributingAreaM2 != null;
+  const ec = edge ?? edgeContamination(outcome.grid, outcome.routed);
+  const largestOpen = ec.contaminated[largestDrainageCell(outcome)] === 1;
   card.append(
     el('div', { className: 'olv-story-headline', text: 'D8 flow routing over the analysed DTM' }),
     row('Cells read', `${s.readableCells.toLocaleString('en-US')} of ${s.cells.toLocaleString('en-US')}`),
@@ -350,7 +491,11 @@ export function renderFlowPulseLab(outcome: FlowPulseResult | FlowRefusal, flat 
     row('Largest upstream count', `${s.maxUpstreamCells} cells`),
     row(
       'Largest contributing area',
-      metric ? `${s.maxContributingAreaM2!.toFixed(1)} m²` : 'Withheld: the horizontal scale is not resolved',
+      metric ? contributingAreaText(s.maxContributingAreaM2!, largestOpen) : 'Withheld: the horizontal scale is not resolved',
+    ),
+    row(
+      'Edge-contaminated cells',
+      `${ec.contaminatedCells.toLocaleString('en-US')} of ${s.readableCells.toLocaleString('en-US')}: ground outside the survey may also drain through them, so their areas are lower bounds`,
     ),
   );
   const list = el('ul', { className: 'olv-story-v' });
@@ -367,15 +512,17 @@ export function renderFlowPulseLab(outcome: FlowPulseResult | FlowRefusal, flat 
  * area is in square metres only when the basis permits a metric area, and in
  * cells otherwise; sinks, flats and the rest stay in the result card.
  */
-export function flowPulseStats(outcome: FlowPulseResult): HTMLElement {
+export function flowPulseStats(outcome: FlowPulseResult, edge: EdgeContamination | null = null): HTMLElement {
   const s = outcome.summary;
   const area = mayReportMetricArea(outcome.basis) ? s.maxContributingAreaM2 : null;
+  // "≥" when the largest drainage reaches the survey edge: its area is a lower bound.
+  const atLeast = edge?.contaminated[largestDrainageCell(outcome)] === 1 ? '≥ ' : '';
   return labStatRow('Flow figures', [
     { label: 'Surface', value: s.readableCells.toLocaleString('en-US'), unit: 'cells' },
     { label: 'Outlets', value: s.outletCount.toLocaleString('en-US') },
     area != null
-      ? { label: 'Largest drainage', value: area >= 100 ? Math.round(area).toLocaleString('en-US') : area.toFixed(1), unit: 'm²' }
-      : { label: 'Largest drainage', value: s.maxUpstreamCells.toLocaleString('en-US'), unit: 'cells' },
+      ? { label: 'Largest drainage', value: `${atLeast}${area >= 100 ? Math.round(area).toLocaleString('en-US') : area.toFixed(1)}`, unit: 'm²' }
+      : { label: 'Largest drainage', value: `${atLeast}${s.maxUpstreamCells.toLocaleString('en-US')}`, unit: 'cells' },
   ]);
 }
 
@@ -402,7 +549,7 @@ export function flowTerrainBanner(input: FlowPulseLabInput): HTMLElement | null 
 /** Plain lines beside a Flow Pulse result. */
 export const FLOW_HOW_TO_READ: readonly string[] = [
   'Each square is one ground cell. Water in a cell moves to the neighbour with the steepest drop.',
-  'Outlets are where flow leaves the surface at its edge, which can be where a stream enters it. Sinks are low spots where it stops.',
+  'Outlets are where flow leaves the surface at its edge. Sinks are low spots where it stops. A stream that enters the survey shows as a channel that starts at the edge; its area is a lower bound.',
   'Upstream counts are numbers of cells, not volumes of water or rainfall.',
 ];
 
@@ -598,6 +745,13 @@ function mountFlowPulseInteractive(
   let overlayFrame: FlowOverlayFrame | null = null;
   let lastTrace: FlowPathTrace | FlowClickRefusal | null = null;
   let lastCatchment: FlowCatchmentTrace | FlowClickRefusal | null = null;
+  // Rainfall setting: kept across re-runs, so a conditioning switch keeps it.
+  let rainfall: RainfallSetting = RAINFALL_DEFAULT;
+  let edge: EdgeContamination | null = null;
+  let snapOn = true;
+  /** The pointer pick behind the current outlet, when it was snapped. */
+  let lastSnap: { from: GridCell; to: GridCell } | null = null;
+  let rainFrame = 0;
 
   const overlayHost = input.overlayHost ?? null;
   const flowOverlay = acquireFlowOverlay(overlayHost, input.isStale ?? null);
@@ -608,7 +762,7 @@ function mountFlowPulseInteractive(
   const grid = new FlowResultGrid({
     ariaLabel: 'Routed terrain grid — arrow keys move, Enter or Space acts on the selected cell',
     onMove: (_cell: GridCell, report) => announce(cellAnnouncement(report)),
-    onActivate: (cell: GridCell) => handleActivate(cell),
+    onActivate: (cell: GridCell, source: ActivationSource) => handleActivate(cell, source),
     elevationRef: flowElevationReference(input),
   });
 
@@ -634,8 +788,45 @@ function mountFlowPulseInteractive(
       { value: 'catchment', label: 'Set catchment outlet', tip: "Click a cell to set the catchment's outlet point." },
     ],
     () => mode,
-    (value) => { mode = value; modeCtl.sync(); renderSelection(); },
+    (value) => { mode = value; modeCtl.sync(); syncSnapToggle(); renderSelection(); },
   );
+
+  // Pour-point snapping: a click in catchment mode moves to the strongest
+  // channel nearby; the keyboard cursor always sets the exact cell.
+  const snapToggle = button(
+    'Snap outlet to channel', 'olv-flow-snap-toggle',
+    `A click sets the outlet on the strongest channel within ${POUR_POINT_SNAP_RADIUS_CELLS} cells. Keyboard selection is always exact.`,
+  );
+  snapToggle.addEventListener('click', () => {
+    snapOn = !snapOn;
+    syncSnapToggle();
+    announce(snapOn
+      ? `Outlet snapping on: a click moves to the strongest channel within ${POUR_POINT_SNAP_RADIUS_CELLS} cells.`
+      : 'Outlet snapping off: a click sets the outlet on the cell clicked.');
+  });
+  function syncSnapToggle(): void {
+    snapToggle.setAttribute('aria-pressed', snapOn ? 'true' : 'false');
+    snapToggle.hidden = mode !== 'catchment';
+  }
+  syncSnapToggle();
+
+  const rainCtl = buildRainfallControl(rainfall, (next) => {
+    rainfall = next;
+    // One redraw per frame while the slider moves; at once where there are no frames.
+    if (typeof requestAnimationFrame !== 'function') { applyRainfall(); return; }
+    if (rainFrame) return;
+    rainFrame = requestAnimationFrame(() => { rainFrame = 0; applyRainfall(); });
+  });
+  const rainAssumptions = el('div', { className: 'olv-flow-rain-assumptions' });
+
+  /** Redraw the network for the current rainfall and refresh the figures that depend on it. */
+  function applyRainfall(): void {
+    if (!outcome.ok) return;
+    const field = displayChannelField(outcome, rainfall);
+    grid.setChannelField(field);
+    rainCtl.setNote(rainfallNote(field, rainfall), !field);
+    renderSelection();
+  }
 
   const overlayToggle = button('Drainage in 3D', 'olv-flow-overlay-toggle', 'Show or hide the flow-accumulation drainage lines on the 3D view.');
   overlayToggle.setAttribute('aria-pressed', overlayOn ? 'true' : 'false');
@@ -695,28 +886,59 @@ function mountFlowPulseInteractive(
       }));
       return;
     }
+    const cols = outcome.grid.cols;
     if (mode === 'pulse') {
       const t = current as FlowPathTrace;
+      const end = t.path.length > 0 ? t.path[t.path.length - 1]! : t.cell.row * cols + t.cell.col;
+      const endCells = outcome.accumulation.upstreamCells[end]!;
+      const open = edge?.contaminated[end] === 1;
       selectionPanel.append(
         row('Path cells', String(t.path.length)),
-        row('Ends at', statusLabel(t.endStatus)),
+        row('Ends at', `${statusLabel(t.endStatus)}, col ${end % cols}, row ${Math.floor(end / cols)}`),
+        row('Area draining to the end', contributingAreaText(areaOfCells(outcome, endCells), open)),
+        ...peakFlowRows('Peak flow at the end', labPeakFlow(outcome, endCells, rainfall, open)),
       );
     } else {
       const c = current as FlowCatchmentTrace;
-      const areaKnown = mayReportMetricArea(outcome.basis);
-      const areaM2 = areaKnown ? c.cells * outcome.grid.cellMetresX * outcome.grid.cellMetresY : null;
+      const outlet = c.cell.row * cols + c.cell.col;
+      const open = edge?.contaminated[outlet] === 1;
       selectionPanel.append(
+        row('Outlet', `col ${c.cell.col}, row ${c.cell.row}`),
+        ...(lastSnap ? [el('p', {
+          className: 'olv-flow-snap-note',
+          text: `Snapped to the strongest channel within ${POUR_POINT_SNAP_RADIUS_CELLS} cells, from col ${lastSnap.from.col}, row ${lastSnap.from.row}.`,
+        })] : []),
         row('Contributing cells', String(c.cells)),
-        row(
-          'Contributing area',
-          areaM2 != null ? `${areaM2.toFixed(1)} m²` : 'Withheld: the horizontal scale is not resolved',
-        ),
+        row('Contributing area', contributingAreaText(areaOfCells(outcome, c.cells), open)),
+        ...peakFlowRows('Peak flow at the outlet', labPeakFlow(outcome, c.cells, rainfall, open)),
+        el('div', { className: 'olv-lab-actions olv-flow-gif-actions' }, [gifButton, gifError]),
       );
     }
   }
 
-  function handleActivate(cell: GridCell): void {
+  /** The peak-flow row (with its machine-readable figure) and any area-limit warning. */
+  function peakFlowRows(label: string, e: PeakFlowEstimate): HTMLElement[] {
+    const r = row(label, e.ok ? `${peakFlowText(e)} (rational method)` : e.reason);
+    r.classList.add('olv-flow-peak');
+    if (e.ok) r.dataset.qM3s = String(e.qM3s);
+    const warn = areaLimitWarning(e);
+    return warn ? [r, el('p', { className: 'olv-flow-peak-warning', text: warn })] : [r];
+  }
+
+  function handleActivate(clicked: GridCell, source: ActivationSource = 'keyboard'): void {
     if (!outcome.ok || busy) return;
+    let cell = clicked;
+    let snapped: { from: GridCell; to: GridCell } | null = null;
+    if (mode === 'catchment' && source === 'pointer' && snapOn) {
+      const s = snapPourPoint(
+        outcome.grid.cols, outcome.grid.rows, outcome.routed.status, outcome.accumulation.upstreamCells, clicked,
+      );
+      if (s.snapped) {
+        cell = s.cell;
+        snapped = { from: s.from, to: s.cell };
+        grid.setCursor(cell);
+      }
+    }
     try {
       const stale = input.isStale?.() ?? false;
       if (mode === 'pulse') {
@@ -736,12 +958,13 @@ function mountFlowPulseInteractive(
       } else {
         const trace = catchmentClick(outcome, cell, stale);
         lastCatchment = trace;
+        lastSnap = trace.ok ? snapped : null;
         if (trace.ok) {
           grid.setCatchmentMask(trace.mask);
           if (flowOverlay && overlayFrame) {
             flowOverlay.setCatchment(buildFlowCatchmentBuffers(outcome.grid, trace.mask, overlayFrame));
           }
-          announce(`Catchment traced: ${trace.cells} cell(s).`);
+          announce(`Catchment traced: ${trace.cells} cell(s).${snapped ? ` ${snapSentence(snapped.from, snapped.to)}` : ''}`);
         } else {
           grid.setCatchmentMask(null);
           flowOverlay?.clearCatchment();
@@ -775,6 +998,10 @@ function mountFlowPulseInteractive(
         input.layerId,
         buildFlowPulsePackage,
         flowPulseGeorefOf(input, digests),
+        {
+          rainfall: displayChannelField(outcome, rainfall) ? rainfall : null,
+          snappedFrom: lastSnap ? lastSnap.from.row * outcome.grid.cols + lastSnap.from.col : null,
+        },
       );
       if (!built.ok) {
         announce(`Export refused — ${built.reason}`);
@@ -803,6 +1030,44 @@ function mountFlowPulseInteractive(
 
   exportButton.addEventListener('click', () => void handleExport());
 
+  const gifLabel = 'Export GIF';
+  const gifButton = button(gifLabel, 'olv-flow-gif-export', 'Export an animated GIF of this catchment, revealed by D8 flow length to the outlet.');
+  let gifBusy = false;
+  const gifError = el('p', { className: 'olv-flow-gif-error' });
+  gifButton.addEventListener('click', () => void handleGifExport());
+
+  async function handleGifExport(): Promise<void> {
+    if (!outcome.ok || busy || gifBusy || !lastCatchment || !lastCatchment.ok || !edge) return;
+    const run = outcome, catchment = lastCatchment, ec = edge, setting = rainfall, snap = lastSnap;
+    gifBusy = true;
+    gifButton.disabled = true;
+    gifButton.textContent = 'Preparing GIF…';
+    gifError.textContent = '';
+    try {
+      if (input.isStale?.() ?? false) {
+        announce('GIF export refused — the result is stale; rerun Flow Pulse before exporting.');
+        return;
+      }
+      const { renderWatershedGif, canvasTextRasterizer } = await loadWatershedGif();
+      const gifInput = watershedGifInputFor(input, run, catchment, setting, ec, snap ? snap.from : null, new Date().toISOString());
+      const bytes = await renderWatershedGif(gifInput, {
+        raster: canvasTextRasterizer(),
+        onProgress: (done, total) => { gifButton.textContent = `Exporting GIF… ${done}/${total}`; },
+      });
+      const base = input.filename ?? input.layerId ?? 'flow-pulse';
+      downloadBytes(watershedGifFilename(base, catchment.cell.col, catchment.cell.row), bytes, 'image/gif');
+      announce('Watershed GIF downloaded.');
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      announce(`GIF export failed: ${msg}`);
+      gifError.textContent = `GIF export failed: ${msg}. Your scan and the run are unchanged; try again.`;
+    } finally {
+      gifBusy = false;
+      gifButton.disabled = false;
+      gifButton.textContent = gifLabel;
+    }
+  }
+
   function showError(err: unknown): void {
     const msg = err instanceof Error ? err.message : String(err);
     const text = `Flow simulation failed: ${msg.replace(/[.\s]+$/, '')}. Your scan and measurements are unchanged. Adjust the inputs and run it again.`;
@@ -815,8 +1080,9 @@ function mountFlowPulseInteractive(
   }
 
   function renderReady(): void {
+    edge = outcome.ok ? edgeContamination(outcome.grid, outcome.routed) : null;
     // Inside Details, the card's method is a plain section, not a second accordion.
-    const staticCard = renderFlowPulseLab(outcome, outcome.ok);
+    const staticCard = renderFlowPulseLab(outcome, outcome.ok, edge);
     chip.set(flowChipFacts(input, outcome));
     if (!outcome.ok) {
       head.setStage(1);
@@ -829,14 +1095,24 @@ function mountFlowPulseInteractive(
     grid.load(outcome.grid, outcome.routed, outcome.accumulation, outcome.contributingAreaM2);
     lastTrace = null;
     lastCatchment = null;
+    lastSnap = null;
     clearSelectionDrawing();
-    renderSelection();
+    applyRainfall();
     applyOverlayVisibility();
+    const metricField = displayChannelField(outcome, rainfall) != null;
+    rainAssumptions.replaceChildren(
+      el('p', { className: 'olv-flow-rain-assumptions-title', text: 'Rainfall estimate: what it assumes' }),
+      ...rationalAssumptions(conditioning).map((t) => el('p', { className: 'olv-flow-rain-assumptions-line', text: t })),
+      el('p', {
+        className: 'olv-flow-rain-assumptions-line',
+        text: 'Sources: Kuichling (1889) for the method; FHWA HEC-22 (2009) Table 3-1 and Schwab et al. (1993) for the C ranges; HEC-22 for the 80 ha limit. Particle speed is a display of upstream cell count, not water velocity.',
+      }),
+    );
 
     const motion = el('button', {
       className: 'olv-flow-motion-toggle', type: 'button',
       text: 'Pause flow motion',
-      tip: 'Particles move along the drainage lines, faster and brighter where more cells drain through. Off when the system asks for reduced motion.',
+      tip: 'Particles move along the drainage lines; speed shows upstream cell count, not water velocity. Off when the system asks for reduced motion.',
     }) as HTMLButtonElement;
     const syncMotion = (): void => {
       const st = flowMotionControlState(prefersReducedMotion(), grid.particles.paused);
@@ -852,8 +1128,9 @@ function mountFlowPulseInteractive(
     // the legend, the full card and the reading notes fold into Details.
     body.replaceChildren(
       grid.element,
-      flowPulseStats(outcome),
-      el('div', { className: 'olv-lab-controls' }, [modeCtl.element, gridHint]),
+      flowPulseStats(outcome, edge),
+      rainCtl.element,
+      el('div', { className: 'olv-lab-controls' }, [modeCtl.element, snapToggle, gridHint]),
       selectionPanel,
       el('div', { className: 'olv-lab-actions' }, [
         conditioningCtl.element,
@@ -861,9 +1138,10 @@ function mountFlowPulseInteractive(
         ...(overlayHost ? [overlayToggle] : []),
       ]),
       labDetails([
-        flowGridLegend(grid.maxUpstream),
+        metricField ? flowDischargeLegend() : flowGridLegend(grid.maxUpstream),
         motion,
         conditioningHint,
+        rainAssumptions,
         el('div', { className: 'olv-flow-overlay-section' }, [...(overlayHost ? [] : [overlayUnavailable]), overlayLegend]),
         howToRead(FLOW_HOW_TO_READ),
         head.element,
@@ -911,6 +1189,8 @@ function mountFlowPulseInteractive(
     // `acquireFlowOverlay`, rather than constructing a second one that would
     // leave the first orphaned in the scene.
     dispose: () => {
+      if (rainFrame && typeof cancelAnimationFrame === 'function') cancelAnimationFrame(rainFrame);
+      rainFrame = 0;
       grid.dispose();
       chip.dispose();
       if (!overlayOn && persistentFlowOverlay) {
