@@ -669,6 +669,18 @@ export const METHOD_REGISTRY: Readonly<Record<string, MethodEntry>> = {
     category: 'simulation',
     implementation: ['src/simulation/flowPulse/d8Flow.ts'],
   },
+  // v6 conditions a Float64 copy of the surface, raising a filled cell one
+  // Float64 step above the cell it was reached from, and orders the flood by
+  // the spill level without that rise, first in first out within a level.
+  // The v5 Float32 steps added up along a long flat (6.1e-5 m a cell at
+  // 600 m) until its far end stood above a nearby exit only centimetres
+  // higher than the true spill point, and D8 drained that end over it; the
+  // flood, ordered by the raised heights, could also reach that exit first
+  // and report its level as the flat's spill level. Spill levels now equal
+  // those of a flood with no rise at all, whatever rise is asked for, and a
+  // Float64 chain cannot climb to the next height a Float32 DTM can hold.
+  // The conditioned surface changes; `fillEpsilon: 'float32-step'` is now
+  // `'float64-step'`.
   // v5 raises a filled cell one Float32 step above the cell it was reached
   // from, the increment Barnes, Lehman & Mulla take with nextafter, instead of
   // a fixed 1 mm: the flood is ordered by the raised heights, and the larger
@@ -687,27 +699,33 @@ export const METHOD_REGISTRY: Readonly<Record<string, MethodEntry>> = {
   // declared `.gap-outlet` variant below.
   'olv.simulation.terrain-flow.priority-flood': {
     id: 'olv.simulation.terrain-flow.priority-flood',
-    version: 5,
+    version: 6,
     name: 'Priority-Flood depression conditioning',
     summary:
       'Floods inward from the edge of the survey (the grid boundary and NoData that '
       + 'reaches it), raising each cell reached from below to its spill level, and '
       + 'returns a second surface rather than modifying the DTM. NoData the survey '
       + 'encloses is a wall, as D8 reads it; cells NoData encloses are left as '
-      + 'they are and counted. Each filled cell sits one Float32 step above the cell '
-      + 'it was reached from, which breaks the resulting plateaux without lifting a '
-      + 'depression above its true spill point; a fixed increment can be asked for '
-      + 'instead, and increments lost to Float32 precision are then counted and '
-      + 'reported rather than assumed to have applied. Only a cell whose original '
-      + 'height is strictly below its spill level counts as filled; a flat lifted by '
-      + 'the epsilon alone is counted separately, and fill depth excludes the epsilon.',
+      + 'they are and counted. The flood is ordered by the spill level without any '
+      + 'epsilon rise, first in, first out within a level. The conditioned surface '
+      + 'is Float64 and each filled cell sits one Float64 step above the cell it was '
+      + 'reached from, which breaks the resulting plateaux; along any flat shorter than '
+      + '2^29 cells those steps stay below the next height a Float32 DTM can represent, '
+      + 'so routing cannot drain a flat over an exit higher than its true spill point. A '
+      + 'fixed increment can be asked for instead; it adds up the same way and can '
+      + 'climb past a nearby higher exit, and increments too small to represent are '
+      + 'counted and reported rather than assumed to have applied. Only a cell whose '
+      + 'original height is strictly below its spill level counts as filled; a flat '
+      + 'lifted by the epsilon alone is counted separately, and fill depth excludes the '
+      + 'epsilon.',
     citation: 'Barnes, Lehman & Mulla (2014), doi:10.1016/j.cageo.2013.04.024',
     category: 'simulation',
     implementation: ['src/simulation/flowPulse/priorityFlood.ts'],
   },
+  // v4 takes the v6 Float64 surface and spill-level flood order above.
   'olv.simulation.terrain-flow.priority-flood.gap-outlet': {
     id: 'olv.simulation.terrain-flow.priority-flood.gap-outlet',
-    version: 3,
+    version: 4,
     name: 'Priority-Flood conditioning with NoData gaps as exits',
     summary:
       'The same flood, also seeded at every cell beside NoData, so a gap drains '

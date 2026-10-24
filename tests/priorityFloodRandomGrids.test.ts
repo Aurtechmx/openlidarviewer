@@ -13,7 +13,9 @@
  *     depression definition the module now uses (a cell counts only when
  *     its original height is strictly below the spill level it was reached
  *     from; epsilon-only rises across flats are not fill), tracked here as
- *     a separate per-cell spill level rather than read off the module
+ *     a separate per-cell spill level rather than read off the module. It
+ *     also follows the module's current flood order (spill level without
+ *     the epsilon, then join order) and its Float64 conditioned surface
  *   `cellsUnreachable` under the wall matches a plain breadth-first search
  *     flood-fill from the boundary, run with its own queue rather than the
  *     conditioning pass's heap
@@ -63,14 +65,15 @@ function randomGrid(rand: () => number, cols: number, rows: number, minGap: numb
 }
 
 /**
- * A frontier cell waiting to be resolved: its grid index, the elevation it
- * was queued at, and the order it joined in (the tie-break).
+ * A frontier cell waiting to be resolved: its grid index, the water level it
+ * was queued at (epsilon excluded), and the order it joined in (the
+ * tie-break).
  */
 interface PendingCell { at: number; elevation: number; joinedAt: number }
 
 /**
- * Priority order for the frontier below: lowest elevation first, and among
- * equal elevations whichever joined earliest. Deliberately NOT a binary
+ * Priority order for the frontier below: lowest water level first, and among
+ * equal levels whichever joined earliest. Deliberately NOT a binary
  * heap — a plain "scan for the best candidate" queue, so this stands as its
  * own implementation rather than a relabelled copy of the module under test.
  */
@@ -94,12 +97,13 @@ function takeBestCandidate(frontier: PendingCell[]): PendingCell {
  * and every cell touching NoData is a seed, unconditionally. Reimplemented
  * standalone, from the pre-fix source, rather than imported, so this check
  * does not exercise the same `noData` branch it is meant to verify against.
- * The resolution order (lowest elevation first, ties broken by join order)
- * matches the module under test, but is reached here via a scanned frontier
- * list rather than its binary heap — an independent walk to the same order.
+ * The resolution order (lowest water level first, the epsilon excluded, ties
+ * broken by join order) and the Float64 surface match the module under
+ * test, but the order is reached here via a scanned frontier list rather
+ * than its binary heap — an independent walk to the same order.
  */
 function earlierSeedingFlood(grid: FlowGrid, epsilon: number): {
-  z: Float32Array;
+  z: Float64Array;
   cellsRaised: number;
   maxFillDepth: number;
   fillDepthSum: number;
@@ -107,7 +111,7 @@ function earlierSeedingFlood(grid: FlowGrid, epsilon: number): {
 } {
   const { z: source, valid, cols, rows } = grid;
   const total = cols * rows;
-  const z = new Float32Array(source);
+  const z = new Float64Array(source);
   const resolved = new Uint8Array(total);
   // Water level each resolved cell stands at, epsilon excluded.
   const waterLevel = Array.from(source, (v) => v);
@@ -131,7 +135,7 @@ function earlierSeedingFlood(grid: FlowGrid, epsilon: number): {
       const at = row * cols + col;
       if (valid[at] !== 1 || !touchesGapOrEdge(col, row)) continue;
       resolved[at] = 1;
-      frontier.push({ at, elevation: z[at], joinedAt: joinCounter++ });
+      frontier.push({ at, elevation: waterLevel[at], joinedAt: joinCounter++ });
     }
   }
 
@@ -166,7 +170,7 @@ function earlierSeedingFlood(grid: FlowGrid, epsilon: number): {
         z[neighbourAt] = raisedTo;
         if (epsilon > 0 && z[neighbourAt] <= fromElevation) epsilonAbsorbed++;
       }
-      frontier.push({ at: neighbourAt, elevation: z[neighbourAt], joinedAt: joinCounter++ });
+      frontier.push({ at: neighbourAt, elevation: waterLevel[neighbourAt], joinedAt: joinCounter++ });
     }
   }
 
@@ -318,7 +322,7 @@ describe('the wall leaves no sink or flat on any cell it reached', () => {
   });
 });
 
-describe('the Float32-step rise on random grids', () => {
+describe('the Float64-step rise on random grids', () => {
   it('reaches the exact spill levels and leaves no sink or flat', () => {
     const rand = mulberry32(20261023);
     for (let trial = 0; trial < 40; trial++) {
@@ -327,7 +331,7 @@ describe('the Float32-step rise on random grids', () => {
       const g = randomGrid(rand, 12 + (trial % 7), 9 + (trial % 5), 0, 0.15);
       for (let i = 0; i < g.z.length; i++) g.z[i] = Math.fround(600 + g.z[i] * 0.0037);
       const exact = priorityFlood(g, { epsilon: 0 });
-      const res = priorityFlood(g, { epsilon: 'float32-step' });
+      const res = priorityFlood(g, { epsilon: 'float64-step' });
       expect(Array.from(res.spillLevel)).toEqual(Array.from(exact.spillLevel));
       expect(res.cellsRaised).toBe(exact.cellsRaised);
       expect(res.epsilonAbsorbed).toBe(0);

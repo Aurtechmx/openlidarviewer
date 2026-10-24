@@ -37,6 +37,14 @@ export type FlowCellStatus =
   | typeof CELL_OUTLET;
 
 /**
+ * Elevations a routing model reads. A DTM arrives as Float32; the surface
+ * Priority-Flood conditions is Float64, because the rises that give a filled
+ * flat its descent are far smaller than a Float32 step and would otherwise
+ * add up to centimetres along a long flat (see `priorityFlood.ts`).
+ */
+export type ElevationArray = Float32Array | Float64Array;
+
+/**
  * An elevation surface to route over.
  *
  * `valid` is a mask rather than a sentinel elevation because every sentinel
@@ -45,7 +53,7 @@ export type FlowCellStatus =
  * it. `z` at an invalid cell is not read.
  */
 export interface FlowGrid {
-  readonly z: Float32Array;
+  readonly z: ElevationArray;
   /** 1 where the cell carries an elevation, 0 where it does not. */
   readonly valid: Uint8Array;
   readonly cols: number;

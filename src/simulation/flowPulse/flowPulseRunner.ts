@@ -46,6 +46,7 @@ import {
 import {
   filledCells,
   priorityFlood,
+  type FillEpsilon,
   type NoDataReading,
   type PriorityFloodResult,
 } from './priorityFlood';
@@ -119,8 +120,8 @@ export interface FlowSummary {
   /** Deepest fill (spill level minus original height, epsilon excluded), or null in raw mode. */
   readonly maxFillDepth: number | null;
   /**
-   * Fill increments Float32 could not represent, or null in raw mode.
-   * Non-zero means part of the surface is still flat after conditioning.
+   * Fill rises the conditioned surface could not represent, or null in raw
+   * mode. Non-zero means part of the surface is still flat after conditioning.
    */
   readonly epsilonAbsorbed: number | null;
   /**
@@ -136,8 +137,12 @@ export interface FlowPulseParams {
   readonly routing: FlowRoutingMethod;
   /** How a cell whose height was interpolated is treated. */
   readonly interpolated: InterpolatedPolicy;
-  /** Rise above the spill parent when conditioning: one Float32 step, or a fixed rise in the vertical unit. */
-  readonly fillEpsilon: number | 'float32-step';
+  /**
+   * Rise above the cell a filled cell was reached from when conditioning: one
+   * Float64 step on the Float64 conditioned surface, or a fixed rise in the
+   * vertical unit.
+   */
+  readonly fillEpsilon: FillEpsilon;
   /**
    * How conditioning reads a NoData cell. Routing always treats one as a
    * wall; `outlet` makes conditioning treat a gap as a drainage exit.
@@ -161,7 +166,7 @@ export const FLOW_PULSE_DEFAULTS: FlowPulseParams = Object.freeze({
   conditioning: 'priority-flood',
   routing: 'd8',
   interpolated: 'route',
-  fillEpsilon: 'float32-step',
+  fillEpsilon: 'float64-step',
   fillNoData: 'wall',
   maxCells: 4_000_000,
   withheldExcluded: null,
@@ -265,6 +270,8 @@ export function runFlowPulse(
   }
 
   // Conditioning first: routing reads whichever surface the caller declared.
+  // The conditioned surface is Float64 and D8 routes on it as it is; only the
+  // field digest writes it at Float32, the DTM's own precision.
   const conditioned = params.conditioning === 'priority-flood'
     ? priorityFlood(grid, { epsilon: params.fillEpsilon, noData: params.fillNoData })
     : null;

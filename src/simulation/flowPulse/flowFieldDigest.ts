@@ -24,7 +24,16 @@
  *   8. upstream:    Uint32, little-endian, 4 bytes/cell
  *      (AccumulationResult.upstreamCells)
  *   9. conditioned z: Float32, little-endian, 4 bytes/cell — present only
- *      when conditioning ran (PriorityFloodResult.z)
+ *      when conditioning ran (PriorityFloodResult.z, each value rounded to
+ *      the nearest Float32)
+ *
+ * Field 9 is written at Float32 although the conditioned surface is Float64.
+ * Float32 is the precision of the DTM the surface came from, so the filled
+ * levels survive the rounding exactly; what does not survive is the Float64
+ * rise that gives a filled flat its descent, which is far below a Float32
+ * step and which the receiver, direction and status fields already record as
+ * the routing it produced. Writing the Float64 values instead would change
+ * the layout, and with it the digest of every run, raw ones included.
  *
  * A caller comparing two runs is comparing bytes, not parsed JSON: hashing an
  * array by first rendering it through JSON.stringify would cost a string
@@ -68,7 +77,8 @@ function feedUint32LE(hasher: IncrementalSha256, values: Uint32Array): void {
   hasher.update(bytes);
 }
 
-function feedFloat32LE(hasher: IncrementalSha256, values: Float32Array): void {
+/** Each value at Float32, rounded to nearest as `DataView.setFloat32` does. */
+function feedFloat32LE(hasher: IncrementalSha256, values: Float32Array | Float64Array): void {
   const bytes = new Uint8Array(values.length * 4);
   const view = new DataView(bytes.buffer);
   for (let i = 0; i < values.length; i++) view.setFloat32(i * 4, values[i], true);
