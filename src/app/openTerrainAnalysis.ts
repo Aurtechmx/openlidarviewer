@@ -43,5 +43,6 @@ export async function openTerrainAnalysis(
   const { hasResult } = await deps.showPanel();
   // Contours land on their page only when a result exists; a run shows on Terrain.
   deps.showPage?.(!rerun && hasResult ? 'contours' : 'terrain');
-  if (rerun || !hasResult) deps.run();
+  // Fire-and-forget: the run reports its own failure on the panel and never rejects.
+  if (rerun || !hasResult) void deps.run();
 }
