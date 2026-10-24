@@ -7,7 +7,9 @@
  */
 import { describe, expect, it } from 'vitest';
 
-import { computeLocalStep, edgeRise, moveStep, stepOneSided, trendStep } from '../src/simulation/terrainAccess/localStep';
+import {
+  computeLocalStep, computeOrthogonalSteps, edgeRise, moveStep, stepOneSided, trendStep,
+} from '../src/simulation/terrainAccess/localStep';
 import { gradientField } from '../src/simulation/terrainAccess/directionalGrade';
 import { hornSlopeAspect } from '../src/terrain/ground/terrainDerivatives';
 import { TERRAIN_ACCESS_NEIGHBOURS, type TerrainAccessGrid } from '../src/simulation/terrainAccess/terrainAccessTypes';
@@ -236,6 +238,22 @@ describe('a ledge reads its own height, whatever the slope it sits on', () => {
   it('is NaN when either endpoint is NoData', () => {
     const grid = gridOf([[0, 0, null, 0]]);
     expect(Number.isNaN(moveStep(grid, gradientOf(grid), 1, 1, 0))).toBe(true);
+  });
+
+  it('the precomputed orthogonal steps give exactly the step computed move by move, off-grid moves included', () => {
+    let seed = 11;
+    const next = (): number => { seed = (seed * 1103515245 + 12345) % 2147483648; return seed / 2147483648; };
+    const grid = fnGrid(9, 7, 2.5661413613706827, (c, r) => (c === 4 && r === 2 ? null : 3 * next() + 0.2 * r));
+    const g = gradientOf(grid);
+    const steps = computeOrthogonalSteps(grid, g);
+    for (let i = 0; i < grid.cols * grid.rows; i++) {
+      for (const [dx, dy] of TERRAIN_ACCESS_NEIGHBOURS) {
+        const cached = moveStep(grid, g, i, dx, dy, steps);
+        const computed = moveStep(grid, g, i, dx, dy);
+        if (Number.isNaN(computed)) expect(Number.isNaN(cached)).toBe(true);
+        else expect(cached).toBe(computed);
+      }
+    }
   });
 
   it('a move and its reverse have the same step, exactly', () => {

@@ -38,7 +38,7 @@
 
 import { hornSlopeAspect, synthesisedNeighbourMask } from '../../terrain/ground/terrainDerivatives';
 import { computeVRM } from '../../terrain/complexity/vectorRuggedness';
-import { computeLocalStep, edgeRise, moveStep } from './localStep';
+import { computeLocalStep, computeOrthogonalSteps, edgeRise, moveStep, type OrthogonalSteps } from './localStep';
 import { classifyObstruction, type ObstructionState } from './obstacleEvidence';
 import { diagonalSweepClear, dilateBlocked } from './footprintClearance';
 import { directionalSlope, gradientField, headingUnit, type GradientField } from './directionalGrade';
@@ -66,6 +66,8 @@ export interface TerrainAccessFeatures {
   readonly vrm: Float32Array;
   /** Local relief: the largest raw height difference in each cell's 3×3 footprint, metres. Reported, never gated. */
   readonly localStep: Float32Array;
+  /** The step of every orthogonal move (`computeOrthogonalSteps`), read by `moveStep` for each move and corner path. */
+  readonly orthogonalSteps: OrthogonalSteps;
   readonly obstruction: readonly ObstructionState[];
   /**
    * 1 where the cell's Horn window used a synthesised neighbour (the grid's
@@ -157,11 +159,12 @@ export function prepareTerrainAccessFeatures(
     valid: grid.valid,
   });
   const localStep = computeLocalStep(grid, (LOCAL_WINDOW_CELLS - 1) / 2);
+  const orthogonalSteps = computeOrthogonalSteps(grid, gradient);
   const obstruction = classifyObstruction(grid, profile.obstacleHeightThreshold);
   const derivativeSynthesised = synthesisedNeighbourMask(maskedZ, grid.cols, grid.rows);
   const supportCause = derivativeSupportCause(maskedZ, derivativeSynthesised, grid.cols, grid.rows);
   return {
-    slope, aspect, gradient, vrm: vrmResult.vrm, localStep, obstruction, derivativeSynthesised,
+    slope, aspect, gradient, vrm: vrmResult.vrm, localStep, orthogonalSteps, obstruction, derivativeSynthesised,
     derivativeSupportCause: supportCause,
   };
 }
@@ -344,7 +347,7 @@ export function edgeGeometry(
   const atTo = directionalSlope(
     { east: features.gradient.east[toIndex], north: features.gradient.north[toIndex] }, heading,
   );
-  const stepM = moveStep(grid, features.gradient, fromIndex, dx, dy);
+  const stepM = moveStep(grid, features.gradient, fromIndex, dx, dy, features.orthogonalSteps);
   const riseM = edgeRise(grid, fromIndex, toIndex);
   const distanceM = Math.hypot(dx * grid.cellMetresX, dy * grid.cellMetresY);
   const edgeGrade = Number.isFinite(riseM) && distanceM > 0 ? riseM / distanceM : 0;

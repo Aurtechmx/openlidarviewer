@@ -188,25 +188,71 @@ export function trendStep(grid: StepGrid, gradient: GradientField, fromIndex: nu
 }
 
 /**
+ * {@link trendStep} of every orthogonal move, computed once: `east[i]` is the
+ * step of the move from cell i one column east, `north[i]` one row north (NaN
+ * where that cell is off the grid or either has no elevation). The step is
+ * symmetric, so the move west from i is `east[i − 1]` and south `north[i − cols]`.
+ * Float64, so a looked-up step is the same number {@link trendStep} returns.
+ */
+export interface OrthogonalSteps {
+  readonly east: Float64Array;
+  readonly north: Float64Array;
+}
+
+/** Build {@link OrthogonalSteps} for a whole grid. */
+export function computeOrthogonalSteps(grid: StepGrid, gradient: GradientField): OrthogonalSteps {
+  const n = grid.cols * grid.rows;
+  const east = new Float64Array(n).fill(Number.NaN);
+  const north = new Float64Array(n).fill(Number.NaN);
+  for (let i = 0; i < n; i++) {
+    east[i] = trendStep(grid, gradient, i, 1, 0);
+    north[i] = trendStep(grid, gradient, i, 0, 1);
+  }
+  return { east, north };
+}
+
+/** The orthogonal step from `index` by (dx, 0) or (0, dy), from `steps` when given, else computed. */
+function orthogonalStep(
+  grid: StepGrid, gradient: GradientField, steps: OrthogonalSteps | undefined, index: number, dx: number, dy: number,
+): number {
+  if (!steps) return trendStep(grid, gradient, index, dx, dy);
+  if (dx === 1) return steps.east[index];
+  if (dx === -1) return steps.east[index - 1];
+  if (dy === 1) return steps.north[index];
+  return steps.north[index - grid.cols];
+}
+
+/**
  * The step `maxStepHeight` gates a move against, metres: {@link trendStep}
  * for an orthogonal move, and for a diagonal move the larger of its own
  * trend step and the easier of the two paths through its corner cells (see
- * the module header). NaN when either endpoint has no elevation.
+ * the module header). NaN when either endpoint has no elevation. `steps`,
+ * when given, must be {@link computeOrthogonalSteps} of this grid; it only
+ * saves recomputing the orthogonal steps.
  */
-export function moveStep(grid: StepGrid, gradient: GradientField, fromIndex: number, dx: number, dy: number): number {
+export function moveStep(
+  grid: StepGrid, gradient: GradientField, fromIndex: number, dx: number, dy: number, steps?: OrthogonalSteps,
+): number {
+  if (dx === 0 || dy === 0) {
+    const { cols, rows } = grid;
+    const row = Math.floor(fromIndex / cols);
+    const col = fromIndex - row * cols;
+    if (col + dx < 0 || col + dx >= cols || row + dy < 0 || row + dy >= rows) return Number.NaN;
+    return orthogonalStep(grid, gradient, steps, fromIndex, dx, dy);
+  }
   const direct = trendStep(grid, gradient, fromIndex, dx, dy);
-  if (dx === 0 || dy === 0 || Number.isNaN(direct)) return direct;
+  if (Number.isNaN(direct)) return direct;
   const { cols } = grid;
   const row = Math.floor(fromIndex / cols);
   const col = fromIndex - row * cols;
   // Corner (col + dx, row): along dx first, then dy. Corner (col, row + dy): the other way round.
   const viaX = Math.max(
-    trendStep(grid, gradient, fromIndex, dx, 0),
-    trendStep(grid, gradient, row * cols + col + dx, 0, dy),
+    orthogonalStep(grid, gradient, steps, fromIndex, dx, 0),
+    orthogonalStep(grid, gradient, steps, row * cols + col + dx, 0, dy),
   );
   const viaY = Math.max(
-    trendStep(grid, gradient, fromIndex, 0, dy),
-    trendStep(grid, gradient, (row + dy) * cols + col, dx, 0),
+    orthogonalStep(grid, gradient, steps, fromIndex, 0, dy),
+    orthogonalStep(grid, gradient, steps, (row + dy) * cols + col, dx, 0),
   );
   // Math.max propagates NaN, so a corner without an elevation drops out here.
   let corner = Number.NaN;
