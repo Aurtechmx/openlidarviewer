@@ -135,7 +135,10 @@ inside one cell read as one. Because the bracket allows one change of grade
 anywhere in the four cells it reads, a ledge where the grade also changes
 reads lower than its height by up to that change in rise per cell, which a
 coarse cell makes larger: on 2.566 m cells a 20° slope changes the rise per
-cell by about 0.93 m. The 3×3 local relief (the largest raw height
+cell by about 0.93 m. The other way round, a level move between two risers
+one cell apart (a tread between two steps, or a cell of noise between two
+rough ones) reads the smaller riser as its own step, so on rough terrain the
+step limit can close a cell the raw height differences would have left open. The 3×3 local relief (the largest raw height
 difference around a cell) is reported beside the route and is never
 compared with the step limit.
 

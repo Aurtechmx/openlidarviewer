@@ -64,6 +64,8 @@
  * The bracket allows one change of grade anywhere in the four cells it reads,
  * so a ledge where the grade also changes reads lower than its height by up
  * to that change in rise per cell; a coarse cell makes that allowance larger.
+ * The other way round, a level move between two risers one cell apart (a
+ * tread between two steps) reads the smaller riser as its own step.
  *
  * ── LOCAL RELIEF ─────────────────────────────────────────────────────────────
  * `computeLocalStep` is the CELL diagnostic: the largest raw height difference

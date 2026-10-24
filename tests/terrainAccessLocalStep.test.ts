@@ -222,6 +222,17 @@ describe('a ledge reads its own height, whatever the slope it sits on', () => {
     expect(stepOneSided(grid, 3 * 7 + 3, 0, 1)).toBe(false);
   });
 
+  it('documented limit: a level move between two risers one cell apart reads the smaller riser', () => {
+    // 0 → 0.4 (riser) → 0.4 (tread) → 0.7 (riser) → 0.7: the tread move is
+    // level, but both moves beside it rise, so no single change of grade
+    // explains it.
+    const grid = gridOf([[0, 0, 0.4, 0.4, 0.7, 0.7]]);
+    const g = gradientOf(grid);
+    expect(moveStep(grid, g, 2, 1, 0)).toBeCloseTo(0.3, 6);
+    expect(moveStep(grid, g, 1, 1, 0)).toBeCloseTo(0.4, 6);
+    expect(moveStep(grid, g, 3, 1, 0)).toBeCloseTo(0.3, 6);
+  });
+
   it('is NaN when either endpoint is NoData', () => {
     const grid = gridOf([[0, 0, null, 0]]);
     expect(Number.isNaN(moveStep(grid, gradientOf(grid), 1, 1, 0))).toBe(true);
