@@ -117,9 +117,10 @@ describe('above-ground obstruction is never accepted without aligned evidence', 
     if (!without.ok) return;
     expect(without.record.schemaVersion).toBe(2);
     // A 1×3 grid is all outer ring: every slope used a substituted neighbour,
-    // so the slope-derived limits are estimated under the default exploratory policy.
+    // and each move has a cell on one side only, so the slope-derived limits
+    // and the step are estimated under the default exploratory policy.
     expect(without.record.result.constraints).toEqual({
-      longitudinalGrade: 'estimated', crossSlope: 'estimated', stepHeight: 'evaluated',
+      longitudinalGrade: 'estimated', crossSlope: 'estimated', stepHeight: 'estimated',
       minimumTerrainConfidence: 'evaluated', vehicleWidth: 'evaluated',
       ruggedness: 'disabled', vehicleLength: 'recorded-not-enforced', aboveGroundObstruction: 'unavailable',
       derivativeSupport: 'disclosed',

@@ -87,6 +87,19 @@ describe('run card', () => {
       { term: 'cross-slope', total: 2 }, { term: 'step', total: 1 }, { term: 'support', total: 0 },
     ])).toBe('Cost driven mostly by: cross slope, then step height.');
   });
+
+  it('does not name a term that adds only rounding or under 1% of the extra cost', () => {
+    // A plane's step reads a few Float32 units in the last place, not 0.
+    expect(explain.costDriversSentence([
+      { term: 'longitudinal-grade', total: 12 }, { term: 'step', total: 3e-7 }, { term: 'support', total: 0 },
+    ])).toBe('Cost driven mostly by: grade along the route.');
+    expect(explain.costDriversSentence([
+      { term: 'longitudinal-grade', total: 12 }, { term: 'cross-slope', total: 0.05 },
+    ])).toBe('Cost driven mostly by: grade along the route.');
+    expect(explain.costDriversSentence([{ term: 'step', total: 4e-7 }])).toBe(
+      'Cost is distance alone under the configured weights.',
+    );
+  });
 });
 
 describe('no eligible cell refusal', () => {

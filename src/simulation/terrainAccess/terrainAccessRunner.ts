@@ -52,7 +52,7 @@ import { aStarTerrain, type AStarOutcome } from './aStarTerrain';
 import { computeRouteDiagnostics, type RouteDiagnostics } from './routeDiagnostics';
 import { terrainAccessResultDigest } from './terrainAccessDigest';
 import {
-  derivativeEstimateStatement, obstructionEstimateStatement, type DerivativeEstimatedConstraint,
+  derivativeEstimateStatement, obstructionEstimateStatement, stepEstimateStatement, type DerivativeEstimatedConstraint,
 } from './terrainAccessExplain';
 import { basisLimitations } from '../simulationInputBasis';
 import { sealRunRecord, type FieldSimulationRunRecord } from '../simulationRunRecord';
@@ -169,7 +169,8 @@ export type TerrainAccessConstraintStatus =
 /** The route figures {@link terrainAccessConstraintStatus} reads to decide `estimated`. */
 export type DerivativeRouteSupport = Pick<RouteDiagnostics,
   | 'derivativeSynthesisedRouteCells' | 'derivativeSynthesisedBoundaryRouteCells'
-  | 'derivativeSynthesisedHoleRouteCells' | 'ruggednessSynthesisedRouteCells'>;
+  | 'derivativeSynthesisedHoleRouteCells' | 'ruggednessSynthesisedRouteCells'>
+  & Partial<Pick<RouteDiagnostics, 'stepOneSidedRouteMoves'>>;
 
 /**
  * The per-constraint status a run record carries under `result.constraints`.
@@ -177,7 +178,8 @@ export type DerivativeRouteSupport = Pick<RouteDiagnostics,
  * With it, longitudinal grade and cross slope read `estimated` when any route
  * cell's slope used a substituted neighbour, and an evaluated ruggedness limit
  * reads `estimated` when any route cell's VRM window holds such a cell. Step
- * height is a raw height difference between two cells and is never estimated.
+ * height reads `estimated` when any route move read the terrain on one side
+ * only (`stepOneSidedRouteMoves`), which only the exploratory policy allows.
  * An evaluated obstruction limit reads `estimated` when the surface basis is
  * a sample, or when `obstructionUnevaluatedRouteCells` is above zero. The
  * minimum terrain confidence reads `evaluated` under the `block` unknown
@@ -197,7 +199,7 @@ export function terrainAccessConstraintStatus(
   return {
     longitudinalGrade: slopeStatus,
     crossSlope: slopeStatus,
-    stepHeight: 'evaluated',
+    stepHeight: (route?.stepOneSidedRouteMoves ?? 0) > 0 ? 'estimated' : 'evaluated',
     // Only the 'block' policy turns the minimum into a hard block; under
     // 'penalize' it changes neither eligibility nor cost and only sets the
     // reported share of route cells below it.
@@ -239,6 +241,9 @@ export function constraintEstimateStatements(
       boundaryRouteCells: route.derivativeSynthesisedBoundaryRouteCells,
       holeRouteCells: route.derivativeSynthesisedHoleRouteCells,
     });
+  }
+  if (constraints.stepHeight === 'estimated') {
+    out.stepHeight = stepEstimateStatement(route.stepOneSidedRouteMoves ?? 0, Math.max(0, route.cellCount - 1));
   }
   if (constraints.aboveGroundObstruction === 'estimated') {
     const basis = grid?.aboveGroundBasis;
@@ -384,6 +389,7 @@ export function runTerrainAccess(
       maxLongitudinalGrade: diagnostics.maxLongitudinalGrade,
       maxCrossSlope: diagnostics.maxCrossSlope,
       maxEdgeStepM: diagnostics.maxEdgeStepM,
+      stepOneSidedRouteMoves: diagnostics.stepOneSidedRouteMoves,
       maxLocalReliefM: diagnostics.maxLocalReliefM,
       maxVrm: diagnostics.maxVrm,
       minTerrainConfidence: diagnostics.minTerrainConfidence,

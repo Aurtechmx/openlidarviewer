@@ -40,12 +40,23 @@ export const COST_TERM_LABEL: Readonly<Record<CostContributor['term'], string>> 
 });
 
 /**
+ * Below this many metres of added cost a term is rounding, not terrain (a
+ * plane's step reads a few Float32 units in the last place, not 0).
+ */
+const NEGLIGIBLE_COST_M = 1e-6;
+/** A term adding less than this share of a route's extra cost is not named. */
+const NEGLIGIBLE_COST_SHARE = 0.01;
+
+/**
  * The one or two terms that explain most of a route's extra cost, from
  * `RouteDiagnostics.dominantCostContributors` (already sorted, largest
- * first). A second term is named only when it adds a non-zero share.
+ * first). A term is named only when it adds at least 1% of the route's extra
+ * cost and more than {@link NEGLIGIBLE_COST_M}.
  */
 export function costDriversSentence(contributors: readonly CostContributor[]): string {
-  const nonZero = contributors.filter((c) => c.total > 0);
+  const sum = contributors.reduce((acc, c) => acc + Math.max(0, c.total), 0);
+  const floor = Math.max(NEGLIGIBLE_COST_M, NEGLIGIBLE_COST_SHARE * sum);
+  const nonZero = contributors.filter((c) => c.total > 0 && c.total >= floor);
   // Cost terms describe the configured penalties, not how well the terrain is
   // supported; support is stated by the evidence rows and the estimated limits.
   if (nonZero.length === 0) return 'Cost is distance alone under the configured weights.';
@@ -158,11 +169,23 @@ export function obstructionEstimateStatement(counts: ObstructionEstimateCounts):
   return parts.join(' ');
 }
 
+/**
+ * The sentence for a step-height limit marked `estimated`: how many route
+ * moves read the terrain on one side only. One string for the run card,
+ * limitations, CSV, README and run record.
+ */
+export function stepEstimateStatement(oneSidedMoves: number, routeMoves: number): string {
+  return `Step height estimated from the terrain on one side of the move on ${countText(oneSidedMoves)} of `
+    + `${countText(routeMoves)} route ${routeMoves === 1 ? 'move' : 'moves'} (beside the grid edge or NoData), `
+    + 'where a change of grade can read as a step.';
+}
+
 /** The preview's grid-wide form of {@link derivativeEstimateStatement}, under the exploratory policy. */
 export function derivativeEstimateGridStatement(cells: number, boundary: number, hole: number): string {
   return `Longitudinal grade and cross-slope estimated from substituted neighbours on ${cellsText(cells, 'grid')} `
     + `(${countText(boundary)} at the outer boundary, ${countText(hole)} beside interior NoData holes). `
-    + 'The exploratory evidence policy allows these cells; a route over them reports those limits as estimated.';
+    + 'The exploratory evidence policy allows these cells; a route over them reports those limits as estimated, '
+    + 'and so does the step of a move that reads the terrain on one side only.';
 }
 
 /** The why-not inspector's clause for one cell whose slope used a substituted neighbour. */

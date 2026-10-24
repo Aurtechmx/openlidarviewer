@@ -33,6 +33,7 @@ import {
   DERIVATIVE_CAUSE_BOUNDARY, DERIVATIVE_CAUSE_HOLE, edgeGeometry, utilization, windowHoldsFlagged,
   type CostWeights, type TerrainAccessFeatures,
 } from './traversabilityCost';
+import { stepOneSided } from './localStep';
 import type { TerrainAccessGrid } from './terrainAccessTypes';
 
 const MEASURED = 2;
@@ -76,6 +77,14 @@ export interface RouteDiagnostics {
    * figure a reader should compare to their declared step limit.
    */
   readonly maxEdgeStepM: number;
+  /**
+   * Route moves whose step read the terrain on one side of the move only
+   * (`stepOneSided`): a cell behind the start or past the end along a trend
+   * it reads is off the grid or NoData. There a change of grade can read as a
+   * step. Zero under the conservative evidence policy, which blocks every
+   * cell such a move could start or end on.
+   */
+  readonly stepOneSidedRouteMoves: number;
   /**
    * The largest windowed-footprint relief (`features.localStep`, the largest
    * raw height difference in a route cell's whole 3x3 neighbourhood, slope
@@ -140,7 +149,7 @@ export function computeRouteDiagnostics(
     return {
       cellCount: 0, horizontalLengthM: 0, length3dM: 0, totalAscentM: 0, totalDescentM: 0,
       maxLongitudinalGrade: 0, p95LongitudinalGrade: 0, maxCrossSlope: 0, p95CrossSlope: 0,
-      maxEdgeStepM: 0, maxLocalReliefM: 0, maxVrm: 0, minTerrainConfidence: Number.NaN,
+      maxEdgeStepM: 0, stepOneSidedRouteMoves: 0, maxLocalReliefM: 0, maxVrm: 0, minTerrainConfidence: Number.NaN,
       fractionMeasured: null, fractionInterpolated: null, fractionBelowProfileConfidence: null,
       profileMinimumTerrainConfidence: profile.minimumTerrainConfidence,
       derivativeSynthesisedRouteCells: 0, fractionDerivativeSynthesised: null,
@@ -158,6 +167,7 @@ export function computeRouteDiagnostics(
   const crossSlopes: number[] = [];
   const edgeLengths: number[] = [];
   let maxEdgeStepM = 0;
+  let stepOneSidedRouteMoves = 0;
   let maxLocalReliefM = 0;
   let minTerrainConfidence = Number.POSITIVE_INFINITY;
   let maxVrm = 0;
@@ -183,6 +193,7 @@ export function computeRouteDiagnostics(
 
     const evalr = edgeGeometry(grid, features, prev, i, dx, dy);
     if (Number.isFinite(evalr.stepM) && evalr.stepM > maxEdgeStepM) maxEdgeStepM = evalr.stepM;
+    if (stepOneSided(grid, prev, dx, dy)) stepOneSidedRouteMoves++;
     horizontalLengthM += evalr.distanceM;
     const rise = grid.z[i] - grid.z[prev];
     length3dM += Math.hypot(evalr.distanceM, rise);
@@ -239,7 +250,7 @@ export function computeRouteDiagnostics(
     p95LongitudinalGrade: weightedQuantile(longitudinalGrades, edgeLengths, 0.95),
     maxCrossSlope: crossSlopes.length ? Math.max(...crossSlopes) : 0,
     p95CrossSlope: weightedQuantile(crossSlopes, edgeLengths, 0.95),
-    maxEdgeStepM, maxLocalReliefM,
+    maxEdgeStepM, stepOneSidedRouteMoves, maxLocalReliefM,
     maxVrm,
     minTerrainConfidence: Number.isFinite(minTerrainConfidence) ? minTerrainConfidence : Number.NaN,
     fractionMeasured: coverageKnown ? measured / path.length : null,
