@@ -4,7 +4,7 @@ OpenLiDARViewer has a game-like navigation system, so a point cloud can be explo
 
 ## Modes
 
-Switch with the bottom-centre control or the number keys.
+Switch with the Orbit | Walk | Fly | Pan control at the bottom centre, or with the number keys. Frame all sits beside it.
 
 | Mode | Best for |
 |---|---|
@@ -59,14 +59,26 @@ Bare-key shortcuts are ignored while you are typing in a text field, so naming a
 
 ## Views and projection
 
-The camera pads next to the navigation legend hold the view controls.
+The Navigation button in the navigation bar (or `H`) opens a panel with the key legend and the Camera and Views rows. More, beside Frame all, holds the axis views.
 
 - Camera presets: Top, Iso, Oblique and Planar jump the camera to a named pose. Iso has no key.
-- Standard views: Top, Bottom, Front, Back, Left and Right look straight at one face of the scan, fitted to the visible bounds with a margin at each screen edge.
+- Axis views, under More: Top, Bottom, Front, Back, Left and Right look straight at one face of the scan, fitted to the visible bounds with a margin at each screen edge. More opens only when you click it, and the command palette lists the same six views.
 - Ortho switches between perspective and a flat orthographic projection. Measurements use the 3D points either way. Scroll zoom in an orthographic view keeps the point under the cursor fixed.
 - Plan looks straight down in parallel projection with the hand tool on the drag. Turning it off puts back the projection and navigation mode you had. Plan switches on once the camera has landed top-down. Choosing another mode, view or preset before it lands cancels the entry. If the camera cannot reach top-down, Plan turns off and says "Plan view did not finish. Try Plan again." Scroll zoom is ignored while the camera is moving into the view.
 
-The compass rose reads Grid N on its top face when the scan has a coordinate system. That is the direction of the map's Y axis, not true north. A scan with no coordinate system labels the faces B, R, F and L.
+## View cube
+
+The view cube sits in the top-right corner of the scan and turns with the camera. Each of its six faces, twelve edges and eight corners turns the camera to look from that direction, around the current pivot and at the current distance, so a click never resets the zoom. A face also sets Plan view the way the axis-view buttons do, and an edge or corner turns Plan view off. Home, below the cube, frames the scan like Frame all.
+
+On a Z-up scan with a known coordinate system, the side faces read N, E, S and W. N is grid north, the direction of the map's Y axis, which is not true north. A scan with a local or unknown coordinate system gets Front, Back, Left and Right instead.
+
+From the keyboard, Tab enters the cube as one stop. The arrow keys move through all 26 views in a fixed order, Home and End jump to the first and last, and Enter or Space turns the camera. A view too thin to click at the current angle still takes focus: the cube outlines it and shows its name beside it.
+
+The cube is on once a scan opens. On a phone-width screen it starts off. Toggle compass in the command palette, or `?viewcube=1` and `?viewcube=0` in the address, switches it.
+
+## Focus mode
+
+Focus in the header, or Focus Mode in the command palette, closes both side rails and hides the header links so the scan has the window. The navigation bar, the view cube, the dock and the state strip stay. Exit focus or Esc brings each rail back as it was. Phones do not offer Focus mode.
 
 ## Mouse-look (pointer lock)
 
