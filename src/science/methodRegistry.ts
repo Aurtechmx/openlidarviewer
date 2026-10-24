@@ -784,13 +784,20 @@ export const METHOD_REGISTRY: Readonly<Record<string, MethodEntry>> = {
   },
   'olv.simulation.terrain-access.local-step': terrainAccessMethod(
     'olv.simulation.terrain-access.local-step',
-    'Local step-height metric',
-    'Maximum absolute elevation discontinuity between a cell and its valid '
-      + 'neighbours within a 3×3 footprint, plus the pairwise edge form used to '
-      + 'gate one directed move. A geometric discontinuity measure, not a '
+    'Step height of a move',
+    'The step one directed move is gated on: how far its rise falls outside the '
+      + 'bracket of the one-sided rises just behind its start and just past its end '
+      + 'along the same heading (that one rise where only one side has data, the Horn '
+      + 'gradient at both ends where neither does). A diagonal move also takes the '
+      + 'easier of its two paths through the corner cells, so it cannot pass between '
+      + 'the cells of a one-cell berm or ditch. A plane of any slope has no step and a '
+      + 'ledge reads its own height; v1 gated the raw height difference between the '
+      + 'two cells, which on coarse cells limited grade. The 3×3 local relief is '
+      + 'reported alongside, never gated. A geometric discontinuity measure, not a '
       + 'classification of what caused it.',
-    'Internal composition (footprint-maximum finite difference); no single source method.',
+    'Internal composition (one-sided finite differences along the move); no single source method.',
     ['src/simulation/terrainAccess/localStep.ts'],
+    2,
   ),
   'olv.simulation.terrain-access.directional-grade': terrainAccessMethod(
     'olv.simulation.terrain-access.directional-grade',
@@ -817,10 +824,12 @@ export const METHOD_REGISTRY: Readonly<Record<string, MethodEntry>> = {
       + 'evidence-gap policy decides cells whose slope used a synthesised Horn '
       + 'neighbour (outer ring or beside a void) and, when the obstruction limit is '
       + 'evaluated, cells with no above-ground return: conservative blocks them, '
-      + 'exploratory allows them and reports their share of the route.',
+      + 'exploratory allows them and reports their share of the route. v4 gates and '
+      + 'costs the step limit on the local-step v2 discontinuity, so grade enters the '
+      + 'cost once and the grade limit is the only limit on slope.',
     'Internal composition (declared multi-term utilization cost); no single source method.',
     ['src/simulation/terrainAccess/traversabilityCost.ts', 'src/simulation/terrainAccess/footprintClearance.ts'],
-    3,
+    4,
   ),
   'olv.simulation.terrain-access.astar': terrainAccessMethod(
     'olv.simulation.terrain-access.astar',

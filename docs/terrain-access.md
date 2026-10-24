@@ -43,7 +43,10 @@ The profile's grade fields are entered in the Lab as degrees, the unit a
 person reasons in, and converted once, in `parseTerrainAccessProfileForm`,
 to the rise/run tangents the model compares internally. That is the same
 unit `hornSlopeAspect`'s own slope field uses, so the A* hot path never
-repeats that trigonometry.
+repeats that trigonometry. A degree field accepts only a value strictly
+between 0° and 90° and says so in degrees: outside that range the tangent
+would apply a different limit from the one typed (190° reads as 10°, 270°
+as no limit at all).
 
 ## DTM basis and units
 
@@ -54,7 +57,10 @@ DTM's coverage code. An above-ground height layer and an ROI mask are optional.
 
 A run refuses outright (`UNITS_UNRESOLVED`) rather than guess when the
 horizontal scale is unresolved, when a geographic frame's latitude is
-unknown, or when the vertical unit-to-metres factor is unresolved. Every
+unknown, or when the vertical unit-to-metres factor is unresolved or not
+finite. A grid whose cell size is 0, negative or not finite, or whose arrays
+disagree with its dimensions, is refused as `INVALID_GRID` before any cell
+is read. Every
 grade, cross-slope and step-height comparison depends on those being real
 metric quantities, unlike Flow Pulse's own routing direction, which survives
 an unresolved scale.
@@ -86,6 +92,53 @@ V-shaped valley floor, where the centred Horn gradient is zero, is still
 gated on its real rise. The same per-edge figures feed the limit check, the
 cost and the route diagnostics.
 
+### Step height
+
+The step limit applies to a height discontinuity, not to the rise of a
+slope. The step of a move from A to its neighbour B by raster offset d
+(`localStep.ts`) compares the move's rise z(B) − z(A) with the rise of the
+terrain along the same heading just behind and just past it:
+
+    behind = z(A) − z(A − d)        ahead = z(B + d) − z(B)
+    step   = max(0, rise − max(behind, ahead), min(behind, ahead) − rise)
+
+so the step is how far the rise falls outside the bracket of those two. A
+plane of any slope, on any cell size, has a step of 0; a ledge of height h on
+a plane of any slope has a step of h. Any rise between the two one-sided
+rises is what a single change of grade between A − d and B + d produces (a
+hill toe, a crest, a bank top), so it is not counted as a step. The mean of
+the two would read such a change of grade as a step of half the change in
+rise per cell (flat ground meeting a 19° slope on 2.566 m cells would read
+0.44 m) and would amplify DTM noise more than the raw rise does.
+
+When only one of A − d and B + d has an elevation (beside the grid edge or a
+NoData cell) the bracket is that one rise; there a change of grade right at
+the move reads as a step, so the estimate errs towards blocking. When
+neither has one, the bracket is the Horn gradient at A and at B projected on
+the move. A route over a move that read one side only reports step height
+as `estimated` (`stepOneSidedRouteMoves` in the diagnostics), which only the
+exploratory evidence policy allows.
+
+A diagonal move passes between its two corner cells. Its step is the larger
+of its own step along the diagonal and the easier of the two paths through a
+corner, each the larger of its two orthogonal steps:
+
+    step_diag = max(direct, min over corners c of max(step(A → c), step(c → B)))
+
+so a one-cell berm or ditch running across the diagonal blocks it, while a
+single high or low cell at one corner leaves the other corner open.
+
+What it cannot resolve: a step is only seen at the grid's own resolution. A
+ledge the DTM spreads over more than one cell (interpolation, or a coarse
+cell) reads as slope and is judged by the grade limit instead. Two ledges
+inside one cell read as one. Because the bracket allows one change of grade
+anywhere in the four cells it reads, a ledge where the grade also changes
+reads lower than its height by up to that change in rise per cell, which a
+coarse cell makes larger: on 2.566 m cells a 20° slope changes the rise per
+cell by about 0.93 m. The 3×3 local relief (the largest raw height
+difference around a cell) is reported beside the route and is never
+compared with the step limit.
+
 Width clearance (`footprintClearance.ts`) treats each cell as its
 rectangle and the vehicle as a disc of half the declared width. A cell is
 refused when its centre is strictly closer than that half-width to a
@@ -102,7 +155,8 @@ the two cell centres. A* search, the traversability map and the why-not
 inspector apply this one edge rule. Every eligible
 edge carries a declared, bounded soft cost, `distance * (1 + sum of weight *
 utilization)`, that rises linearly with how much of a limit a move actually
-uses. Every weight must be a finite number of 0 or more, so no edge costs
+uses. Grade enters that sum once, through the longitudinal term; the step
+term reads the step above, so a smooth slope adds nothing to it. Every weight must be a finite number of 0 or more, so no edge costs
 less than its length and the A* heuristic stays admissible; a run or preview
 with any other weight is refused with `INVALID_WEIGHTS`.
 
@@ -157,10 +211,11 @@ maximum and p95 grade and cross-slope (per-edge, as defined above, with the
 p95 weighted by edge length: the smallest value whose edges cover at least
 95% of the route length, with compensated sums and a 1e-12 relative tolerance
 so an exact boundary such as 95 of 100 equal diagonal edges returns the 95th
-value), maximum local step, minimum terrain
-confidence, and which cost term dominated, each term summed as edge length
-times its weighted utilization so it is the share of the route cost it
-adds.
+value), the largest step crossed (the figure the step limit applies to),
+the largest local relief touched, minimum terrain confidence, and which cost
+term dominated, each term summed as edge length times its weighted
+utilization so it is the share of the route cost it adds. A term adding
+less than 1% of the route's extra cost is not named as a driver.
 
 The traversability map (`buildTraversabilityMap`) classifies every readable
 cell into a declared bucket (blocked, unknown, or low/moderate/high cost)
@@ -181,8 +236,17 @@ finite number), `START_BLOCKED`, `END_BLOCKED`, `NO_ROUTE`,
 profile sets an above-ground obstruction limit and no aligned above-ground
 surface exists), `SURFACE_MISALIGNED` (the above-ground surface does not cover
 the same cells as the terrain), `SURFACE_STALE` (the above-ground surface was
-built with a different terrain surface) and `INVALID_ROI` (a region-of-interest
-mask of the wrong length or with values other than 0 and 1).
+built with a different terrain surface), `INVALID_ROI` (a region-of-interest
+mask of the wrong length or with values other than 0 and 1) and
+`INVALID_GRID` (a cell size or dimensions a run cannot read).
+
+`START_BLOCKED` and `END_BLOCKED` say whether the cell is off the grid, has
+no elevation (NoData), or which declared limit blocks it, in the why-not
+inspector's words. `NO_ROUTE` grows the area each endpoint can reach over the
+moves the search takes, stops at the smaller one, and names the reasons that
+close the moves out of it with their shares, for example "The start can reach
+1,234 cells; the moves out of that area are closed by step height (61%), cross
+slope (22%) and no elevation (NoData) (17%)." The survey edge is not counted.
 
 The Lab also refuses a stale preview or run (`STALE_INPUT`) the moment the
 terrain behind it may have changed since the profile was applied. That is a
@@ -199,7 +263,15 @@ and goal are chosen on a keyboard- and pointer-accessible 2D result grid
 (arrow keys move, Enter or Space activates) and any cell can be inspected
 with "Why not?" without a route existing; and the completed run, with
 diagnostics, the route drawn on the grid and, where scene membership is
-supplied, in the 3D scene through `TerrainAccessOverlay`.
+supplied, in the 3D scene through `TerrainAccessOverlay`. The run card states
+the limits the run applied (grade and cross slope in degrees, step and
+vehicle width in metres, minimum confidence), for a refused run too.
+
+The run reuses the preview's grid, terrain features, eligibility and
+traversability map when its inputs give the same preparation digest as the
+preview's (the run's input digest plus the whole profile, the cost weights
+and the run parameters); any difference and it prepares afresh. The result
+and its record are the same either way.
 
 ## Exports
 
