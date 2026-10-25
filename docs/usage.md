@@ -41,7 +41,7 @@ The Rendering section of the View panel tunes how the cloud is drawn:
 
 ## Reference plane
 
-The Reference plane section of the View panel draws a grid at a position you choose, as a reference for reading heights and alignment by eye. It is not measured terrain. Nothing measures or snaps to it, no analysis reads it, and no data export contains it; a Save view snapshot shows it when it is on screen (see below). It is off by default. Turn it on with the Reference plane button, the `B` key, or Toggle reference plane in the command palette.
+The Reference plane section of the View panel (switch the panel from Basic to Advanced to see it) draws a grid at a position you choose, as a reference for reading heights and alignment by eye. It is not measured terrain. Nothing measures or snaps to it, no analysis reads it, and no data export contains it; a Save view snapshot shows it when it is on screen (see below). It is off by default. Turn it on with the Reference plane button, the `B` key, or Toggle reference plane in the command palette.
 
 - Orientation is Horizontal (perpendicular to the scan's up axis), Vertical along X, Vertical along Y (along Z on a Y-up mesh scan), or Through 3 picked points.
 - Nothing is drawn until you set an elevation. Type the origin and elevation, use Use picked point to take both from a point you click on the scan, or use Use scan minimum, which takes the lowest point over every visible layer. That point is often noise or a pit, and it is not ground. The horizontal origin starts at the scan's centre rounded to the major spacing, and the readout says "scan centre (rounded to grid)" until you type one, pick one, or press Use scan centre to go back to it. The readout shows the elevation, its unit and how it was set.
@@ -53,7 +53,7 @@ The grid covers the scan and one scan size around it. Lines are drawn at full st
 
 ## Navigating
 
-Switch modes with the bottom-centre control or the `1` / `2` / `3` / `4` keys. Orbit lets you drag to rotate, scroll to zoom, and double-click to focus. Walk is first-person, with WASD on the level and Space/C for height. Fly is free flight, where WASD follows where you look. Pan (`4`, or `G` from any mode) is the hand tool, which drags the scene under the pointer. The Plan chip looks straight down in parallel projection with the hand tool on the drag, and turning it off restores the view you had.
+Switch modes with the Orbit | Walk | Fly | Pan control at the bottom centre, or the `1` / `2` / `3` / `4` keys. Orbit lets you drag to rotate, scroll to zoom, and double-click to focus. Walk is first-person, with WASD on the level and Space/C for height. Fly is free flight, where WASD follows where you look. Pan (`4`, or `G` from any mode) is the hand tool, which drags the scene under the pointer. The Plan chip looks straight down in parallel projection with the hand tool on the drag, and turning it off restores the view you had.
 
 In Walk and Fly, click the scan to capture the cursor for mouse-look, and press `Esc` to release it. See [navigation.md](navigation.md).
 
@@ -71,7 +71,7 @@ Click Measure in the tool dock to open the measurement toolbar. Pick a tool from
 - Height takes two clicks and reports the vertical difference between them.
 - Angle takes three clicks and reports the angle at the middle vertex.
 - Slope takes two clicks and reports the rise, run, slope angle, and grade percentage.
-- Profile takes two clicks and reports the full cross-section geometry of the line: 3D length, horizontal distance, vertical drop, and grade percentage. Reads in a single compact card ("12.5 m · Δh +2.3 m · 18.4%"); the overlay draws the 3D segment plus an L-bent ghost so the run and drop are visible separately.
+- Profile takes two clicks and reports the full cross-section geometry of the line: 3D length, horizontal distance, vertical drop, and grade percentage. Reads in a single compact card ("12.5 m · Δh +2.3 m · 18.4%"); the overlay draws the 3D segment plus an L-bent ghost so the run and drop are visible separately. The profile summary and its PDF also give an Endpoint gradient: the net change between the first and last stations with data, and when stations between them are missing it says how many.
 - Box takes two clicks on opposite corners of a diagonal and reports an axis-aligned width, depth, height and volume.
 - Volume takes a polygon footprint, or a freeform shape drawn with the Lasso button, and reports cut, fill and net against a reference height. It leaves out noise classes 7 and 18 and Withheld points and counts them. On a cloud the loader reduced to one point per small cube, those labels are not available, and the volume records that instead of a count.
 
