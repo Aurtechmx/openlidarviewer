@@ -30,9 +30,9 @@ from the tree and fails when a cell drifts.
 | I/O | `src/io` | ~42k | Format loaders (LAS/LAZ/PLY/PCD/PTX/E57/…), COPC + EPT streaming sources, range transports, session. |
 | Render | `src/render` | ~84k | three.js/WebGPU scene, streaming scheduler, measurement tools, colour modes. |
 | Export / report | `src/export`, `src/report`, `src/convert` | ~21k | Studio exporters, PDF/report builders, batch conversion. |
-| Application services | `src/app` | ~32k | Composition root and the services that own shared state. |
+| Application services | `src/app` | ~33k | Composition root and the services that own shared state. |
 | UI | `src/ui` | ~47k | Panels, Inspector, Studio surfaces, onboarding. |
-| Shell | `src/main.ts` | 4,235 | Wiring. A monolith under decomposition. |
+| Shell | `src/main.ts` | 4,214 | Wiring. A monolith under decomposition. |
 
 ## Composition root
 
@@ -102,7 +102,7 @@ Recorded so the next pass does not re-derive them:
   `applyPolygonReclassify`) is ALREADY extracted and tested. What remains on the
   Viewer is a thin GPU-upload wrapper.
 
-`src/main.ts` (4,235): the largest blocks, which are the extraction
+`src/main.ts` (4,214): the largest blocks, which are the extraction
 candidates:
 
 `buildActionRegistry` is a thin assembler in `src/app/actionDefinitions.ts` over
