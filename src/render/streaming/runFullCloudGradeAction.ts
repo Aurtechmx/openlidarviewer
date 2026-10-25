@@ -128,6 +128,10 @@ export async function runFullCloudGrade(deps: {
       run.coverage.note,
     );
   } catch (err) {
+    // The same stale guard as the result: a cancel or a failure that lands
+    // after the cloud was replaced or detached describes a scan the panel no
+    // longer shows (a new scan committing cancels the old scan's grade).
+    if (viewer.streamingCloud !== source) return;
     // A user-initiated cancel is not a failure — show a neutral note, not the
     // red error state.
     if (signal?.aborted || (err instanceof DOMException && err.name === 'AbortError')) {

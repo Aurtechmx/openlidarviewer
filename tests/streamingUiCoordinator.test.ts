@@ -14,7 +14,7 @@ import { describe, it, expect, vi } from 'vitest';
 import { createStreamingUiCoordinator, STREAMING_STATUS_POLL_MS } from '../src/app/streamingUiCoordinator';
 
 function harness(over: { cloud?: boolean } = {}) {
-  const panel = { setStatus: vi.fn(), setViewDiagnostics: vi.fn(), setQuality: vi.fn(), hide: vi.fn(), element: {} };
+  const panel = { setStatus: vi.fn(), setViewDiagnostics: vi.fn(), setQuality: vi.fn(), hide: vi.fn(), resetForScan: vi.fn(), element: {} };
   let callbacks: any = null;
   const renderer = {
     setStreamingColorMode: vi.fn(), setStreamingQuality: vi.fn(), pauseStreaming: vi.fn(), resumeStreaming: vi.fn(), clearStreamingCache: vi.fn(),
@@ -117,6 +117,23 @@ describe('streaming UI coordinator', () => {
     expect(args.signal.aborted).toBe(true);
     h.resolveGrade();
     await first;
+    expect(h.c.gradeRunning()).toBe(false);
+  });
+
+  it('a new scan committing aborts the grade and resets the panel controls without hiding it', async () => {
+    const h = harness();
+    h.c.startPolling();
+    const run = h.c.runGrade();
+    await Promise.resolve();
+    await Promise.resolve();
+    const args = (h.runFullCloudGrade.mock.calls[0] as unknown[])[0] as { signal: AbortSignal };
+    h.c.resetForScan();
+    expect(args.signal.aborted).toBe(true);
+    expect(h.panel.resetForScan).toHaveBeenCalledTimes(1);
+    expect(h.panel.hide).not.toHaveBeenCalled();
+    expect(h.cleared()).toEqual([]);
+    h.resolveGrade();
+    await run;
     expect(h.c.gradeRunning()).toBe(false);
   });
 

@@ -298,6 +298,9 @@ export function activateCommittedStreamingCloud(
   deps: OpenStreamingDeps,
 ): void {
   deps.stage.hideEmptyState();
+  // A stream that replaced a stream never passed through the panel's hide(),
+  // so the old scan's pause state and full-cloud grade stood on the new one.
+  deps.resetStreamingUiForScan?.();
   dropPendingSessionForStream(deps.showToast, () => {
     const v = deps.getViewer();
     v.measure.clear(); v.annotate.reset(); deps.bookmarks.clear(); deps.refreshViewsUI();
@@ -566,6 +569,8 @@ export interface OpenStreamingDeps {
   replaceGuard?: (req: ReplaceRequest) => Promise<ReplaceOutcome>;
   /** Drop the previous stream's class tally, report cloud and confidence. */
   resetStreamState: () => void;
+  /** A stream committed over another: abort the old grade and reset the panel's pause and grade controls. */
+  resetStreamingUiForScan?: () => void;
   /** Start the ~4 Hz streaming-status poll that drives the panel. */
   startStreamingStatusPolling: () => void;
   /** Reveal the scan-dependent chrome (dock, inspector, nav bar, `olv-has-scan`) for a streaming cloud. */

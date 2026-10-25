@@ -3620,7 +3620,7 @@ const openStreamingDeps: OpenStreamingDeps = {
   closeStreaming,
   clearOpenStaticLayers, retireSceneState, replaceGuard: (req) => requestReplace(req),
   resetStreamState,
-  startStreamingStatusPolling: () => streamingUi.startPolling(),
+  startStreamingStatusPolling: () => streamingUi.startPolling(), resetStreamingUiForScan: () => streamingUi.resetForScan(),
   revealStreamingChrome: () => revealStreamingScanChrome({
     dock, inspector, navBar, backend: viewer.activeBackend(), body: document.body,
   }),

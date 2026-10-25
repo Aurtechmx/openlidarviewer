@@ -505,8 +505,6 @@ export class StreamingPanel {
     // new one replaced them.
     this._title.textContent = DEFAULT_TITLE;
     this._summary.replaceChildren();
-    this._paused = false;
-    this._pause.textContent = 'Pause';
     // Reset the progress treatment for the next scan.
     // Drops the busy scan too; the next open starts its own.
     this._setPlainLine('');
@@ -515,7 +513,20 @@ export class StreamingPanel {
     this._progress.classList.add('olv-hidden');
     this._progressTrack.classList.remove('olv-stream-prog-shimmer');
     this._progressFill.style.width = '0%';
-    // Reset the full-cloud grade affordance for the next scan.
+    this.resetForScan();
+  }
+
+  /**
+   * A new scan committed while the panel stayed up (a stream replacing a
+   * stream never passes through `hide()`): the pause control and the
+   * full-cloud grade describe the scan that is gone, so they return to their
+   * starting state. The renderer's new scheduler starts unpaused, so the
+   * pause flag follows it without reporting a toggle. The summary, phase and
+   * title are the new scan's and are left to its open.
+   */
+  resetForScan(): void {
+    this._paused = false;
+    this._pause.textContent = 'Pause';
     this._gradeRunning = false;
     this._gradeBtn.disabled = false;
     this._gradeBtn.textContent = GRADE_LABEL;

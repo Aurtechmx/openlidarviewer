@@ -732,6 +732,18 @@ describe('activateCommittedStreamingCloud — the shared publish seam', () => {
     // This is how EPT reaches CrsService at all (blocker #2).
     expect(calls.refreshCrs).toHaveBeenCalledTimes(1);
   });
+
+  it('resets the streaming panel controls for the committed cloud', () => {
+    // A stream replacing a stream never passes through hide(), so the old
+    // scan's pause state and full-cloud grade stood on the new scan's panel.
+    const { deps } = makeCopcDeps();
+    const resetStreamingUiForScan = vi.fn();
+    activateCommittedStreamingCloud(
+      { kind: 'copc', name: 'next.copc.laz', sourcePointCount: 9, crs: () => null },
+      { ...deps, resetStreamingUiForScan },
+    );
+    expect(resetStreamingUiForScan).toHaveBeenCalledTimes(1);
+  });
 });
 
 describe('openStreamingCopc — metadata is published only AFTER commit (blocker #3)', () => {
