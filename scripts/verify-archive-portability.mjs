@@ -241,7 +241,7 @@ export function classifyMarkdownReferences(text, fromRelPath) {
  * resolve alongside the real links.
  *
  * A name preceded by a path separator, a word character, a dot or an @ is NOT a
- * root-level reference: `docs/releases/RELEASE_NOTES_v0.6.0.md` names a document
+ * root-level reference: `docs/releases/archive/RELEASE_NOTES_v0.6.0.md` names a document
  * under docs/, and the root file of the same name is a different file.
  */
 export function rootDocumentReferences(text) {

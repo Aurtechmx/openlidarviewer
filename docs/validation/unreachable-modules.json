@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "purpose": "Every module under src/ that the running application does not reach, with the reason it does not and what would change that. scripts/lint-unreachable-modules.mjs fails when an unreachable module is ABSENT from this file. Unreachable is allowed here; unclassified is not. This register makes no claim that a listed module is right, only that its absence from the product is a decision somebody made and can be re-examined. A module leaves this register the moment production refers to it AT ALL, including by an erased `import type`, so absence from the list does not mean a module contributes runtime code. src/render/continuity/continuityField.ts is the clearest case: every one of its four importers uses `import type`, so it emits nothing into any bundle and is still absent from the running application, yet it cannot be listed here. Where the question is what executes rather than what is referred to, read the runtime-edges-only figure the lint prints beside this count.",
-  "whyThisExists": "docs/releases/RELEASE_NOTES_v0.6.6.md declares staged code publicly, under \"Foundations added for a later release, not reachable in v0.6.6\": implemented, tested, and not passed through by the running application, listed so the source is not mistaken for dead code. Nothing enforced that practice. A module staged deliberately in one release and forgotten in the next leave the same tree behind, and a superseded module is indistinguishable from one waiting to be wired. The register is where those cases are told apart.",
+  "whyThisExists": "docs/releases/archive/RELEASE_NOTES_v0.6.6.md declares staged code publicly, under \"Foundations added for a later release, not reachable in v0.6.6\": implemented, tested, and not passed through by the running application, listed so the source is not mistaken for dead code. Nothing enforced that practice. A module staged deliberately in one release and forgotten in the next leave the same tree behind, and a superseded module is indistinguishable from one waiting to be wired. The register is where those cases are told apart.",
   "method": "Breadth-first closure from the module scripts index.html loads, over static value imports, static type-only imports, dynamic import() with a literal specifier, and new Worker(new URL(...)). Dynamic edges are counted, which is why src/lazyChunks.ts is not a leaf: it holds this repository's dynamic import() literals and most lazy features hang off it. Type-only edges are counted too, so a module reached only by an erased import is NOT listed here; that widening keeps the register about modules nothing in the product refers to at all. It is a file-level graph, so it cannot see an unused export, and reachable is not executed.",
   "measuredAt": {
     "commit": "9cf459f3",
@@ -33,7 +33,7 @@
       "why": "Named in the v0.6.6 release notes as \"a cross-CRS project placement planner\", listed under \"Foundations added for a later release, not reachable in v0.6.6\". It plans a placement; the multi-layer mount still refuses a CRS mismatch rather than asking this planner.",
       "graduation": "The multi-layer mount consults planLayerPlacement before refusing a mismatched CRS.",
       "review": "2027-02-28",
-      "declaredIn": "docs/releases/RELEASE_NOTES_v0.6.6.md"
+      "declaredIn": "docs/releases/archive/RELEASE_NOTES_v0.6.6.md"
     },
     {
       "path": "src/geo/tiePointGeometry.ts",
@@ -41,7 +41,7 @@
       "why": "The control-network validation half of the same release-notes entry: it decides whether a correspondence set can determine a rigid transform at all. Its only non-test importer is tiePointRegister.ts, which is itself unreachable.",
       "graduation": "tiePointRegister graduates; this arrives with it.",
       "review": "2027-02-28",
-      "declaredIn": "docs/releases/RELEASE_NOTES_v0.6.6.md"
+      "declaredIn": "docs/releases/archive/RELEASE_NOTES_v0.6.6.md"
     },
     {
       "path": "src/geo/tiePointRegister.ts",
@@ -49,7 +49,7 @@
       "why": "Named in the v0.6.6 release notes as \"tie-point rigid registration with control-network validation\". Horn absolute orientation over labelled correspondences; no UI collects the correspondences.",
       "graduation": "A tie-point capture surface exists and calls registerFromTiePoints.",
       "review": "2027-02-28",
-      "declaredIn": "docs/releases/RELEASE_NOTES_v0.6.6.md"
+      "declaredIn": "docs/releases/archive/RELEASE_NOTES_v0.6.6.md"
     },
     {
       "path": "src/io/heavy/LocalOutOfCoreSource.ts",
@@ -57,7 +57,7 @@
       "why": "Named in the v0.6.6 release notes as \"a local out-of-core read planner\", listed under \"Foundations added for a later release, not reachable in v0.6.6\". The claim that local files use the whole-file path is no longer true: src/app/openScan.ts now routes a large uncompressed LAS through openLocalHeavyLas.ts and src/io/heavy/localOocBuild.ts, a separate heavy-LAS bridge that peeks the header and streams tiles instead of materialising one ArrayBuffer. That bridge superseded the LAS half of the role this planner was staged for. A large chunked LAZ now takes the same bridge: openScan.ts routes it through openLocalHeavyLas.ts, which sniffs the header format and, for a LAZ with a usable chunk table, builds tiles through src/io/heavy/localOocBuild.ts and buildTileStoreFromLaz; a LAZ without a usable chunk table is refused rather than read whole. The planner itself remains unreachable: only its own test imports planOutOfCore.",
       "graduation": "Either this becomes the shared LAS-plus-future-LAZ read planner the open path consults before choosing a reader, or, if the heavy-LAS bridge covers the need and the LAZ builder lands separately, it is removed. Decide when the chunked-LAZ path is designed.",
       "review": "2027-02-28",
-      "declaredIn": "docs/releases/RELEASE_NOTES_v0.6.6.md"
+      "declaredIn": "docs/releases/archive/RELEASE_NOTES_v0.6.6.md"
     },
     {
       "path": "src/process/ProductExecutorRegistry.ts",
@@ -65,7 +65,7 @@
       "why": "Named in the v0.6.6 release notes: \"a product executor registry foundation that invokes a registered compute core through ProcessService.runIfAuthorized ... production product routes do not pass through it yet\".",
       "graduation": "A production product route resolves its core through this registry instead of calling the core directly.",
       "review": "2027-02-28",
-      "declaredIn": "docs/releases/RELEASE_NOTES_v0.6.6.md"
+      "declaredIn": "docs/releases/archive/RELEASE_NOTES_v0.6.6.md"
     },
     {
       "path": "src/process/dualCompleteness.ts",
@@ -94,7 +94,7 @@
       "why": "Named in the same release-notes line: the seam that re-exports the tested terrain/change planar solver under the registration layer's vocabulary. Only registrationModel imports it, and that is unreachable.",
       "graduation": "registrationModel graduates; this arrives with it.",
       "review": "2027-02-28",
-      "declaredIn": "docs/releases/RELEASE_NOTES_v0.6.6.md"
+      "declaredIn": "docs/releases/archive/RELEASE_NOTES_v0.6.6.md"
     },
     {
       "path": "src/registration/registrationModel.ts",
@@ -102,7 +102,7 @@
       "why": "Named in the v0.6.6 release notes as the model that \"selects [a planar ICP solver] directly instead of refusing the planar case\". It chooses mount / planar ICP / general ICP / tie-point; no caller asks it to choose.",
       "graduation": "The multi-layer mount or a registration surface asks chooseRegistrationModel before placing two clouds.",
       "review": "2027-02-28",
-      "declaredIn": "docs/releases/RELEASE_NOTES_v0.6.6.md"
+      "declaredIn": "docs/releases/archive/RELEASE_NOTES_v0.6.6.md"
     },
     {
       "path": "src/registration/rigidSolve.ts",

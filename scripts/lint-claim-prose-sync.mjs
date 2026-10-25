@@ -66,9 +66,9 @@ export const TRUTH_DOCS = [
   // The release notes and validation report state the E4 count to the public and
   // were NOT scanned, which is half of why "Ten products are now at E4" survived
   // past twelve; the other half was a detector that stopped counting at seven.
-  'docs/releases/RELEASE_NOTES_v0.6.6.md',
-  'docs/releases/VALIDATION_REPORT_v0.6.6.md',
-  'docs/releases/KNOWN_LIMITATIONS_v0.6.6.md',
+  'docs/releases/archive/RELEASE_NOTES_v0.6.6.md',
+  'docs/releases/archive/VALIDATION_REPORT_v0.6.6.md',
+  'docs/releases/archive/KNOWN_LIMITATIONS_v0.6.6.md',
   'docs/project/CLAIMS_AND_LIMITATIONS.md',
   'docs/validation/THREATS_TO_VALIDITY.md',
   'docs/validation/cross-implementation.md',

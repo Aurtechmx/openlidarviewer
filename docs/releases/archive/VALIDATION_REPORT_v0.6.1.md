@@ -2,7 +2,7 @@
 
 This report states, soberly, what v0.6.1 validates and what it does not. It is the human-readable companion to the machine-readable claim register (`docs/validation/claim-register.yaml`).
 
-v0.6.1 is a defect-fix release on top of v0.6.0. It corrects three defects an audit of the v0.6.0 archive found, each with a regression test that fails on the v0.6.0 code, and adds nothing a user can invoke. The evidence state of every registered claim is therefore unchanged: the fixes are at the export and decode boundary, not in an algorithm. Everything v0.6.0 validated it still validates, and the reasoning behind that evidence remains in [VALIDATION_REPORT_v0.6.0.md](VALIDATION_REPORT_v0.6.0.md), with the terrain and contour algorithms inherited from v0.5.9 as recorded in [VALIDATION_REPORT_v0.5.9.md](VALIDATION_REPORT_v0.5.9.md). This report covers what v0.6.1 itself adds to the record.
+v0.6.1 is a defect-fix release on top of v0.6.0. It corrects three defects an audit of the v0.6.0 archive found, each with a regression test that fails on the v0.6.0 code, and adds nothing a user can invoke. The evidence state of every registered claim is therefore unchanged: the fixes are at the export and decode boundary, not in an algorithm. Everything v0.6.0 validated it still validates, and the reasoning behind that evidence remains in [VALIDATION_REPORT_v0.6.0.md](VALIDATION_REPORT_v0.6.0.md), with the terrain and contour algorithms inherited from v0.5.9 as recorded in [VALIDATION_REPORT_v0.5.9.md](../VALIDATION_REPORT_v0.5.9.md). This report covers what v0.6.1 itself adds to the record.
 
 ## Evidence ceiling
 

@@ -9,7 +9,7 @@
  * from, and does anyone still know why?
  *
  * THE PRACTICE THIS BACKS. Staged code is declared, not hidden:
- * docs/releases/RELEASE_NOTES_v0.6.6.md carries a section headed "Foundations
+ * docs/releases/archive/RELEASE_NOTES_v0.6.6.md carries a section headed "Foundations
  * added for a later release, not reachable in v0.6.6", so a reader of the
  * source is told which parts the shipped application does not pass through.
  * Nothing enforced it. A module staged deliberately in one release and simply

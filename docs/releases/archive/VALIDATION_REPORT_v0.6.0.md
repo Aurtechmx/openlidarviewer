@@ -2,7 +2,7 @@
 
 This report states, soberly, what v0.6.0 validates and what it does not. It is the human-readable companion to the machine-readable claim register (`docs/validation/claim-register.yaml`).
 
-The v0.6 cycle's changes are in streaming decode, session import, measurement-unit honesty, the non-destructive Float64 placement architecture, and the self-explaining measurement/layer surfaces. The terrain and contour **algorithms** are inherited from v0.5.9 — the v0.6 cycle did not touch them. The Horn slope raster's independent cross-implementation validation (`SLOPE-RASTER` at E4) was first introduced during alpha.3 and ships unchanged in v0.6.0. Other terrain and contour claims retain their previous evidence levels, as recorded in [VALIDATION_REPORT_v0.5.9.md](VALIDATION_REPORT_v0.5.9.md). This report covers the release-specific surface on top of that.
+The v0.6 cycle's changes are in streaming decode, session import, measurement-unit honesty, the non-destructive Float64 placement architecture, and the self-explaining measurement/layer surfaces. The terrain and contour **algorithms** are inherited from v0.5.9 — the v0.6 cycle did not touch them. The Horn slope raster's independent cross-implementation validation (`SLOPE-RASTER` at E4) was first introduced during alpha.3 and ships unchanged in v0.6.0. Other terrain and contour claims retain their previous evidence levels, as recorded in [VALIDATION_REPORT_v0.5.9.md](../VALIDATION_REPORT_v0.5.9.md). This report covers the release-specific surface on top of that.
 
 ## Evidence ceiling
 

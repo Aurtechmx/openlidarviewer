@@ -30,7 +30,7 @@ function writeValidFixture(root: string): void {
   ].join('\n\n'));
   w('src/main.ts', 'console.log(`OpenLiDARViewer v${x} — open source under the AGPL-3.0-only license.`);\n');
   w('docs-site/.vitepress/config.mts', "export default { themeConfig: { footer: { message: 'AGPL-3.0-only licensed. Local-first: the viewer never uploads your data.' } } };\n");
-  w('docs/releases/RELEASE_NOTES_v0.6.7.md', '# v0.6.7\n## Licensing change\nFirst release under AGPL-3.0-only.\n');
+  w('docs/releases/archive/RELEASE_NOTES_v0.6.7.md', '# v0.6.7\n## Licensing change\nFirst release under AGPL-3.0-only.\n');
 }
 
 describe('lint:license boundary', () => {
@@ -60,7 +60,7 @@ describe('lint:license boundary', () => {
   });
 
   it('rejects release notes that omit the license change', () => {
-    writeFileSync(resolve(root, 'docs/releases/RELEASE_NOTES_v0.6.7.md'), '# v0.6.7\nSome features.\n');
+    writeFileSync(resolve(root, 'docs/releases/archive/RELEASE_NOTES_v0.6.7.md'), '# v0.6.7\nSome features.\n');
     expect(checkLicense(root).some((p: string) => /does not describe the license change/.test(p))).toBe(true);
   });
 

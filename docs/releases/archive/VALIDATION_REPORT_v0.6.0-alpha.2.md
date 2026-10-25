@@ -2,7 +2,7 @@
 
 This report states, soberly, what v0.6.0-alpha.2 validates and what it does not. It is the human-readable companion to the machine-readable claim register (`docs/validation/claim-register.yaml`) and the alpha review response (`docs/_audit/v0.6-alpha-blocker-response.md`).
 
-The v0.6 cycle's changes are in streaming decode, session import, measurement-unit honesty, and a shared project-frame foundation. The terrain and contour correctness claims are **inherited unchanged from v0.5.9** — the alpha wave did not touch those algorithms — so their evidence remains as recorded in [VALIDATION_REPORT_v0.5.9.md](VALIDATION_REPORT_v0.5.9.md). This report covers the alpha-specific surface on top of that.
+The v0.6 cycle's changes are in streaming decode, session import, measurement-unit honesty, and a shared project-frame foundation. The terrain and contour correctness claims are **inherited unchanged from v0.5.9** — the alpha wave did not touch those algorithms — so their evidence remains as recorded in [VALIDATION_REPORT_v0.5.9.md](../VALIDATION_REPORT_v0.5.9.md). This report covers the alpha-specific surface on top of that.
 
 ## Evidence ceiling
 

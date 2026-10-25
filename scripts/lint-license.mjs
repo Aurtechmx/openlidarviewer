@@ -117,8 +117,11 @@ export function checkLicense(root) {
   must(/AGPL-3\.0-only/.test(docsSiteConfig), 'docs-site/.vitepress/config.mts footer does not name AGPL-3.0-only.');
 
   if (version) {
-    const notes = read(`docs/releases/RELEASE_NOTES_v${version}.md`);
-    must(notes != null, `docs/releases/RELEASE_NOTES_v${version}.md is missing.`);
+    // Notes of releases before the current one are kept in docs/releases/archive/.
+    const notesPath = [`docs/releases/RELEASE_NOTES_v${version}.md`, `docs/releases/archive/RELEASE_NOTES_v${version}.md`]
+      .find((p) => read(p) != null) ?? `docs/releases/RELEASE_NOTES_v${version}.md`;
+    const notes = read(notesPath);
+    must(notes != null, `${notesPath} is missing.`);
     if (notes != null) {
       must(/AGPL-3\.0-only/.test(notes) && /licens/i.test(notes), `RELEASE_NOTES_v${version}.md does not describe the license change.`);
     }
