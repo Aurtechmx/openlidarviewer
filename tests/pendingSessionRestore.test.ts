@@ -44,7 +44,7 @@ describe('a streamed open while a session waits', () => {
   const cleared = { measure: vi.fn(), annotate: vi.fn(), bookmarks: vi.fn(), views: vi.fn() };
   const deps = (showToast: (m: string) => void): OpenStreamingDeps => {
     const any = () => vi.fn();
-    const viewer = { measure: { clear: cleared.measure }, annotate: { clear: cleared.annotate } };
+    const viewer = { measure: { clear: cleared.measure }, annotate: { reset: cleared.annotate } };
     return new Proxy({ showToast, getViewer: () => viewer, bookmarks: { clear: cleared.bookmarks }, refreshViewsUI: cleared.views, stage: { hideEmptyState: any() }, inspectorCards: { refreshProvenanceFromStreaming: any() } } as Record<string, unknown>, {
       get: (t, k) => (k in t ? t[k as string] : new Proxy(vi.fn(), { get: () => vi.fn() })),
     }) as unknown as OpenStreamingDeps;

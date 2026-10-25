@@ -519,7 +519,7 @@ function makeCopcDeps(over: { openRejects?: boolean; attachRejects?: boolean; pr
     setMode: vi.fn(),
     frameAll: vi.fn(),
     measure: { clear: vi.fn(), claimUnowned: vi.fn() },
-    annotate: { clear: vi.fn(), claimUnowned: vi.fn() },
+    annotate: { clear: vi.fn(), reset: vi.fn(), resetHistory: vi.fn(), claimUnowned: vi.fn() },
     availableImageExportModes: () => [],
   } as unknown as Viewer;
 

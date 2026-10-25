@@ -142,7 +142,7 @@ function harness(opts: HarnessOptions = {}) {
     addCloud: calls.addCloud,
     clouds: () => [cloud],
     measure: { setLayerResolver: () => {}, claimUnowned: () => {} },
-    annotate: { clear: calls.annotateClear },
+    annotate: { reset: calls.annotateClear },
     setCoverageGrid: () => {},
     setMode: () => {},
     frameAll: calls.frameAll,

@@ -4067,7 +4067,7 @@ function resetToEmptyState(): void {
   document.body.classList.remove('olv-has-scan');
   scans.clear();
   bookmarks.clear();
-  viewer.annotate.clear();
+  viewer.annotate.reset();
   refreshMeasurePanel();
   refreshAnnotationPanel();
 }

@@ -107,6 +107,8 @@ export function settleHeavyReplace(deps: HeavyLasBridgeDeps, plan: HeavyReplaceP
     for (const a of viewer.annotate.getAnnotations()) {
       if (!ownedByStatic(a, plan.staticOwners) && (!seen || seen.annotations.has(a.id))) viewer.annotate.remove(a.id);
     }
+    // The removed annotations belonged to the replaced stream: no undo brings them back.
+    viewer.annotate.resetHistory();
     viewer.measure.claimUnowned(RETIRED_SCAN_OWNER);
     viewer.annotate.claimUnowned(RETIRED_SCAN_OWNER);
     return;

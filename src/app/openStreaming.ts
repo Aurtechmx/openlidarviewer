@@ -248,10 +248,12 @@ export function settleReplacedWork(
   const laterA = seen ? (stores.annotate.getAnnotations?.() ?? []).filter((a) => !seen.annotations.has(a.id)).length : 0;
   if (decision.outcome === 'replace') {
     if (laterM + laterA === 0) {
-      v.measure.clear(); v.annotate.clear();
+      v.measure.clear(); v.annotate.reset();
     } else {
       for (const id of seen!.measurements) stores.measure.removeMeasurement?.(id);
       for (const id of seen!.annotations) stores.annotate.remove?.(id);
+      // The removed annotations belonged to the replaced scan: no undo brings them back.
+      v.annotate.resetHistory();
     }
     deps.bookmarks.clear(); deps.refreshViewsUI();
     if (laterM + laterA === 0) return;
@@ -298,7 +300,7 @@ export function activateCommittedStreamingCloud(
   deps.stage.hideEmptyState();
   dropPendingSessionForStream(deps.showToast, () => {
     const v = deps.getViewer();
-    v.measure.clear(); v.annotate.clear(); deps.bookmarks.clear(); deps.refreshViewsUI();
+    v.measure.clear(); v.annotate.reset(); deps.bookmarks.clear(); deps.refreshViewsUI();
   });
   // Local-first counter — the categorical source kind, never the URL. Only a
   // COMMITTED open is counted now, not an attempt that failed to build.

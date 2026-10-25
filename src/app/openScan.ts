@@ -618,7 +618,7 @@ export async function attachStaticCloud(
     // filters go with it; static layers beside it keep theirs.
     if (prior.length === 0) deps.retireSceneState?.();
     viewer.reconfigureForClouds();
-    if (replaced === 'replace') { viewer.measure.clear(); viewer.annotate.clear(); deps.bookmarks.clear(); deps.inspector.setViews([]); }
+    if (replaced === 'replace') { viewer.measure.clear(); viewer.annotate.reset(); deps.bookmarks.clear(); deps.inspector.setViews([]); }
   }
   deps.stage.hideEmptyState();
   // COMMIT BOUNDARY. The cloud is in the scene and nothing below rolls that
@@ -729,7 +729,7 @@ export async function attachStaticCloud(
   // matched and rebased onto this scan, so its restored work is not cleared.
   const pendingSession = takePendingSessionRestore();
   const freshProject = shouldResetSavedWork(viewer.clouds().length);
-  if (freshProject && !pendingSession) { deps.bookmarks.clear(); viewer.annotate.clear(); }
+  if (freshProject && !pendingSession) { deps.bookmarks.clear(); viewer.annotate.reset(); }
   deps.refreshAnnotationPanel();
 
   // ── Inspector setup — wrapped in defensive try/catches so a single
@@ -839,7 +839,7 @@ export async function attachStaticCloud(
   if (pendingSession && freshProject) {
     void deps.importSession(pendingSession, { reapply: true }).then((ok) => {
       if (ok !== false || deps.scans.activeId !== id) return;
-      viewer.measure.clear(); viewer.annotate.clear(); deps.bookmarks.clear(); deps.inspector.setViews([]);
+      viewer.measure.clear(); viewer.annotate.reset(); deps.bookmarks.clear(); deps.inspector.setViews([]);
       deps.refreshAnnotationPanel();
     });
   }

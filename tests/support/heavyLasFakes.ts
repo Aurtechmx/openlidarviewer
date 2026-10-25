@@ -87,6 +87,8 @@ export function fakeWork() {
     },
     annotate: {
       clear: a.clear,
+      reset: a.clear,
+      resetHistory: vi.fn(),
       claimUnowned: a.claimUnowned,
       getAnnotations: () => a.items,
       remove: vi.fn((id: string) => { a.removeOne(id); }),
