@@ -527,10 +527,12 @@ export class NavController {
    * The Viewer folds this into the flag the live-probe gate reads. Without it
    * the gate sees only OrbitControls drags, so a probe pick runs on every
    * pointer-move frame while the camera is moving, scanning every point of
-   * every visible cloud for a readout that is not being read.
+   * every visible cloud for a readout that is not being read. A tool that
+   * freezes navigation (measuring) also freezes walk and fly, so they count
+   * as driving only while input is live.
    */
   get isDriving(): boolean {
-    return this._mode === 'walk' || this._mode === 'fly'
+    return ((this._mode === 'walk' || this._mode === 'fly') && this._inputEnabled)
       || this.orbitDragging || this.panDragging;
   }
 

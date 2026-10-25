@@ -283,6 +283,16 @@ describe('navigation mode transitions', () => {
       });
     }
 
+    for (const mode of ['walk', 'fly'] as const) {
+      it(`is false in ${mode} while a tool has frozen navigation, so the measure hover still picks`, () => {
+        nav.setMode(mode);
+        nav.setInputEnabled(false);
+        expect(nav.isDriving).toBe(false);
+        nav.setInputEnabled(true);
+        expect(nav.isDriving).toBe(true);
+      });
+    }
+
     it('is false in pan at rest', () => {
       nav.setMode('pan');
       expect(nav.isDriving).toBe(false);
