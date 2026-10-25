@@ -94,7 +94,7 @@ export function settleHeavyReplace(deps: HeavyLasBridgeDeps, plan: HeavyReplaceP
     return;
   }
   if (plan.staticCount === 0) {
-    settleReplacedWork(deps.streaming, plan.decision ?? { outcome: plan.outcome, name: '', seen: null });
+    settleReplacedWork(deps.streaming, plan.decision ?? { outcome: plan.outcome, name: '', seen: null, replacesScene: true });
     return;
   }
   if (plan.outcome === 'replace') {

@@ -191,11 +191,15 @@ export interface ReplaceDecision {
   readonly outcome: ReplaceOutcome;
   readonly name: string;
   readonly seen: { readonly measurements: ReadonlySet<string>; readonly annotations: ReadonlySet<string> } | null;
+  /** A scan was open when the question was asked, so the commit replaces it. */
+  readonly replacesScene?: boolean;
 }
 
 type WorkStores = {
   measure: { getMeasurements?(): readonly { id: string }[]; removeMeasurement?(id: string): unknown };
   annotate: { getAnnotations?(): readonly { id: string }[]; remove?(id: string): void };
+  clouds?(): readonly string[];
+  readonly hasStreamingCloud?: boolean;
 };
 
 /**
@@ -210,9 +214,10 @@ export async function guardReplacedWork(
   const ms = v?.measure.getMeasurements?.();
   const as = v?.annotate.getAnnotations?.();
   const seen = ms && as ? { measurements: new Set(ms.map((m) => m.id)), annotations: new Set(as.map((a) => a.id)) } : null;
+  const replacesScene = (v?.clouds?.().length ?? 0) > 0 || v?.hasStreamingCloud === true;
   const outcome = (await deps.replaceGuard?.({ kind: 'scan', name })) ?? 'none';
   if (outcome === 'cancel') throw new LoadCancelledError();
-  return { outcome, name, seen };
+  return { outcome, name, seen, replacesScene };
 }
 
 /**
@@ -227,11 +232,15 @@ export async function guardReplacedWork(
  * it is not given to the new scan either: it is kept, marked as taken on the
  * replaced scan (sessions and exports of the new scan leave it out and say
  * so), and the user is told how many items that is.
+ *
+ * A scan that replaced an open one also retires that scene's clip box and
+ * point filters, so the new scan never draws through the old box.
  */
 export function settleReplacedWork(
-  deps: Pick<OpenStreamingDeps, 'getViewer' | 'bookmarks' | 'refreshViewsUI'> & Partial<Pick<OpenStreamingDeps, 'showToast'>>,
+  deps: Pick<OpenStreamingDeps, 'getViewer' | 'bookmarks' | 'refreshViewsUI'> & Partial<Pick<OpenStreamingDeps, 'showToast' | 'retireSceneState'>>,
   decision: ReplaceDecision,
 ): void {
+  if (decision.replacesScene) deps.retireSceneState?.();
   const v = deps.getViewer();
   const stores = v as unknown as WorkStores;
   const seen = decision.seen;
@@ -546,6 +555,8 @@ export interface OpenStreamingDeps {
   closeStreaming: () => void;
   /** Free the open static layers — a streaming scan is exclusive. */
   clearOpenStaticLayers: () => void;
+  /** Drop the replaced scene's clip box and point filters. */
+  retireSceneState?: () => void;
   /** Ask before work that the replacement would discard is lost. */
   replaceGuard?: (req: ReplaceRequest) => Promise<ReplaceOutcome>;
   /** Drop the previous stream's class tally, report cloud and confidence. */

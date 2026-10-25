@@ -149,6 +149,39 @@ describe('a streamed scan opened over existing work', () => {
   });
 });
 
+describe('a streamed scan that replaces the open scene', () => {
+  const settleDeps = (v: object, retireSceneState: () => void) => ({ getViewer: () => v as never, bookmarks: { clear: vi.fn() }, refreshViewsUI: vi.fn(), retireSceneState });
+
+  it.each([
+    ['static layers', { clouds: () => ['a', 'b'], hasStreamingCloud: false }],
+    ['a stream', { clouds: () => [], hasStreamingCloud: true }],
+  ])('retires the clip box and filters of the scene it replaces (%s)', async (_label, scene) => {
+    const v = { ...fakeViewer([]), ...scene };
+    const retire = vi.fn();
+    const decision = await guardReplacedWork({ getViewer: () => v as never }, 'next.copc.laz');
+    expect(decision.replacesScene).toBe(true);
+    settleReplacedWork(settleDeps(v, retire), decision);
+    expect(retire).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps them when the viewer was empty, so a session clip imported before its scan survives', async () => {
+    const v = { ...fakeViewer([]), clouds: () => [], hasStreamingCloud: false };
+    const retire = vi.fn();
+    const decision = await guardReplacedWork({ getViewer: () => v as never }, 'first.copc.laz');
+    expect(decision.replacesScene).toBe(false);
+    settleReplacedWork(settleDeps(v, retire), decision);
+    expect(retire).not.toHaveBeenCalled();
+  });
+
+  it('reads the scene before the question, not after the commit', async () => {
+    let open = ['a'];
+    const v = { ...fakeViewer([]), clouds: () => open, hasStreamingCloud: false };
+    const decision = await guardReplacedWork({ getViewer: () => v as never, replaceGuard: async () => { open = []; return 'none' as const; } }, 'x');
+    expect(v.clouds()).toEqual([]);
+    expect(decision.replacesScene).toBe(true);
+  });
+});
+
 // A viewer whose stores also list and remove items, so work placed while the
 // replacement prepares can be told apart from the work the dialog covered.
 function listingViewer(initial: string[]) {
