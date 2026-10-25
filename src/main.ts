@@ -55,7 +55,7 @@ import { RecommendedViewChip } from './ui/RecommendedViewChip';
 import { recommendCameraPreset, flatnessFromBounds, describeProjectSize } from './render/camera/recommendView';
 import type { WorkflowEvent } from './render/workflow/workflowRecorder';
 import { matchesShortcut } from './render/workflow/workflowConfig';
-import { LassoVolumeTool } from './ui/LassoVolumeTool';
+import { LassoVolumeTool, armLasso, disarmLasso, type LassoArmingDeps } from './ui/LassoVolumeTool';
 import {
   downloadBytes as downloadFileBytes,
   downloadText,
@@ -559,9 +559,7 @@ const lassoVolumeTool = new LassoVolumeTool(stage.canvas, {
     // technical users expect after seeing a result. They can re-arm
     // by clicking the Lasso button or pressing L again.
     viewer.setSelectionHighlight(out.selectionByCloudId);
-    lassoVolumeTool.disable();
-    viewer.setLassoMode(false);
-    syncLassoButton();
+    disarmLasso(lassoArming);
     // The lasso result is in the source CRS's native linear units. Convert to
     // metres before stamping m³ / m² — areas by lin², volumes by lin³ — the
     // same factor the measure tool uses. (The CRS gate below still blocks
@@ -609,11 +607,7 @@ const lassoVolumeTool = new LassoVolumeTool(stage.canvas, {
     );
   },
   onCancel: () => {
-    viewer?.clearSelectionHighlight();
-    lassoVolumeTool.disable();
-    viewer?.setLassoMode(false);
-    syncLassoButton();
-    pendingLassoSave = null;
+    disarmLasso(lassoArming, { clearHighlight: true, clearPending: true });
     showLassoToast('Lasso cancelled — back to navigation.');
   },
 });
@@ -666,6 +660,8 @@ function syncLassoButton(): void {
   if (!lassoButton) return;
   lassoButton.classList.toggle('olv-mkind-active', lassoVolumeTool.enabled);
 }
+/** Every arm and disarm goes through these, so the overlay, the viewer mode and the button never disagree. */
+const lassoArming: LassoArmingDeps = { tool: lassoVolumeTool, viewer: () => viewer, syncButton: syncLassoButton, clearPending: () => { pendingLassoSave = null; } };
 viewerLoaded.then((v) => {
   lassoButton = v.measure.addAuxKindButton(
     'Lasso volume',
@@ -673,19 +669,8 @@ viewerLoaded.then((v) => {
       '• Click again or press Esc to exit and return to navigation.\n' +
       '• Click "Save to session" on the result toast to keep it.',
     () => {
-      if (lassoVolumeTool.enabled) {
-        lassoVolumeTool.disable();
-        v.setLassoMode(false);
-        v.clearSelectionHighlight();
-        showLassoToast('Lasso off — back to navigation.');
-      } else {
-        lassoVolumeTool.enable();
-        v.setLassoMode(true);
-        showLassoToast(
-          'Lasso armed — draw a shape on the canvas. Press Esc to cancel and return to navigation.',
-        );
-      }
-      syncLassoButton();
+      if (disarmLasso(lassoArming, { clearHighlight: true })) showLassoToast('Lasso off — back to navigation.');
+      else { armLasso(lassoArming); showLassoToast('Lasso armed — draw a shape on the canvas. Press Esc to cancel and return to navigation.'); }
     },
     // Gestalt proximity: Lasso renders directly AFTER the Volume
     // button in the kind row, so the eye reads it as a sibling
@@ -810,7 +795,7 @@ function showInstantAnswer(scanLabel: string): void {
           compareLoadedLayers();
           break;
         case 'volume':
-          lassoVolumeTool.enable();
+          armLasso(lassoArming);
           break;
         case 'floorplan':
           // Ensure the (lazy) Object panel is mounted before revealing it, so
@@ -1482,13 +1467,7 @@ const keyBindingDeps: KeyBindingDeps = {
     measureUndoPoint: () => viewer?.measure.undoLastPoint(),
     onEscape: () => {
       let handled = reclassifyUi?.disarm() === true; // a separately owned lasso
-      if (lassoVolumeTool.enabled) {
-        lassoVolumeTool.disable();
-        viewer?.setLassoMode(false);
-        viewer?.clearSelectionHighlight();
-        syncLassoButton();
-        handled = true;
-      }
+      if (disarmLasso(lassoArming, { clearHighlight: true })) handled = true;
       if (viewer?.measureMode) {
         viewer.setMeasureMode(false);
         handled = true;
@@ -1496,15 +1475,8 @@ const keyBindingDeps: KeyBindingDeps = {
       if (handled) showLassoToast('Back to navigation.'); else if (!viewer?.toolActive) return workspaceShell?.focus.escape(); // Focus mode last
     },
     toggleLasso: () => {
-      if (lassoVolumeTool.enabled) {
-        lassoVolumeTool.disable();
-        viewer?.setLassoMode(false);
-        showLassoToast('Lasso volume off.');
-      } else {
-        lassoVolumeTool.enable();
-        viewer?.setLassoMode(true);
-        showLassoToast('Lasso volume armed — draw a shape on the canvas.');
-      }
+      if (disarmLasso(lassoArming)) showLassoToast('Lasso volume off.');
+      else { armLasso(lassoArming); showLassoToast('Lasso volume armed — draw a shape on the canvas.'); }
     },
     setCameraPreset: (preset) => navWiring.applyCameraPreset(preset), // tells Plan View too
     toast: (message) => showLassoToast(message),
@@ -3962,6 +3934,7 @@ async function loadFromUrl(url: string, name: string): Promise<void> {
  */
 /** The open scene closed or was replaced: its clip box and point filters go with it. The next reveal fits the clip to the new scan. */
 function retireSceneState(): void {
+  disarmLasso(lassoArming, { clearHighlight: true, clearPending: true }); // the lasso and its waiting result were on the scene that is going
   clipPanel.setVisible(false); clipFlow.reset(); // hiding the clip panel also clears the active clip
   viewer.setElevationFilter(undefined); inspector.setElevationExtent(null); activeElevFilter = null;
   viewer.setIntensityFilter(undefined); inspector.setIntensityExtent(null); activeIntenFilter = null;

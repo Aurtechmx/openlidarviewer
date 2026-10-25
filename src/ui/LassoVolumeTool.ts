@@ -257,3 +257,39 @@ export class LassoVolumeTool {
   }
 }
 
+/** What arming and disarming the lasso touches besides the tool itself. */
+export interface LassoArmingDeps {
+  readonly tool: Pick<LassoVolumeTool, 'enabled' | 'enable' | 'disable'>;
+  /** The viewer, or null before its chunk resolved. */
+  viewer(): { setLassoMode(on: boolean): void; clearSelectionHighlight(): void } | null;
+  /** Mirror the tool's state on the measure dock's lasso button. */
+  syncButton(): void;
+  /** Drop the lasso result waiting on the toast's Save. */
+  clearPending(): void;
+}
+
+/** Arm the lasso: the overlay, the viewer's lasso mode and the dock button move together. */
+export function armLasso(deps: LassoArmingDeps): void {
+  deps.tool.enable();
+  deps.viewer()?.setLassoMode(true);
+  deps.syncButton();
+}
+
+/**
+ * Disarm the lasso. Returns whether it was armed, so an Escape handler knows
+ * it consumed the key. The button is synced either way. `clearHighlight`
+ * drops the selected-point tint; `clearPending` drops the result waiting on
+ * the toast's Save, which a scene retire must do whether or not the tool was
+ * armed, because the result was measured on the scan that is going.
+ */
+export function disarmLasso(deps: LassoArmingDeps, opts: { clearHighlight?: boolean; clearPending?: boolean } = {}): boolean {
+  const wasArmed = deps.tool.enabled;
+  if (wasArmed) {
+    deps.tool.disable();
+    deps.viewer()?.setLassoMode(false);
+  }
+  if (opts.clearHighlight) deps.viewer()?.clearSelectionHighlight();
+  if (opts.clearPending) deps.clearPending();
+  deps.syncButton();
+  return wasArmed;
+}
