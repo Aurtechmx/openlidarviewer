@@ -73,7 +73,7 @@ import type { RangeSource } from '../io/range/RangeSource';
 import { LoadError } from '../io/loadErrors';
 import { resolveLasCrsFromRange, type CrsInfo } from '../io/crs';
 import { LoadCancelledError } from '../io/loadFile';
-import { askHeavyReplace, settleHeavyReplace, type HeavyReplacePlan } from './heavyReplace';
+import { askHeavyReplace, settleHeavyReplace, type HeavyReplacePlan, streamFrameNotice } from './heavyReplace';
 import type {
   HeavyLasBridgeDeps,
   HeavyLasBridgeEnv,
@@ -718,7 +718,15 @@ async function attachHeavyStream(
   settleHeavyReplace(deps, replace);
   // Already settled: the open started it from the file's head and tail.
   source.sourceDigest = (await deps.sourceDigest?.catch(() => null)) ?? null;
+  // Beside static layers the reveal publishes the stream's CRS while a static
+  // layer stays the active scan, so that layer's measurements read in the
+  // stream's frame. Until the frames are kept apart, say so when they differ.
+  const before = replace.staticCount > 0 ? (deps.streaming.resolvedCrs?.() ?? null) : null;
   revealHeavyStreamingSurfaces(source, deps.streaming);
+  if (replace.staticCount > 0) {
+    const notice = streamFrameNotice(before, deps.streaming.resolvedCrs?.() ?? null);
+    if (notice) deps.streaming.showToast(notice);
+  }
 }
 
 /**

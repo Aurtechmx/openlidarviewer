@@ -573,6 +573,8 @@ export interface OpenStreamingDeps {
   resetStreamState: () => void;
   /** A stream committed over another: abort the old grade and reset the panel's pause and grade controls. */
   resetStreamingUiForScan?: () => void;
+  /** The published CRS the measurements read in (override applied), or null for a scan with none. */
+  resolvedCrs?: () => { readonly name: string; readonly epsg?: number; readonly linearUnit: string } | null;
   /** Start the ~4 Hz streaming-status poll that drives the panel. */
   startStreamingStatusPolling: () => void;
   /** Reveal the scan-dependent chrome (dock, inspector, nav bar, `olv-has-scan`) for a streaming cloud. */

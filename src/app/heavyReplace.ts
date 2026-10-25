@@ -141,3 +141,30 @@ export function settleHeavyReplace(deps: HeavyLasBridgeDeps, plan: HeavyReplaceP
   viewer.measure.claimUnowned(RETIRED_SCAN_OWNER);
   viewer.annotate.claimUnowned(RETIRED_SCAN_OWNER);
 }
+
+/** The part of a resolved CRS the frame notice compares and names. */
+export interface FrameSummary {
+  readonly name: string;
+  readonly epsg?: number;
+  readonly linearUnit: string;
+}
+
+const frameLabel = (f: FrameSummary | null): string => (f === null ? 'no CRS' : f.epsg != null ? `EPSG:${f.epsg}` : f.name);
+
+/**
+ * A stream opened beside a static layer publishes its coordinate system while
+ * the static layer stays the active scan, so that layer's measurements, report
+ * and exports read in the stream's frame. Until the frames are kept apart, the
+ * user is told when they differ. `before` is the published CRS before the
+ * stream committed, `after` the one it published; null is a scan with no CRS.
+ */
+export function streamFrameNotice(before: FrameSummary | null, after: FrameSummary | null): string | null {
+  if (before === null && after === null) return null;
+  if (before !== null && after !== null) {
+    const same = before.epsg != null || after.epsg != null
+      ? before.epsg === after.epsg
+      : before.name === after.name && before.linearUnit === after.linearUnit;
+    if (same) return null;
+  }
+  return `The streamed scan's coordinate system (${frameLabel(after)}) differs from the open scan's (${frameLabel(before)}). Measurements on the earlier scan now read in the stream's units; check them before use.`;
+}

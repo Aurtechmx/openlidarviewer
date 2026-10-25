@@ -3589,7 +3589,7 @@ const openStreamingDeps: OpenStreamingDeps = {
   crsCoordinator,
   bookmarks,
   isPhone,
-  closeStreaming, abandonStreamingOpen,
+  closeStreaming, abandonStreamingOpen, resolvedCrs: () => crsService.current(),
   clearOpenStaticLayers, retireSceneState, replaceGuard: (req) => requestReplace(req),
   resetStreamState,
   startStreamingStatusPolling: () => streamingUi.startPolling(), resetStreamingUiForScan: () => streamingUi.resetForScan(),
