@@ -685,11 +685,16 @@ function isCancel(err: unknown): boolean {
  */
 function teardownPreview(previewAttached: boolean, deps: HeavyLasBridgeDeps): void {
   if (!previewAttached) return;
+  const viewer = deps.getViewer();
   try {
-    deps.getViewer().detachStreamingCloud();
+    viewer.detachStreamingCloud();
   } catch (err) {
     if (deps.debug) console.warn('[heavy-las] preview teardown failed', err);
   }
+  // The preview was attached over an empty viewer (over a stream there is no
+  // preview), and its attach hid the empty state and revealed the scan chrome.
+  // With nothing left on screen, the empty state comes back.
+  if (viewer.clouds().length === 0 && !viewer.hasStreamingCloud) deps.restoreEmptyState?.();
 }
 
 /**

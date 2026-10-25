@@ -80,3 +80,35 @@ export function revealStreamingScanChrome(reveal: StreamingScanReveal): void {
 
   body.classList.add('olv-has-scan');
 }
+
+/** What putting the empty state back touches: the reveal's surfaces, in reverse, plus the stage. */
+export interface StreamingScanRetire {
+  dock: RevealDock;
+  inspector: RevealInspector;
+  navBar: { readonly element: { classList: { add(token: string): void } } };
+  body: { classList: { remove(token: string): void } };
+  stage: { showEmptyState(): void };
+}
+
+/**
+ * Undo the reveal when the stream it was for came down and left the viewer
+ * empty. The out-of-core open shows a preview through the streaming attach,
+ * which hides the empty state and reveals the dock and nav bar; a cancel or a
+ * build failure detaches the preview, and without this the chrome stood over a
+ * blank stage with no way back to the Open-a-scan state. Only the surfaces the
+ * reveal turned on are turned off here; the rest of the shell's reset belongs
+ * to a scan that was committed, which a preview never was.
+ */
+export function restoreEmptyStateAfterStream(retire: StreamingScanRetire): void {
+  const { dock, inspector, navBar, body, stage } = retire;
+  dock.setMeasureEnabled(false);
+  dock.setAnnotateEnabled(false);
+  dock.setInspectEnabled(false);
+  dock.setProbeEnabled(false);
+  dock.setCloseEnabled(false);
+  dock.setEmpty(true);
+  inspector.setEmpty(true);
+  navBar.element.classList.add('olv-hidden');
+  body.classList.remove('olv-has-scan');
+  stage.showEmptyState();
+}

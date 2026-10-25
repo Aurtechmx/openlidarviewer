@@ -213,6 +213,7 @@ export function makeDeps(opts: { hasStreamingCloud?: boolean } = {}) {
     stage: { hideEmptyState: vi.fn() },
     body: { classList: { add: vi.fn() } },
     setPhase: vi.fn(),
+    restoreEmptyState: vi.fn(),
     debug: false,
     streaming: s.streaming,
   };

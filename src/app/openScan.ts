@@ -55,6 +55,7 @@ import type { NavBar } from '../ui/NavBar';
 import type { DebugOverlay } from '../ui/DebugOverlay';
 import type { DropZone, LoadContext } from '../ui/DropZone';
 import { announceProjectReady } from '../ui/ProjectCard';
+import { restoreEmptyStateAfterStream } from '../ui/streamingScanReveal';
 import type { Stage } from '../ui/Stage';
 import type { ScanService } from './ScanService';
 import type { LayerService } from './LayerService';
@@ -348,6 +349,15 @@ export async function openScan(file: File, deps: OpenScanDeps): Promise<void> {
         typeof document !== 'undefined' && document.body
           ? document.body
           : { classList: { add: () => {} } },
+      // A preview that comes down over an empty viewer takes the chrome its
+      // attach revealed with it and shows the empty state again.
+      restoreEmptyState: () => restoreEmptyStateAfterStream({
+        dock: deps.dock,
+        inspector: deps.inspector,
+        navBar: deps.navBar,
+        body: typeof document !== 'undefined' && document.body ? document.body : { classList: { remove: () => {} } },
+        stage: deps.stage,
+      }),
       setPhase: (phase) => {
         // Called only once the file is routed out of core, so the scope is known.
         if (!streamed) {
