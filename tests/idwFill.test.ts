@@ -49,4 +49,53 @@ describe('idwFill', () => {
     const b = idwFill(z, had, 4, 1);
     expect(Array.from(a)).toEqual(Array.from(b));
   });
+
+  it('matches a full square scan of each ring bit for bit', () => {
+    // Reference: visit every cell of the ring's bounding square in row
+    // order and keep only the perimeter, as the fill did before it skipped
+    // interior columns directly.
+    const reference = (z: Float32Array, had: Uint8Array, cols: number, rows: number, k: number, maxR: number): Float32Array => {
+      const out = new Float32Array(z);
+      for (let row = 0; row < rows; row++) {
+        for (let col = 0; col < cols; col++) {
+          const i = row * cols + col;
+          if (had[i] === 1) continue;
+          let wSum = 0, vSum = 0, found = 0, last = -1;
+          for (let radius = 1; radius <= maxR; radius++) {
+            for (let r = row - radius; r <= row + radius; r++) {
+              if (r < 0 || r >= rows) continue;
+              const edge = r === row - radius || r === row + radius;
+              for (let c = col - radius; c <= col + radius; c++) {
+                if (c < 0 || c >= cols) continue;
+                if (!edge && c !== col - radius && c !== col + radius) continue;
+                const j = r * cols + c;
+                if (had[j] !== 1) continue;
+                const w = 1 / Math.pow(Math.sqrt((r - row) ** 2 + (c - col) ** 2), 2);
+                wSum += w;
+                vSum += w * z[j];
+                found++;
+              }
+            }
+            if (found >= k && last < 0) last = radius;
+            if (last >= 0 && radius >= last + 1) break;
+          }
+          out[i] = wSum > 0 ? vSum / wSum : Number.NaN;
+        }
+      }
+      return out;
+    };
+    let seed = 7;
+    const rand = () => ((seed = (seed * 1103515245 + 12345) % 2147483648) / 2147483648);
+    for (const [cols, rows, density] of [[23, 17, 0.08], [40, 31, 0.02], [9, 50, 0.3]] as const) {
+      const n = cols * rows;
+      const z = new Float32Array(n).fill(Number.NaN);
+      const had = new Uint8Array(n);
+      for (let i = 0; i < n; i++) {
+        if (rand() < density) { had[i] = 1; z[i] = rand() * 100 - 20; }
+      }
+      const got = idwFill(z, had, cols, rows, { kNearest: 6, maxRadiusCells: 12 });
+      const want = reference(z, had, cols, rows, 6, 12);
+      for (let i = 0; i < n; i++) expect(Object.is(got[i], want[i])).toBe(true);
+    }
+  });
 });
