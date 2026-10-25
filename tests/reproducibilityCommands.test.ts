@@ -32,7 +32,7 @@ const read = (p: string): string => readFileSync(resolve(ROOT, p), 'utf8');
  * four documents a reviewer actually opens is a guard with a hole in it.
  */
 const DOCS = [
-  'docs/releases/REPRODUCIBILITY_v0.6.8.md',
+  'docs/releases/archive/REPRODUCIBILITY_v0.6.8.md',
   'REVIEWER_QUICKSTART.md',
   'REPRODUCIBILITY.md',
   'ARTIFACT_EVALUATION.md',

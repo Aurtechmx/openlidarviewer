@@ -6,7 +6,7 @@ v0.6.4 is a classification, report-hardening, precision and interface release on
 
 ## What changed this cycle, and what carried over
 
-The terrain and contour ALGORITHMS are the ones inherited from v0.5.9 and recorded in [VALIDATION_REPORT_v0.5.9.md](VALIDATION_REPORT_v0.5.9.md), and their evidence state is unchanged: `SLOPE-RASTER`, `ASPECT-RASTER` and `HILLSHADE` remain at E4 on the basis established in [VALIDATION_REPORT_v0.6.3.md](VALIDATION_REPORT_v0.6.3.md), and every other terrain product remains at E3. No terrain claim moved in this release.
+The terrain and contour ALGORITHMS are the ones inherited from v0.5.9 and recorded in [VALIDATION_REPORT_v0.5.9.md](../VALIDATION_REPORT_v0.5.9.md), and their evidence state is unchanged: `SLOPE-RASTER`, `ASPECT-RASTER` and `HILLSHADE` remain at E4 on the basis established in [VALIDATION_REPORT_v0.6.3.md](VALIDATION_REPORT_v0.6.3.md), and every other terrain product remains at E3. No terrain claim moved in this release.
 
 The CLASSIFICATION heuristic did change. v0.6.4 adds a building ground-support gate (`buildingMinSupport`, default 0.66) in `src/render/class/deriveClassification.ts`, and makes automatic classification return-number aware. These are new behaviour, not inherited, and they carry new evidence rather than resting on the terrain record. So the terrain evidence is inherited unchanged, the classification behaviour is not, and the two are stated apart here rather than folded into one claim.
 

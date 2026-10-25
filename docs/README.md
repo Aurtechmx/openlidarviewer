@@ -101,8 +101,9 @@ The whole collection lives in [validation/](validation/), and these are the entr
 ## Release records
 
 Every version keeps four documents: release notes, validation report,
-reproducibility record, known limitations. All 57 sit in
-[releases/](releases/). The current set is linked below. Older readiness and
+reproducibility record, known limitations. The current release's set and
+the notes of v0.5 and earlier sit in [releases/](releases/); the v0.6 series is
+in [releases/archive/](releases/archive/). The current set is linked below. Older readiness and
 audit reports are kept in an internal audit directory that stays in the
 repository and out of the released archive, so they are not linked here.
 

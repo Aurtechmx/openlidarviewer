@@ -661,7 +661,7 @@ are not release-authoritative.
 - Contours are promoted to E4 with a GDAL `gdal_contour` cross-implementation check on a frozen analytic plane (agreement to 2.9e-5 m).
 - Remote streaming is hardened: signed URLs are scrubbed from error messages, every range read is bounded in bytes and time, the remote object's identity is pinned across a load, and a streaming scan carries a stable shell id.
 
-Full notes: [RELEASE_NOTES_v0.6.5.md](docs/releases/RELEASE_NOTES_v0.6.5.md)
+Full notes: [RELEASE_NOTES_v0.6.5.md](docs/releases/archive/RELEASE_NOTES_v0.6.5.md)
 
 ## [0.6.4] - 2026-08-07
 

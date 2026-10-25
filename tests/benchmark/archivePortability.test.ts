@@ -189,7 +189,7 @@ describe('rootDocumentReferences', () => {
   });
 
   it('does not read a document under a directory as a root document', () => {
-    expect(rootDocumentReferences('docs/releases/RELEASE_NOTES_v0.6.0.md is the copy under docs/')).toEqual([]);
+    expect(rootDocumentReferences('docs/releases/archive/RELEASE_NOTES_v0.6.0.md is the copy under docs/')).toEqual([]);
   });
 
   it('reads nothing out of prose that names no document', () => {
