@@ -259,7 +259,7 @@ import { placedWorldOrigin } from './terrain/canonicalFrame';
 import { createAppRuntime } from './app/AppRuntime';
 import { createLayerService } from './app/LayerService';
 import { createViewBookmarks } from './app/viewBookmarks';
-import { createScanService, survivorAfterRemoval } from './app/ScanService';
+import { createScanService, survivorAfterRemoval, refreshActiveLayerSurfaces } from './app/ScanService';
 import { createScanRouteService } from './app/ScanRouteService';
 import { createProjectFrameService, projectFrameInputFrom, sessionImportOrigins } from './app/projectFrame';
 
@@ -4150,7 +4150,7 @@ function compareLoadedLayers(): void {
 }
 
 
-function activateLayer(id: string): void { if (scans.activeId === id) return; scans.setActive(id); const c = scans.activeCloud(); if (c) { crsCoordinator.refreshCrsForStaticCloud(c); inspectorCards.refreshProvenance(c, id); inspectorCards.refreshDatasetIntelligenceFromStaticCloud(c); } } // select a static layer and re-resolve its CRS (so the measure units), provenance and dataset card
+function activateLayer(id: string): void { if (scans.activeId === id) return; scans.setActive(id); const c = scans.activeCloud(); if (c) refreshActiveLayerSurfaces({ refreshCrs: (cl) => crsCoordinator.refreshCrsForStaticCloud(cl), refreshProvenance: (cl, layerId) => inspectorCards.refreshProvenance(cl, layerId), refreshDatasetIntelligence: (cl) => inspectorCards.refreshDatasetIntelligenceFromStaticCloud(cl), refreshClassLegend, syncColorMode: syncColorModeForActive, setDetail: (shown, total) => inspector.setDetail(shown, total), setReport: (cl) => inspector.setReport(runModules(cl, currentClassScope(cl))) }, c, id); } // a static layer became the active scan: its CRS (so the measure units), cards, class legend, colour chips, point count and Scan Report
 function removeCloud(id: string): void {
   const next = survivorAfterRemoval(viewer.clouds(), id, scans.activeId); viewer.removeCloud(id); // removing the active layer promotes a survivor
   inspector.removeCloud(id);
