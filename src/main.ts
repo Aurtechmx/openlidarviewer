@@ -259,7 +259,7 @@ import { placedWorldOrigin } from './terrain/canonicalFrame';
 import { createAppRuntime } from './app/AppRuntime';
 import { createLayerService } from './app/LayerService';
 import { createViewBookmarks } from './app/viewBookmarks';
-import { createScanService, survivorAfterRemoval, refreshActiveLayerSurfaces } from './app/ScanService';
+import { createScanService, survivorAfterRemoval, refreshActiveLayerSurfaces, refreshStreamSurfaces } from './app/ScanService';
 import { createScanRouteService } from './app/ScanRouteService';
 import { createProjectFrameService, projectFrameInputFrom, sessionImportOrigins } from './app/projectFrame';
 
@@ -4160,12 +4160,12 @@ function removeCloud(id: string): void {
   if (layers.solo === id) layers.solo = null;
   if (next && next !== scans.activeId) activateLayer(next); else scans.clearIf(id); inspector.compareDifference.dropStale(); // a comparison on this scan goes with it
   captureProvenance.clearIf(id); exportPanel.forgetFindingsFor(id); // a removed scan's saved findings go with it
-  if (viewer.clouds().length === 0) resetToEmptyState();
+  if (viewer.clouds().length === 0 && !viewer.hasStreamingCloud) resetToEmptyState(); // a stream opened beside the static layers stays
   else {
     layerService.refreshCrsFlags();
     layerService.applyVisibility();
     inspector.setElevationExtent(viewer.elevationExtent()); inspector.setIntensityExtent(viewer.intensityExtent());
-    syncProjectElevationScale();
+    syncProjectElevationScale(); const sc = viewer.streamingCloud; if (viewer.clouds().length === 0 && sc) refreshStreamSurfaces({ refreshCrs: (s) => crsCoordinator.refreshCrsForStreamingCloud(s as unknown as Parameters<typeof crsCoordinator.refreshCrsForStreamingCloud>[0]), refreshProvenance: (s) => inspectorCards.refreshProvenanceFromStreaming(s), refreshDatasetIntelligence: () => inspector.clearDatasetIntelligence() /* the removed layer's card; an out-of-core source, the one stream that opens beside static layers, has none of its own */, streamClasses: () => runtime.streamingClasses.aggregate(), reseedLegend: (classes) => { classLegendPanel.setClasses(classes); classLegendPanel.setStreamingMode(true); if (classLegendPanel.hasClasses()) classLegendPanel.show(); else classLegendPanel.hide(); viewer.applyClassVisibility(classLegendPanel.getVisibility()); syncInspectClassScope(); }, refreshReport: refreshScopedReport }, sc); // the stream is the whole scene again: its CRS, cards, legend and report
   }
 }
 

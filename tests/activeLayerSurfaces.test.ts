@@ -10,7 +10,7 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, it, expect, vi } from 'vitest';
-import { refreshActiveLayerSurfaces, type ActiveLayerSurfaceDeps } from '../src/app/ScanService';
+import { refreshActiveLayerSurfaces, refreshStreamSurfaces, type ActiveLayerSurfaceDeps, type StreamSurfaceDeps } from '../src/app/ScanService';
 
 type Cloud = { pointCount: number; declaredPointCount?: number; decodedPointCount?: number; classification?: Uint8Array };
 
@@ -64,5 +64,35 @@ describe('refreshActiveLayerSurfaces', () => {
     expect(start).toBeGreaterThan(-1);
     const body = main.slice(start, main.indexOf('\nfunction ', start + 1));
     expect(body).toContain('refreshActiveLayerSurfaces(');
+  });
+});
+
+describe('refreshStreamSurfaces', () => {
+  it('describes the stream once the last static layer beside it is removed', () => {
+    const tally = new Map([[2, 10], [6, 4]]);
+    const d: StreamSurfaceDeps<{ name: string }> = {
+      refreshCrs: vi.fn(),
+      refreshProvenance: vi.fn(),
+      refreshDatasetIntelligence: vi.fn(),
+      streamClasses: () => tally,
+      reseedLegend: vi.fn(),
+      refreshReport: vi.fn(),
+    };
+    const stream = { name: 'big.laz' };
+    refreshStreamSurfaces(d, stream);
+    expect(d.refreshCrs).toHaveBeenCalledWith(stream);
+    expect(d.refreshProvenance).toHaveBeenCalledWith(stream);
+    expect(d.refreshDatasetIntelligence).toHaveBeenCalledWith(stream);
+    expect(d.reseedLegend).toHaveBeenCalledWith(tally);
+    expect(d.refreshReport).toHaveBeenCalledTimes(1);
+  });
+
+  it('is what the shell runs when a removal leaves only the stream, instead of the empty state', () => {
+    const main = readFileSync(join(import.meta.dirname, '..', 'src', 'main.ts'), 'utf8');
+    const start = main.indexOf('function removeCloud(id: string): void {');
+    expect(start).toBeGreaterThan(-1);
+    const body = main.slice(start, main.indexOf('\n}\n', start));
+    expect(body).toContain('viewer.clouds().length === 0 && !viewer.hasStreamingCloud) resetToEmptyState()');
+    expect(body).toContain('refreshStreamSurfaces(');
   });
 });

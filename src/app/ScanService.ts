@@ -186,3 +186,31 @@ export function refreshActiveLayerSurfaces<Cloud extends ActiveLayerCloud>(
   deps.setDetail(cloud.pointCount, cloud.decodedPointCount ?? cloud.pointCount);
   deps.setReport(cloud);
 }
+
+/** What the shell refreshes when a stream becomes the whole scene again. */
+export interface StreamSurfaceDeps<Stream> {
+  refreshCrs(stream: Stream): void;
+  refreshProvenance(stream: Stream): void;
+  /** The Dataset Intelligence card described the removed layer: fill it from the stream, or clear it when the stream has none. */
+  refreshDatasetIntelligence(stream: Stream): void;
+  /** The stream's session class tally, by code. */
+  streamClasses(): Map<number, number>;
+  /** Put the stream's classes back on the legend in place of the removed layer's. */
+  reseedLegend(classes: Map<number, number>): void;
+  /** The streaming Scan Report, in the legend's class scope. */
+  refreshReport(): void;
+}
+
+/**
+ * The last static layer beside an out-of-core stream was removed. The stream
+ * stays, so the scene is not empty, but the removed layer was the active scan
+ * and the per-scan surfaces described it: the CRS the measurements read in,
+ * the cards, the class legend and the report return to the stream's.
+ */
+export function refreshStreamSurfaces<Stream>(deps: StreamSurfaceDeps<Stream>, stream: Stream): void {
+  deps.refreshCrs(stream);
+  deps.refreshProvenance(stream);
+  deps.refreshDatasetIntelligence(stream);
+  deps.reseedLegend(deps.streamClasses());
+  deps.refreshReport();
+}

@@ -524,8 +524,9 @@ function toggleChip(
  * Exported as a plain predicate so the rule can be read and tested without a
  * DOM, in the same shape as `shouldResetSavedWork` in the load path.
  */
-export function removalClosesScan(layerCount: number): boolean {
-  return layerCount <= 1;
+export function removalClosesScan(layerCount: number, streamOpen = false): boolean {
+  // A stream opened beside the static layers stays when the last of them goes.
+  return layerCount <= 1 && !streamOpen;
 }
 
 export class Inspector {
@@ -713,6 +714,8 @@ export class Inspector {
   /** The latest setReport() argument, rows or a pending computation. */
   private _reportSource: unknown = null;
   private readonly _layerRows = new Map<string, HTMLElement>();
+  /** A streaming scan is open, so removing the last static layer does not close the scan. */
+  private _streaming = false;
   /** Per-layer facts the group panel reads: display name and stable identity. */
   private readonly _layerFacts = new Map<string, { name: string; stableId: string | null }>();
   /**
@@ -1565,7 +1568,7 @@ export class Inspector {
         // states the rest. Class edits live only in the layer's buffer, so
         // removing an edited layer asks too. Any other removal that leaves a
         // layer behind is not destructive and stays one click.
-        const closes = removalClosesScan(this._layerRows.size);
+        const closes = removalClosesScan(this._layerRows.size, this._streaming);
         const keepEdits = this._cb.removalClassEditsLine?.(id) ?? null;
         const edited = keepEdits !== null;
         if (!closes && !edited) {
@@ -1866,6 +1869,7 @@ export class Inspector {
    * StreamingPanel in this mode to avoid overlap).
    */
   setStreamingMode(streaming: boolean): void {
+    this._streaming = streaming;
     const hidden = streaming ? 'none' : '';
     this._layersSection.style.display = hidden;
     this._colorBySection.style.display = hidden;
