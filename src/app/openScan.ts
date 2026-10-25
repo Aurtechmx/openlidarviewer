@@ -154,6 +154,8 @@ export interface OpenScanDeps {
   stage: Pick<Stage, 'hideEmptyState' | 'showEmptyState'>;
   /** Tear down any open streaming scan (a static load replaces it; a failed streaming open tidies up). */
   closeStreaming: () => void;
+  /** A streaming open ended before anything attached: hide and reset its panel, leaving the open scene's cards alone. */
+  abandonStreamingOpen?: () => void;
   /** Ask before a static scan that replaces an open stream discards the work on it. */
   replaceGuard?: (req: ReplaceRequest) => Promise<ReplaceOutcome>;
   /** Drop the replaced scene's clip box and point filters. */
@@ -443,6 +445,9 @@ export async function openScan(file: File, deps: OpenScanDeps): Promise<void> {
     if (err instanceof LoadCancelledError) {
       // A cancelled load is a quiet no-op — no error toast, nothing was added.
       showCancelled(deps);
+      // A COPC open shows its panel before its first read; with no stream
+      // behind it the panel comes down. A stream that was already open keeps its panel.
+      if (!deps.getViewer().hasStreamingCloud) deps.abandonStreamingOpen?.();
     } else {
       // The toast shows a clear, categorised message; the raw error still
       // reaches the console for developers under ?debug=1.
@@ -453,6 +458,9 @@ export async function openScan(file: File, deps: OpenScanDeps): Promise<void> {
       // candidate, and closing it would destroy working state for a file that
       // never arrived.
       if (!hadStreamingOnEntry && deps.getViewer().hasStreamingCloud) deps.closeStreaming();
+      // One that never attached showed only its panel; closing would also
+      // clear the cards of a static scan that is still open.
+      else if (!deps.getViewer().hasStreamingCloud) deps.abandonStreamingOpen?.();
     }
   } finally {
     deps.setLoading(false);

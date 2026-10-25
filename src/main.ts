@@ -3512,7 +3512,7 @@ const openScanDeps: OpenScanDeps = {
   isTouchFirst: isTouchFirstDevice,
   deviceMemoryGB,
   stage,
-  closeStreaming, retireSceneState, replaceGuard: (req) => requestReplace(req),
+  closeStreaming, abandonStreamingOpen, retireSceneState, replaceGuard: (req) => requestReplace(req),
   scans,
   layerIdentity: runtime.layerIdentity,
   inspector,
@@ -3589,7 +3589,7 @@ const openStreamingDeps: OpenStreamingDeps = {
   crsCoordinator,
   bookmarks,
   isPhone,
-  closeStreaming,
+  closeStreaming, abandonStreamingOpen,
   clearOpenStaticLayers, retireSceneState, replaceGuard: (req) => requestReplace(req),
   resetStreamState,
   startStreamingStatusPolling: () => streamingUi.startPolling(), resetStreamingUiForScan: () => streamingUi.resetForScan(),
@@ -3729,13 +3729,15 @@ async function handleRemoteCopc(url: string, signal?: AbortSignal): Promise<void
     // decision, not a load failure.
     if (err instanceof LoadCancelledError || isAbortError(err)) {
       dropZone.setProgress(null);
+      if (!viewer.hasStreamingCloud) abandonStreamingOpen(); // the panel went up before the first read
     } else {
       if (debug) console.error('OpenLiDARViewer — remote COPC error', err);
       recordUsage('error', 'load');
       dropZone.setError(describeRemoteCopcError(err, url));
-      // Transactional: a failed open left the prior scene untouched, so keep it
-      // — only tidy the streaming chrome when no streaming scene remains.
-      if (!viewer.hasStreamingCloud) closeStreaming();
+      // Transactional: a failed open left the prior scene untouched, so keep it.
+      // With no stream behind it only the panel comes down; the full close
+      // would also clear the cards of a static scan that is still open.
+      if (!viewer.hasStreamingCloud) abandonStreamingOpen();
     }
   } finally {
     unlinkAbort();
@@ -3743,6 +3745,10 @@ async function handleRemoteCopc(url: string, signal?: AbortSignal): Promise<void
   }
 }
 
+/** A streaming open ended before anything attached: hide and reset its panel and drop its benchmark, leaving the open scene's cards alone. */
+function abandonStreamingOpen(): void {
+  streamingUi.endSession(); streamingBenchmark = null; coarseStableFired = false;
+}
 /** Close a streaming scan: stop polling, detach, restore the static panel. */
 function closeStreaming(): void {
   // A new streaming scan must re-seed its filter controls from its own data.

@@ -561,6 +561,8 @@ export interface OpenStreamingDeps {
   // ── Session lifecycle helpers that stay in the shell ──
   /** Tear down any open streaming scan (a failed open tidies up; a replacement supersedes). */
   closeStreaming: () => void;
+  /** A streaming open ended before anything attached: hide and reset its panel, leaving the open scene's cards alone. */
+  abandonStreamingOpen?: () => void;
   /** Free the open static layers — a streaming scan is exclusive. */
   clearOpenStaticLayers: () => void;
   /** Drop the replaced scene's clip box and point filters. */
@@ -1086,6 +1088,13 @@ export async function handleRemoteEpt(
     // or a DOMException named `AbortError` when the Stage URL-field Cancel
     // aborts the linked signal mid-fetch. Both mean "the user changed their
     // mind" — neither is an error to report or count.
+    // Only tidy up when this open left NOTHING valid behind (blocker #4A): a
+    // committed candidate is the current valid scene, and a prior streaming A
+    // survives a candidate that failed before commit (attach is transactional),
+    // so closing in either case would blank a scene the user still has. What
+    // an uncommitted open leaves is its panel, so that is what comes down; the
+    // full close would also clear the cards of a static scan that stays open.
+    if (shouldTidyFailedStreamingOpen(committed, hadStreamingScene)) deps.abandonStreamingOpen?.();
     if (err instanceof LoadCancelledError || isAbortError(err)) {
       deps.dropZone.setProgress(null);
     } else {
@@ -1099,11 +1108,6 @@ export async function handleRemoteEpt(
       deps.dropZone.setError(
         eptUrlMod ? eptUrlMod.describeRemoteEptError(err, url) : describeLoadError(err),
       );
-      // Only tidy up when this failed open left NOTHING valid behind (blocker #4A):
-      // a committed candidate is the current valid scene, and a prior streaming A
-      // survives a candidate that failed before commit (attach is transactional),
-      // so closing in either case would blank a scene the user still has.
-      if (shouldTidyFailedStreamingOpen(committed, hadStreamingScene)) deps.closeStreaming();
     }
   } finally {
     unlinkAbort();

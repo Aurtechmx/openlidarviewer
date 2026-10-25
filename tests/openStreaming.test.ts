@@ -157,6 +157,7 @@ function makeDeps(
     prewarmForUrl: vi.fn(),
     getViewer: vi.fn(() => ({}) as unknown as Viewer),
     closeStreaming: vi.fn(),
+    abandonStreamingOpen: vi.fn(),
     validateRemoteEptUrl,
     describeRemoteEptError,
     loadEpt: vi.fn(async () => {
@@ -207,6 +208,7 @@ function makeDeps(
     bookmarks: { clear: vi.fn() },
     isPhone: () => false,
     closeStreaming: calls.closeStreaming,
+    abandonStreamingOpen: calls.abandonStreamingOpen,
     clearOpenStaticLayers: vi.fn(),
     resetStreamState: vi.fn(),
     startStreamingStatusPolling: vi.fn(),
@@ -307,8 +309,11 @@ describe('handleRemoteEpt — the guarded remote-open decisions', () => {
     const { deps, calls } = makeDeps({ validate: { ok: true }, loadEptRejects: true });
     await handleRemoteEpt('https://example.com/ept.json', undefined, deps);
     expect(calls.setError).toHaveBeenCalledTimes(1);
-    // A failed open leaves no scan — the stream is torn down.
-    expect(calls.closeStreaming).toHaveBeenCalledTimes(1);
+    // A failed open that attached nothing leaves no scan to close: the
+    // streaming panel it showed is hidden, and the cards of a static scan
+    // that was open stay as they were.
+    expect(calls.abandonStreamingOpen).toHaveBeenCalledTimes(1);
+    expect(calls.closeStreaming).not.toHaveBeenCalled();
     // And the one-load flag is always released.
     expect(calls.setLoading).toHaveBeenLastCalledWith(false);
   });
