@@ -554,6 +554,9 @@ export async function generateReportPdf(templateId: string, deps: ReportExportDe
     annotations: viewer.annotate.getAnnotations().map((a) => structuredClone(a)),
     measurements: owned.own.map((m) => structuredClone(m)),
     measurementsWithheld: owned.withheld,
+    // Each row as the Measurements panel prints it, so the PDF and the panel
+    // agree to the character (decimals, units, bearings and refusals).
+    measurementValues: new Map((viewer.measure.getSummaries?.() ?? []).map((s) => [s.id, s.value])),
     unitSystem: viewer.measure.unitSystem,
     // Render-units → metres, the SAME factor the live measure readouts apply
     // (B2, v0.4.5) — so the report PDF's measurement values agree with the
