@@ -74,11 +74,13 @@ export class ProjectSnapIndex {
   private _provider: (() => readonly SnapLayerSource[]) | null = null;
   private readonly _grids = new WeakMap<Float32Array, PointSnapIndex>();
   private _warmQueued = false;
+  private _warming = false;
 
   /**
    * @param defer Optional task scheduler. When given, grids for newly offered
-   *   layers are built one per task after a change, so the build runs between
-   *   frames instead of inside the first click that needs it.
+   *   layers are built one per task while warming is on (see
+   *   {@link setWarming}), so the build runs between frames instead of inside
+   *   the first click that needs it.
    */
   private readonly _defer: ((task: () => void) => void) | undefined;
 
@@ -95,15 +97,30 @@ export class ProjectSnapIndex {
   /** The eligible layer set, a visibility/lock state or a placement changed. */
   invalidate(): void {
     this._layers = null;
-    if (this._defer && this._provider && !this._warmQueued) {
-      this._warmQueued = true;
-      this._defer(() => this._warmStep());
-    }
+    this._queueWarm();
+  }
+
+  /**
+   * Build missing grids ahead of need, one per deferred task, only while on.
+   * The measure tool turns it on while it is open, so a scan nobody measures
+   * never pays for a grid. A query still builds any grid it finds missing, so
+   * results never depend on this.
+   */
+  setWarming(on: boolean): void {
+    this._warming = on;
+    this._queueWarm();
+  }
+
+  private _queueWarm(): void {
+    if (!this._warming || !this._defer || !this._provider || this._warmQueued) return;
+    this._warmQueued = true;
+    this._defer(() => this._warmStep());
   }
 
   /** Build at most one missing grid, then yield and continue with the next. */
   private _warmStep(): void {
     this._warmQueued = false;
+    if (!this._warming) return;
     const missing = (this._provider?.() ?? []).find(
       (src) => src.local.length >= 3 && !this._grids.has(src.local),
     );

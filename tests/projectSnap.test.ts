@@ -138,6 +138,7 @@ describe('deferred grid build', () => {
     const s = new ProjectSnapIndex((t) => { tasks.push(t); });
     const C = grid();
     const D = grid();
+    s.setWarming(true);
     s.setProvider(() => [{ id: 'c', local: C, offset: [0, 0, 0] }, { id: 'd', local: D, offset: BIG }]);
     expect(tasks.length).toBe(1);
     tasks.shift()!();
@@ -146,5 +147,39 @@ describe('deferred grid build', () => {
     tasks.shift()!();
     expect(tasks.length).toBe(0);
     expect(s.nearest(at(BIG), 0.05)?.layerId).toBe('d');
+  });
+
+  it('builds nothing ahead of need until warming is on, and stops when it goes off', () => {
+    const tasks: Array<() => void> = [];
+    const s = new ProjectSnapIndex((t) => { tasks.push(t); });
+    let provided = 0;
+    s.setProvider(() => { provided++; return [{ id: 'c', local: grid(), offset: [0, 0, 0] }]; });
+    s.invalidate();
+    expect(tasks.length).toBe(0);
+    expect(provided).toBe(0);
+
+    s.setWarming(true);
+    expect(tasks.length).toBe(1);
+    s.setWarming(false);
+    tasks.shift()!();
+    expect(provided).toBe(0);
+    expect(tasks.length).toBe(0);
+  });
+
+  it('answers the same with or without warming', () => {
+    const C = grid();
+    const D = grid();
+    const layers = (): SnapLayerSource[] => [{ id: 'c', local: C, offset: [0, 0, 0] }, { id: 'd', local: D, offset: BIG }];
+    const cold = new ProjectSnapIndex(() => {});
+    cold.setProvider(layers);
+    const tasks: Array<() => void> = [];
+    const warm = new ProjectSnapIndex((t) => { tasks.push(t); });
+    warm.setWarming(true);
+    warm.setProvider(layers);
+    while (tasks.length) tasks.shift()!();
+    for (const q of [at(BIG), at([0, 0, 0])]) {
+      expect(cold.nearest(q, 0.5)).toEqual(warm.nearest(q, 0.5));
+      expect(cold.support(q)).toEqual(warm.support(q));
+    }
   });
 });
