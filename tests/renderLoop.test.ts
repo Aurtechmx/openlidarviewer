@@ -333,6 +333,22 @@ describe('runRenderFrame — measure cursor gating', () => {
 
     expect(host.setMeasureCursor).not.toHaveBeenCalled();
   });
+
+  it('does not pick or consume the pointer while the user is driving the camera', () => {
+    const pickPoint = vi.fn(() => ({ x: 1, y: 2, z: 3 }));
+    const host = makeHost({
+      toolMode: () => 'measure',
+      pointerMoved: () => true,
+      pointerOnCanvas: () => true,
+      userInteracting: () => true,
+      pickPoint,
+    });
+    runRenderFrame(host);
+
+    expect(pickPoint).not.toHaveBeenCalled();
+    expect(host.setMeasureCursor).not.toHaveBeenCalled();
+    expect(host.clearPointerMoved).not.toHaveBeenCalled();
+  });
 });
 
 describe('runRenderFrame — live probe gating', () => {
