@@ -598,6 +598,7 @@ export class StreamingRenderer {
       this._fades.delete(entry.mesh);
       this._host.removeStreamingMesh(entry.mesh);
       this._meshes.delete(node.record.id);
+      this._visibility.forget(node.record.id);
       return;
     }
     // Cancel any in-flight fade-IN — we override with the fade-OUT.
