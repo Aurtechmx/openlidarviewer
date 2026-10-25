@@ -509,6 +509,39 @@ describe('what the completed attach leaves behind', () => {
     }
   });
 
+  it('retires the clip box and filters when the waiting session is refused on this scan', async () => {
+    // The session was imported on an empty viewer, so its clip box and point
+    // filters were applied unchanged. A refused match clears its measurements,
+    // annotations and views; the box and filters belong to the same session.
+    const h = harness();
+    const retireSceneState = vi.fn();
+    const viewer = h.deps.getViewer() as unknown as { measure: { clear?: () => void } };
+    viewer.measure.clear = vi.fn();
+    markPendingSessionRestore(fakeFile('s.olvsession'));
+    try {
+      await openScan(fakeFile(), { ...h.deps, retireSceneState, importSession: vi.fn(async () => false) });
+      await settle();
+      expect(viewer.measure.clear).toHaveBeenCalledTimes(1);
+      expect(h.calls.annotateClear).toHaveBeenCalledTimes(1);
+      expect(retireSceneState).toHaveBeenCalledTimes(1);
+    } finally {
+      clearPendingSessionRestore();
+    }
+  });
+
+  it('keeps the session clip box when the waiting session applies', async () => {
+    const h = harness();
+    const retireSceneState = vi.fn();
+    markPendingSessionRestore(fakeFile('s.olvsession'));
+    try {
+      await openScan(fakeFile(), { ...h.deps, retireSceneState, importSession: vi.fn(async () => true) });
+      await settle();
+      expect(retireSceneState).not.toHaveBeenCalled();
+    } finally {
+      clearPendingSessionRestore();
+    }
+  });
+
   it('fills the Scan Report when the main thread goes idle', async () => {
     // The report walks every point several times. Running it inline put ~3 s of
     // that on the attach long-task, blocking first paint and first input.

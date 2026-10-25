@@ -835,11 +835,13 @@ export async function attachStaticCloud(
 
   // The waiting session is matched against this scan and rebased once. On a
   // refusal its toast says why, and the work restored in the session's own
-  // frame is removed rather than left misplaced on this scan.
+  // frame is removed rather than left misplaced on this scan, along with the
+  // clip box and point filters the import applied to the empty viewer.
   if (pendingSession && freshProject) {
     void deps.importSession(pendingSession, { reapply: true }).then((ok) => {
       if (ok !== false || deps.scans.activeId !== id) return;
       viewer.measure.clear(); viewer.annotate.reset(); deps.bookmarks.clear(); deps.inspector.setViews([]);
+      deps.retireSceneState?.();
       deps.refreshAnnotationPanel();
     });
   }

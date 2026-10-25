@@ -5,6 +5,9 @@
 //  - A streamed first open leaving the session waiting, so a later additive
 //    static open took it and dropped it without applying.
 //  - A streamed open dropping the session without telling the user.
+//  - A streamed open dropping the session but keeping the clip box and point
+//    filters it had applied to the empty viewer, so the new scan drew through
+//    a box saved over another scan.
 
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -41,11 +44,11 @@ describe('pending session restore', () => {
 });
 
 describe('a streamed open while a session waits', () => {
-  const cleared = { measure: vi.fn(), annotate: vi.fn(), bookmarks: vi.fn(), views: vi.fn() };
+  const cleared = { measure: vi.fn(), annotate: vi.fn(), bookmarks: vi.fn(), views: vi.fn(), retire: vi.fn() };
   const deps = (showToast: (m: string) => void): OpenStreamingDeps => {
     const any = () => vi.fn();
     const viewer = { measure: { clear: cleared.measure }, annotate: { reset: cleared.annotate } };
-    return new Proxy({ showToast, getViewer: () => viewer, bookmarks: { clear: cleared.bookmarks }, refreshViewsUI: cleared.views, stage: { hideEmptyState: any() }, inspectorCards: { refreshProvenanceFromStreaming: any() } } as Record<string, unknown>, {
+    return new Proxy({ showToast, getViewer: () => viewer, bookmarks: { clear: cleared.bookmarks }, refreshViewsUI: cleared.views, retireSceneState: cleared.retire, stage: { hideEmptyState: any() }, inspectorCards: { refreshProvenanceFromStreaming: any() } } as Record<string, unknown>, {
       get: (t, k) => (k in t ? t[k as string] : new Proxy(vi.fn(), { get: () => vi.fn() })),
     }) as unknown as OpenStreamingDeps;
   };
@@ -60,6 +63,8 @@ describe('a streamed open while a session waits', () => {
     expect(cleared.annotate).toHaveBeenCalledTimes(1);
     expect(cleared.bookmarks).toHaveBeenCalledTimes(1);
     expect(cleared.views).toHaveBeenCalledTimes(1);
+    // The session's clip box and filters were applied to an empty viewer; they go with its work.
+    expect(cleared.retire).toHaveBeenCalledTimes(1);
   });
 
   it('says nothing when no session waits', () => {

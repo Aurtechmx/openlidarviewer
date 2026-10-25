@@ -301,6 +301,9 @@ export function activateCommittedStreamingCloud(
   dropPendingSessionForStream(deps.showToast, () => {
     const v = deps.getViewer();
     v.measure.clear(); v.annotate.reset(); deps.bookmarks.clear(); deps.refreshViewsUI();
+    // The session was imported on an empty viewer, so its clip box and point
+    // filters were applied as saved; they go with the rest of its work.
+    deps.retireSceneState?.();
   });
   // Local-first counter — the categorical source kind, never the URL. Only a
   // COMMITTED open is counted now, not an attempt that failed to build.
