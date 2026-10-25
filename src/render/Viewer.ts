@@ -1828,7 +1828,7 @@ export class Viewer {
   private _streamingCoverage() {
     const s = this._streaming;
     return s
-      ? { knownNodeCount: s.cloud.octree.nodes().length || null, residentNodeCount: this._streamingPickData.size, hierarchyComplete: s.cloud.octree.isComplete }
+      ? { knownNodeCount: s.cloud.octree.store.size || null, residentNodeCount: this._streamingPickData.size, hierarchyComplete: s.cloud.octree.isComplete }
       : null;
   }
 
