@@ -40,6 +40,52 @@ function ownedByStatic(item: OwnedItem, staticOwners: readonly string[]): boolea
   return ownerIdsOf(item).some((id) => staticOwners.includes(id));
 }
 
+/** The stores a replace reads and prunes. */
+export interface ReplaceWorkStores {
+  measure: { getMeasurements(): readonly (OwnedItem & { id: string })[]; removeMeasurement(id: string): unknown; claimUnowned(owner: string): void };
+  annotate: { getAnnotations(): readonly (OwnedItem & { id: string })[]; remove(id: string): void; claimUnowned(owner: string): void; resetHistory(): void };
+}
+
+/** The stable ids of the open static layers that stay open through a replace. */
+export function staticOwnersOf(statics: readonly string[], stableLayerId: (id: string) => string | null): string[] {
+  return statics.map((id) => stableLayerId(id)).filter((id): id is string => id !== null);
+}
+
+/**
+ * Narrow the replace question to the stream's work when static layers stay
+ * open: work owned by a static layer stays, and so do the saved views.
+ */
+export function staticWorkScope(viewer: ReplaceWorkStores, staticOwners: readonly string[]): (work: DiscardableWork) => DiscardableWork {
+  return (work) => ({
+    ...work,
+    measurements: viewer.measure.getMeasurements().filter((m) => !ownedByStatic(m, staticOwners)).length,
+    annotations: viewer.annotate.getAnnotations().filter((a) => !ownedByStatic(a, staticOwners)).length,
+    views: 0,
+  });
+}
+
+/**
+ * A confirmed Replace with static layers staying open: remove only the work
+ * the question named (anything placed while the file was being prepared was
+ * never offered for discard), forget the annotation undo history those items
+ * sat in, and stamp what is left unowned as the retired scan's.
+ */
+export function removeReplacedStreamWork(
+  viewer: ReplaceWorkStores,
+  staticOwners: readonly string[],
+  seen: { measurements: ReadonlySet<string>; annotations: ReadonlySet<string> } | null,
+): void {
+  for (const m of viewer.measure.getMeasurements()) {
+    if (!ownedByStatic(m, staticOwners) && (!seen || seen.measurements.has(m.id))) viewer.measure.removeMeasurement(m.id);
+  }
+  for (const a of viewer.annotate.getAnnotations()) {
+    if (!ownedByStatic(a, staticOwners) && (!seen || seen.annotations.has(a.id))) viewer.annotate.remove(a.id);
+  }
+  viewer.annotate.resetHistory();
+  viewer.measure.claimUnowned(RETIRED_SCAN_OWNER);
+  viewer.annotate.claimUnowned(RETIRED_SCAN_OWNER);
+}
+
 /**
  * Decide before any work starts. Resolves null on Cancel: the caller then
  * returns `cancelled` with nothing changed.
@@ -48,19 +94,10 @@ export async function askHeavyReplace(deps: HeavyLasBridgeDeps, name: string): P
   await deps.viewerReady;
   const viewer = deps.getViewer();
   const statics = viewer.clouds();
-  const staticOwners = statics
-    .map((id) => deps.stableLayerId?.(id) ?? null)
-    .filter((id): id is string => id !== null);
+  const staticOwners = staticOwnersOf(statics, (id) => deps.stableLayerId?.(id) ?? null);
   const replacingStream = viewer.hasStreamingCloud === true;
   if (!replacingStream) return { replacingStream, outcome: 'none', decision: null, staticOwners, staticCount: statics.length };
-  // With static layers staying open, only the stream's work is at risk: work
-  // owned by a static layer stays, and so do the saved views.
-  const scope = statics.length === 0 ? undefined : (work: DiscardableWork): DiscardableWork => ({
-    ...work,
-    measurements: viewer.measure.getMeasurements().filter((m) => !ownedByStatic(m, staticOwners)).length,
-    annotations: viewer.annotate.getAnnotations().filter((a) => !ownedByStatic(a, staticOwners)).length,
-    views: 0,
-  });
+  const scope = statics.length === 0 ? undefined : staticWorkScope(viewer, staticOwners);
   try {
     const decision = await guardReplacedWork(
       {
@@ -98,19 +135,7 @@ export function settleHeavyReplace(deps: HeavyLasBridgeDeps, plan: HeavyReplaceP
     return;
   }
   if (plan.outcome === 'replace') {
-    // Only the work the question named: anything placed while the file was
-    // being prepared was never offered for discard.
-    const seen = plan.decision?.seen ?? null;
-    for (const m of viewer.measure.getMeasurements()) {
-      if (!ownedByStatic(m, plan.staticOwners) && (!seen || seen.measurements.has(m.id))) viewer.measure.removeMeasurement(m.id);
-    }
-    for (const a of viewer.annotate.getAnnotations()) {
-      if (!ownedByStatic(a, plan.staticOwners) && (!seen || seen.annotations.has(a.id))) viewer.annotate.remove(a.id);
-    }
-    // The removed annotations belonged to the replaced stream: no undo brings them back.
-    viewer.annotate.resetHistory();
-    viewer.measure.claimUnowned(RETIRED_SCAN_OWNER);
-    viewer.annotate.claimUnowned(RETIRED_SCAN_OWNER);
+    removeReplacedStreamWork(viewer, plan.staticOwners, plan.decision?.seen ?? null);
     return;
   }
   viewer.measure.claimUnowned(RETIRED_SCAN_OWNER);

@@ -27,6 +27,8 @@
 import { describe, it, expect, beforeAll, vi } from 'vitest';
 
 import { openScan, type OpenScanDeps } from '../src/app/openScan';
+import type { ReplaceRequest } from '../src/app/discardGuard';
+import type { DiscardableWork } from '../src/app/closeScanGuard';
 import { clearPendingSessionRestore, holdSessionWork, markPendingSessionRestore } from '../src/app/pendingSessionRestore';
 import * as THREE from 'three/webgpu';
 import { Viewer } from '../src/render/Viewer';
@@ -141,8 +143,8 @@ function harness(opts: HarnessOptions = {}) {
     hasStreamingCloud: false,
     addCloud: calls.addCloud,
     clouds: () => [cloud],
-    measure: { setLayerResolver: () => {}, claimUnowned: () => {} },
-    annotate: { reset: calls.annotateClear },
+    measure: { setLayerResolver: () => {}, claimUnowned: () => {}, getMeasurements: () => [], removeMeasurement: () => null },
+    annotate: { reset: calls.annotateClear, resetHistory: () => {}, getAnnotations: () => [], remove: () => {}, claimUnowned: () => {} },
     setCoverageGrid: () => {},
     setMode: () => {},
     frameAll: calls.frameAll,
@@ -895,5 +897,72 @@ describe('a static open over a stream sizes navigation for the new scan alone', 
     expect(over.calls.addCloud).toHaveBeenCalledTimes(1);
     expect(over.calls.setError).not.toHaveBeenCalled();
     expect(b.sizing()).toEqual(a.sizing());
+  });
+});
+
+// A static file opened over a stream with static layers beside it. Only the
+// stream goes, so only its work is at risk: the question counts that work and
+// Replace removes only what the question counted. Saved views stay.
+describe('a static open over a stream with static layers open', () => {
+  type Item = { id: string; owner?: { layerId: string; frame: 'project' } };
+  function streamScene(h: ReturnType<typeof harness>, statics: string[]) {
+    const measurements: Item[] = [];
+    const annotations: Item[] = [];
+    const drop = (list: Item[]) => vi.fn((id: string) => { const k = list.findIndex((i) => i.id === id); if (k >= 0) list.splice(k, 1); return null; });
+    const claim = (list: Item[]) => vi.fn((layerId: string) => { for (const i of list) if (!i.owner) i.owner = { layerId, frame: 'project' }; });
+    const viewer = h.deps.getViewer() as unknown as Record<string, unknown>;
+    viewer.hasStreamingCloud = true;
+    const added: string[] = [];
+    h.calls.addCloud.mockImplementation(() => { h.trace.push('addCloud'); added.push('cloud-1'); return 'cloud-1'; });
+    viewer.clouds = () => [...statics, ...added];
+    viewer.measure = { setLayerResolver: () => {}, clear: vi.fn(() => { measurements.length = 0; }), getMeasurements: () => measurements, removeMeasurement: drop(measurements), claimUnowned: claim(measurements) };
+    viewer.annotate = { reset: h.calls.annotateClear, resetHistory: vi.fn(), getAnnotations: () => annotations, remove: drop(annotations), claimUnowned: claim(annotations) };
+    viewer.reconfigureForClouds = vi.fn();
+    // The scope is read while the question is open, before anything is removed.
+    const scoped: DiscardableWork[] = [];
+    const replaceGuard = vi.fn(async (req: ReplaceRequest) => {
+      if (req.scope) scoped.push(req.scope({ measurements: 2, annotations: 2, views: 3, classEdits: false, results: 0 }));
+      return 'replace' as const;
+    });
+    const deps: OpenScanDeps = {
+      ...h.deps,
+      replaceGuard,
+      retireSceneState: vi.fn(),
+      layerIdentity: { ...h.deps.layerIdentity, stableIdFor: (id: string) => (statics.includes(id) ? `stable-${id}` : null) },
+    };
+    return { deps, replaceGuard, scoped, measurements, annotations, viewer };
+  }
+
+  it('asks only about the stream work, and Replace keeps the static work and saved views', async () => {
+    const h = harness();
+    const t = streamScene(h, ['s1']);
+    t.measurements.push({ id: 'm-static', owner: { layerId: 'stable-s1', frame: 'project' } }, { id: 'm-stream' });
+    t.annotations.push({ id: 'a-static', owner: { layerId: 'stable-s1', frame: 'project' } }, { id: 'a-stream' });
+
+    await openScan(fakeFile(), t.deps);
+
+    expect(t.replaceGuard).toHaveBeenCalledTimes(1);
+    expect(t.scoped).toEqual([{ measurements: 1, annotations: 1, views: 0, classEdits: false, results: 0 }]);
+    // Replace removed the stream's items only; the static layer's work stands.
+    expect(t.measurements.map((m) => m.id)).toEqual(['m-static']);
+    expect(t.annotations.map((a) => a.id)).toEqual(['a-static']);
+    expect(h.calls.bookmarksClear).not.toHaveBeenCalled();
+    expect(h.calls.annotateClear).not.toHaveBeenCalled();
+    expect(t.deps.retireSceneState).not.toHaveBeenCalled();
+    expect(h.calls.closeStreaming).toHaveBeenCalledTimes(1);
+  });
+
+  it('over a stream alone, asks about everything and Replace clears it all', async () => {
+    const h = harness();
+    const t = streamScene(h, []);
+    t.measurements.push({ id: 'm-stream' });
+
+    await openScan(fakeFile(), t.deps);
+
+    expect(t.replaceGuard.mock.calls[0]![0].scope).toBeUndefined();
+    expect(t.measurements).toEqual([]);
+    expect(h.calls.annotateClear).toHaveBeenCalled();
+    expect(h.calls.bookmarksClear).toHaveBeenCalled();
+    expect(t.deps.retireSceneState).toHaveBeenCalledTimes(1);
   });
 });

@@ -36,6 +36,7 @@ import type { ReplaceOutcome, ReplaceRequest } from './discardGuard';
 import { HEADER_PEEK_BYTES, openLocalHeavyLas, describeHeavyRefusal } from './openLocalHeavyLas';
 import { fileSourceFingerprint } from '../io/sourceFingerprint';
 import type { OpenStreamingDeps } from './openStreaming';
+import { removeReplacedStreamWork, staticOwnersOf, staticWorkScope } from './heavyReplace';
 import { availableModes } from '../render/colorModes';
 import { recommendColorMode } from '../render/colorModeRecommend';
 import { increment as recordUsage } from '../diagnostics/usageCounters';
@@ -603,10 +604,19 @@ export async function attachStaticCloud(
   // nodes and the new cloud are both in memory; the stream's point budget
   // caps that overlap.
   // A static scan opened over a stream replaces it, and its measurements and
-  // annotations belong to the stream: ask before they are lost.
-  const replaced: ReplaceOutcome = !viewer.hasStreamingCloud ? 'none' : source.replaced ?? (await deps.replaceGuard?.({ kind: 'scan', name: result.cloud.name })) ?? 'none';
-  if (replaced === 'cancel') throw new LoadCancelledError();
+  // annotations belong to the stream: ask before they are lost. With static
+  // layers beside the stream only the stream's work is at risk, so the
+  // question counts that work alone and Replace removes only what it counted.
   const prior = viewer.clouds();
+  const staticOwners = staticOwnersOf(prior, (cloudId) => deps.layerIdentity.stableIdFor(cloudId));
+  const scope = prior.length === 0 ? undefined : staticWorkScope(viewer, staticOwners);
+  let seen: { measurements: ReadonlySet<string>; annotations: ReadonlySet<string> } | null = null;
+  const ask = async (): Promise<ReplaceOutcome> => {
+    seen = { measurements: new Set(viewer.measure.getMeasurements().map((m) => m.id)), annotations: new Set(viewer.annotate.getAnnotations().map((a) => a.id)) };
+    return (await deps.replaceGuard?.({ kind: 'scan', name: result.cloud.name, ...(scope ? { scope } : {}) })) ?? 'none';
+  };
+  const replaced: ReplaceOutcome = !viewer.hasStreamingCloud ? 'none' : source.replaced ?? (await ask());
+  if (replaced === 'cancel') throw new LoadCancelledError();
   const id = viewer.addCloud(result.cloud);
   source.preview?.dispose();
   if (viewer.hasStreamingCloud) {
@@ -618,7 +628,10 @@ export async function attachStaticCloud(
     // filters go with it; static layers beside it keep theirs.
     if (prior.length === 0) deps.retireSceneState?.();
     viewer.reconfigureForClouds();
-    if (replaced === 'replace') { viewer.measure.clear(); viewer.annotate.reset(); deps.bookmarks.clear(); deps.inspector.setViews([]); }
+    if (replaced === 'replace') {
+      if (prior.length === 0) { viewer.measure.clear(); viewer.annotate.reset(); deps.bookmarks.clear(); deps.inspector.setViews([]); }
+      else removeReplacedStreamWork(viewer, staticOwners, seen);
+    }
   }
   deps.stage.hideEmptyState();
   // COMMIT BOUNDARY. The cloud is in the scene and nothing below rolls that
