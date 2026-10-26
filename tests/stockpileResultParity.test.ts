@@ -124,7 +124,11 @@ function expectParity(record: VolumeRecord, headline: string): void {
       expect(row[`${k}_m3`]).toBe('');
       expect(props[`${k}_m3`]).toBeUndefined();
     }
-    expect(finding.label).toMatch(/grid volume withheld/);
+    expect(finding.label).toMatch(/volume withheld/);
+    expect(finding.value).toBeNull();
+    expect(record.crossCheck).toBeUndefined();
+    expect(headline).not.toMatch(/cross-check/);
+    expect(row.pointsample_net_m3).toBe('');
     expect(valueForDimension(m, 'volume-net')).toBeNull();
   }
   const cc = record.crossCheck;
@@ -182,7 +186,7 @@ describe('one lasso result on every surface', () => {
     const out = lassoStockpileResult(ps, inputs, 1);
     expect(out.record.gridAuthority).toBe('withheld');
     expect(out.record.fill).toBeUndefined();
-    expect(out.record.crossCheck?.net).toBe(ps.net);
+    expect(out.record.crossCheck).toBeUndefined();
     expectParity(out.record, out.headline);
   });
 

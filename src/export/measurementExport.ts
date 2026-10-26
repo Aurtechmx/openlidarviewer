@@ -312,7 +312,8 @@ export function measurementMetrics(
         // grid figure — named so a reader never confuses it with the canonical
         // cut_m3/fill_m3/net_m3 above. The `pointsample_` prefix is kept for
         // existing readers; the estimator it names is `crossCheck.method`.
-        if (m.volume.crossCheck) {
+        // A withheld grid exports no cross-check either.
+        if (m.volume.crossCheck && m.volume.gridAuthority !== 'withheld') {
           set('pointsample_cut_m3', m.volume.crossCheck.cut * Vol);
           set('pointsample_fill_m3', m.volume.crossCheck.fill * Vol);
           set('pointsample_net_m3', m.volume.crossCheck.net * Vol);

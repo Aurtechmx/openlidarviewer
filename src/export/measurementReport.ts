@@ -251,7 +251,7 @@ export function measurementsToFindings(
             ? `Area-weighted grid volume withheld (${vol.gridAuthorityReason || 'insufficient observations'}).`
             : `Area-weighted grid integration over the ${footprint} footprint${vol.gridAuthority === 'preview' ? ` (PREVIEW: ${vol.gridAuthorityReason})` : ''}. Cells with too little support reduce the reported footprint rather than reading as zero.`,
         );
-        if (vol.crossCheck) {
+        if (vol.crossCheck && vol.gridAuthority !== 'withheld') {
           caveats.push(
             `Cut-fill cross-check (${vol.crossCheck.method}): cut ${(vol.crossCheck.cut * V).toFixed(2)} ${u('m³')} / fill ${(vol.crossCheck.fill * V).toFixed(2)} ${u('m³')}.`,
           );
@@ -277,12 +277,12 @@ export function measurementsToFindings(
       // point-sampled volume printed to ~1e-14 m³ beside a distance at 1 mm,
       // implying a resolution its own coverage caveat denies.
       //
-      // A withheld grid carries no net of its own; the
-      // cross-check's net is reported instead, under a label that says so —
-      // never silently as the (absent) grid figure.
+      // A withheld grid carries no net of its own and shows no cross-check
+      // net either. An unswitched record without a net (never written by
+      // the app) still falls back to its cross-check under a label saying so.
       if (vol.net !== undefined) {
         findings.push({ label, value: roundTo3(vol.net * V), unit: u('m³'), confidence: vol.confidence, caveats });
-      } else if (vol.crossCheck) {
+      } else if (vol.crossCheck && vol.gridAuthority !== 'withheld') {
         findings.push({
           label: `${label} (cut-fill cross-check — grid volume withheld)`,
           value: roundTo3(vol.crossCheck.net * V),

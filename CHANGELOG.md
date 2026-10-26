@@ -22,6 +22,7 @@ are not release-authoritative. v0.7.0 is the current published release.
 - Change detection says when it assumed the vertical unit from the horizontal unit.
 - The terrain complexity summary warns when more than 10% of its cells are interpolated.
 - Wording: the scan fitness verdict names hold-out residuals, Contour Studio no longer calls area and scale "validated", the precision check no longer says "certified level", and the Analyse help calls the hold-out an internal check.
+- A withheld stockpile volume shows no cut-fill cross-check figure either, in the Measurements panel, the toast, the PDF report and the CSV and GeoJSON exports. The grid is withheld for a footprint the scan does not support, and the cross-check covered the same footprint.
 
 ### Changed
 

@@ -513,12 +513,10 @@ export function volumeFiguresWithheld(v: VolumeRecord): boolean {
 
 /**
  * The text that stands in for fill / cut / net when they are withheld: the
- * reason, and the point-sample cross-check when the record kept one.
- * `fmtVolume` formats a native-unit volume (render units³) for display.
+ * reason only. A withheld grid shows no cross-check figure either, so a
+ * record saved with one prints none.
  */
-export function volumeWithheldClause(v: VolumeRecord, fmtVolume: (renderUnitsCubed: number) => string): string {
-  const cc = v.crossCheck;
+export function volumeWithheldClause(v: VolumeRecord): string {
   const reason = v.gridAuthorityReason ? ` (${v.gridAuthorityReason})` : '';
-  return `${cc ? 'grid ' : ''}volume withheld${reason}` +
-    (cc ? ` · cut-fill cross-check net ${fmtVolume(Math.abs(cc.net))} ${cc.net < 0 ? 'cut' : 'fill'}` : '');
+  return `volume withheld${reason}`;
 }

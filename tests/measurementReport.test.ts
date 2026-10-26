@@ -223,16 +223,17 @@ describe('a grid-canonical volume finding', () => {
     expect(f[0].caveats!.join(' ')).toMatch(/PREVIEW: display sample/);
   });
 
-  test('a withheld record reports the cross-check net under a label that says the grid was withheld', () => {
+  test('a withheld record reports no cross-check net, only an explicit null', () => {
     const withheld = gridVolume('v1', {
       fill: undefined, cut: undefined, net: undefined,
       gridAuthority: 'withheld', gridAuthorityReason: 'insufficient observations',
     });
     const f = measurementsToFindings([withheld], up, 1);
     expect(f).toHaveLength(1);
-    expect(f[0].label).toMatch(/cut-fill cross-check — grid volume withheld/);
-    expect(f[0].value).toBeCloseTo(90, 6); // the cross-check's net, not a fabricated grid figure
+    expect(f[0].label).toMatch(/\(volume withheld\)/);
+    expect(f[0].value).toBeNull();
     expect(f[0].caveats!.join(' ')).toMatch(/withheld \(insufficient observations/);
+    expect(f[0].caveats!.join(' ')).not.toMatch(/Cut-fill cross-check \(/);
   });
 
   test('a withheld record with no cross-check reports an explicit null under its reason', () => {

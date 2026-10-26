@@ -193,10 +193,11 @@ describe('withStockpileGrid', () => {
     expect(out.gridAuthorityReason).toBe('insufficient observations');
   });
 
-  it('always moves the ORIGINAL point-sample numbers into crossCheck, whatever the authority', () => {
-    for (const authority of ['measured', 'preview', 'withheld'] as const) {
+  it('moves the ORIGINAL point-sample numbers into crossCheck unless the grid is withheld', () => {
+    for (const authority of ['measured', 'preview'] as const) {
       const out = withStockpileGrid(psRecord, gridFigure({ authority }));
       expect(out.crossCheck).toEqual({ fill: 10, cut: 2, net: 8, method: CUT_FILL_VOLUME_METHOD });
     }
+    expect(withStockpileGrid(psRecord, gridFigure({ authority: 'withheld' })).crossCheck).toBeUndefined();
   });
 });

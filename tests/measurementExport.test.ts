@@ -133,7 +133,7 @@ describe('measurementMetrics', () => {
     expect(m.pointsample_net_m3).toBe(90);
   });
 
-  it('a withheld grid record exports no cut_m3/fill_m3/net_m3, only the cross-check', () => {
+  it('a withheld grid record exports no cut_m3/fill_m3/net_m3 and no cross-check', () => {
     const withheld = mk('volume', [[0, 0, 0], [10, 0, 0], [10, 10, 0]], {
       volume: {
         referenceZ: 0, footprintArea: 50, pointsInPolygon: 800, densityNative: 16,
@@ -146,7 +146,8 @@ describe('measurementMetrics', () => {
     expect(m.fill_m3).toBeUndefined();
     expect(m.cut_m3).toBeUndefined();
     expect(m.net_m3).toBeUndefined();
-    expect(m.pointsample_fill_m3).toBe(120);
+    expect(m.pointsample_fill_m3).toBeUndefined();
+    expect(m.pointsample_net_m3).toBeUndefined();
   });
 
   it('applies unitToMetres to lengths (×), areas (×²), and volumes (×³)', () => {
