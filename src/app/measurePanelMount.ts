@@ -27,7 +27,7 @@ import { cloudUpAxisMoved, setCloudUpResolver } from '../render/layerUpRegistry'
 import { bindMeasureUnitFrames, chainUnitFrame, type LayerUnitSource, type MeasureUnitFrames } from './measureLayerUnits';
 import { buildMeasureConfidenceContext } from './measureConfidenceContext';
 import { buildResultModel } from './measureResultModel';
-import { copyToClipboard } from '../render/InspectTool';
+import { copyToClipboard } from '../ui/clipboard';
 import { loadMeasurePanel, loadProfileWorkbenchRuntime } from '../lazyChunks';
 import { retryableOnce, mountPanelOnce } from './lazySurfaceLoad';
 
