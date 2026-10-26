@@ -162,7 +162,9 @@ export function createToolLauncher(deps: ToolLauncherDeps): ToolLauncher {
     const gen = ++generation;
     const actions = deps.getActions();
     if (Array.isArray(actions)) render(actions as readonly Action[]);
-    else void Promise.resolve(actions).then((list) => { if (gen === generation) render(list); });
+    // A registry chunk that fails to load (a reload mid-fetch, a dropped
+    // connection) leaves the rows as they are; the next refresh asks again.
+    else void Promise.resolve(actions).then((list) => { if (gen === generation) render(list); }, () => {});
   }
 
   refresh();

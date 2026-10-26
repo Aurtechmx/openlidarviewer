@@ -2794,7 +2794,7 @@ void viewerLoaded.then(() => {
     stage.overlay.append(viewer.inspectElements.overlay);
     stage.overlay.append(viewer.inspectElements.hint);
     stage.overlay.append(viewer.annotateElements.overlay);
-    stage.overlay.append(viewer.annotateElements.hint); void loadActiveToolStatus().then((m) => stage.addTeardown(m.wireActiveToolIndicator({ viewer: () => viewer, clipEnabled: () => clipPanel.enabled, mount: stage.overlay, watch: [viewer.measureElements.hint, viewer.inspectElements.hint, viewer.annotateElements.hint] }).dispose));
+    stage.overlay.append(viewer.annotateElements.hint); void loadActiveToolStatus().then((m) => stage.addTeardown(m.wireActiveToolIndicator({ viewer: () => viewer, clipEnabled: () => clipPanel.enabled, mount: stage.overlay, watch: [viewer.measureElements.hint, viewer.inspectElements.hint, viewer.annotateElements.hint] }).dispose)).catch((err: unknown) => { if (debug) console.warn('[activeToolStatus] chunk load failed', err); });
     // Right context rail — one coherent column: the Streaming card (only while a
     // COPC streams) above the Inspector, in normal vertical flow rather than a
     // fixed 50vh absolute split. The rail owns the collapse + wheel containment.
@@ -2827,7 +2827,7 @@ void viewerLoaded.then(() => {
         hasScan, crsService,
         onModeChange: refreshToolLauncher, onRoute: (r) => clipPanel.setPageOpen(r.mode === 'work' && r.page === 'clip'),
     });
-    void fillToolLauncher(); // the card fills its mounted host when its chunk lands
+    void fillToolLauncher().catch((err: unknown) => { if (debug) console.warn('[toolLauncher] chunk load failed', err); }); // fills its host when the chunk lands
     workspaceShell = shell;
     phoneSheet = shell.mobileSheet;
     syncMobileSheet = shell.applyMobileSheet;
