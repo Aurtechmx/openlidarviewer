@@ -56,13 +56,25 @@ export const MAX_NODE_POINTS = 50_000_000;
  */
 export const MAX_DECOMPRESSED_NODE_BYTES = MAX_DECODED_ALLOCATION_BYTES;
 
+/** Records decoded into one WASM heap block before it is copied out. */
+export const DECODE_BLOCK_RECORDS = 1024;
+/** Byte ceiling on that block, so a huge (Extra Bytes) record takes fewer per block. */
+const DECODE_BLOCK_MAX_BYTES = 1024 * 1024;
+
+/** Records per WASM block for a node: up to 1,024, fewer for long records, at least one. */
+export function decodeBlockRecords(pointCount: number, recordLength: number): number {
+  const byBytes = Math.max(1, Math.floor(DECODE_BLOCK_MAX_BYTES / Math.max(1, recordLength)));
+  return Math.max(1, Math.min(DECODE_BLOCK_RECORDS, byBytes, pointCount));
+}
+
 /**
  * The true peak resident bytes of decoding one COPC node, the larger of the two
  * phases that never overlap but are each unbounded on their own:
  *
- *   phase 1 (laz-perf decompression) = 2·Bc + B_raw — the JS-side compressed
- *   buffer plus laz-perf's WASM-heap duplicate of it, both live while the raw
- *   LAS records are staged.
+ *   phase 1 (laz-perf decompression) = 2·Bc + B_raw + B_block — the JS-side
+ *   compressed buffer plus laz-perf's WASM-heap duplicate of it, both live
+ *   while the raw LAS records are staged, and the WASM block records are
+ *   decoded into before each copy out ({@link decodeBlockRecords}).
  *
  *   phase 2 (`decodeRecords`) = Bc + B_raw + B_channels — the compressed chunk
  *   the worker still holds, the raw records handed in, and the decoded channel
@@ -92,7 +104,11 @@ export function estimateCopcPeakBytes(
     pointCount,
     meta.pointSemantics,
   );
-  const phase1 = 2 * bc + rawBytes;
+  const blockBytes =
+    Number.isFinite(pointCount) && pointCount >= 0 && meta.pointRecordLength > 0
+      ? decodeBlockRecords(pointCount, meta.pointRecordLength) * meta.pointRecordLength
+      : Number.POSITIVE_INFINITY;
+  const phase1 = 2 * bc + rawBytes + blockBytes;
   const phase2 = bc + rawBytes + channelBytes;
   return Math.max(phase1, phase2);
 }
@@ -152,8 +168,8 @@ export function decompressChunk(
   // Peak-memory cap: the decoded guard above bounds the OUTPUT buffer, but decode
   // holds several allocations at once across two non-overlapping phases, and each
   // phase is unbounded on its own. Phase 1 (laz-perf decompression) peaks at
-  // 2·Bc + B_raw — the JS compressed buffer, laz-perf's WASM-heap duplicate, and
-  // the raw records. Phase 2 (decodeRecords) peaks at Bc + B_raw + B_channels —
+  // 2·Bc + B_raw + B_block — the JS compressed buffer, laz-perf's WASM-heap
+  // duplicate, the raw records, and the WASM block records are decoded into. Phase 2 (decodeRecords) peaks at Bc + B_raw + B_channels —
   // the compressed chunk the worker still holds, the raw records, and the decoded
   // channel arrays. The old guard charged only phase 1, so a node whose phase-2
   // working set (B_channels is a second B_raw-sized copy) blew the budget slipped
@@ -165,27 +181,28 @@ export function decompressChunk(
       `malformed COPC: node of ${pointCount.toLocaleString('en-US')} points would peak at ` +
         `${peakBytes.toLocaleString('en-US')} bytes, over the ` +
         `${MAX_DECODE_PEAK_BYTES.toLocaleString('en-US')}-byte decode budget ` +
-        `(max of laz-perf decompression 2·compressed + raw records, and decodeRecords ` +
+        `(max of laz-perf decompression 2·compressed + raw records + decode block, and decodeRecords ` +
         `compressed + raw records + decoded channel arrays).`,
     );
   }
 
   const compressed = chunk instanceof Uint8Array ? chunk : new Uint8Array(chunk);
   const recordLength = meta.pointRecordLength;
+  // Records land side by side in one WASM block and leave it in one copy,
+  // rather than one `subarray` + `set` per record.
+  const blockRecords = decodeBlockRecords(pointCount, recordLength);
   const chunkPtr = lazPerf._malloc(compressed.byteLength);
-  const pointPtr = lazPerf._malloc(recordLength);
+  const blockPtr = lazPerf._malloc(blockRecords * recordLength);
   const decoder = new lazPerf.ChunkDecoder();
   try {
     lazPerf.HEAPU8.set(compressed, chunkPtr);
     decoder.open(meta.pointDataRecordFormat, recordLength, chunkPtr);
     const out = new Uint8Array(pointCount * recordLength);
-    for (let i = 0; i < pointCount; i++) {
-      decoder.getPoint(pointPtr);
-      // `HEAPU8` is re-read each iteration — laz-perf may grow (and detach) it.
-      out.set(
-        lazPerf.HEAPU8.subarray(pointPtr, pointPtr + recordLength),
-        i * recordLength,
-      );
+    for (let i = 0; i < pointCount; i += blockRecords) {
+      const n = Math.min(blockRecords, pointCount - i);
+      for (let k = 0; k < n; k++) decoder.getPoint(blockPtr + k * recordLength);
+      // `HEAPU8` is read after the block — laz-perf may grow (and detach) it.
+      out.set(lazPerf.HEAPU8.subarray(blockPtr, blockPtr + n * recordLength), i * recordLength);
     }
     return out;
   } catch (err) {
@@ -197,7 +214,7 @@ export function decompressChunk(
     );
   } finally {
     decoder.delete();
-    lazPerf._free(pointPtr);
+    lazPerf._free(blockPtr);
     lazPerf._free(chunkPtr);
   }
 }

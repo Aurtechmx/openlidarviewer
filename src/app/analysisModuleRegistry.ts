@@ -32,14 +32,39 @@ export function createAnalysisModuleRegistry(): ModuleRegistry {
 
 let shared: ModuleRegistry | null = null;
 
+/** One turn of the event loop: the `setTimeout(0)` yield the open path uses between its stages. */
+const nextTask = (): Promise<void> => new Promise((resolve) => setTimeout(resolve, 0));
+
 /**
  * Run every registered module over a cloud and flatten the rows, in
  * registration order. The shell reaches this through `loadAnalysisModules`,
  * so the modules load with the first report rather than at startup.
+ *
+ * The run yields to the browser between modules, and inside a module that
+ * offers `runYielding`, so a multi-million-point report is several short tasks
+ * rather than one long one; the rows are the ones `run` gives. `isCurrent` is
+ * asked at every yield: once it says the scan was replaced or closed, the run
+ * stops and its promise never settles, so nothing paints a stale report.
  */
-export function runAnalysisModules(cloud: PointCloud, options: RunOptions): AnalysisRow[] {
+export async function runAnalysisModules(
+  cloud: PointCloud,
+  options: RunOptions,
+  isCurrent: () => boolean = () => true,
+  yieldTask: () => Promise<void> = nextTask,
+): Promise<AnalysisRow[]> {
   shared ??= createAnalysisModuleRegistry();
+  const pause = async (): Promise<boolean> => {
+    await yieldTask();
+    return isCurrent();
+  };
   const rows: AnalysisRow[] = [];
-  for (const module of shared.list()) rows.push(...module.run(cloud, undefined, options).rows);
+  for (const [i, module] of shared.list().entries()) {
+    if (i > 0 && !(await pause())) return new Promise<never>(() => {});
+    const result = module.runYielding
+      ? await module.runYielding(cloud, pause, undefined, options)
+      : module.run(cloud, undefined, options);
+    if (result === null) return new Promise<never>(() => {});
+    rows.push(...result.rows);
+  }
   return rows;
 }

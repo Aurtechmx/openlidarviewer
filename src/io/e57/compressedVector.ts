@@ -297,6 +297,44 @@ function concat(parts: Uint8Array[]): Uint8Array {
   return out;
 }
 
+/** 2^k for k = 0..32: the byte-window read below divides and wraps by these exactly. */
+const POW2: readonly number[] = Array.from({ length: 33 }, (_, k) => 2 ** k);
+
+/**
+ * Read one LSB-first bit-packed value of `bitWidth` bits that starts at bit
+ * `bitInByte` (0..7) of `buffer[byteIndex]`.
+ *
+ * A field of 32 bits or fewer spans at most five bytes. Those bytes are
+ * gathered little-endian into one double (under 2^40, so exact), the leading
+ * bits are divided off and the value is cut to its width, which is the value
+ * the bit-by-bit loop builds. Wider fields keep that loop.
+ */
+export function readPackedBits(buffer: Uint8Array, byteIndex: number, bitInByte: number, bitWidth: number): number {
+  if (bitWidth > 32) return readPackedBitsBitwise(buffer, byteIndex, bitInByte, bitWidth);
+  const nBytes = (bitInByte + bitWidth + 7) >> 3;
+  let acc = 0;
+  let mul = 1;
+  for (let j = 0; j < nBytes; j++) {
+    acc += (buffer[byteIndex + j] ?? 0) * mul;
+    mul *= 256;
+  }
+  return Math.floor(acc / POW2[bitInByte]!) % POW2[bitWidth]!;
+}
+
+/** {@link readPackedBits} one bit at a time; any width up to 53 bits. */
+export function readPackedBitsBitwise(buffer: Uint8Array, byteIndex: number, bitInByte: number, bitWidth: number): number {
+  let packed = 0;
+  for (let k = 0; k < bitWidth; k++) {
+    packed += ((buffer[byteIndex] >> bitInByte) & 1) * 2 ** k;
+    bitInByte++;
+    if (bitInByte === 8) {
+      bitInByte = 0;
+      byteIndex++;
+    }
+  }
+  return packed;
+}
+
 /**
  * Decode one field's continuous bytestream.
  *
@@ -363,17 +401,8 @@ function decodeField(
   // large scan with a wide field, where `>> 3` would wrap to a negative index.
   for (let b = 0; b < outCount; b++) {
     const bitPos = recordAt(b) * bitWidth;
-    let byteIndex = Math.floor(bitPos / 8);
-    let bitInByte = bitPos - byteIndex * 8;
-    let packed = 0;
-    for (let k = 0; k < bitWidth; k++) {
-      packed += ((buffer[byteIndex] >> bitInByte) & 1) * 2 ** k;
-      bitInByte++;
-      if (bitInByte === 8) {
-        bitInByte = 0;
-        byteIndex++;
-      }
-    }
+    const byteIndex = Math.floor(bitPos / 8);
+    const packed = readPackedBits(buffer, byteIndex, bitPos - byteIndex * 8, bitWidth);
     const value = packed + minimum;
     out[b] = field.type === 'scaledInteger' ? value * scale + offset : value;
   }
@@ -434,17 +463,8 @@ function decodeStructuredField(
   }
   for (let b = 0; b < outCount; b++) {
     const bitPos = recordAt(b) * bitWidth;
-    let byteIndex = Math.floor(bitPos / 8);
-    let bitInByte = bitPos - byteIndex * 8;
-    let packed = 0;
-    for (let k = 0; k < bitWidth; k++) {
-      packed += ((buffer[byteIndex] >> bitInByte) & 1) * 2 ** k;
-      bitInByte++;
-      if (bitInByte === 8) {
-        bitInByte = 0;
-        byteIndex++;
-      }
-    }
+    const byteIndex = Math.floor(bitPos / 8);
+    const packed = readPackedBits(buffer, byteIndex, bitPos - byteIndex * 8, bitWidth);
     const raw = packed + minimum;
     const value = field.type === 'scaledInteger' ? raw * scale + offset : raw;
     if (request.kind !== 'f32' && (value < request.minimum || value > request.maximum)) {

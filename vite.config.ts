@@ -543,14 +543,25 @@ function chunkEmissionGuard(devFlags: boolean, testSeam: boolean) {
         (n) => n.includes('index-') && n.endsWith('.js'),
       );
       if (shellName) {
-        const shellChunk = bundle[shellName] as { modules?: Record<string, unknown> };
-        const shellModules = Object.keys(shellChunk.modules ?? {});
-        const leaked = forbiddenInShell.filter((forbidden) =>
-          shellModules.some((m) => m.includes(forbidden)),
-        );
+        // The shell's static-import closure: every chunk the browser fetches
+        // (and index.html preloads) before main.ts runs. A forbidden module in
+        // a shared chunk the shell imports statically loads at startup just as
+        // surely as one inlined into the shell itself.
+        type ChunkInfo = { modules?: Record<string, unknown>; imports?: string[] };
+        const closure = new Set([shellName]);
+        for (const name of closure) {
+          for (const dep of (bundle[name] as ChunkInfo | undefined)?.imports ?? []) closure.add(dep);
+        }
+        const leaked: string[] = [];
+        for (const name of closure) {
+          const modules = Object.keys((bundle[name] as ChunkInfo).modules ?? {});
+          for (const forbidden of forbiddenInShell) {
+            if (modules.some((m) => m.includes(forbidden))) leaked.push(`${forbidden} (in ${name})`);
+          }
+        }
         if (leaked.length > 0) {
           this.error(
-            `OpenLiDARViewer chunk-emission guard: forbidden modules leaked into the shell chunk (${shellName}): ${leaked.join(', ')}.\n` +
+            `OpenLiDARViewer chunk-emission guard: forbidden modules leaked into the startup closure of ${shellName}: ${leaked.join(', ')}.\n` +
               `Each entry must arrive through a dynamic import() — check the static import graph from src/main.ts.`,
           );
         }
@@ -612,6 +623,13 @@ export default defineConfig(({ mode }) => {
     // is the canary. If a refactor adds the warning back on a different
     // chunk, that chunk is mis-architected, not the threshold.
     rollupOptions: {
+      // Keep shared modules in their own chunks instead of folding them into
+      // the entry. With rolldown's chunk optimization on, every module the
+      // shell shares with a lazy chunk is merged into index-*.js, doubling
+      // the shell chunk the bundle budget measures. The startup download is
+      // the same modules either way; this keeps the shell itself small and
+      // the shared code cacheable apart from it.
+      experimental: { chunkOptimization: false },
       output: {
         // Manual chunk strategy — pin heavy vendor libraries to dedicated
         // chunks so the application-owned chunks that import them stay small.

@@ -68,6 +68,18 @@ export interface AnalysisModule {
   id: string;
   label: string;
   run(cloud: PointCloud, selection?: Selection, options?: RunOptions): AnalysisResult;
+  /**
+   * Optional: the same result as `run`, computed in steps with `pause()`
+   * awaited between them so a long module does not hold the main thread in
+   * one task. `pause()` resolves false when the result is no longer wanted
+   * (the scan was replaced); the module then stops and resolves null.
+   */
+  runYielding?(
+    cloud: PointCloud,
+    pause: () => Promise<boolean>,
+    selection?: Selection,
+    options?: RunOptions,
+  ): Promise<AnalysisResult | null>;
 }
 
 export class ModuleRegistry {

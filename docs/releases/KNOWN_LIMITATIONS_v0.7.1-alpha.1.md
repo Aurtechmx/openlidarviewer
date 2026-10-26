@@ -427,13 +427,13 @@ consecutive passes, counted by `scripts/ios-streak.mjs`.
 
 ## The two monoliths are still monoliths
 
-`src/main.ts` is 4,214 lines, after the Save view snapshot
+`src/main.ts` is 4,212 lines, after the Save view snapshot
 moved to its own lazy module, the Analyse panel's longitude and latitude
 wiring moved to the mapper module, the Planetary Computer CRS record moved to
 its own module, the view cube's wiring was condensed, the epoch comparison
 sequence moved to its own module (twelve lines) and the Clip page's
 construction moved to its own module (seven lines), and
-`src/render/Viewer.ts` is 5,935, 288 lines below its v0.6.9 count of 6,223. Five getters collapsed to make room for a memory
+`src/render/Viewer.ts` is 5,932, 291 lines below its v0.6.9 count of 6,223. Five getters collapsed to make room for a memory
 accessor and a size-mode call, and the streamed draw cull then paid for its own
 wiring by moving the pass onto the streaming renderer and collapsing two more
 expressions. Making the loop request-driven then took another thirty-one out:
@@ -447,7 +447,7 @@ measurement controller, which took twenty-eight more. The draw precision bound's
 fails the build when either passes its recorded baseline, so a raise is a hand
 edit to `docs/validation/monolith-size-baseline.json` and always shows in the
 diff.
-Fan-out is 96 for the shell, 73 for the renderer, across 1175 modules with no
+Fan-out is 95 for the shell, 73 for the renderer, across 1177 modules with no
 dependency cycles. Fan-out counts the distinct modules a file imports with a
 value import, source files and external packages alike; type-only and dynamic
 imports are not counted. The shell and the renderer figures are held

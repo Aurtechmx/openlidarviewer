@@ -555,8 +555,8 @@ export class StreamingRenderer {
     handle.mesh.visible = isDrawn(this._visibility.reasonsFor(node.record.id));
     // Opaque dissolve-in: the node starts fully dissolved (progress 0) and
     // materialises over FADE_MS as the render loop steps it. A settled node
-    // keeps the plain graph — the dither fold is dropped the moment it
-    // finishes.
+    // keeps the dither fold at progress 1 (an exact multiplier of 1), so its
+    // fade-out later needs no pipeline rebuild.
     if (this._fadeIn) this._startFade(handle.mesh);
   }
 
@@ -721,12 +721,12 @@ export class StreamingRenderer {
     for (const [mesh, state] of this._fades) {
       const elapsed = now - state.start;
       if (state.direction === 'in') {
-        // Dissolve IN: progress 0 → 1 (ease-out), then settle to the plain graph.
-        this._host.setNodeDissolveProgress(state.mat, fadeOpacity(elapsed, FADE_MS, 0));
-        if (elapsed >= FADE_MS) {
-          this._host.endNodeDissolve(state.mat);
-          this._fades.delete(mesh);
-        }
+        // Dissolve IN: progress 0 → 1 (ease-out). Settled, the fold stays for
+        // the node's life with progress pinned at 1: step(hash, 1) is 1 for
+        // every point, so the size is exact, and dropping the fold now (then
+        // adding it back for the fade-out) would rebuild the pipeline twice.
+        this._host.setNodeDissolveProgress(state.mat, elapsed >= FADE_MS ? 1 : fadeOpacity(elapsed, FADE_MS, 0));
+        if (elapsed >= FADE_MS) this._fades.delete(mesh);
       } else {
         // direction === 'out' — the node was evicted; dissolve from its start
         // density → 0 (fadeOutOpacity is 1 → 0), then remove the mesh + entry.

@@ -147,18 +147,20 @@ describe('COPC estimateCopcPeakBytes — the second decode phase is bounded', ()
     const meta: ChunkDecodeMetadata = {
       pointDataRecordFormat: 6,
       pointRecordLength: 30,
-      pointCount: 1000,
+      pointCount: 100_000,
       scale: [1, 1, 1],
       offset: [0, 0, 0],
       renderOrigin: [0, 0, 0],
       pointSemantics: true,
     };
+    // Enough points that the decoded-channel phase is the peak with and
+    // without semantics (phase 1 also carries the 1,024-record decode block).
     const compressedBytes = 1000;
-    const withSemantics = estimateCopcPeakBytes(meta, compressedBytes, 1000);
-    const without = estimateCopcPeakBytes({ ...meta, pointSemantics: false }, compressedBytes, 1000);
+    const withSemantics = estimateCopcPeakBytes(meta, compressedBytes, 100_000);
+    const without = estimateCopcPeakBytes({ ...meta, pointSemantics: false }, compressedBytes, 100_000);
     // The 8 B/point pointSemantics adds is the whole difference — the peak
     // guard would otherwise silently drop it, as the review found.
-    expect(withSemantics - without).toBe(8 * 1000);
+    expect(withSemantics - without).toBe(8 * 100_000);
   });
 
   test('decompressChunk refuses the node BEFORE any _malloc or decode', () => {

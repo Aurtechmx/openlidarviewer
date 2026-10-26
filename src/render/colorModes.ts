@@ -585,9 +585,27 @@ export function colorByClassification(
   count: number,
 ): Uint8Array {
   const out = new Uint8Array(count * 3);
+  // Byte codes (every LAS code) read a 256-entry table filled on first sight;
+  // anything else (past a byte, fractional, NaN) keeps the per-code map.
+  const table = new Uint8Array(256 * 3);
+  const filled = new Uint8Array(256);
   const cache = new Map<number, readonly [number, number, number]>();
   for (let i = 0; i < count; i++) {
     const code = classification[i];
+    if (code >= 0 && code < 256 && (code | 0) === code) {
+      const t = code * 3;
+      if (filled[code] === 0) {
+        const colour = activeClassPalette[code] ?? fallbackClassColour(code);
+        table[t] = colour[0];
+        table[t + 1] = colour[1];
+        table[t + 2] = colour[2];
+        filled[code] = 1;
+      }
+      out[i * 3] = table[t];
+      out[i * 3 + 1] = table[t + 1];
+      out[i * 3 + 2] = table[t + 2];
+      continue;
+    }
     let colour = cache.get(code);
     if (!colour) {
       colour = activeClassPalette[code] ?? fallbackClassColour(code);

@@ -59,7 +59,13 @@ export function frustumPlanesFromViewProjection(m: ArrayLike<number>): FrustumPl
  * the p-vertex test — the box corner farthest along each plane normal.
  */
 export function boxInFrustum(box: Box6, planes: FrustumPlanes): boolean {
-  for (const [a, b, c, d] of planes) {
+  // Components read by index rather than destructured: this runs once per
+  // node per rescore.
+  for (const plane of planes) {
+    const a = plane[0];
+    const b = plane[1];
+    const c = plane[2];
+    const d = plane[3];
     const px = a >= 0 ? box[3] : box[0];
     const py = b >= 0 ? box[4] : box[1];
     const pz = c >= 0 ? box[5] : box[2];

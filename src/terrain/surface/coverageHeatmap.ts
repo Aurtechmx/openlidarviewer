@@ -26,8 +26,8 @@
 
 import {
   gradeForConfidence,
-  type EvidenceGrade,
-} from '../ground/cellConfidence';
+  type ContourDisplayGrade,
+} from '../ground/displayGrade';
 
 /** 0..255 RGB triple. */
 export interface CoverageRgb {
@@ -55,7 +55,7 @@ export const COVERAGE_WEAK: CoverageRgb = { r: 214, g: 76, b: 64 }; // red
 export const COVERAGE_NONE: CoverageRgb = { r: 90, g: 94, b: 102 };
 
 /** Map an evidence grade to its coverage ramp colour. */
-export function coverageColorForGrade(grade: EvidenceGrade): CoverageRgb {
+export function coverageColorForGrade(grade: ContourDisplayGrade): CoverageRgb {
   switch (grade) {
     case 'solid':
       return COVERAGE_STRONG;
@@ -77,7 +77,7 @@ export function coverageColorForConfidence(confidence: number): CoverageRgb {
 
 /** The three-stop legend, strong → weak, for the tile and 3D legends. */
 export const COVERAGE_LEGEND: ReadonlyArray<{
-  readonly grade: EvidenceGrade;
+  readonly grade: ContourDisplayGrade;
   readonly color: CoverageRgb;
   readonly word: string;
   readonly meaning: string;
@@ -165,4 +165,4 @@ export function coverageHeatmapImage(
 
 // Re-export the threshold object so a consumer can read the cutoffs without
 // reaching past the rasteriser into the confidence leaf.
-export { EVIDENCE_THRESHOLDS } from '../ground/cellConfidence';
+export { EVIDENCE_THRESHOLDS } from '../ground/displayGrade';

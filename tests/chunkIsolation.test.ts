@@ -238,6 +238,34 @@ describe('post-build chunk isolation contract', () => {
   );
 
   it.skipIf(!distExists)(
+    'no chunk in the startup static-import closure carries three.js, pdf-lib or laz-perf',
+    () => {
+      // Every chunk the shell imports statically is fetched (and preloaded by
+      // index.html) at startup, so a heavy module in a shared chunk the shell
+      // imports loads at startup as surely as one inlined into the shell.
+      const shell = files.find((f) => f.startsWith('index-') && f.endsWith('.js'));
+      expect(shell, 'startup shell `index-*.js` not found').toBeDefined();
+      const staticImports = (f: string): string[] =>
+        [
+          ...readFileSync(join(DIST, f), 'utf8').matchAll(
+            /(?:^|[;}\n])\s*import\s*(?:[^'"()]*?from\s*)?["']\.\/([^"']+\.js)["']/g,
+          ),
+        ].map((m) => m[1]!);
+      const closure = new Set([shell!]);
+      for (const f of closure) for (const dep of staticImports(f)) closure.add(dep);
+      const leaks: string[] = [];
+      for (const f of closure) {
+        if (f.includes('vendor-three-webgpu') || f.includes('vendor-pdf') || f.includes('vendor-laz')) leaks.push(f);
+        const text = readFileSync(join(DIST, f), 'utf8');
+        for (const needle of SHELL_FORBIDDEN_CONTENT) if (text.includes(needle)) leaks.push(`${needle} (in ${f})`);
+      }
+      expect(leaks, `heavy code reachable from the shell at startup: ${leaks.join(', ')}`).toEqual([]);
+      const html = readFileSync(join(DIST, '..', 'index.html'), 'utf8');
+      expect(html).not.toMatch(/modulepreload[^>]*vendor-three-webgpu/);
+    },
+  );
+
+  it.skipIf(!distExists)(
     'every app-owned chunk except vendor-three-webgpu is under the warning threshold',
     () => {
       const appOwnedOversized = files

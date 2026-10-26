@@ -44,6 +44,7 @@ import { geodesicFillWithReport, GEODESIC_NODE_BUDGET } from './geodesicFill';
 import { hornSlope } from './terrainDerivatives';
 import { horizontalCellMetresXY } from './horizontalScale';
 import { coverageFootprint } from './coverageFootprint';
+import type { ContourDisplayGrade } from './displayGrade';
 
 /** Per-cell provenance: how the elevation in this cell came to be. */
 export type CellCoverage =
@@ -51,15 +52,11 @@ export type CellCoverage =
   | 1 // interpolated — filled from nearest measured cell
   | 2; // measured — at least one ground return landed here
 
-/**
- * Contour DISPLAY grade derived from confidence — the shared visual grammar.
- * `solid | dashed | gap` is a PRESENTATION choice (how firmly the line is drawn),
- * derived from support/confidence. It is NOT scientific provenance: a solid line
- * does not mean "measured" and a dashed line does not mean "interpolated". Source
- * provenance is carried separately (see `ContourSegmentEvidence`) and must never
- * be reconstructed from this grade.
- */
-export type ContourDisplayGrade = 'solid' | 'dashed' | 'gap';
+export {
+  type ContourDisplayGrade,
+  EVIDENCE_THRESHOLDS,
+  gradeForConfidence,
+} from './displayGrade';
 
 /**
  * @deprecated Renamed to {@link ContourDisplayGrade} to stop display grade being
@@ -67,22 +64,6 @@ export type ContourDisplayGrade = 'solid' | 'dashed' | 'gap';
  * imports to `ContourDisplayGrade`.
  */
 export type EvidenceGrade = ContourDisplayGrade;
-
-/** Confidence cutoffs for the display grades (single source of truth). */
-export const EVIDENCE_THRESHOLDS = {
-  /** >= solid → drawn as a confident, continuous line. */
-  solid: 66,
-  /** >= dashed (and < solid) → drawn dashed: "interpolated, uncertain". */
-  dashed: 33,
-  // < dashed → `gap`: not drawn / drawn as an explicit break.
-} as const;
-
-/** Map a 0..100 confidence to its display grade. */
-export function gradeForConfidence(confidence: number): ContourDisplayGrade {
-  if (!Number.isFinite(confidence) || confidence < EVIDENCE_THRESHOLDS.dashed) return 'gap';
-  if (confidence < EVIDENCE_THRESHOLDS.solid) return 'dashed';
-  return 'solid';
-}
 
 /**
  * The confidence-aware DTM. This is the product; contours, hillshade,

@@ -82,12 +82,12 @@ import { sceneUpOf } from '../io/sniffFormat';
 import { settleTerrainGatherFrame, type TerrainGatherSource, type TerrainUpAxisBasis } from '../terrain/gatherUpAxis';
 import type { SourceFormat } from '../io/sniffFormat';
 import { colorForMode, defaultMode, refreshClassificationColours } from './colorModes';
-import type { ColorMode, CoverageColorGrid, ColorForModeOptions } from './colorModes';
-import { computeSharedElevationRange, elevationOptsFor, applyElevationColors, upAxisOf } from './projectElevationScale';
+import type { ColorMode, CoverageColorGrid } from './colorModes';
+import { computeSharedElevationRange, applyElevationColors, colorOptsForMode, upAxisOf } from './projectElevationScale';
 import { type ActiveColorbar } from './activeColorbar';
 import type { NoDataCapture, SizedCapture, SnapshotHost, SnapshotOptions } from './snapshot';
 import { runRenderFrame, feedFrameMs, governDpr, governPoints, type RenderLoopHost } from './renderLoop';
-import { type BoxBounds, type ClipBox, type ClipLayerCount, type VerticalExtent, ClipBoxGpu, ClipOutline, clipFrameBounds, clipKeepsPoint, clipPickAccept, countKept, verticalExtentOf } from './clip/clipGpu';
+import { type BoxBounds, type ClipBox, type ClipLayerCount, type VerticalExtent, ClipBoxGpu, ClipOutline, FilterFolds, clipFrameBounds, clipKeepsPoint, clipPickAccept, countKept, verticalExtentOf } from './clip/clipGpu';
 import { edlDefaultEnabled, EDL_DEFAULTS } from './edl';
 import { angularVelocity } from './angularVelocity';
 import { refinementDprTarget, shouldApplyDpr, DPR_MOTION_FLOOR } from './adaptiveDpr';
@@ -668,9 +668,9 @@ export class Viewer {
    * loop, which is cancelled while idle, so node fetch/decode keeps flowing
    * with the camera at rest. It runs only while the document is visible:
    * a hidden tab does no streaming work and resumes on `visibilitychange`.
-   * Started on attach, stopped on detach (and so on dispose).
+   * Started on attach, stopped on detach/dispose; stands down while frames tick (`heartbeatDue`).
    */
-  private readonly _streamingHeartbeat = new VisibleHeartbeat(() => this._tickStreaming(), 200);
+  private readonly _streamingHeartbeat = new VisibleHeartbeat(() => { if (this._streaming?.scheduler.heartbeatDue(this._nowMs(), 200)) this._tickStreaming(); }, 200);
   /**
    * Last-observed centre of the streaming cloud's bounds. The streaming
    * pipeline returns the COPC / EPT octree's *full* extent up front, so this
@@ -816,7 +816,7 @@ export class Viewer {
    * nothing is hidden, picking takes the original no-predicate path and is
    * byte-identical (and equally fast) to the pre-feature behaviour.
    */
-  private _classFiltered = false;
+  private _classFiltered = false; private readonly _folds = new FilterFolds();
   /**
    * Materials whose mesh carries the `aClass` attribute — only these get the
    * class-mask multiply folded into their size node. Materials on class-less
@@ -1372,7 +1372,7 @@ export class Viewer {
    *
    * @returns A string ID that identifies this cloud in subsequent calls.
    */
-  addCloud(input: PointCloud): string {
+  addCloud(input: PointCloud, initialMode?: ColorMode): string {
     // A new scan starts a fresh GPU-error slate, so an error this scan raises is
     // surfaced even if an earlier scan happened to emit the same message text.
     this._resetGpuErrorHistory();
@@ -1384,7 +1384,7 @@ export class Viewer {
         ? downsampleToBudget(input, GPU_HARD_POINT_CEILING)
         : input;
     const id = `cloud_${this._nextId++}`;
-    const mode = defaultMode(cloud);
+    const mode = initialMode ?? defaultMode(cloud);
 
     const { mesh, material, colorAttr } = this._meshForCloud(cloud, mode);
     this._scene.add(mesh);
@@ -1404,12 +1404,12 @@ export class Viewer {
 
   /** A cloud's point mesh coloured by `mode`; the layer and the preview share it. */
   private _meshForCloud(cloud: PointCloud, mode: ColorMode): PointMeshHandle {
-    // upAxis from the layer's resolved frame so the elevation ramp follows
-    // true height (a PLY under a CRS is Z-up). Classification and intensity are the cloud's own, already
-    // in lockstep with its positions, so every attribute aligns per point.
+    // The options a mode switch uses (trim, coverage grid, up axis from the layer's resolved frame); a
+    // shared elevation window is folded in by addCloud's refresh. Classification and intensity are the
+    // cloud's own, already in lockstep with its positions, so every attribute aligns per point.
     return this.buildPointMesh(
       cloud.positions,
-      colorForMode(mode, cloud, { upAxis: upAxisOf(cloud) as 1 | 2 }),
+      colorForMode(mode, cloud, colorOptsForMode({ cloud, mode }, mode, null, this._heightPercentileTrim, this._coverageGrid ?? undefined)),
       cloud.classification ?? null,
       cloud.intensity ?? null,
     );
@@ -2659,11 +2659,8 @@ export class Viewer {
     if (!entry) return;
     if (entry.mode === mode) return;
 
-    const opts: ColorForModeOptions =
-      mode === 'elevation'
-        ? elevationOptsFor(entry, this._projectSharedElevation ? this.projectSharedElevationRange() : null, this._heightPercentileTrim)
-        : { heightPercentileTrim: this._heightPercentileTrim, coverageGrid: this._coverageGrid ?? undefined, upAxis: upAxisOf(entry.cloud) as 1 | 2 };
-    const raw = colorForMode(mode, entry.cloud, opts);
+    const shared = mode === 'elevation' && this._projectSharedElevation ? this.projectSharedElevationRange() : null;
+    const raw = colorForMode(mode, entry.cloud, colorOptsForMode(entry, mode, shared, this._heightPercentileTrim, this._coverageGrid ?? undefined));
     const arr = entry.colorAttr.array as Float32Array;
     // sRGB → linear via the shared EOTF seam — keeps a mode switch
     // byte-identical to what the initial `toFloatColors` upload produced.
@@ -3172,13 +3169,13 @@ export class Viewer {
     }
     // Cache whether any class is hidden so the pick paths skip the per-point
     // visibility predicate entirely on the all-visible hot path.
-    const wasFiltered = this._classFiltered;
     this._classFiltered = anyHidden;
-    // The class fold is present in the size graph only while some class is
-    // hidden. Crossing the all-visible ↔ some-hidden boundary changes the graph
-    // shape, so rebuild the affected pipelines. Changing WHICH classes are hidden
-    // while still filtered is a uniform-only change (the mask array re-uploads).
-    if (wasFiltered !== anyHidden) this._reapplyAllSizeModes();
+    // The class fold enters the size graph the first time a class is hidden and
+    // stays (an all-ones mask is the identity) until a scan opens with nothing
+    // hidden (`FilterFolds`), so only that first hide rebuilds pipelines; later
+    // toggles and changing WHICH classes are hidden only re-upload the mask.
+    // The fold is dropped again by `_resetGpuErrorHistory` on the next scan.
+    if (this._folds.classMask.set(anyHidden)) this._reapplyAllSizeModes();
     this._demand.changed('filter');
   }
 
@@ -3191,12 +3188,12 @@ export class Viewer {
    */
   setElevationFilter(range: readonly [number, number] | undefined): void {
     this._elevFilterWorld = range ? [range[0], range[1]] : undefined;
-    const wasActive = this._elevGpu.isActive();
     const enabled = elevationFilterUniform(range, 2, 0).enabled;
     this._elevGpu.apply(enabled, this._allPointMaterials());
-    // On/off changes the size graph's SHAPE, so rebuild pipelines on that
-    // transition only; moving the window while active is a uniform-only change.
-    if (wasActive !== (enabled !== 0)) this._reapplyAllSizeModes();
+    // The first on adds the fold (a rebuild); it then stays until a scan opens
+    // with the filter off, so later on/off and window moves are uniform-only.
+    // Off, the mask is `mix(1, inRange, 0)`: exactly 1, the unfiltered size.
+    if (this._folds.elevation.set(enabled !== 0)) this._reapplyAllSizeModes();
     this._demand.changed('filter');
   }
 
@@ -3244,14 +3241,14 @@ export class Viewer {
    */
   setIntensityFilter(range: readonly [number, number] | undefined): void {
     const u = intensityFilterUniform(range);
-    const wasActive = this._intenFilterEnabled.value !== 0;
     this._intenFilterEnabled.value = u.enabled;
     this._intenFilterMin.value = u.min;
     this._intenFilterMax.value = u.max;
-    // On/off toggles the intensity fold in the compiled shader — rebuild the
-    // affected pipelines on that transition only. Narrowing an already-active
-    // window is a uniform-only change.
-    if (wasActive !== (u.enabled !== 0)) this._reapplyAllSizeModes();
+    // The first on adds the intensity fold to the compiled shader (a rebuild);
+    // it stays, as the identity while off, until a scan opens with the filter
+    // off, so later toggles and window changes are uniform-only.
+    // (Same rule as the clip and the class and elevation filters: FilterFolds.)
+    if (this._folds.intensity.set(u.enabled !== 0)) this._reapplyAllSizeModes();
     this._demand.changed('filter');
   }
 
@@ -4250,12 +4247,12 @@ export class Viewer {
 
   /**
    * A new scan opens: forget the GPU errors surfaced so far, so its error is
-   * never suppressed for matching an earlier scan's text, and drop the clip
-   * fold unless the clip is on, so no scan opens with it in its size graph.
+   * never suppressed for matching an earlier scan's text, and drop the clip and
+   * filter folds whose control is off, so no scan opens with them in its graph.
    */
   private _resetGpuErrorHistory(): void {
     this._gpuErrorLedger.reset();
-    if (this._clipGpu.forget()) this._reapplyAllSizeModes();
+    if ([this._clipGpu.forget(), this._folds.forget()].includes(true)) this._reapplyAllSizeModes();
   }
 
   /**
@@ -4748,22 +4745,22 @@ export class Viewer {
   private _applySizeMode(material: THREE.PointsNodeMaterial): void {
     const base = pointSizeBaseNode(this._pointSizeMode, this._adaptiveSizeNode, material) as TslNode | null;
     // A fold enters this material's size graph only when BOTH the mesh carries
-    // the required attribute AND the corresponding filter is currently active.
+    // the required attribute AND the corresponding filter has been used since
+    // the last scan opened (on now, or on earlier: `FilterFolds`).
     //
-    // Gating on the ACTIVE state (not just attribute presence) is deliberate and
-    // load-bearing: an inactive filter used to still fold its mask into every
+    // Gating on use (not just attribute presence) is deliberate and
+    // load-bearing: an unused filter used to still fold its mask into every
     // carrier mesh, relying on the `mix(1, …, enabled)` identity to be a no-op.
     // That left `attribute('aPos')` / `attribute('aIntensity')` reads compiled
     // into essentially every scan's vertex shader even with no filter in use —
     // a shape the plain-open path never had before v0.5.6, and the regression
-    // behind "scans open but nothing renders." With this gate, a scan opened
-    // without any active filter gets the exact pre-filter graph (adaptive node
-    // or `null`) — no extra attribute reads, no mask math. Folds appear only
-    // when the user actually turns a filter on (which re-runs this via
-    // `_reapplyAllSizeModes`, rebuilding the pipeline for that transition).
-    const foldClass = this._materialsWithClass.has(material) && this._classFiltered;
-    const foldElev = this._materialsWithElev.has(material) && this._elevGpu.isActive();
-    const foldInten = this._materialsWithInten.has(material) && this._intenFilterEnabled.value !== 0;
+    // behind "scans open but nothing renders." Opening a scan drops every fold
+    // whose filter is off, so it gets the exact pre-filter graph. A fold appears
+    // when the user first turns a filter on (one rebuild via
+    // `_reapplyAllSizeModes`); later toggles are uniform changes only.
+    const foldClass = this._materialsWithClass.has(material) && this._folds.classMask.folded;
+    const foldElev = this._materialsWithElev.has(material) && this._folds.elevation.folded;
+    const foldInten = this._materialsWithInten.has(material) && this._folds.intensity.folded;
     // The clip needs `aPos`, which every mesh from the shared builder carries.
     const foldClip = this._materialsWithElev.has(material) && this._clipGpu.folded();
     // A streaming node mid-dissolve folds a per-point opaque dither (same
@@ -4808,15 +4805,15 @@ export class Viewer {
    * Begin a streaming node's opaque dissolve: fold the per-point dither into its
    * size graph, then recompile (a NodeMaterial keeps its old shader until
    * `needsUpdate`, so without this an already-compiled node never picks up the
-   * fold). Returns the progress the dissolve starts from. A fresh/settled node
-   * seeds at `startProgress`; a node whose dissolve is already in flight (a
-   * fade-in interrupted by eviction) KEEPS its current progress, so it dissolves
-   * out from where it got to rather than snapping to full density.
+   * fold). Returns the progress the dissolve starts from. A fresh node seeds at
+   * `startProgress`; a node already folded (settled at progress 1, or still
+   * dissolving in when evicted) keeps its progress and fold, so it dissolves
+   * out from where it got to without a pipeline rebuild.
    */
   beginNodeDissolve(material: THREE.PointsNodeMaterial, startProgress: number): number {
     const existing = this._fadeUniforms.get(material);
-    const u = existing ?? uniform(startProgress);
-    if (!existing) u.value = startProgress;
+    if (existing) return existing.value as number; // already folded: no rebuild
+    const u = uniform(startProgress);
     this._fadeUniforms.set(material, u);
     this._materialsWithFade.add(material);
     this._applySizeMode(material);
@@ -4831,9 +4828,9 @@ export class Viewer {
   }
 
   /**
-   * End a node's dissolve: drop the dither fold so the settled mesh reverts to
-   * the plain size graph (no per-frame dither cost once materialised), then
-   * recompile so the GPU actually runs the plain graph.
+   * End a node's dissolve: drop the dither fold and recompile. Called when a
+   * node's mesh leaves the scene; a node that finishes dissolving IN keeps its
+   * fold pinned at 1 instead (`step(hash, 1)` is 1, so its size is exact).
    */
   endNodeDissolve(material: THREE.PointsNodeMaterial): void {
     if (!this._materialsWithFade.has(material)) return;

@@ -47,7 +47,7 @@ import {
   type DecodeContext,
   type RawPoints,
 } from '../lasDecodeShared';
-import { stratifiedSampleIndices } from '../strideSample';
+import { makePrng, pickInBucket, STRIDE_SAMPLE_SEED } from '../strideSample';
 import type { ProgressUpdate } from '../loadProgress';
 import type { LasHeader } from '../lasHeader';
 
@@ -168,7 +168,7 @@ export function placeChunk(out: RawPoints, local: RawPoints, at: number): Float3
 }
 
 /** One chunk's share of the decode: its byte range, what it keeps, where it lands. */
-interface PlannedChunk {
+export interface PlannedChunk {
   readonly range: LazChunkRange;
   /** Chunk-local indices to keep, or undefined for a full (stride 1) decode. */
   readonly keep?: Uint32Array;
@@ -186,25 +186,36 @@ interface PlannedChunk {
  * order reproduces the list. `readLazChunkTable` accumulates `firstPointIndex`
  * chunk by chunk and refuses a table whose counts do not sum to the header's,
  * so the ranges are contiguous, ascending and cover every record: one forward
- * walk assigns the whole sample.
+ * walk assigns the whole sample. The walk draws the sample bucket by bucket,
+ * with the same seeded sequence in the same order, straight into each chunk's
+ * list, so the whole-file list (tens of millions of entries on a large file)
+ * is never built. Exported for tests/lazSamplePartition.test.ts.
  */
-function partitionSample(
+export function partitionSample(
   chunks: readonly LazChunkRange[],
   count: number,
   step: number,
 ): PlannedChunk[] {
-  const sample = stratifiedSampleIndices(count, step);
+  // As stratifiedSampleIndices: one pick per bucket, buckets in ascending order.
+  const s = Math.max(1, Math.floor(step));
+  const total = count > 0 ? Math.ceil(count / s) : 0;
+  const rand = makePrng(STRIDE_SAMPLE_SEED);
+  let b = 0;
+  let pick = total > 0 ? pickInBucket(0, s, count, rand) : 0;
   const planned: PlannedChunk[] = [];
-  let read = 0;
   let outIndex = 0;
   for (const range of chunks) {
     const end = range.firstPointIndex + range.pointCount;
-    const start = read;
-    while (read < sample.length && sample[read] < end) read++;
-    const keep = new Uint32Array(read - start);
-    for (let j = 0; j < keep.length; j++) keep[j] = sample[start + j] - range.firstPointIndex;
+    // A chunk of L records meets at most ceil(L / s) + 1 buckets.
+    const scratch = new Uint32Array(Math.min(total - b, Math.ceil(range.pointCount / s) + 1));
+    let n = 0;
+    while (b < total && pick < end) {
+      scratch[n++] = pick - range.firstPointIndex;
+      if (++b < total) pick = pickInBucket(b, s, count, rand);
+    }
+    const keep = n === scratch.length ? scratch : scratch.slice(0, n);
     planned.push({ range, keep, outIndex });
-    outIndex += keep.length;
+    outIndex += n;
   }
   return planned;
 }

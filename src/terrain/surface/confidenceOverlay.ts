@@ -34,8 +34,8 @@
 
 import {
   gradeForConfidence,
-  type EvidenceGrade,
-} from '../ground/cellConfidence';
+  type ContourDisplayGrade,
+} from '../ground/displayGrade';
 import type { CoverageRgb, CoverageGrid, CoverageImage } from './coverageHeatmap';
 import { COVERAGE_NONE } from './coverageHeatmap';
 
@@ -58,7 +58,7 @@ export const CONFIDENCE_WEAK: CoverageRgb = { r: 44, g: 60, b: 100 }; // cividis
 export const CONFIDENCE_NONE: CoverageRgb = COVERAGE_NONE;
 
 /** Map an evidence grade to its confidence ramp colour. */
-export function confidenceColorForGrade(grade: EvidenceGrade): CoverageRgb {
+export function confidenceColorForGrade(grade: ContourDisplayGrade): CoverageRgb {
   switch (grade) {
     case 'solid':
       return CONFIDENCE_STRONG;
@@ -81,7 +81,7 @@ export function confidenceColorForConfidence(confidence: number): CoverageRgb {
 
 /** The three-stop legend, strong → weak, for the tile and 3D legends. */
 export const CONFIDENCE_LEGEND: ReadonlyArray<{
-  readonly grade: EvidenceGrade;
+  readonly grade: ContourDisplayGrade;
   readonly color: CoverageRgb;
   readonly word: string;
   readonly meaning: string;

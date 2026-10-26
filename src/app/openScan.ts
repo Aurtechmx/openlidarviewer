@@ -204,7 +204,7 @@ export interface OpenScanDeps {
     applyDisplayProfile: (cloud: PointCloud, target: Inspector) => void;
   }>;
   /** Run the analysis modules over a cloud for the Scan Report. */
-  runModules: (cloud: PointCloud, scope?: ClassScope) => Promise<AnalysisRow[]>;
+  runModules: (cloud: PointCloud, scope?: ClassScope, isCurrent?: () => boolean) => Promise<AnalysisRow[]>;
   /** Derive the active class scope for the report. */
   currentClassScope: (cloud: PointCloud) => ClassScope;
   /** Pre-warm the lazy Visual Export Studio chunk. */
@@ -635,7 +635,8 @@ export async function attachStaticCloud(
   };
   const replaced: ReplaceOutcome = !viewer.hasStreamingCloud ? 'none' : source.replaced ?? (await ask());
   if (replaced === 'cancel') throw new LoadCancelledError();
-  const id = viewer.addCloud(result.cloud);
+  const recommended = recommendColorMode(result.cloud); // coloured once, in this mode (see below)
+  const id = viewer.addCloud(result.cloud, recommended.mode);
   source.preview?.dispose();
   if (viewer.hasStreamingCloud) {
     // addCloud sized walk speed, clip planes, point attenuation and the orbit
@@ -724,7 +725,6 @@ export async function attachStaticCloud(
   // classification → intensity → elevation), gated so it never picks a mode
   // the cloud can't render, nor an RGB array too uniform to read. The rail
   // syncs off `mode` below, so this seam keeps render and chips in step.
-  const recommended = recommendColorMode(result.cloud);
   const mode = recommended.mode;
   deps.setCurrentColorMode(mode);
   viewer.setColorMode(id, mode);
@@ -816,13 +816,13 @@ export async function attachStaticCloud(
   // "rendering…" clears. Run it when the main thread goes idle instead —
   // the report card fills in a beat later, navigation is live immediately.
   // The cloud-id guard drops the stale result if the user swapped scans
-  // before idle arrived (the memoised module re-runs cheaply on re-open).
+  // before idle arrived or mid-run (the run yields between checks and modules).
   {
     const reportForId = id;
     const fillReport = (): void => {
       if (deps.scans.activeId !== reportForId) return; // scan changed while we waited
       try {
-        deps.inspector.setReport(deps.runModules(result.cloud, deps.currentClassScope(result.cloud)));
+        deps.inspector.setReport(deps.runModules(result.cloud, deps.currentClassScope(result.cloud), () => deps.scans.activeId === reportForId));
       } catch (err) {
         if (deps.debug) console.warn('[inspector] runModules + setReport threw', err);
       }

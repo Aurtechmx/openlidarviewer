@@ -222,8 +222,8 @@ function hashKey(key: number): number {
 }
 
 /**
- * The per-voxel running state behind {@link voxelDownsample}: a lookup from
- * packed voxel key to slot, and typed accumulators indexed by slot.
+ * The voxel lookup behind {@link voxelDownsample} and {@link countVoxels}: a
+ * map from packed voxel key to slot, slots handed out in first-seen order.
  *
  * The lookup is an open-addressing table (linear probing, load at most one
  * half) over the exact packed key; a voxel whose indices fall outside the
@@ -232,51 +232,16 @@ function hashKey(key: number): number {
  * order voxels are first seen whichever table they live in. Growing rehashes
  * the keys but never renumbers a slot.
  */
-class VoxelAccumulator {
+class VoxelSlotTable {
   slotCount = 0;
-  sumX: Float64Array;
-  sumY: Float64Array;
-  sumZ: Float64Array;
-  sumR: Float64Array;
-  sumG: Float64Array;
-  sumB: Float64Array;
-  sumI: Float64Array;
-  colourN: Int32Array;
-  intensityN: Int32Array;
-  firstClass: Int32Array;
-  firstReturnNumber: Int32Array;
-  firstReturnCount: Int32Array;
-  firstSourceId: Int32Array;
-  firstGpsTime: Float64Array;
-  counts: Int32Array;
-  private _capacity: number;
+  protected _capacity: number;
   private _keys: Float64Array;
   private _slots: Int32Array;
   private _mask: number;
   private readonly _overflow = new Map<string, number>();
 
-  constructor(
-    capacity: number,
-    wants: { colors: boolean; intensity: boolean; extras: boolean; gpsTime: boolean; mask: boolean },
-  ) {
+  constructor(capacity: number) {
     this._capacity = Math.max(1, capacity);
-    this.sumX = new Float64Array(this._capacity);
-    this.sumY = new Float64Array(this._capacity);
-    this.sumZ = new Float64Array(this._capacity);
-    const none = new Float64Array(0);
-    this.sumR = wants.colors ? new Float64Array(this._capacity) : none;
-    this.sumG = wants.colors ? new Float64Array(this._capacity) : none;
-    this.sumB = wants.colors ? new Float64Array(this._capacity) : none;
-    this.sumI = wants.intensity ? new Float64Array(this._capacity) : none;
-    const noInts = new Int32Array(0);
-    this.colourN = wants.mask && wants.colors ? new Int32Array(this._capacity) : noInts;
-    this.intensityN = wants.mask && wants.intensity ? new Int32Array(this._capacity) : noInts;
-    this.firstClass = wants.extras ? new Int32Array(this._capacity) : noInts;
-    this.firstReturnNumber = wants.extras ? new Int32Array(this._capacity) : noInts;
-    this.firstReturnCount = wants.extras ? new Int32Array(this._capacity) : noInts;
-    this.firstSourceId = wants.extras ? new Int32Array(this._capacity) : noInts;
-    this.firstGpsTime = wants.gpsTime ? new Float64Array(this._capacity) : none;
-    this.counts = new Int32Array(this._capacity);
     let tableSize = 1;
     while (tableSize < this._capacity * 2) tableSize *= 2;
     this._keys = new Float64Array(tableSize);
@@ -318,9 +283,79 @@ class VoxelAccumulator {
     return this.slotCount++;
   }
 
-  /** Double every accumulator and rebuild the key table; slots keep their numbers. */
+  /** Per-slot storage a subclass keeps; widened before the capacity doubles. */
+  protected _growStorage(_next: number): void {
+    // The count-only table keeps no per-slot storage; the accumulator widens its arrays here.
+  }
+
+  /** Double the capacity and rebuild the key table; slots keep their numbers. */
   private _grow(): void {
     const next = this._capacity * 2;
+    this._growStorage(next);
+    this._capacity = next;
+    const oldKeys = this._keys;
+    const oldSlots = this._slots;
+    let tableSize = 1;
+    while (tableSize < next * 2) tableSize *= 2;
+    this._keys = new Float64Array(tableSize);
+    this._slots = new Int32Array(tableSize).fill(-1);
+    this._mask = tableSize - 1;
+    for (let j = 0; j < oldSlots.length; j++) {
+      const slot = oldSlots[j];
+      if (slot === -1) continue;
+      const key = oldKeys[j];
+      let i = hashKey(key) & this._mask;
+      while (this._slots[i] !== -1) i = (i + 1) & this._mask;
+      this._keys[i] = key;
+      this._slots[i] = slot;
+    }
+  }
+}
+
+/** The per-voxel running state behind {@link voxelDownsample}: typed accumulators indexed by slot. */
+class VoxelAccumulator extends VoxelSlotTable {
+  sumX: Float64Array;
+  sumY: Float64Array;
+  sumZ: Float64Array;
+  sumR: Float64Array;
+  sumG: Float64Array;
+  sumB: Float64Array;
+  sumI: Float64Array;
+  colourN: Int32Array;
+  intensityN: Int32Array;
+  firstClass: Int32Array;
+  firstReturnNumber: Int32Array;
+  firstReturnCount: Int32Array;
+  firstSourceId: Int32Array;
+  firstGpsTime: Float64Array;
+  counts: Int32Array;
+
+  constructor(
+    capacity: number,
+    wants: { colors: boolean; intensity: boolean; extras: boolean; gpsTime: boolean; mask: boolean },
+  ) {
+    super(capacity);
+    const cap = this._capacity;
+    this.sumX = new Float64Array(cap);
+    this.sumY = new Float64Array(cap);
+    this.sumZ = new Float64Array(cap);
+    const none = new Float64Array(0);
+    this.sumR = wants.colors ? new Float64Array(cap) : none;
+    this.sumG = wants.colors ? new Float64Array(cap) : none;
+    this.sumB = wants.colors ? new Float64Array(cap) : none;
+    this.sumI = wants.intensity ? new Float64Array(cap) : none;
+    const noInts = new Int32Array(0);
+    this.colourN = wants.mask && wants.colors ? new Int32Array(cap) : noInts;
+    this.intensityN = wants.mask && wants.intensity ? new Int32Array(cap) : noInts;
+    this.firstClass = wants.extras ? new Int32Array(cap) : noInts;
+    this.firstReturnNumber = wants.extras ? new Int32Array(cap) : noInts;
+    this.firstReturnCount = wants.extras ? new Int32Array(cap) : noInts;
+    this.firstSourceId = wants.extras ? new Int32Array(cap) : noInts;
+    this.firstGpsTime = wants.gpsTime ? new Float64Array(cap) : none;
+    this.counts = new Int32Array(cap);
+  }
+
+  protected override _growStorage(next: number): void {
     const widen = <T extends Float64Array | Int32Array>(a: T): T => {
       if (a.length === 0) return a;
       const b = new (a.constructor as new (n: number) => T)(next);
@@ -342,24 +377,30 @@ class VoxelAccumulator {
     this.firstSourceId = widen(this.firstSourceId);
     this.firstGpsTime = widen(this.firstGpsTime);
     this.counts = widen(this.counts);
-    this._capacity = next;
-    const oldKeys = this._keys;
-    const oldSlots = this._slots;
-    let tableSize = 1;
-    while (tableSize < next * 2) tableSize *= 2;
-    this._keys = new Float64Array(tableSize);
-    this._slots = new Int32Array(tableSize).fill(-1);
-    this._mask = tableSize - 1;
-    for (let j = 0; j < oldSlots.length; j++) {
-      const slot = oldSlots[j];
-      if (slot === -1) continue;
-      const key = oldKeys[j];
-      let i = hashKey(key) & this._mask;
-      while (this._slots[i] !== -1) i = (i + 1) & this._mask;
-      this._keys[i] = key;
-      this._slots[i] = slot;
-    }
   }
+}
+
+/**
+ * The point count {@link voxelDownsample} would return at `voxelSize`,
+ * without building the cloud: the same finite-point filter, the same voxel
+ * indices and the same slot table, with no sums. The budget search reads only
+ * this number from each step.
+ */
+export function countVoxels(cloud: PointCloud, voxelSize: number): number {
+  if (Number.isNaN(voxelSize) || voxelSize <= 0) {
+    throw new RangeError(`countVoxels: voxelSize must be > 0 (got ${voxelSize})`);
+  }
+  const pos = sourcePositions(cloud);
+  const count = cloud.pointCount;
+  const table = new VoxelSlotTable(Math.min(count, INITIAL_SLOTS));
+  for (let i = 0; i < count; i++) {
+    const x = pos[i * 3];
+    const y = pos[i * 3 + 1];
+    const z = pos[i * 3 + 2];
+    if (!Number.isFinite(x) || !Number.isFinite(y) || !Number.isFinite(z)) continue;
+    table.slotFor(Math.floor(x / voxelSize), Math.floor(y / voxelSize), Math.floor(z / voxelSize));
+  }
+  return table.slotCount;
 }
 
 /**
@@ -412,7 +453,7 @@ export function downsampleToBudget(cloud: PointCloud, maxPoints: number): PointC
 /** Full-cloud voxel passes {@link downsampleToBudget} may run, the first included. */
 export const MAX_DOWNSAMPLE_PASSES = 16;
 
-/** What a budget reduction did; `passes` counts full-cloud voxel passes. */
+/** What a budget reduction did; `passes` counts the full-cloud search steps (voxel counts), not the one build that follows. */
 export interface DownsampleReport {
   readonly cloud: PointCloud;
   readonly passes: number;
@@ -433,10 +474,14 @@ export function downsampleToBudgetReport(cloud: PointCloud, maxPoints: number): 
   }
   if (cloud.pointCount <= maxPoints) return { cloud, passes: 0, voxelSize: 0 };
 
+  // Each step counts voxels rather than building them: only the count steers
+  // the search. `reduced` is the count at `size`; the cloud is built once, at
+  // the size the search settles on, so it is the cloud a build-every-step
+  // search returned. `passes` counts the search steps.
   let passes = 0;
-  const pass = (size: number): PointCloud => {
+  const pass = (size: number): { pointCount: number } => {
     passes++;
-    return voxelDownsample(cloud, size);
+    return { pointCount: countVoxels(cloud, size) };
   };
 
   // Aim the first estimate a little under budget. The estimate is usually
@@ -518,7 +563,7 @@ export function downsampleToBudgetReport(cloud: PointCloud, maxPoints: number): 
       }
     }
   }
-  return { cloud: reduced, passes, voxelSize: size };
+  return { cloud: voxelDownsample(cloud, size), passes, voxelSize: size };
 }
 
 /** `metadata` without the source quantisation, which only the file's own coordinates satisfy. */

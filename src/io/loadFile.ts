@@ -568,6 +568,16 @@ function parseWorkerInstance(): Worker {
 }
 
 /**
+ * Start the shared parse worker before the first open, so that open does not
+ * also wait for the worker script to load and evaluate. Called from the idle
+ * pre-warm; idempotent, and a no-op where there are no workers.
+ */
+export function warmParseWorker(): void {
+  if (parseWorkerFactory === defaultParseWorkerFactory && typeof Worker === 'undefined') return;
+  parseWorkerInstance();
+}
+
+/**
  * Test seam: swap the parse-worker factory so the worker-routed paths
  * (`loadFile`, `decodeFullViaWorker`) can be exercised with a fake worker in
  * Node. Passing `undefined` restores the real module-worker factory. Drops any

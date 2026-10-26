@@ -422,16 +422,35 @@ export const healthCheck: AnalysisModule = {
   run(cloud: PointCloud): AnalysisResult {
     const cached = _resultCache.get(cloud);
     if (cached) return cached;
-    // Every health-check row is a diagnostic — surfaced under "Advanced report".
-    const rows = [
-      checkInvalidCoordinates(cloud),
-      checkEmptyCloud(cloud),
-      checkDeclaredVsDecoded(cloud),
-      checkDuplicatePoints(cloud),
-      checkStrayOutliers(cloud),
-    ];
-    const result: AnalysisResult = { rows: rows.map((row) => ({ ...row, advanced: true })) };
-    _resultCache.set(cloud, result);
-    return result;
+    return finish(cloud, CHECKS.map((check) => check(cloud)));
+  },
+
+  // The five checks together are one 0.5 s task on a few-million-point scan;
+  // run apart, each is its own task and input is handled between them.
+  async runYielding(cloud: PointCloud, pause: () => Promise<boolean>): Promise<AnalysisResult | null> {
+    const cached = _resultCache.get(cloud);
+    if (cached) return cached;
+    const rows: AnalysisRow[] = [];
+    for (let i = 0; i < CHECKS.length; i++) {
+      if (i > 0 && !(await pause())) return null;
+      rows.push(CHECKS[i]!(cloud));
+    }
+    return finish(cloud, rows);
   },
 };
+
+/** The checks, in report order. */
+const CHECKS: ReadonlyArray<(cloud: PointCloud) => AnalysisRow> = [
+  checkInvalidCoordinates,
+  checkEmptyCloud,
+  checkDeclaredVsDecoded,
+  checkDuplicatePoints,
+  checkStrayOutliers,
+];
+
+/** Every health-check row is a diagnostic, surfaced under "Advanced report"; memoised per cloud. */
+function finish(cloud: PointCloud, rows: AnalysisRow[]): AnalysisResult {
+  const result: AnalysisResult = { rows: rows.map((row) => ({ ...row, advanced: true })) };
+  _resultCache.set(cloud, result);
+  return result;
+}

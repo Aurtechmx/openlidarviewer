@@ -51,7 +51,7 @@
   },
   "fanOut": {
     "src/main.ts": {
-      "runtime": 96,
+      "runtime": 95,
       "typeOnly": 26,
       "dynamic": 7,
       "modules": [
@@ -105,7 +105,6 @@
         "src/io/LocalFileSource.ts",
         "src/io/download.ts",
         "src/io/loadFile.ts",
-        "src/io/loaderConfig.ts",
         "src/io/range/RangeSource.ts",
         "src/io/shareState.ts",
         "src/lazyChunks.ts",
@@ -449,13 +448,13 @@
     "components": []
   },
   "context": {
-    "filesScanned": 1168,
+    "filesScanned": 1177,
     "inlineTypeOnlyImports": 3,
     "note": "inlineTypeOnlyImports counts declarations whose named bindings are all inline `type` specifiers. Under verbatimModuleSyntax the declaration survives as `import {} from \"x\"`, a module load with no binding, so it is counted as a runtime edge above.",
     "topFanIn": [
       {
         "file": "src/ui/dom.ts",
-        "importers": 91
+        "importers": 92
       },
       {
         "file": "src/lazyChunks.ts",
@@ -490,20 +489,20 @@
         "importers": 21
       },
       {
-        "file": "src/science/methodRegistry.ts",
-        "importers": 19
+        "file": "src/export/safeText.ts",
+        "importers": 18
       },
       {
         "file": "src/geo/SpatialContext.ts",
         "importers": 18
       },
       {
-        "file": "src/model/pointFrames.ts",
-        "importers": 17
+        "file": "src/science/methodRegistry.ts",
+        "importers": 18
       },
       {
-        "file": "src/export/safeText.ts",
-        "importers": 16
+        "file": "src/model/pointFrames.ts",
+        "importers": 17
       },
       {
         "file": "src/io/download.ts",
