@@ -44,7 +44,7 @@ The format is based on Keep a Changelog and the project follows Semantic Version
 
 ### Validation
 
-- The live DTM's median gridding on measured cells agreed with R terra and SciPy on eight seeded point clouds (18498 and 18655 cells, within the 1e-6 m tolerance registered before the references were generated; occupancy masks match). The DTM claim now names this scope. Interpolated (filled) cells are not covered.
+- The live DTM's median gridding on measured cells agreed with R terra and SciPy on eight seeded point clouds (18498 and 18655 cells, within the 1e-6 m tolerance registered before the references were generated; occupancy masks match). The DTM claim now names this scope. Interpolated (filled) cells are not covered. The evidence resolver maps the live DTM's measured cells to that parameter set (E4) and leaves filled cells not covered, and the terrain report, the DEM package evidence contract and the export provenance name measured cells.
 
 ## [0.7.1-alpha.1] - 2026-10-25
 

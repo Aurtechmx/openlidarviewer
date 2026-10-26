@@ -40,6 +40,7 @@ import { exportGate, EVIDENCE_REGISTRY } from '../../validation/evidenceRegistry
 import { evidenceRank, INDEPENDENCE_FLOOR } from '../../validation/evidenceLevel';
 import { governingClaim } from '../../validation/evidenceComposition';
 import {
+  dtmCellsEvidenceText,
   resolveExportEvidence,
   type EvidenceContext,
   type ExportEvidenceResolution,
@@ -1053,7 +1054,7 @@ export function provenanceLines(p: ExportProvenance): string[] {
       kv(
         'Scoped evidence',
         `${s.resolutionState}; baseline ${s.baselineEvidence ?? 'unregistered'} → effective `
-          + `${s.effectiveEvidence ?? (s.resolutionState === 'external-evidence-out-of-scope' ? 'not covered by the registered studies' : 'unregistered')}; study ${s.matchedScopedStudy ?? 'none'}`,
+          + `${s.effectiveEvidence ?? (s.resolutionState === 'external-evidence-out-of-scope' ? (s.claimId === 'DTM' ? dtmCellsEvidenceText() : 'not covered by the registered studies') : 'unregistered')}; study ${s.matchedScopedStudy ?? 'none'}`,
       ),
     );
   }

@@ -55,6 +55,7 @@ import { METRIC_TOOLTIPS, blockedTreatmentContrast } from '../contour/contourCop
 import { horizontalUnitLabel } from '../../units/units';
 import { EVIDENCE_REGISTRY } from '../../validation/claimRegistry.generated';
 import { evidenceLabel, type EvidenceLevel } from '../../validation/evidenceLevel';
+import { dtmCellsEvidenceText } from '../../validation/scopedEvidence';
 import {
   buildExportProvenance,
   provenanceLines,
@@ -160,8 +161,8 @@ const PRODUCT_CLAIM: Readonly<Record<string, string>> = {
 };
 const CONTOUR_PRODUCTS = new Set(['Contours', 'Map sheet']);
 
-/** The DTM row when no registered study covers this DTM's settings. */
-export const DTM_NOT_COVERED = 'not covered by the registered study';
+/** The DTM row when no study covers the DTM as a whole: what its measured and filled cells resolve to. */
+export const DTM_NOT_COVERED = dtmCellsEvidenceText();
 
 /** "E4 — Cross-implementation validated" from the registry level id. */
 function fmtLevel(level: EvidenceLevel): string {

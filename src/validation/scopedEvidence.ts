@@ -38,7 +38,7 @@
  */
 
 import type { EvidenceLevel, ExportDecision } from './evidenceLevel';
-import { evidenceRank, meetsRequired, INDEPENDENCE_FLOOR, exportDecision } from './evidenceLevel';
+import { evidenceLabel, evidenceRank, meetsRequired, INDEPENDENCE_FLOOR, exportDecision } from './evidenceLevel';
 import { EVIDENCE_REGISTRY, type RegistryEntry } from './claimRegistry.generated';
 import { exportGate } from './evidenceRegistry';
 
@@ -182,6 +182,13 @@ export interface EvidenceContext {
    * ({@link LIVE_PARAMETER_SET}), when one is declared.
    */
   readonly parameterSetId?: string;
+  /**
+   * For the live DTM, which of its cells the artifact stands for: measured
+   * cells (at least one return, median aggregated) or filled (interpolated)
+   * cells. Selects the parameter set from {@link LIVE_DTM_CELL_PARAMETER_SET}
+   * when no explicit parameterSetId is given.
+   */
+  readonly cells?: DtmCellClass;
   /** Aggregation this artifact was built with. */
   readonly aggregation?: string;
   /** Interpolation/fill this artifact was built with. */
@@ -234,12 +241,34 @@ export const SCOPED_EVIDENCE_RECORDS: readonly ScopedEvidenceRecord[] = [];
 /**
  * The parameter set each shipped product is built with, for claims whose
  * register scope names the parameter sets its studies covered. The live DTM
- * aggregates by median (LIVE_DTM_AGGREGATION) with void fill; the DTM study
- * covers min-return gridding (PS-DTM-MIN-CELL1-R045) only.
+ * as a whole aggregates by median (LIVE_DTM_AGGREGATION) with void fill, which
+ * no study covers; its measured cells are covered (see
+ * {@link LIVE_DTM_CELL_PARAMETER_SET}).
  */
 export const LIVE_PARAMETER_SET: Readonly<Record<string, string>> = {
   DTM: 'PS-DTM-LIVE-MEDIAN-FILL',
 };
+
+/** The two kinds of cell in the live DTM. */
+export type DtmCellClass = 'measured' | 'filled';
+
+/**
+ * The parameter set each kind of live DTM cell is built with. Measured cells
+ * are median gridded on a 1-unit cell with the origin at 0, the configuration
+ * the R terra and SciPy median studies cover. Filled cells come from the void
+ * fill, which no study covers.
+ */
+export const LIVE_DTM_CELL_PARAMETER_SET: Readonly<Record<DtmCellClass, string>> = {
+  measured: 'PS-DTM-MEDIAN-CELL1-ORIGIN0',
+  filled: 'PS-DTM-LIVE-MEDIAN-FILL',
+};
+
+/** The parameter set an artifact was built with: explicit, by DTM cell class, or the shipped product's. */
+function artifactParameterSet(claimId: string, context?: EvidenceContext): string | undefined {
+  if (context?.parameterSetId != null) return context.parameterSetId;
+  if (claimId === 'DTM' && context?.cells != null) return LIVE_DTM_CELL_PARAMETER_SET[context.cells];
+  return LIVE_PARAMETER_SET[claimId];
+}
 
 interface MatchOutcome {
   readonly matched: boolean;
@@ -310,7 +339,7 @@ export function resolveEvidence(
   // built with another set is not covered and inherits no level. A claim that
   // declares none keeps the baseline below.
   const covered = entry?.scopedParameterSets;
-  const paramSet = context?.parameterSetId ?? LIVE_PARAMETER_SET[claimId];
+  const paramSet = artifactParameterSet(claimId, context);
   if (forClaim.length === 0 && covered && covered.length > 0 && paramSet != null && !covered.includes(paramSet)) {
     return {
       baselineEvidence: baseline,
@@ -528,4 +557,19 @@ export function resolveExportEvidence(
     baselineGate,
     note,
   };
+}
+
+/**
+ * The live DTM's evidence by cell class, as one phrase every DTM surface
+ * prints: the level its measured cells resolve to, and that filled cells are
+ * not covered. Both halves come from {@link resolveEvidence}.
+ */
+export function dtmCellsEvidenceText(): string {
+  const measured = resolveEvidence('DTM', { cells: 'measured' }).effectiveEvidence;
+  const filled = resolveEvidence('DTM', { cells: 'filled' }).effectiveEvidence;
+  const measuredText = measured == null
+    ? 'measured cells not covered'
+    : `${measured.slice(0, 2)} (${evidenceLabel(measured)}) on measured cells`;
+  const filledText = filled == null ? 'filled cells not covered' : `${filled.slice(0, 2)} on filled cells`;
+  return `${measuredText}; ${filledText} by the registered studies`;
 }
