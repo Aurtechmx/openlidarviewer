@@ -32,6 +32,9 @@ export interface TerrainRunCardFacts {
   readonly dtm: {
     readonly analyzedPointCount: number;
     readonly coverageMode: TerrainCoverageMode;
+    /** Per-cell coverage (2 measured, 1 interpolated) and confidence, for the measured-cell figure. */
+    readonly coverage?: ArrayLike<number>;
+    readonly confidence?: ArrayLike<number>;
   };
   readonly quality: {
     /** Mean per-cell confidence, 0..100. */
@@ -41,6 +44,7 @@ export interface TerrainRunCardFacts {
   };
 }
 import type { StreamingSourceKind } from '../render/streaming/StreamingSource';
+import { splitCellConfidence } from '../terrain/contour/terrainReadiness';
 
 export interface InspectorCardRefreshers {
   /**
@@ -434,7 +438,11 @@ export function createInspectorCardRefreshers(
     if (!base) return;
     const count = run.dtm.analyzedPointCount;
     const mode = run.dtm.coverageMode;
-    const confidence = run.quality.meanCellConfidence;
+    // Measured cells only: the pooled mean also averages interpolation support.
+    const confidence =
+      run.dtm.coverage && run.dtm.confidence
+        ? splitCellConfidence(run.dtm.coverage, run.dtm.confidence).measured
+        : Number.NaN;
     const ground = run.quality.groundPointRatio;
     foldCoverageMeta(
       {

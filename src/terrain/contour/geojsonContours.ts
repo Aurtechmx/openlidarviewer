@@ -87,7 +87,9 @@ export function toGeoJSON(
       // reads `mixed` there.
       basis: contourBasis(f),
       index: f.isIndex,
-      meanConfidence: Math.round(f.meanConfidence),
+      // A display score that pools measured and interpolated cells along the
+      // run, named so it cannot be read as one confidence or a probability.
+      presentationSupport: Math.round(f.meanConfidence),
       coverageMode: model.coverageMode,
     },
     geometry: {

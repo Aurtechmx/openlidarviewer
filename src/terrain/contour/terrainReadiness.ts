@@ -83,6 +83,25 @@ function tallyCoverage(coverage: Uint8Array): CoverageTally {
   };
 }
 
+/**
+ * Mean cell confidence over measured cells (coverage 2) and interpolated cells
+ * (coverage 1), kept apart: one is a measured-cell reliability, the other an
+ * interpolation support score, and a pooled mean moves with the mix. NaN for
+ * a half with no finite cells.
+ */
+export function splitCellConfidence(
+  coverage: ArrayLike<number>,
+  confidence: ArrayLike<number>,
+): { measured: number; interpolated: number } {
+  let ms = 0, mn = 0, is = 0, inn = 0;
+  for (let i = 0; i < coverage.length; i++) {
+    const c = confidence[i];
+    if (!Number.isFinite(c)) continue;
+    if (coverage[i] === 2) { ms += c; mn++; } else if (coverage[i] === 1) { is += c; inn++; }
+  }
+  return { measured: mn > 0 ? ms / mn : Number.NaN, interpolated: inn > 0 ? is / inn : Number.NaN };
+}
+
 /** Map a 0..100 score to a rating with documented thresholds. */
 function rate(score: number): ReadinessRating {
   if (!Number.isFinite(score)) return 'unavailable';
@@ -129,6 +148,10 @@ export function computeTerrainReadiness(
   const tol = result.confidenceToleranceM;
 
   // ── Ground confidence ────────────────────────────────────────────────
+  // Shown as two figures, measured and interpolated, never one pooled mean.
+  const split = splitCellConfidence(result.dtm.coverage, result.dtm.confidence);
+  const half = (v: number): string => (Number.isFinite(v) ? pct(v / 100) : '—');
+  const splitValue = `${half(split.measured)} measured · ${half(split.interpolated)} interpolated`;
   let groundRating = rate(meanConf);
   // A confident-looking surface that is mostly interpolated should not
   // read "excellent" — temper by how much was actually measured.
@@ -143,14 +166,14 @@ export function computeTerrainReadiness(
     // residuals are in; this card stamped it "m" after every other renderer
     // of the same residual had been gated.
     const unit = result.verticalScaleResolved === false ? 'source Z units' : 'm';
-    confidenceDetail = `Calibrated to held-out error · ±${tol.toFixed(2)} ${unit}`;
+    confidenceDetail = `Measured-cell tolerance = hold-out RMSEz ±${tol.toFixed(2)} ${unit}`;
   } else {
     confidenceDetail = 'Heuristic estimate — not enough held-out points to calibrate.';
   }
   const groundConfidence: ReadinessIndicator = {
     label: 'Ground confidence',
     rating: groundRating,
-    value: Number.isFinite(meanConf) ? pct(meanConf / 100) : '—',
+    value: Number.isFinite(meanConf) ? splitValue : '—',
     detail: confidenceDetail,
   };
 

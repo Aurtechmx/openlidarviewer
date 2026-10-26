@@ -4,7 +4,7 @@
 
 import { describe, it, expect } from 'vitest';
 import { analyseContours } from '../src/terrain/contour/analyseContours';
-import { computeTerrainReadiness, type ReadinessRating } from '../src/terrain/contour/terrainReadiness';
+import { computeTerrainReadiness, splitCellConfidence, type ReadinessRating } from '../src/terrain/contour/terrainReadiness';
 import type { TerrainPoint } from '../src/terrain/TerrainContracts';
 
 const RATINGS: ReadinessRating[] = ['excellent', 'strong', 'good', 'moderate', 'weak', 'unavailable'];
@@ -33,8 +33,9 @@ describe('computeTerrainReadiness', () => {
     // A fully-sampled patch should be dominated by MEASURED cells.
     expect(r.dtmQuality.value).toMatch(/measured/);
     expect(r.dtmQuality.rating).not.toBe('weak');
-    // Ground confidence is a percentage.
-    expect(r.groundConfidence.value).toMatch(/%|—/);
+    // Measured and interpolated cells are reported apart, never pooled.
+    expect(r.groundConfidence.value).toMatch(/% measured/);
+    expect(r.groundConfidence.value).toMatch(/interpolated/);
   });
 
   it('reports unavailable contour readiness when no points are given', () => {
@@ -58,5 +59,18 @@ describe('computeTerrainReadiness', () => {
     const result = analyseContours(sparse, { cellSizeM: 2, crs: 'EPSG:32610' });
     const r = computeTerrainReadiness(result);
     expect(r.groundConfidence.rating).not.toBe('excellent');
+  });
+});
+
+describe('splitCellConfidence', () => {
+  it('averages measured and interpolated cells apart', () => {
+    const coverage = new Uint8Array([2, 2, 1, 1, 0]);
+    const confidence = new Float32Array([90, 70, 20, 40, 0]);
+    expect(splitCellConfidence(coverage, confidence)).toEqual({ measured: 80, interpolated: 30 });
+  });
+  it('is NaN for a half with no cells', () => {
+    const s = splitCellConfidence(new Uint8Array([2]), new Float32Array([50]));
+    expect(s.measured).toBe(50);
+    expect(s.interpolated).toBeNaN();
   });
 });

@@ -285,7 +285,7 @@ describe('summariseDataset — empty state', () => {
     if (out) {
       expect(out.coverage.label).toBe('Full Dataset');
       expect(out.confidence.band).toBe('green');
-      expect(out.confidence.label).toBe('92%');
+      expect(out.confidence.label).toBe('92% measured cells');
       expect(out.coverage.streamingWarning).toBeUndefined();
       expect(out.details.coverageMode).toBe('Full Dataset');
       expect(out.details.engineStatus).toBe('active');
