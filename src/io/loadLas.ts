@@ -34,7 +34,7 @@
 
 import { PointCloud } from '../model/PointCloud';
 import type { CloudMetadata } from '../model/PointCloud';
-import { parseLasHeader } from './lasHeader';
+import { assertReadableLaszipVlr, parseLasHeader } from './lasHeader';
 import { bufferRangeReader, MAX_RANGE_VLR_BLOCK_BYTES, resolveLasCrs, type ByteRangeReader } from './crs';
 import { LoadError } from './loadErrors';
 import { compressedBytesPerPointFloor, validateDeclaredPointCount } from './validateCount';
@@ -209,6 +209,8 @@ export async function loadLas(
 
   let raw: RawPoints;
   if (sourceFormat === 'laz') {
+    // A compression record LASzip itself would reject is refused by name.
+    assertReadableLaszipVlr(buffer, name);
     // Bound the declared count by the compressed bytes before any decoder,
     // worker or output array is set up for it.
     validateDeclaredPointCount(
@@ -343,6 +345,7 @@ export async function loadLazFromFile(
   // The VLRs sit between the public header and the point data.
   const head = await readLasHead(file, name);
   const header = parseLasHeader(head);
+  assertReadableLaszipVlr(head, name);
   // EVLR bytes read for the CRS, recorded in the ledger below.
   const evlrReads: Array<[number, number]> = [];
   await attachEvlrCrs(header, head, async (offset, length) => {

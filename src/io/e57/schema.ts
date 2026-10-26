@@ -174,6 +174,8 @@ export interface E57SourceMetadata {
 /** The interpreted E57 document. */
 export interface E57DocumentSchema {
   scans: E57Scan[];
+  /** Images in the `images2D` vector. They are counted, never decoded or shown. */
+  imageCount: number;
   metadata: E57Metadata;
   /**
    * Declared-only source metadata (standard + extension-namespace fields), or
@@ -790,6 +792,11 @@ export function readE57Document(root: XmlNode): E57DocumentSchema {
   const scans = data3D
     ? childrenNamed(data3D, 'vectorChild').map((s) => readScan(s, warnings))
     : [];
+  const images2D = child(root, 'images2D');
+  const imageCount = images2D ? childrenNamed(images2D, 'vectorChild').length : 0;
+  if (imageCount > 0) {
+    warnings.push(`The file holds ${imageCount} image${imageCount === 1 ? '' : 's'} (images2D); images are not displayed.`);
+  }
   const created = child(root, 'creationDateTime');
   // Declared metadata must never sink a load: malformed metadata degrades to
   // "omitted" (with a warning), and the geometry pipeline proceeds untouched.
@@ -804,6 +811,7 @@ export function readE57Document(root: XmlNode): E57DocumentSchema {
   }
   return {
     scans,
+    imageCount,
     warnings,
     sourceMetadata,
     metadata: {

@@ -416,7 +416,15 @@ export async function readExactlyBounded(
         `Range read stalled — ${err.message}. The server sent headers but stopped sending data.`,
       );
     }
-    throw err;
+    if (err instanceof RangeReadError) throw err;
+    // The range-source contract is a typed failure: a cancel that lands while
+    // the body is arriving, or a connection that drops partway, would
+    // otherwise surface as a bare AbortError or the runtime's TypeError.
+    if (options.signal?.aborted) throw new RangeReadError('aborted', 'Range read aborted');
+    throw new RangeReadError(
+      'transport',
+      `The connection closed after ${filled} of the ${expectedBytes} requested bytes.`,
+    );
   }
   if (filled !== expectedBytes) {
     throw new RangeReadError(

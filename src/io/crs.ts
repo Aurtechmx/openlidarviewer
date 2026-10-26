@@ -757,9 +757,13 @@ function isGeographicKeyword(k: string): boolean {
   return k === 'GEOGCS' || k === 'GEOGCRS';
 }
 
-/** The vertical-CRS keywords (WKT1 `VERT_CS`, WKT2 `VERTCRS` / `VERTICALCRS`). */
+/**
+ * The vertical-CRS keywords (WKT1 `VERT_CS`, WKT2 `VERTCRS` / `VERTICALCRS`,
+ * and the ESRI-style WKT1 `VERTCS`). Missing one lets its UNIT be read as the
+ * horizontal unit, since the horizontal slice ends where the vertical CRS starts.
+ */
 function isVerticalKeyword(k: string): boolean {
-  return k === 'VERT_CS' || k === 'VERTCRS' || k === 'VERTICALCRS';
+  return k === 'VERT_CS' || k === 'VERTCS' || k === 'VERTCRS' || k === 'VERTICALCRS';
 }
 
 /** The compound-CRS keywords (WKT1 `COMPD_CS`, WKT2 `COMPOUNDCRS`). */

@@ -13,6 +13,7 @@ The format is based on Keep a Changelog and the project follows Semantic Version
 - Error toasts have a Dismiss control and a Show in Session log action.
 - Three external-reference windows under `validation/field-simulation/external-references/` (CC-BY-4.0, credited in the third-party notices and credits page), registered as OLV-DS-117 to OLV-DS-121, with four protocol records, five study manifests and `tests/flowPulseExternalReferences.test.ts`. TauDEM 5.3.8 and GRASS GIS 8.3.2 are registered as oracles.
 - Six RichDEM test and example grids (GPL-3.0, credited in the notices and credits page) under `validation/field-simulation/richdem-references/`, registered as OLV-DS-122 to OLV-DS-127, with `tests/flowPulseRichDemReferences.test.ts` under a pre-registered protocol. On RichDEM's own depression-filling test grid the Priority-Flood spill level equals RichDEM's expected fill on all 100 cells and the inventory lists the same three depressions; on its flow-accumulation test grid the accumulation over RichDEM's directions equals its expected output on all 100 cells. Recorded as corroboration; no evidence level moved. RichDEM is registered as an oracle.
+- A pinned set of small test files from LASzip, laspy, libE57Format, PROJ and the Point Cloud Library, with tests that open each one through the normal load path and check the outcome the upstream project's own tests state.
 
 ### Changed
 
@@ -34,6 +35,11 @@ The format is based on Keep a Changelog and the project follows Semantic Version
 - A browser with neither WebGPU nor WebGL 2 is told so when a scan opens, instead of the failure being reported as a fault in the file.
 - A URL that fails to open shows its message under the URL field with Retry, for COPC, EPT and 3D Tiles alike.
 - The warning that a PDF report was saved without some sections stays on screen; the progress toast used to erase it.
+- A LAZ file whose compression record names a coder, compressor, item type or item version that LASzip does not define is refused with a message naming that field, instead of a generic "could not be read" line.
+- LAS files whose ESRI-style WKT names a vertical CRS (`VERTCS`) could have their horizontal unit read from the vertical CRS, so a file in US survey feet reported its distances in metres. The horizontal unit now comes from the projected CRS.
+- An E57 file that holds images but no 3D scans is refused with a message saying how many images it holds and that images are not displayed, instead of a generic decoding failure. A file with both scans and images opens with a warning that the images are not displayed.
+- A remote COPC whose server answers a range request with 416 is reported as a file that changed on the server, or as a read past its end, instead of an unexpected-status transport error.
+- A remote COPC read cancelled while its data is arriving, or cut off when the connection drops, now fails with a clear cancelled or connection-closed reason instead of a raw browser error.
 
 ## [0.7.1-alpha.1] - 2026-10-25
 

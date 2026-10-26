@@ -42,6 +42,8 @@ const DEFAULT_RETRY_BASE_MS = 250;
 const RETRYABLE_STATUSES = new Set([408, 429, 500, 502, 503, 504]);
 /** The server's answer to our `If-Match`: the object is no longer the one we pinned. */
 const PRECONDITION_FAILED = 412;
+/** The requested bytes lie past the end of the object the server holds. */
+const RANGE_NOT_SATISFIABLE = 416;
 /** Shown when a mid-load object change is detected. Not retryable — the bytes
  *  already decoded belong to a version that no longer exists. */
 const RESOURCE_CHANGED_MESSAGE =
@@ -231,6 +233,18 @@ export class HttpRangeSource implements RangeSource {
     if (response.status === PRECONDITION_FAILED) {
       cancelResponseBody(response);
       throw new RangeReadError('resource-changed', RESOURCE_CHANGED_MESSAGE);
+    }
+    // Every read is clamped to the size pinned at probe time, so a 416 means
+    // the server now holds a shorter object. Its Content-Range (`bytes */N`)
+    // or validators name the change when they differ from the pin; otherwise
+    // the read is still refused as out of range rather than as a transport fault.
+    if (response.status === RANGE_NOT_SATISFIABLE) {
+      cancelResponseBody(response);
+      this._assertSameObject(response, parseContentRangeTotal(response.headers.get('content-range')));
+      throw new RangeReadError(
+        'out-of-range',
+        `The server refused bytes ${offset}-${end} as past the end of the file it holds.`,
+      );
     }
     // 206 Partial Content is the expected success. A 200 means the server
     // ignored the Range header and is sending the whole file — that defeats

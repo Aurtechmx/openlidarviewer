@@ -23,13 +23,18 @@
  * and refuses the file.
  */
 
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { parseE57 } from '../src/io/e57/parseE57';
 import type { E57ScanData } from '../src/io/e57/parseE57';
 import { decodeCompressedVector } from '../src/io/e57/compressedVector';
 import type { E57Field } from '../src/io/e57/schema';
+import { readE57Document } from '../src/io/e57/schema';
+import { parseXml } from '../src/io/e57/xml';
+import { LoadError, describeLoadError } from '../src/io/loadErrors';
+import { loadFile } from '../src/io/loadFile';
+import { installInProcessParseWorker, type InProcessParseWorkerHandle } from './helpers/inProcessParseWorker';
 
 const DIR = fileURLToPath(new URL('./fixtures/e57-libe57format/', import.meta.url));
 
@@ -233,6 +238,99 @@ describe('parseE57 — malformed files are refused by name', () => {
     // header rather than a CompressedVector section.
     expect(() => parseE57(fixture('ZeroPointsInvalid.e57'))).toThrow(
       'E57: expected a CompressedVector section.',
+    );
+  });
+});
+
+/**
+ * Two more files from the same corpus, each with the outcome libE57Format's
+ * own tests assert for it (libE57Format `test/src/`):
+ *
+ *   - MultipleScansHomogeneousError.e57: a homogeneous `data3D` vector whose
+ *     second scan has no prototype. `SimpleReaderData.MultipleScansHomogeneousError`
+ *     asserts that opening the file throws. OLV refuses it.
+ *   - PinholeImageWithDistortionParameters.e57: a valid file with three pinhole
+ *     images (two carrying the Leica camera-distortion extension) and no 3D
+ *     data. `Extension_DIST.ReadPinholeImageWithDistortionParameters` opens it
+ *     and reads 3 images and 0 Data3D. OLV has nothing to draw from it, so it
+ *     refuses with a message that says the file holds images OLV does not
+ *     display, rather than a bare "no scans".
+ */
+describe('libE57Format upstream outcomes', () => {
+  it('MultipleScansHomogeneousError.e57: refused, as libE57Format refuses it', () => {
+    expect(() => parseE57(fixture('MultipleScansHomogeneousError.e57'))).toThrow(
+      'E57: a scan has no point prototype.',
+    );
+  });
+
+  it('PinholeImageWithDistortionParameters.e57: refused, naming the three images it does hold', () => {
+    let thrown: unknown;
+    try {
+      parseE57(fixture('PinholeImageWithDistortionParameters.e57'));
+    } catch (err) {
+      thrown = err;
+    }
+    expect(thrown).toBeInstanceOf(LoadError);
+    expect((thrown as LoadError).message).toBe(
+      'E57: the file contains no 3D scans. It holds 3 images (images2D), and images are not displayed.',
+    );
+    // The page shows the reason rather than the generic decode-failure line.
+    expect(describeLoadError(thrown)).toBe((thrown as LoadError).message);
+  });
+
+  it('a file with scans and images opens with a warning that the images are not displayed', () => {
+    const xml = `<?xml version="1.0" encoding="UTF-8"?>
+<e57Root type="Structure" xmlns="http://www.astm.org/COMMIT/E57/2010-e57-v1.0">
+  <formatName type="String"><![CDATA[ASTM E57 3D Imaging Data File]]></formatName>
+  <guid type="String"><![CDATA[g]]></guid>
+  <data3D type="Vector" allowHeterogeneousChildren="1">
+    <vectorChild type="Structure">
+      <guid type="String"><![CDATA[s]]></guid>
+      <points type="CompressedVector" fileOffset="48" recordCount="1">
+        <prototype type="Structure">
+          <cartesianX type="Float" precision="single"/>
+          <cartesianY type="Float" precision="single"/>
+          <cartesianZ type="Float" precision="single"/>
+        </prototype>
+        <codecs type="Vector" allowHeterogeneousChildren="1"></codecs>
+      </points>
+    </vectorChild>
+  </data3D>
+  <images2D type="Vector" allowHeterogeneousChildren="1">
+    <vectorChild type="Structure"><guid type="String"><![CDATA[i1]]></guid></vectorChild>
+    <vectorChild type="Structure"><guid type="String"><![CDATA[i2]]></guid></vectorChild>
+  </images2D>
+</e57Root>`;
+    const doc = readE57Document(parseXml(xml));
+    expect(doc.scans).toHaveLength(1);
+    expect(doc.imageCount).toBe(2);
+    expect(doc.warnings).toContain('The file holds 2 images (images2D); images are not displayed.');
+  });
+});
+
+describe('libE57Format upstream outcomes through loadFile', () => {
+  let bridge: InProcessParseWorkerHandle;
+  beforeAll(async () => { bridge = await installInProcessParseWorker(); });
+  afterAll(() => bridge.restore());
+
+  const open = (name: string) =>
+    loadFile(new File([readFileSync(DIR + name)], name)).then(
+      () => { throw new Error(`${name} opened`); },
+      (err: unknown) => err,
+    );
+
+  it('MultipleScansHomogeneousError.e57 is refused before the decode, naming the missing prototype', async () => {
+    const err = await open('MultipleScansHomogeneousError.e57');
+    expect(err).toBeInstanceOf(LoadError);
+    expect((err as LoadError).category).toBe('malformed-file');
+    expect((err as LoadError).message).toContain('E57: a scan has no point prototype.');
+  });
+
+  it('PinholeImageWithDistortionParameters.e57 is refused and the page says why', async () => {
+    const err = await open('PinholeImageWithDistortionParameters.e57');
+    expect(err).toBeInstanceOf(LoadError);
+    expect(describeLoadError(err)).toBe(
+      'E57: the file contains no 3D scans. It holds 3 images (images2D), and images are not displayed.',
     );
   });
 });

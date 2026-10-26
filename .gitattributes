@@ -24,6 +24,7 @@
 *.las binary
 *.laz binary
 *.e57 binary
+*.pcd binary
 *.ply binary
 *.glb binary
 *.tif binary

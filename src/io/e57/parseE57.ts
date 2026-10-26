@@ -16,6 +16,7 @@ import { parseE57Header } from './header';
 import { depage, physicalToLogical } from './depage';
 import { parseXml } from './xml';
 import { readE57Document } from './schema';
+import { LoadError } from '../loadErrors';
 import type {
   E57ColorLimits,
   E57Field,
@@ -148,6 +149,14 @@ export function parseE57(buffer: ArrayBuffer, opts?: ParseE57Options): E57ParseR
   const document = readE57Document(parseXml(new TextDecoder().decode(xmlBytes)));
 
   if (document.scans.length === 0) {
+    const images = document.imageCount;
+    if (images > 0) {
+      // A valid file of images only: say what it holds, not just what it lacks.
+      const message =
+        `E57: the file contains no 3D scans. It holds ${images} image${images === 1 ? '' : 's'} ` +
+        '(images2D), and images are not displayed.';
+      throw new LoadError('unsupported-format', message, message);
+    }
     throw new Error('E57: the file contains no 3D scans.');
   }
 
