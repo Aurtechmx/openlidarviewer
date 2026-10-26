@@ -1,0 +1,59 @@
+{
+  "tool": "scipy.stats.binned_statistic_2d",
+  "statistic": "median",
+  "scipy": "1.17.1",
+  "numpy": "2.4.6",
+  "python": "3.11.15",
+  "platform": "darwin-arm64",
+  "commandLine": "python3 -I scripts/dtm-median-reference-scipy.py",
+  "outputs": [
+    {
+      "fixture": "pc-01-plane-buildings",
+      "returns": 9196,
+      "path": "validation/cross-implementation/dtm-median/scipy/pc-01-plane-buildings__median.asc",
+      "sha256": "6cb56b19b1f17f9760a21ae1b2201d41138640231ef69553e7ef4ebfd8fb10f1"
+    },
+    {
+      "fixture": "pc-02-rolling-buildings",
+      "returns": 9228,
+      "path": "validation/cross-implementation/dtm-median/scipy/pc-02-rolling-buildings__median.asc",
+      "sha256": "d7eb98a03757001dd501f216937deaf75244244d0c060de943ae537ad75096df"
+    },
+    {
+      "fixture": "pc-03-ridge-buildings",
+      "returns": 9234,
+      "path": "validation/cross-implementation/dtm-median/scipy/pc-03-ridge-buildings__median.asc",
+      "sha256": "a5805e0d7593eec0ce6799ef67cdeb3dec3b4d265916ce4b32460e3c1d8d3030"
+    },
+    {
+      "fixture": "pc-04-plane-lowblunders",
+      "returns": 9193,
+      "path": "validation/cross-implementation/dtm-median/scipy/pc-04-plane-lowblunders__median.asc",
+      "sha256": "1eaeb28819b96cbad08101a5ad7b38cafeb59effc0dce7df82177bbfbcdf4077"
+    },
+    {
+      "fixture": "pc-05-plane-gap",
+      "returns": 8658,
+      "path": "validation/cross-implementation/dtm-median/scipy/pc-05-plane-gap__median.asc",
+      "sha256": "2130e37abab829e5baa8e3b8858ebff9fb6bdfe07076f4402f8ac887aeecfffb"
+    },
+    {
+      "fixture": "pc-06-bare-plane",
+      "returns": 2500,
+      "path": "validation/cross-implementation/dtm-median/scipy/pc-06-bare-plane__median.asc",
+      "sha256": "e1becc03f0fe4493c447876826eeea6ed828f847f63e3be974b9558d3e786184"
+    },
+    {
+      "fixture": "pc-07-bare-rolling",
+      "returns": 2500,
+      "path": "validation/cross-implementation/dtm-median/scipy/pc-07-bare-rolling__median.asc",
+      "sha256": "7619d38bf4cbfaf5a5787635b775fe02c4ccdeb2c0399087e1d8c7f6eaafc390"
+    },
+    {
+      "fixture": "pc-08-bare-ridge",
+      "returns": 2500,
+      "path": "validation/cross-implementation/dtm-median/scipy/pc-08-bare-ridge__median.asc",
+      "sha256": "4032bbc301d538df6df464b458a174e01ea2672257909b63601638d211f39485"
+    }
+  ]
+}
