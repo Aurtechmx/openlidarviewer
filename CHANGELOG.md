@@ -4,7 +4,6 @@ The format is based on Keep a Changelog and the project follows Semantic Version
 
 ## [Unreleased]
 
-
 ## [0.7.1-alpha.1] - 2026-10-25
 
 A development cut on the way to v0.7.1. It carries no DOI, and its test figures

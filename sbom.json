@@ -351,7 +351,7 @@
           "type": "library",
           "name": "meshoptimizer",
           "version": "1.2.0",
-          "bom-ref": "openlidarviewer@0.7.0|@loaders.gl/gltf@4.5.2|meshoptimizer@1.2.0",
+          "bom-ref": "openlidarviewer@0.7.1-alpha.1|@loaders.gl/gltf@4.5.2|meshoptimizer@1.2.0",
           "author": "Arseny Kapoulkine",
           "description": "Mesh optimization library that makes meshes smaller and faster to render",
           "licenses": [
@@ -597,7 +597,7 @@
           "type": "library",
           "name": "tslib",
           "version": "1.14.1",
-          "bom-ref": "openlidarviewer@0.7.0|pdf-lib@1.17.1|tslib@1.14.1",
+          "bom-ref": "openlidarviewer@0.7.1-alpha.1|pdf-lib@1.17.1|tslib@1.14.1",
           "author": "Microsoft Corp.",
           "description": "Runtime library for TypeScript helper functions",
           "licenses": [
@@ -2073,7 +2073,7 @@
   ],
   "dependencies": [
     {
-      "ref": "openlidarviewer@0.7.0",
+      "ref": "openlidarviewer@0.7.1-alpha.1",
       "dependsOn": [
         "openlidarviewer@0.7.1-alpha.1|@fontsource-variable/inter@5.3.0",
         "openlidarviewer@0.7.1-alpha.1|@fontsource/jetbrains-mono@5.3.0",
@@ -2113,11 +2113,11 @@
         "openlidarviewer@0.7.1-alpha.1|@loaders.gl/schema@4.5.4",
         "openlidarviewer@0.7.1-alpha.1|@loaders.gl/textures@4.5.4",
         "openlidarviewer@0.7.1-alpha.1|@math.gl/core@4.1.0",
-        "openlidarviewer@0.7.0|@loaders.gl/gltf@4.5.2|meshoptimizer@1.2.0"
+        "openlidarviewer@0.7.1-alpha.1|@loaders.gl/gltf@4.5.2|meshoptimizer@1.2.0"
       ]
     },
     {
-      "ref": "openlidarviewer@0.7.0|@loaders.gl/gltf@4.5.2|meshoptimizer@1.2.0"
+      "ref": "openlidarviewer@0.7.1-alpha.1|@loaders.gl/gltf@4.5.2|meshoptimizer@1.2.0"
     },
     {
       "ref": "openlidarviewer@0.7.1-alpha.1|@loaders.gl/obj@4.5.4",
@@ -2146,11 +2146,11 @@
         "openlidarviewer@0.7.1-alpha.1|@pdf-lib/standard-fonts@1.0.0",
         "openlidarviewer@0.7.1-alpha.1|@pdf-lib/upng@1.0.1",
         "openlidarviewer@0.7.1-alpha.1|pako@1.0.11",
-        "openlidarviewer@0.7.0|pdf-lib@1.17.1|tslib@1.14.1"
+        "openlidarviewer@0.7.1-alpha.1|pdf-lib@1.17.1|tslib@1.14.1"
       ]
     },
     {
-      "ref": "openlidarviewer@0.7.0|pdf-lib@1.17.1|tslib@1.14.1"
+      "ref": "openlidarviewer@0.7.1-alpha.1|pdf-lib@1.17.1|tslib@1.14.1"
     },
     {
       "ref": "openlidarviewer@0.7.1-alpha.1|proj4@2.22.0",

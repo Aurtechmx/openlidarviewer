@@ -204,11 +204,25 @@ export function syncSbom(text, { pkg, lockedVersion, lockedSha512 = () => null }
     }
   }
 
+  // Nested components (a dependency's own bundled dependencies) and the root
+  // reference carry the root version in their bom-ref too. Rebase any ref that
+  // still names an older root version, so none survives a root bump.
+  const rebase = (r) =>
+    typeof r === 'string' ? r.replace(/^openlidarviewer@[^|]+/, rootRef) : r;
+  const rebaseNested = (list) => {
+    for (const c of list ?? []) {
+      if (!c) continue;
+      if (c['bom-ref'] != null) c['bom-ref'] = rebase(c['bom-ref']);
+      rebaseNested(c.components);
+    }
+  };
+  for (const c of sbom.components ?? []) rebaseNested(c.components);
+
   // Repoint the dependency graph through the old->new bom-ref map.
   for (const dep of sbom.dependencies ?? []) {
-    if (dep.ref != null && refMap.has(dep.ref)) dep.ref = refMap.get(dep.ref);
+    if (dep.ref != null) dep.ref = rebase(refMap.get(dep.ref) ?? dep.ref);
     if (Array.isArray(dep.dependsOn)) {
-      dep.dependsOn = dep.dependsOn.map((r) => refMap.get(r) ?? r);
+      dep.dependsOn = dep.dependsOn.map((r) => rebase(refMap.get(r) ?? r));
     }
   }
 
