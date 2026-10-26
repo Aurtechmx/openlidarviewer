@@ -27,6 +27,9 @@ are not release-authoritative. v0.7.0 is the current published release.
 ### Changed
 
 - Contour GeoJSON features carry the pooled run score as `presentationSupport` instead of `meanConfidence`.
+- Box measurements in CSV and GeoJSON exports cite a new MEAS-BOX claim (E3) for the box's own extents and volume. They cited the cut-fill volume claim, VOL-POINT-SAMPLE, which describes a different estimator. The register now holds 40 claims.
+- The MEAS-AREA claim describes the area the tool reports: the area in the polygon's own plane, which equals the planimetric area for a horizontal polygon. Its scope now states that the cross-implementation comparison covers horizontal polygons only.
+- The approved wording for MEAS-AREA, E57-INGEST, TPI and VRM no longer calls their tolerances preregistered. Each protocol was adopted together with its result, and the wording now says so.
 - The Scan Report's Density and Spacing values say "(bounding-box estimate)" on every scan, static or streamed. Both are the point count over the axis-aligned bounding box, so a diagonal strip or gappy coverage reads sparser than the area the points cover. Before, only a display-sample load said how they were worked out.
 - The lasso stockpile toast no longer says "MEASURED" for a footprint with full coverage. It says "exploratory volume preview", as the stockpile volume's claim allows at every tier. In CSV and GeoJSON exports, `grid_authority` writes that tier as `exploratory_full_coverage` instead of `measured`; `preview` and `withheld` are unchanged.
 - Measuring costs less on large scans. The hover pick waits while the camera moves, and snap grids are built while the Measure tool is open instead of for every scan as it opens.

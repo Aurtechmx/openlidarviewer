@@ -371,6 +371,13 @@ describe('the evidence stamp names the claim behind each figure', () => {
     expect(dRow).toMatch(/exploratory/i);
   });
 
+  it('a box draws on MEAS-BOX, not the cut-fill volume claim', () => {
+    const box = { id: 'b', kind: 'box', name: 'b', points: [[0, 0, 0], [2, 3, 4]] } as never;
+    const note = JSON.parse(measurementsToGeoJSON([box], ctx)).evidence as string;
+    expect(note).toContain('MEAS-BOX');
+    expect(note).not.toContain('VOL-POINT-SAMPLE');
+  });
+
   it('names every claim a mixed collection draws on, once each', () => {
     const note = JSON.parse(measurementsToGeoJSON([dist, prof, dist], ctx)).evidence as string;
     expect(note).toContain('MEAS-DISTANCE');

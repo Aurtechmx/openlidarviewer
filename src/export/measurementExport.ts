@@ -682,7 +682,7 @@ const CLAIM_FOR_KIND: Readonly<Record<Measurement['kind'], string>> = {
   angle: 'MEAS-ANGLE',
   slope: 'MEAS-ANGLE',
   profile: 'MEAS-PROFILE',
-  box: 'VOL-POINT-SAMPLE',
+  box: 'MEAS-BOX',
   volume: 'VOL-POINT-SAMPLE',
 };
 
