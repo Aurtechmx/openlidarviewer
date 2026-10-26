@@ -204,9 +204,19 @@ describe('lint:release-truth', () => {
   // a correction can be lost in: a release that lists what it added while a
   // surface still claims the application came forward untouched.
   describe('rule 6b — a blanket "unchanged" claim beside a populated Added list', () => {
+    // The rule only fires beside a populated Added list. A fresh development
+    // cut opens its changelog section empty, so the list is seeded here rather
+    // than read off the tree, the same way the deposit states are built above.
+    const SEEDED_CHANGELOG = realRead('CHANGELOG.md')!.replace(
+      new RegExp(`^## \\[${VERSION.replaceAll('.', '\\.')}\\][^\\n]*`, 'm'),
+      (heading) => `${heading}\n\n### Added\n\n- A seeded entry.\n\n### Changed\n\n- A seeded change.\n`,
+    );
+    const seeded = (path: string, text: string) =>
+      (p: string): string | null => (p === 'CHANGELOG.md' ? SEEDED_CHANGELOG : p === path ? text : realRead(p));
+
     it('fails when the release notes claim the application came forward unchanged', () => {
       const doc = realRead(RELEASE_NOTES)! + '\n\nIt carries the v0.6.5 application forward unchanged.\n';
-      const problems = problemsFor(withOverride(RELEASE_NOTES, doc));
+      const problems = problemsFor(seeded(RELEASE_NOTES, doc));
       expect(problems.some((p) => p.includes('application forward unchanged'))).toBe(true);
     });
 
@@ -214,7 +224,7 @@ describe('lint:release-truth', () => {
       // Inject the blanket claim under every "### Changed" heading, so the
       // current release section carries it whether or not [Unreleased] also
       // has a Changed list above it; rule 6b scopes to the current version.
-      const text = realRead('CHANGELOG.md')!.replaceAll(
+      const text = SEEDED_CHANGELOG.replaceAll(
         '### Changed\n',
         '### Changed\n\n- The terrain and measurement algorithms are inherited from v0.6.5 unchanged.\n',
       );
@@ -224,7 +234,7 @@ describe('lint:release-truth', () => {
 
     it('fails when the public release page carries the claim', () => {
       const doc = (realRead(DOCS_SITE) ?? '') + '\n\nThis is the v0.6.5 application, unchanged.\n';
-      const problems = problemsFor(withOverride(DOCS_SITE, doc));
+      const problems = problemsFor(seeded(DOCS_SITE, doc));
       expect(problems.some((p) => p.includes(DOCS_SITE))).toBe(true);
     });
 

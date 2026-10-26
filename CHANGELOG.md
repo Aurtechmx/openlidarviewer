@@ -4,6 +4,12 @@ The format is based on Keep a Changelog and the project follows Semantic Version
 
 ## [Unreleased]
 
+
+## [0.7.1-alpha.1] - 2026-10-25
+
+A development cut on the way to v0.7.1. It carries no DOI, and its test figures
+are not release-authoritative. v0.7.0 is the current published release.
+
 ### Fixed
 
 - A scan that replaces the open one, such as a streamed scan opened over static layers or a static scan opened over a stream, starts with the clip box off and the elevation and intensity filters cleared. It used to keep the previous scan's clip box, and a stream opened over another stream kept the old filter range. A scan added beside open layers keeps both.
@@ -14,6 +20,7 @@ The format is based on Keep a Changelog and the project follows Semantic Version
 
 - Measuring costs less on large scans. The hover pick waits while the camera moves, and snap grids are built while the Measure tool is open instead of for every scan as it opens.
 - Terrain void filling visits only the edge of each search ring. Filled heights are unchanged.
+
 
 ## [0.7.0] - 2026-10-24
 
