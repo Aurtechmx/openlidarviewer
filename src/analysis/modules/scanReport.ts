@@ -3,6 +3,7 @@ import { ATTR_COLOUR_INVALID, ATTR_INTENSITY_INVALID, countAttributeInvalid, typ
 import { sourcePositions } from '../../model/pointFrames';
 import type { ClassScope } from '../../render/class/classScope';
 import type { SpatialContext } from '../../geo/SpatialContext';
+import type { CrsInfo } from '../../io/crs';
 import { groundMetresPermitted, heightScale, heightUnitsPermitted, horizontalGroundRefusal, spatialContextFrom } from '../../geo/SpatialContext';
 import { layerUpFrameFromContext, upFrameRefusal } from '../../geo/frame/layerUpFrame';
 import { heightLabel, HEIGHT_INCLUDES_NOISE_SUFFIX } from '../../geo/height';
@@ -107,6 +108,22 @@ export function scanReportUnitBasis(ctx: SpatialContext): ScanReportUnitBasis {
     heightUnit: height.suffix,
     densityUnit: unitKnown ? ' pts/m²' : ' pts/unit²',
   };
+}
+
+/**
+ * Whether a density in ground metres may be stated for this frame, by the
+ * Scan Report's own gate: X/Y are ground metres and the frame has a local
+ * vertical. Takes a resolved context or a CRS, so a caller holding only the
+ * file's CRS reads the same rule. A bare unit record (no CRS name) carries
+ * nothing this gate reads and passes; its unit is checked by the caller.
+ */
+export function scanReportDensityPermitted(
+  crs: SpatialContext | CrsInfo | { readonly linearUnit?: string } | null | undefined,
+): boolean {
+  if (!crs) return false;
+  const ctx = 'horizontalMetricRefused' in crs ? crs
+    : 'name' in crs ? spatialContextFrom(crs as CrsInfo) : null;
+  return ctx === null || (groundMetresPermitted(ctx) && heightUnitsPermitted(ctx));
 }
 
 /**
