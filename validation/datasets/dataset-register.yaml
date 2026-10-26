@@ -3406,6 +3406,74 @@ datasets:
     controlPointIds: []
     checkpointIds: []
 
+  - datasetId: OLV-DS-128-LIBE57FORMAT-MULTISCAN-HOMOGENEOUS-ERROR
+    title: "libE57Format self-test MultipleScansHomogeneousError, a homogeneous data3D vector whose second scan has no prototype"
+    sourceUrl: https://raw.githubusercontent.com/asmaloney/libE57Format-test-data/24201531715945ba7d49af6dfcb8e07b6b9b6b7f/self/MultipleScansHomogeneousError.e57
+    landingPage: https://github.com/asmaloney/libE57Format-test-data
+    licence: CC0-1.0
+    licenceUrl: https://github.com/asmaloney/libE57Format-test-data/blob/main/LICENSE
+    redistribution: permitted
+    acquisitionDate: 2026-10-25
+    sourceSha256: 4413dec6c0c5945f75b7b0787c23bcf3c2dceee95f2734c3c8a67aadc69176b3
+    sourceBytes: 2048
+    format: e57
+    pointCount: not-applicable
+    sensorType: synthetic
+    capturePlatform: none-synthetic
+    captureDate: not-applicable
+    horizontalCrs: local-metric-grid
+    verticalCrs: local-metric-grid
+    horizontalUnits: metre
+    verticalUnits: metre
+    nominalDensity: not-applicable
+    terrainClasses: [not-applicable]
+    landCoverClasses: [not-applicable]
+    containsIndependentCheckpoints: false
+    checkpointSource: not-applicable
+    checkpointUseRestriction: not-applicable
+    dataOwner: "asmaloney / libE57Format project"
+    citation: "asmaloney/libE57Format-test-data, self/MultipleScansHomogeneousError.e57. https://github.com/asmaloney/libE57Format-test-data"
+    knownLimitations: "Deliberately malformed: data3D is declared homogeneous and its second scan has no point prototype. libE57Format's SimpleReaderData.MultipleScansHomogeneousError test asserts that opening it throws. No point cloud is ever produced."
+    evidenceRole: oracle
+    storage: committed
+    localPath: tests/fixtures/e57-libe57format/MultipleScansHomogeneousError.e57
+    controlPointIds: []
+    checkpointIds: []
+
+  - datasetId: OLV-DS-129-LIBE57FORMAT-PINHOLE-IMAGE-DISTORTION
+    title: "libE57Format self-test PinholeImageWithDistortionParameters, three pinhole images and no 3D scans"
+    sourceUrl: https://raw.githubusercontent.com/asmaloney/libE57Format-test-data/24201531715945ba7d49af6dfcb8e07b6b9b6b7f/self/PinholeImageWithDistortionParameters.e57
+    landingPage: https://github.com/asmaloney/libE57Format-test-data
+    licence: CC0-1.0
+    licenceUrl: https://github.com/asmaloney/libE57Format-test-data/blob/main/LICENSE
+    redistribution: permitted
+    acquisitionDate: 2026-10-25
+    sourceSha256: 2bbc531965a8b2ea552bfe9ead5c1ff8e311df652cbfda4d47317033a8767bd8
+    sourceBytes: 6144
+    format: e57
+    pointCount: not-applicable
+    sensorType: synthetic
+    capturePlatform: none-synthetic
+    captureDate: not-applicable
+    horizontalCrs: local-metric-grid
+    verticalCrs: local-metric-grid
+    horizontalUnits: metre
+    verticalUnits: metre
+    nominalDensity: not-applicable
+    terrainClasses: [not-applicable]
+    landCoverClasses: [not-applicable]
+    containsIndependentCheckpoints: false
+    checkpointSource: not-applicable
+    checkpointUseRestriction: not-applicable
+    dataOwner: "asmaloney / libE57Format project"
+    citation: "asmaloney/libE57Format-test-data, self/PinholeImageWithDistortionParameters.e57. https://github.com/asmaloney/libE57Format-test-data"
+    knownLimitations: "Valid E57 holding three 1 x 1 pinhole JPEG images, two with the Leica camera-distortion extension, and no 3D data; libE57Format's Extension_DIST test reads 3 images and 0 Data3D. Fixes only the images-only refusal; no point cloud is ever produced."
+    evidenceRole: oracle
+    storage: committed
+    localPath: tests/fixtures/e57-libe57format/PinholeImageWithDistortionParameters.e57
+    controlPointIds: []
+    checkpointIds: []
+
   - datasetId: OLV-DS-087-SYNTHETIC-E57-DECODE
     title: "OpenLiDARViewer synthetic E57 fixture, exact single-precision decode paths"
     sourceUrl: scripts/make-e57-fixture.mjs

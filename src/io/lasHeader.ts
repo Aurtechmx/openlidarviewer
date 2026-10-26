@@ -378,3 +378,100 @@ export function pointFormatHasRgb(pointFormat: number): boolean {
 export function lasDecodedAttributes(pointFormat: number): PointAttributes {
   return { ...LAS_DECODED_ATTRIBUTES, hasColor: pointFormatHasRgb(pointFormat) };
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// The laszip VLR, checked as LASzip checks it
+// ─────────────────────────────────────────────────────────────────────────────
+//
+// LASzip validates a LAZ file's `laszip encoded` VLR before it decompresses
+// anything (`check_compressor`, `check_coder` and `check_item` in LASzip's
+// `src/laszip.cpp`). A VLR that fails one of those checks describes a stream no
+// LAZ decoder can read, so the file is refused here with the field named,
+// rather than handed to the decoder to fail on later with a generic message.
+// Reads the head slice only.
+
+const LASZIP_VLR_HEADER_BYTES = 54;
+
+/** LASzip compressors 0 to 3: none, pointwise, pointwise chunked, layered chunked. */
+const LASZIP_COMPRESSOR_COUNT = 4;
+/** LASzip defines one coder, 0 (arithmetic). */
+const LASZIP_CODER_COUNT = 1;
+
+/** Item size and the versions LASzip accepts, by item type. */
+const LASZIP_ITEMS: Record<number, { name: string; size: number | 'any'; versions: readonly number[] }> = {
+  0: { name: 'BYTE', size: 'any', versions: [0, 1, 2] },
+  6: { name: 'POINT10', size: 20, versions: [0, 1, 2] },
+  7: { name: 'GPSTIME11', size: 8, versions: [0, 1, 2] },
+  8: { name: 'RGB12', size: 6, versions: [0, 1, 2] },
+  9: { name: 'WAVEPACKET13', size: 29, versions: [0, 1] },
+  10: { name: 'POINT14', size: 30, versions: [0, 2, 3, 4] },
+  11: { name: 'RGB14', size: 6, versions: [0, 2, 3, 4] },
+  12: { name: 'RGBNIR14', size: 8, versions: [0, 2, 3, 4] },
+  13: { name: 'WAVEPACKET14', size: 29, versions: [0, 3, 4] },
+  14: { name: 'BYTE14', size: 'any', versions: [0, 2, 3, 4] },
+};
+
+/** Why the laszip VLR in `head` describes a stream LASzip would not read, or null. */
+export function laszipVlrProblem(head: ArrayBuffer): string | null {
+  if (head.byteLength < OFFSET_NUM_VLR + 4) return null;
+  const view = new DataView(head);
+  let cursor = view.getUint16(OFFSET_HEADER_SIZE, true);
+  const vlrCount = view.getUint32(OFFSET_NUM_VLR, true);
+  for (let i = 0; i < vlrCount && cursor + LASZIP_VLR_HEADER_BYTES <= head.byteLength; i++) {
+    let userId = '';
+    for (let k = 0; k < 16; k++) {
+      const c = view.getUint8(cursor + 2 + k);
+      if (c === 0) break;
+      userId += String.fromCharCode(c);
+    }
+    const recordId = view.getUint16(cursor + 18, true);
+    const length = view.getUint16(cursor + 20, true);
+    const at = cursor + LASZIP_VLR_HEADER_BYTES;
+    if (userId === 'laszip encoded' && recordId === 22204) {
+      if (at + length > head.byteLength) return null;
+      return laszipPayloadProblem(view, at, length);
+    }
+    cursor = at + length;
+  }
+  return null;
+}
+
+function laszipPayloadProblem(view: DataView, at: number, length: number): string | null {
+  if (length < 34 || (length - 34) % 6 !== 0) {
+    return `its LAZ compression record is ${length} bytes, which is not 34 bytes plus 6 per item`;
+  }
+  const compressor = view.getUint16(at, true);
+  if (compressor >= LASZIP_COMPRESSOR_COUNT) {
+    return `its LAZ compression record names compressor ${compressor}, and LASzip defines only compressors 0 to 3`;
+  }
+  const coder = view.getUint16(at + 2, true);
+  if (coder >= LASZIP_CODER_COUNT) {
+    return `its LAZ compression record names coder ${coder}, and LASzip defines only coder 0 (arithmetic)`;
+  }
+  const items = view.getUint16(at + 32, true);
+  if (items === 0 || 34 + items * 6 > length) {
+    return `its LAZ compression record lists ${items} items in ${length} bytes`;
+  }
+  for (let i = 0; i < items; i++) {
+    const type = view.getUint16(at + 34 + i * 6, true);
+    const size = view.getUint16(at + 36 + i * 6, true);
+    const version = view.getUint16(at + 38 + i * 6, true);
+    const item = LASZIP_ITEMS[type];
+    if (!item) return `its LAZ compression record lists item type ${type}, which LASzip does not define`;
+    if (item.size === 'any' ? size < 1 : size !== item.size) {
+      return `its LAZ compression record gives the ${item.name} item ${size} bytes`;
+    }
+    if (!item.versions.includes(version)) {
+      return `its LAZ compression record lists a ${item.name} item at version ${version}, which LASzip does not define`;
+    }
+  }
+  return null;
+}
+
+/** Refuse a LAZ file whose compression record no LAZ decoder can follow. */
+export function assertReadableLaszipVlr(head: ArrayBuffer, name: string): void {
+  const problem = laszipVlrProblem(head);
+  if (problem === null) return;
+  const message = `${name} cannot be decompressed: ${problem}. The file is damaged or was not written by a LAZ encoder.`;
+  throw new LoadError('malformed-file', message, message);
+}

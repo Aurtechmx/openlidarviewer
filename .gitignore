@@ -108,6 +108,8 @@ ELITE_*.md
 *.copc.laz.*
 # The one small COPC the streaming e2e specs open (scripts/make-copc-fixture.mjs).
 !/tests/fixtures/copc/terrain-access-utm.copc.laz
+# laspy's paged-hierarchy COPC test file (33 KB), used by the COPC range tests.
+!/tests/fixtures/las-laspy/simple_with_page.copc.laz
 
 # Local tooling / editor metadata (ignored via .git/info/exclude, not shipped)
 
