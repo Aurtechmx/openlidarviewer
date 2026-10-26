@@ -300,15 +300,14 @@ const fact = (name, value) => {
 // KNOWN_LIMITATIONS_v0.7.0-alpha.1 stated 843 modules against a tree of 886,
 // a renderer fan-out of 77 against 76, and an eager bundle of 805 KiB.
 //
-// Scope is deliberately the CURRENT alpha's documents only. A shipped v0.6.x
-// document describes the tree as it was and must not be "corrected" into
-// describing a tree it never saw.
+// Scope is deliberately the documents of package.json's version only. A
+// shipped document describes the tree as it was and must not be "corrected"
+// into describing a tree it never saw.
 {
-  const CURRENT_DOCS = [
-    'docs/releases/KNOWN_LIMITATIONS_v0.7.0.md',
-    'docs/releases/RELEASE_NOTES_v0.7.0.md',
-    'docs/releases/VALIDATION_REPORT_v0.7.0.md',
-  ].filter((f) => existsSync(resolve(ROOT, f)));
+  const pkgVersion = JSON.parse(read('package.json')).version;
+  const CURRENT_DOCS = ['KNOWN_LIMITATIONS', 'RELEASE_NOTES', 'VALIDATION_REPORT']
+    .map((name) => `docs/releases/${name}_v${pkgVersion}.md`)
+    .filter((f) => existsSync(resolve(ROOT, f)));
 
   const measurement = measureModuleGraph();
   const modules = measurement.graph.size;

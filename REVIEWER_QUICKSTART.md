@@ -66,7 +66,7 @@ Everything happens on your machine; no data leaves the browser.
 ## Verifying a published release
 
 ```bash
-git checkout v0.7.0
+git checkout v0.7.1-alpha.1
 nvm use && npm ci
 OLV_GATE_MODE=release npm run gate
 ```
