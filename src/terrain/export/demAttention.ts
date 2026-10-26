@@ -60,6 +60,19 @@ export const ATTENTION_REASON_CODE = {
   UNRESOLVED: 8,
 } as const;
 
+/**
+ * Band 1 codes. The level is the highest input score banded at
+ * ATTENTION_PARAMS.levelCuts; these names are what the README, the QGIS
+ * layer style and the code table call each band value. Part of the method
+ * version, as the reason table is.
+ */
+export const ATTENTION_LEVEL_CODE = {
+  none: 0,
+  low: 1,
+  medium: 2,
+  high: 3,
+} as const;
+
 /** Pre-registered values (validation/protocols/evidencedem-attention-v1.md). */
 export const ATTENTION_PARAMS = {
   /** LONG_INTERPOLATION = interpolation distance in cells / this (the edge risk distance). */

@@ -18,8 +18,13 @@
  * `withheldExcluded` is `true`, `false`, or `null` for undeclared, and the
  * third is the common case today. `src/science/withheldPolicy.ts` states the
  * project's rule — scientific processing excludes Withheld points unless
- * asked otherwise — and has no callers anywhere in `src/`, so no DTM in this
- * tree can currently claim the exclusion was applied.
+ * asked otherwise. The terrain path applies it: `src/render/terrainStreamSample.ts`
+ * drops Withheld returns while gathering the points for the terrain core, and
+ * `src/app/terrainAnalysisRunner.ts` records the outcome beside its core
+ * parameters, `null` when a contributing buffer carried no flags channel.
+ * That outcome is not written onto the DTM grid, so a simulation that reads
+ * only the grid cannot tell whether the exclusion was applied, and the field
+ * stays undeclared until the grid carries it.
  *
  * Defaulting that to `false` would be a lie in the safe-looking direction,
  * and defaulting it to `true` would be a lie in the dangerous one. `null`

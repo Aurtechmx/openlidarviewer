@@ -18,8 +18,8 @@ import {
 describe('resolveLiveDtmDescriptor', () => {
   it('resolves to the documented production DTM method values', () => {
     const d = resolveLiveDtmDescriptor();
-    expect(d.methodId).toBe('olv.dtm.idw-fill');
-    expect(d.methodVersion).toBe(METHOD_REGISTRY['olv.dtm.idw-fill'].version);
+    expect(d.methodId).toBe('olv.dtm.geodesic-fill');
+    expect(d.methodVersion).toBe(METHOD_REGISTRY['olv.dtm.geodesic-fill'].version);
     // Track the production source of truth, not a hardcoded literal: the
     // descriptor must equal the constants the delivered surface is built from.
     expect(d.aggregation).toBe(LIVE_DTM_AGGREGATION);
@@ -111,11 +111,14 @@ describe('dtmMethodDigest', () => {
   it('default trust holds the digest byte-identical; trust=false moves it', () => {
     // Pinned default digest: deriving despike from a trust parameter must not
     // perturb the production default (trust=true → despike off). If this
-    // literal ever changes, the delivered method changed. Last moved by
-    // olv.dtm.idw-fill@2, which leaves cells outside the data footprint as no
-    // data (method version 2 and the footprint radius both enter the digest).
+    // literal ever changes, the delivered method changed or was renamed: the
+    // method id and version both enter the digest. Last moved when the id
+    // changed from the legacy olv.dtm.idw-fill (version 2) to
+    // olv.dtm.geodesic-fill@1, the same computation under the name of the
+    // algorithm; before that by the version that leaves cells outside the
+    // data footprint as no data.
     const DEFAULT_DIGEST =
-      '2a195e64973ef80ec4c2a33119e27ce0905048ad319337444cf916586784ce35';
+      '912aed5a6063b1f6941c04a02bc837ff132d5bf3683c2851cf86e49bfc907700';
     expect(dtmMethodDigest(resolveLiveDtmDescriptor())).toBe(DEFAULT_DIGEST);
     // trust=false flips despike on — a method-behaviour change — so the digest
     // must differ from the trusted default.

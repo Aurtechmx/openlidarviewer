@@ -13,10 +13,37 @@
  * catch anything.
  */
 import { describe, it, expect } from 'vitest';
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 // @ts-expect-error — plain .mjs tooling module, no type declarations
-import { bareSpecifier, markdownTargets, linkCandidates, importSpecifiers, scriptFileTargets, documentedScripts, manifestInventoryPaths, classifyMarkdownReferences, rootDocumentReferences, readsPackageFromNodeModules, archiveSource, skipResult } from '../../scripts/verify-archive-portability.mjs';
+import { bareSpecifier, markdownTargets, linkCandidates, importSpecifiers, scriptFileTargets, documentedScripts, manifestInventoryPaths, classifyMarkdownReferences, rootDocumentReferences, readsPackageFromNodeModules, archiveSource, skipResult, declaresRequiredArguments } from '../../scripts/verify-archive-portability.mjs';
 // @ts-expect-error: plain .mjs tooling module, no type declarations
 import { ranOutcome } from '../../scripts/publication-battery.mjs';
+
+describe('declaresRequiredArguments', () => {
+  it('is true when a usage message names a required <placeholder>', () => {
+    expect(declaresRequiredArguments("console.error('usage: npm run dem:package -- <crop> <outdir>\\n  crops: ...');")).toBe(true);
+    expect(declaresRequiredArguments('usage: test-file.mjs <file.test.ts ...> [--deadline=<sec>]')).toBe(true);
+    expect(declaresRequiredArguments('Usage: x.mjs --dir <staging-directory>')).toBe(true);
+  });
+
+  it('is false for optional-only arguments, no usage message, or placeholders away from a usage line', () => {
+    expect(declaresRequiredArguments('usage: x.mjs [--json <path>] [--keep]')).toBe(false);
+    expect(declaresRequiredArguments('usage: x.mjs')).toBe(false);
+    expect(declaresRequiredArguments('// writes <outdir>/index.html\nconsole.log("done")')).toBe(false);
+    expect(declaresRequiredArguments('usage:\n  x.mjs <dir>')).toBe(false);
+  });
+
+  it('selects exactly the repository scripts that print a usage message and exit when run bare', () => {
+    const read = (f: string) => readFileSync(resolve(__dirname, '../../scripts', f), 'utf8');
+    for (const f of ['dem-package.mjs', 'test-file.mjs', 'verify-release-assets.mjs', 'create-release-manifest.mjs']) {
+      expect(declaresRequiredArguments(read(f)), f).toBe(true);
+    }
+    for (const f of ['lint-archive-metadata.mjs', 'verify-dataset-register.mjs']) {
+      expect(declaresRequiredArguments(read(f)), f).toBe(false);
+    }
+  });
+});
 
 describe('bareSpecifier', () => {
   it('names the package for bare and scoped specifiers', () => {

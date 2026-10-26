@@ -10,7 +10,7 @@
 
 import { describe, it, expect } from 'vitest';
 // @ts-expect-error — plain .mjs script, no types
-import { buildEvidenceRecord, parseGateStages, parseGateLog, summariseStages, bindMutationEvidence, CANONICAL_NPM, MANDATORY_RELEASE_STAGES, DEFERRED_RELEASE_STAGES } from '../scripts/collect-evidence.mjs';
+import { buildEvidenceRecord, parseGateStages, parseGateLog, summariseStages, bindMutationEvidence, resolveReleaseIdentity, CANONICAL_NPM, MANDATORY_RELEASE_STAGES, DEFERRED_RELEASE_STAGES } from '../scripts/collect-evidence.mjs';
 
 const BUCKETS = ['unit', 'export', 'terrain', 'ui', 'slow'];
 const fullBuckets = () =>
@@ -334,5 +334,66 @@ describe('buildEvidenceRecord — development mode', () => {
     const b = fullBuckets();
     b.ui = { passed: 0, skipped: 0, runs: 0 };
     expect(buildEvidenceRecord(base({ mode: 'development', buckets: b })).ok).toBe(false);
+  });
+});
+
+describe('resolveReleaseIdentity — a gate run inside an extracted archive', () => {
+  const sha = 'c'.repeat(40);
+  const manifest = { version: '0.7.0', tag: 'v0.7.0', gitCommit: sha };
+  const fs = (files: Record<string, unknown>) => ({
+    listDir: (dir: string) => Object.keys(files).filter((f) => f.startsWith(`${dir}/`)).map((f) => f.slice(dir.length + 1)),
+    readJson: (path: string) => files[path] ?? null,
+  });
+
+  it('keeps git as the source whenever git answered', () => {
+    const r = resolveReleaseIdentity({ gitCommit: sha, gitTag: 'v0.7.0', env: { OLV_RELEASE_COMMIT: 'd'.repeat(40), OLV_RELEASE_TAG: 'v9' } });
+    expect(r).toMatchObject({ commit: sha, tag: 'v0.7.0', source: 'git', identityFrom: 'git', problems: [] });
+  });
+
+  it('takes both halves from the environment and records the archive source', () => {
+    const r = resolveReleaseIdentity({ env: { OLV_RELEASE_COMMIT: sha, OLV_RELEASE_TAG: 'v0.7.0' } });
+    expect(r).toMatchObject({ commit: sha, tag: 'v0.7.0', source: 'archive', identityFrom: 'environment', problems: [] });
+  });
+
+  it('refuses one environment half without the other, and a short sha', () => {
+    expect(resolveReleaseIdentity({ env: { OLV_RELEASE_TAG: 'v0.7.0' } }).problems[0]).toMatch(/both be set/);
+    expect(resolveReleaseIdentity({ env: { OLV_RELEASE_COMMIT: 'abc', OLV_RELEASE_TAG: 'v0.7.0' } }).problems[0]).toMatch(/40-hex/);
+  });
+
+  it('reads the manifest beside the archive when the environment is silent', () => {
+    const r = resolveReleaseIdentity({
+      version: '0.7.0', manifestDirs: ['/dl'], ...fs({ '/dl/release-manifest-v0.7.0.json': manifest }),
+    });
+    expect(r).toMatchObject({ commit: sha, tag: 'v0.7.0', source: 'archive', identityFrom: 'release-manifest:release-manifest-v0.7.0.json' });
+  });
+
+  it('does not use a manifest for another version, and says so', () => {
+    const r = resolveReleaseIdentity({
+      version: '0.7.1', manifestDirs: ['/dl'], ...fs({ '/dl/release-manifest-v0.7.0.json': manifest }),
+    });
+    expect(r.commit).toBeNull();
+    expect(r.problems[0]).toMatch(/describes v0.7.0, not the package version v0.7.1/);
+  });
+
+  it('with no identity at all the record refuses with the archive wording', () => {
+    const r = resolveReleaseIdentity({});
+    expect(r).toMatchObject({ commit: null, tag: null, source: 'archive', identityFrom: null });
+    const p = problems({ commit: null, tag: null, source: 'archive', identityFrom: null });
+    expect(p.some((x) => x.includes('OLV_RELEASE_COMMIT'))).toBe(true);
+  });
+
+  it('writes source and identityFrom into the release record', () => {
+    const r = buildEvidenceRecord(base({ source: 'archive', identityFrom: 'environment' }));
+    expect(r.ok).toBe(true);
+    expect(r.record.source).toBe('archive');
+    expect(r.record.identityFrom).toBe('environment');
+    const git = buildEvidenceRecord(base());
+    expect(git.record.source).toBe('git');
+    expect(git.record.identityFrom).toBe('git');
+  });
+
+  it('refuses an unknown identity source and an archive record with no provenance', () => {
+    expect(problems({ source: 'guess' }).some((p) => p.includes('identity source'))).toBe(true);
+    expect(problems({ source: 'archive', identityFrom: null }).some((p) => p.includes('identityFrom'))).toBe(true);
   });
 });

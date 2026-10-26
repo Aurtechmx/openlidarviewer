@@ -21,11 +21,16 @@
  * no success banner, so grepping for one would be a check that always passes
  * — a guard that cannot fail is worse than none, because it reads like
  * protection. Writes `docs/validation/test-evidence.json`.
+ *
+ * Release mode outside a repository (an extracted source archive) takes the
+ * commit and tag from OLV_RELEASE_COMMIT and OLV_RELEASE_TAG, or from the
+ * `release-manifest-*.json` published beside the archive, and records
+ * `source: "archive"`; see {@link resolveReleaseIdentity}.
  */
 
 import './lib/confineGit.mjs';
 import { releaseChannelFor, releaseChannelProblems } from './lib/releaseChannel.mjs';
-import { readFileSync, writeFileSync, mkdirSync, copyFileSync } from 'node:fs';
+import { readFileSync, writeFileSync, mkdirSync, copyFileSync, readdirSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { resolve, dirname } from 'node:path';
@@ -205,6 +210,85 @@ export function bindMutationEvidence(mutation, releaseCommit, { required }) {
   };
 }
 
+/** Where a record's commit and tag came from. */
+export const IDENTITY_SOURCES = ['git', 'archive'];
+
+/**
+ * Resolve the commit and tag a release record describes.
+ *
+ * A checkout answers through git. An extracted source archive has no `.git`,
+ * so the same gate run there used to stop at "git commit is unknown" and
+ * "release mode requires a tag" and could never produce a record, although
+ * every stage had run. The identity exists; it is written in the release
+ * manifest published beside the archive, and a reviewer who downloaded both
+ * holds it. So release mode also accepts the identity from, in this order:
+ *
+ *   1. git, when the tree is a repository (`source: "git"`);
+ *   2. OLV_RELEASE_COMMIT and OLV_RELEASE_TAG, both set (`source: "archive"`);
+ *   3. a `release-manifest-*.json` in one of `manifestDirs`, whose `gitCommit`
+ *      and `tag` are taken as given (`source: "archive"`).
+ *
+ * Both halves must come from one place: a commit from the environment paired
+ * with a tag from a manifest would bind a record to an identity nobody wrote
+ * down. A manifest is read only when its `version` is the package version, so
+ * a manifest for another release left in the same download folder is reported
+ * rather than used. Nothing here reads git; the caller passes what git said.
+ */
+export function resolveReleaseIdentity({
+  gitCommit = null,
+  gitTag = null,
+  env = {},
+  version = null,
+  manifestDirs = [],
+  listDir = () => [],
+  readJson = () => null,
+} = {}) {
+  const problems = [];
+  if (gitCommit) {
+    return { commit: gitCommit, tag: gitTag, source: 'git', identityFrom: 'git', problems };
+  }
+  const envCommit = env.OLV_RELEASE_COMMIT ?? null;
+  const envTag = env.OLV_RELEASE_TAG ?? null;
+  if (envCommit || envTag) {
+    if (!envCommit || !envTag) {
+      problems.push('OLV_RELEASE_COMMIT and OLV_RELEASE_TAG must both be set; one without the other names no release');
+      return { commit: null, tag: null, source: 'archive', identityFrom: 'environment', problems };
+    }
+    if (!/^[0-9a-f]{40}$/.test(envCommit)) {
+      problems.push(`OLV_RELEASE_COMMIT must be a full 40-hex sha, got ${JSON.stringify(envCommit)}`);
+    }
+    return { commit: envCommit, tag: envTag, source: 'archive', identityFrom: 'environment', problems };
+  }
+  for (const dir of manifestDirs) {
+    let names = [];
+    try {
+      names = listDir(dir).filter((n) => /^release-manifest-.*\.json$/.test(n)).sort();
+    } catch {
+      continue;
+    }
+    for (const name of names) {
+      const manifest = readJson(resolve(dir, name));
+      if (!manifest || typeof manifest !== 'object') continue;
+      if (version && manifest.version !== version) {
+        problems.push(`${name} describes v${manifest.version}, not the package version v${version}; it was not used`);
+        continue;
+      }
+      if (!manifest.gitCommit || !manifest.tag) {
+        problems.push(`${name} carries no gitCommit or no tag; it was not used`);
+        continue;
+      }
+      return {
+        commit: manifest.gitCommit,
+        tag: manifest.tag,
+        source: 'archive',
+        identityFrom: `release-manifest:${name}`,
+        problems: [],
+      };
+    }
+  }
+  return { commit: null, tag: null, source: 'archive', identityFrom: null, problems };
+}
+
 /**
  * The canonical release toolchain. Evidence made elsewhere is not authoritative.
  * npm comes from the packageManager pin so there is exactly one place to bump it;
@@ -254,6 +338,8 @@ export function buildEvidenceRecord(input) {
     stages = null,
     canonicalNode = null,
     mutation = null,
+    source = 'git',
+    identityFrom = source === 'git' ? 'git' : null,
   } = input;
 
   const problems = [];
@@ -264,7 +350,21 @@ export function buildEvidenceRecord(input) {
   for (const b of BUCKETS) {
     if (!buckets?.[b] || buckets[b].runs === 0) problems.push(`no test tally for the ${b} bucket`);
   }
-  if (!commit) problems.push('git commit is unknown');
+  if (!IDENTITY_SOURCES.includes(source)) {
+    problems.push(`identity source must be one of ${IDENTITY_SOURCES.join(', ')}, got ${JSON.stringify(source)}`);
+  }
+  if (!commit) {
+    problems.push(
+      source === 'archive'
+        ? 'commit is unknown: no git repository, and neither OLV_RELEASE_COMMIT/OLV_RELEASE_TAG nor a release-manifest-*.json beside the archive names one'
+        : 'git commit is unknown',
+    );
+  }
+  // An archive record names where its identity came from, or it is a record
+  // that cannot be checked against anything.
+  if (source === 'archive' && commit && !identityFrom) {
+    problems.push('an archive record must say where its commit and tag came from (identityFrom)');
+  }
 
   if (release) {
     // A release record names the tag it describes, or it is not one.
@@ -348,6 +448,11 @@ export function buildEvidenceRecord(input) {
       releaseAuthoritative: release,
       tag,
       commit,
+      // "git" when the tree answered for itself; "archive" when the identity
+      // was supplied to a run inside an extracted source archive, and then
+      // identityFrom says by what (the environment, or the manifest file).
+      source,
+      identityFrom,
       repository,
       generatedAt,
       nodeVersion,
@@ -448,6 +553,32 @@ function main() {
     }).toString().trim();
   } catch { /* an untagged commit is normal for a development run */ }
 
+  // Outside a repository the identity comes from the environment or from the
+  // release manifest published beside the archive: the directory the archive
+  // was extracted into, or one named by OLV_RELEASE_MANIFEST_DIR. A development
+  // run keeps git's answer (possibly none) and is not an archive record.
+  let identity = { commit, tag, source: 'git', identityFrom: commit ? 'git' : null, problems: [] };
+  if (mode === 'release') {
+    identity = resolveReleaseIdentity({
+      gitCommit: commit,
+      gitTag: tag,
+      env: process.env,
+      version,
+      manifestDirs: [process.env.OLV_RELEASE_MANIFEST_DIR, resolve(ROOT, '..')].filter(Boolean),
+      listDir: (dir) => readdirSync(dir),
+      readJson: (path) => {
+        try {
+          return JSON.parse(readFileSync(path, 'utf8'));
+        } catch {
+          return null;
+        }
+      },
+    });
+    for (const p of identity.problems) console.error(`release identity: ${p}`);
+    commit = identity.commit;
+    tag = identity.tag;
+  }
+
   let npmVersion = null;
   try {
     npmVersion = execFileSync(NPM, ['--version'], { stdio: ['ignore', 'pipe', 'ignore'] }).toString().trim();
@@ -525,6 +656,8 @@ function main() {
     platform: `${process.platform}-${process.arch}`,
     generatedAt: new Date().toISOString(),
     gateLogSha256,
+    source: identity.source,
+    identityFrom: identity.identityFrom,
     repository: process.env.GITHUB_REPOSITORY ?? null,
     workflow: process.env.GITHUB_WORKFLOW ?? null,
     workflowRunId: process.env.GITHUB_RUN_ID ?? null,
@@ -535,9 +668,9 @@ function main() {
     science,
   });
 
-  if (!built.ok) {
+  if (!built.ok || identity.problems.length > 0) {
     console.error(`Refusing to write ${mode} evidence:`);
-    for (const p of built.problems) console.error(`  • ${p}`);
+    for (const p of [...identity.problems, ...built.problems]) console.error(`  • ${p}`);
     process.exit(1);
   }
   const evidence = built.record;

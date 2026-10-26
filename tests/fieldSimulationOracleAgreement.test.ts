@@ -27,6 +27,7 @@ import { describe, expect, it } from 'vitest';
 
 import { d8Flow } from '../src/simulation/flowPulse/d8Flow';
 import { flowAccumulation } from '../src/simulation/flowPulse/flowAccumulation';
+import { priorityFlood, type FillEpsilon, type NoDataReading } from '../src/simulation/flowPulse/priorityFlood';
 import type { FlowGrid } from '../src/simulation/flowPulse/flowTypes';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..', 'validation', 'field-simulation');
@@ -49,6 +50,17 @@ interface Expected {
   readonly sinkCount: number;
   readonly flatCount: number;
   readonly outletCount: number;
+  /** The Priority-Flood half: the oracle conditions every fixture with these options. */
+  readonly conditioning: { readonly epsilon: FillEpsilon; readonly noData: NoDataReading };
+  readonly conditionedZ: readonly (number | null)[];
+  readonly spillLevel: readonly (number | null)[];
+  readonly depressionMask: readonly number[];
+  readonly cellsRaised: number;
+  readonly maxFillDepth: number;
+  readonly fillDepthSum: number;
+  readonly flatCellsResolved: number;
+  readonly epsilonAbsorbed: number;
+  readonly cellsUnreachable: number;
 }
 
 const read = <T,>(p: string): T => JSON.parse(readFileSync(p, 'utf8')) as T;
@@ -113,5 +125,40 @@ describe.each(names)('%s', (name) => {
   it('accumulates to the same upstream counts by a different algorithm', () => {
     const acc = flowAccumulation(grid, routed);
     expect([...acc.upstreamCells]).toEqual([...want.upstreamCells]);
+  });
+
+  // The conditioned half. The oracle's heapq flood and the viewer's binary
+  // heap are ordered the same way (spill level, then insertion), read the
+  // same float32 heights and apply the same rise, so the conditioned surface
+  // is compared exactly, cell by cell, not within a tolerance: a single
+  // float64 step out of place is a different flood order.
+  const conditioned = priorityFlood(grid, want.conditioning);
+  const valid = (v: number, i: number): number | null => (grid.valid[i] === 1 ? v : null);
+
+  it('conditions to the same surface, to the last float64 step', () => {
+    expect(Array.from(conditioned.z, valid)).toEqual([...want.conditionedZ]);
+  });
+
+  it('reaches every cell at the same spill level', () => {
+    expect(Array.from(conditioned.spillLevel, valid)).toEqual([...want.spillLevel]);
+  });
+
+  it('fills the same cells and reports the same fill figures', () => {
+    expect([...conditioned.depressionMask]).toEqual([...want.depressionMask]);
+    expect({
+      cellsRaised: conditioned.cellsRaised,
+      maxFillDepth: conditioned.maxFillDepth,
+      fillDepthSum: conditioned.fillDepthSum,
+      flatCellsResolved: conditioned.flatCellsResolved,
+      epsilonAbsorbed: conditioned.epsilonAbsorbed,
+      cellsUnreachable: conditioned.cellsUnreachable,
+    }).toEqual({
+      cellsRaised: want.cellsRaised,
+      maxFillDepth: want.maxFillDepth,
+      fillDepthSum: want.fillDepthSum,
+      flatCellsResolved: want.flatCellsResolved,
+      epsilonAbsorbed: want.epsilonAbsorbed,
+      cellsUnreachable: want.cellsUnreachable,
+    });
   });
 });

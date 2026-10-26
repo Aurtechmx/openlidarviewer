@@ -3,6 +3,7 @@
   "@type": "SoftwareSourceCode",
   "identifier": [
     "https://doi.org/10.5281/zenodo.21544619",
+    "https://doi.org/10.5281/zenodo.23631668",
     "https://archive.softwareheritage.org/swh:1:snp:7b496fd207adaae61d5add4137e7d4eb781a1f83"
   ],
   "name": "OpenLiDARViewer",
@@ -64,7 +65,8 @@
   ],
   "maintainer": {
     "@type": "Person",
-    "@id": "https://orcid.org/0009-0007-3147-323X"
+    "@id": "https://orcid.org/0009-0007-3147-323X",
+    "email": "info@aurtech.mx"
   },
   "softwareRequirements": [
     {

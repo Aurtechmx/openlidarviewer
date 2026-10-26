@@ -116,6 +116,14 @@ jobs:
       - name: Install Playwright Chromium
         run: ./node_modules/.bin/playwright install --with-deps chromium
 
+      # The committer time of the tagged commit, so the build, the archives and
+      # the manifest carry one reproducible timestamp instead of the wall clock.
+      # scripts/package.sh and scripts/verify-scientific-records.mjs resolve the
+      # same value themselves when the variable is unset; setting it here makes
+      # the manifest record it rather than null.
+      - name: Reproducible timestamp from the tagged commit
+        run: echo "SOURCE_DATE_EPOCH=$(git log -1 --format=%ct HEAD)" >> "$GITHUB_ENV"
+
       - name: Release-mode gate (all mandatory stages)
         env:
           OLV_GATE_MODE: release
@@ -220,6 +228,11 @@ jobs:
           cp "incoming/smoke-deploy-v${V}.json" "$STAGE"/
           cp "incoming/RELEASE_NOTES_v${V}.md" "$STAGE"/
           ls -la "$STAGE"
+
+      # The same committer time the gate job used; this job checked out the same
+      # tagged commit, so the manifest binds the value the archives were built with.
+      - name: Reproducible timestamp from the tagged commit
+        run: echo "SOURCE_DATE_EPOCH=$(git log -1 --format=%ct HEAD)" >> "$GITHUB_ENV"
 
       - name: Bind the manifest
         run: |

@@ -10,6 +10,7 @@
 import { readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, it, expect } from 'vitest';
+import { evidenceExpectedJson } from './support/demOracleFixtures';
 import { DTM_CLAIMS, validatedDecision } from './helpers/exportDecisions';
 import { extractEntry } from './helpers/zipReader';
 import { DEM_PKG_OPTS, demResultAround } from './helpers/demPackageFixture';
@@ -510,32 +511,8 @@ describe('terrain evidence oracle fixture', () => {
     epsg: 32610, isGeographic: false, horizontalUnit: 'm', verticalUnit: 'm', demValues: grid.z,
   };
   const bytes = writeTerrainEvidenceGeoTiff(grid, geo);
-  const b = terrainEvidenceBands(grid);
-  const cell = (i: number): number | null => (grid.coverage[i] !== 0 && Number.isFinite(grid.z[i]) ? 1 : null);
-  const expected = {
-    note: 'TypeScript values for terrain_evidence.tif; grid order, row 0 = south. null = NoData.',
-    cols: grid.cols,
-    rows: grid.rows,
-    cellSize: grid.cellSizeM,
-    xllCorner: geo.xllCorner,
-    yllCorner: geo.yllCorner,
-    epsg: geo.epsg,
-    noData: geo.noData,
-    bandNames: [...TERRAIN_EVIDENCE_BANDS],
-    bandUnits: ['returns', 'm', 'code', 'm', 'm', 'm'],
-    frameResolved: true,
-    edgeAffectedWithinCells: EVIDENCE_STATE_PARAMS.edgeAffectedWithinCells,
-    supportCount: Array.from(b.supportCount, (v, i) => (cell(i) ? v : null)),
-    interpolationDistance: Array.from(b.interpolationDistance, (v, i) => (cell(i) ? v : null)),
-    interpDistanceCells: Array.from(grid.interpDistanceCells, (v, i) => (cell(i) ? v : null)),
-    cellState: Array.from(b.cellState, (v, i) => (cell(i) ? v : null)),
-    nearestSupportDistance: Array.from(b.nearestSupportDistance, (v, i) => (cell(i) ? v : null)),
-    verticalDispersion: Array.from(b.verticalDispersion, (v, i) => (cell(i) && Number.isFinite(v) ? v : null)),
-    edgeDistance: Array.from(b.edgeDistance, (v, i) => (cell(i) && Number.isFinite(v) ? v : null)),
-    returns: evidenceReturns().perCell,
-    sha256: sha256Hex(bytes),
-  };
-  const json = `${JSON.stringify(expected, null, 2)}\n`;
+  // The record the Python reader checks; shared with the DEM package driver.
+  const json = evidenceExpectedJson({ grid, geo, bytes, returns: evidenceReturns().perCell });
   if (process.env.OLV_WRITE_EVIDENCE_FIXTURE === '1') {
     writeFileSync(join(DIR, 'terrain_evidence.tif'), bytes);
     writeFileSync(join(DIR, 'expected.json'), json);

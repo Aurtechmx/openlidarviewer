@@ -193,7 +193,7 @@ function stageRelease(opts: {
   );
   const manifest: Record<string, any> = {
     schemaVersion: 1, project: 'openlidarviewer', version: VERSION, tag: TAG,
-    gitCommit: COMMIT, bundle: { liveEntryKiB: 713, ceilingKiB: 720 }, artifacts,
+    gitCommit: COMMIT, sourceDateEpoch: 1767225600, bundle: { liveEntryKiB: 713, ceilingKiB: 720 }, artifacts,
   };
   opts.manifest?.(manifest);
   const manName = `release-manifest-v${VERSION}.json`;
@@ -259,6 +259,13 @@ describeZip('release:verify — provenance', () => {
   it('rejects a manifest whose commit differs from the evidence', () => {
     stageRelease({ manifest: (m) => { m.gitCommit = 'd'.repeat(40); } });
     failsWith('!= evidence commit');
+  });
+
+  it('rejects a manifest that records no reproducible timestamp, or a malformed one', () => {
+    stageRelease({ manifest: (m) => { m.sourceDateEpoch = null; } });
+    failsWith('no sourceDateEpoch');
+    stageRelease({ manifest: (m) => { m.sourceDateEpoch = '2026-01-01'; } });
+    failsWith('not a Unix time');
   });
 
   it('rejects a manifest commit that is not the tag target', () => {

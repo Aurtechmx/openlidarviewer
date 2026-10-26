@@ -10,6 +10,7 @@
 import { readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, it, expect } from 'vitest';
+import { attentionExpectedJson } from './support/demOracleFixtures';
 import { extractEntry } from './helpers/zipReader';
 import { DEM_PKG_OPTS, decodeBands, demResultFor } from './helpers/demPackageFixture';
 import { buildDemPackage } from '../src/terrain/export/demPackage';
@@ -17,7 +18,6 @@ import {
   ATTENTION_PARAMS,
   ATTENTION_REASON_CODE as RC,
   ATTENTION_NO_DATA,
-  TERRAIN_ATTENTION_BANDS,
   TERRAIN_ATTENTION_METHOD_ID,
   TERRAIN_RESIDUAL_METHOD_ID,
   attentionLevel,
@@ -448,41 +448,8 @@ describe('terrain attention oracle fixture', () => {
   const b = terrainAttentionBands(inp);
   const geo = { xllCorner: 600000, yllCorner: 4000000, epsg: 32610, isGeographic: false, demValues: g.z };
   const bytes = writeTerrainAttentionGeoTiff(b, g, geo);
-  const written = (i: number): boolean => g.coverage[i] !== 0 && Number.isFinite(g.z[i]);
-  const num = (v: number): number | null => (Number.isFinite(v) ? v : null);
-  const expected = {
-    note: 'TypeScript values for terrain_attention.tif; grid order, row 0 = south. null = NoData or no value.',
-    cols: COLS,
-    rows: ROWS,
-    cellSize: g.cellSizeM,
-    xllCorner: geo.xllCorner,
-    yllCorner: geo.yllCorner,
-    epsg: geo.epsg,
-    noData: ATTENTION_NO_DATA,
-    bandNames: [...TERRAIN_ATTENTION_BANDS],
-    bandUnits: ['level', 'code'],
-    params: {
-      longInterpolationCells: ATTENTION_PARAMS.longInterpolationCells,
-      lowSupportConfidence: ATTENTION_PARAMS.lowSupportConfidence,
-      verticalReference: 0.3,
-      levelCuts: [...ATTENTION_PARAMS.levelCuts],
-      reasonOrder: Object.keys(RC).filter((k) => k !== 'NONE'),
-      reasonCodes: RC,
-      edgeAffectedState: EVIDENCE_STATE_CODE.edgeAffected,
-    },
-    heights: Array.from(g.z, (v) => num(v)),
-    counts: Array.from(g.counts),
-    coverage: Array.from(g.coverage),
-    confidence: Array.from(g.confidence),
-    interpDistanceCells: Array.from(g.interpDistanceCells, (v) => num(v)),
-    cellState: Array.from(ev.cellState),
-    sensitivityRange: Array.from(sens),
-    residual: Array.from(res.residual, (v) => num(v)),
-    attentionLevel: Array.from(b.level, (v, i) => (written(i) ? v : null)),
-    dominantReason: Array.from(b.reason, (v, i) => (written(i) ? v : null)),
-    sha256: sha256Hex(bytes),
-  };
-  const json = `${JSON.stringify(expected, null, 2)}\n`;
+  // The record the Python reader checks; shared with the DEM package driver.
+  const json = attentionExpectedJson({ grid: g, inputs: inp, residual: res, bands: b, geo, bytes });
   if (process.env.OLV_WRITE_ATTENTION_FIXTURE === '1') {
     writeFileSync(join(DIR, 'terrain_attention.tif'), bytes);
     writeFileSync(join(DIR, 'expected.json'), json);

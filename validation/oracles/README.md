@@ -157,13 +157,14 @@ node-gyp build that fails.
 ## The guard
 
 ```sh
-node scripts/verify-oracle-versions.mjs
+npm run verify:oracle-versions
 ```
 
-It reads the versions the records already state, in
-`validation/cross-implementation/studies/*.study.json` and in every
-`environment` block under `validation/`, runs each oracle's own version command,
-and compares.
+It is a step of the release gate (`scripts/gates.json`, static group, after
+`lint:oracle-consensus`) and of the CI workflow. It reads the versions the
+records already state, in `validation/cross-implementation/studies/*.study.json`
+and in every `environment` block under `validation/`, runs each oracle's own
+version command, and compares.
 
 - A tool that is not installed is reported and passed over. Several legs
   already record `status: "failed"` rather than fabricating a reference, and a
@@ -175,9 +176,36 @@ and compares.
 - A pin in `oracle-pins.json` that disagrees with a record exits non-zero
   even when no oracle is installed at all, which is the half that runs on a CI
   machine with neither GDAL nor PDAL on it.
+- `acceptedHostVersions` in `oracle-pins.json` declares, for an oracle the
+  image does not install (R today), the versions the committed records were
+  produced against on the reference workstation. A host running one of those
+  versions passes; a version outside the set still fails. Declaring a version
+  there does not put it in the image.
 
 `validation/snapshot/` is skipped. It is a frozen copy of an earlier release and
 its versions are supposed to differ from today's machine.
+
+## Recording the image digest
+
+`oracle-pins.json` carries a `containerPinning` block. It reads `not-executed`
+until a maintainer runs
+
+```sh
+bash scripts/pin-oracle-image.sh
+```
+
+which builds the image, runs the slope protocol
+(`PROTO-RASTER-HORN-GDAL-ANALYTIC-DEM`, through `scripts/run-gdaldem-reference.mjs`)
+inside it against a scratch copy of the committed tree, writes the run under
+`validation/oracles/runs/`, and records the image's content digest, the tag,
+the date and the path of that run in the block as `recorded`. The script
+refuses to run on a dirty tree or without a reachable Docker daemon, and it
+never writes into the committed references: the image does not reproduce them
+byte for byte, and adopting it for a leg is a separate change to that leg's
+record. `verify:oracle-versions` accepts either state and refuses a recorded
+digest whose run is missing, did not execute inside the image, or names a
+different image. The build needs about 1.5 GB of disk for the image and up to
+2 GB during the build; the run itself writes a few MB.
 
 ## Regenerating the lock
 

@@ -39,7 +39,10 @@
  *   validation/ ** /reference-runs*.json                  → the environment
  *       block each reference runner writes, verbatim from the tool.
  *   validation/oracles/oracle-pins.json                   → the versions the
- *       pinned container image installs, when that file exists.
+ *       pinned container image installs, the host versions declared for an
+ *       oracle the image does not install, and the containerPinning block
+ *       (not-executed, or a recorded image digest with its run), when that
+ *       file exists.
  *
  * The pin cross-check is the half that runs everywhere. It needs no oracle
  * installed at all, so CI catches a record and an image that have drifted apart
@@ -104,7 +107,8 @@ const ORACLES = [
     names: [/\bR\b/],
     probe: ['Rscript', '--version'],
     parse: (out) => /(\d+\.\d+\.\d+)/.exec(out)?.[1] ?? null,
-    extract: (text) => /\bR\s+(\d+\.\d+\.\d+)/.exec(text)?.[1] ?? null,
+    // Records write either "R 4.4.1" or R's own banner, "R version 4.6.1".
+    extract: (text) => /\bR\s+(?:version\s+)?(\d+\.\d+\.\d+)/.exec(text)?.[1] ?? null,
   },
 ];
 
@@ -211,25 +215,103 @@ function collectClaims() {
 }
 
 /**
- * What the pinned image declares for each oracle, when the pin manifest is
- * present. A value is a single version OR an array of accepted versions — a
- * declared set for a corpus produced across more than one patch release (see
- * oracle-pins.json GDALVersionsNote). Each accepted version becomes one entry.
+ * The versions a parsed pin manifest declares, as {oracleId, version, origin}.
+ *
+ * `oracleVersions` is what the image installs (origin "image"). A value is a
+ * single version OR an array of accepted versions — a declared set for a corpus
+ * produced across more than one patch release (see oracle-pins.json
+ * GDALVersionsNote). `acceptedHostVersions` (origin "host") declares, for an
+ * oracle the image does not install, the versions the committed records were
+ * produced against on the reference workstation; see acceptedHostVersionsNote.
+ * Both are declared sets: a recorded version in either passes, and one in
+ * neither is undeclared drift. Each accepted version becomes one entry.
  */
+export function pinnedVersionsOf(pins) {
+  const out = [];
+  const add = (table, origin) => {
+    for (const [oracleId, value] of Object.entries(table ?? {})) {
+      for (const version of Array.isArray(value) ? value : [value]) {
+        if (typeof version === 'string') out.push({ oracleId, version, origin });
+      }
+    }
+  };
+  add(pins?.oracleVersions, 'image');
+  add(pins?.acceptedHostVersions, 'host');
+  return out;
+}
+
+/** The pin manifest's declared versions, when the file is present. */
 function collectPins() {
   if (!existsSync(PINS)) return null;
   try {
     const pins = JSON.parse(readFileSync(PINS, 'utf8'));
-    const out = [];
-    for (const [oracleId, value] of Object.entries(pins.oracleVersions ?? {})) {
-      for (const version of Array.isArray(value) ? value : [value]) {
-        if (typeof version === 'string') out.push({ oracleId, version });
-      }
-    }
-    return { path: rel(PINS), entries: out };
+    return { path: rel(PINS), entries: pinnedVersionsOf(pins) };
   } catch {
     return { path: rel(PINS), entries: [], unreadable: true };
   }
+}
+
+/**
+ * Problems with the `containerPinning` block of the pin manifest.
+ *
+ * The block says whether a reference run has been produced inside the image.
+ * Two states are legal and both have to be whole:
+ *   not-executed  no digest, no run reference: the image has not been run;
+ *   recorded      a sha256 content digest, a date, and a runReference naming a
+ *                 committed record whose environment says containerPinning
+ *                 "executed" (written by the image's entrypoint).
+ * A digest with no run, a run that was not inside the image, or a status
+ * outside those two reads as a pin and proves nothing, so each is a failure.
+ * `readJson(relativePath)` returns the parsed record or null when absent.
+ */
+export function containerPinningProblems(pins, readJson = () => null) {
+  const problems = [];
+  const block = pins?.containerPinning;
+  if (block === undefined) return problems; // an older manifest without the block makes no claim
+  const where = 'oracle-pins.json containerPinning';
+  if (!block || typeof block !== 'object') return [`${where} is not an object`];
+  if (block.status === 'not-executed') {
+    for (const f of ['imageDigest', 'runReference', 'recordedOn']) {
+      if (block[f] != null) problems.push(`${where} is not-executed but carries ${f} ${JSON.stringify(block[f])}; a run that happened must be recorded as "recorded"`);
+    }
+    return problems;
+  }
+  if (block.status !== 'recorded') {
+    return [`${where} status must be "not-executed" or "recorded", got ${JSON.stringify(block.status)}`];
+  }
+  if (!/^sha256:[0-9a-f]{64}$/.test(String(block.imageDigest ?? ''))) {
+    problems.push(`${where} is recorded but imageDigest ${JSON.stringify(block.imageDigest)} is not a sha256 content digest`);
+  }
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(String(block.recordedOn ?? ''))) {
+    problems.push(`${where} is recorded but recordedOn ${JSON.stringify(block.recordedOn)} is not a date`);
+  }
+  if (typeof block.runReference !== 'string' || block.runReference === '') {
+    problems.push(`${where} is recorded but names no runReference`);
+    return problems;
+  }
+  const run = readJson(block.runReference);
+  if (!run) {
+    problems.push(`${where} names runReference ${block.runReference}, which does not exist or is not JSON`);
+    return problems;
+  }
+  if (run.environment?.containerPinning !== 'executed') {
+    problems.push(`${where} names ${block.runReference}, whose environment says containerPinning ${JSON.stringify(run.environment?.containerPinning)}; the run was not inside the image`);
+  }
+  // The reference runs carry their own environment block. It has to say the
+  // same thing as the record's outer one, or one file states both that the run
+  // was and was not inside the image.
+  const nested = run.referenceRuns?.environment;
+  if (nested !== undefined) {
+    for (const f of ['containerPinning', 'containerPinningReason']) {
+      if (nested?.[f] !== run.environment?.[f]) {
+        problems.push(`${where} names ${block.runReference}, whose nested referenceRuns.environment.${f} ${JSON.stringify(nested?.[f])} disagrees with its environment ${JSON.stringify(run.environment?.[f])}`);
+      }
+    }
+  }
+  if (run.imageDigest !== block.imageDigest) {
+    problems.push(`${where} records ${block.imageDigest} but ${block.runReference} records ${run.imageDigest}; the run and the pin name different images`);
+  }
+  return problems;
 }
 
 /**
@@ -293,6 +375,7 @@ function main() {
       recordedVersions: versions,
       recordCount: mine.length,
       pinnedVersions: [...new Set(pinned.map((p) => p.version))],
+      pinOrigin: pinned.some((p) => p.origin === 'image') ? 'image pins' : 'host versions declared',
       live,
       status: 'ok',
     };
@@ -348,6 +431,17 @@ function main() {
 
   if (pins?.unreadable) {
     problems.push(`${pins.path} exists but is not readable JSON.`);
+  } else if (pins) {
+    const pinsDoc = JSON.parse(readFileSync(PINS, 'utf8'));
+    problems.push(
+      ...containerPinningProblems(pinsDoc, (relPath) => {
+        try {
+          return JSON.parse(readFileSync(resolve(ROOT, relPath), 'utf8'));
+        } catch {
+          return null;
+        }
+      }),
+    );
   }
 
   if (asJson) {
@@ -364,7 +458,7 @@ function main() {
         : e.live.state === 'absent'
           ? 'not installed here'
           : `INSTALLED BUT BROKEN (exit ${e.live.exitCode})`;
-    const pin = e.pinnedVersions.length > 0 ? `, image pins ${e.pinnedVersions.join('/')}` : '';
+    const pin = e.pinnedVersions.length > 0 ? `, ${e.pinOrigin} ${e.pinnedVersions.join('/')}` : '';
     console.log(
       `${e.status === 'ok' || e.status === 'absent' ? 'ok  ' : 'FAIL'}  ${e.oracle.padEnd(5)} ` +
         `records cite ${e.recordedVersions.join('/') || '(none)'} in ${e.recordCount} place(s)${pin}; live: ${live}`,

@@ -41,7 +41,11 @@ import xml.etree.ElementTree as ET
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 DEFAULT_DIR = os.path.join(HERE, '..', 'fixture')
-TREE = os.path.realpath(os.path.join(HERE, '..'))
+# A --dir anywhere in this repository, not only this oracle's own tree: the
+# DEM package driver (npm run dem:package) writes the raster and its record
+# under the output directory it was given. Anything outside the repository is
+# still refused.
+TREE = os.path.realpath(os.path.join(HERE, '..', '..', '..'))
 sys.path.insert(0, os.path.join(HERE, '..', '..', 'oracle_common'))
 from geotiff_ifd import confined_dir, f32, geokeys, grid_size, read_ifd  # noqa: E402
 

@@ -13,6 +13,10 @@ The Contour Studio geometry products carry these method ids on the product and i
 
 These ids are stamped by the geometry-product builders. Routing them through the canonical `ScientificAnalysisRecord` (which validates ids against the method registry) is part of the export wiring and is registered there when an exporter emits the record.
 
+## DTM void fill (v0.7.1)
+
+The delivered DTM method is `olv.dtm.geodesic-fill@1`: ground returns are binned to the grid and interior voids are filled by geodesic-distance propagation from measured cells, with an Euclidean inverse-distance prefill only seeding the provisional surface (`src/terrain/ground/geodesicFill.ts`). Earlier releases stamped the same computation as `olv.dtm.idw-fill@2`, an id that named the prefill rather than the algorithm. That id stays registered and marked superseded, so a session or export stamped with it at version 1 or 2 still resolves; its version 2 and `olv.dtm.geodesic-fill@1` describe the same behaviour, and its version 1 is the older fill that reached outside the data footprint. New records are stamped with the new id.
+
 ## Stability rule
 
 An id is stable; a behavioural change bumps the `@version`. A number produced by `id@N` must not silently change meaning under the same id and version. When a method changes, its entry in `docs/science/METHOD_REGISTRY.md` and the version stamp move together.

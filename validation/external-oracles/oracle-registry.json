@@ -41,7 +41,7 @@
       "installationMethod": "homebrew",
       "sourceRevision": null,
       "independenceNotes": [
-        "GDAL links PROJ for coordinate operations, so a GDAL reprojection leg and a PROJ leg share this lineage and must not be counted as two.",
+        "GDAL links PROJ for coordinate operations, so a GDAL reprojection leg and a PROJ leg share this lineage and must not be counted as two; gdal-3.13.1 carries the same lineageGroup for that reason.",
         "Independent of GeographicLib: different codebase, different series formulation, no shared transverse-Mercator code."
       ],
       "limitations": [
@@ -135,14 +135,14 @@
         "raster-io",
         "planar-area"
       ],
-      "lineageGroup": "gdal",
+      "lineageGroup": "proj",
       "implementationLanguage": "C++",
       "license": "MIT",
       "architecture": "linux-64",
       "installationMethod": "conda-forge, pinned by validation/oracles/conda-linux-64.lock",
       "sourceRevision": null,
       "independenceNotes": [
-        "Links PROJ for coordinate operations. A GDAL reprojection result and a PROJ result are one lineage, not two.",
+        "Links PROJ for coordinate operations. A GDAL reprojection result and a PROJ result are one lineage, not two, which is why this entry shares lineageGroup \"proj\" with proj-9.8.1: a record that counted a GDAL coordinate-operation leg and a PROJ leg as independent would fail the O3 rule. The shared group is about the coordinate-operation lineage; the raster derivatives GDAL computes (slope, aspect, hillshade, contours, area) are GDAL's own code, and no record pairs them with PROJ.",
         "gdaldem slope/aspect implement Horn, which is the formula OLV registers; that is what makes them same-quantity rather than alternative-family."
       ],
       "limitations": [

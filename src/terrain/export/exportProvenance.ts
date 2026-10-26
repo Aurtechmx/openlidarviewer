@@ -746,7 +746,7 @@ function buildScopedEvidence(opts: ExportProvenanceOptions): ExportScopedEvidenc
  * a follow-up when the record is built from the result directly.)
  */
 function terrainMethodIds(p: ExportProvenance): string[] {
-  const ids = ['olv.ground.smrf', 'olv.dtm.idw-fill'];
+  const ids = ['olv.ground.smrf', 'olv.dtm.geodesic-fill'];
   if (p.accuracy) ids.push('olv.validation.holdout-rmse');
   if (p.complexity) ids.push('olv.terrain.vrm', 'olv.terrain.tpi', 'olv.terrain.slope-horn');
   return ids;
@@ -835,7 +835,7 @@ export function processingManifestFromProvenance(
   const tag = (id: string): string => methodTag(methodRef(id));
   const ops: ProcessingOpInput[] = terrainMethodIds(p).map((id): ProcessingOpInput => {
     switch (id) {
-      case 'olv.dtm.idw-fill':
+      case 'olv.dtm.geodesic-fill':
         return {
           method: tag(id),
           params: { coverageMode: p.coverageMode },

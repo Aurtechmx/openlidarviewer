@@ -309,6 +309,14 @@ export function verifyStagedRelease(dir, opts = {}) {
       }
     }
   }
+  if (manifest) {
+    // The manifest states the reproducible timestamp the archives were built
+    // with, or it binds the build to nothing. Before the workflow set
+    // SOURCE_DATE_EPOCH every published manifest recorded null here.
+    const epoch = manifest.sourceDateEpoch;
+    if (epoch == null) note('manifest records no sourceDateEpoch; a release manifest names the committer time the archives were built with');
+    else if (!/^\d{9,11}$/.test(String(epoch))) note(`manifest sourceDateEpoch ${JSON.stringify(epoch)} is not a Unix time in seconds`);
+  }
   if (manifest && evidence) {
     if (manifest.gitCommit && evidence.commit && manifest.gitCommit !== evidence.commit) {
       note(`manifest commit ${manifest.gitCommit} != evidence commit ${evidence.commit}`);

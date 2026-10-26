@@ -1,12 +1,36 @@
 {
-  "schemaVersion": 1,
-  "$schemaNote": "Immutable exposure ledger for the retrospective Rogue dev/holdout split. It PINS the tiles the repository had already used before the split was frozen; those tiles are forced into development and can never serve as an untouched holdout. build-rogue-split.mjs reads exposure only from this file (not a live git scan), so a later doc that mentions a tile does not silently move it out of the holdout and the split reproduces on any machine. collectionDigest ties the ledger to the exact input collection it was pinned against.",
+  "schemaVersion": 2,
+  "$schemaNote": "Immutable exposure ledger for the retrospective Rogue dev/holdout split. `exposed` PINS the tiles the repository had already used before the split was frozen; those tiles are forced into development and can never serve as an untouched holdout. build-rogue-split.mjs reads exposure only from this file (not a live git scan), so a later doc that mentions a tile does not silently move it out of the holdout and the split reproduces on any machine. collectionDigest ties the ledger to the exact input collection it was pinned against. `referenceExposures` records something seen ABOUT a holdout tile that is not an OLV result on it: the tiles keep their assignment, and the entry states the disclosure any later holdout result on them must carry. The whole file is hashed into the split's exposureDigest, so adding an entry here is visible in the split record.",
   "collectionDigest": "c8b8ce14d4d5204ba64aec243e028e14722bd7285e0ec98a93018f859d6d4d4b",
   "exposed": [
     {
       "tileId": "10TDM3746",
       "reason": "used before split freeze",
       "evidence": "cited in validation/datasets/dataset-register.yaml and validation/protocols/independent-checkpoints-v1.md, scored in validation/real-scene/gf-strata/OLV-DS-091.json, and referenced by tests/e5ManifestVerify.test.ts and tests/independentCheckpointHarness.test.ts"
+    }
+  ],
+  "referenceExposures": [
+    {
+      "date": "2026-10-25",
+      "kind": "reference-residuals-seen",
+      "seen": "USGS's own per-checkpoint vertical-accuracy residuals for the Rogue River-Siskiyou NF 2019 project (OR_RogueSiskiyouNF_2019_B19_VA.dbf: Z_survey, DEMz, LAZz and zdiff = Z_survey - DEMz), printed while acquiring the 3DEP checkpoints. The table included the 12 checkpoints that fall in the 8 holdout tiles. These are the reference producer's residuals against its own DEM, not OLV results; no OLV output was produced on any of the 8 holdout tiles. OLV output does exist for the development tile 10TDM3746 (validation/real-scene/gf-strata/OLV-DS-091.json), which is listed under exposed and is not one of the holdout tiles.",
+      "tileIds": [
+        "10TDM3847",
+        "10TDM4647",
+        "10TDM6151",
+        "10TDM6159",
+        "10TDM6265",
+        "10TDM6455",
+        "10TDM6762",
+        "10TDM8061"
+      ],
+      "checkpointsInHoldout": 12,
+      "source": {
+        "url": "https://rockyweb.usgs.gov/vdelivery/Datasets/Staged/Elevation/metadata/OR_RogueSiskiyouNF_2019_B19/vertical_accuracy/USGS/OR_RogueSiskiyouNF_2019_B19_VA.dbf",
+        "sha256": "6917ecfbfa8243756fa028ded61326682edadf4866737a9924f07665a801c849"
+      },
+      "assignmentEffect": "none: the eight tiles stay holdout. What was seen is the reference's own residuals, not an OLV result on these tiles, so the ledger records a disclosure rather than forcing the tiles into development.",
+      "consequence": "Any later holdout result on these checkpoints must disclose that the reference residuals were seen before the protocol for that result was frozen, and may not be described as a blind holdout evaluation on them."
     }
   ]
 }

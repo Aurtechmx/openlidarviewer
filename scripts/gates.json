@@ -166,6 +166,10 @@
       "group": "static"
     },
     {
+      "script": "verify:oracle-versions",
+      "group": "static"
+    },
+    {
       "script": "validation:datasets:verify",
       "group": "static"
     },
@@ -222,7 +226,15 @@
       "group": "static"
     },
     {
+      "script": "lint:archive-metadata",
+      "group": "static"
+    },
+    {
       "script": "lint:claim-prose-sync",
+      "group": "static"
+    },
+    {
+      "script": "lint:freeze-prose",
       "group": "static"
     },
     {

@@ -28,7 +28,7 @@ function rng(seed: number): () => number {
 }
 
 const REGISTERED = Object.keys(EVIDENCE_REGISTRY);
-const METHOD_IDS = ['olv.ground.smrf', 'olv.dtm.idw-fill', 'olv.terrain.vrm', 'olv.validation.spatial-block'];
+const METHOD_IDS = ['olv.ground.smrf', 'olv.dtm.geodesic-fill', 'olv.terrain.vrm', 'olv.validation.spatial-block'];
 
 describe('evidence gate — property', () => {
   it('never validated AND exploratory at once; unregistered is always exploratory', () => {

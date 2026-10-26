@@ -67,6 +67,8 @@ jobs:
         run: npm run lint:oracle-registry
       - name: Oracle-consensus lint (every triangulation record is contract-shaped and test-backed)
         run: npm run lint:oracle-consensus
+      - name: Oracle versions (records, pins and any installed oracle agree on the reference versions)
+        run: npm run verify:oracle-versions
       - name: E5 input-manifest verify (immutable digest, no dup tiles, creation ≠ acquisition)
         run: npm run validation:e5:manifests:verify
       - name: Reference-strategy lint (every consensus record classifies + is test-backed)

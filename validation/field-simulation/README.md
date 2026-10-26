@@ -1,17 +1,29 @@
 # Field simulation: cross-implementation check
 
-D8 flow direction and flow accumulation are computed twice here, and the two
-results are compared on a small set of frozen terrains.
+D8 flow direction, flow accumulation and Priority-Flood conditioning are
+computed twice here, and the results are compared on a small set of frozen
+terrains.
 
 ## What is compared
 
-`oracle/flow_oracle.py` is a second implementation of the same two published
+`oracle/flow_oracle.py` is a second implementation of the same three published
 methods, written in Python from their definitions:
 
 - **D8 flow direction**, O'Callaghan & Mark (1984). Steepest descent per unit
   of horizontal distance, in metres, to one of eight neighbours.
 - **Flow accumulation**, the count of cells draining through each cell,
   itself included.
+- **Priority-Flood conditioning**, Barnes, Lehman & Mulla (2014), with
+  `heapq`: the surface flooded inward from its edge, lowest cell first, each
+  cell reached from below raised to its spill level plus one float64 step so
+  the filled flat drains. The rules the viewer fixes are repeated from the
+  method rather than copied from the TypeScript: NoData is a wall and seeds
+  only where it reaches the grid boundary, a gap is an exit only when a
+  fixture asks, a cell is in a depression only when its original height is
+  strictly below the spill level, and cells NoData encloses are counted as
+  unreachable rather than filled. Every fixture is conditioned with the
+  viewer's defaults for a conditioned run (`float64-step`, NoData as wall)
+  unless it carries a `conditioning` block naming its own.
 
 It differs from the viewer in more than language. Accumulation walks
 downstream from every cell, where `src/simulation/flowPulse/flowAccumulation.ts`
@@ -20,7 +32,12 @@ bookkeeping error in one does not reproduce in the other.
 
 `tests/fieldSimulationOracleAgreement.test.ts` compares the viewer against the
 records in `expected/`, field by field: receiver, direction, status, upstream
-counts, and the sink, flat and outlet tallies.
+counts, the sink, flat and outlet tallies, and for the conditioned half the
+conditioned surface cell by cell to the last float64 step, the spill levels,
+the depression mask and the fill figures (cells raised, deepest fill, fill
+depth sum, flats resolved, rises absorbed, cells unreachable). The heights are
+read as float32 on both sides, so the float64 rises start from the same
+values.
 
 ## What agreement does and does not establish
 
@@ -45,7 +62,7 @@ fixture here.
 | Fixture | TF | What it pins |
 | --- | --- | --- |
 | `plane-east` | TF-1 (constant plane) | A constant plane routes every interior cell the same way. |
-| `bowl-notched` | TF-2 (bowl) | A pit stays a sink in raw routing rather than draining through the rim notch. The conditioned half of TF-2, the pit filling to the notch's spill level, is checked against this SAME committed grid in `tests/depressionInventory.test.ts`, at the TS level. Priority-Flood already has extensive property coverage (`tests/priorityFlood.test.ts`, `tests/priorityFloodRandomGrids.test.ts`), so it was not re-implemented a third time in Python for this one comparison. |
+| `bowl-notched` | TF-2 (bowl) | A pit stays a sink in raw routing rather than draining through the rim notch. The conditioned half of TF-2: the pit is the one cell the flood raises, to the inner rim's level, and the conditioned surface, spill levels and fill figures agree with the Python flood. `tests/depressionInventory.test.ts` checks the depression table over the same grid, and `tests/priorityFlood.test.ts` and `tests/priorityFloodRandomGrids.test.ts` hold the property coverage. |
 | `ridge` | TF-3 (ridge) | Ground falling away on both sides of a crest routes west on one side and east on the other; the crest cells themselves tie on gradient and must all break the tie toward the same neighbour. |
 | `anisotropic` | TF-6 (anisotropic grid) | Ten metres east against one metre south: the steeper physical gradient wins over the larger raw drop. |
 | `valley-v` | TF-4 (V-shaped valley) | Accumulation converges on the valley axis. |

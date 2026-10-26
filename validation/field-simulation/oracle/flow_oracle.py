@@ -1,8 +1,10 @@
 #!/usr/bin/env python3
-"""D8 flow routing and accumulation, written independently of the viewer.
+"""D8 flow routing, accumulation and Priority-Flood conditioning, written
+independently of the viewer.
 
-This is a second implementation of the same two published methods, in another
-language, derived from their definitions rather than from the TypeScript:
+This is a second implementation of the same three published methods, in
+another language, derived from their definitions rather than from the
+TypeScript:
 
   D8 flow direction  - O'Callaghan & Mark (1984). Each cell drains to whichever
                        of its eight neighbours gives the steepest descent per
@@ -13,6 +15,24 @@ language, derived from their definitions rather than from the TypeScript:
                        viewer uses. A different algorithm for the same
                        quantity: if the two agree on every fixture, they are
                        unlikely to be wrong in the same way.
+  Priority-Flood     - Barnes, Lehman & Mulla (2014). The surface is flooded
+                       inward from its edge, always from the lowest cell
+                       reached so far (heapq, ordered by spill level then by
+                       insertion), and a cell reached from below is raised to
+                       the level it was reached at, plus one rise so every
+                       filled flat drains. The rules the viewer fixes and this
+                       file repeats from the method's definition: the rise is
+                       the next float64 above the parent (math.nextafter) or a
+                       fixed number; a NoData cell is a wall, so the flood
+                       seeds only at the grid boundary and at the rim of NoData
+                       that reaches it, and reads an enclosed gap as an exit
+                       only when the fixture asks for it; a cell is in a
+                       depression only when its ORIGINAL height is strictly
+                       below the spill level it was reached from; cells NoData
+                       encloses are never reached and are counted, not filled.
+                       The input heights are read as float32, the precision the
+                       viewer's grids hold, so the float64 rises start from the
+                       same values on both sides.
 
 WHAT THIS IS AND IS NOT. Agreement between these two implementations catches
 transcription slips, tie-break drift and axis-scaling mistakes. It is not
@@ -28,8 +48,10 @@ Usage:
   flow_oracle.py --check   recompute and compare against them
 """
 import argparse
+import heapq
 import json
 import math
+import struct
 import sys
 from collections import deque
 from pathlib import Path
@@ -138,6 +160,134 @@ def route(z, valid, cols, rows, mx, my):
     return receiver, direction, status
 
 
+def f32(v):
+    """The nearest float32 to v, as a Python float (the viewer holds heights in Float32Array)."""
+    return struct.unpack('<f', struct.pack('<f', v))[0]
+
+
+class _Flood:
+    """The state of one Priority-Flood run, advanced one cell at a time."""
+
+    def __init__(self, z, valid, cols, rows, epsilon, nodata):
+        self.valid, self.cols, self.rows = valid, cols, rows
+        self.epsilon = epsilon
+        self.gaps_are_exits = nodata == 'outlet'
+        self.step = epsilon == 'float64-step'
+        self.rises = self.step or epsilon > 0
+        self.n = cols * rows
+        self.source = [f32(v) for v in z]
+        self.out = list(self.source)
+        self.spill = list(self.source)
+        self.closed = [False] * self.n
+        self.outside = outside_surface(valid, cols, rows)
+        self.heap = []
+        self.seq = 0
+        self.depression = [0] * self.n
+        self.cells_raised = 0
+        self.max_fill_depth = 0.0
+        self.fill_depth_sum = 0.0
+        self.flat_cells_resolved = 0
+        self.epsilon_absorbed = 0
+
+    def rise(self, zc):
+        return math.nextafter(zc, math.inf) if self.step else zc + self.epsilon
+
+    def push(self, i):
+        heapq.heappush(self.heap, (self.spill[i], self.seq, i))
+        self.seq += 1
+
+    def edge_seed(self, col, row):
+        if col == 0 or row == 0 or col == self.cols - 1 or row == self.rows - 1:
+            return True
+        for dx, dy in NEIGHBOURS:
+            nb = (row + dy) * self.cols + col + dx
+            if not self.valid[nb] and (self.gaps_are_exits or self.outside[nb]):
+                return True
+        return False
+
+    def seed(self):
+        for row in range(self.rows):
+            for col in range(self.cols):
+                i = row * self.cols + col
+                if self.valid[i] and self.edge_seed(col, row):
+                    self.closed[i] = True
+                    self.push(i)
+
+    def neighbours(self, c):
+        """Valid, not yet reached neighbours of cell c."""
+        col, row = c % self.cols, c // self.cols
+        for dx, dy in NEIGHBOURS:
+            nc, nr = col + dx, row + dy
+            if 0 <= nc < self.cols and 0 <= nr < self.rows:
+                nb = nr * self.cols + nc
+                if self.valid[nb] and not self.closed[nb]:
+                    yield nb
+
+    def fill(self, nb, level):
+        """Record a depression cell reached from a spill level above its own height."""
+        original = self.source[nb]
+        self.depression[nb] = 1
+        self.spill[nb] = level
+        depth = level - original
+        self.cells_raised += 1
+        self.fill_depth_sum += depth
+        self.max_fill_depth = max(self.max_fill_depth, depth)
+
+    def lift(self, nb, zc):
+        """Raise a cell at or below its parent so the flat drains."""
+        original = self.source[nb]
+        self.out[nb] = self.rise(zc)
+        if self.depression[nb] != 1 and self.out[nb] > original:
+            self.flat_cells_resolved += 1
+        if self.rises and self.out[nb] <= zc:
+            self.epsilon_absorbed += 1
+
+    def run(self):
+        self.seed()
+        while self.heap:
+            _, _, c = heapq.heappop(self.heap)
+            zc = self.out[c]
+            level = self.spill[c]
+            for nb in self.neighbours(c):
+                self.closed[nb] = True
+                original = self.source[nb]
+                if original < level:
+                    self.fill(nb, level)
+                if original <= zc:
+                    self.lift(nb, zc)
+                self.push(nb)
+
+
+def priority_flood(z, valid, cols, rows, epsilon='float64-step', nodata='wall'):
+    """Condition a surface so every reachable valid cell drains to the boundary.
+
+    Returns a dict with the conditioned heights (float64), the spill level each
+    cell was reached at, the depression mask, and the counts the viewer reports.
+    Invalid cells keep their input value in the conditioned surface and the
+    spill level, and are null in the frozen record.
+    """
+    if epsilon != 'float64-step' and not (isinstance(epsilon, (int, float)) and epsilon >= 0):
+        raise ValueError('epsilon must be "float64-step" or a non-negative number')
+    if nodata not in ('wall', 'outlet'):
+        raise ValueError('nodata must be "wall" or "outlet"')
+    flood = _Flood(z, valid, cols, rows, epsilon, nodata)
+    flood.run()
+    n = flood.n
+    cells_unreachable = sum(1 for i in range(n) if valid[i] and not flood.closed[i])
+    return {
+        "conditioning": {"epsilon": epsilon, "noData": nodata},
+        "conditionedZ": [flood.out[i] if valid[i] else None for i in range(n)],
+        "spillLevel": [flood.spill[i] if valid[i] else None for i in range(n)],
+        "depressionMask": flood.depression,
+        "cellsRaised": flood.cells_raised,
+        "maxFillDepth": flood.max_fill_depth,
+        "fillDepthSum": flood.fill_depth_sum,
+        "flatCellsResolved": flood.flat_cells_resolved,
+        "epsilonAbsorbed": flood.epsilon_absorbed,
+        "cellsUnreachable": cells_unreachable,
+    }
+
+
 def accumulate(receiver, status, cols, rows):
     """Upstream cell count per cell, by walking downstream from every cell.
 
@@ -177,6 +327,14 @@ def compute(path):
     my = float(spec.get("cellMetresY", 1))
     receiver, direction, status = route(z, valid, cols, rows, mx, my)
     upstream = accumulate(receiver, status, cols, rows)
+    # Every fixture is also conditioned, with the viewer's defaults for a
+    # conditioned run unless the fixture names its own (a "conditioning" block
+    # with "epsilon" and "noData"), so the conditioned surface and the filled
+    # mask are compared on every terrain, not only the one with a pit.
+    cond = spec.get("conditioning", {})
+    flood = priority_flood(z, valid, cols, rows,
+                           epsilon=cond.get("epsilon", "float64-step"),
+                           nodata=cond.get("noData", "wall"))
     return {
         "fixture": path.name,
         "cols": cols,
@@ -190,6 +348,7 @@ def compute(path):
         "sinkCount": status.count(SINK),
         "flatCount": status.count(FLAT),
         "outletCount": status.count(OUTLET),
+        **flood,
     }
 
 
@@ -220,7 +379,10 @@ def main():
             continue
         want = json.loads(out.read_text())
         for key in ("receiver", "direction", "status", "upstreamCells",
-                    "sinkCount", "flatCount", "outletCount"):
+                    "sinkCount", "flatCount", "outletCount",
+                    "conditioning", "conditionedZ", "spillLevel", "depressionMask",
+                    "cellsRaised", "maxFillDepth", "fillDepthSum",
+                    "flatCellsResolved", "epsilonAbsorbed", "cellsUnreachable"):
             if got[key] != want.get(key):
                 problems.append(f"{path.name}: {key} differs from the frozen record")
 

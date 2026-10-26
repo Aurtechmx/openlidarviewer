@@ -9,6 +9,13 @@ authors:
     affiliation: "Aurtech"
     orcid: "https://orcid.org/0009-0007-3147-323X"
 
+contact:
+  - given-names: "A."
+    family-names: "Urias"
+    affiliation: "Aurtech"
+    orcid: "https://orcid.org/0009-0007-3147-323X"
+    email: "info@aurtech.mx"
+
 version: "0.7.1-alpha.1"
 date-released: "2026-10-25"
 license: AGPL-3.0-only
