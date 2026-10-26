@@ -244,6 +244,9 @@ export function writeTerrainAttentionGeoTiff(
   grid: { readonly cols: number; readonly rows: number; readonly cellSizeM: number; readonly coverage: ArrayLike<number> },
   geo: AttentionGeoreference,
 ): Uint8Array {
+  // A skipped cell stays covered so band 2 keeps its reason 8; band 1 passes
+  // NaN there, which the writer stores as NoData without a collision.
+  const level = Float32Array.from(bands.level, (v) => (v === ATTENTION_NO_DATA ? NaN : v));
   return writeGeoTiff({
     coverage: demWrittenMask(grid.coverage, geo.demValues),
     cols: grid.cols,
@@ -255,7 +258,7 @@ export function writeTerrainAttentionGeoTiff(
     epsg: geo.epsg,
     isGeographic: geo.isGeographic,
     bands: [
-      { values: bands.level, type: 'uint8', description: TERRAIN_ATTENTION_BANDS[0], unit: 'level' },
+      { values: level, type: 'uint8', description: TERRAIN_ATTENTION_BANDS[0], unit: 'level' },
       { values: bands.reason, type: 'uint8', description: TERRAIN_ATTENTION_BANDS[1], unit: 'code' },
     ],
   });
