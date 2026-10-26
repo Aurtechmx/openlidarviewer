@@ -109,3 +109,27 @@ export function makeLassoUnprojector(
     return [a[0] + dx * t, a[1] + dy * t, a[2] + dz * t];
   };
 }
+
+/**
+ * How far the camera ray through screen point (sx, sy) leans from straight
+ * down, in degrees, read from `unproject` at two plane heights one unit
+ * apart: the hit moves tan(angle) across the plane. Undefined when either
+ * ray misses the plane.
+ */
+export function viewOffNadirDeg(
+  unproject: LassoUnprojector,
+  sx: number,
+  sy: number,
+  height: number,
+  up: readonly [number, number, number],
+): number | undefined {
+  const a = unproject(sx, sy, height);
+  const b = unproject(sx, sy, height + 1);
+  if (!a || !b) return undefined;
+  const ul = Math.hypot(up[0], up[1], up[2]) || 1;
+  const d = [b[0] - a[0], b[1] - a[1], b[2] - a[2]];
+  const v = (d[0] * up[0] + d[1] * up[1] + d[2] * up[2]) / ul;
+  const h = Math.hypot(d[0] - (v * up[0]) / ul, d[1] - (v * up[1]) / ul, d[2] - (v * up[2]) / ul);
+  const deg = (Math.atan2(h, Math.abs(v)) * 180) / Math.PI;
+  return Number.isFinite(deg) ? deg : undefined;
+}

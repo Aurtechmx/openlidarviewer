@@ -20,6 +20,7 @@ export const EVIDENCE_REGISTRY: Readonly<Record<string, RegistryEntry>> = {
   'MEAS-AREA': { current: 'E4_CROSS_IMPLEMENTATION_VALIDATED', required: 'E5_EXTERNALLY_VALIDATED', exportAllowed: true },
   'E57-INGEST': { current: 'E4_CROSS_IMPLEMENTATION_VALIDATED', required: 'E5_EXTERNALLY_VALIDATED', exportAllowed: true },
   'MEAS-HEIGHT': { current: 'E3_SYNTHETICALLY_VALIDATED', required: 'E5_EXTERNALLY_VALIDATED', exportAllowed: true },
+  'MEAS-BOX': { current: 'E3_SYNTHETICALLY_VALIDATED', required: 'E5_EXTERNALLY_VALIDATED', exportAllowed: true },
   'MEAS-ANGLE': { current: 'E3_SYNTHETICALLY_VALIDATED', required: 'E5_EXTERNALLY_VALIDATED', exportAllowed: true },
   'MEAS-PROFILE': { current: 'E4_CROSS_IMPLEMENTATION_VALIDATED', required: 'E4_CROSS_IMPLEMENTATION_VALIDATED', exportAllowed: true },
   'CRS-UTM-PROJECTION': { current: 'E4_CROSS_IMPLEMENTATION_VALIDATED', required: 'E4_CROSS_IMPLEMENTATION_VALIDATED', exportAllowed: true },
@@ -72,6 +73,7 @@ export type ClaimId =
   | 'MEAS-AREA'
   | 'E57-INGEST'
   | 'MEAS-HEIGHT'
+  | 'MEAS-BOX'
   | 'MEAS-ANGLE'
   | 'MEAS-PROFILE'
   | 'CRS-UTM-PROJECTION'

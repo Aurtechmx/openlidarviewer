@@ -59,7 +59,7 @@ describe('Scan Report up axis', () => {
     expect(rowValue(result.rows, 'Depth')).toBe('4.0 m');
     expect(rowValue(result.rows, 'Height')).toMatch(/^20\.0 /);
     // 4 points over a 10 m by 4 m footprint.
-    expect(rowValue(result.rows, 'Density')).toBe('0.1 pts/m²');
+    expect(rowValue(result.rows, 'Density')).toBe('0.1 pts/m² (bounding-box estimate)');
   });
 
   it('a local PLY keeps the Y-up reading: footprint X by Z, height the Y span', () => {

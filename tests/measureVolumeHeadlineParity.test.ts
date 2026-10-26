@@ -66,14 +66,15 @@ describe('live volume headline matches the PDF row', () => {
     expect(words(v)).toBe(words(pdf(m)));
   });
 
-  it('a withheld figure states its reason and cross-check', async () => {
+  it('a withheld figure states its reason and no cross-check figure', async () => {
     const m = volume({
       interpolatedFraction: 0.64, excludedFraction: 0,
       gridAuthority: 'withheld', gridAuthorityReason: 'more than half the footprint interpolated',
       crossCheck: { fill: 12, cut: 2, net: 10, method: 'olv.volume.stockpile@3' },
     });
     const v = await live(m);
-    expect(v).toContain('grid volume withheld (more than half the footprint interpolated) · cut-fill cross-check net 10.00 m³ fill');
+    expect(v).toContain('volume withheld (more than half the footprint interpolated)');
+    expect(v).not.toMatch(/cross-check|10\.00/);
     expect(words(v)).toBe(words(pdf(m)));
   });
 });

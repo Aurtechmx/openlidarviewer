@@ -191,9 +191,8 @@ function computeValue(
       const area = formatAreaHonest(mm.area_m2, system, verified);
       const v = m.volume;
       if (!v) return `${area} footprint · cut/fill —`;
-      const vol = unitToMetres * unitToMetres * verticalToMetres;
       if (volumeFiguresWithheld(v) || mm.cut_m3 == null) {
-        return `${area} · ${volumeWithheldClause(v, (n) => formatVolume(n * vol, system, verified))}`;
+        return `${area} · ${volumeWithheldClause(v)}`;
       }
       const fill = formatVolume(Math.max(0, mm.fill_m3 ?? 0), system, verified);
       const cut = formatVolume(Math.max(0, mm.cut_m3 ?? 0), system, verified);
@@ -293,7 +292,7 @@ function buildProfileExtras(
     slopeLine =
       `Max ${signPrefix(summary.maxGradePercent)}${summary.maxGradePercent.toFixed(2)}%, ` +
       `Min ${signPrefix(summary.minGradePercent)}${summary.minGradePercent.toFixed(2)}%, ` +
-      `Avg ${signPrefix(summary.avgGradePercent)}${summary.avgGradePercent.toFixed(2)}%`;
+      `Net ${signPrefix(summary.avgGradePercent)}${summary.avgGradePercent.toFixed(2)}% (total rise ÷ total run)`;
   } else {
     const reason = samples
       ? 'no finite samples along the section.'

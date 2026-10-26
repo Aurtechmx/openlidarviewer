@@ -11,6 +11,8 @@ are not release-authoritative. v0.7.0 is the current published release.
 
 ### Fixed
 
+- Dataset Intelligence gives no density tier on a Web Mercator or geocentric frame, or on a frame with no local vertical, as the Scan Report gives no pts/m² there. It used to tier those scans as if their grid units were ground metres.
+- The stockpile volume breakdown caps its confidence by how much of the footprint the scan covers, as the volume record already did. Dense, even sampling over part of a footprint no longer reads high confidence.
 - A scan that replaces the open one, such as a streamed scan opened over static layers or a static scan opened over a stream, starts with the clip box off and the elevation and intensity filters cleared. It used to keep the previous scan's clip box, and a stream opened over another stream kept the old filter range. A scan added beside open layers keeps both.
 - The PDF report prints each measurement as the Measurements panel shows it. It used to format the figures itself, with more decimals, cubic metres where the panel shows cubic decimetres, no bearing on a distance and no angle on a slope.
 - On phones, a streamed scan no longer keeps a visibility record for every node it evicts.
@@ -22,10 +24,18 @@ are not release-authoritative. v0.7.0 is the current published release.
 - Change detection says when it assumed the vertical unit from the horizontal unit.
 - The terrain complexity summary warns when more than 10% of its cells are interpolated.
 - Wording: the scan fitness verdict names hold-out residuals, Contour Studio no longer calls area and scale "validated", the precision check no longer says "certified level", and the Analyse help calls the hold-out an internal check.
+- A withheld stockpile volume shows no cut-fill cross-check figure either, in the Measurements panel, the toast, the PDF report and the CSV and GeoJSON exports. The grid is withheld for a footprint the scan does not support, and the cross-check covered the same footprint.
 
 ### Changed
 
 - Contour GeoJSON features carry the pooled run score as `presentationSupport` instead of `meanConfidence`.
+- The lasso stockpile toast warns when the lasso was drawn more than 20° from straight down: raised points can then fall outside the footprint, and the toast says to draw in plan view.
+- The PDF report's profile slope summary labels its third figure "Net … (total rise ÷ total run)" instead of "Avg". It is the summed rise over the summed run of the covered segments, not an average of the grades.
+- Box measurements in CSV and GeoJSON exports cite a new MEAS-BOX claim (E3) for the box's own extents and volume. They cited the cut-fill volume claim, VOL-POINT-SAMPLE, which describes a different estimator. The register now holds 40 claims.
+- The MEAS-AREA claim describes the area the tool reports: the area in the polygon's own plane, which equals the planimetric area for a horizontal polygon. Its scope now states that the cross-implementation comparison covers horizontal polygons only.
+- The approved wording for MEAS-AREA, E57-INGEST, TPI and VRM no longer calls their tolerances preregistered. Each protocol was adopted together with its result, and the wording now says so.
+- The Scan Report's Density and Spacing values say "(bounding-box estimate)" on every scan, static or streamed. Both are the point count over the axis-aligned bounding box, so a diagonal strip or gappy coverage reads sparser than the area the points cover. Before, only a display-sample load said how they were worked out.
+- The lasso stockpile toast no longer says "MEASURED" for a footprint with full coverage. It says "exploratory volume preview", as the stockpile volume's claim allows at every tier. In CSV and GeoJSON exports, `grid_authority` writes that tier as `exploratory_full_coverage` instead of `measured`; `preview` and `withheld` are unchanged.
 - Measuring costs less on large scans. The hover pick waits while the camera moves, and snap grids are built while the Measure tool is open instead of for every scan as it opens.
 - Terrain void filling visits only the edge of each search ring. Filled heights are unchanged.
 

@@ -28,7 +28,7 @@ import type { VolumeBudgetDecision } from './volumeBudget';
 import { decideVolumeBudget } from './volumeBudget';
 import { selectByLassoWithDepth, volumeFromLassoWithFootprint } from './lassoVolume';
 import type { LassoFootprintBasis } from './lassoVolume';
-import type { LassoUnprojector } from './lassoProjector';
+import { viewOffNadirDeg, type LassoUnprojector } from './lassoProjector';
 import type {
   LassoSelectionWithDepth,
   ScreenProjector,
@@ -417,6 +417,8 @@ export interface LassoVolumeComputeOutput {
   readonly selectionByCloudId: Map<string, ReadonlyArray<number>>;
   readonly budget: VolumeBudgetDecision;
   readonly anySourceReduced: boolean;
+  /** How far the view leaned from straight down at the lasso's centre, in degrees; absent without an unprojector. */
+  readonly viewOffNadirDeg?: number;
   /**
    * True when at least one selected point came from a streaming source. The
    * completeness of a streaming source is a property of the transfer, not of
@@ -660,9 +662,18 @@ export function computeLassoVolume(
       : undefined,
   });
 
+  // How far the view leaned from straight down at the lasso's centre: the
+  // toast warns when an oblique view biases the footprint.
+  let cx = 0, cy = 0;
+  for (const p of lasso) { cx += p.x; cy += p.y; }
+  const viewOffNadir = host.unprojectToHeight && lasso.length > 0
+    ? viewOffNadirDeg(host.unprojectToHeight, cx / lasso.length, cy / lasso.length, lassoOut.referenceZ, host.worldUp)
+    : undefined;
+
   return {
     selectedPositions,
     selectedCount: totalSelected,
+    ...(viewOffNadir !== undefined ? { viewOffNadirDeg: viewOffNadir } : {}),
     selectionByCloudId,
     budget,
     anySourceReduced,

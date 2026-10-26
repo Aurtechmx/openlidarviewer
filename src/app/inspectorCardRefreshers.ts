@@ -15,6 +15,7 @@ import { withheldCount } from '../science/withheldPolicy';
 import { alignedFlags } from '../science/withheldCounts';
 import type { Inspector } from '../ui/Inspector';
 import { isLinearUnitKnown } from '../geo/CoordinateTypes';
+import { scanReportDensityPermitted } from '../analysis/modules/scanReport';
 import { captureProvenance } from '../diagnostics/captureProvenance';
 import {
   signalsForStaticCloud,
@@ -135,7 +136,10 @@ function metresBboxSpans(
   dz: number,
   crs: UnitCrs,
 ): [number, number, number] | undefined {
-  if (!isLinearUnitKnown(crs)) return undefined;
+  // The Scan Report's gate: a known unit, and X/Y that are ground metres (a
+  // Web Mercator or geocentric frame names metres but is not), with a local
+  // vertical for the height.
+  if (!isLinearUnitKnown(crs) || !scanReportDensityPermitted(crs)) return undefined;
   const mpu = crs?.linearUnitToMetres;
   if (!Number.isFinite(mpu) || (mpu as number) <= 0) return undefined;
   const vmpuRaw = crs?.verticalUnitToMetres ?? mpu;

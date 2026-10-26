@@ -196,9 +196,9 @@ claims:
 
   - claimId: MEAS-AREA
     product: Area measurement
-    algorithm: Polygon shoelace area (planimetric, unit-aware)
+    algorithm: Polygon area by Newell's method in the polygon's own plane (unit-aware); equals the shoelace planimetric area for a horizontal polygon
     algorithmVersion: v0.5.x
-    claim: "Planimetric area of a user polygon in square metres when the horizontal unit is known."
+    claim: "Area of a user polygon in its own plane, in square metres when the horizontal unit is known. For a horizontal polygon this is the planimetric area."
     currentEvidence: E4_CROSS_IMPLEMENTATION_VALIDATED
     requiredEvidence: E5_EXTERNALLY_VALIDATED
     supportingTests: [tests/measure*.test.ts, tests/measurementAnalyticalFixtures.test.ts, tests/measureAreaCrossCheck.test.ts]
@@ -213,7 +213,7 @@ claims:
     softwareStatus: shipping
     evidenceLevel: E4_CROSS_IMPLEMENTATION_VALIDATED
     externalValidationStatus: partial
-    approvedClaim: "Planimetric polygon area agreed with GDAL/OGR OGR_GEOM_AREA and with the closed-form area on the committed planar-polygon fixture, to machine precision (maximum difference 3.3e-11 m² over 10 polygons), within the preregistered 1e-6 m² tolerance. Visual-inspection grade against a real feature."
+    approvedClaim: "Area of a horizontal polygon agreed with GDAL/OGR OGR_GEOM_AREA and with the closed-form area on the committed planar-polygon fixture, to machine precision (maximum difference 3.3e-11 m² over 10 polygons), within a 1e-6 m² tolerance adopted together with the result. A tilted polygon's area is not covered by that comparison. Visual-inspection grade against a real feature."
     prohibitedClaim: ["survey-grade area", "geodetic area"]
     scope:
       supported: []
@@ -221,6 +221,7 @@ claims:
         - "Any accuracy figure. The shoelace area is exact for the polygon given and says nothing about how well the polygon follows the feature."
         - "Geographic-degree grids, which are refused."
         - "Extents large enough for the planar-projection assumption to fail."
+        - "Tilted or non-planar rings. The headline area is the area in the polygon's own plane, and the cross-implementation fixture holds only horizontal polygons, so the E4 comparison does not cover a tilted polygon."
 
   - claimId: E57-INGEST
     product: E57 point-cloud ingestion
@@ -241,7 +242,7 @@ claims:
     softwareStatus: shipping
     evidenceLevel: E4_CROSS_IMPLEMENTATION_VALIDATED
     externalValidationStatus: partial
-    approvedClaim: "Decoded cartesian coordinates, namespaced surface normals and colour agreed with PDAL 2.10.2 readers.e57 over all 1788994 points of a public CC-BY terrestrial scan (OLV-DS-040, pinned by SHA-256, not vendored; the PDAL reference outputs are committed), compared per field as an exact order-independent quantised integer sum at a 1e-6 quantum within the preregistered 1e-6 m tolerance, alongside exact declared count/bounds conformance and agreement on 18 committed positional samples."
+    approvedClaim: "Decoded cartesian coordinates, namespaced surface normals and colour agreed with PDAL 2.10.2 readers.e57 over all 1788994 points of a public CC-BY terrestrial scan (OLV-DS-040, pinned by SHA-256, not vendored; the PDAL reference outputs are committed), compared per field as an exact order-independent quantised integer sum at a 1e-6 quantum within a 1e-6 m tolerance adopted together with the result, alongside exact declared count/bounds conformance and agreement on 18 committed positional samples."
     prohibitedClaim: ["survey-grade ingestion", "validated against every E57 writer", "scanner-native metadata handling"]
     scope:
       supported: []
@@ -280,6 +281,33 @@ claims:
         - "Vertical-datum transformation. The delta is between two picked heights in the scan frame."
         - "Scans whose vertical unit is undeclared and differs from the horizontal unit."
         - "Orthometric or datum-referenced elevation of either point."
+
+  - claimId: MEAS-BOX
+    product: Box measurement
+    algorithm: Axis-aligned box extents along the scan up-axis (unit-aware)
+    algorithmVersion: v0.5.x
+    claim: "Width, depth and height of an axis-aligned box between two picked corners, and its volume as their product, in metres when the units are known."
+    currentEvidence: E3_SYNTHETICALLY_VALIDATED
+    requiredEvidence: E5_EXTERNALLY_VALIDATED
+    supportingTests: [tests/measurementExport.test.ts, tests/measurementAnalyticalFixtures.test.ts]
+    supportingDatasets: []
+    units: [metres, cubic-metres, source-units]
+    crsDatum: "Horizontal extents use the linear unit and the height uses the vertical unit; refuses metric extents in geographic degrees."
+    assumptions: ["the box is axis-aligned in the scan frame", "pick accuracy is visual-inspection grade"]
+    failureModes: ["geographic-degree CRS", "unknown unit", "Y-up vs Z-up ambiguity", "an object not aligned with the scan axes"]
+    exportAllowed: true
+    userLabel: "Visual-inspection-grade box"
+    softwareStatus: shipping
+    evidenceLevel: E3_SYNTHETICALLY_VALIDATED
+    externalValidationStatus: none
+    approvedClaim: "Box extents and their product in the stated units; visual-inspection grade."
+    prohibitedClaim: ["stockpile volume", "survey-grade volume", "certified accuracy"]
+    scope:
+      supported: []
+      unsupported:
+        - "The volume of the material inside the box. The figure is the box's own volume, not a volume integrated from the points."
+        - "Objects not aligned with the scan axes, whose box is larger than the object."
+        - "Geographic-degree frames, where metric extents are refused."
 
   - claimId: MEAS-ANGLE
     product: Angle measurement
@@ -759,7 +787,7 @@ claims:
     softwareStatus: shipping
     evidenceLevel: E4_CROSS_IMPLEMENTATION_VALIDATED
     externalValidationStatus: partial
-    approvedClaim: "TPI agreed with gdaldem 3.13.1 TPI and with the closed-form quadratic curvature on a low-amplitude analytic fixture, over 3364 interior cells within a preregistered 1e-5, with the largest difference under 9e-7."
+    approvedClaim: "TPI agreed with gdaldem 3.13.1 TPI and with the closed-form quadratic curvature on a low-amplitude analytic fixture, over 3364 interior cells within a 1e-5 tolerance adopted together with the result, with the largest difference under 9e-7."
     prohibitedClaim: ["standardised / cross-validated ruggedness", "field-validated terrain position", "TPI on real terrain of arbitrary elevation without accounting for the reference's float32 accumulation"]
     scope:
       supported:
@@ -791,7 +819,7 @@ claims:
     softwareStatus: shipping
     evidenceLevel: E4_CROSS_IMPLEMENTATION_VALIDATED
     externalValidationStatus: partial
-    approvedClaim: "VRM agreed with SAGA 7.8.2 Vector Ruggedness Measure and with the closed-form Sappington VRM on a smooth tilted analytic fixture, over 3136 interior cells within a preregistered 1e-4 (largest difference under 2e-5 against SAGA), and reproduced the closed form to under 1e-9."
+    approvedClaim: "VRM agreed with SAGA 7.8.2 Vector Ruggedness Measure and with the closed-form Sappington VRM on a smooth tilted analytic fixture, over 3136 interior cells within a 1e-4 tolerance adopted together with the result (largest difference under 2e-5 against SAGA), and reproduced the closed form to under 1e-9."
     prohibitedClaim: ["standardised / cross-validated ruggedness", "field-validated ruggedness", "VRM at under-resolved sharp features, where discrete slope/aspect estimators differ"]
     scope:
       supported:

@@ -203,8 +203,8 @@ test('equivalent geometry reports equivalent metric units on both sides', () => 
   for (const label of ['Width', 'Depth', 'Height']) {
     expect(valueOf(streamingRows, label)).toBe(valueOf(staticRows, label));
   }
-  expect(valueOf(streamingRows, 'Density')).toMatch(/ pts\/m²$/);
-  expect(valueOf(staticRows, 'Density')).toMatch(/ pts\/m²$/);
+  expect(valueOf(streamingRows, 'Density')).toMatch(/ pts\/m² \(bounding-box estimate\)$/);
+  expect(valueOf(staticRows, 'Density')).toMatch(/ pts\/m² \(bounding-box estimate\)$/);
 });
 
 test('the report states whether its figures are declared or resident', () => {

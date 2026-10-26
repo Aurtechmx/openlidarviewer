@@ -39,14 +39,14 @@ describe('PDF volume row carries the live headline caveats', () => {
     expect(r.value).toContain('PREVIEW (streaming source not fully resident)');
   });
 
-  it('states why a withheld volume has no figure, with its cross-check', () => {
+  it('states why a withheld volume has no figure, and prints no cross-check figure', () => {
     const r = row(volume({
       interpolatedFraction: 0.64, excludedFraction: 0,
       gridAuthority: 'withheld', gridAuthorityReason: 'more than half the footprint interpolated',
       crossCheck: { fill: 12, cut: 2, net: 10, method: 'olv.volume.stockpile@3' },
     }));
-    expect(r.value).toContain('grid volume withheld (more than half the footprint interpolated)');
-    expect(r.value).toContain('cut-fill cross-check net 10.000 m³ fill');
+    expect(r.value).toContain('volume withheld (more than half the footprint interpolated)');
+    expect(r.value).not.toMatch(/cross-check|10\.000/);
     expect(r.value).not.toMatch(/cut\/fill —/);
   });
 
@@ -71,6 +71,13 @@ describe('volumeCaveatClauses', () => {
     expect(volumeWithheldClause({
       referenceZ: 0, footprintArea: 1, pointsInPolygon: 1, densityNative: 1, confidence: 'low',
       gridAuthority: 'withheld', gridAuthorityReason: 'too sparse',
-    }, (x) => `${x}`)).toBe('volume withheld (too sparse)');
+    })).toBe('volume withheld (too sparse)');
+  });
+  it('prints no cross-check figure beside a withheld grid, even when the record kept one', () => {
+    expect(volumeWithheldClause({
+      referenceZ: 0, footprintArea: 1, pointsInPolygon: 1, densityNative: 1, confidence: 'low',
+      gridAuthority: 'withheld', gridAuthorityReason: 'too sparse',
+      crossCheck: { fill: 12, cut: 2, net: 10, method: 'olv.volume.stockpile@3' },
+    })).toBe('volume withheld (too sparse)');
   });
 });

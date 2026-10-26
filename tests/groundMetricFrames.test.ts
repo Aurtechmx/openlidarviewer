@@ -14,6 +14,7 @@ import { buildDatasetSummary } from '../src/report/ReportMetadataSection';
 import { groundMetresPermitted, horizontalGroundRefusal, spatialContextFrom } from '../src/geo/SpatialContext';
 import { GEOCENTRIC_REASON, WEB_MERCATOR_REASON } from '../src/geo/CrsValidation';
 import { PointCloud } from '../src/model/PointCloud';
+import { createInspectorCardRefreshers } from '../src/app/inspectorCardRefreshers';
 import type { CrsInfo } from '../src/io/crs';
 
 const utm: CrsInfo = { source: 'wkt', name: 'WGS 84 / UTM zone 10N', epsg: 32610, linearUnit: 'metre', linearUnitToMetres: 1, verticalUnitToMetres: 1, isGeographic: false };
@@ -50,6 +51,23 @@ describe.each([
       expect(v(l)).not.toMatch(/\bm\b|pts\/m²|\bcm\b|\bmm\b/);
     }
     expect(r.rows.some((x) => x.value.includes(reason))).toBe(true);
+  });
+
+  it('Dataset Intelligence gives no density tier, as the scan report gives no pts/m²', () => {
+    let last: Record<string, unknown> = {};
+    const inspector = {
+      setDatasetIntelligence: (x: Record<string, unknown>) => { last = x; },
+      clearDatasetIntelligence: () => {},
+      setProvenance: () => {},
+    } as never;
+    const tile = {
+      pointCount: 1000,
+      metadata: { crs },
+      bounds: { min: [0, 0, 0], max: [1500, 1500, 300] },
+    };
+    createInspectorCardRefreshers(inspector, () => ctx).refreshDatasetIntelligenceFromStaticCloud(tile as never);
+    expect(last.bboxSpansM).toBeUndefined();
+    expect(last.bboxVolume).toBeUndefined();
   });
 
   it('streaming extent rows', () => {

@@ -147,8 +147,8 @@ describe('scanReport — unknown-unit CRS never claims metres', () => {
       expect(v).not.toMatch(/pts\/m²/);
     }
     expect(rowByLabel(r, 'Width').value).toBe('2.0 (source units)');
-    expect(rowByLabel(r, 'Density').value).toBe('1.0 pts/unit²');
-    expect(rowByLabel(r, 'Spacing').value).toBe('1.00 (source units)');
+    expect(rowByLabel(r, 'Density').value).toBe('1.0 pts/unit² (bounding-box estimate)');
+    expect(rowByLabel(r, 'Spacing').value).toBe('1.00 (source units) (bounding-box estimate)');
   });
 
   it('geographic CRS (degrees): the severe case is not stamped as metres', () => {
@@ -166,7 +166,8 @@ describe('scanReport — unknown-unit CRS never claims metres', () => {
       make({ source: 'wkt', name: 'WGS 84 / UTM zone 12N', linearUnit: 'metre', linearUnitToMetres: 1, isGeographic: false }),
     );
     expect(rowByLabel(r, 'Width').value).toBe('2.0 m');
-    expect(rowByLabel(r, 'Density').value).toBe('1.0 pts/m²');
-    expect(rowByLabel(r, 'Spacing').value).toBe('1.00 m');
+    // Every load, strided or not, says the figures are over the bounding box.
+    expect(rowByLabel(r, 'Density').value).toBe('1.0 pts/m² (bounding-box estimate)');
+    expect(rowByLabel(r, 'Spacing').value).toBe('1.00 m (bounding-box estimate)');
   });
 });

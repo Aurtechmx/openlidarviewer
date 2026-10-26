@@ -2459,11 +2459,11 @@ export class MeasureController {
         if (!v) return `${area} footprint · cut/fill —`;
         // A withheld grid figure carries no fill/cut/net at all — never a
         // borrowed cut-and-fill number under the grid's name. The point-sample
-        // cross-check, when the record kept one, is the only number left to show.
+        // cross-check is not shown either: the grid refused that footprint.
         // The clauses come from the builders the PDF report row uses.
         const { fill: vf, cut: vc, net: vn } = v;
         if (volumeFiguresWithheld(v) || vf === undefined || vc === undefined || vn === undefined) {
-          return `${area} · ${volumeWithheldClause(v, (n) => this._fmtCutFill(n))}`;
+          return `${area} · ${volumeWithheldClause(v)}`;
         }
         const fill = this._fmtCutFill(Math.max(0, vf));
         const cut = this._fmtCutFill(Math.max(0, vc));

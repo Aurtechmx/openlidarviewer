@@ -3635,7 +3635,7 @@ export class Viewer {
       stockpileInputs: {
         polygon: out.polygon3D, positions: out.selectedPositions, lin, withheld: out.withheld,
         options: {
-          sourceReduced: out.anySourceReduced, densityUnitKnown, vert,
+          sourceReduced: out.anySourceReduced, densityUnitKnown, vert, viewOffNadirDeg: out.viewOffNadirDeg,
           streamingContributed: out.streamingContributed, walkSampled: out.budget.downsample,
           streamingCoverage: this._streamingCoverage(), up: [this._worldUp.x, this._worldUp.y, this._worldUp.z], elevationDatum: this._measure.elevationDatum,
         },

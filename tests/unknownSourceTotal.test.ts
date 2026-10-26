@@ -51,7 +51,7 @@ describe('streaming extent rows', () => {
   it('reports density as usual for a source that knows its total', () => {
     const { rows } = streamingExtentRows(HEADER, METRIC_CONTEXT, 200_000);
     expect(rows.map((r: { label: string }) => r.label)).toContain('Density');
-    expect(rows.find((r: { label: string; value: string }) => r.label === 'Density')?.value).toBe('10.0 pts/m²');
+    expect(rows.find((r: { label: string; value: string }) => r.label === 'Density')?.value).toBe('10.0 pts/m² (bounding-box estimate)');
   });
 
   it('is not the same as a source that reports zero points', () => {

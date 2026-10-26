@@ -55,9 +55,9 @@ export interface StockpileGridFigure {
  * When a grid figure exists, its numbers become `fill`/`cut`/`net` and
  * `method`; the point-sample numbers this record already carried move to
  * `crossCheck` under their own tag rather than being dropped.
- * A withheld grid clears `fill`/`cut`/`net` outright — the
- * cross-check is still there for a reader who wants a number, but it is
- * never presented under the grid's name.
+ * A withheld grid clears `fill`/`cut`/`net` outright and keeps no
+ * cross-check either: the footprint the grid refused is the same footprint
+ * the point sample covers, so no surface shows a number for it.
  */
 export function withStockpileGrid(
   record: VolumeRecord,
@@ -76,7 +76,7 @@ export function withStockpileGrid(
     method: grid.method,
     gridAuthority: grid.authority,
     gridAuthorityReason: grid.reason,
-    crossCheck: { fill, cut, net, method },
+    ...(grid.authority === 'withheld' ? {} : { crossCheck: { fill, cut, net, method } }),
   };
   // The shares the canonical figure stands on are the grid's own.
   if (grid.supportFraction !== undefined) enriched.coverageFraction = grid.supportFraction;
@@ -121,7 +121,7 @@ const m3 = (n: number, vol: number): string => `${(n * vol).toFixed(2)} m³`;
  * follows as the cross-check; a withheld grid prints no grid number at all.
  */
 export function stockpileResultHeadline(r: VolumeRecord, vol: number): string {
-  const cc = r.crossCheck;
+  const cc = r.gridAuthority === 'withheld' ? undefined : r.crossCheck;
   let head: string;
   if (r.fill !== undefined && r.cut !== undefined && r.net !== undefined) {
     head = `Volume · fill ${m3(r.fill, vol)} · cut ${m3(r.cut, vol)} · net ${m3(r.net, vol)}`;

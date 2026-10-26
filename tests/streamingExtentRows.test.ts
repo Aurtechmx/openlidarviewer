@@ -45,8 +45,8 @@ test('metre CRS: converts and labels "m" / "pts/m²" (byte-identical to before)'
   expect(byLabel.Width).toBe('1000.0 m');
   expect(byLabel.Depth).toBe('1000.0 m');
   expect(byLabel.Height).toBe('100.0 m');
-  expect(byLabel.Density).toBe('1.0 pts/m²');
-  expect(byLabel.Spacing).toBe('1.00 m');
+  expect(byLabel.Density).toBe('1.0 pts/m² (bounding-box estimate)');
+  expect(byLabel.Spacing).toBe('1.00 m (bounding-box estimate)');
 });
 
 test('foot CRS: applies the 0.3048 factor before stamping metres', () => {
@@ -77,8 +77,8 @@ test('unknown-unit CRS: does NOT claim metres despite the placeholder factor', (
   }
   const byLabel = Object.fromEntries(rows.map((r) => [r.label, r.value]));
   expect(byLabel.Width).toBe('1000.0 (source units)');
-  expect(byLabel.Density).toBe('1.0 pts/unit²');
-  expect(byLabel.Spacing).toBe('1.00 (source units)');
+  expect(byLabel.Density).toBe('1.0 pts/unit² (bounding-box estimate)');
+  expect(byLabel.Spacing).toBe('1.00 (source units) (bounding-box estimate)');
 });
 
 test('no CRS resolved (null): fails closed exactly like unknown', () => {

@@ -3,6 +3,7 @@ import { ATTR_COLOUR_INVALID, ATTR_INTENSITY_INVALID, countAttributeInvalid, typ
 import { sourcePositions } from '../../model/pointFrames';
 import type { ClassScope } from '../../render/class/classScope';
 import type { SpatialContext } from '../../geo/SpatialContext';
+import type { CrsInfo } from '../../io/crs';
 import { groundMetresPermitted, heightScale, heightUnitsPermitted, horizontalGroundRefusal, spatialContextFrom } from '../../geo/SpatialContext';
 import { layerUpFrameFromContext, upFrameRefusal } from '../../geo/frame/layerUpFrame';
 import { heightLabel, HEIGHT_INCLUDES_NOISE_SUFFIX } from '../../geo/height';
@@ -10,7 +11,7 @@ import { estimateInMemoryPrecision } from '../../geo/inMemoryPrecision';
 import { inMemoryPrecisionRows } from '../inMemoryPrecisionRows';
 import { drawPrecisionRows } from '../drawPrecisionRows';
 import { drawPrecisionUnitOf, evaluateDrawPrecision, tileFromLocalFloat32 } from '../../science/drawPrecision';
-import { SCAN_DENSITY_METHOD_TAG } from '../streamingExtentRows';
+import { BOUNDING_BOX_ESTIMATE, SCAN_DENSITY_METHOD_TAG } from '../streamingExtentRows';
 
 /** ", N flagged invalid and masked" when the file flags points whose `bit` attribute is not a measurement. */
 function maskedNote(cloud: PointCloud, bit: number): string {
@@ -107,6 +108,22 @@ export function scanReportUnitBasis(ctx: SpatialContext): ScanReportUnitBasis {
     heightUnit: height.suffix,
     densityUnit: unitKnown ? ' pts/m²' : ' pts/unit²',
   };
+}
+
+/**
+ * Whether a density in ground metres may be stated for this frame, by the
+ * Scan Report's own gate: X/Y are ground metres and the frame has a local
+ * vertical. Takes a resolved context or a CRS, so a caller holding only the
+ * file's CRS reads the same rule. A bare unit record (no CRS name) carries
+ * nothing this gate reads and passes; its unit is checked by the caller.
+ */
+export function scanReportDensityPermitted(
+  crs: SpatialContext | CrsInfo | { readonly linearUnit?: string } | null | undefined,
+): boolean {
+  if (!crs) return false;
+  const ctx = 'horizontalMetricRefused' in crs ? crs
+    : 'name' in crs ? spatialContextFrom(crs as CrsInfo) : null;
+  return ctx === null || (groundMetresPermitted(ctx) && heightUnitsPermitted(ctx));
 }
 
 /**
@@ -290,7 +307,11 @@ export const scanReport: AnalysisModule = {
     // Both figures are nominal averages (count ÷ footprint), and on a strided
     // load they mix bases — the header's count over the SAMPLE's footprint —
     // so the row says so rather than reading as a measured density.
-    const mixedBasis = strided ? ' (mean: declared count over the display-sample footprint)' : '';
+    // Every load says the footprint is the axis-aligned bounding box: on a
+    // rotated or irregular coverage it reads sparser than the occupied area.
+    const mixedBasis = strided
+      ? ' (bounding-box estimate; mean: declared count over the display-sample footprint)'
+      : ` ${BOUNDING_BOX_ESTIMATE}`;
     if (upRefusal) {
       rows.push(withScope(rowWarn('Density', upRefusal), scope));
     } else if (footprintArea <= 0 || densityN === 0) {
@@ -309,7 +330,9 @@ export const scanReport: AnalysisModule = {
     } else {
       const spacing = Math.sqrt(footprintArea / densityN);
       const spacingValue = basis.unitKnown ? formatLength(spacing) : `${spacing.toFixed(2)} (source units)`;
-      const spacingBasis = strided ? ' (nominal: √(display-sample footprint ÷ declared count))' : '';
+      const spacingBasis = strided
+        ? ' (bounding-box estimate; nominal: √(display-sample footprint ÷ declared count))'
+        : ` ${BOUNDING_BOX_ESTIMATE}`;
       rows.push(withScope(rowInfo('Spacing', `${spacingValue}${spacingBasis}`), scope));
     }
     // What the two figures above were computed over, and under which method.
