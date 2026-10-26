@@ -11,6 +11,7 @@ are not release-authoritative. v0.7.0 is the current published release.
 
 ### Fixed
 
+- The stockpile volume breakdown caps its confidence by how much of the footprint the scan covers, as the volume record already did. Dense, even sampling over part of a footprint no longer reads high confidence.
 - A scan that replaces the open one, such as a streamed scan opened over static layers or a static scan opened over a stream, starts with the clip box off and the elevation and intensity filters cleared. It used to keep the previous scan's clip box, and a stream opened over another stream kept the old filter range. A scan added beside open layers keeps both.
 - The PDF report prints each measurement as the Measurements panel shows it. It used to format the figures itself, with more decimals, cubic metres where the panel shows cubic decimetres, no bearing on a distance and no angle on a slope.
 - On phones, a streamed scan no longer keeps a visibility record for every node it evicts.

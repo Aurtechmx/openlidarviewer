@@ -48,6 +48,7 @@ import {
   volumeCutFill,
 } from './volume';
 import type { PolygonValidity } from './polygonHygiene';
+import { capConfidenceByCoverage } from './measureDerivations';
 import { WelfordStats } from '../../process/numerics';
 import { quantileSorted } from '../../terrain/quantile';
 
@@ -345,7 +346,12 @@ export function stockpileVolume(input: StockpileInput): StockpileVolumeResult {
   const densityPerM2 = lin > 0 ? v.densityNative / (lin * lin) : v.densityNative;
   const graded = gradeConfidence(relativeError, inN, densityPerM2, densityUnitKnown);
   // More than a quarter of the surface interpolated caps the grade at LOW.
-  const confidence: StockpileConfidence = v.interpolationVerdict && v.interpolationVerdict !== 'ok' ? 'low' : graded;
+  // The observed share of the footprint caps it too, by the rule every volume
+  // record uses: dense sampling over part of a footprint says nothing about
+  // the rest.
+  const confidence: StockpileConfidence = v.interpolationVerdict && v.interpolationVerdict !== 'ok'
+    ? 'low'
+    : capConfidenceByCoverage(graded, { coverageFraction: v.coverageFraction, excludedFraction: v.excludedFraction });
   const caveats = buildCaveats(
     confidence,
     inN,

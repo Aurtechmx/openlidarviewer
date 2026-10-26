@@ -280,3 +280,20 @@ describe('stockpileVolume — general-up clouds', () => {
     expect(r.breakdown.meanThickness).toBeCloseTo(2, 6);
   });
 });
+
+describe('stockpileVolume — coverage caps the confidence tier', () => {
+  test('a dense, flat sample over under half the footprint reads low, not high', () => {
+    // Points fill only x < 4 of a 10×10 footprint; the rest lies outside the
+    // scanned extent. Dense, even sampling there says nothing about the rest.
+    const out: number[] = [];
+    for (let x = 0.1; x < 4; x += 0.2) for (let y = 0.1; y < 10; y += 0.2) out.push(x, y, 2);
+    const r = stockpileVolume({
+      polygon: squareFootprint(10),
+      positions: Float32Array.from(out),
+      base: { mode: 'explicit', z: 0 },
+    });
+    expect(r.validity).toBe('ok');
+    expect(r.breakdown.coverageFraction).toBeLessThan(0.5);
+    expect(r.confidence).toBe('low');
+  });
+});
