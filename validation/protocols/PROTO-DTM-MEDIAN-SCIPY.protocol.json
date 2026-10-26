@@ -1,0 +1,51 @@
+{
+  "schemaVersion": 1,
+  "protocolId": "PROTO-DTM-MEDIAN-SCIPY",
+  "example": false,
+  "title": "DTM median gridding on measured cells against SciPy",
+  "question": "Does rasterizeDtm with median aggregation give the same per-cell median as SciPy on the same points and grid, for cells that hold at least one return?",
+  "recordWrittenOn": "2026-10-26",
+  "referenceTool": "SciPy",
+  "referenceVersion": "1.17.1",
+  "claims": [
+    {
+      "claimId": "DTM",
+      "datasetIds": [
+        "OLV-DS-007-PC-PLANE-BUILDINGS",
+        "OLV-DS-008-PC-ROLLING-BUILDINGS",
+        "OLV-DS-009-PC-RIDGE-BUILDINGS",
+        "OLV-DS-010-PC-PLANE-LOWBLUNDERS",
+        "OLV-DS-011-PC-PLANE-GAP",
+        "OLV-DS-012-PC-BARE-PLANE",
+        "OLV-DS-013-PC-BARE-ROLLING",
+        "OLV-DS-014-PC-BARE-RIDGE"
+      ],
+      "parameterSetIds": [
+        "PS-DTM-MEDIAN-CELL1-ORIGIN0"
+      ],
+      "metrics": {
+        "toleranceAbs": 0.000001,
+        "toleranceUnit": "metre (OLV float32 against the reference rounded to float32)",
+        "minimumComparableCells": 15000,
+        "requiredWithinToleranceFraction": 1
+      },
+      "toleranceDerivation": "Both sides take the median of the same returns, so the only expected difference is float32 storage on the OLV side. Rounding the reference to float32 removes that, and 1e-6 m then separates a last-bit difference from a different median. Every cell must pass and the occupancy masks must match exactly.",
+      "freeze": {
+        "status": "preregistered",
+        "on": "2026-10-26",
+        "witnessCommit": "9b179556bc3b5003711946c76d52ee9bfed34b7b",
+        "witness": "The commit that adds validation/protocols/dtm-median-gridding-v1.md, which names both references, the datasets, the grid and edge rules and this tolerance, before any reference grid existed.",
+        "resultLandedOn": "2026-10-26",
+        "resultCommit": "2efd1d29c55edb80ebcc38d09620fdc6961fbbc9",
+        "atInstant": "2026-10-26T00:55:10-07:00",
+        "resultAtInstant": "2026-10-26T00:56:22-07:00"
+      }
+    }
+  ],
+  "decisionRule": "Agree only when every compared cell is within 1e-6 m after rounding the reference to float32, the occupancy masks match exactly, at least 15000 cells are compared, and the two references (SciPy and R terra) agree with each other under the same rule. Otherwise report the failure with its numbers; the tolerance is never widened.",
+  "notes": [
+    "Transcribes validation/protocols/dtm-median-gridding-v1.md, committed in the witness commit before any reference grid existed. It does not create that freeze.",
+    "SciPy computes the per-cell median and the bin assignment, but over bin edges this project supplies; the fixtures and the comparison harness are this project's own. It is the weaker of the two references."
+  ],
+  "digest": "sha256:50e0ec0d90c4eb92eba1d9227c69924858f288719e177379907beaf3c60b43cb"
+}
