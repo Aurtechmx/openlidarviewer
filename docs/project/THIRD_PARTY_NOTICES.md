@@ -362,6 +362,54 @@ taken from `validation/datasets/dataset-register.yaml`.
 - Committed derivatives: `tests/fixtures/e57-pdal/pdal_sample.csv`,
   `tests/fixtures/e57-pdal/pdal-reference.json`
 
+### OLV-DS-117: TauDEM for Bear Creek
+
+- Creator: Cybercastor (Riverscapes Consortium TauDEM project)
+- Title: TauDEM for Bear Creek
+- Link: <https://doi.org/10.5281/zenodo.8335853>
+- Licence: CC BY 4.0, <https://creativecommons.org/licenses/by/4.0/>
+- Modified: two 256 x 256 windows of `inputs/dem.tif` and
+  `intermediates/pitfill.tif` were cut and re-encoded as JSON (register ids
+  OLV-DS-119 and OLV-DS-120). The source archive is not redistributed.
+- Committed derivatives:
+  `validation/field-simulation/external-references/bear-creek-taudem-fill-A.json`,
+  `validation/field-simulation/external-references/bear-creek-taudem-fill-B.json`
+
+### OLV-DS-118: Flow direction and accumulation maps, Reunion island, with the Riviere des Pluies catchment
+
+- Creator: Poncet, N., Leroux, M.-D., Lamy, K., Marpinard, E., Cammas, J.-P.,
+  Dubois, C. and Belon, R.
+- Title: Flow direction and accumulation maps, streams post-processed from
+  BDAlti 25m DEM on Reunion island + Riviere des Pluies catchment boundaries
+- Link: <https://doi.org/10.5281/zenodo.18790150>
+- Licence: CC BY 4.0, <https://creativecommons.org/licenses/by/4.0/>
+- Upstream elevations: IGN BD ALTI 25 m, published by IGN under Licence
+  Ouverte 2.0 (Etalab), <https://www.data.gouv.fr/datasets/bd-alti-r-1>
+  (checked 2026-10-25). The Zenodo depositor does not state the upstream
+  licence; the CC BY 4.0 record above is the licence relied on for the derived
+  grids.
+- Modified: a 589 x 294 window of the elevation, direction and accumulation
+  rasters was cut, the catchment polygon was rasterised onto it, and the result
+  was re-encoded as JSON (register id OLV-DS-121). The source files are not
+  redistributed.
+- Committed derivatives:
+  `validation/field-simulation/external-references/reunion-pluies-grass.json`
+
+### OLV-DS-122 to OLV-DS-127: RichDEM reference grids
+
+- Creator: Richard Barnes
+- Title: RichDEM: Terrain Analysis Software, files `data/garbrecht.dem`,
+  `data/pit.dem`, `tests/depressions/testdem1.dem`,
+  `tests/depressions/testdem1.all.out`, `tests/flow_accum/testdem1.d8` and
+  `tests/flow_accum/testdem1.out` at commit
+  `9a1c97bb2529e386451a7dd54768b8b74bb4d620`
+- Link: <https://github.com/r-barnes/richdem>
+- Licence: GNU General Public License v3.0,
+  <https://github.com/r-barnes/richdem/blob/9a1c97bb2529e386451a7dd54768b8b74bb4d620/LICENSE.txt>
+- Modified: not modified; the six files are kept byte for byte and read as
+  test references. No RichDEM code is included or run.
+- Committed derivatives: `validation/field-simulation/richdem-references/`
+
 ### OLV-DS-093: 2019 USFS Lidar, Rogue River-Siskiyou National Forest, tile 10TDM3449
 
 - Creator: USDA Forest Service and U.S. Geological Survey 3D Elevation Program

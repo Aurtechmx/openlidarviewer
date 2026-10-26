@@ -391,8 +391,12 @@ Whether Withheld points were excluded from the terrain behind a run is
 frequently undeclared; the run then records it as undeclared instead of
 guessing. A grid
 above 4,000,000 cells is refused outright in this release. The depression
-inventory's evidence is weaker than the routing claim's evidence; see
-`docs/validation/claim-register.yaml`, entry `TERRAIN-FLOW-DEPRESSION-INVENTORY`.
+inventory is recorded at E3, below the routing claim's E4, because only its
+conditioned mode was compared against an external tool (TauDEM 5.3.8
+PitRemove); see `docs/validation/claim-register.yaml`, entry
+`TERRAIN-FLOW-DEPRESSION-INVENTORY`. The routing claim's comparison against
+TauDEM and GRASS GIS on real terrain is described in
+`validation/protocols/flow-pulse-external-references-v1.md`.
 
 ## Method registry
 

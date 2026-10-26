@@ -1,0 +1,118 @@
+{
+ "schemaVersion": 1,
+ "studyId": "TERRAIN-FLOW-DEPRESSION-INVENTORY-TAUDEM-BEAR-CREEK",
+ "claimId": "TERRAIN-FLOW-DEPRESSION-INVENTORY",
+ "example": false,
+ "notes": [
+  "G2 of the study pre-registered in validation/protocols/flow-pulse-external-references-v1.md. Reference depressions are the 8-connected components of the cells where TauDEM's fill is above the DEM.",
+  "Depressions are paired by their lowest member cell. On both crops the filled mask equals TauDEM's raised mask cell for cell, so pairing by that cell cannot hide a split or a merge.",
+  "Conditioned mode only. Raw mode, which lists D8 sinks as one-cell candidates, was not compared."
+ ],
+ "protocolRef": {
+  "protocolId": "PROTO-FLOW-PITREMOVE-TAUDEM-BEAR-CREEK",
+  "digest": "sha256:1991c9dd122f6058d9e68cf3fcaabdd8a80fb0c25951aea214ceab635449db9b"
+ },
+ "candidate": {
+  "revision": "e964ebeaec7bbb8a7a7f10dc39dbf15b991ca1f5",
+  "version": "0.7.0",
+  "algorithmVersion": "v0.7.0-alpha.1"
+ },
+ "reference": {
+  "tool": "TauDEM",
+  "version": "5.3.8",
+  "containerDigest": null,
+  "containerPinning": "not-executed",
+  "containerPinningNote": "The reference was not executed here. Its authors ran it and published the output on Zenodo (10.5281/zenodo.8335853); the run log records the command and the PitRemove version but no executable path or container. The bytes compared are pinned by sha256 in the dataset register instead.",
+  "executablePath": "Taudem-TauDEM_for_Bear_Creek.zip/intermediates/pitfill.tif (published output; the run log names the command, not the executable path)",
+  "commandLine": "mpiexec -n 2 pitremove -z inputs/dem.tif -fel intermediates/pitfill.tif",
+  "platform": "not recorded by the publisher"
+ },
+ "datasets": [
+  {
+   "datasetId": "OLV-DS-117-BEAR-CREEK-TAUDEM-PITFILL",
+   "description": "The TauDEM for Bear Creek archive: a USGS NED DEM and TauDEM 5.3.8 PitRemove filled elevation, 5523 x 2396 cells in EPSG:4326. Acquired, not vendored."
+  },
+  {
+   "datasetId": "OLV-DS-119-BEAR-CREEK-TAUDEM-FILL-A",
+   "description": "Crop A, rows 1946 to 2201 and columns 828 to 1083: 65,536 valid cells, 62 TauDEM depressions.",
+   "path": "validation/field-simulation/external-references/bear-creek-taudem-fill-A.json",
+   "sha256": "575769bd4bef1b8f1e7c925e9835dbd60a0df79725ffa8546341727317432233"
+  },
+  {
+   "datasetId": "OLV-DS-120-BEAR-CREEK-TAUDEM-FILL-B",
+   "description": "Crop B, rows 2120 to 2375 and columns 2407 to 2662: 53,583 valid cells and 11,953 NoData cells reaching the border, 125 TauDEM depressions.",
+   "path": "validation/field-simulation/external-references/bear-creek-taudem-fill-B.json",
+   "sha256": "61243e616b84082270420417e8561bad0edbf27b6f9443b7fc22bc13eff9b681"
+  }
+ ],
+ "parameterSets": [
+  {
+   "id": "PS-FLOW-PRIORITY-FLOOD-NODATA-OUTLET",
+   "description": "Priority-Flood with NoData read as an outlet, as TauDEM PitRemove reads it. The compared quantity is the spill level, which excludes the epsilon gradient by definition, so the epsilon setting cannot change it.",
+   "candidateParameters": {
+    "function": "priorityFlood",
+    "epsilon": "float64-step",
+    "noData": "outlet",
+    "inventory": "depressionInventory(grid, conditioned, filledCells(grid, conditioned), true)",
+    "rowOrder": "fixture rows reversed so row 0 is south"
+   },
+   "referenceParameters": {
+    "tool": "TauDEM PitRemove 5.3.8",
+    "command": "mpiexec -n 2 pitremove -z inputs/dem.tif -fel intermediates/pitfill.tif",
+    "gradient": "none"
+   }
+  }
+ ],
+ "metrics": {
+  "toleranceAbs": 0,
+  "toleranceUnit": "depressions matching on every listed field (cell count, area, maximum fill depth, spill level)",
+  "minimumComparableCells": 187,
+  "requiredWithinToleranceFraction": 1
+ },
+ "result": {
+  "comparableCells": 187,
+  "skippedCells": 0,
+  "withinToleranceFraction": 1,
+  "maxAbsDiff": 0
+ },
+ "status": "agree",
+ "statusReason": "All 187 depressions match (62 on crop A, 125 on crop B) on cell count, area, maximum fill depth and spill level, and the filled mask equals TauDEM's raised mask on every cell of both crops. Nothing was widened.",
+ "rawArtifacts": [
+  {
+   "path": "validation/field-simulation/external-references/bear-creek-taudem-fill-A.json",
+   "sha256": "575769bd4bef1b8f1e7c925e9835dbd60a0df79725ffa8546341727317432233",
+   "role": "reference-output"
+  },
+  {
+   "path": "validation/field-simulation/external-references/bear-creek-taudem-fill-B.json",
+   "sha256": "61243e616b84082270420417e8561bad0edbf27b6f9443b7fc22bc13eff9b681",
+   "role": "reference-output"
+  },
+  {
+   "path": "validation/field-simulation/external-references/results/flow-pulse-external-references-v1.json",
+   "sha256": "ff1754e04ab7e43069d4aa9a249cbd95b012ecf7766b68cbdf48e12c1842f23f",
+   "role": "candidate-output"
+  }
+ ],
+ "derivedArtifacts": [],
+ "scope": {
+  "supported": [
+   {
+    "datasetId": "OLV-DS-119-BEAR-CREEK-TAUDEM-FILL-A",
+    "parameterSetId": "PS-FLOW-PRIORITY-FLOOD-NODATA-OUTLET"
+   },
+   {
+    "datasetId": "OLV-DS-120-BEAR-CREEK-TAUDEM-FILL-B",
+    "parameterSetId": "PS-FLOW-PRIORITY-FLOOD-NODATA-OUTLET"
+   }
+  ],
+  "unsupported": [
+   "Raw mode, where each D8 sink is listed as a one-cell candidate.",
+   "A depression with more than one fill level inside one 8-connected component. None occurs on these crops, so the spill level reported for such a component is untested.",
+   "A depression enclosed by NoData.",
+   "Fill volume. The area is cell count times an approximate cell area, and no volume is compared.",
+   "Accuracy against the ground. Agreement with TauDEM is not field validation, and archival data cannot reach E5."
+  ]
+ },
+ "protocolDigest": "sha256:9c16e22fc536e4ac529b0ffd8c45eab61ff1d68b19878d6b2e871d2b2a2dcb91"
+}

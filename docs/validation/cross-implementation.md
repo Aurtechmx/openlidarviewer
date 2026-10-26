@@ -6,7 +6,7 @@ E3 is checked against our own code or our own synthetic data. **E4
 agrees with our output within a stated tolerance.** This page is the procedure
 for producing that independent output.
 
-Seventeen products are at E4. Five are algorithm checks against GDAL:
+Eighteen products are at E4. Five are algorithm checks against GDAL:
 `SLOPE-RASTER`, `ASPECT-RASTER`, `HILLSHADE`, `CONTOURS` and
 `MEAS-AREA` (polygon area against GDAL/OGR `OGR_GEOM_AREA` on a committed
 planar-polygon fixture, agreeing to machine precision, see
@@ -77,6 +77,30 @@ accuracy against surveyed field change, and the protocol freeze is
 `adopted-with-result` rather than a preregistration, because it landed in the
 same commit as the first result.
 
+The eighteenth is the flow router, `TERRAIN-FLOW-PULSE`, and it is the first
+compared on real terrain against outputs two other programs published, rather
+than against a reference run here. On two Bear Creek crops of a USGS NED DEM,
+the Priority-Flood spill level equals TauDEM 5.3.8 PitRemove's filled elevation
+on all 119,119 distinct cells (172,702 cell comparisons across three runs: crop A,
+crop B with NoData as outlet, crop B with NoData as wall), under
+`PROTO-FLOW-PITREMOVE-TAUDEM-BEAR-CREEK`. The crops were chosen so that a fill
+computed on the crop alone reproduces TauDEM's whole-grid fill. On one 25 m window of the Riviere des Pluies catchment, Reunion, against GRASS GIS
+8.3.2: 99.2% of catchment cells with a unique steepest descent take the same D8
+direction (`PROTO-FLOW-D8-GRASS-REUNION`), the catchment from the mouth has a
+Jaccard index of 0.999 (`PROTO-FLOW-CATCHMENT-GRASS-REUNION`), and 95.2% of
+catchment cells are within 5% of the accumulation, 87.0% exact
+(`PROTO-FLOW-ACCUMULATION-GRASS-REUNION`). The GRASS outputs come from a
+single-flow router whose module the dataset does not name (inferred from the
+output encoding to be `r.watershed` in single-flow mode, a least-cost router),
+over a DEM that still holds closed depressions,
+so routing agrees within the stated tolerances and not exactly. All four gates
+were preregistered in `validation/protocols/flow-pulse-external-references-v1.md`
+before the router ran on these data, after a feasibility run of a separate
+scratch implementation against the same references. The same comparison lifts
+`TERRAIN-FLOW-DEPRESSION-INVENTORY` to its required E3: in conditioned mode its
+187 depressions match TauDEM's on count, cells, area, deepest fill and spill
+level.
+
 | Product | Reference | Test | Cells | Max difference | Tolerance |
 |---|---|---|---|---|---|
 | `SLOPE-RASTER` | GDAL 3.13.1 Horn slope | `tests/slopeCrossCheck.test.ts` | 11,564 interior | under 0.001° | 0.5° |
@@ -95,9 +119,17 @@ same commit as the first result.
 | `NVA-VVA` | base R 4.6.1 (1.96 × pooled RMSE) | `tests/statisticsRAgreement.test.ts` | 6 comparisons over 6 residual vectors | 8.9×10⁻¹⁶ m | 1×10⁻¹² m |
 | `CHANGE-RASTER` | GRASS 8.5.0 `r.mapcalc` (+ closed form) | `tests/changeGrassAgreement.test.ts` | 3,007 comparable cells (8 epoch pairs) | 7×10⁻⁶ relative | 1×10⁻⁵ relative |
 | `CHANGE-VOLUME` | GRASS 8.5.0 `r.univar` (+ closed form) | `tests/changeGrassAgreement.test.ts` | 3,007 comparable cells (8 epoch pairs) | 7×10⁻⁶ relative | 1×10⁻⁵ relative |
+| `TERRAIN-FLOW-PULSE` | TauDEM 5.3.8 PitRemove (spill level) | `tests/flowPulseExternalReferences.test.ts` | 172,702 comparisons, 119,119 distinct cells (2 crops, 3 runs) | 0 (exact) | 0 after Float32 cast |
+| `TERRAIN-FLOW-PULSE` | GRASS GIS 8.3.2 D8 direction | `tests/flowPulseExternalReferences.test.ts` | 70,656 uniquely steepest catchment cells | 99.21% agree | at least 98% agree |
+| `TERRAIN-FLOW-PULSE` | GRASS GIS 8.3.2 catchment | `tests/flowPulseExternalReferences.test.ts` | 72,112 cells in either catchment | Jaccard 0.9990 | Jaccard at least 0.99 |
+| `TERRAIN-FLOW-PULSE` | GRASS GIS 8.3.2 accumulation | `tests/flowPulseExternalReferences.test.ts` | 72,078 catchment cells | 95.2% within 5% (87.0% exact) | at least 90% within 5% |
 
-Every tolerance above except aspect and the last five was registered in `REFERENCE_SLOTS`
-before the references were generated. Aspect's 0.5 degree tolerance was carried
+Every tolerance above except aspect, the five rows from `CRS-UTM-PROJECTION` to
+`CHANGE-VOLUME` and the four `TERRAIN-FLOW-PULSE` rows was registered in
+`REFERENCE_SLOTS` before the references were generated. The four flow
+tolerances are not reference slots: they were preregistered in
+`validation/protocols/flow-pulse-external-references-v1.md`, committed with the
+fixtures before the router ran on them. Aspect's 0.5 degree tolerance was carried
 over from slope in the same change that produced its result, so it is adopted,
 not preregistered. The two change tolerances were written in
 the same change as their first result, so `PROTO-CHANGE-GRASS-MAPCALC` records

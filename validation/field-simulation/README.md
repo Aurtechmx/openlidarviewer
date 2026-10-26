@@ -70,6 +70,47 @@ fixture here.
 | `nodata-barrier` | TF-7 (NoData barrier) | Flow does not cross cells with no elevation, and no receiver is an invalid cell. |
 | `sl-field-real-terrain` | TF-8 (real terrain fixture) | A real 40x40 m crop of OLV's own bincell DTM over the VT StREAM Lab survey (OpenTopography DOI 10.5069/G9NZ85W7), already committed under `validation/terrain-field/` for that harness. Real relief and real survey NoData gaps, not a hand-written surface. `tests/flowPulseRealTerrainDigest.test.ts` pins a `flowFieldDigest` for it, alongside the field-by-field oracle agreement below. |
 
+## Depression figures
+
+`oracle/depression_oracle.py` computes, for every grid in `fixtures/` and in
+`depression-cases/`, the depressions a Priority-Flood fill must produce, with
+NoData read as a wall and as an outlet: each depression's cells, cell count,
+area, deepest fill, fill volume, spill level and outlet elevation. It is
+written in Python from the published method and the conventions in
+`docs/terrain-flow-pulse.md`, not from the TypeScript, and writes
+`expected-depressions/`. `depression-cases/` holds five small constructed grids
+for cases the TF fixtures lack: nested depressions, corner-only contact, a
+depression open to the border, an enclosed NoData hole and non-square cells.
+The comparison is pre-registered in
+`validation/protocols/depression-inventory-synthetic-suite-v1.md`.
+
+```
+python3 validation/field-simulation/oracle/depression_oracle.py --check
+python3 validation/field-simulation/oracle/depression_oracle.py --write
+```
+
+Like the flow oracle, this is a second implementation inside this project, so
+agreement checks arithmetic and bookkeeping, not the method itself.
+
+## External references
+
+`external-references/` holds three windows of real terrain with outputs from
+tools written outside this project: TauDEM 5.3.8 PitRemove on two Bear Creek
+crops, and GRASS GIS 8.3.2 direction, accumulation and catchment on the
+Riviere des Pluies, Reunion. They are kept apart from `fixtures/` because they
+have no records in `expected/`: the comparison against them is the study
+pre-registered in `validation/protocols/flow-pulse-external-references-v1.md`.
+See `external-references/README.md` for the format and the licence.
+
+## RichDEM reference grids
+
+`richdem-references/` keeps six small grids from RichDEM (GPL-3.0), the
+library the Priority-Flood paper was released with: a depression-filling test
+input with its expected fill, a D8 direction grid with its expected
+accumulation, and two example grids. They are read as data only. See
+`richdem-references/README.md` and
+`validation/protocols/richdem-references-v1.md`.
+
 ## Running it
 
 ```

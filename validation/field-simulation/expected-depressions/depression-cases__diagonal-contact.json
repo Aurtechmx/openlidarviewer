@@ -1,0 +1,57 @@
+{
+ "fixture": "depression-cases/diagonal-contact.json",
+ "cols": 4,
+ "rows": 4,
+ "cellMetresX": 1.0,
+ "cellMetresY": 1.0,
+ "wall": {
+  "cellsUnreachable": 0,
+  "depressionCount": 1,
+  "filledCellCount": 2,
+  "fillDepthSum": 16.0,
+  "fillVolumeM3": 16.0,
+  "depressions": [
+   {
+    "seedCell": 5,
+    "cells": [
+     5,
+     10
+    ],
+    "cellCount": 2,
+    "areaM2": 2.0,
+    "maxFillDepth": 8.0,
+    "fillDepthSum": 16.0,
+    "fillVolumeM3": 16.0,
+    "spillLevels": [
+     9.0
+    ],
+    "outletElevation": 9.0
+   }
+  ]
+ },
+ "outlet": {
+  "cellsUnreachable": 0,
+  "depressionCount": 1,
+  "filledCellCount": 2,
+  "fillDepthSum": 16.0,
+  "fillVolumeM3": 16.0,
+  "depressions": [
+   {
+    "seedCell": 5,
+    "cells": [
+     5,
+     10
+    ],
+    "cellCount": 2,
+    "areaM2": 2.0,
+    "maxFillDepth": 8.0,
+    "fillDepthSum": 16.0,
+    "fillVolumeM3": 16.0,
+    "spillLevels": [
+     9.0
+    ],
+    "outletElevation": 9.0
+   }
+  ]
+ }
+}

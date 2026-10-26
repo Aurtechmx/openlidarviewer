@@ -1,0 +1,53 @@
+{
+ "name": "nested-saddle",
+ "why": "Two pits separated by a saddle at 4, inside a ring at 5 that a rim at 9 encloses, with one notch at 6 in the rim. Both pits, the saddle and the ring fill to 6 as one depression.",
+ "cellMetresX": 1,
+ "cellMetresY": 1,
+ "z": [
+  [
+   9,
+   9,
+   9,
+   9,
+   9,
+   9,
+   9
+  ],
+  [
+   9,
+   5,
+   5,
+   5,
+   5,
+   5,
+   9
+  ],
+  [
+   9,
+   5,
+   1,
+   4,
+   2,
+   5,
+   9
+  ],
+  [
+   9,
+   5,
+   5,
+   5,
+   5,
+   5,
+   9
+  ],
+  [
+   9,
+   9,
+   9,
+   6,
+   9,
+   9,
+   9
+  ]
+ ]
+}

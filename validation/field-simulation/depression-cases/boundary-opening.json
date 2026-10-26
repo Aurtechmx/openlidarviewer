@@ -1,0 +1,32 @@
+{
+ "name": "boundary-opening",
+ "why": "A low cell on the grid border next to two cells that would otherwise be a pit. Water leaves over the border, so nothing fills.",
+ "cellMetresX": 1,
+ "cellMetresY": 1,
+ "z": [
+  [
+   5,
+   5,
+   5,
+   5
+  ],
+  [
+   1,
+   2,
+   5,
+   5
+  ],
+  [
+   5,
+   2,
+   5,
+   5
+  ],
+  [
+   5,
+   5,
+   5,
+   5
+  ]
+ ]
+}

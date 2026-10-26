@@ -191,6 +191,96 @@
       ]
     },
     {
+      "oracleId": "grass-8.3.2",
+      "name": "GRASS GIS",
+      "version": "8.3.2",
+      "executables": [
+        "r.watershed"
+      ],
+      "roleCapabilities": [
+        "independent-same-quantity-implementation"
+      ],
+      "domains": [
+        "flow-direction",
+        "flow-accumulation",
+        "catchment-delineation"
+      ],
+      "lineageGroup": "grass",
+      "implementationLanguage": "C",
+      "license": "GPL-2.0-or-later",
+      "architecture": "not recorded by the publisher",
+      "installationMethod": "not installed here; the outputs compared are the ones published on Zenodo (10.5281/zenodo.18790150), whose GeoTIFF software tag reads GRASS GIS 8.3.2 with GDAL 3.8.4",
+      "sourceRevision": null,
+      "independenceNotes": [
+        "Same lineage as grass-8.5.0. The two are one implementation family and may never be counted as two independent legs.",
+        "The module is not named by the publisher. The direction encoding and the signed integer accumulation are those of r.watershed in single-flow mode, a least-cost search, which is a different routing algorithm from the candidate's steepest-descent D8 over a Priority-Flood surface."
+      ],
+      "limitations": [
+        "Not executed here, and the command line is not published, so the module and its flags are inferred from the output encoding.",
+        "As a least-cost router it does not follow a filled surface's steepest descent across depressions, and the published filled DEM still holds closed depressions, so agreement with a steepest-descent router is bounded below exact by the method.",
+        "The published accumulation disagrees with the published directions on about 0.14% of cells."
+      ]
+    },
+    {
+      "oracleId": "taudem-5.3.8",
+      "name": "TauDEM",
+      "version": "5.3.8",
+      "executables": [
+        "pitremove"
+      ],
+      "roleCapabilities": [
+        "independent-same-quantity-implementation"
+      ],
+      "domains": [
+        "depression-filling",
+        "hydrologic-conditioning"
+      ],
+      "lineageGroup": "taudem",
+      "implementationLanguage": "C++",
+      "license": "GPL-3.0-or-later",
+      "architecture": "not recorded by the publisher",
+      "installationMethod": "not installed here; the output compared is the one Riverscapes TauDEM 1.2.3 published on Zenodo (10.5281/zenodo.8335853), with a run log naming PitRemove 5.3.8",
+      "sourceRevision": null,
+      "independenceNotes": [
+        "A separate C++ codebase from Utah State University, sharing no code with this project or with the GRASS and GDAL lineages.",
+        "PitRemove fills each depression to its spill level with no gradient and computes it by its own route, so agreement with the candidate's Priority-Flood is agreement on the quantity, the filled elevation."
+      ],
+      "limitations": [
+        "Not executed here. The outputs are the publisher's, so the run environment rests on the published log (PitRemove 5.3.8 under mpiexec -n 2) rather than on a recorded installation.",
+        "Treats NoData as an outlet. A comparison under the candidate's default, NoData as a wall, is only equivalent where NoData reaches the grid border."
+      ]
+    },
+    {
+      "oracleId": "richdem-9a1c97b",
+      "name": "RichDEM",
+      "version": "git 9a1c97bb2529e386451a7dd54768b8b74bb4d620",
+      "executables": [
+        "none (test expectations read as data)"
+      ],
+      "roleCapabilities": [
+        "original-algorithm-reference",
+        "independent-same-quantity-implementation"
+      ],
+      "domains": [
+        "depression-filling",
+        "flow-accumulation"
+      ],
+      "lineageGroup": "richdem",
+      "implementationLanguage": "C++",
+      "license": "GPL-3.0",
+      "architecture": "not applicable; nothing is executed",
+      "installationMethod": "not installed; six test and example files kept byte for byte under validation/field-simulation/richdem-references/",
+      "sourceRevision": "9a1c97bb2529e386451a7dd54768b8b74bb4d620",
+      "independenceNotes": [
+        "Richard Barnes's library, the implementation the Priority-Flood paper (Barnes, Lehman and Mulla 2014) was released with. The candidate's priorityFlood follows that paper, so for depression filling this is the original-algorithm reference rather than an unrelated method.",
+        "Shares no code with this project or with the TauDEM, GRASS and GDAL lineages."
+      ],
+      "limitations": [
+        "Only RichDEM's own test expectations are used, written by its author for 10 x 10 grids; they exercise the definitions, not scale or real terrain.",
+        "Its Garbrecht and Martz flat resolution has no counterpart in the candidate and is not compared."
+      ]
+    },
+    {
       "oracleId": "saga-7.8.2",
       "name": "SAGA GIS",
       "version": "7.8.2",

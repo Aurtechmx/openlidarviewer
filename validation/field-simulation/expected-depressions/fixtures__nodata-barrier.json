@@ -1,0 +1,23 @@
+{
+ "fixture": "fixtures/nodata-barrier.json",
+ "cols": 3,
+ "rows": 2,
+ "cellMetresX": 1.0,
+ "cellMetresY": 1.0,
+ "wall": {
+  "cellsUnreachable": 0,
+  "depressionCount": 0,
+  "filledCellCount": 0,
+  "fillDepthSum": 0,
+  "fillVolumeM3": 0,
+  "depressions": []
+ },
+ "outlet": {
+  "cellsUnreachable": 0,
+  "depressionCount": 0,
+  "filledCellCount": 0,
+  "fillDepthSum": 0,
+  "fillVolumeM3": 0,
+  "depressions": []
+ }
+}

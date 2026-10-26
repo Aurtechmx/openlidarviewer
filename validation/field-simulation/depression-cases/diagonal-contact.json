@@ -1,0 +1,32 @@
+{
+ "name": "diagonal-contact",
+ "why": "Two one-cell pits that touch only at a corner. Under 8-connectivity they are one depression of two cells.",
+ "cellMetresX": 1,
+ "cellMetresY": 1,
+ "z": [
+  [
+   9,
+   9,
+   9,
+   9
+  ],
+  [
+   9,
+   1,
+   9,
+   9
+  ],
+  [
+   9,
+   9,
+   1,
+   9
+  ],
+  [
+   9,
+   9,
+   9,
+   9
+  ]
+ ]
+}

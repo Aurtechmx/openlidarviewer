@@ -1,0 +1,46 @@
+{
+ "schemaVersion": 1,
+ "protocolId": "PROTO-FLOW-CATCHMENT-GRASS-REUNION",
+ "example": false,
+ "title": "Conditioned D8 catchment against the GRASS GIS 8.3.2 Riviere des Pluies catchment",
+ "question": "Does the catchment Flow Pulse delineates from the mouth cell on its conditioned surface (NoData as outlet) overlap the rasterised GRASS catchment with a Jaccard index of at least 0.99?",
+ "recordWrittenOn": "2026-10-25",
+ "referenceTool": "GRASS GIS",
+ "referenceVersion": "8.3.2 (from the GeoTIFF software tag; module not named by the dataset)",
+ "claims": [
+  {
+   "claimId": "TERRAIN-FLOW-PULSE",
+   "datasetIds": [
+    "OLV-DS-118-REUNION-GRASS-FLOW",
+    "OLV-DS-121-REUNION-PLUIES-GRASS-WINDOW"
+   ],
+   "parameterSetIds": [
+    "PS-FLOW-D8-CONDITIONED-OUTLET-25M"
+   ],
+   "metrics": {
+    "toleranceAbs": 0,
+    "toleranceUnit": "catchment membership; the fraction is the Jaccard index",
+    "minimumComparableCells": 50000,
+    "requiredWithinToleranceFraction": 0.99
+   },
+   "toleranceDerivation": "A Jaccard index of 0.99, read as the fraction of cells in either catchment on which both agree. The two routers differ inside depressions and on near-ties, and every such difference near the divide moves cells across it, so exact agreement is not expected. A wrong mouth cell, a mirrored grid or a broken catchment walk would lose most of the catchment. Thresholds set after a feasibility run of a separate scratch implementation (Python with numpy, not Flow Pulse code, not committed) against the same references, and before Flow Pulse was run on them. That run gave 0.9921 direction agreement, catchment Jaccard 0.9990 and 0.952 of catchment cells within 5% of the accumulation. The minimum of 50,000 is below the 72,078 cells of the reference catchment.",
+   "freeze": {
+    "status": "preregistered",
+    "on": "2026-10-25",
+    "witnessCommit": "aca8a782430ab840414b24bc87ed0b9e53033baf",
+    "witness": "validation/protocols/flow-pulse-external-references-v1.md at aca8a78 states G4, its threshold, the cells it compares and the Flow Pulse parameters, and lists this protocol's metrics block. That commit adds the three fixtures and no Flow Pulse result: the comparison test arrives in the next commit and the measured values after it. The threshold was set after a feasibility run of a separate scratch implementation against the same references, so it is blind to Flow Pulse's result and not to the references.",
+    "atInstant": "2026-10-25T16:44:54-07:00",
+    "resultLandedOn": "2026-10-25",
+    "resultAtInstant": "2026-10-25T17:03:20-07:00",
+    "resultCommit": "f85b5b1d23f1b5d2d30348d0bb3f936c81da20bd"
+   }
+  }
+ ],
+ "decisionRule": "G4 passes if the Jaccard index between catchmentFrom(result, mouth) and the rasterised GRASS polygon is at least 0.99, with at least 50,000 cells in the union. It is one of the four gates TERRAIN-FLOW-PULSE needs for E4. A failed gate is not re-run with a different threshold, parameter, cell selection or code.",
+ "notes": [
+  "Pre-registered in validation/protocols/flow-pulse-external-references-v1.md.",
+  "GRASS reference properties that bound agreement below 100%: the module routes by least cost rather than by steepest descent on a filled surface, the published \"filled\" DEM still holds closed depressions, and the published accumulation disagrees with the published directions on about 0.14% of cells.",
+  "The polygon is rasterised by cell centre, so a cell the polygon edge clips is in or out by where its centre falls."
+ ],
+ "digest": "sha256:438c3899a8f24d8b96875cd76c689b8a5fa885803055f1f0334313bd16af7f54"
+}

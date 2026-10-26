@@ -92,6 +92,8 @@ written down.
 | protocol | governs | state |
 | --- | --- | --- |
 | `PROTO-RASTER-HORN-GDAL-ANALYTIC-DEM` | `SLOPE-RASTER`, `ASPECT-RASTER`, `HILLSHADE` against GDAL 3.13.1 on the frozen analytic DEM | transcribed from `REFERENCE_SLOTS`; slope and hillshade preregistered at `a78b0f9`, aspect adopted with its result at `40e2ca1`; three studies run under it |
+| `PROTO-FLOW-PITREMOVE-TAUDEM-BEAR-CREEK` | `TERRAIN-FLOW-PULSE` (G1) and `TERRAIN-FLOW-DEPRESSION-INVENTORY` (G2) against TauDEM 5.3.8 PitRemove on two Bear Creek crops | preregistered at `aca8a78` in `flow-pulse-external-references-v1.md`, before Flow Pulse ran on the data; two studies run under it, both agree |
+| `PROTO-FLOW-D8-GRASS-REUNION`, `PROTO-FLOW-CATCHMENT-GRASS-REUNION`, `PROTO-FLOW-ACCUMULATION-GRASS-REUNION` | `TERRAIN-FLOW-PULSE` (G3 direction, G4 catchment, G5 accumulation) against GRASS GIS 8.3.2 on a Riviere des Pluies window | preregistered at `aca8a78` with the TauDEM gates; one study each, all agree. One claim needs three records because a record holds one metrics block per claim |
 | `EXAMPLE-PROTO-SLOPE-RASTER-GDAL-HORN` | a template, referenced only by the example manifest | nothing under it has been run |
 
 There is no protocol here for a study nobody has designed. An empty tolerance

@@ -1,0 +1,748 @@
+{
+ "fixture": "fixtures/sl-field-real-terrain.json",
+ "cols": 40,
+ "rows": 40,
+ "cellMetresX": 1.0,
+ "cellMetresY": 1.0,
+ "wall": {
+  "cellsUnreachable": 0,
+  "depressionCount": 34,
+  "filledCellCount": 123,
+  "fillDepthSum": 6.90570068359375,
+  "fillVolumeM3": 6.90570068359375,
+  "depressions": [
+   {
+    "seedCell": 1092,
+    "cells": [
+     1092,
+     1133,
+     1134,
+     1173,
+     1174,
+     1210,
+     1211,
+     1212,
+     1213,
+     1214,
+     1248,
+     1250,
+     1251,
+     1252,
+     1253,
+     1289,
+     1290,
+     1291,
+     1292,
+     1293,
+     1329,
+     1330,
+     1331,
+     1332,
+     1333,
+     1370,
+     1371,
+     1372,
+     1373,
+     1374,
+     1410,
+     1411,
+     1412,
+     1451,
+     1452,
+     1490,
+     1491,
+     1492
+    ],
+    "cellCount": 38,
+    "areaM2": 38.0,
+    "maxFillDepth": 0.1182861328125,
+    "fillDepthSum": 1.58331298828125,
+    "fillVolumeM3": 1.58331298828125,
+    "spillLevels": [
+     605.4970703125
+    ],
+    "outletElevation": 605.4970703125
+   },
+   {
+    "seedCell": 889,
+    "cells": [
+     889,
+     890,
+     926,
+     927,
+     928,
+     929,
+     965,
+     966,
+     968,
+     1004,
+     1005
+    ],
+    "cellCount": 11,
+    "areaM2": 11.0,
+    "maxFillDepth": 0.099609375,
+    "fillDepthSum": 0.31640625,
+    "fillVolumeM3": 0.31640625,
+    "spillLevels": [
+     605.4138793945312
+    ],
+    "outletElevation": 605.4138793945312
+   },
+   {
+    "seedCell": 1282,
+    "cells": [
+     1282,
+     1283,
+     1284,
+     1322,
+     1323,
+     1324,
+     1363,
+     1403,
+     1404,
+     1405,
+     1444
+    ],
+    "cellCount": 11,
+    "areaM2": 11.0,
+    "maxFillDepth": 0.314697265625,
+    "fillDepthSum": 1.99993896484375,
+    "fillVolumeM3": 1.99993896484375,
+    "spillLevels": [
+     604.9901123046875
+    ],
+    "outletElevation": 604.9901123046875
+   },
+   {
+    "seedCell": 314,
+    "cells": [
+     314,
+     315,
+     354,
+     393,
+     394,
+     433
+    ],
+    "cellCount": 6,
+    "areaM2": 6.0,
+    "maxFillDepth": 0.15570068359375,
+    "fillDepthSum": 0.49664306640625,
+    "fillVolumeM3": 0.49664306640625,
+    "spillLevels": [
+     605.0885009765625
+    ],
+    "outletElevation": 605.0885009765625
+   },
+   {
+    "seedCell": 636,
+    "cells": [
+     636,
+     675,
+     676,
+     714,
+     715,
+     716
+    ],
+    "cellCount": 6,
+    "areaM2": 6.0,
+    "maxFillDepth": 0.281494140625,
+    "fillDepthSum": 1.32904052734375,
+    "fillVolumeM3": 1.32904052734375,
+    "spillLevels": [
+     604.4912109375
+    ],
+    "outletElevation": 604.4912109375
+   },
+   {
+    "seedCell": 1277,
+    "cells": [
+     1277,
+     1316,
+     1355,
+     1356,
+     1397,
+     1437
+    ],
+    "cellCount": 6,
+    "areaM2": 6.0,
+    "maxFillDepth": 0.01739501953125,
+    "fillDepthSum": 0.04852294921875,
+    "fillVolumeM3": 0.04852294921875,
+    "spillLevels": [
+     605.4000854492188
+    ],
+    "outletElevation": 605.4000854492188
+   },
+   {
+    "seedCell": 733,
+    "cells": [
+     733,
+     734,
+     772,
+     773,
+     812
+    ],
+    "cellCount": 5,
+    "areaM2": 5.0,
+    "maxFillDepth": 0.0531005859375,
+    "fillDepthSum": 0.13720703125,
+    "fillVolumeM3": 0.13720703125,
+    "spillLevels": [
+     605.4833984375
+    ],
+    "outletElevation": 605.4833984375
+   },
+   {
+    "seedCell": 781,
+    "cells": [
+     781,
+     819,
+     820,
+     821
+    ],
+    "cellCount": 4,
+    "areaM2": 4.0,
+    "maxFillDepth": 0.03802490234375,
+    "fillDepthSum": 0.10223388671875,
+    "fillVolumeM3": 0.10223388671875,
+    "spillLevels": [
+     605.5944213867188
+    ],
+    "outletElevation": 605.5944213867188
+   },
+   {
+    "seedCell": 1154,
+    "cells": [
+     1154,
+     1155,
+     1194,
+     1234
+    ],
+    "cellCount": 4,
+    "areaM2": 4.0,
+    "maxFillDepth": 0.06182861328125,
+    "fillDepthSum": 0.1773681640625,
+    "fillVolumeM3": 0.1773681640625,
+    "spillLevels": [
+     605.3604125976562
+    ],
+    "outletElevation": 605.3604125976562
+   },
+   {
+    "seedCell": 574,
+    "cells": [
+     574,
+     575,
+     576
+    ],
+    "cellCount": 3,
+    "areaM2": 3.0,
+    "maxFillDepth": 0.01922607421875,
+    "fillDepthSum": 0.04571533203125,
+    "fillVolumeM3": 0.04571533203125,
+    "spillLevels": [
+     605.5451049804688
+    ],
+    "outletElevation": 605.5451049804688
+   },
+   {
+    "seedCell": 1016,
+    "cells": [
+     1016,
+     1017,
+     1056
+    ],
+    "cellCount": 3,
+    "areaM2": 3.0,
+    "maxFillDepth": 0.0487060546875,
+    "fillDepthSum": 0.0755615234375,
+    "fillVolumeM3": 0.0755615234375,
+    "spillLevels": [
+     605.4996948242188
+    ],
+    "outletElevation": 605.4996948242188
+   },
+   {
+    "seedCell": 1089,
+    "cells": [
+     1089,
+     1129,
+     1130
+    ],
+    "cellCount": 3,
+    "areaM2": 3.0,
+    "maxFillDepth": 0.0283203125,
+    "fillDepthSum": 0.072265625,
+    "fillVolumeM3": 0.072265625,
+    "spillLevels": [
+     605.5025024414062
+    ],
+    "outletElevation": 605.5025024414062
+   },
+   {
+    "seedCell": 696,
+    "cells": [
+     696,
+     697
+    ],
+    "cellCount": 2,
+    "areaM2": 2.0,
+    "maxFillDepth": 0.00592041015625,
+    "fillDepthSum": 0.00653076171875,
+    "fillVolumeM3": 0.00653076171875,
+    "spillLevels": [
+     605.5015258789062
+    ],
+    "outletElevation": 605.5015258789062
+   },
+   {
+    "seedCell": 105,
+    "cells": [
+     105
+    ],
+    "cellCount": 1,
+    "areaM2": 1.0,
+    "maxFillDepth": 0.0137939453125,
+    "fillDepthSum": 0.0137939453125,
+    "fillVolumeM3": 0.0137939453125,
+    "spillLevels": [
+     605.6392822265625
+    ],
+    "outletElevation": 605.6392822265625
+   },
+   {
+    "seedCell": 235,
+    "cells": [
+     235
+    ],
+    "cellCount": 1,
+    "areaM2": 1.0,
+    "maxFillDepth": 0.04638671875,
+    "fillDepthSum": 0.04638671875,
+    "fillVolumeM3": 0.04638671875,
+    "spillLevels": [
+     605.1044921875
+    ],
+    "outletElevation": 605.1044921875
+   },
+   {
+    "seedCell": 272,
+    "cells": [
+     272
+    ],
+    "cellCount": 1,
+    "areaM2": 1.0,
+    "maxFillDepth": 0.03131103515625,
+    "fillDepthSum": 0.03131103515625,
+    "fillVolumeM3": 0.03131103515625,
+    "spillLevels": [
+     605.1019897460938
+    ],
+    "outletElevation": 605.1019897460938
+   },
+   {
+    "seedCell": 293,
+    "cells": [
+     293
+    ],
+    "cellCount": 1,
+    "areaM2": 1.0,
+    "maxFillDepth": 0.01007080078125,
+    "fillDepthSum": 0.01007080078125,
+    "fillVolumeM3": 0.01007080078125,
+    "spillLevels": [
+     605.4691772460938
+    ],
+    "outletElevation": 605.4691772460938
+   },
+   {
+    "seedCell": 411,
+    "cells": [
+     411
+    ],
+    "cellCount": 1,
+    "areaM2": 1.0,
+    "maxFillDepth": 0.01007080078125,
+    "fillDepthSum": 0.01007080078125,
+    "fillVolumeM3": 0.01007080078125,
+    "spillLevels": [
+     605.4312744140625
+    ],
+    "outletElevation": 605.4312744140625
+   },
+   {
+    "seedCell": 490,
+    "cells": [
+     490
+    ],
+    "cellCount": 1,
+    "areaM2": 1.0,
+    "maxFillDepth": 0.03436279296875,
+    "fillDepthSum": 0.03436279296875,
+    "fillVolumeM3": 0.03436279296875,
+    "spillLevels": [
+     605.3939819335938
+    ],
+    "outletElevation": 605.3939819335938
+   },
+   {
+    "seedCell": 495,
+    "cells": [
+     495
+    ],
+    "cellCount": 1,
+    "areaM2": 1.0,
+    "maxFillDepth": 0.01922607421875,
+    "fillDepthSum": 0.01922607421875,
+    "fillVolumeM3": 0.01922607421875,
+    "spillLevels": [
+     605.5357055664062
+    ],
+    "outletElevation": 605.5357055664062
+   },
+   {
+    "seedCell": 638,
+    "cells": [
+     638
+    ],
+    "cellCount": 1,
+    "areaM2": 1.0,
+    "maxFillDepth": 0.133544921875,
+    "fillDepthSum": 0.133544921875,
+    "fillVolumeM3": 0.133544921875,
+    "spillLevels": [
+     604.443115234375
+    ],
+    "outletElevation": 604.443115234375
+   },
+   {
+    "seedCell": 689,
+    "cells": [
+     689
+    ],
+    "cellCount": 1,
+    "areaM2": 1.0,
+    "maxFillDepth": 0.02496337890625,
+    "fillDepthSum": 0.02496337890625,
+    "fillVolumeM3": 0.02496337890625,
+    "spillLevels": [
+     605.517578125
+    ],
+    "outletElevation": 605.517578125
+   },
+   {
+    "seedCell": 768,
+    "cells": [
+     768
+    ],
+    "cellCount": 1,
+    "areaM2": 1.0,
+    "maxFillDepth": 0.01739501953125,
+    "fillDepthSum": 0.01739501953125,
+    "fillVolumeM3": 0.01739501953125,
+    "spillLevels": [
+     605.4909057617188
+    ],
+    "outletElevation": 605.4909057617188
+   },
+   {
+    "seedCell": 792,
+    "cells": [
+     792
+    ],
+    "cellCount": 1,
+    "areaM2": 1.0,
+    "maxFillDepth": 0.0078125,
+    "fillDepthSum": 0.0078125,
+    "fillVolumeM3": 0.0078125,
+    "spillLevels": [
+     604.3432006835938
+    ],
+    "outletElevation": 604.3432006835938
+   },
+   {
+    "seedCell": 810,
+    "cells": [
+     810
+    ],
+    "cellCount": 1,
+    "areaM2": 1.0,
+    "maxFillDepth": 0.00482177734375,
+    "fillDepthSum": 0.00482177734375,
+    "fillVolumeM3": 0.00482177734375,
+    "spillLevels": [
+     605.4833984375
+    ],
+    "outletElevation": 605.4833984375
+   },
+   {
+    "seedCell": 934,
+    "cells": [
+     934
+    ],
+    "cellCount": 1,
+    "areaM2": 1.0,
+    "maxFillDepth": 0.022216796875,
+    "fillDepthSum": 0.022216796875,
+    "fillVolumeM3": 0.022216796875,
+    "spillLevels": [
+     605.5447998046875
+    ],
+    "outletElevation": 605.5447998046875
+   },
+   {
+    "seedCell": 937,
+    "cells": [
+     937
+    ],
+    "cellCount": 1,
+    "areaM2": 1.0,
+    "maxFillDepth": 0.023193359375,
+    "fillDepthSum": 0.023193359375,
+    "fillVolumeM3": 0.023193359375,
+    "spillLevels": [
+     605.5101928710938
+    ],
+    "outletElevation": 605.5101928710938
+   },
+   {
+    "seedCell": 943,
+    "cells": [
+     943
+    ],
+    "cellCount": 1,
+    "areaM2": 1.0,
+    "maxFillDepth": 0.0032958984375,
+    "fillDepthSum": 0.0032958984375,
+    "fillVolumeM3": 0.0032958984375,
+    "spillLevels": [
+     604.673095703125
+    ],
+    "outletElevation": 604.673095703125
+   },
+   {
+    "seedCell": 996,
+    "cells": [
+     996
+    ],
+    "cellCount": 1,
+    "areaM2": 1.0,
+    "maxFillDepth": 0.00341796875,
+    "fillDepthSum": 0.00341796875,
+    "fillVolumeM3": 0.00341796875,
+    "spillLevels": [
+     605.4650268554688
+    ],
+    "outletElevation": 605.4650268554688
+   },
+   {
+    "seedCell": 1197,
+    "cells": [
+     1197
+    ],
+    "cellCount": 1,
+    "areaM2": 1.0,
+    "maxFillDepth": 0.01190185546875,
+    "fillDepthSum": 0.01190185546875,
+    "fillVolumeM3": 0.01190185546875,
+    "spillLevels": [
+     605.4014892578125
+    ],
+    "outletElevation": 605.4014892578125
+   },
+   {
+    "seedCell": 1393,
+    "cells": [
+     1393
+    ],
+    "cellCount": 1,
+    "areaM2": 1.0,
+    "maxFillDepth": 0.05548095703125,
+    "fillDepthSum": 0.05548095703125,
+    "fillVolumeM3": 0.05548095703125,
+    "spillLevels": [
+     605.4158935546875
+    ],
+    "outletElevation": 605.4158935546875
+   },
+   {
+    "seedCell": 1474,
+    "cells": [
+     1474
+    ],
+    "cellCount": 1,
+    "areaM2": 1.0,
+    "maxFillDepth": 0.00579833984375,
+    "fillDepthSum": 0.00579833984375,
+    "fillVolumeM3": 0.00579833984375,
+    "spillLevels": [
+     605.443115234375
+    ],
+    "outletElevation": 605.443115234375
+   },
+   {
+    "seedCell": 1524,
+    "cells": [
+     1524
+    ],
+    "cellCount": 1,
+    "areaM2": 1.0,
+    "maxFillDepth": 0.002197265625,
+    "fillDepthSum": 0.002197265625,
+    "fillVolumeM3": 0.002197265625,
+    "spillLevels": [
+     604.9758911132812
+    ],
+    "outletElevation": 604.9758911132812
+   },
+   {
+    "seedCell": 1554,
+    "cells": [
+     1554
+    ],
+    "cellCount": 1,
+    "areaM2": 1.0,
+    "maxFillDepth": 0.03369140625,
+    "fillDepthSum": 0.03369140625,
+    "fillVolumeM3": 0.03369140625,
+    "spillLevels": [
+     605.4625854492188
+    ],
+    "outletElevation": 605.4625854492188
+   }
+  ]
+ },
+ "outlet": {
+  "cellsUnreachable": 0,
+  "depressionCount": 8,
+  "filledCellCount": 12,
+  "fillDepthSum": 0.298095703125,
+  "fillVolumeM3": 0.298095703125,
+  "depressions": [
+   {
+    "seedCell": 1154,
+    "cells": [
+     1154,
+     1155,
+     1194,
+     1234
+    ],
+    "cellCount": 4,
+    "areaM2": 4.0,
+    "maxFillDepth": 0.06182861328125,
+    "fillDepthSum": 0.1773681640625,
+    "fillVolumeM3": 0.1773681640625,
+    "spillLevels": [
+     605.3604125976562
+    ],
+    "outletElevation": 605.3604125976562
+   },
+   {
+    "seedCell": 574,
+    "cells": [
+     574,
+     575
+    ],
+    "cellCount": 2,
+    "areaM2": 2.0,
+    "maxFillDepth": 0.01092529296875,
+    "fillDepthSum": 0.02081298828125,
+    "fillVolumeM3": 0.02081298828125,
+    "spillLevels": [
+     605.5368041992188
+    ],
+    "outletElevation": 605.5368041992188
+   },
+   {
+    "seedCell": 105,
+    "cells": [
+     105
+    ],
+    "cellCount": 1,
+    "areaM2": 1.0,
+    "maxFillDepth": 0.0137939453125,
+    "fillDepthSum": 0.0137939453125,
+    "fillVolumeM3": 0.0137939453125,
+    "spillLevels": [
+     605.6392822265625
+    ],
+    "outletElevation": 605.6392822265625
+   },
+   {
+    "seedCell": 768,
+    "cells": [
+     768
+    ],
+    "cellCount": 1,
+    "areaM2": 1.0,
+    "maxFillDepth": 0.01739501953125,
+    "fillDepthSum": 0.01739501953125,
+    "fillVolumeM3": 0.01739501953125,
+    "spillLevels": [
+     605.4909057617188
+    ],
+    "outletElevation": 605.4909057617188
+   },
+   {
+    "seedCell": 934,
+    "cells": [
+     934
+    ],
+    "cellCount": 1,
+    "areaM2": 1.0,
+    "maxFillDepth": 0.022216796875,
+    "fillDepthSum": 0.022216796875,
+    "fillVolumeM3": 0.022216796875,
+    "spillLevels": [
+     605.5447998046875
+    ],
+    "outletElevation": 605.5447998046875
+   },
+   {
+    "seedCell": 1056,
+    "cells": [
+     1056
+    ],
+    "cellCount": 1,
+    "areaM2": 1.0,
+    "maxFillDepth": 0.03363037109375,
+    "fillDepthSum": 0.03363037109375,
+    "fillVolumeM3": 0.03363037109375,
+    "spillLevels": [
+     605.484619140625
+    ],
+    "outletElevation": 605.484619140625
+   },
+   {
+    "seedCell": 1197,
+    "cells": [
+     1197
+    ],
+    "cellCount": 1,
+    "areaM2": 1.0,
+    "maxFillDepth": 0.01190185546875,
+    "fillDepthSum": 0.01190185546875,
+    "fillVolumeM3": 0.01190185546875,
+    "spillLevels": [
+     605.4014892578125
+    ],
+    "outletElevation": 605.4014892578125
+   },
+   {
+    "seedCell": 1291,
+    "cells": [
+     1291
+    ],
+    "cellCount": 1,
+    "areaM2": 1.0,
+    "maxFillDepth": 0.0009765625,
+    "fillDepthSum": 0.0009765625,
+    "fillVolumeM3": 0.0009765625,
+    "spillLevels": [
+     605.415771484375
+    ],
+    "outletElevation": 605.415771484375
+   }
+  ]
+ }
+}

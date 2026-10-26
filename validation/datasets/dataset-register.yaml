@@ -3541,3 +3541,380 @@ datasets:
     evidenceRole: reference-labelling
     controlPointIds: []
     checkpointIds: []
+
+  # ── External flow-routing references (TauDEM, GRASS GIS) ─────────────────
+  # Sources are acquired, not vendored. The three windows cut from them are
+  # committed under validation/field-simulation/external-references/ and used
+  # by the study pre-registered in
+  # validation/protocols/flow-pulse-external-references-v1.md.
+  - datasetId: OLV-DS-117-BEAR-CREEK-TAUDEM-PITFILL
+    title: "TauDEM for Bear Creek (HUC 1707030407): USGS NED DEM and TauDEM 5.3.8 PitRemove filled elevation"
+    sourceUrl: https://zenodo.org/records/8335853/files/Taudem-TauDEM_for_Bear_Creek.zip
+    landingPage: https://doi.org/10.5281/zenodo.8335853
+    licence: CC-BY-4.0
+    licenceUrl: https://creativecommons.org/licenses/by/4.0/
+    redistribution: attribution-required
+    acquisitionDate: 2026-10-25
+    sourceSha256: 890a21234a274823b70d4e810e1994350e79addb26740c75ecf7b748cae226ec
+    sourceBytes: 283401959
+    format: other
+    pointCount: not-applicable
+    sensorType: derived-raster
+    capturePlatform: none-synthetic
+    captureDate: unknown
+    horizontalCrs: "EPSG:4326 (WGS 84 geographic), 1/3 arc-second cells"
+    verticalCrs: "unknown (the GeoTIFFs declare no vertical datum)"
+    horizontalUnits: degree
+    verticalUnits: metre
+    nominalDensity: not-applicable
+    terrainClasses: [mountainous, incised-valleys, closed-depressions]
+    landCoverClasses: [not-stated]
+    containsIndependentCheckpoints: false
+    checkpointSource: "TauDEM 5.3.8 PitRemove, an implementation this project did not write"
+    checkpointUseRestriction: not-applicable
+    evidenceRole: oracle
+    dataOwner: "Cybercastor, Riverscapes Consortium TauDEM project (DEM from the USGS National Elevation Dataset)"
+    citation: "Cybercastor (2023). TauDEM for Bear Creek [Data set]. Zenodo. https://doi.org/10.5281/zenodo.8335853"
+    knownLimitations: "The digest covers the Zenodo zip, 283 MB, not vendored. Only inputs/dem.tif and intermediates/pitfill.tif are used. taudem.log records the command, mpiexec -n 2 pitremove -z inputs/dem.tif -fel intermediates/pitfill.tif, and PitRemove version 5.3.8 run by Riverscapes TauDEM 1.2.3. The DEM is a NED mosaic in geographic degrees, so cell lengths in metres vary with latitude and any metric figure built on a fixed cell size is an approximation. The filled DEM is a reference implementation's output, not surveyed truth. capturePlatform is none-synthetic because the enum has no value for a compiled national mosaic; do not cite it. Land cover is not stated by the provider and is not guessed."
+    storage: acquired
+    localPath: not-vendored
+    controlPointIds: []
+    checkpointIds: []
+
+  - datasetId: OLV-DS-118-REUNION-GRASS-FLOW
+    title: "Flow direction and accumulation maps from the 25 m BD ALTI DEM of Reunion, with the Riviere des Pluies catchment (GRASS GIS 8.3.2)"
+    sourceUrl: https://zenodo.org/records/18790150/files/flow_dir_GRASS.tif
+    landingPage: https://doi.org/10.5281/zenodo.18790150
+    licence: CC-BY-4.0
+    licenceUrl: https://creativecommons.org/licenses/by/4.0/
+    redistribution: attribution-required
+    acquisitionDate: 2026-10-25
+    sourceSha256: 458bf03ebd162f3b4b5525a5febf38307582d094d7d2ea150ea69f32b6e44ca1
+    sourceBytes: 11823991
+    format: geotiff
+    pointCount: not-applicable
+    sensorType: derived-raster
+    capturePlatform: none-synthetic
+    captureDate: unknown
+    horizontalCrs: "EPSG:2975 (RGR92 / UTM zone 40S)"
+    verticalCrs: "unknown (the GeoTIFFs declare no vertical datum)"
+    horizontalUnits: metre
+    verticalUnits: metre
+    nominalDensity: not-applicable
+    terrainClasses: [volcanic-island, steep-slope, incised-valleys, closed-depressions]
+    landCoverClasses: [not-stated]
+    containsIndependentCheckpoints: false
+    checkpointSource: "GRASS GIS 8.3.2 flow routing, an implementation this project did not write"
+    checkpointUseRestriction: not-applicable
+    evidenceRole: oracle
+    dataOwner: "Poncet, N., Leroux, M.-D., Lamy, K., Marpinard, E., Cammas, J.-P., Dubois, C., Belon, R."
+    citation: "Poncet, N. et al. (2026). Flow direction and accumulation maps, streams post-processed from BDAlti 25m DEM on Reunion island + Riviere des Pluies catchment boundaries [Data set]. Zenodo. https://doi.org/10.5281/zenodo.18790150"
+    knownLimitations: "The recorded digest is flow_dir_GRASS.tif. The other files used are mnt_filled_GRASS.tif (sha256 414e24d1d1a09a0ac0259f3ddf0e8772722ee040a365d8cbf9ba91527d07b5cc, 23659982 bytes), flow_acc_GRASS.tif (sha256 f8776e68361efe8f96ca36fa90595fd943b62b61fc0b1d4e7aff7dd67e6be3de, 47253306 bytes) and catchment_1.shp (sha256 c27eed038af9bcf2193f27626740eb2b008547bd8390402b7704fe25eebb8af0, with its .dbf, .shx and .prj). The GRASS version comes from the GeoTIFF software tag; the record does not name the module. The direction code and the signed integer accumulation are those of r.watershed in single-flow mode, a least-cost router; the module is inferred from that encoding, not stated by the depositor. A steepest-descent router is not expected to agree on every cell. mnt_filled_GRASS.tif still holds closed depressions despite its name, and the published accumulation disagrees with the published directions on about 0.14% of cells. The record's description names the source DEM as BDTopo while its title says BDAlti. The elevations derive from IGN's BD ALTI 25 m. IGN publishes BD ALTI on data.gouv.fr under Licence Ouverte 2.0 (Etalab), https://www.data.gouv.fr/datasets/bd-alti-r-1, checked 2026-10-25. The Zenodo depositor does not state the upstream licence; this repository relies on the Zenodo record's CC-BY-4.0 for the derived grids and credits IGN as the source of the elevations. Not surveyed truth. capturePlatform is none-synthetic because the enum has no value for a national DEM product; do not cite it."
+    storage: acquired
+    localPath: not-vendored
+    controlPointIds: []
+    checkpointIds: []
+
+  - datasetId: OLV-DS-119-BEAR-CREEK-TAUDEM-FILL-A
+    title: "Bear Creek window A (256 x 256): NED DEM with TauDEM 5.3.8 PitRemove filled elevation, from OLV-DS-117"
+    sourceUrl: https://doi.org/10.5281/zenodo.8335853
+    landingPage: validation/field-simulation/external-references/README.md
+    licence: CC-BY-4.0
+    licenceUrl: https://creativecommons.org/licenses/by/4.0/
+    redistribution: attribution-required
+    acquisitionDate: 2026-10-25
+    sourceSha256: 575769bd4bef1b8f1e7c925e9835dbd60a0df79725ffa8546341727317432233
+    sourceBytes: 824855
+    format: other
+    pointCount: not-applicable
+    sensorType: derived-raster
+    capturePlatform: none-synthetic
+    captureDate: unknown
+    horizontalCrs: "EPSG:4326 (WGS 84 geographic), 1/3 arc-second cells"
+    verticalCrs: "unknown (the source GeoTIFFs declare no vertical datum)"
+    horizontalUnits: degree
+    verticalUnits: metre
+    nominalDensity: not-applicable
+    terrainClasses: [mountainous, closed-depressions]
+    landCoverClasses: [not-stated]
+    containsIndependentCheckpoints: false
+    checkpointSource: "TauDEM 5.3.8 PitRemove, an implementation this project did not write"
+    checkpointUseRestriction: not-applicable
+    evidenceRole: oracle
+    dataOwner: "Cybercastor, Riverscapes Consortium (source); OpenLiDARViewer contributors (window and JSON encoding)"
+    citation: "Window of Cybercastor (2023). TauDEM for Bear Creek [Data set]. Zenodo. https://doi.org/10.5281/zenodo.8335853"
+    knownLimitations: "Rows 1946 to 2201 and columns 828 to 1083 of the source grid, cut with gdal_translate, rows north to south. 65,536 valid cells, no NoData. TauDEM raised 9,769 cells in 62 depressions (8-connected), the deepest 8.357 m. The window was chosen, from the DEM and TauDEM output only, as one where a fill draining to the window edge reproduces TauDEM's whole-grid fill exactly, so it is not a random sample. The fixture's cell size, 7.42 m by 10.29 m, approximates one cell at the window centre and supports no distance-dependent comparison."
+    storage: committed
+    localPath: validation/field-simulation/external-references/bear-creek-taudem-fill-A.json
+    controlPointIds: []
+    checkpointIds: []
+
+  - datasetId: OLV-DS-120-BEAR-CREEK-TAUDEM-FILL-B
+    title: "Bear Creek window B (256 x 256, with NoData): NED DEM with TauDEM 5.3.8 PitRemove filled elevation, from OLV-DS-117"
+    sourceUrl: https://doi.org/10.5281/zenodo.8335853
+    landingPage: validation/field-simulation/external-references/README.md
+    licence: CC-BY-4.0
+    licenceUrl: https://creativecommons.org/licenses/by/4.0/
+    redistribution: attribution-required
+    acquisitionDate: 2026-10-25
+    sourceSha256: 61243e616b84082270420417e8561bad0edbf27b6f9443b7fc22bc13eff9b681
+    sourceBytes: 711089
+    format: other
+    pointCount: not-applicable
+    sensorType: derived-raster
+    capturePlatform: none-synthetic
+    captureDate: unknown
+    horizontalCrs: "EPSG:4326 (WGS 84 geographic), 1/3 arc-second cells"
+    verticalCrs: "unknown (the source GeoTIFFs declare no vertical datum)"
+    horizontalUnits: degree
+    verticalUnits: metre
+    nominalDensity: not-applicable
+    terrainClasses: [mountainous, closed-depressions, survey-edge-nodata]
+    landCoverClasses: [not-stated]
+    containsIndependentCheckpoints: false
+    checkpointSource: "TauDEM 5.3.8 PitRemove, an implementation this project did not write"
+    checkpointUseRestriction: not-applicable
+    evidenceRole: oracle
+    dataOwner: "Cybercastor, Riverscapes Consortium (source); OpenLiDARViewer contributors (window and JSON encoding)"
+    citation: "Window of Cybercastor (2023). TauDEM for Bear Creek [Data set]. Zenodo. https://doi.org/10.5281/zenodo.8335853"
+    knownLimitations: "Rows 2120 to 2375 and columns 2407 to 2662 of the source grid, cut with gdal_translate, rows north to south. 53,583 valid cells and 11,953 NoData cells in two regions, both reaching the window border, so no NoData is enclosed. TauDEM raised 6,688 cells in 125 depressions (8-connected), the deepest 3.413 m. Chosen the same way as window A and not a random sample. The fixture's cell size, 7.42 m by 10.29 m, approximates one cell at the window centre and supports no distance-dependent comparison."
+    storage: committed
+    localPath: validation/field-simulation/external-references/bear-creek-taudem-fill-B.json
+    controlPointIds: []
+    checkpointIds: []
+
+  - datasetId: OLV-DS-121-REUNION-PLUIES-GRASS-WINDOW
+    title: "Riviere des Pluies window (589 x 294, 25 m): elevation, GRASS GIS 8.3.2 D8 direction and accumulation, rasterised catchment, from OLV-DS-118"
+    sourceUrl: https://doi.org/10.5281/zenodo.18790150
+    landingPage: validation/field-simulation/external-references/README.md
+    licence: CC-BY-4.0
+    licenceUrl: https://creativecommons.org/licenses/by/4.0/
+    redistribution: attribution-required
+    acquisitionDate: 2026-10-25
+    sourceSha256: b43d8b737e4e706e12b567cd57d704415468b7752e58da813f600e16a08be9d2
+    sourceBytes: 2333078
+    format: other
+    pointCount: not-applicable
+    sensorType: derived-raster
+    capturePlatform: none-synthetic
+    captureDate: unknown
+    horizontalCrs: "EPSG:2975 (RGR92 / UTM zone 40S)"
+    verticalCrs: "unknown (the source GeoTIFFs declare no vertical datum)"
+    horizontalUnits: metre
+    verticalUnits: metre
+    nominalDensity: not-applicable
+    terrainClasses: [volcanic-island, steep-slope, incised-valleys]
+    landCoverClasses: [not-stated]
+    containsIndependentCheckpoints: false
+    checkpointSource: "GRASS GIS 8.3.2 flow routing, an implementation this project did not write"
+    checkpointUseRestriction: not-applicable
+    evidenceRole: oracle
+    dataOwner: "Poncet, N. et al. (source); OpenLiDARViewer contributors (window, rasterised catchment and JSON encoding)"
+    citation: "Window of Poncet, N. et al. (2026). Flow direction and accumulation maps, streams post-processed from BDAlti 25m DEM on Reunion island + Riviere des Pluies catchment boundaries [Data set]. Zenodo. https://doi.org/10.5281/zenodo.18790150"
+    knownLimitations: "Rows 44 to 632 and columns 996 to 1289 of the source grids, cut with gdal_translate, rows north to south. 169,684 valid cells. The catchment mask is catchment_1.shp rasterised onto the window grid with gdal_rasterize (cell-centre rule), 72,078 cells, clear of the window border. The mouth cell is row 2, column 191 of the window, where GRASS accumulates 72,077 cells. The GRASS outputs come from a single-flow router (module inferred from the output encoding, not named by the dataset) over a surface that still holds closed depressions, so they bound agreement with a steepest-descent router below 100%. The elevations derive from IGN's BD ALTI 25 m, published by IGN under Licence Ouverte 2.0 (Etalab); see OLV-DS-118 for the source and the licence basis."
+    storage: committed
+    localPath: validation/field-simulation/external-references/reunion-pluies-grass.json
+    controlPointIds: []
+    checkpointIds: []
+
+  # ── RichDEM reference grids (GPL-3.0, r-barnes/richdem at 9a1c97bb) ───────
+  # Six files kept byte for byte under validation/field-simulation/richdem-references/,
+  # read as data only. See validation/protocols/richdem-references-v1.md.
+  - datasetId: OLV-DS-122-RICHDEM-GARBRECHT-DEM
+    title: "RichDEM example grid garbrecht.dem: a 7 x 7 flat at 6 enclosed by higher edges, with one lower edge cell at 5"
+    sourceUrl: https://raw.githubusercontent.com/r-barnes/richdem/9a1c97bb2529e386451a7dd54768b8b74bb4d620/data/garbrecht.dem
+    landingPage: https://github.com/r-barnes/richdem
+    licence: GPL-3.0
+    licenceUrl: https://github.com/r-barnes/richdem/blob/9a1c97bb2529e386451a7dd54768b8b74bb4d620/LICENSE.txt
+    redistribution: share-alike
+    acquisitionDate: 2026-10-25
+    sourceSha256: 8f5e69fe353940e95f4797af9d9312169ce6af7684342b9667d48950f58c7fb3
+    sourceBytes: 206
+    format: asc
+    pointCount: not-applicable
+    sensorType: synthetic
+    capturePlatform: none-synthetic
+    captureDate: not-applicable
+    horizontalCrs: local-metric-grid
+    verticalCrs: local-metric-grid
+    horizontalUnits: metre
+    verticalUnits: metre
+    nominalDensity: not-applicable
+    terrainClasses: [constructed-test-grid]
+    landCoverClasses: [not-applicable]
+    containsIndependentCheckpoints: false
+    checkpointSource: "RichDEM (r-barnes/richdem), an implementation this project did not write"
+    checkpointUseRestriction: not-applicable
+    evidenceRole: oracle
+    dataOwner: "Richard Barnes (RichDEM)"
+    citation: "Barnes, R. (2016). RichDEM: Terrain Analysis Software. https://github.com/r-barnes/richdem (file data/garbrecht.dem at commit 9a1c97bb2529e386451a7dd54768b8b74bb4d620)"
+    knownLimitations: "A Garbrecht and Martz style flat. No RichDEM test at this commit reads it and no RichDEM output for it is held, so it carries hand-derived expectations only: raw D8 reports 22 flat cells and no sink, and after conditioning every cell drains to the one lower edge cell. Garbrecht and Martz flat resolution, which RichDEM implements and Flow Pulse does not, is not compared. The header declares a 3-unit cell and a UTM-like corner but no CRS, so units are taken as metres for area only. GitHub reports the licence as GPL-3.0; the licence file does not say whether later versions apply."
+    storage: committed
+    localPath: validation/field-simulation/richdem-references/data/garbrecht.dem
+    controlPointIds: []
+    checkpointIds: []
+  - datasetId: OLV-DS-123-RICHDEM-PIT-DEM
+    title: "RichDEM example grid pit.dem: a 10 x 6 basin inside a ring at 9, open to the south through a row at 6"
+    sourceUrl: https://raw.githubusercontent.com/r-barnes/richdem/9a1c97bb2529e386451a7dd54768b8b74bb4d620/data/pit.dem
+    landingPage: https://github.com/r-barnes/richdem
+    licence: GPL-3.0
+    licenceUrl: https://github.com/r-barnes/richdem/blob/9a1c97bb2529e386451a7dd54768b8b74bb4d620/LICENSE.txt
+    redistribution: share-alike
+    acquisitionDate: 2026-10-25
+    sourceSha256: c81f23e1b217f31eea9870922c06e2a18bf545193ec769d0e98a80ac93b46370
+    sourceBytes: 236
+    format: asc
+    pointCount: not-applicable
+    sensorType: synthetic
+    capturePlatform: none-synthetic
+    captureDate: not-applicable
+    horizontalCrs: local-metric-grid
+    verticalCrs: local-metric-grid
+    horizontalUnits: metre
+    verticalUnits: metre
+    nominalDensity: not-applicable
+    terrainClasses: [constructed-test-grid]
+    landCoverClasses: [not-applicable]
+    containsIndependentCheckpoints: false
+    checkpointSource: "RichDEM (r-barnes/richdem), an implementation this project did not write"
+    checkpointUseRestriction: not-applicable
+    evidenceRole: oracle
+    dataOwner: "Richard Barnes (RichDEM)"
+    citation: "Barnes, R. (2016). RichDEM: Terrain Analysis Software. https://github.com/r-barnes/richdem (file data/pit.dem at commit 9a1c97bb2529e386451a7dd54768b8b74bb4d620)"
+    knownLimitations: "No RichDEM test at this commit reads it and no RichDEM output for it is held, so it carries hand-derived expectations only: one depression of 8 cells filled by 1 to a spill level of 6. The header declares a 3-unit cell and a UTM-like corner but no CRS, so units are taken as metres for area only. GitHub reports the licence as GPL-3.0; the licence file does not say whether later versions apply."
+    storage: committed
+    localPath: validation/field-simulation/richdem-references/data/pit.dem
+    controlPointIds: []
+    checkpointIds: []
+  - datasetId: OLV-DS-124-RICHDEM-DEPRESSIONS-TESTDEM1
+    title: "RichDEM depression-filling test input testdem1.dem: 10 x 10 integer grid with rings at 2 enclosing cells at 0"
+    sourceUrl: https://raw.githubusercontent.com/r-barnes/richdem/9a1c97bb2529e386451a7dd54768b8b74bb4d620/tests/depressions/testdem1.dem
+    landingPage: https://github.com/r-barnes/richdem
+    licence: GPL-3.0
+    licenceUrl: https://github.com/r-barnes/richdem/blob/9a1c97bb2529e386451a7dd54768b8b74bb4d620/LICENSE.txt
+    redistribution: share-alike
+    acquisitionDate: 2026-10-25
+    sourceSha256: 825730d5e4488f197c853989344d4f95d04d4ae77095df8492ddba08f445dd10
+    sourceBytes: 309
+    format: asc
+    pointCount: not-applicable
+    sensorType: synthetic
+    capturePlatform: none-synthetic
+    captureDate: not-applicable
+    horizontalCrs: local-metric-grid
+    verticalCrs: local-metric-grid
+    horizontalUnits: metre
+    verticalUnits: metre
+    nominalDensity: not-applicable
+    terrainClasses: [constructed-test-grid]
+    landCoverClasses: [not-applicable]
+    containsIndependentCheckpoints: false
+    checkpointSource: "RichDEM (r-barnes/richdem), an implementation this project did not write"
+    checkpointUseRestriction: not-applicable
+    evidenceRole: oracle
+    dataOwner: "Richard Barnes (RichDEM)"
+    citation: "Barnes, R. (2016). RichDEM: Terrain Analysis Software. https://github.com/r-barnes/richdem (file tests/depressions/testdem1.dem at commit 9a1c97bb2529e386451a7dd54768b8b74bb4d620)"
+    knownLimitations: "Input of RichDEM's test case "Checking depression filling". Integer elevations; NODATA_value 9 with no cell at 9. Paired with OLV-DS-125. The header declares a 3-unit cell and a UTM-like corner but no CRS, so units are taken as metres for area only. GitHub reports the licence as GPL-3.0; the licence file does not say whether later versions apply."
+    storage: committed
+    localPath: validation/field-simulation/richdem-references/tests/depressions/testdem1.dem
+    controlPointIds: []
+    checkpointIds: []
+  - datasetId: OLV-DS-125-RICHDEM-DEPRESSIONS-TESTDEM1-FILLED
+    title: "RichDEM expected filled elevation testdem1.all.out for testdem1.dem"
+    sourceUrl: https://raw.githubusercontent.com/r-barnes/richdem/9a1c97bb2529e386451a7dd54768b8b74bb4d620/tests/depressions/testdem1.all.out
+    landingPage: https://github.com/r-barnes/richdem
+    licence: GPL-3.0
+    licenceUrl: https://github.com/r-barnes/richdem/blob/9a1c97bb2529e386451a7dd54768b8b74bb4d620/LICENSE.txt
+    redistribution: share-alike
+    acquisitionDate: 2026-10-25
+    sourceSha256: fd6c48bb002e35fb21750ab1aa5b7d0e3a366bace10702598f018d1fe99af249
+    sourceBytes: 309
+    format: asc
+    pointCount: not-applicable
+    sensorType: synthetic
+    capturePlatform: none-synthetic
+    captureDate: not-applicable
+    horizontalCrs: local-metric-grid
+    verticalCrs: local-metric-grid
+    horizontalUnits: metre
+    verticalUnits: metre
+    nominalDensity: not-applicable
+    terrainClasses: [constructed-test-grid]
+    landCoverClasses: [not-applicable]
+    containsIndependentCheckpoints: false
+    checkpointSource: "RichDEM (r-barnes/richdem), an implementation this project did not write"
+    checkpointUseRestriction: not-applicable
+    evidenceRole: oracle
+    dataOwner: "Richard Barnes (RichDEM)"
+    citation: "Barnes, R. (2016). RichDEM: Terrain Analysis Software. https://github.com/r-barnes/richdem (file tests/depressions/testdem1.all.out at commit 9a1c97bb2529e386451a7dd54768b8b74bb4d620)"
+    knownLimitations: "The grid five RichDEM fill routines (PriorityFlood_Original, PriorityFlood_Barnes2014, Zhou2016, Wei2018, FillDepressions, D8 topology) must each reproduce exactly in RichDEM's own test. Filled to the spill level with no gradient; 9 cells raised in 3 depressions. Written by RichDEM's author as a test expectation, so it is a reference output and not surveyed truth. The header declares a 3-unit cell and a UTM-like corner but no CRS, so units are taken as metres for area only. GitHub reports the licence as GPL-3.0; the licence file does not say whether later versions apply."
+    storage: committed
+    localPath: validation/field-simulation/richdem-references/tests/depressions/testdem1.all.out
+    controlPointIds: []
+    checkpointIds: []
+  - datasetId: OLV-DS-126-RICHDEM-FLOWACCUM-TESTDEM1-D8
+    title: "RichDEM flow-accumulation test input testdem1.d8: 10 x 10 D8 directions, every cell code 3 (north)"
+    sourceUrl: https://raw.githubusercontent.com/r-barnes/richdem/9a1c97bb2529e386451a7dd54768b8b74bb4d620/tests/flow_accum/testdem1.d8
+    landingPage: https://github.com/r-barnes/richdem
+    licence: GPL-3.0
+    licenceUrl: https://github.com/r-barnes/richdem/blob/9a1c97bb2529e386451a7dd54768b8b74bb4d620/LICENSE.txt
+    redistribution: share-alike
+    acquisitionDate: 2026-10-25
+    sourceSha256: 15ec72b87f21801d2ff1b3884bc48a4bd65445ce062eecc164e2c3e373c0bbe1
+    sourceBytes: 309
+    format: asc
+    pointCount: not-applicable
+    sensorType: synthetic
+    capturePlatform: none-synthetic
+    captureDate: not-applicable
+    horizontalCrs: local-metric-grid
+    verticalCrs: local-metric-grid
+    horizontalUnits: metre
+    verticalUnits: metre
+    nominalDensity: not-applicable
+    terrainClasses: [constructed-test-grid]
+    landCoverClasses: [not-applicable]
+    containsIndependentCheckpoints: false
+    checkpointSource: "RichDEM (r-barnes/richdem), an implementation this project did not write"
+    checkpointUseRestriction: not-applicable
+    evidenceRole: oracle
+    dataOwner: "Richard Barnes (RichDEM)"
+    citation: "Barnes, R. (2016). RichDEM: Terrain Analysis Software. https://github.com/r-barnes/richdem (file tests/flow_accum/testdem1.d8 at commit 9a1c97bb2529e386451a7dd54768b8b74bb4d620)"
+    knownLimitations: "Input of RichDEM's test case "Checking flow accumulation". RichDEM D8 codes: 1 W, 2 NW, 3 N, 4 NE, 5 E, 6 SE, 7 S, 8 SW, 0 no flow. A single uniform direction, so it exercises counting and edge exit, not routing choice. Paired with OLV-DS-127. The header declares a 3-unit cell and a UTM-like corner but no CRS, so units are taken as metres for area only. GitHub reports the licence as GPL-3.0; the licence file does not say whether later versions apply."
+    storage: committed
+    localPath: validation/field-simulation/richdem-references/tests/flow_accum/testdem1.d8
+    controlPointIds: []
+    checkpointIds: []
+  - datasetId: OLV-DS-127-RICHDEM-FLOWACCUM-TESTDEM1-ACCUM
+    title: "RichDEM expected D8 accumulation testdem1.out for testdem1.d8"
+    sourceUrl: https://raw.githubusercontent.com/r-barnes/richdem/9a1c97bb2529e386451a7dd54768b8b74bb4d620/tests/flow_accum/testdem1.out
+    landingPage: https://github.com/r-barnes/richdem
+    licence: GPL-3.0
+    licenceUrl: https://github.com/r-barnes/richdem/blob/9a1c97bb2529e386451a7dd54768b8b74bb4d620/LICENSE.txt
+    redistribution: share-alike
+    acquisitionDate: 2026-10-25
+    sourceSha256: ab4b94c92337d4b40478a1948b834855e3c64bae3f6ec8ef33f4e27672950936
+    sourceBytes: 510
+    format: asc
+    pointCount: not-applicable
+    sensorType: synthetic
+    capturePlatform: none-synthetic
+    captureDate: not-applicable
+    horizontalCrs: local-metric-grid
+    verticalCrs: local-metric-grid
+    horizontalUnits: metre
+    verticalUnits: metre
+    nominalDensity: not-applicable
+    terrainClasses: [constructed-test-grid]
+    landCoverClasses: [not-applicable]
+    containsIndependentCheckpoints: false
+    checkpointSource: "RichDEM (r-barnes/richdem), an implementation this project did not write"
+    checkpointUseRestriction: not-applicable
+    evidenceRole: oracle
+    dataOwner: "Richard Barnes (RichDEM)"
+    citation: "Barnes, R. (2016). RichDEM: Terrain Analysis Software. https://github.com/r-barnes/richdem (file tests/flow_accum/testdem1.out at commit 9a1c97bb2529e386451a7dd54768b8b74bb4d620)"
+    knownLimitations: "Expected output of RichDEM's d8_flow_accum on OLV-DS-126, compared as a whole grid in RichDEM's test: each cell counts itself and flow off the grid is dropped, giving 10 on the northern row down to 1 on the southern row. The header declares a 3-unit cell and a UTM-like corner but no CRS, so units are taken as metres for area only. GitHub reports the licence as GPL-3.0; the licence file does not say whether later versions apply."
+    storage: committed
+    localPath: validation/field-simulation/richdem-references/tests/flow_accum/testdem1.out
+    controlPointIds: []
+    checkpointIds: []

@@ -1,0 +1,107 @@
+{
+ "schemaVersion": 1,
+ "studyId": "TERRAIN-FLOW-PULSE-GRASS-D8-REUNION",
+ "claimId": "TERRAIN-FLOW-PULSE",
+ "example": false,
+ "notes": [
+  "G3 of the study pre-registered in validation/protocols/flow-pulse-external-references-v1.md.",
+  "The comparison is categorical. maxAbsDiff is the largest disagreement in 45-degree steps between the two directions among disagreeing cells, which is not a tolerance quantity.",
+  "558 of 70656 cells disagree. The largest groups are Flow Pulse east against GRASS north-west (214), Flow Pulse west against GRASS north-east (118) and Flow Pulse north against GRASS south-east (114), cells where GRASS took a neighbour other than the unique steepest descent.",
+  "GRASS reference properties that bound agreement below 100%: the module routes by least cost rather than by steepest descent on a filled surface, the published \"filled\" DEM still holds closed depressions, and the published accumulation disagrees with the published directions on about 0.14% of cells."
+ ],
+ "protocolRef": {
+  "protocolId": "PROTO-FLOW-D8-GRASS-REUNION",
+  "digest": "sha256:77549b174b39f08cf5c71e1fdfecd6e18f0cdc7094ff0406896a9e708e8dfeeb"
+ },
+ "candidate": {
+  "revision": "e964ebeaec7bbb8a7a7f10dc39dbf15b991ca1f5",
+  "version": "0.7.0",
+  "algorithmVersion": "v0.7.0-alpha.1"
+ },
+ "reference": {
+  "tool": "GRASS GIS",
+  "version": "8.3.2",
+  "containerDigest": null,
+  "containerPinning": "not-executed",
+  "containerPinningNote": "The reference was not executed here. Its authors ran it and published the output on Zenodo (10.5281/zenodo.18790150); the version comes from the GeoTIFF software tag and no command or container is published. The bytes compared are pinned by sha256 in the dataset register instead.",
+  "executablePath": "zenodo.18790150/flow_dir_GRASS.tif and flow_acc_GRASS.tif (published output; no executable path is published)",
+  "commandLine": "not published; the direction encoding and the signed integer accumulation are those of r.watershed in single-flow mode",
+  "platform": "not recorded by the publisher"
+ },
+ "datasets": [
+  {
+   "datasetId": "OLV-DS-118-REUNION-GRASS-FLOW",
+   "description": "GRASS GIS 8.3.2 direction and accumulation over Reunion at 25 m, with the Riviere des Pluies catchment polygon. Acquired, not vendored."
+  },
+  {
+   "datasetId": "OLV-DS-121-REUNION-PLUIES-GRASS-WINDOW",
+   "description": "A 589 x 294 window over the catchment: 169,684 valid cells, 72,078 catchment cells.",
+   "path": "validation/field-simulation/external-references/reunion-pluies-grass.json",
+   "sha256": "b43d8b737e4e706e12b567cd57d704415468b7752e58da813f600e16a08be9d2"
+  }
+ ],
+ "parameterSets": [
+  {
+   "id": "PS-FLOW-D8-RAW-25M",
+   "description": "Raw D8 routing (no conditioning) over the window at 25 m square cells, compared on catchment cells whose steepest descent is unique by more than 1e-9 per metre.",
+   "candidateParameters": {
+    "function": "runFlowPulse",
+    "conditioning": "raw",
+    "routing": "d8",
+    "interpolated": "route",
+    "cellSizeM": 25,
+    "horizontalScale": "projected, resolved, unitToMetres 1",
+    "directionMapping": "index 0 (E) to GRASS 8, indices 1..7 unchanged",
+    "rowOrder": "fixture rows reversed so row 0 is south"
+   },
+   "referenceParameters": {
+    "tool": "GRASS GIS 8.3.2",
+    "module": "not named by the dataset; the encoding is that of r.watershed in single-flow mode",
+    "compared": "absolute value of the direction code"
+   }
+  }
+ ],
+ "metrics": {
+  "toleranceAbs": 0,
+  "toleranceUnit": "D8 direction code",
+  "minimumComparableCells": 50000,
+  "requiredWithinToleranceFraction": 0.98
+ },
+ "result": {
+  "comparableCells": 70656,
+  "skippedCells": 1422,
+  "withinToleranceFraction": 0.9921025815217391,
+  "maxAbsDiff": 4
+ },
+ "status": "agree",
+ "statusReason": "70098 of 70656 catchment cells with a unique steepest descent (99.21%) take the GRASS direction, against a 98% gate. The remaining catchment cells are ties or have no descent and were excluded by the pre-registered selection. Nothing was widened.",
+ "rawArtifacts": [
+  {
+   "path": "validation/field-simulation/external-references/reunion-pluies-grass.json",
+   "sha256": "b43d8b737e4e706e12b567cd57d704415468b7752e58da813f600e16a08be9d2",
+   "role": "reference-output"
+  },
+  {
+   "path": "validation/field-simulation/external-references/results/flow-pulse-external-references-v1.json",
+   "sha256": "ff1754e04ab7e43069d4aa9a249cbd95b012ecf7766b68cbdf48e12c1842f23f",
+   "role": "candidate-output"
+  }
+ ],
+ "derivedArtifacts": [],
+ "scope": {
+  "supported": [
+   {
+    "datasetId": "OLV-DS-121-REUNION-PLUIES-GRASS-WINDOW",
+    "parameterSetId": "PS-FLOW-D8-RAW-25M"
+   }
+  ],
+  "unsupported": [
+   "Exact agreement. The reference is a least-cost router, and agreement is within the stated tolerance only.",
+   "Tied and flat cells, which the selection excludes.",
+   "D8 tie order and flat resolution.",
+   "Flow length and the Rational-method peak-flow estimate (TERRAIN-FLOW-RATIONAL-PEAK).",
+   "Accuracy against the ground. Agreement with another program is not field validation, and archival data cannot reach E5."
+  ]
+ },
+ "protocolDigest": "sha256:456f0e50464388d8b7edebb38b3a1f2096987c356a0b1d094f023aa89c0481e4"
+}

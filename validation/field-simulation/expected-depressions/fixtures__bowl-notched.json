@@ -1,0 +1,55 @@
+{
+ "fixture": "fixtures/bowl-notched.json",
+ "cols": 5,
+ "rows": 5,
+ "cellMetresX": 1.0,
+ "cellMetresY": 1.0,
+ "wall": {
+  "cellsUnreachable": 0,
+  "depressionCount": 1,
+  "filledCellCount": 1,
+  "fillDepthSum": 4.0,
+  "fillVolumeM3": 4.0,
+  "depressions": [
+   {
+    "seedCell": 12,
+    "cells": [
+     12
+    ],
+    "cellCount": 1,
+    "areaM2": 1.0,
+    "maxFillDepth": 4.0,
+    "fillDepthSum": 4.0,
+    "fillVolumeM3": 4.0,
+    "spillLevels": [
+     4.0
+    ],
+    "outletElevation": 4.0
+   }
+  ]
+ },
+ "outlet": {
+  "cellsUnreachable": 0,
+  "depressionCount": 1,
+  "filledCellCount": 1,
+  "fillDepthSum": 4.0,
+  "fillVolumeM3": 4.0,
+  "depressions": [
+   {
+    "seedCell": 12,
+    "cells": [
+     12
+    ],
+    "cellCount": 1,
+    "areaM2": 1.0,
+    "maxFillDepth": 4.0,
+    "fillDepthSum": 4.0,
+    "fillVolumeM3": 4.0,
+    "spillLevels": [
+     4.0
+    ],
+    "outletElevation": 4.0
+   }
+  ]
+ }
+}

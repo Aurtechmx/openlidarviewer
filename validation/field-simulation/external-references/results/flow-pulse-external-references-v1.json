@@ -1,0 +1,129 @@
+{
+  "G1": {
+    "runs": [
+      {
+        "crop": "A",
+        "noData": "outlet",
+        "compared": 65536,
+        "mismatches": 0,
+        "cellsUnreachable": 0
+      },
+      {
+        "crop": "B",
+        "noData": "outlet",
+        "compared": 53583,
+        "mismatches": 0,
+        "cellsUnreachable": 0
+      },
+      {
+        "crop": "B",
+        "noData": "wall",
+        "compared": 53583,
+        "mismatches": 0,
+        "cellsUnreachable": 0
+      }
+    ],
+    "compared": 172702,
+    "mismatches": 0,
+    "pass": true
+  },
+  "G2": {
+    "crops": [
+      {
+        "crop": "A",
+        "referenceDepressions": 62,
+        "olvDepressions": 62,
+        "maskMismatches": 0,
+        "matched": 62,
+        "fieldMismatches": {
+          "cells": 0,
+          "areaM2": 0,
+          "maxFillDepth": 0,
+          "spillLevel": 0,
+          "unmatched": 0
+        },
+        "referenceMultiLevel": 0
+      },
+      {
+        "crop": "B",
+        "referenceDepressions": 125,
+        "olvDepressions": 125,
+        "maskMismatches": 0,
+        "matched": 125,
+        "fieldMismatches": {
+          "cells": 0,
+          "areaM2": 0,
+          "maxFillDepth": 0,
+          "spillLevel": 0,
+          "unmatched": 0
+        },
+        "referenceMultiLevel": 0
+      }
+    ],
+    "matched": 187,
+    "reference": 187,
+    "pass": true
+  },
+  "G3": {
+    "eligible": 70656,
+    "agree": 70098,
+    "fraction": 0.9921025815217391,
+    "disagreementsByOlvToGrass": {
+      "8->3": 214,
+      "6->3": 13,
+      "2->7": 114,
+      "2->5": 47,
+      "4->1": 118,
+      "4->8": 1,
+      "5->6": 1,
+      "8->5": 16,
+      "2->8": 1,
+      "3->8": 1,
+      "4->7": 5,
+      "6->1": 20,
+      "4->2": 2,
+      "6->8": 2,
+      "6->2": 1,
+      "5->4": 1,
+      "2->3": 1
+    },
+    "pass": true
+  },
+  "G4": {
+    "mouthOlvIndex": 172475,
+    "mouthStatus": 0,
+    "olvCells": 72072,
+    "grassCells": 72078,
+    "both": 72038,
+    "union": 72112,
+    "onlyOlv": 34,
+    "onlyGrass": 40,
+    "jaccard": 0.9989738185045485,
+    "pass": true
+  },
+  "G5": {
+    "cells": 72078,
+    "within": 68627,
+    "fraction": 0.952121313022004,
+    "exact": 62693,
+    "exactFraction": 0.8697938344571159,
+    "maxRelativeDifference": 17457,
+    "pass": true
+  },
+  "exploratoryEdgeContamination": {
+    "inwardEdgeCells": 1619,
+    "contaminatedCells": 5112,
+    "validCells": {
+      "bothFlagged": 356,
+      "olvOnly": 4756,
+      "grassOnly": 0,
+      "neither": 164572
+    },
+    "catchmentCells": {
+      "bothFlagged": 3,
+      "olvOnly": 0,
+      "grassOnly": 0,
+      "neither": 72075
+    }
+  }
+}
