@@ -60,10 +60,11 @@ export type MeasureKeyAction = 'finish' | 'undo';
  *
  * Undo answers to Backspace and to the platform chord (Cmd+Z on macOS,
  * Ctrl+Z elsewhere; both accepted, since a chord that silently does nothing
- * is worse than one that fires on the other platform's modifier). The chord
- * counts only while a draft is open, so with the tool merely armed the event
- * stays with whatever owns it otherwise — a focused name field's own undo,
- * and the global annotation/classification undo.
+ * is worse than one that fires on the other platform's modifier). Both count
+ * whether or not a draft is open: with nothing drafted the tool says there is
+ * nothing to undo, so the chord never silently falls through to the
+ * annotation or class undo while the Measure tool is open. A focused text
+ * field keeps its own undo. The delete toast's Undo listens ahead of this.
  *
  * Shift+Cmd+Z and Ctrl+Y are redo. There is no measurement redo, so they are
  * not claimed here rather than being folded into undo.
@@ -80,6 +81,6 @@ export function measureKeyAction(
   if (e.key === 'Enter') return drafting ? 'finish' : null;
   if (e.key === 'Backspace') return 'undo';
   const chord = (e.ctrlKey || e.metaKey) && !e.shiftKey && !e.altKey;
-  if (chord && (e.key === 'z' || e.key === 'Z')) return drafting ? 'undo' : null;
+  if (chord && (e.key === 'z' || e.key === 'Z')) return 'undo';
   return null;
 }

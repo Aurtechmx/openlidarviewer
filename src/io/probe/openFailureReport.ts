@@ -116,11 +116,12 @@ function article(word: string): string {
 
 /**
  * The open advice, left out when the first explanation already recommends a
- * format to export or tells the user to extract an archive.
+ * format to export or tells the user to extract an archive. It names formats
+ * and the user's own software, never a vendor.
  */
 function openAdvice(first: string): string {
   if (first.includes(OPEN_FORMATS) || first.includes('Extract it')) return '';
-  return `To view a scan, open it as ${OPEN_FORMATS}.`;
+  return `Export it as ${OPEN_FORMATS} from the software that made it, then open that file.`;
 }
 
 /** The short message the toast shows. */

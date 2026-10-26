@@ -861,7 +861,7 @@ describe('buildActionRegistry — one name per action (CE-NAME-01)', () => {
     const { ACTION_TITLES, SURFACE_DESCRIPTORS } = await import('../src/ui/actionDescriptors');
     const { actions } = harness();
     const titled = actions.filter((a) => a.id in ACTION_TITLES);
-    expect(titled.length).toBe(10);
+    expect(titled).toHaveLength(14);
     for (const a of titled) expect(a.title, a.id).toBe(ACTION_TITLES[a.id as keyof typeof ACTION_TITLES]);
     // A control-only descriptor never shadows a palette action.
     for (const d of SURFACE_DESCRIPTORS) expect(actions.some((a) => a.id === d.id), d.id).toBe(false);

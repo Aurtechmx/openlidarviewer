@@ -58,6 +58,8 @@ export interface ClipFlowDeps {
   readonly setBoxKind: () => void;
   /** Reveal and focus a measurement's row in the Measure page. */
   readonly openDetails: (id: string) => void;
+  /** Delete a measurement as its row's × does, with the same Undo offer. */
+  readonly deleteMeasurement: (id: string) => void;
   /** Defaults to the app's clipboard helper. */
   readonly copy?: (text: string) => Promise<boolean>;
   /** True while the camera looks straight down: a box completed then is a footprint. */
@@ -138,6 +140,8 @@ export function createClipFlow(deps: ClipFlowDeps): ClipFlow {
     onOpenDetails: (id) => deps.openDetails(id),
     onUseAsClip: (id) => { isolate(id); },
     onDismiss: () => dismissCard(),
+    // The card described a measurement that is gone; the list's Undo toast takes over.
+    onDelete: (id) => { card.hide(); deps.deleteMeasurement(id); },
   });
   const indicator = new ClipIndicator(deps.clipPanel);
   const lane = el('div', { className: 'olv-flow-lane' }, [card.element, indicator.element]);
@@ -222,8 +226,8 @@ export interface ClipFlowShell {
   /** False until the first scan resolves the (deferred) Viewer. */
   readonly ready: () => boolean;
   readonly activeLayerId: () => string | null;
-  readonly openPage: (page: 'clip' | 'measure') => void;
-  readonly measurePanel: () => Pick<MeasurePanel, 'focusRow'> | null;
+  readonly openPage: (page: 'clip' | 'measure', options?: { readonly reveal?: boolean }) => void;
+  readonly measurePanel: () => Pick<MeasurePanel, 'focusRow' | 'deleteRow'> | null;
   /** Flip Measure and record it, as the shell's scene-tool command does, without opening its page. */
   readonly toggleMeasure: () => void;
   readonly toast: (message: string) => void;
@@ -255,7 +259,9 @@ export function createClipFlowFromShell(sh: ClipFlowShell): ClipFlow {
     armMeasureTool: () => { if (!v().measureMode) sh.toggleMeasure(); },
     stopMeasureTool: () => { if (v().measureMode) sh.toggleMeasure(); },
     setBoxKind: () => v().measure.setKind('box'),
-    openDetails: (id) => { sh.openPage('measure'); sh.measurePanel()?.focusRow(id); },
+    // The page is asked for to be read, so a phone sheet opens rather than drops.
+    openDetails: (id) => { sh.openPage('measure', { reveal: true }); sh.measurePanel()?.focusRow(id); },
+    deleteMeasurement: (id) => { sh.measurePanel()?.deleteRow(id); },
     lookingDown: () => sh.ready() && looksDown(v().getCameraPose(), v().measure.worldUp),
     setFootprintHint: (on) => { if (sh.ready()) v().measure.boxFootprint = on; },
     watchHint: (fn) => (sh.ready() ? watchHintText(v().measureElements.hint, fn) : () => {}),

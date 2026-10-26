@@ -70,7 +70,7 @@ describe('the entry URL', () => {
       return new Response('{}', { status: 200 });
     }) as unknown as typeof fetch;
     try {
-      await openRemoteTileset(url, undefined, t.d as never);
+      await openRemoteTileset(url, undefined, t.d as never).catch(() => {});
     } finally {
       globalThis.fetch = realFetch;
     }

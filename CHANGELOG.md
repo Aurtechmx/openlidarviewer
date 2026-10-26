@@ -4,6 +4,33 @@ The format is based on Keep a Changelog and the project follows Semantic Version
 
 ## [Unreleased]
 
+### Added
+
+- Open scan, Open session, Save session and Report PDF in the command palette. They run the same paths as their controls; Report PDF uses the default template.
+- Undo after Clear in the measure toolbar: a toast offers to put every deleted measurement back for 8 seconds.
+- A Delete button on the measurement result card, and a Copy button on each Measurements row, both doing what the list's own controls do.
+- A polygon volume shows its base level, the median of the outline's vertex heights, under the result, marked local when the scan has no datum. Copy result and the PDF report carry it, and the measurement CSV and GeoJSON write it as `base_level`.
+- Error toasts have a Dismiss control and a Show in Session log action.
+
+### Changed
+
+- The Measurements panel's session buttons read Save session and Open session. Every save ends in a toast stating how many measurements, annotations and saved views the file holds and that it holds no points.
+- The measure toolbar's Undo is disabled until a point is drafted, and its tooltip says so. Backspace and Ctrl/Cmd+Z stay with the Measure tool while it is open; with nothing drafted the hint says where a finished measurement is deleted. Esc during a vertex drag puts the vertex back. The global Undo and Redo say in a toast what they undid or redid.
+- Copy view link says Link copied only when the clipboard took the link, and a toast says what the link restores or that copying was blocked and the link is in the address bar. The button is disabled while a stream is the scene.
+- Error toasts stay for the longer of six seconds and 0.4 seconds per word, up to thirty, and hold while hovered or focused.
+- A snapshot is saved as `<scan>-view-YYYYMMDD-HHMMSS.png` and a toast names the file.
+- On a phone, Open details on the result card opens the sheet to half height and focuses the row; choosing a tab or tapping the sheet's head opens it to half height.
+- The advice for a file no probe recognised says to export it as LAS/LAZ, E57, PLY, PCD, PTX, PTS or XYZ from the software that made it.
+- The command palette's no-match text says how to reach the shortcut sheet from the palette. The URL field's empty message names the 3D Tiles entry point, and a CORS block on an EPT dataset or tileset says the fix is at the host.
+- The Colour by chips and the measure kind buttons carry aria-pressed, the scan canvas is an application region named with its keys, and a new measurement result is announced with its caveat through the one polite region.
+
+### Fixed
+
+- A refusal written for the user, such as the tileset-by-URL guidance, the E57 and whole-file size caps and a graphics backend that cannot start, reaches the toast as written instead of as the category's general sentence.
+- A browser with neither WebGPU nor WebGL 2 is told so when a scan opens, instead of the failure being reported as a fault in the file.
+- A URL that fails to open shows its message under the URL field with Retry, for COPC, EPT and 3D Tiles alike.
+- The warning that a PDF report was saved without some sections stays on screen; the progress toast used to erase it.
+
 ## [0.7.1-alpha.1] - 2026-10-25
 
 A development cut on the way to v0.7.1. It carries no DOI, and its test figures

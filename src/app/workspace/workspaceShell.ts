@@ -105,9 +105,11 @@ export interface WorkspaceShell {
   /**
    * Open a scene tool's page in Tools. Focus follows to the task heading only
    * when it was already in the rail (a launcher click), never off the canvas.
-   * On a phone the sheet drops to its head so the tool can be used.
+   * On a phone the sheet drops to its head so the tool can be used; with
+   * `reveal` it opens to half height instead, for a page the user asked to
+   * read (a result card's Open details).
    */
-  openToolPage(page: ToolPage): void;
+  openToolPage(page: ToolPage, options?: { readonly reveal?: boolean }): void;
   /**
    * For a launcher row: when the tool's panel is already up (its tool on,
    * results placed, or the clip box, which has its own switch), reopen its page
@@ -536,12 +538,16 @@ export function mountWorkspaceShell(d: WorkspaceShellDeps): WorkspaceShell {
       if (up) live.navigate({ mode: 'work', page }, railIntent.startedInRail());
       return up;
     },
-    openToolPage: (page) => {
+    openToolPage: (page, options) => {
       live.navigate({ mode: 'work', page }, railIntent.startedInRail());
+      if (!mobileApplied) return;
+      // Asked to read the page (a result card's Open details): bring it into
+      // view at half height, with the scene still above it.
+      if (options?.reveal) { sheet.revealResult('work', '.olv-ws-task-title'); return; }
       // A tool just started: on a phone, drop the sheet so the scene is free to
       // tap. The Tools tab keeps the page, so opening the sheet again shows it.
       // The Clip page opens at half height: its switch and the scene both show.
-      if (mobileApplied) sheet.setDetent(page === 'clip' ? 'half' : 'peek');
+      sheet.setDetent(page === 'clip' ? 'half' : 'peek');
     },
     revealScene: () => { if (mobileApplied) sheet.setDetent('peek'); },
     applyMobileSheet,

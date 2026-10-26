@@ -27,6 +27,8 @@ export interface RevealDock {
   setInspectEnabled(enabled: boolean): void;
   setProbeEnabled(enabled: boolean): void;
   setCloseEnabled(enabled: boolean): void;
+  /** Copy view link; optional so an older dock surface still satisfies the reveal. */
+  setShareEnabled?(enabled: boolean): void;
   setBackend(backend: 'webgpu' | 'webgl2'): void;
 }
 
@@ -72,6 +74,9 @@ export function revealStreamingScanChrome(reveal: StreamingScanReveal): void {
   dock.setInspectEnabled(true);
   dock.setProbeEnabled(true);
   dock.setCloseEnabled(true);
+  // A view link is applied only when a scan opens from a file, so while a
+  // stream is the scene the button is off and its tooltip says why.
+  dock.setShareEnabled?.(false);
   dock.setBackend(backend);
 
   navBar.element.classList.remove('olv-hidden');

@@ -106,6 +106,54 @@ function brandMarkImg(className: string, alt = ''): HTMLImageElement {
 }
 
 
+/** What the URL field wants when Open is pressed with nothing in it. */
+export const URL_FIELD_EMPTY_MESSAGE =
+  'Enter a URL to a .copc.laz file, an EPT dataset (ept.json) or a 3D Tiles tileset (tileset.json).';
+
+/** True for a dataset served as many files, which cannot be downloaded and opened as one. */
+function isMultiFileDatasetUrl(url: string): boolean {
+  return /\/ept\.json(?:[?#]|$)|tileset\.json(?:[?#]|$)/i.test(url);
+}
+
+/**
+ * Map raw fetch / range-source errors to plain guidance under the URL field.
+ * A CORS block on a COPC file can be worked round by downloading the file; an
+ * EPT dataset or a tileset is many files, so the only fix is at the host.
+ */
+export function friendlyUrlError(err: unknown, url = ''): string {
+  const raw = err instanceof Error ? err.message : String(err ?? '');
+  const lower = raw.toLowerCase();
+  if (lower.includes('cors') || lower.includes('cross-origin')) {
+    if (isMultiFileDatasetUrl(url)) return 'This host blocks browser access. Ask the host to allow CORS for this site.';
+    return (
+      'This file\'s host blocks browser access. Try downloading the file ' +
+      'and using Open scan, or ask the host to allow CORS.'
+    );
+  }
+  if (lower.includes('failed to fetch') || lower.includes('networkerror')) {
+    return (
+      'Couldn\'t reach this URL. Check the link, your connection, and ' +
+      'whether the host is online.'
+    );
+  }
+  if (lower.includes('range') || lower.includes('416')) {
+    return (
+      'The host returned an unexpected range response. The file may be ' +
+      'corrupted or not a valid COPC.'
+    );
+  }
+  if (lower.includes('404') || lower.includes('not found')) {
+    return 'No file found at this URL. Check the path and try again.';
+  }
+  if (lower.includes('403') || lower.includes('forbidden')) {
+    return 'The host refused access. Check the link or use Open scan.';
+  }
+  if (lower.includes('aborted')) {
+    return 'Cancelled.';
+  }
+  return raw || 'Couldn\'t open this URL. Try downloading the file and opening it from your device.';
+}
+
 /**
  * Cosmetic heuristic for the URL field's blur hint: true for a URL that looks
  * like a COPC file, an EPT `ept.json` or a 3D Tiles `tileset.json`.
@@ -202,6 +250,10 @@ export class Stage {
 
   constructor(mount: HTMLElement, options: StageOptions = {}) {
     this.canvas = el('canvas', { className: 'olv-canvas' });
+    // The canvas is a keyboard-driven application region, named so a screen
+    // reader says what it is and which keys drive it before focus lands there.
+    this.canvas.setAttribute('role', 'application');
+    this.canvas.setAttribute('aria-label', 'Scan view. Arrow keys or W A S D move, R frames the scan, Shift+F10 opens the view menu.');
     // A Tab stop, and a keyboard equivalent for the pointer's right-click:
     // Shift+F10 / the ContextMenu key are the platform-standard chords for
     // "open the context menu here" — without a tabindex the canvas could
@@ -899,10 +951,7 @@ export class Stage {
       // An empty "Open" press used to be a silent no-op — tell the user
       // what the field wants instead of doing nothing (E-hierarchy:
       // communicate, don't ignore).
-      this._showUrlError(
-        'Enter a URL to a .copc.laz file or an EPT dataset (ept.json).',
-        'warning',
-      );
+      this._showUrlError(URL_FIELD_EMPTY_MESSAGE, 'warning');
       return;
     }
     if (typeof navigator !== 'undefined' && navigator.onLine === false) {
@@ -941,7 +990,7 @@ export class Stage {
         // User-initiated cancel — no error noise, just restore.
         return;
       }
-      const friendly = this._friendlyUrlError(err);
+      const friendly = friendlyUrlError(err, url);
       this._showUrlError(friendly, 'error');
       // E8: input is preserved (we never cleared it), so the user can
       // tweak and resubmit. Plus a retry banner up top (E9).
@@ -949,39 +998,6 @@ export class Stage {
     }
   }
 
-  /** Map raw fetch / range-source errors to plain-English guidance (E6). */
-  private _friendlyUrlError(err: unknown): string {
-    const raw = err instanceof Error ? err.message : String(err ?? '');
-    const lower = raw.toLowerCase();
-    if (lower.includes('cors') || lower.includes('cross-origin')) {
-      return (
-        'This file\'s host blocks browser access. Try downloading the file ' +
-        'and using Open scan, or ask the host to allow CORS.'
-      );
-    }
-    if (lower.includes('failed to fetch') || lower.includes('networkerror')) {
-      return (
-        'Couldn\'t reach this URL. Check the link, your connection, and ' +
-        'whether the host is online.'
-      );
-    }
-    if (lower.includes('range') || lower.includes('416')) {
-      return (
-        'The host returned an unexpected range response. The file may be ' +
-        'corrupted or not a valid COPC.'
-      );
-    }
-    if (lower.includes('404') || lower.includes('not found')) {
-      return 'No file found at this URL. Check the path and try again.';
-    }
-    if (lower.includes('403') || lower.includes('forbidden')) {
-      return 'The host refused access. Check the link or use Open scan.';
-    }
-    if (lower.includes('aborted')) {
-      return 'Cancelled.';
-    }
-    return raw || 'Couldn\'t open this URL. Try downloading the file and opening it from your device.';
-  }
 
   /**
    * Toggle the Open button into / out of its loading state. While loading,

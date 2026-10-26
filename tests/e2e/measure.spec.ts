@@ -255,7 +255,7 @@ test('exporting produces a session download', async ({ page }) => {
   await loadSampleAndMeasure(page);
   const [download] = await Promise.all([
     page.waitForEvent('download'),
-    page.locator('.olv-mp-action', { hasText: 'Export' }).click(),
+    page.locator('.olv-mp-action', { hasText: 'Save session' }).click(),
   ]);
   // The export uses the current scan's name with an `.olvsession` suffix —
   // the canonical v3 session-file extension.

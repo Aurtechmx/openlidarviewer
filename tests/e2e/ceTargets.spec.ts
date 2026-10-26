@@ -10,7 +10,7 @@
  * Controls covered (C1): the dock buttons, whose labels now come from the
  * action registry; the NavBar frame button and camera chips, whose names now
  * come from the registry; the canvas menu rows; the empty state's Open scan
- * and the Measure panel's Export session.
+ * and the Measure panel's Save session.
  */
 import { test, expect, type Locator, type Page } from '@playwright/test';
 import { dropDenseGridPly, pinNavigationPanel, placeTestDistance } from './helpers';
@@ -69,15 +69,15 @@ test.describe('targets at desktop size', { tag: '@desktop-only' }, () => {
     await page.keyboard.press('Escape');
   });
 
-  test('Measure panel Export session', async ({ page }) => {
+  test('Measure panel Save session', async ({ page }) => {
     await openScan(page);
     await page.locator('.olv-dock [data-action="tool.measure"]').click();
     await placeTestDistance(page);
-    expectAtLeast(await sizes(page.locator('.olv-mp-action', { hasText: 'Export session' })), AA, 'Export session');
+    expectAtLeast(await sizes(page.locator('.olv-mp-action', { hasText: 'Save session' })), AA, 'Save session');
     // The registry name keeps one line: the button is no taller than its one-word neighbour.
     const heights = await page.locator('.olv-mp-action').evaluateAll((n) => n.map((e) => [e.textContent?.trim(), e.getBoundingClientRect().height] as const));
-    const open = heights.find(([t]) => t === 'Open')![1];
-    expect(heights.find(([t]) => t === 'Export session')![1]).toBeLessThanOrEqual(open);
+    const open = heights.find(([t]) => t === 'Open session')![1];
+    expect(heights.find(([t]) => t === 'Save session')![1]).toBeLessThanOrEqual(open);
   });
 });
 
@@ -95,14 +95,14 @@ test.describe('targets on a touch phone', { tag: '@touch' }, () => {
     expectAtLeast(await sizes(page.locator('.olv-dock [data-action]')), TOUCH, 'dock buttons');
   });
 
-  test('Measure panel Export session', async ({ page }) => {
+  test('Measure panel Save session', async ({ page }) => {
     await openScan(page);
     await page.locator('.olv-mobile-sheet .olv-msheet-tab[data-tab="work"]').click();
     await page.locator('.olv-msheet-slot[data-tab="work"] .olv-tl-row', { hasText: 'Measure' }).click();
     await placeTestDistance(page);
     await page.locator('.olv-mobile-sheet .olv-msheet-tab[data-tab="work"]').click();
-    const button = page.locator('.olv-mp-action', { hasText: 'Export session' });
+    const button = page.locator('.olv-mp-action', { hasText: 'Save session' });
     await button.scrollIntoViewIfNeeded();
-    expectAtLeast(await sizes(button), TOUCH, 'Export session');
+    expectAtLeast(await sizes(button), TOUCH, 'Save session');
   });
 });

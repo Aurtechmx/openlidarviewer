@@ -155,13 +155,20 @@ describe('MobileSheet', () => {
     expect(flips).toEqual([]);
   });
 
-  it('selecting a tab re-expands a collapsed sheet', async () => {
+  it('selecting a tab opens a collapsed sheet to half height, so the scene stays in view', async () => {
     const { sheet, tab } = await makeSheet();
     sheet.setExpanded(false);
     expect(sheet.isExpanded()).toBe(false);
     tab('view').fire('click');
     expect(sheet.isExpanded()).toBe(true);
+    expect(sheet.getDetent()).toBe('half');
     expect(sheet.getActive()).toBe('view');
+  });
+
+  it('selecting a tab leaves a sheet the user opened to full where it is', async () => {
+    const { sheet, tab } = await makeSheet({ initialDetent: 'full' });
+    tab('view').fire('click');
+    expect(sheet.getDetent()).toBe('full');
   });
 
   it('ArrowRight moves the active tab and focuses it', async () => {
@@ -315,14 +322,14 @@ describe('MobileSheet detents', () => {
     expect(flips).toEqual([]);
   });
 
-  it('toggleExpanded still follows the two-state peek↔full path', async () => {
+  it('toggleExpanded moves between the head and half height', async () => {
     const { sheet } = await makeSheet({ initialDetent: 'half' });
     // From an expanded detent a toggle collapses to peek…
     sheet.toggleExpanded();
     expect(sheet.getDetent()).toBe('peek');
-    // …and from peek it opens to full (not half), matching legacy behaviour.
+    // …and from peek it opens to half, so the scene stays above the sheet.
     sheet.toggleExpanded();
-    expect(sheet.getDetent()).toBe('full');
+    expect(sheet.getDetent()).toBe('half');
   });
 });
 

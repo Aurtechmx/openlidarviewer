@@ -2122,14 +2122,17 @@ export class Inspector {
       const title = disabled ? COVERAGE_DISABLED_TITLE : MODE_TITLES[mode];
       const chip = el('button', { className: 'olv-chip', text: MODE_LABELS[mode], title });
       if (active) chip.classList.add('olv-chip-active');
+      // One chip is pressed at a time; the attribute is what a screen reader reads as the choice.
+      chip.setAttribute('aria-pressed', String(active));
       if (disabled) {
         chip.disabled = true;
         chip.classList.add('olv-chip-disabled');
       }
       chip.addEventListener('click', () => {
         if (disabled) return; // a disabled (analysis-gated) chip is a no-op
-        for (const other of this._chips.children) other.classList.remove('olv-chip-active');
+        for (const other of this._chips.children) { other.classList.remove('olv-chip-active'); other.setAttribute('aria-pressed', 'false'); }
         chip.classList.add('olv-chip-active');
+        chip.setAttribute('aria-pressed', 'true');
         this._activeMode = mode;
         this._openingReason = null;
         this._cb.onColorMode(mode);

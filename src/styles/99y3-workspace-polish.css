@@ -235,7 +235,7 @@
   }
 }
 
-/* The Measure panel's session buttons keep one line: "Export session" takes
+/* The Measure panel's session buttons keep one line: "Save session" takes
    the width it needs and the shorter captions give way. */
 .olv-mp-action { flex: 1 0 auto; white-space: nowrap; }
 

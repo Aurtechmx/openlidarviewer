@@ -266,12 +266,12 @@ export class MobileSheet {
     return this._active;
   }
 
-  /** Select a tab (idempotent). Expands the sheet if it was collapsed. */
+  /** Select a tab (idempotent). A collapsed sheet opens to half height, with the scene still above it. */
   setActive(tab: MobileTab): void {
     if (!this._slots.has(tab)) return;
     const changed = tab !== this._active;
     this._active = tab;
-    if (!this.isExpanded()) this.setExpanded(true);
+    if (!this.isExpanded()) this.setDetent('half');
     this._syncTabs();
     if (changed) this._onTabChange?.(tab);
   }
@@ -312,15 +312,16 @@ export class MobileSheet {
   }
 
   setExpanded(expanded: boolean): void {
-    // Map the legacy boolean onto detents: collapse → 'peek', expand → 'full'
-    // (but leave an already-expanded 'half' where it is).
+    // Map the legacy boolean onto detents: collapse → 'peek', expand → 'half',
+    // so the scene stays in view (a drag or fling still reaches 'full'). An
+    // already-expanded 'full' is left where it is.
     if (expanded === this.isExpanded()) return;
-    this.setDetent(expanded ? 'full' : 'peek');
+    this.setDetent(expanded ? 'half' : 'peek');
   }
 
   toggleExpanded(): void {
-    // A tap toggles the two-state peek↔full path callers/tests expect.
-    this.setDetent(this.isExpanded() ? 'peek' : 'full');
+    // A head tap toggles between the head and half height.
+    this.setDetent(this.isExpanded() ? 'peek' : 'half');
   }
 
   /** Show or hide the whole sheet (the host hides it with no scan loaded). */

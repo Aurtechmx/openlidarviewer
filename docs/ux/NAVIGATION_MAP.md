@@ -212,9 +212,10 @@ The list has 25 rows.
 | 20 | `view.save-state` "Save view state" | Right rail "+ Save current view"; key `V`; palette |
 | 21 | `nav.reset` "Reset navigation to defaults" | Right rail "Reset to defaults"; palette |
 | 22 | Theme, "<Theme> theme" | Top bar theme toggle; palette |
-| 23 | Open a scan (no registry id) | Data home "Open scan"; empty state open button; right rail "+ Add dataset" |
+| 23 | `scan.open` "Open scan" | Data home "Open scan"; empty state open button; right rail "+ Add dataset"; palette |
 | 24 | Close a scan (no registry id) | Dock "Close"; layer row `×` with "Close this scan?" |
-| 25 | Session export (no registry id) | Measure panel "Export" (`.olvsession`); Export mode |
+| 25 | `session.export` "Save session" and `session.open` "Open session" | Measure panel "Save session" and "Open session" (`.olvsession`); Export mode; palette |
+| 26 | `report.pdf` "Report PDF" | Export panel report button; palette (default template) |
 
 The dock's Probe (`tool.probe`) has no registry descriptor, so the Tools
 launcher skips it (`ui/toolLauncher.ts:115`). It is reachable from the dock
@@ -227,7 +228,7 @@ C1 applied CE-NAME-01 to the rows above. The name table is
 descriptors, the canvas menu, the Data home and the Measure panel read it; the
 dock, the NavBar and the empty state write the names out and tests hold them to
 it. Actions
-with a control but no palette entry (rows 8, 14, 23, 24 and 25, plus Probe and
+with a control but no palette entry (rows 8, 14 and 24, plus Probe and
 Help) have a descriptor in `SURFACE_DESCRIPTORS` in `ui/actionDescriptors.ts`. No control was removed.
 
 | Action | Name | Changed copies |
@@ -240,7 +241,8 @@ Help) have a descriptor in `SURFACE_DESCRIPTORS` in `ui/actionDescriptors.ts`. N
 | `camera.orthographic` | Orthographic projection | NavBar name "Toggle orthographic projection"; the chip shows "Ortho" |
 | `camera.plan-view` | Plan view | NavBar name "Toggle plan view"; the chip shows "Plan" |
 | `scan.open` | Open scan | Empty state "Open scan from device" |
-| `session.export` | Export session | Measure panel "Export" |
+| `session.export` | Save session | Measure panel "Save session" |
+| `session.open` | Open session | Measure panel "Open session" |
 
 A chip that shows a shorter form shows the start of the name, and its
 accessible name is the full name.

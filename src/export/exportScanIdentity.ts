@@ -73,11 +73,26 @@ export const TERRAIN_RESULT_FOREIGN_SCAN_REFUSAL =
  * gone after a restore unless the scan itself is exported.
  */
 export const SESSION_CLASS_EDITS_NOT_STORED =
-  'Session saved. Class edits are not stored in the session file. To keep them, export the scan as LAS at display resolution.';
+  'Class edits are not stored in the session file. To keep them, export the scan as LAS at display resolution.';
 
-/** The notice to show after a session save, or null when there is nothing to warn about. */
-export function sessionSaveNotice(hasClassEdits: boolean): string | null {
-  return hasClassEdits ? SESSION_CLASS_EDITS_NOT_STORED : null;
+/** The counts a session file holds, as the save toast states them. */
+export interface SessionSavedWork {
+  readonly measurements: number;
+  readonly annotations: number;
+  readonly views: number;
+}
+
+const count = (n: number, noun: string): string => `${n} ${noun}${n === 1 ? '' : 's'}`;
+
+/**
+ * The toast after every session save: what the file holds, that it holds no
+ * points, and, when the scan carries class edits, that those are not in it.
+ */
+export function sessionSavedNotice(work: SessionSavedWork, hasClassEdits: boolean): string {
+  const saved =
+    `Session saved: ${count(work.measurements, 'measurement')}, ${count(work.annotations, 'annotation')}, `
+    + `${count(work.views, 'saved view')}. It holds no points; open it with the same scan file.`;
+  return hasClassEdits ? `${saved} ${SESSION_CLASS_EDITS_NOT_STORED}` : saved;
 }
 
 /**

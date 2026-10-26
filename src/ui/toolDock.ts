@@ -35,7 +35,8 @@ export interface ToolDockCallbacks {
   onFrameAll: () => void;
   onSnapshot: () => void;
   /** Copy a shareable link that reproduces the current view. */
-  onShare: () => void;
+  /** Copy the view link; resolves true when the clipboard took it, so the label can say so. */
+  onShare: () => void | boolean | Promise<void | boolean>;
   /** Toggle distance-measurement mode. */
   onMeasureToggle: () => void;
   /** Toggle point-inspection mode. */
@@ -71,6 +72,8 @@ interface DockToolSpec {
   label: string;
   title: string;
   enabledTitle?: string;
+  /** For a tool that starts enabled: the tooltip `setEnabled(id, false)` swaps in. */
+  disabledTitle?: string;
   icon?: string;
   classes?: string[];
   disabled?: boolean;
@@ -209,12 +212,15 @@ export class ToolDock {
         title:
           'Copies the camera angle and view settings — not the scan itself. ' +
           'The recipient needs to open the same file first.',
+        // A link is applied only when a scan opens from a file (openScan.ts), so
+        // a streamed scene has nothing for the link to restore onto.
+        disabledTitle: 'View links work for scans opened from a file.',
         icon: ICON_LINK,
         classes: ['olv-tool-share', 'olv-dock-gap'],
         blur: true,
         onClick: () => {
-          callbacks.onShare();
-          this._flashShare();
+          // The label says "Link copied" only once the clipboard has the link.
+          void Promise.resolve(callbacks.onShare()).then((ok) => { if (ok === true) this._flashShare(); });
         },
       },
       {
@@ -333,6 +339,8 @@ export class ToolDock {
     }
     if (spec.enabledTitle !== undefined) {
       this._titles.set(spec.id, { enabled: spec.enabledTitle, disabled: spec.title });
+    } else if (spec.disabledTitle !== undefined) {
+      this._titles.set(spec.id, { enabled: spec.title, disabled: spec.disabledTitle });
     }
     this._buttons.set(spec.id, button);
     return button;
@@ -389,6 +397,11 @@ export class ToolDock {
   /** Enable or disable the Measure tool — enabled once a scan is loaded. */
   setMeasureEnabled(enabled: boolean): void {
     this.setEnabled('tool.measure', enabled);
+  }
+
+  /** Enable or disable Copy view link: off while a stream is the scene, since a link restores only onto a scan opened from a file. */
+  setShareEnabled(enabled: boolean): void {
+    this.setEnabled('tool.share', enabled);
   }
 
   /** Reflect whether measurement mode is currently active. */

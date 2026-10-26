@@ -21,7 +21,7 @@ async function saveSession(page: Page): Promise<Saved> {
   await openToolPage(page, 'Measure');
   const [download] = await Promise.all([
     page.waitForEvent('download'),
-    page.locator('.olv-mp-action', { hasText: 'Export' }).click(),
+    page.locator('.olv-mp-action', { hasText: 'Save session' }).click(),
   ]);
   expect(download.suggestedFilename()).toMatch(/\.olvsession$/);
   const path = await download.path();

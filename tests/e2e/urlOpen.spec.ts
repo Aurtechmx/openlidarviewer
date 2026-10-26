@@ -64,7 +64,7 @@ test.describe('open from URL — empty submit', () => {
     const message = page.locator('.olv-url-message');
     await expect(message).toBeVisible();
     await expect(message).toHaveText(
-      'Enter a URL to a .copc.laz file or an EPT dataset (ept.json).',
+      'Enter a URL to a .copc.laz file, an EPT dataset (ept.json) or a 3D Tiles tileset (tileset.json).',
     );
     await expect(message).toHaveClass(/olv-url-message-warning/);
 

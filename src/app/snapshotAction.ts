@@ -34,8 +34,22 @@ export interface SnapshotActionDeps {
   /** The reference plane's provenance note while it is drawn, else null. */
   readonly referencePlaneNote: () => string | null;
   readonly onError: (message: string) => void;
+  /** The active scan's base name, so the file is named after it; absent or null falls back to the app name. */
+  readonly baseName?: () => string | null;
+  /** Says which file was written. */
+  readonly toast?: (message: string) => void;
   /** Injected by the tests; the browser download otherwise. */
   readonly download?: (blob: Blob, filename: string) => void;
+  /** Injected by the tests; the wall clock otherwise. */
+  readonly now?: () => Date;
+}
+
+/** `<scan>-view-YYYYMMDD-HHMMSS.png`, in local time, so a folder of snapshots sorts by scan and moment. */
+export function snapshotFileName(baseName: string | null | undefined, now: Date): string {
+  const two = (n: number): string => String(n).padStart(2, '0');
+  const stamp = `${now.getFullYear()}${two(now.getMonth() + 1)}${two(now.getDate())}-${two(now.getHours())}${two(now.getMinutes())}${two(now.getSeconds())}`;
+  const base = (baseName ?? '').trim() || 'openlidarviewer';
+  return `${base}-view-${stamp}.png`;
 }
 
 export async function saveSnapshot(deps: SnapshotActionDeps): Promise<void> {
@@ -60,7 +74,9 @@ export async function saveSnapshot(deps: SnapshotActionDeps): Promise<void> {
     } catch (err) {
       console.warn('[snapshot] provenance stamping skipped:', err);
     }
-    (deps.download ?? triggerDownload)(stamped, 'openlidarviewer.png');
+    const name = snapshotFileName(deps.baseName?.(), (deps.now ?? (() => new Date()))());
+    (deps.download ?? triggerDownload)(stamped, name);
+    deps.toast?.(`Snapshot saved as ${name}.`);
   } catch {
     deps.onError('Could not save the view');
   }

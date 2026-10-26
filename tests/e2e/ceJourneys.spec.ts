@@ -319,7 +319,7 @@ test.describe('CE wayfinding journeys', () => {
     rec.fact('continueRow', (await cont.innerText()).trim());
     await rec.click(cont, 'Continue row');
     const download = page.waitForEvent('download');
-    await rec.click(page.locator('.olv-mp-action', { hasText: /^Export session$/ }), 'Export session (Measure panel)');
+    await rec.click(page.locator('.olv-mp-action', { hasText: /^Save session$/ }), 'Save session (Measure panel)');
     const file = await download;
     rec.succeed();
     rec.fact('file', file.suggestedFilename().replace(/^.*\./, '*.'));

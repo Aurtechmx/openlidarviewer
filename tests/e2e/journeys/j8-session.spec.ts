@@ -33,7 +33,7 @@ async function planeSection(page: Page) {
 async function saveSession(page: Page): Promise<{ name: string; bytes: Uint8Array; json: Record<string, unknown> }> {
   await openToolPage(page, 'Measure');
   const dl = page.waitForEvent('download');
-  await page.locator('.olv-mp-action', { hasText: 'Export' }).click();
+  await page.locator('.olv-mp-action', { hasText: 'Save session' }).click();
   const out = await downloadBytes(await dl);
   return { ...out, json: JSON.parse(new TextDecoder().decode(out.bytes)) as Record<string, unknown> };
 }
@@ -119,7 +119,8 @@ test('P1: saving a session with class edits warns that the edits are not stored'
   });
   await j.step('save the session: the warning names the loss and the way to keep the edits', async () => {
     await saveSession(page);
-    await expect(page.locator('.olv-lasso-toast-msg')).toHaveText(SESSION_CLASS_EDITS_NOT_STORED, { timeout: 5_000 });
+    await expect(page.locator('.olv-lasso-toast-msg')).toContainText('Session saved: ', { timeout: 5_000 });
+    await expect(page.locator('.olv-lasso-toast-msg')).toContainText(SESSION_CLASS_EDITS_NOT_STORED);
   });
 });
 

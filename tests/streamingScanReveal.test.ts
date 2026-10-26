@@ -26,6 +26,7 @@ function spyDock(calls: string[]) {
     setInspectEnabled: (v: boolean) => calls.push(`dock.setInspectEnabled(${v})`),
     setProbeEnabled: (v: boolean) => calls.push(`dock.setProbeEnabled(${v})`),
     setCloseEnabled: (v: boolean) => calls.push(`dock.setCloseEnabled(${v})`),
+    setShareEnabled: (v: boolean) => calls.push(`dock.setShareEnabled(${v})`),
     setBackend: (b: string) => calls.push(`dock.setBackend(${b})`),
   };
 }
@@ -63,6 +64,8 @@ describe('streaming scan reveal', () => {
     expect(c.calls).toContain('dock.setInspectEnabled(true)');
     expect(c.calls).toContain('dock.setProbeEnabled(true)');
     expect(c.calls).toContain('dock.setAnnotateEnabled(true)');
+    // A view link restores only onto a scan opened from a file, so the stream turns it off.
+    expect(c.calls).toContain('dock.setShareEnabled(false)');
     expect(c.calls).toContain('dock.setBackend(webgpu)');
     expect(c.calls).toContain('navBar.remove(olv-hidden)');
     expect(c.calls).toContain('body.add(olv-has-scan)');

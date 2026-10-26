@@ -507,6 +507,16 @@ export function volumeCaveatClauses(v: VolumeRecord): string[] {
 }
 
 /** True when the record carries no fill / cut / net (a withheld grid figure). */
+/**
+ * The base-level clause a polygon volume carries under its headline, in the
+ * copied text and in the PDF row. `datumKnown` false marks the level as local:
+ * the scene has no shared datum, so the height is a render height, not an
+ * elevation.
+ */
+export function volumeBaseLevelClause(level: string, datumKnown: boolean): string {
+  return `Base level ${level}${datumKnown ? '' : ', local'} (median of the outline's vertex heights)`;
+}
+
 export function volumeFiguresWithheld(v: VolumeRecord): boolean {
   return v.fill === undefined || v.cut === undefined || v.net === undefined;
 }

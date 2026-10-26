@@ -277,7 +277,7 @@ test.describe('a PLY under a projected CRS measures, exports and navigates along
     await measure(page, 'height', [[0, 0, 0], [0, 100, 0]]);
     await openToolPage(page, 'Measure');
     const dl = page.waitForEvent('download');
-    await page.locator('.olv-mp-action', { hasText: 'Export' }).click();
+    await page.locator('.olv-mp-action', { hasText: 'Save session' }).click();
     const file = await dl;
     const bytes = readFileSync((await file.path())!);
     const json = JSON.parse(bytes.toString('utf8')) as { upAxis: string; upFrame?: { axis: string; basis: string } };

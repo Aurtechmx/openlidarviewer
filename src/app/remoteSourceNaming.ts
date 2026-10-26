@@ -9,6 +9,7 @@
  */
 
 import { RangeReadError, sanitizeUrlForDisplay } from '../io/range/RangeSource';
+import { LoadError } from '../io/loadErrors';
 
 /**
  * Display name for a remote EPT source: the dataset folder that holds
@@ -60,6 +61,9 @@ export function shortHost(url: string): string {
  * message names the host and says so.
  */
 export function describeRemoteCopcError(err: unknown, url: string): string {
+  // A refusal written for the user (a graphics backend that cannot start) is
+  // about the browser, not the host, and is shown as written.
+  if (err instanceof LoadError && err.userFacing) return err.message;
   const safeUrl = sanitizeUrlForDisplay(url);
   if (err instanceof RangeReadError) {
     if (err.code === 'range-unsupported') {

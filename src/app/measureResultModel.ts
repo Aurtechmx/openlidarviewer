@@ -71,6 +71,15 @@ export function buildResultModel(s: MeasurementSummary, scene: MeasureSceneConte
   }
 
   const value = hasValue ? raw : NO_VALUE_TEXT;
-  const copyText = hasValue ? `${s.name}: ${raw}${caveat ? ` (${caveat})` : ''}` : null;
+  const copyText = hasValue ? `${s.name}: ${measurementRowText({ value: raw, volumeBaseLevel: s.volumeBaseLevel })}${caveat ? ` (${caveat})` : ''}` : null;
   return { id: s.id, kind: s.kind, name: s.name, value, status, caveat, copyText, canClip: s.kind === 'box' };
+}
+
+/**
+ * The row as the Measurements panel prints it: the headline and, for a polygon
+ * volume, the base-level clause under it. The copied text and the PDF report's
+ * measurement rows take this, so all three say the same thing.
+ */
+export function measurementRowText(s: Pick<MeasurementSummary, 'value' | 'volumeBaseLevel'>): string {
+  return s.volumeBaseLevel ? `${s.value} · ${s.volumeBaseLevel}` : s.value;
 }

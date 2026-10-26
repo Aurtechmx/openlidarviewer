@@ -79,7 +79,7 @@ export class CommandPalette {
     this._input.setAttribute('aria-expanded', 'false');
     this._empty = el('div', {
       className: 'olv-palette-empty olv-hidden',
-      text: 'No matching commands. Try a shorter search, or press ? to browse every shortcut.',
+      text: 'No matching commands. Try a shorter search, or press Esc and then ? for every shortcut.',
     });
 
     const hint = el('div', { className: 'olv-palette-hint' }, [

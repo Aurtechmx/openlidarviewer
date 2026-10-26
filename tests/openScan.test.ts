@@ -99,7 +99,7 @@ function copcHead(): ArrayBuffer {
  * routing and the loading-flag lifecycle are what these tests observe. A
  * `loading` override starts the one-load-at-a-time guard closed.
  */
-function makeDeps(over: { loading?: boolean } = {}) {
+function makeDeps(over: { loading?: boolean; graphicsFail?: boolean } = {}) {
   let loading = over.loading ?? false;
   const calls = {
     importSession: vi.fn(async () => {}),
@@ -120,7 +120,11 @@ function makeDeps(over: { loading?: boolean } = {}) {
   // One stable viewer stub, not a fresh object per call: the router reads
   // `hasStreamingCloud` when the open begins and again if it fails, and those
   // two reads have to see the same object for the comparison to mean anything.
-  const viewerStub = { hasStreamingCloud: false };
+  const viewerStub = {
+    hasStreamingCloud: false,
+    ...(over.graphicsFail ? { ready: Promise.reject(new Error('no adapter')) } : {}),
+  };
+  if (over.graphicsFail) void viewerStub.ready?.catch(() => {});
 
   const deps: OpenScanDeps = {
     viewerReady: Promise.resolve(),
@@ -218,6 +222,18 @@ describe('openScan — the file router', () => {
     expect(calls.importSession).not.toHaveBeenCalled();
     expect(calls.loadLocalSource).not.toHaveBeenCalled();
     expect(calls.setLoading).not.toHaveBeenCalled(); // never claimed the flag
+  });
+
+  it('reports a graphics backend that cannot start in plain words, before the file is read', async () => {
+    const { deps, calls } = makeDeps({ graphicsFail: true });
+    await openScan(fakeFile('scan.laz'), deps);
+    expect(calls.setError).toHaveBeenCalledWith(
+      'This browser could not start 3D graphics. Neither WebGPU nor WebGL 2 is available. '
+        + 'Turn on hardware acceleration in the browser settings, or try another browser.',
+      undefined,
+    );
+    expect(calls.loadLocalSource).not.toHaveBeenCalled();
+    expect(calls.setLoading).toHaveBeenLastCalledWith(false);
   });
 
   it('routes a COPC file to the streaming pipeline, not the static loader', async () => {

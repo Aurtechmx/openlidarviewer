@@ -77,7 +77,7 @@ async function readouts(page: Page): Promise<string[]> {
 async function save(page: Page): Promise<Session> {
   await openToolPage(page, 'Measure');
   const download = page.waitForEvent('download');
-  await page.locator('.olv-mp-action', { hasText: 'Export' }).click();
+  await page.locator('.olv-mp-action', { hasText: 'Save session' }).click();
   return JSON.parse(readFileSync((await (await download).path())!, 'utf8')) as Session;
 }
 

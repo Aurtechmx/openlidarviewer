@@ -222,7 +222,7 @@ describe('the open path', () => {
     });
     const t = deps(empty);
     await withTransport(empty, () =>
-      openRemoteTileset('https://host.example/d/tileset.json', undefined, t.d as never),
+      openRemoteTileset('https://host.example/d/tileset.json', undefined, t.d as never).catch(() => {}),
     );
     expect(t.attached).not.toHaveBeenCalled();
     expect(t.d.dropZone.setError).toHaveBeenCalled();
@@ -384,7 +384,7 @@ describe('a refusal reaches the user', () => {
   async function shownFor(doc: string): Promise<string> {
     const t = deps(doc);
     await withTransport(doc, () =>
-      openRemoteTileset('https://host.example/d/tileset.json', undefined, t.d as never),
+      openRemoteTileset('https://host.example/d/tileset.json', undefined, t.d as never).catch(() => {}),
     );
     const calls = t.d.dropZone.setError.mock.calls;
     return calls.length ? String(calls[0][0]) : '';

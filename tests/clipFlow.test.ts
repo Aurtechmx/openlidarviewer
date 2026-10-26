@@ -39,7 +39,7 @@ class FakePanel {
 
 async function make(opts: { ms?: BoxMeasurementLike[]; ctx?: typeof one; measureOn?: boolean; vertical?: { axis: 0 | 1 | 2; min: number; max: number }; down?: boolean } = {}) {
   const { createClipFlow } = await import('../src/app/clipFlow');
-  const log = { adopted: [] as ClipBox[], pages: [] as string[], toasts: [] as string[], runs: 0, stops: 0, reveals: 0, footprint: [] as boolean[], kinds: [] as string[], copies: [] as string[], details: [] as string[] };
+  const log = { adopted: [] as ClipBox[], pages: [] as string[], toasts: [] as string[], runs: 0, stops: 0, reveals: 0, footprint: [] as boolean[], kinds: [] as string[], copies: [] as string[], details: [] as string[], deleted: [] as string[] };
   const state = { ms: opts.ms ?? [], sums: [] as MeasurementSummary[], on: opts.measureOn ?? false, down: opts.down ?? false, hintFn: null as ((t: string) => void) | null };
   const panel = new FakePanel();
   const overlay = new FakeEl('div');
@@ -64,6 +64,7 @@ async function make(opts: { ms?: BoxMeasurementLike[]; ctx?: typeof one; measure
     stopMeasureTool: () => { log.stops++; state.on = false; },
     setBoxKind: () => log.kinds.push('box'),
     openDetails: (id) => log.details.push(id),
+    deleteMeasurement: (id) => log.deleted.push(id),
     copy: async (t) => { log.copies.push(t); return true; },
   });
   const card = flow.card.element as unknown as FakeEl;
@@ -353,5 +354,18 @@ describe('active-clip chip', () => {
     expect(t.panel.listeners).toBe(1);
     t.flow.dispose();
     expect(t.panel.listeners).toBe(0);
+  });
+});
+
+describe('the result card: Delete', () => {
+  it('deletes the measurement through the list and hides the card', async () => {
+    const t = await make();
+    t.complete(summary({ id: 'd1', kind: 'distance', name: 'Line 1', value: '4.00 m' }));
+    expect(t.card.classList.contains('olv-hidden')).toBe(false);
+    const del = t.btn('Delete');
+    expect(del.getAttribute('aria-label')).toBe('Delete Line 1');
+    del.click();
+    expect(t.log.deleted).toEqual(['d1']);
+    expect(t.card.classList.contains('olv-hidden')).toBe(true);
   });
 });

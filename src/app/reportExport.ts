@@ -56,6 +56,7 @@ import { classificationCoverage } from '../render/class/classificationCoverage';
 import { truncationNote, truncationOf, truncationText } from '../io/truncation';
 import { measurementsOwnedByActive, type OwnershipView } from './measurementOwnership';
 import { withholdUnresolvedUp } from './layerUpFrames';
+import { measurementRowText } from './measureResultModel';
 
 /** Re-exported so the shell wires report and KML ownership from one import. */
 export { ownershipViewOf, handOverLayerWork } from './measurementOwnership';
@@ -352,7 +353,12 @@ function classificationShare(cloud: {
   };
 }
 
-export async function generateReportPdf(templateId: string, deps: ReportExportDeps): Promise<void> {
+/**
+ * Assemble, render and download the report. Resolves with the names of the
+ * sections the engine dropped (empty when the PDF is whole); the caller tells
+ * the user, once the progress toast is out of the way.
+ */
+export async function generateReportPdf(templateId: string, deps: ReportExportDeps): Promise<readonly string[]> {
   // the report flow needs the Viewer state; ensure it's loaded.
   await deps.viewerReady;
   const viewer = deps.getViewer();
@@ -555,8 +561,9 @@ export async function generateReportPdf(templateId: string, deps: ReportExportDe
     measurements: owned.own.map((m) => structuredClone(m)),
     measurementsWithheld: owned.withheld,
     // Each row as the Measurements panel prints it, so the PDF and the panel
-    // agree to the character (decimals, units, bearings and refusals).
-    measurementValues: new Map((viewer.measure.getSummaries?.() ?? []).map((s) => [s.id, s.value])),
+    // agree to the character (decimals, units, bearings, refusals and a
+    // volume's base level).
+    measurementValues: new Map((viewer.measure.getSummaries?.() ?? []).map((s) => [s.id, measurementRowText(s)])),
     unitSystem: viewer.measure.unitSystem,
     // Render-units → metres, the SAME factor the live measure readouts apply
     // (B2, v0.4.5) — so the report PDF's measurement values agree with the
@@ -618,18 +625,49 @@ export async function generateReportPdf(templateId: string, deps: ReportExportDe
   // user's Downloads folder distinguishes a Survey Summary from an
   // Engineering Inspection at a glance.
   triggerDownload(result.blob, `${exportFileStem}-${validatedTemplateId}.pdf`);
-  // Per-section render failures are caught by the engine's isolation pass
-  // and surfaced as a `failedSections` list — the PDF still ships but
-  // misses those sections. Tell the user so they're not surprised by a
-  // partial deliverable, and record it for local diagnostics so the
-  // partial-PDF mode is visible in the session-stats panel.
-  if (result.failedSections.length > 0) {
-    recordUsage('error', 'report:partial');
-    const list = result.failedSections.join(', ');
-    deps.dropZone.setError(
-      `Report rendered without these sections: ${list}. ` +
-        'Check for unusual characters in the affected inputs and try again.',
-    );
+  // Per-section render failures are caught by the engine's isolation pass and
+  // surfaced as a `failedSections` list: the PDF still ships but misses those
+  // sections. The caller warns once its progress toast is gone.
+  return result.failedSections;
+}
+
+/** What the report run needs from the shell beside the assembly deps. */
+export interface ReportRunDeps {
+  /** The assembly above, bound to the shell's state; injected so the run is testable. */
+  readonly generate: (templateId: string) => Promise<readonly string[]>;
+  readonly dropZone: Pick<DropZone, 'setProgress' | 'setError'>;
+  /** True when the active scan's source checksum is already known, so the toast need not say it is waiting for one. */
+  readonly sourceDigestReady: () => boolean;
+  /** Lazily import the report engine, for the default template id when none is named. */
+  readonly loadReportEngine: ReportExportDeps['loadReportEngine'];
+}
+
+/**
+ * The report export as the Export panel and the command palette run it: a
+ * progress toast while the lazy engine loads and the PDF renders, the usage
+ * counter on success, and a warning that names the sections a partial PDF
+ * lacks. The warning is shown after the progress toast is cleared, since
+ * clearing progress also clears whatever message the toast holds. `null`
+ * takes the default template.
+ */
+export async function runReportExport(templateId: string | null, deps: ReportRunDeps): Promise<void> {
+  deps.dropZone.setProgress(deps.sourceDigestReady() ? 'Generating report…' : 'Generating report: checking the source file first…');
+  try {
+    const id = templateId ?? (await deps.loadReportEngine()).DEFAULT_TEMPLATE_ID;
+    const failed = await deps.generate(id);
+    recordUsage('report', id);
+    deps.dropZone.setProgress(null);
+    if (failed.length > 0) {
+      recordUsage('error', 'report:partial');
+      deps.dropZone.setError(
+        `Report saved without these sections: ${failed.join(', ')}. `
+          + 'Check the affected inputs for unusual characters and export again.',
+      );
+    }
+  } catch (err) {
+    recordUsage('error', 'report');
+    console.error('[report]', err);
+    deps.dropZone.setError(`Report generation failed: ${err instanceof Error ? err.message : String(err)}`);
   }
 }
 

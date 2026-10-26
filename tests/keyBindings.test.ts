@@ -251,8 +251,15 @@ describe('dispatch — measure-mode precedence', () => {
     expect(deps.measureFinish).toHaveBeenCalledTimes(1);
   });
 
-  it('the undo chord while measuring-but-not-drafting falls through to global undo', () => {
+  it('the undo chord while measuring-but-not-drafting stays with the tool, not the global undo', () => {
     const { deps, globals } = makeDeps({ measureMode: true, drafting: false });
+    dispatch(deps, { key: 'z', metaKey: true });
+    expect(deps.measureUndoPoint).toHaveBeenCalledTimes(1);
+    expect(globals.onUndo).not.toHaveBeenCalled();
+  });
+
+  it('the undo chord outside measure mode reaches the global undo', () => {
+    const { deps, globals } = makeDeps({ measureMode: false });
     dispatch(deps, { key: 'z', metaKey: true });
     expect(deps.measureUndoPoint).not.toHaveBeenCalled();
     expect(globals.onUndo).toHaveBeenCalledTimes(1);

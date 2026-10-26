@@ -14,6 +14,7 @@ import {
   validateRemoteCopcUrl,
   sanitizeUrlForDisplay,
 } from '../range/RangeSource';
+import { LoadError } from '../loadErrors';
 
 /** Maximum acceptable length of an EPT URL — same guard as the COPC entry. */
 export { MAX_REMOTE_COPC_URL_LENGTH as MAX_REMOTE_EPT_URL_LENGTH } from '../range/RangeSource';
@@ -65,6 +66,9 @@ export function validateRemoteEptUrl(
  * inclusion.
  */
 export function describeRemoteEptError(err: unknown, url: string): string {
+  // A refusal written for the user (a graphics backend that cannot start) is
+  // about the browser, not the host, and is shown as written.
+  if (err instanceof LoadError && err.userFacing) return err.message;
   const safeUrl = sanitizeUrlForDisplay(url);
   const shortHost = (() => {
     try {

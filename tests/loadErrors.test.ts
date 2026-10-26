@@ -1,7 +1,9 @@
 import {
   LoadError,
+  GRAPHICS_UNAVAILABLE_MESSAGE,
   describeLoadError,
   classifyLoadError,
+  graphicsReady,
   messageForCategory,
 } from '../src/io/loadErrors';
 import type { LoadErrorCategory } from '../src/io/loadErrors';
@@ -24,7 +26,7 @@ test('a typed LoadError is described by its own category', () => {
   );
 });
 
-test('unsupported-format errors keep their own wording', () => {
+test('a message written for the user reaches the toast as it is; a developer detail does not', () => {
   expect(messageForCategory('unsupported-format')).toBe("This file type isn't supported yet.");
   for (const msg of [
     'Not an E57 file: bad signature',
@@ -32,9 +34,26 @@ test('unsupported-format errors keep their own wording', () => {
     'PNTS Draco data is not supported',
     'This URL is not a COPC file',
   ]) {
+    // Unmarked: the category's general message, and the detail stays in the console.
     expect(describeLoadError(new LoadError('unsupported-format', msg))).toBe("This file type isn't supported yet.");
+    // A copyable report, or the user-facing flag, shows the message verbatim.
     expect(describeLoadError(new LoadError('unsupported-format', msg, 'report'))).toBe(msg);
+    expect(describeLoadError(new LoadError('unsupported-format', msg, undefined, { userFacing: true }))).toBe(msg);
   }
+  const refusal = 'PLY too large for this device: the file is 3.1 GB, past the 2.0 GB this tab can be given. Convert to COPC/EPT to stream it instead.';
+  const e = new LoadError('memory-constraint', refusal, undefined, { userFacing: true });
+  expect(e.userFacing).toBe(true);
+  expect(describeLoadError(e)).toBe(refusal);
+  expect(new LoadError('memory-constraint', refusal).userFacing).toBe(false);
+});
+
+test('a graphics backend that cannot start is described as such, never as a fault in the file', async () => {
+  const boom = new Error('WebGPU adapter request failed');
+  await expect(graphicsReady(Promise.reject(boom))).rejects.toMatchObject({ category: 'gpu-limitation', userFacing: true, cause: boom });
+  const err = await graphicsReady(Promise.reject(boom)).catch((x: unknown) => x);
+  expect(describeLoadError(err)).toBe(GRAPHICS_UNAVAILABLE_MESSAGE);
+  await expect(graphicsReady(Promise.resolve())).resolves.toBeUndefined();
+  await expect(graphicsReady(undefined)).resolves.toBeUndefined();
 });
 
 test('every category maps to a non-empty, user-facing message', () => {
