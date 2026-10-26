@@ -17,9 +17,9 @@ import { revealStreamingScanChrome, restoreEmptyStateAfterStream } from '../src/
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 
-function spyChrome() {
-  const calls: string[] = [];
-  const dock = {
+/** A dock that records each call it receives into `calls`. */
+function spyDock(calls: string[]) {
+  return {
     setEmpty: (v: boolean) => calls.push(`dock.setEmpty(${v})`),
     setMeasureEnabled: (v: boolean) => calls.push(`dock.setMeasureEnabled(${v})`),
     setAnnotateEnabled: (v: boolean) => calls.push(`dock.setAnnotateEnabled(${v})`),
@@ -28,6 +28,11 @@ function spyChrome() {
     setCloseEnabled: (v: boolean) => calls.push(`dock.setCloseEnabled(${v})`),
     setBackend: (b: string) => calls.push(`dock.setBackend(${b})`),
   };
+}
+
+function spyChrome() {
+  const calls: string[] = [];
+  const dock = spyDock(calls);
   const inspector = { setEmpty: (v: boolean) => calls.push(`inspector.setEmpty(${v})`) };
   const navBar = {
     element: { classList: { remove: (t: string) => calls.push(`navBar.remove(${t})`) } },
@@ -107,15 +112,7 @@ describe('restoring the empty state after a stream came down', () => {
   // blank stage, with no way back to the Open-a-scan state.
   it('undoes every step of the reveal and shows the empty state', () => {
     const calls: string[] = [];
-    const dock = {
-      setEmpty: (v: boolean) => calls.push(`dock.setEmpty(${v})`),
-      setMeasureEnabled: (v: boolean) => calls.push(`dock.setMeasureEnabled(${v})`),
-      setAnnotateEnabled: (v: boolean) => calls.push(`dock.setAnnotateEnabled(${v})`),
-      setInspectEnabled: (v: boolean) => calls.push(`dock.setInspectEnabled(${v})`),
-      setProbeEnabled: (v: boolean) => calls.push(`dock.setProbeEnabled(${v})`),
-      setCloseEnabled: (v: boolean) => calls.push(`dock.setCloseEnabled(${v})`),
-      setBackend: (b: string) => calls.push(`dock.setBackend(${b})`),
-    };
+    const dock = spyDock(calls);
     restoreEmptyStateAfterStream({
       dock,
       inspector: { setEmpty: (v: boolean) => calls.push(`inspector.setEmpty(${v})`) },

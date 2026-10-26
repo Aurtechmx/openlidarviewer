@@ -16,62 +16,9 @@
  */
 
 import { describe, it, expect, beforeAll } from 'vitest';
+import { FakeEl, installPanelDom, noopPanelCallbacks } from './support/streamingPanelDom';
 
-class FakeEl {
-  className = '';
-  title = '';
-  type = '';
-  disabled = false;
-  private _text = '';
-  readonly children: FakeEl[] = [];
-  readonly dataset: Record<string, string> = {};
-  readonly style: Record<string, string> = {};
-  readonly classList = {
-    _set: new Set<string>(),
-    add(c: string): void { this._set.add(c); },
-    remove(c: string): void { this._set.delete(c); },
-    toggle(c: string): void { this._set.has(c) ? this._set.delete(c) : this._set.add(c); },
-    contains(c: string): boolean { return this._set.has(c); },
-  };
-  readonly tagName: string;
-  constructor(tagName: string) { this.tagName = tagName; }
-  setAttribute(): void { /* no-op */ }
-  removeAttribute(): void { /* no-op */ }
-  set textContent(v: string) { this._text = v; }
-  get textContent(): string {
-    return [this._text, ...this.children.map((c) => c.textContent)].filter(Boolean).join(' ');
-  }
-  append(...kids: FakeEl[]): void { this.children.push(...kids.filter(Boolean)); }
-  replaceChildren(...kids: FakeEl[]): void { this.children.length = 0; this.children.push(...kids.filter(Boolean)); }
-  addEventListener(): void { /* no-op */ }
-  blur(): void { /* no-op */ }
-  click(): void { /* no-op */ }
-  /** First descendant whose own text contains `substr`, or undefined. */
-  findContaining(substr: string): FakeEl | undefined {
-    if (this._text.includes(substr)) return this;
-    for (const c of this.children) {
-      const hit = c.findContaining(substr);
-      if (hit) return hit;
-    }
-    return undefined;
-  }
-}
-
-beforeAll(() => {
-  (globalThis as unknown as { document: unknown }).document = {
-    createElement: (tag: string) => new FakeEl(tag),
-  };
-  const g = globalThis as unknown as Record<string, unknown>;
-  g.HTMLInputElement ??= class {};
-  g.HTMLAnchorElement ??= class {};
-});
-
-function noopCallbacks() {
-  return {
-    onColorMode() {}, onQuality() {}, onPauseToggle() {}, onClearCache() {},
-    onGradeFullCloud() {}, onCancelGrade() {},
-  };
-}
+beforeAll(installPanelDom);
 
 const COPC_SUMMARY = {
   fileName: 'autzen.copc.laz',
@@ -102,7 +49,7 @@ async function panelWith(summary: Parameters<
   Awaited<typeof import('../src/ui/StreamingPanel')>['StreamingPanel']['prototype']['setSummary']
 >[0]) {
   const { StreamingPanel } = await import('../src/ui/StreamingPanel');
-  const panel = new StreamingPanel(noopCallbacks());
+  const panel = new StreamingPanel(noopPanelCallbacks());
   panel.setSummary(summary);
   return { panel, root: panel.element as unknown as FakeEl };
 }

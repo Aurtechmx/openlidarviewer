@@ -149,7 +149,11 @@ export interface FrameSummary {
   readonly linearUnit: string;
 }
 
-const frameLabel = (f: FrameSummary | null): string => (f === null ? 'no CRS' : f.epsg != null ? `EPSG:${f.epsg}` : f.name);
+function frameLabel(f: FrameSummary | null): string {
+  if (f === null) return 'no CRS';
+  if (f.epsg != null) return `EPSG:${f.epsg}`;
+  return f.name;
+}
 
 /**
  * A stream opened beside a static layer publishes its coordinate system while
