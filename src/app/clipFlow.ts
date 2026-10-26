@@ -26,7 +26,7 @@ import { MeasureResultCard } from '../ui/MeasureResultCard';
 import { ClipIndicator, type ClipIndicatorSource } from '../ui/ClipIndicator';
 import { el } from '../ui/dom';
 import { seatClear, seatFit, watchSeat } from '../ui/hudSeat';
-import { copyToClipboard } from '../render/InspectTool';
+import { copyToClipboard } from '../ui/clipboard';
 import type { MeasurementSummary } from '../render/measure/MeasureController';
 import type { MeasureSceneContext } from '../render/measure/measureConfidence';
 import type { CrsService } from '../geo/CrsService';

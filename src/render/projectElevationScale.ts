@@ -17,7 +17,7 @@
  * Pure math only (no Viewer / WebGL state) so it is unit-testable.
  */
 
-import { rampRangeForMode, colorForMode, type ColorForModeOptions } from './colorModes';
+import { rampRangeForMode, colorForMode, type ColorForModeOptions, type ColorMode } from './colorModes';
 import { writeFloatColorsInto } from './colorEncode';
 import { cloudUpAxisIndex } from './layerUpRegistry';
 import { participatesInSharedAnalysis, type LayerCompatibility } from '../model/layerCompatibility';
@@ -129,6 +129,23 @@ export function elevationOptsFor(
       ? localOverrideFor(shared, e.cloud.sourceOrigin[upAxis])
       : undefined;
   return { heightPercentileTrim: trim, upAxis, elevationRangeOverride: override };
+}
+
+/**
+ * The options a layer is coloured in `mode` with: the elevation options above
+ * (shared window folded in when one is given) or, for every other mode, the
+ * height trim, the coverage grid and the layer's up axis. The first colouring
+ * at load and every later mode switch go through this, so they cannot drift.
+ */
+export function colorOptsForMode(
+  e: FrameLayer,
+  mode: ColorMode,
+  shared: Range | null,
+  trim: number,
+  coverageGrid: ColorForModeOptions['coverageGrid'],
+): ColorForModeOptions {
+  if (mode === 'elevation') return elevationOptsFor(e, shared, trim);
+  return { heightPercentileTrim: trim, coverageGrid, upAxis: upAxisOf(e.cloud) as 1 | 2 };
 }
 
 /** A layer whose colour buffer can be rewritten in place (CloudEntry subset). */

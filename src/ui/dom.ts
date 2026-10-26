@@ -5,6 +5,9 @@
 // edge (InspectTool.ts already imports `el` from here) rather than opening a
 // second one, which lint:module-graph's shrink-only ratchet would refuse.
 export { announcePolite } from './politeAnnounce';
+// Same edge reuse for InspectTool's Copy button; the helper itself lives in
+// the three-free leaf clipboard.ts so the startup shell can import it directly.
+export { copyToClipboard } from './clipboard';
 
 // Side-effect import: installs the single top-level `[data-tip]` glass
 // tooltip layer (see tipLayer.ts for why it has to be one shared layer,

@@ -10,7 +10,7 @@
  * Pure — no DOM, no three.js.
  */
 
-import type { StreamingNodeRecord } from '../../io/copc/copcTypes';
+import type { Box6, StreamingNodeRecord } from '../../io/copc/copcTypes';
 
 /**
  * A node's lifecycle state.
@@ -59,6 +59,14 @@ export interface StreamingNode {
    * store, which owns no clock and stays free of one.
    */
   residentSinceMs: number;
+  /**
+   * The node's bounds in its scheduler's local render space, cached by that
+   * scheduler on first use so a rescore reads it off the node rather than
+   * looking it up by id. `localBoxOwner` is the scheduler that wrote it; any
+   * other scheduler recomputes.
+   */
+  localBox?: Box6;
+  localBoxOwner?: object;
 }
 
 /** Create a fresh, unloaded runtime node from a parsed record. */
@@ -71,6 +79,8 @@ export function createStreamingNode(record: StreamingNodeRecord): StreamingNode 
     score: 0,
     lastUsedTick: 0,
     residentSinceMs: 0,
+    localBox: undefined,
+    localBoxOwner: undefined,
   };
 }
 

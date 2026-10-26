@@ -25,6 +25,8 @@ are not release-authoritative. v0.7.0 is the current published release.
 - The terrain complexity summary warns when more than 10% of its cells are interpolated.
 - Wording: the scan fitness verdict names hold-out residuals, Contour Studio no longer calls area and scale "validated", the precision check no longer says "certified level", and the Analyse help calls the hold-out an internal check.
 - A withheld stockpile volume shows no cut-fill cross-check figure either, in the Measurements panel, the toast, the PDF report and the CSV and GeoJSON exports. The grid is withheld for a footprint the scan does not support, and the cross-check covered the same footprint.
+- A scan opened after you changed the height trim is coloured with that trim, as the colour key states. It used the default trim of 5.
+- With the project-wide height scale on, adding a layer in another colour mode leaves the height colours of the other layers on the range the colour key states. It used to widen their range to the new layer's heights.
 
 ### Changed
 
@@ -38,6 +40,13 @@ are not release-authoritative. v0.7.0 is the current published release.
 - The lasso stockpile toast no longer says "MEASURED" for a footprint with full coverage. It says "exploratory volume preview", as the stockpile volume's claim allows at every tier. In CSV and GeoJSON exports, `grid_authority` writes that tier as `exploratory_full_coverage` instead of `measured`; `preview` and `withheld` are unchanged.
 - Measuring costs less on large scans. The hover pick waits while the camera moves, and snap grids are built while the Measure tool is open instead of for every scan as it opens.
 - Terrain void filling visits only the edge of each search ring. Filled heights are unchanged.
+- The page downloads about 240 KiB less (gzip) before a scan opens. The 3D renderer loads when you open a scan or when the browser is idle.
+- Opening the file picker starts loading the viewer and the file reader, as dragging a file over the page already did.
+- Large LAS, LAZ and E57 files reach their final points sooner.
+- Streamed scans spend less time choosing nodes while the camera moves, and a node keeps its shader through its fade in and fade out.
+- Turning the class, elevation or intensity filter on or off rebuilds the point shaders only the first time after a scan opens.
+- A scan without RGB is coloured once when it opens, and colouring by class takes about a quarter of the time.
+- The scan report fills in after a large scan opens without holding the page for half a second.
 
 
 ## [0.7.0] - 2026-10-24

@@ -748,6 +748,9 @@ export class StreamingScheduler {
   private _hasReplace = false;
   /** The last replace-frontier hidden set, to emit only on a real change. */
   private _lastHiddenKey = '\0';
+  /** Residency version and store size the frontier was last computed from. */
+  private _frontierResidency = -1;
+  private _frontierStoreSize = -1;
 
   /**
    * A node's bounds in local render space, computed on first use and cached.
@@ -755,6 +758,8 @@ export class StreamingScheduler {
    * the progressive EPT walk) are scoreable the moment they appear.
    */
   private _localBoundsFor(node: StreamingNode): Box6 {
+    // Held on the node too, so the per-rescore read skips the id lookup.
+    if (node.localBoxOwner === this) return node.localBox!;
     const id = node.record.id;
     let box = this._localBounds.get(id);
     if (!box) {
@@ -763,6 +768,8 @@ export class StreamingScheduler {
       box = [b[0] - rx, b[1] - ry, b[2] - rz, b[3] - rx, b[4] - ry, b[5] - rz];
       this._localBounds.set(id, box);
     }
+    node.localBox = box;
+    node.localBoxOwner = this;
     return box;
   }
 
@@ -831,6 +838,20 @@ export class StreamingScheduler {
    */
   tickDue(nowMs: number, phase: RefinementPhase, wake: WakeReason | null = null): boolean {
     if (!shouldTick({ nowMs, lastTickMs: this._lastTickAtMs, phase, wake })) return false;
+    this._lastTickAtMs = nowMs;
+    return true;
+  }
+
+  /**
+   * Whether the idle heartbeat should tick at this time, recording it if so.
+   * The heartbeat keeps streaming flowing while the render loop sleeps; while
+   * frames are ticking the scheduler it would only add ticks on top of them,
+   * so it stands down when any tick ran within `intervalMs`. Its own ticks go
+   * through the same timestamp, so the frame cadence counts them too.
+   */
+  heartbeatDue(nowMs: number, intervalMs: number): boolean {
+    const elapsed = nowMs - this._lastTickAtMs;
+    if (Number.isFinite(elapsed) && elapsed >= 0 && elapsed < intervalMs) return false;
     this._lastTickAtMs = nowMs;
     return true;
   }
@@ -1199,11 +1220,12 @@ export class StreamingScheduler {
       const freshScored: { node: StreamingNode; candidate: ScoredCandidate }[] = [];
       // Walk the store's zero-allocation node iterator rather than `nodes()`,
       // which materialises a 28 k-element array on every rescore.
+      const refused = this._refusedOversized.size > 0 ? this._refusedOversized : null;
       for (const node of store.iterate()) {
         // A node the admission ceiling refused can never become resident, so
         // it must not be scored: a candidate in the list takes budget in
         // `selectWithinBudget`, and the coarsest node takes it first.
-        if (this._refusedOversized.has(node.record.id)) continue;
+        if (refused?.has(node.record.id)) continue;
         const box = this._localBoundsFor(node);
         let score = 0;
         if (boxInFrustum(box, planes)) {
@@ -1476,10 +1498,15 @@ export class StreamingScheduler {
     // pending; re-enqueueing one would decode it a second time and hand the
     // queue two items for the same node. Only reachable with an upload queue
     // attached, which is why nothing has hit it yet.
+    // `wanted` is drawn from `scored` (a prefix of it, or a subset when
+    // stickiness reorders), so the walk stops once every wanted id is seen.
     this._queue.length = 0;
+    let wantedSeen = 0;
     for (const { node } of scored) {
+      if (wantedSeen === wanted.size) break;
+      if (!wanted.has(node.record.id)) continue;
+      wantedSeen++;
       if (
-        wanted.has(node.record.id) &&
         node.state !== 'resident' &&
         node.state !== 'loading' &&
         node.state !== 'decoded'
@@ -1511,7 +1538,13 @@ export class StreamingScheduler {
    */
   private _emitReplaceFrontier(): void {
     if (!this._hasReplace) return;
-    const nodes = this._cloud.octree.store.all().map((node) => ({
+    // The frontier reads only residency and the hierarchy: unchanged since the
+    // last pass, it is the same set, so skip the whole-store walk.
+    const store = this._cloud.octree.store;
+    if (store.residencyVersion === this._frontierResidency && store.size === this._frontierStoreSize) return;
+    this._frontierResidency = store.residencyVersion;
+    this._frontierStoreSize = store.size;
+    const nodes = store.all().map((node) => ({
       id: node.record.id,
       refine: node.record.refine,
       resident: node.state === 'resident',

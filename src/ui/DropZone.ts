@@ -213,6 +213,10 @@ export class DropZone {
         this._onDragIntent?.();
       }
     });
+    // Opening the file picker is the same intent: warm while the picker is open.
+    target.addEventListener('click', (e) => {
+      if ((e.target as HTMLInputElement | null)?.type === 'file' && !this._dragIntentFired) { this._dragIntentFired = true; this._onDragIntent?.(); }
+    }, true);
     target.addEventListener('dragleave', (e) => {
       if (e.relatedTarget === null) target.classList.remove('olv-dragging');
     });

@@ -2,8 +2,6 @@ import { parseEmbedConfig } from './ui/embedConfig'; // First: it imports the fr
 import '@fontsource/jetbrains-mono/latin-400.css';
 import '@fontsource/jetbrains-mono/latin-500.css';
 import './styles';
-// Disable loaders.gl CDN workers before any parse (must run before any loader).
-import './io/loaderConfig';
 import type { Viewer } from './render/Viewer';
 import { floorPlanPositions } from './app/floorPlanPositions';
 import { isMobileDevice, isTouchFirstDevice } from './ui/isMobileDevice';
@@ -121,7 +119,7 @@ import {
   type GlobalActionHandlers,
   type KeyBindingDeps,
 } from './ui/keyBindings';
-import { LoadCancelledError } from './io/loadFile';
+import { LoadCancelledError, warmParseWorker } from './io/loadFile';
 import { LocalFileSource } from './io/LocalFileSource';
 import { deviceCaps } from './render/deviceProfile';
 // `startEmbedBridge` is only wired in `?embed=1` mode.
@@ -498,11 +496,11 @@ const ensureViewer = (): Promise<Viewer> => { startViewer(); return viewerLoaded
 // The rail's chunk is fetched beside the Viewer's, in the full app only.
 const workspaceShellChunk = bareMode ? null : viewerStarted.then(loadWorkspaceShell);
 const viewerLoaded: Promise<Viewer> = viewerStarted.then(async () => {
+  // WebKit/iOS: navigator.gpu is present but requestAdapter() -> null; probe (started beside the chunk fetch; a throw
+  // resolves null) so the renderer picks WebGL 2 instead of throwing on the first scan open.
+  const gpu = (navigator as { gpu?: { requestAdapter(): Promise<unknown> } }).gpu, adapter = typeof gpu?.requestAdapter === 'function' ? (async () => { try { return await gpu.requestAdapter(); } catch { return null; } })() : null;
   const { Viewer: ViewerCtor, chooseRenderBackendForPage } = await importOrReload(loadViewer);
-  // WebKit/iOS: navigator.gpu is present but requestAdapter() -> null; probe so
-  // the renderer picks WebGL 2 instead of throwing on the first scan open.
-  const gpu = (navigator as { gpu?: { requestAdapter(): Promise<unknown> } }).gpu;
-  viewer = new ViewerCtor(stage.canvas, (await chooseRenderBackendForPage(gpu, location.search)) === 'webgl2');
+  viewer = new ViewerCtor(stage.canvas, (await chooseRenderBackendForPage(adapter ? { requestAdapter: () => adapter } : gpu, location.search)) === 'webgl2');
   // Feed the export adapter the RESOLVED CRS per cloud, so a rejected/local
   // override never reaches the ortho .prj (C10). Rule lives in the app module.
   viewer.setExportCrsResolver(makeExportCrsResolver({
@@ -3049,9 +3047,9 @@ function streamingDebugSample(): StreamingDebugStats | null {
  * visible-class subset; when omitted (or full) the output is byte-identical to
  * the unscoped path.
  */
-function runModules(cloud: PointCloud, scope?: ClassScope): Promise<AnalysisRow[]> {
+function runModules(cloud: PointCloud, scope?: ClassScope, isCurrent?: () => boolean): Promise<AnalysisRow[]> {
   const options: RunOptions = { spatialContext: crsService.context(), ...(scope ? { scope } : {}) }; // resolved ctx honours override
-  return loadAnalysisModules().then((m) => m.runAnalysisModules(cloud, { ...options, drawPrecision: m.drawPrecisionViewFor(viewer, scans.activeId, cloud) }));
+  return loadAnalysisModules().then((m) => m.runAnalysisModules(cloud, { ...options, drawPrecision: m.drawPrecisionViewFor(viewer, scans.activeId, cloud) }, isCurrent));
 }
 
 /**
@@ -3212,7 +3210,7 @@ function prewarmLoaders(): void {
   void loadLasLoader().catch(() => { /* swallow */ }); void preloadStreamingReport().catch(() => { /* swallow — the report call retries */ });
   // The Viewer chunk pulls in three.js / WebGPU (~800 KB) — warm it too, skipping under Save-Data / 2G-3G.
   if (!_isDataSaver()) {
-    void ensureViewer().catch(() => { /* swallow — open() retries */ });
+    void ensureViewer().catch(() => { /* swallow — open() retries */ }); warmParseWorker(); // and the shared parse worker's script
   }
 }
 

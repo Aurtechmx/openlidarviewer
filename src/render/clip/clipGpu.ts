@@ -105,6 +105,57 @@ export class ClipBoxGpu {
   }
 }
 
+/**
+ * One filter's fold in the point size graph, under the clip's rule above: in
+ * the graph while the filter is on and, after its first use, while it is off
+ * too (where its multiplier is exactly 1), until a scan opens with the filter
+ * off. Turning the filter on or off again is then a uniform change only.
+ */
+export class StickyFold {
+  private _active = false;
+  private _used = false;
+
+  /** Whether the fold belongs in the size graph. */
+  get folded(): boolean {
+    return this._used || this._active;
+  }
+
+  /** Record the filter turning on or off. True when that changed the fold. */
+  set(active: boolean): boolean {
+    const was = this.folded;
+    this._active = active;
+    if (active) this._used = true;
+    return was !== this.folded;
+  }
+
+  /** A scan is opening: drop the fold unless the filter is on. True when that changed the fold. */
+  forget(): boolean {
+    const was = this.folded;
+    this._used = this._active;
+    return was !== this.folded;
+  }
+}
+
+/**
+ * The class, elevation and intensity filters' folds. Off, each multiplier is
+ * exactly 1: the class mask is all ones, and the elevation and intensity masks
+ * are `mix(1, inRange, 0)` with `inRange` a 0/1 `step` product. Size × 1.0 is
+ * the size, so keeping a fold changes no drawn pixel.
+ */
+export class FilterFolds {
+  readonly classMask = new StickyFold();
+  readonly elevation = new StickyFold();
+  readonly intensity = new StickyFold();
+
+  /** A scan is opening: drop each fold whose filter is off. True when any fold changed. */
+  forget(): boolean {
+    const a = this.classMask.forget();
+    const b = this.elevation.forget();
+    const c = this.intensity.forget();
+    return a || b || c;
+  }
+}
+
 /** A warm amber, apart from the blue of a Box measurement, so the clip never reads as one. */
 const OUTLINE_COLOUR = 0xffb547;
 /** Edges hidden behind points still show, faintly, so the whole box stays legible. */

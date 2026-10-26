@@ -83,6 +83,18 @@ export class StreamingNodeStore {
    */
   private _queuedCount = 0;
 
+  /** Bumped whenever a node becomes or stops being resident; see {@link residencyVersion}. */
+  private _residencyVersion = 0;
+
+  /**
+   * A counter that moves whenever any node gains or loses `resident`. Equal
+   * values (with an equal `size`) mean the resident set and the hierarchy are
+   * what they were, so anything derived from them alone is unchanged.
+   */
+  get residencyVersion(): number {
+    return this._residencyVersion;
+  }
+
   /**
    * Live counts of nodes in the `loading` and `error` states, maintained at
    * every {@link setState} transition alongside `_queuedCount`. With these,
@@ -190,7 +202,9 @@ export class StreamingNodeStore {
    * the `resident` state.
    */
   setState(node: StreamingNode, state: NodeState, residentPointCount = 0): void {
-    const probe = (node.state === 'resident') !== (state === 'resident') ? navSink() : null;
+    const flips = (node.state === 'resident') !== (state === 'resident');
+    if (flips) this._residencyVersion++;
+    const probe = flips ? navSink() : null;
     if (probe) {
       probe.lodChange(state === 'resident' ? 1 : 0, state === 'resident' ? 0 : 1);
     }

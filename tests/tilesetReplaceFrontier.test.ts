@@ -16,6 +16,7 @@ import { TilesetStreamingSource } from '../src/render/streaming/TilesetStreaming
 import { createTilesetTransport } from '../src/io/tiles3d/tilesetTransport';
 import { parseTileset } from '../src/io/tiles3d/tileset';
 import { computeReplaceHidden } from '../src/render/streaming/replaceFrontier';
+import { StreamingScheduler } from '../src/render/streaming/StreamingScheduler';
 
 const BOX = { box: [0, 0, 0, 10, 0, 0, 0, 10, 0, 0, 0, 10] };
 const ENTRY = 'https://tiles.example.com/city/tileset.json';
@@ -90,5 +91,52 @@ describe('the replace frontier over a TilesetStreamingSource', () => {
 
   it('hides nothing before anything is resident', () => {
     expect(hiddenOf(source())).toEqual(new Set());
+  });
+
+  it('the scheduler walks the store for the frontier only when residency or the hierarchy changed', () => {
+    const s = source();
+    const store = s.octree.store;
+    const emitted: Set<string>[] = [];
+    const scheduler = new StreamingScheduler(
+      s,
+      { decode: () => new Promise<never>(() => {}) } as never,
+      { onNodeReady: () => {}, onNodeEvicted: () => {}, onFrontierChanged: (hidden) => emitted.push(new Set(hidden)) },
+      { pointBudget: 1_000_000, maxConcurrentDecodes: 1, chunkCacheBytes: 1 << 20 },
+    );
+    let walks = 0;
+    const realAll = store.all.bind(store);
+    let counting = false;
+    Object.defineProperty(store, 'all', { configurable: true, writable: true, value: () => { if (counting) walks++; return realAll(); } });
+    const emit = (): void => {
+      counting = true;
+      (scheduler as unknown as { _emitReplaceFrontier(): void })._emitReplaceFrontier();
+      counting = false;
+    };
+
+    emit();
+    expect(walks).toBe(1);
+    expect(emitted).toEqual([new Set()]);
+    emit();
+    emit();
+    expect(walks).toBe(1); // nothing changed: no walk, no emission
+    store.setState(store.get('root.pnts')!, 'resident');
+    store.setState(store.get('a.pnts')!, 'resident');
+    emit();
+    expect(walks).toBe(2);
+    expect(emitted.at(-1)).toEqual(hiddenOf(s));
+    // A state change that keeps residency (resident → resident with a new count) is not a change.
+    store.setState(store.get('a.pnts')!, 'resident', 10);
+    store.setState(store.get('b.pnts')!, 'queued');
+    emit();
+    expect(walks).toBe(2);
+    store.setState(store.get('b.pnts')!, 'resident');
+    emit();
+    expect(walks).toBe(3);
+    expect(emitted.at(-1)).toEqual(new Set(['root.pnts']));
+    expect(emitted.at(-1)).toEqual(hiddenOf(s));
+    store.setState(store.get('a.pnts')!, 'unloaded');
+    emit();
+    expect(emitted.at(-1)).toEqual(hiddenOf(s));
+    expect(emitted).toHaveLength(4);
   });
 });
