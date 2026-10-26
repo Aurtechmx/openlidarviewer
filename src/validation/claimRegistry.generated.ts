@@ -56,6 +56,7 @@ export const EVIDENCE_REGISTRY: Readonly<Record<string, RegistryEntry>> = {
   'TERRAIN-FLOW-DEPRESSION-INVENTORY': { current: 'E3_SYNTHETICALLY_VALIDATED', required: 'E3_SYNTHETICALLY_VALIDATED', exportAllowed: true, scopedParameterSets: ['PS-FLOW-PRIORITY-FLOOD-NODATA-OUTLET'] },
   'TERRAIN-FLOW-RATIONAL-PEAK': { current: 'E2_ANALYTICALLY_VERIFIED', required: 'E2_ANALYTICALLY_VERIFIED', exportAllowed: true },
   'TERRAIN-ACCESS': { current: 'E3_SYNTHETICALLY_VALIDATED', required: 'E3_SYNTHETICALLY_VALIDATED', exportAllowed: true },
+  'STORAGE-HISTORY': { current: 'E2_ANALYTICALLY_VERIFIED', required: 'E2_ANALYTICALLY_VERIFIED', exportAllowed: true },
 };
 
 /**
@@ -108,4 +109,5 @@ export type ClaimId =
   | 'TERRAIN-FLOW-PULSE'
   | 'TERRAIN-FLOW-DEPRESSION-INVENTORY'
   | 'TERRAIN-FLOW-RATIONAL-PEAK'
-  | 'TERRAIN-ACCESS';
+  | 'TERRAIN-ACCESS'
+  | 'STORAGE-HISTORY';

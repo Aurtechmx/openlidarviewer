@@ -3008,7 +3008,7 @@ function streamingDebugSample(): StreamingDebugStats | null {
  */
 function runModules(cloud: PointCloud, scope?: ClassScope, isCurrent?: () => boolean): Promise<AnalysisRow[]> {
   const options: RunOptions = { spatialContext: crsService.context(), ...(scope ? { scope } : {}) }; // resolved ctx honours override
-  return loadAnalysisModules().then((m) => m.runAnalysisModules(cloud, { ...options, drawPrecision: m.drawPrecisionViewFor(viewer, scans.activeId, cloud) }, isCurrent));
+  return loadAnalysisModules().then((m) => m.runAnalysisModules(cloud, { ...options, drawPrecision: m.drawPrecisionViewFor(viewer, scans.activeId, cloud) }, isCurrent, undefined, (rows) => { if (scans.activeCloud() === cloud) inspector.setReport(rows); }));
 }
 
 /**

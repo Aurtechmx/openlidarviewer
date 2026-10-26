@@ -44,8 +44,8 @@ compared with an independent field result.
 
 ## Evidence levels
 
-No existing claim changed evidence level. The register holds 40 claims, 18 of
-them at E4 and none at E5. Five claims are new:
+No existing claim changed evidence level. The register holds 41 claims, 18 of
+them at E4 and none at E5. Seven claims are new:
 
 | Claim | Level |
 | --- | --- |
@@ -54,6 +54,8 @@ them at E4 and none at E5. Five claims are new:
 | TERRAIN-FLOW-RATIONAL-PEAK | E2 |
 | TERRAIN-ACCESS | E3, internal oracle ceiling |
 | VVA-P95 | E3 |
+| MEAS-BOX | E3 |
+| STORAGE-HISTORY | E2 |
 
 `HOLDOUT-RMSE` and `NVA-VVA` are scoped to what their R study exercises: RMSE,
 bias and the NVA figure recomputed from frozen residual vectors. The VVA-style

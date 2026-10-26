@@ -2,6 +2,7 @@ import type { PointCloud } from '../model/PointCloud';
 import type { ClassScope } from '../render/class/classScope';
 import type { SpatialContext } from '../geo/SpatialContext';
 import type { DrawPrecisionView } from '../science/drawPrecision';
+import type { StorageHistoryOutcome } from './storageHistoryRow';
 
 export type AnalysisStatus = 'pass' | 'warn' | 'fail' | 'info';
 
@@ -9,6 +10,12 @@ export interface AnalysisRow {
   label: string;
   value: string;
   status: AnalysisStatus;
+  /**
+   * Figures behind the value, shown on hover. The value must stand on its own:
+   * the detail adds the numbers a reader may want, it never carries a caveat
+   * the value leaves out.
+   */
+  detail?: string;
   /** When true, the row is a diagnostic shown under "Advanced report". */
   advanced?: boolean;
   /**
@@ -62,6 +69,12 @@ export interface RunOptions {
    * viewer; the scan report then omits the rows.
    */
   drawPrecision?: DrawPrecisionView;
+  /**
+   * The outcome of the storage-grid test for this cloud (`science/storageHistory.ts`),
+   * computed by the shell off the main thread. Absent for callers without it; the
+   * scan report then omits the row.
+   */
+  storageHistory?: StorageHistoryOutcome;
 }
 
 export interface AnalysisModule {

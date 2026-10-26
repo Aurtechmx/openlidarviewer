@@ -40,7 +40,9 @@ export type MethodCategory =
   /** Ray-and-voxel scanner-visibility evidence (Observatory, docs/observatory/SPEC.md). */
   | 'observation'
   /** Bounds on numerical error in how the viewer represents or draws coordinates. */
-  | 'precision';
+  | 'precision'
+  /** Tests over how a source file stored its coordinates. */
+  | 'storage';
 
 /** A lightweight reference to a registered method at its current version. */
 export interface MethodRef {
@@ -660,6 +662,26 @@ export const METHOD_REGISTRY: Readonly<Record<string, MethodEntry>> = {
     citation: 'Internal composition (count over footprint); Withheld per ASPRS LAS 1.4 R15.',
     category: 'density',
     implementation: ['src/analysis/modules/scanReport.ts'],
+  },
+  'olv.storage.grid-history': {
+    id: 'olv.storage.grid-history',
+    version: 1,
+    name: 'Storage grid history',
+    summary:
+      'Tests whether the stored integer X and Y of a LAS or LAZ file are compatible with an ' +
+      'earlier storage grid. For each candidate grid (same-frame refinements of the storage ' +
+      'step; 0.001, 0.01 and 0.1 m grids for a file in another unit; 0.01 and 0.1 ft grids ' +
+      'turned 0 and whole degrees to 5 either way for a file in metres) the predicted ' +
+      'reciprocal peaks are scored against the incoherent window power at random wavevectors, ' +
+      'the per-peak empirical p-values are Fisher-combined, Bonferroni-corrected over the tested ' +
+      'candidates and held below 0.01, and the median measured-to-predicted amplitude must sit ' +
+      'in [0.5, 2]. At most 12 000 points in at least 20 windows and 300 null wavevectors enter. ' +
+      'The coarsest supported step of a system is reported. States compatibility with a grid, ' +
+      'not how or by whom the file was produced.',
+    citation:
+      'Internal composition (lattice visibility |sinc(k1) sinc(k2)| with an incoherent window spectrum, an empirical null and Fisher\'s method); no single source method.',
+    category: 'storage',
+    implementation: ['src/diagnostics/latticeForensics.ts', 'src/science/storageHistory.ts'],
   },
   'olv.profile.corridor-percentile': {
     id: 'olv.profile.corridor-percentile',

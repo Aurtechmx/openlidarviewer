@@ -252,6 +252,25 @@
       ]
     },
     {
+      "id": "storage-history",
+      "title": "Storage history row in the scan report (storage-grid test over LAS and LAZ integers)",
+      "status": "preview",
+      "modules": [
+        "src/diagnostics/latticeForensics.ts",
+        "src/science/storageHistory.ts",
+        "src/analysis/storageHistoryRow.ts",
+        "src/app/storageHistoryReport.ts",
+        "src/app/storageHistoryWorker.ts"
+      ],
+      "claims": [
+        "STORAGE-HISTORY"
+      ],
+      "uiLabel": {
+        "file": "src/analysis/storageHistoryRow.ts",
+        "text": "Storage history"
+      }
+    },
+    {
       "id": "command-palette",
       "title": "Command palette",
       "status": "stable",

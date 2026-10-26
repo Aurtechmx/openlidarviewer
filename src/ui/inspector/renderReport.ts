@@ -34,6 +34,8 @@ function reportRow(row: AnalysisRow, truncate = false): HTMLElement {
   const stamp = row.scope ? scopeStamp(row.scope, classificationLabel) : '';
   // Truncated declared values keep the verbatim text in the tooltip.
   const valueProps: Parameters<typeof el>[1] = { className: 'olv-report-value' };
+  // The figures behind a value (a p-value, a ratio, a count) ride the hover text.
+  if (row.detail) valueProps.title = row.detail;
   let shown = row.value;
   if (truncate && shown.length > 96) {
     valueProps.title = shown;

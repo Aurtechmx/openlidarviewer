@@ -106,6 +106,12 @@ export const WORKER_REGISTRY: readonly WorkerDeclaration[] = [
     workerChunk: 'observatoryWorker',
     clientModule: 'src/app/observatoryWorkerClient.ts',
   },
+  {
+    id: 'storageHistory',
+    workerModule: 'src/app/storageHistoryWorker.ts',
+    workerChunk: 'storageHistoryWorker',
+    clientModule: 'src/app/storageHistoryWorkerClient.ts',
+  },
 ] as const;
 
 /** Escape a string for safe embedding inside a `RegExp`. */

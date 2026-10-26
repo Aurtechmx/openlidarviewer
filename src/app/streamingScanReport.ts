@@ -29,6 +29,7 @@
 
 import type { AnalysisRow } from '../analysis/ModuleApi';
 import { inMemoryPrecisionRows } from '../analysis/inMemoryPrecisionRows';
+import { storageHistoryRow } from '../analysis/storageHistoryRow';
 import { scanPrecision } from './scanPrecision';
 import { spacingRowFor } from '../ui/StreamingPanel';
 import type { SpatialContext } from '../geo/SpatialContext';
@@ -261,6 +262,11 @@ export function runStreamingModules(cloud: StreamingReportCloud, ctx: SpatialCon
   // precision measurement are decided against the same resolved frame the
   // extent block reads, and both fail closed on an unconfirmed unit.
   rows.push(...streamingStructureRows(cloud, ctx));
+
+  // The storage-grid test reads a resident file's stored integers; a streamed
+  // source holds nodes decoded against a render origin, so the row says the
+  // test did not run rather than leaving the reader to wonder.
+  rows.push(storageHistoryRow({ kind: 'not-tested', reason: 'streamed scan' }));
 
   // Header provenance, labelled by what each LAS field IS — the same labels
   // the static Scan Report uses, so the same file is never described two ways

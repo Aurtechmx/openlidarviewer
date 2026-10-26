@@ -447,7 +447,7 @@ measurement controller, which took twenty-eight more. The draw precision bound's
 fails the build when either passes its recorded baseline, so a raise is a hand
 edit to `docs/validation/monolith-size-baseline.json` and always shows in the
 diff.
-Fan-out is 95 for the shell, 73 for the renderer, across 1180 modules with no
+Fan-out is 95 for the shell, 73 for the renderer, across 1185 modules with no
 dependency cycles. Fan-out counts the distinct modules a file imports with a
 value import, source files and external packages alike; type-only and dynamic
 imports are not counted. The shell and the renderer figures are held
@@ -1045,19 +1045,28 @@ sets. It has these limits:
 - Closing the scan removes the plane. A plane is not carried from one scan to
   the next except through a saved session.
 
-## Storage-grid diagnostics are a library, not a tool
+## Storage history tests a fixed set of candidate grids
 
-`src/diagnostics/latticeForensics.ts` looks for earlier storage grids in
-the integers of LAS and LAZ files: it predicts where a candidate grid
-leaves spectral peaks, scores them and tests whether the points sit on
-that grid's nodes. No panel calls it, so the application shows no result
-from it. The caller supplies the candidate grids, their Jacobians and
-their mapped nodes. It reads horizontal coordinates only. Its phase
-uncertainty is a delete-one-window jackknife, which ignores spatial
-correlation between windows. Empirical p-values cannot fall below 1/2001
-per peak, and the combined value below that is a model figure, not a
-calibrated probability. A supported grid is a grid the points are
-compatible with; it does not say which operation produced it.
+The scan report's "Storage history" row (`olv.storage.grid-history@1`, a
+preview) tests whether the stored integer X and Y of a resident LAS or LAZ
+file are compatible with a candidate earlier storage grid. The candidates are
+fixed: multiples of the file's own step (2, 5, 10, 20, 50, 100 and 1000 times
+the scale), 0.001, 0.01 and 0.1 m grids for a file in another unit, and 0.01
+and 0.1 ft grids with their axes turned 0 or a whole number of degrees up to 5
+either way for a file in metres. The test does not find a grid at another
+step, another unit or another angle, so "none detected" means none of the
+candidates was supported, not that no earlier grid exists. It reads at most
+12 000 points in at least 20 windows against an empirical null of 300
+wavevectors, so one peak's p-value cannot fall below 1/301 and the combined
+value below that is a model figure, not a calibrated probability. It does not
+tell international and US survey feet apart. It reads horizontal coordinates
+only, needs the loaded positions to reproduce the file's integers (a
+voxel-reduced load, a streamed source or another format reads "not tested"),
+and on a display sample it tests a subset of the points. A supported grid is a
+grid the stored integers are compatible with; the row does not say which
+operation produced it, who produced the file, or whether the file was converted
+or edited. The row does not use the phase test in
+`src/diagnostics/latticeForensics.ts`.
 
 ## A figure the position step cannot give within 1 cm is withheld
 
