@@ -344,7 +344,9 @@ export function stockpileAreaGridToastLine(v: StockpileAreaGridView): string {
   if (v.authority === 'withheld') {
     line = `Stockpile: volume withheld · ${support} · ${v.reason}`;
   } else {
-    const state = v.authority === 'measured' ? 'MEASURED' : `PREVIEW (${v.reason})`;
+    // The top tier is still an exploratory preview (VOL-STOCKPILE's approved
+    // wording); full coverage only means no PREVIEW reason applies.
+    const state = v.authority === 'measured' ? 'exploratory volume preview' : `PREVIEW (${v.reason})`;
     line =
       `Stockpile: ${int(v.volumeM3)} m³ · ${state} · ${support} · area-weighted grid` +
       ` · surface term ± ${int(v.surfaceTermM3)} m³ (incomplete model)` +

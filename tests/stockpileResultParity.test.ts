@@ -139,8 +139,10 @@ function expectParity(record: VolumeRecord, headline: string): void {
     expect(props.pointsample_net_m3).toBeCloseTo(cc.net, 3);
     expect(finding.caveats?.join(' ')).toContain(`fill ${cc.fill.toFixed(2)} m³`);
   }
-  expect(row.grid_authority).toBe(record.gridAuthority ?? '');
-  expect(props.grid_authority).toBe(record.gridAuthority);
+  const exported = record.gridAuthority === 'measured' ? 'exploratory_full_coverage' : record.gridAuthority;
+  expect(row.grid_authority).toBe(exported ?? '');
+  expect(props.grid_authority).toBe(exported);
+  expect(row.grid_authority).not.toBe('measured');
   const w = record.withheld;
   if (w) {
     expect(row.source_points).toBe(String(w.source));

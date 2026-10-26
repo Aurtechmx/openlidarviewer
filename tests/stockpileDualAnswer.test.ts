@@ -1133,20 +1133,20 @@ describe('authority on the sampled/streaming axis, independent of support', () =
   const full = uniform(Math.round(10 * APRON_AREA), lcg(0x5a5e0001));
   const positions = cloudOf(full, CONE.surface);
 
-  it('reads MEASURED at baseline, on the selection both override cases reuse', () => {
+  it('reads as the full-coverage preview at baseline, on the selection both override cases reuse', () => {
     const suffix = toastSuffixWithOverride(positions, LASSO, {});
-    expect(suffix).toContain('MEASURED');
+    expect(suffix).toContain('· exploratory volume preview ·');
   });
 
   it('a voxel-reduced source caps the same well-supported grid at PREVIEW ("display sample")', () => {
     const suffix = toastSuffixWithOverride(positions, LASSO, { sourceReduced: true });
     expect(suffix).toContain('PREVIEW (display sample)');
-    expect(suffix).not.toContain('MEASURED');
+    expect(suffix).not.toContain('· exploratory volume preview ·');
   });
 
   it('a streaming source of unknown coverage caps the same well-supported grid at PREVIEW ("streaming and not fully resident")', () => {
     const suffix = toastSuffixWithOverride(positions, LASSO, { streamingContributed: true });
     expect(suffix).toContain('PREVIEW (source is streaming and not fully resident)');
-    expect(suffix).not.toContain('MEASURED');
+    expect(suffix).not.toContain('· exploratory volume preview ·');
   });
 });

@@ -618,7 +618,7 @@ export function measurementsToGeoJSON(
       if (ctx.crsName) properties.crs = ctx.crsName;
       // Same coverage verdict the CSV's grid_authority column carries — see
       // measurementsToCsv.
-      if (m.kind === 'volume' && m.volume?.gridAuthority) properties.grid_authority = m.volume.gridAuthority;
+      if (m.kind === 'volume' && m.volume?.gridAuthority) properties.grid_authority = gridAuthorityExportValue(m.volume.gridAuthority);
       if (m.kind === 'volume' && m.volume?.method) properties.volume_method = m.volume.method;
       const w = m.kind === 'volume' ? m.volume?.withheld : undefined;
       if (w) Object.assign(properties, { source_points: w.source, withheld_excluded: w.excluded, analysed_points: w.analysed });
@@ -685,6 +685,16 @@ const CLAIM_FOR_KIND: Readonly<Record<Measurement['kind'], string>> = {
   box: 'VOL-POINT-SAMPLE',
   volume: 'VOL-POINT-SAMPLE',
 };
+
+/**
+ * The exported `grid_authority` value. The stored top tier `measured` is
+ * written `exploratory_full_coverage`: VOL-STOCKPILE is an exploratory volume
+ * preview at every tier, and full coverage is all that tier adds. `preview`
+ * and `withheld` are written as stored.
+ */
+export function gridAuthorityExportValue(a: 'measured' | 'preview' | 'withheld'): string {
+  return a === 'measured' ? 'exploratory_full_coverage' : a;
+}
 
 /**
  * The area-weighted grid's bare id (no `@version` — this file names a claim,
@@ -872,7 +882,7 @@ export function measurementsToCsv(
       ...metrics,
       evidence: evidenceFor(m),
     };
-    if (m.kind === 'volume' && m.volume?.gridAuthority) base.grid_authority = m.volume.gridAuthority;
+    if (m.kind === 'volume' && m.volume?.gridAuthority) base.grid_authority = gridAuthorityExportValue(m.volume.gridAuthority);
     if (m.kind === 'volume' && m.volume?.method) base.volume_method = m.volume.method;
     const w = m.kind === 'volume' ? m.volume?.withheld : undefined;
     if (w) Object.assign(base, { source_points: w.source, withheld_excluded: w.excluded, analysed_points: w.analysed });

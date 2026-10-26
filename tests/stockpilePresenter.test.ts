@@ -271,7 +271,7 @@ describe('stockpileAreaGridToastLine', () => {
   test('a measured line names the state, the support and the method', () => {
     const pts = Float32Array.from(prism(3, 0.5, 0.5));
     const line = stockpileAreaGridToastLine(presentStockpileAreaGrid(RECT, pts, base, complete, { elevationDatum: 0 }));
-    expect(line).toMatch(/^Stockpile: 600 m³ · MEASURED · 100% footprint support · 0% interpolated · area-weighted grid/);
+    expect(line).toMatch(/^Stockpile: 600 m³ · exploratory volume preview · 100% footprint support · 0% interpolated · area-weighted grid/);
     expect(line).toMatch(/incomplete model/);
     expect(line).toMatch(/base 0\.00 m \(lowest ground, ±0\.05 m, not in the term\)/);
     expect(line).not.toMatch(/1σ|model band/);
@@ -311,7 +311,8 @@ describe('stockpileToastSuffix (area-grid)', () => {
   test('a complete prism yields a measured suffix over the lowest-ground base', () => {
     const pts = Float32Array.from([...prism(3, 0.5, 0.5), ...prism(0, 0.5, 0.5)]);
     const suffix = stockpileToastSuffix(RECT, pts);
-    expect(suffix).toMatch(/^ · Stockpile: \d[\d,]* m³ · MEASURED/);
+    expect(suffix).toMatch(/^ · Stockpile: \d[\d,]* m³ · exploratory volume preview ·/);
+    expect(suffix).not.toMatch(/MEASURED/);
   });
   test('a reduced source or a strided walk reads PREVIEW (display sample)', () => {
     const pts = Float32Array.from([...prism(3, 0.5, 0.5), ...prism(0, 0.5, 0.5)]);
@@ -319,14 +320,14 @@ describe('stockpileToastSuffix (area-grid)', () => {
     expect(stockpileToastSuffix(RECT, pts, 1, { densityUnitKnown: true, vert: 1, walkSampled: true }))
       .toMatch(/PREVIEW \(display sample\)/);
   });
-  test('a settled view over a partially resident streaming source is never MEASURED', () => {
+  test('a settled view over a partially resident streaming source is never a full-coverage preview', () => {
     const pts = Float32Array.from([...prism(3, 0.5, 0.5), ...prism(0, 0.5, 0.5)]);
     const suffix = stockpileToastSuffix(RECT, pts, 1, {
       streamingContributed: true,
       streamingCoverage: { knownNodeCount: 100, residentNodeCount: 5, hierarchyComplete: true },
     });
     expect(suffix).toMatch(/PREVIEW \(source is streaming and not fully resident\)/);
-    expect(suffix).not.toMatch(/MEASURED/);
+    expect(suffix).not.toMatch(/MEASURED|exploratory volume preview ·/);
   });
   test('unknown streaming coverage is not evidence of completeness', () => {
     const pts = Float32Array.from([...prism(3, 0.5, 0.5), ...prism(0, 0.5, 0.5)]);
@@ -345,12 +346,12 @@ describe('stockpileToastSuffix (area-grid)', () => {
       streamingCoverage: { knownNodeCount: 20, residentNodeCount: 20, hierarchyComplete: false },
     })).toMatch(/PREVIEW \(source is streaming and not fully resident\)/);
   });
-  test('a fully resident streaming source reads MEASURED', () => {
+  test('a fully resident streaming source reads as a full-coverage exploratory preview', () => {
     const pts = Float32Array.from([...prism(3, 0.5, 0.5), ...prism(0, 0.5, 0.5)]);
     expect(stockpileToastSuffix(RECT, pts, 1, {
       streamingContributed: true,
       streamingCoverage: { knownNodeCount: 12, residentNodeCount: 12, hierarchyComplete: true },
-    })).toMatch(/· MEASURED ·/);
+    })).toMatch(/· exploratory volume preview ·/);
   });
   test('a degenerate footprint or too few points yields nothing', () => {
     expect(stockpileToastSuffix(RECT.slice(0, 2), Float32Array.from(prism(3, 1, 1)))).toBe('');
