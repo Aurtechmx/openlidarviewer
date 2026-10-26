@@ -337,7 +337,8 @@ describe('readinessNote', () => {
 
   it('states the validation fact for ready without asserting a certification', () => {
     const note = readinessNote('ready');
-    expect(note.toLowerCase()).toContain('validated');
+    expect(note.toLowerCase()).toContain('internal hold-out');
+    expect(note.toLowerCase()).not.toContain('validated');
     expect(note.toLowerCase()).toContain('not a survey certification');
     expect(note).not.toMatch(/\bcertified\b/i);
   });
@@ -493,7 +494,8 @@ describe('buildMapSheetPdf — the density reference names its basis', () => {
     const prov = { ...PROV, accuracy: { rmseZM: 1, nvaM: 1.96, vvaM: 2.1, usgsDensityReferenceFloor: 'QL3' } } as typeof PROV;
     const text = drawn(await buildMapSheetPdf({ model, labels: [], provenance: { ...prov, exportReadiness: 'Ready' } as typeof PROV }));
     expect(text).toContain('>= USGS QL3');
-    expect(text).toContain('Survey accuracy');
+    expect(text).toContain('Internal hold-out accuracy');
+    expect(text).not.toContain('Survey accuracy');
   });
 
   it('fits the accuracy column at its longest', async () => {

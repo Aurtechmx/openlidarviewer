@@ -63,6 +63,7 @@ import {
   type ExportProvenance,
   type ExportProvenanceOptions,
   NO_RESOLVED_VERTICAL_SCALE,
+  contourArtifactClaims,
 } from './exportProvenance';
 
 const DASH = '—';
@@ -150,15 +151,17 @@ export interface TerrainReportContent {
 /**
  * Product label → registered claim id. Only products whose deliverable maps
  * to ONE registry claim are listed; the rest print "no single registered
- * claim" rather than a level picked from several. Map sheet shares the
- * CONTOURS claim (MAP_SHEET_CLAIM in mapSheetPdf.ts).
+ * claim" rather than a level picked from several. Contours and Map sheet
+ * follow the contour style ({@link contourArtifactClaims}).
  */
 const PRODUCT_CLAIM: Readonly<Record<string, string>> = {
   Profiles: 'MEAS-PROFILE',
   'DTM/DEM export': 'DTM',
-  Contours: 'CONTOURS',
-  'Map sheet': 'CONTOURS',
 };
+const CONTOUR_PRODUCTS = new Set(['Contours', 'Map sheet']);
+
+/** The DTM row when no registered study covers this DTM's settings. */
+export const DTM_NOT_COVERED = 'not covered by the registered study';
 
 /** "E4 — Cross-implementation validated" from the registry level id. */
 function fmtLevel(level: EvidenceLevel): string {
@@ -167,19 +170,21 @@ function fmtLevel(level: EvidenceLevel): string {
 
 /**
  * The evidence line for one product. The DTM claim reuses the SAME resolution
- * the provenance was stamped from (scoped overlay included); any other claim
- * prints its registry baseline and says so — the report path carries no
- * artifact context to resolve them against.
+ * the provenance was stamped from (scoped overlay included); with no study in
+ * scope it does not inherit the registry baseline. Any other claim prints its
+ * registry baseline and says so — the report path carries no artifact context
+ * to resolve them against.
  */
-function productEvidence(label: string, provenance: ExportProvenance): string {
-  const claimId = PRODUCT_CLAIM[label];
+function productEvidence(label: string, provenance: ExportProvenance, result: AnalyseContoursResult): string {
+  const claimId = CONTOUR_PRODUCTS.has(label) ? contourArtifactClaims(result)[0] : PRODUCT_CLAIM[label];
   if (claimId == null) return 'no single registered claim';
   const res = provenance.evidenceResolution;
   if (res && res.claimId === claimId && res.effectiveEvidence != null) {
-    return res.matchedStudy != null
-      ? `${fmtLevel(res.effectiveEvidence)} (in-scope study ${res.matchedStudy})`
-      : `${fmtLevel(res.effectiveEvidence)} (baseline)`;
+    if (res.matchedStudy != null) return `${fmtLevel(res.effectiveEvidence)} (in-scope study ${res.matchedStudy})`;
+    if (claimId === 'DTM') return DTM_NOT_COVERED;
+    return `${fmtLevel(res.effectiveEvidence)} (baseline)`;
   }
+  if (claimId === 'DTM') return DTM_NOT_COVERED;
   const entry = EVIDENCE_REGISTRY[claimId];
   return entry ? `${fmtLevel(entry.current)} (baseline)` : 'unregistered (E0)';
 }
@@ -622,7 +627,7 @@ export function buildTerrainReportContent(
   // Each row also carries its claim's evidence level (productEvidence).
   const products: TerrainReportProduct[] = terrainProducts(assessment, workflowItems).map(
     (p) => {
-      const evidence = productEvidence(p.label, provenance);
+      const evidence = productEvidence(p.label, provenance, result);
       // The surface reason already stands in Terrain Assessment; a product row
       // repeats only a reason of its own (a georeferencing gap, for instance).
       return p.statusWord === 'Ready' || p.reason == null || p.reason === assessment.reason

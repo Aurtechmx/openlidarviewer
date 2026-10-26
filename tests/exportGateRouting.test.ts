@@ -28,6 +28,7 @@ import {
   buildMapSheetPdf,
   mapSheetEvidenceNote,
   mapSheetEvidenceLine,
+  mapSheetClaim,
   MAP_SHEET_CLAIM,
 } from '../src/render/measure/mapSheetPdf';
 import type { Measurement, Vec3 } from '../src/render/measure/types';
@@ -170,6 +171,14 @@ describe('map-sheet PDF — routed through the gate', () => {
     expect(mapSheetEvidenceLine()).toMatch(/geometry validated/i);
     expect(mapSheetEvidenceLine()).not.toMatch(/validated export/i);
     expect(mapSheetEvidenceLine()).not.toMatch(/exploratory export/i);
+  });
+
+  it('a generalised or smoothed sheet stands on CONTOURS-CARTOGRAPHIC', () => {
+    expect(mapSheetClaim('crisp', null)).toBe('CONTOURS');
+    expect(mapSheetClaim('smooth', null)).toBe('CONTOURS-CARTOGRAPHIC');
+    expect(mapSheetClaim('crisp', { generalizeToleranceCells: 0.5, cartographicSmoothing: false })).toBe('CONTOURS-CARTOGRAPHIC');
+    expect(mapSheetClaim('crisp', { generalizeToleranceCells: 0, cartographicSmoothing: true })).toBe('CONTOURS-CARTOGRAPHIC');
+    expect(mapSheetEvidenceLine('CONTOURS-CARTOGRAPHIC')).not.toMatch(/validated/i);
   });
 
   it('the note is derived from the gate, not hardcoded (validated for a met claim)', () => {
