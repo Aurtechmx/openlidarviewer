@@ -21,8 +21,10 @@ export interface StorageHistoryWorkerRequest {
 const ctx = self as unknown as DedicatedWorkerGlobalScope;
 
 ctx.onmessage = (event: MessageEvent<StorageHistoryWorkerRequest>): void => {
-  // A dedicated worker only receives messages from the page that created it, so there is no
-  // sender to check. The request is read as plain data and the test refuses a malformed one.
+  // A dedicated worker only receives messages from the page that created it,
+  // where `origin` is empty. Refuse anything that names another origin. The
+  // request is read as plain data and the test refuses a malformed one.
+  if (event.origin && event.origin !== ctx.location.origin) return;
   const msg = event.data;
   try {
     ctx.postMessage({ jobId: msg.jobId, ok: true, outcome: runStorageHistory(msg.request) });
