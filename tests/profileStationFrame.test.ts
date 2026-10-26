@@ -407,6 +407,6 @@ describe('elevationAtChainage: gap propagation', () => {
     expect(extras).toBeDefined();
     // Only the covered half contributes: +4 % throughout, never a 0 % segment
     // manufactured from the last finite sample.
-    expect(extras!.slopeSummary).toBe('Max +4.00%, Min +4.00%, Avg +4.00%');
+    expect(extras!.slopeSummary).toBe('Max +4.00%, Min +4.00%, Net +4.00% (total rise ÷ total run)');
   });
 });

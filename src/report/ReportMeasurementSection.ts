@@ -292,7 +292,7 @@ function buildProfileExtras(
     slopeLine =
       `Max ${signPrefix(summary.maxGradePercent)}${summary.maxGradePercent.toFixed(2)}%, ` +
       `Min ${signPrefix(summary.minGradePercent)}${summary.minGradePercent.toFixed(2)}%, ` +
-      `Avg ${signPrefix(summary.avgGradePercent)}${summary.avgGradePercent.toFixed(2)}%`;
+      `Net ${signPrefix(summary.avgGradePercent)}${summary.avgGradePercent.toFixed(2)}% (total rise ÷ total run)`;
   } else {
     const reason = samples
       ? 'no finite samples along the section.'

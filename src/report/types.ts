@@ -176,7 +176,7 @@ export interface ReportProfileDeliverableExtras {
   readonly stations: string;
   /** "Station interval 25 m" — the chosen chainage spacing. */
   readonly stationInterval: string;
-  /** "Max +5.2 %, Min −1.8 %, Avg +1.7 %" — slope grade summary. */
+  /** "Max +5.2 %, Min −1.8 %, Net +1.7 % (total rise ÷ total run)" — slope grade summary. */
   readonly slopeSummary: string;
   /** Optional Δh refinement caveat — surfaces the streaming-resident warning. */
   readonly coverageCaveat?: string;

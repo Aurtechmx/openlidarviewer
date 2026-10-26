@@ -73,15 +73,16 @@ describe('profile average grade', () => {
     expect(s.minGradePercent).toBe(0);
   });
 
-  it('the PDF slope line prints the run-weighted average', () => {
+  it('the PDF slope line prints the net rise over run', () => {
     // Stations every 5 m to 23 m. Flat to chainage 20, then up 3 m by 23.
     const samples: ProfileChartSample[] = [];
     for (let d = 0; d <= 23; d += 0.5) samples.push({ distance: d, height: d <= 20 ? 0 : d - 20, count: 5 });
     samples.push({ distance: 23, height: 3, count: 5 });
     const m = { id: 'p', kind: 'profile', name: 'P', points: [[0, 0, 0], [23, 0, 3]], profileChart: samples } as unknown as Measurement;
     const slope = buildMeasurementRows([m], 'metric')[0].profileExtras!.slopeSummary;
-    const avg = Number(/Avg \+?(-?[0-9.]+)%/.exec(slope)![1]);
-    expect(avg).toBeCloseTo((3 / 23) * 100, 1);
+    const net = Number(/Net \+?(-?[0-9.]+)% \(total rise ÷ total run\)/.exec(slope)![1]);
+    expect(net).toBeCloseTo((3 / 23) * 100, 1);
+    expect(slope).not.toMatch(/Avg/);
   });
 });
 
