@@ -29,6 +29,7 @@ are not release-authoritative. v0.7.0 is the current published release.
 ### Changed
 
 - Contour GeoJSON features carry the pooled run score as `presentationSupport` instead of `meanConfidence`.
+- The lasso stockpile toast warns when the lasso was drawn more than 20° from straight down: raised points can then fall outside the footprint, and the toast says to draw in plan view.
 - The PDF report's profile slope summary labels its third figure "Net … (total rise ÷ total run)" instead of "Avg". It is the summed rise over the summed run of the covered segments, not an average of the grades.
 - Box measurements in CSV and GeoJSON exports cite a new MEAS-BOX claim (E3) for the box's own extents and volume. They cited the cut-fill volume claim, VOL-POINT-SAMPLE, which describes a different estimator. The register now holds 40 claims.
 - The MEAS-AREA claim describes the area the tool reports: the area in the polygon's own plane, which equals the planimetric area for a horizontal polygon. Its scope now states that the cross-implementation comparison covers horizontal polygons only.

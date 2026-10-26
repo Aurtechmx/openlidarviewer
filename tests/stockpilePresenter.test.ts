@@ -449,3 +449,29 @@ describe('presentStockpile — base-plane caveat unit', () => {
     expect(caveatPm).toBe(rowPm);
   });
 });
+
+describe('stockpileToastSuffix (oblique view)', () => {
+  const pts = Float32Array.from([...prism(3, 0.5, 0.5), ...prism(0, 0.5, 0.5)]);
+  test('a lasso drawn in an oblique view says so and points to plan view', () => {
+    const suffix = stockpileToastSuffix(RECT, pts, 1, { viewOffNadirDeg: 45 });
+    expect(suffix).toMatch(/drawn in an oblique view \(45° from straight down\)/);
+    expect(suffix).toMatch(/draw in plan view/);
+  });
+  test('a lasso drawn looking straight down carries no oblique caveat', () => {
+    expect(stockpileToastSuffix(RECT, pts, 1, { viewOffNadirDeg: 5 })).not.toMatch(/oblique/);
+    expect(stockpileToastSuffix(RECT, pts, 1, {})).not.toMatch(/oblique/);
+  });
+});
+
+describe('viewOffNadirDeg', () => {
+  test('reads the camera ray angle from vertical at the lasso centre', async () => {
+    const { viewOffNadirDeg } = await import('../src/render/measure/lassoProjector');
+    // A ray tilted 30° from straight down: one unit of height moves the hit
+    // tan(30°) units across the plane.
+    const t = Math.tan(Math.PI / 6);
+    const unproject = (_x: number, _y: number, h: number): [number, number, number] => [h * t, 0, h];
+    expect(viewOffNadirDeg(unproject, 0, 0, 0, [0, 0, 1])).toBeCloseTo(30, 6);
+    expect(viewOffNadirDeg(() => [0, 0, 0], 0, 0, 0, [0, 0, 1])).toBeCloseTo(0, 6);
+    expect(viewOffNadirDeg(() => null, 0, 0, 0, [0, 0, 1])).toBeUndefined();
+  });
+});

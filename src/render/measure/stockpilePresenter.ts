@@ -360,6 +360,12 @@ export function stockpileAreaGridToastLine(v: StockpileAreaGridView): string {
 export interface StockpileToastOptions {
   /** True when a contributing cloud was voxel-reduced to the device budget. */
   readonly sourceReduced?: boolean;
+  /**
+   * How far the camera leaned from straight down at the lasso's centre, in
+   * degrees. The selection follows the screen while the footprint lies on
+   * the base plane, so in an oblique view raised points can fall outside it.
+   */
+  readonly viewOffNadirDeg?: number;
   /** False for an unknown-unit CRS, which bars a pts/m² claim. */
   readonly densityUnitKnown?: boolean;
   /** `verticalUnitToMetres`; defaults to `lin` for a single-unit CRS. */
@@ -405,6 +411,15 @@ export interface StockpileGridForLasso {
  * more than the string) and {@link stockpileGridForLasso} (the Save path,
  * which also needs the verdict to enrich the stored record).
  */
+/** Off-nadir angle above which a lasso is called oblique in the toast. */
+export const OBLIQUE_LASSO_DEG = 20;
+
+/** The toast's oblique-view caveat, or '' for a near-plan view or no reading. */
+function obliqueViewClause(deg: number | undefined): string {
+  if (deg === undefined || !(deg > OBLIQUE_LASSO_DEG)) return '';
+  return ` · drawn in an oblique view (${Math.round(deg)}° from straight down): raised points can fall outside the footprint, so draw in plan view for this volume`;
+}
+
 function computeStockpileGridForLasso(
   polygon: ReadonlyArray<Vec3>,
   positions: Float32Array,
@@ -443,7 +458,7 @@ function computeStockpileGridForLasso(
     { lin, vert, unitVerified: densityUnitKnown ?? true, ...(up ? { up } : {}), elevationDatum },
   );
   if (view.authority !== 'withheld' && view.volumeM3 <= 0) return empty;
-  return { suffix: ` · ${stockpileAreaGridToastLine(view)}`, view };
+  return { suffix: ` · ${stockpileAreaGridToastLine(view)}${obliqueViewClause(options.viewOffNadirDeg)}`, view };
 }
 
 /**
