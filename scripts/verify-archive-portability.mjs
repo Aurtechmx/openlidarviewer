@@ -133,7 +133,22 @@ export function scriptFileTargets(scripts) {
   return [...out];
 }
 
-/** `npm run <name>` invocations named in prose. */
+/**
+ * Does a script's source declare, in a `usage:` message, an argument it cannot
+ * run without? A required argument is written as a `<placeholder>`; anything in
+ * `[brackets]` is optional and does not count. Only text on the same line as the
+ * word "usage:" is read, so prose elsewhere in the file cannot trigger it.
+ * Such a script exits non-zero when run bare, which is the script working as
+ * designed, so the archive self-check leaves it out instead of reporting a fail.
+ */
+export function declaresRequiredArguments(source) {
+  for (const m of source.matchAll(/\busage:([^'"`\n]*)/gi)) {
+    const required = m[1].replace(/\[[^\]]*\]/g, '');
+    if (/<[^<>\s]+(?:\s[^<>]*)?>/.test(required)) return true;
+  }
+  return false;
+}
+
 /**
  * Does any of `texts` read `name` out of node_modules? Each text is a shipped
  * non-JS file that mentions node_modules at all. A scoped package may be
@@ -147,6 +162,7 @@ export function readsPackageFromNodeModules(texts, name) {
   return texts.some((t) => (scope == null ? t.includes(bare) : t.includes(scope) && t.includes(bare)));
 }
 
+/** `npm run <name>` invocations named in prose. */
 export function documentedScripts(text) {
   return [...text.matchAll(/npm run ([a-z0-9][a-z0-9:_-]*)/g)].map((m) => m[1]);
 }
@@ -394,23 +410,20 @@ check('documented-scripts-exist', 'every `npm run` command named in shipping doc
 check('archive-self-verification', 'the archive’s own node-only verification scripts run and pass inside the archive', (c) => {
   const f = [];
   const ran = [];
-  // Excluded, each for a reason checked against the script's own usage text:
+  // Excluded by rule: a script whose own usage text names a required
+  // `<placeholder>` argument (see declaresRequiredArguments) cannot be run bare.
+  // That covers release:verify, release:manifest, test:file, dem:package and
+  // this script, so none of them is named here.
+  // Excluded by name, each for a reason that is not about arguments:
   //   verify-archive-portability — this script; running it here would recurse.
-  //   release:verify — verify-release-assets.mjs takes `-- --dir <staging>`;
-  //     a source archive carries no staged asset directory to point it at.
-  //   release:manifest, gen:claim-registry, docs:render — generators, not checks.
+  //   gen:claim-registry, docs:render — generators, not checks.
   const NEEDS_ARGS_OR_GENERATES = new Set([
     'scripts/verify-archive-portability.mjs',
-    'scripts/verify-release-assets.mjs',
-    'scripts/create-release-manifest.mjs',
     // build-validation-snapshot writes a directory; verify-validation-snapshot
     // is the check over what it wrote, and that one does run here.
     'scripts/build-validation-snapshot.mjs',
     'scripts/generate-claim-registry.mjs',
     'scripts/render-claim-register.mjs',
-    // test-file.mjs prints `usage: test-file.mjs <file.test.ts ...>` and exits
-    // non-zero with no arguments; it is a runner, not a check.
-    'scripts/test-file.mjs',
     // acquire-dataset.mjs reaches the network: its own header (lines 19–22)
     // says it is "Deliberately NOT in the release gate. It reaches the
     // network", fetching each `acquired` record's sourceUrl from an outside
@@ -436,7 +449,8 @@ check('archive-self-verification', 'the archive’s own node-only verification s
   const candidates = Object.entries(c.pkg.scripts)
     .filter(([, cmd]) => /^node scripts\/[\w.-]+\.mjs$/.test(cmd))
     .map(([name, cmd]) => ({ name, script: cmd.replace(/^node /, '') }))
-    .filter(({ script }) => !NEEDS_ARGS_OR_GENERATES.has(script));
+    .filter(({ script }) => !NEEDS_ARGS_OR_GENERATES.has(script))
+    .filter(({ script }) => !declaresRequiredArguments(c.read(script) ?? ''));
   for (const { name, script } of candidates) {
     if (!c.set.has(script)) {
       f.push({ level: 'error', message: `npm run ${name} runs ${script}, absent from the archive.` });

@@ -38,5 +38,39 @@
   ],
   "sinkCount": 0,
   "flatCount": 0,
-  "outletCount": 4
+  "outletCount": 4,
+  "conditioning": {
+    "epsilon": "float64-step",
+    "noData": "wall"
+  },
+  "conditionedZ": [
+    3.0,
+    null,
+    1.0,
+    3.0,
+    null,
+    1.0
+  ],
+  "spillLevel": [
+    3.0,
+    null,
+    1.0,
+    3.0,
+    null,
+    1.0
+  ],
+  "depressionMask": [
+    0,
+    0,
+    0,
+    0,
+    0,
+    0
+  ],
+  "cellsRaised": 0,
+  "maxFillDepth": 0.0,
+  "fillDepthSum": 0.0,
+  "flatCellsResolved": 0,
+  "epsilonAbsorbed": 0,
+  "cellsUnreachable": 0
 }

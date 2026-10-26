@@ -12,6 +12,24 @@ Runs OLV's terrain outputs against **real airborne LiDAR** — public, DOI-cited
 - `tests/terrainFieldValidation.test.ts` — drives OLV's real terrain core headless and compares. Skips when a reference is absent; the references are committed, so it runs in CI with no PDAL/GDAL/scipy and no raw cloud present.
 - `scripts/terrain-field/generate-*.mjs` — the reproduction record (exact PDAL/scipy/GDAL commands). Not run in CI.
 
+## Building the DEM package from a crop
+
+```
+npm run dem:package -- sl-field release/dem-package/sl-field
+```
+
+builds the full DEM package for one committed crop (`sl-field`,
+`whitesands-dune` or `estonia-tava`) with the terrain core, the sensitivity
+ensemble and the package assembly the application uses: the DTM, DSM and CHM
+rasters, the evidence, sensitivity and attention rasters with their QGIS
+styles, the README, the passport and `SHA256SUMS.txt`. It writes the ZIP, every
+entry extracted under `package/`, and under `oracle/` the raster-and-record
+pairs the three independent Python readers check, then runs those readers with
+`--check`. The output directory has to be inside the repository; `release/` is
+git-ignored. `tests/demPackageDriver.test.ts` builds the smallest crop on every
+test run; the readers run only from the command, since the gate executes no
+Python.
+
 ## The White Sands leg (bare-earth dunes)
 
 A 100 × 100 m interior crop of USGS 3DEP LPC over gypsum dunes, NAD83(2011) / UTM 13N + NAVD88, class-2 ground only (46,451 returns, 2.2 m of relief around 1237 m). Two comparisons:

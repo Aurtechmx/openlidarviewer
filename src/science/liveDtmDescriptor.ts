@@ -41,12 +41,14 @@ import {
 } from '../terrain/ground/liveDtmConstants';
 
 /**
- * The registry id of the delivered DTM method. Stable legacy token; the shipped
- * fill is geodesic (see METHOD_REGISTRY['olv.dtm.idw-fill'] and
- * surfaceFromRaster.LIVE_INTERPOLATION). Resolving through the registry means
- * the method version tracks the registry's behaviour-versioning contract.
+ * The registry id of the delivered DTM method. The shipped fill is geodesic
+ * (see METHOD_REGISTRY['olv.dtm.geodesic-fill'] and
+ * surfaceFromRaster.LIVE_INTERPOLATION); the legacy id olv.dtm.idw-fill stays
+ * registered as a superseded alias for records already stamped with it.
+ * Resolving through the registry means the method version tracks the
+ * registry's behaviour-versioning contract.
  */
-const LIVE_DTM_METHOD_ID = 'olv.dtm.idw-fill' as const;
+const LIVE_DTM_METHOD_ID = 'olv.dtm.geodesic-fill' as const;
 
 /**
  * Vertical axis convention of the delivered grid. Read from
@@ -74,7 +76,7 @@ export interface ExtrapolationGuardDescriptor {
  * per-dataset fields are context and do NOT.
  */
 export interface LiveDtmDescriptor {
-  /** Registry method id, e.g. `olv.dtm.idw-fill`. */
+  /** Registry method id, e.g. `olv.dtm.geodesic-fill`. */
   readonly methodId: string;
   /** Registry method version (bumped when behaviour changes). */
   readonly methodVersion: number;

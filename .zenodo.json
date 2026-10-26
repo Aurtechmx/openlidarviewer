@@ -2,6 +2,7 @@
   "title": "OpenLiDARViewer",
   "upload_type": "software",
   "license": "AGPL-3.0-only",
+  "version": "0.7.1-alpha.1",
   "creators": [
     {
       "name": "Urias, A.",
@@ -32,6 +33,11 @@
     {
       "relation": "isSupplementTo",
       "identifier": "https://github.com/Aurtechmx/openlidarviewer",
+      "resource_type": "software"
+    },
+    {
+      "relation": "isSupplementTo",
+      "identifier": "https://archive.softwareheritage.org/swh:1:snp:7b496fd207adaae61d5add4137e7d4eb781a1f83",
       "resource_type": "software"
     },
     {

@@ -24,9 +24,10 @@
  * RESOLVED executable path (following symlinks, so a Homebrew shim cannot hide
  * which build ran), platform, architecture, Node version, and the full argv of
  * every invocation together with its exit code and any stderr. Container pinning
- * is recorded as `not-executed`: Docker is installed on this host but the daemon
- * is not running, so no containerised GDAL was used and claiming otherwise would
- * misdescribe the provenance.
+ * is taken from the environment record the oracle image writes before the run
+ * (OLV_ORACLE_ENV_OUT); with no such record the run is on the host and is
+ * recorded as `not-executed`, so the provenance never claims an image it did not
+ * use.
  *
  * ─────────────────────────────────────────────────────────────────────────────
  * WHY DECIMAL_PRECISION IS SET ON THE FLOAT OUTPUTS
@@ -171,6 +172,31 @@ function buildArgs(spec, product, inPath, outPath) {
 const sha256 = (path) => createHash('sha256').update(readFileSync(path)).digest('hex');
 
 
+/**
+ * containerPinning and its reason, as the oracle image recorded them. The image
+ * entrypoint writes an environment record to OLV_ORACLE_ENV_OUT before this
+ * script starts; that record, not this script, knows whether the run is inside
+ * the image. No record, an unreadable one, or one without a containerPinning
+ * field means the run is on the host.
+ */
+export function containerPinningFromEnvironment(envOut = process.env.OLV_ORACLE_ENV_OUT) {
+  const hostRun = (why) => ({
+    containerPinning: 'not-executed',
+    containerPinningReason: `${why}; GDAL was invoked from the host PATH.`,
+  });
+  if (!envOut) return hostRun('No oracle image environment record (OLV_ORACLE_ENV_OUT) was given, so this run was not inside the pinned oracle image');
+  let env;
+  try {
+    env = JSON.parse(readFileSync(envOut, 'utf8')).environment;
+  } catch {
+    return hostRun(`The oracle image environment record ${envOut} is absent or not readable JSON`);
+  }
+  if (!['executed', 'not-executed'].includes(env?.containerPinning) || typeof env.containerPinningReason !== 'string') {
+    return hostRun(`The oracle image environment record ${envOut} has no containerPinning field`);
+  }
+  return { containerPinning: env.containerPinning, containerPinningReason: env.containerPinningReason };
+}
+
 function main() {
   mkdirSync(OUT_DIR, { recursive: true });
 
@@ -233,11 +259,7 @@ function main() {
     environment: {
       gdalinfoVersion: version.stdout.trim(),
       gdaldemResolvedPath: resolvedPath,
-      // Not omitted: recorded as not-executed so the provenance says what did
-      // NOT happen. Docker is installed here but the daemon is not running, so
-      // no pinned container image was used.
-      containerPinning: 'not-executed',
-      containerPinningReason: 'Docker daemon is not running on this host; GDAL was invoked from the host PATH.',
+      ...containerPinningFromEnvironment(),
       projVersion: 'not-recorded: projinfo on this host has no --version flag and gdaldem does not report PROJ',
       platform,
       architecture: arch,

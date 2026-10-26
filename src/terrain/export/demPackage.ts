@@ -58,12 +58,15 @@ import {
   writeTerrainEvidenceGeoTiff,
   terrainEvidenceReadmeLines,
   TERRAIN_EVIDENCE_METHOD_ID,
+  type EvidenceGeoreference,
+  type EvidenceGrid,
 } from './demEvidence';
 import {
   writeTerrainSensitivityGeoTiff,
   terrainSensitivityBands,
   terrainSensitivityReadmeLines,
   TERRAIN_SENSITIVITY_METHOD_ID,
+  type SensitivityGeoreference,
   type SensitivityMemberGrid,
 } from './demSensitivity';
 import {
@@ -75,9 +78,23 @@ import {
   demEvidenceRecord,
   terrainAttentionReadmeLines,
   TERRAIN_ATTENTION_METHOD_ID,
+  type AttentionBands,
+  type AttentionGeoreference,
+  type AttentionInputs,
   type DemEvidenceRecord,
+  type ReconstructionResidual,
+  ATTENTION_NO_DATA,
 } from './demAttention';
 import { horizontalCellMetresXY } from '../ground/horizontalScale';
+import {
+  evidenceCodeTable,
+  attentionCodeTables,
+  sensitivityMembersCodeTable,
+  writePalettedQml,
+  writePseudocolorQml,
+  codeTablesReadmeLines,
+  type CodeTable,
+} from './demCodeTables';
 import { buildZip, type ZipEntry } from '../../convert/zipStore';
 import { buildSha256Manifest } from './sha256';
 import { verticalUnitLabel, horizontalUnitLabel, UNIT_FACTORS } from '../../units/units';
@@ -303,6 +320,12 @@ export interface DemReadmeOptions {
   readonly attentionFilename?: string | null;
   /** DEM evidence tier record; omitted writes no tier section. */
   readonly demEvidence?: DemEvidenceRecord | null;
+  /**
+   * The code tables of the code rasters the package holds, each with the
+   * raster file and the QGIS style file that renders it; omitted writes no
+   * code-table section. Built by buildDemPackage from the rasters it wrote.
+   */
+  readonly codeTables?: readonly { readonly table: CodeTable; readonly rasterFile: string; readonly styleFile: string }[] | null;
 }
 
 /** Heights "in metres" / "in feet" / "in US survey feet", by GeoTIFF unit code. */
@@ -593,6 +616,7 @@ export function buildDemReadme(opts: DemReadmeOptions): string {
       ? terrainSensitivityReadmeLines(opts.sensitivityFilename, opts.evidenceVerticalUnit ?? 'unknown')
       : []),
     ...(opts.demEvidence ? terrainAttentionReadmeLines(opts.attentionFilename ?? null, opts.demEvidence) : []),
+    ...codeTablesReadmeLines(opts.codeTables ?? []),
     `Coverage mode`,
     `  ${coverageLabel(p.coverageMode)}`,
     `  Analysed basis: ${p.analysedBasisLine}`,
@@ -661,10 +685,59 @@ export function buildDemReadme(opts: DemReadmeOptions): string {
 }
 
 /** Build a full DEM package (ZIP) from an analysis result. Returns ZIP bytes. */
+/**
+ * The intermediate products of one package build: for each code raster the
+ * package wrote, the inputs the writer was given and the bytes it produced.
+ * The independent Python readers under validation/terrain-evidence,
+ * terrain-attention and terrain-sensitivity (each with an oracle/ reader) check a
+ * raster against a JSON record of these same values, so a driver that builds
+ * a package for a committed crop can write that record from here rather than
+ * recomputing the inputs a second time. Null where the package holds no such
+ * raster.
+ */
+export interface DemPackageProducts {
+  /** NoData value every raster and the README share. */
+  readonly noData: number;
+  readonly evidence: {
+    readonly filename: string;
+    readonly grid: EvidenceGrid;
+    readonly geo: EvidenceGeoreference;
+    readonly bytes: Uint8Array;
+  } | null;
+  readonly sensitivity: {
+    readonly filename: string;
+    readonly grids: readonly SensitivityMemberGrid[];
+    readonly geo: SensitivityGeoreference;
+    readonly bytes: Uint8Array;
+  } | null;
+  readonly attention: {
+    readonly filename: string;
+    readonly inputs: AttentionInputs;
+    readonly bands: AttentionBands;
+    readonly residual: ReconstructionResidual;
+    readonly geo: AttentionGeoreference;
+    readonly bytes: Uint8Array;
+  } | null;
+}
+
+/** The ZIP bytes of a DEM package; see {@link assembleDemPackage} for the entries and products. */
 export function buildDemPackage(
   result: AnalyseContoursResult,
   options: DemPackageOptions = {},
 ): Uint8Array {
+  return buildZip(assembleDemPackage(result, options).entries);
+}
+
+/**
+ * Assemble the DEM package: every entry in ZIP order, plus the products the
+ * code rasters were written from. `buildDemPackage` is this followed by the
+ * ZIP writer; the split exists so a driver can write the readers' records
+ * from the same values without a second build.
+ */
+export function assembleDemPackage(
+  result: AnalyseContoursResult,
+  options: DemPackageOptions = {},
+): { readonly entries: readonly ZipEntry[]; readonly products: DemPackageProducts } {
   const dtm = result.dtm;
   const basename = safeEntryName(options.basename || 'terrain', 'terrain');
   // Defaulted once for the whole package. Two clocks read a millisecond apart
@@ -741,6 +814,8 @@ export function buildDemPackage(
   const packageNoData = chooseNoData(grids);
 
   const entries: ZipEntry[] = [];
+  /** The code tables of the code rasters written below, for the README and its tests. */
+  const codeTables: Array<{ table: CodeTable; rasterFile: string; styleFile: string }> = [];
   for (const g of grids) {
     const common = {
       values: g.values, coverage: g.coverage,
@@ -768,8 +843,9 @@ export function buildDemPackage(
   const evVUnit = evFactor == null || verticalUnitLabel(evFactor) === 'units' ? 'unknown' : verticalUnitLabel(evFactor);
   const evFrameResolved = evVUnit !== 'unknown' && epsg != null;
   let evidenceBytes: Uint8Array | null = null;
+  let evidenceProduct: DemPackageProducts['evidence'] = null;
   if (hasEvidenceArrays(dtm)) {
-    evidenceBytes = writeTerrainEvidenceGeoTiff(dtm, {
+    const evidenceGeo: EvidenceGeoreference = {
       xllCorner: xll,
       yllCorner: yll,
       noData: packageNoData,
@@ -779,15 +855,24 @@ export function buildDemPackage(
       verticalUnit: evVUnit,
       frameResolved: evFrameResolved,
       demValues: grids[0].values,
-    });
+    };
+    evidenceBytes = writeTerrainEvidenceGeoTiff(dtm, evidenceGeo);
+    evidenceProduct = { filename: evidenceName, grid: dtm, geo: evidenceGeo, bytes: evidenceBytes };
     entries.push({ name: evidenceName, bytes: evidenceBytes });
+    // A QGIS layer style per code band, so the codes read as their meanings
+    // in a GIS without the reader transcribing the README. The palette comes
+    // from the same enum the writer stamps; see demCodeTables.ts.
+    const t = evidenceCodeTable();
+    codeTables.push({ table: t, rasterFile: evidenceName, styleFile: `${basename}_evidence.qml` });
+    entries.push({ name: `${basename}_evidence.qml`, bytes: new TextEncoder().encode(writePalettedQml(t)) });
   }
 
   // Terrain sensitivity raster: written only when the caller ran the ensemble.
   const sensitivityName = `${basename}_sensitivity.tif`;
   let sensitivityBytes: Uint8Array | null = null;
+  let sensitivityProduct: DemPackageProducts['sensitivity'] = null;
   if (options.sensitivityGrids && options.sensitivityGrids.length > 0) {
-    sensitivityBytes = writeTerrainSensitivityGeoTiff(options.sensitivityGrids, {
+    const sensitivityGeo: SensitivityGeoreference = {
       xllCorner: xll,
       yllCorner: yll,
       noData: packageNoData,
@@ -795,8 +880,27 @@ export function buildDemPackage(
       isGeographic,
       verticalUnit: evVUnit,
       demValues: grids[0].values,
-    });
+    };
+    sensitivityBytes = writeTerrainSensitivityGeoTiff(options.sensitivityGrids, sensitivityGeo);
+    sensitivityProduct = { filename: sensitivityName, grids: options.sensitivityGrids, geo: sensitivityGeo, bytes: sensitivityBytes };
     entries.push({ name: sensitivityName, bytes: sensitivityBytes });
+    // Band 1 is continuous: a colour ramp over the range the data spans.
+    // Band 2 counts members: a palette from the ensemble size.
+    const bands = terrainSensitivityBands(options.sensitivityGrids);
+    let lo = Infinity;
+    let hi = -Infinity;
+    for (const v of bands.range) {
+      if (!Number.isFinite(v)) continue;
+      if (v < lo) lo = v;
+      if (v > hi) hi = v;
+    }
+    entries.push({
+      name: `${basename}_sensitivity.qml`,
+      bytes: new TextEncoder().encode(writePseudocolorQml(1, 'sensitivity_range', lo, hi, evVUnit)),
+    });
+    const t = sensitivityMembersCodeTable();
+    codeTables.push({ table: t, rasterFile: sensitivityName, styleFile: `${basename}_sensitivity-members.qml` });
+    entries.push({ name: `${basename}_sensitivity-members.qml`, bytes: new TextEncoder().encode(writePalettedQml(t)) });
   }
 
   // Terrain attention raster: where to inspect first, with one reason per
@@ -805,6 +909,7 @@ export function buildDemPackage(
   // beside the evidence raster.
   const attentionName = `${basename}_attention.tif`;
   let attentionBytes: Uint8Array | null = null;
+  let attentionProduct: DemPackageProducts['attention'] = null;
   let residual: ReturnType<typeof reconstructionResidual> | null = null;
   const vRef = evVUnit === 'unknown' ? null : verticalReferenceInUnit(evFactor);
   if (evidenceBytes && hasEvidenceArrays(dtm) && options.attention === true) {
@@ -823,7 +928,7 @@ export function buildDemPackage(
     const sens = options.sensitivityGrids && options.sensitivityGrids.length > 0
       ? terrainSensitivityBands(options.sensitivityGrids).range
       : null;
-    const bands = terrainAttentionBands({
+    const attentionInputs: AttentionInputs = {
       cols: dtm.cols,
       rows: dtm.rows,
       coverage: dtm.coverage,
@@ -834,15 +939,26 @@ export function buildDemPackage(
       residualUnsampled: residual.unsampled,
       sensitivityRange: sens,
       verticalReference: vRef,
-    });
-    attentionBytes = writeTerrainAttentionGeoTiff(bands, dtm, {
+    };
+    const bands = terrainAttentionBands(attentionInputs);
+    const attentionGeo: AttentionGeoreference = {
       xllCorner: xll,
       yllCorner: yll,
       epsg,
       isGeographic,
       demValues: grids[0].values,
-    });
+    };
+    attentionBytes = writeTerrainAttentionGeoTiff(bands, dtm, attentionGeo);
+    attentionProduct = { filename: attentionName, inputs: attentionInputs, bands, residual, geo: attentionGeo, bytes: attentionBytes };
     entries.push({ name: attentionName, bytes: attentionBytes });
+    const [level, reason] = attentionCodeTables();
+    codeTables.push({ table: level, rasterFile: attentionName, styleFile: `${basename}_attention.qml` });
+    codeTables.push({ table: reason, rasterFile: attentionName, styleFile: `${basename}_attention-reason.qml` });
+    const encoder = new TextEncoder();
+    entries.push(
+      { name: `${basename}_attention.qml`, bytes: encoder.encode(writePalettedQml(level, ATTENTION_NO_DATA)) },
+      { name: `${basename}_attention-reason.qml`, bytes: encoder.encode(writePalettedQml(reason, ATTENTION_NO_DATA)) },
+    );
   }
   const hasDtmTif = entries.some((e) => e.name === `${basename}-dtm.tif`);
   const demEvidence = demEvidenceRecord({
@@ -885,6 +1001,7 @@ export function buildDemPackage(
     sensitivityFilename: sensitivityBytes ? sensitivityName : null,
     attentionFilename: attentionBytes ? attentionName : null,
     demEvidence,
+    codeTables,
   });
   entries.push({
     name: `${basename}-README.txt`,
@@ -966,5 +1083,13 @@ export function buildDemPackage(
     bytes: new TextEncoder().encode(buildSha256Manifest(entries)),
   });
 
-  return buildZip(entries);
+  return {
+    entries,
+    products: {
+      noData: packageNoData,
+      evidence: evidenceProduct,
+      sensitivity: sensitivityProduct,
+      attention: attentionProduct,
+    },
+  };
 }

@@ -118,6 +118,12 @@ SOURCE_DATE_EPOCH="$(git show -s --format=%ct HEAD)" bash scripts/package.sh out
 shasum -a 256 out/*source*.zip     # matches the published hash
 ```
 
+The release workflow sets `SOURCE_DATE_EPOCH` to the tagged commit's committer
+time before the gate, the packaging and the manifest binding, and the manifest
+records that value as `sourceDateEpoch`. `release:verify` refuses a release
+manifest that records none, so the timestamp the archives were built with is
+always readable from the manifest rather than reconstructed.
+
 The deploy archive is **not** claimed to be byte-reproducible — the obfuscator
 is free to vary between runs. Verify it by hash against the manifest, not by
 rebuilding.

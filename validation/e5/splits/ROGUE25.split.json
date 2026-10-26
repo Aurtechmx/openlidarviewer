@@ -8,8 +8,8 @@
     "rule": "exposed → development; unexposed ordered by sha256(salt+fileSha256), first (target − exposed) → development, rest → holdout"
   },
   "inputCollectionDigest": "c8b8ce14d4d5204ba64aec243e028e14722bd7285e0ec98a93018f859d6d4d4b",
-  "exposureDigest": "9cbb73a590318c815c5b6bc36b29b73f83e871cdbf884a8b747481c8073ea5c0",
-  "splitDigest": "6bffd73f9288708d8b867100327f1e4456495c6127686cd6857f8f7668f17649",
+  "exposureDigest": "507e12c07a7cc1882f4585424eafd21a77f2e5034662ecd446995c157b93ce6a",
+  "splitDigest": "33bef23c299aa237a48b147d63f67ac23318ab7136968bd787d718e964c32a23",
   "summary": {
     "total": 25,
     "development": 17,

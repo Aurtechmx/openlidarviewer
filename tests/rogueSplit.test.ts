@@ -35,6 +35,10 @@ const exposure = JSON.parse(exposureText) as {
   schemaVersion: number;
   collectionDigest: string;
   exposed: { tileId: string; reason: string; evidence: string }[];
+  referenceExposures?: {
+    date: string; kind: string; seen: string; tileIds: string[];
+    source: { url: string; sha256: string }; assignmentEffect: string; consequence: string;
+  }[];
 };
 const builderSrc = readText('scripts/e5/build-rogue-split.mjs');
 
@@ -89,6 +93,29 @@ describe('rogue dev/holdout split', () => {
       const t = split.tiles.find((x) => x.tileId === id)!;
       expect(t.exposed).toBe(true);
       expect(t.set).toBe('development');
+    }
+  });
+
+  it('a reference exposure names holdout tiles, a hashed source and the disclosure it forces, and moves nothing', () => {
+    // Something seen ABOUT a holdout tile that is not an OLV result on it (the
+    // reference producer's own residuals, for instance) is recorded here rather
+    // than in `exposed`: the tiles stay holdout, and every later result on them
+    // has to carry the disclosure. The entry is still part of the ledger bytes,
+    // so the split's exposureDigest records that it exists.
+    const holdout = new Set(split.tiles.filter((t) => t.set === 'holdout').map((t) => t.tileId));
+    const forced = new Set(exposure.exposed.map((e) => e.tileId));
+    expect(exposure.referenceExposures?.length ?? 0).toBeGreaterThan(0);
+    for (const r of exposure.referenceExposures ?? []) {
+      expect(r.date).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+      expect(r.seen.length).toBeGreaterThan(0);
+      expect(r.consequence).toMatch(/disclos/i);
+      expect(r.source.sha256).toMatch(/^[0-9a-f]{64}$/);
+      expect(r.source.url).toMatch(/^https:\/\//);
+      expect(r.tileIds.length).toBeGreaterThan(0);
+      for (const id of r.tileIds) {
+        expect(holdout.has(id), `${id} is not a holdout tile`).toBe(true);
+        expect(forced.has(id), `${id} is also in exposed, which would force it to development`).toBe(false);
+      }
     }
   });
 

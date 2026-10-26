@@ -399,7 +399,7 @@ describe('accuracy — the declared parameters are the parameters that ran', () 
     const ops = processingManifestFromProvenance(buildExportProvenance(result, OPTS)).ops;
     const byMethod = (needle: string) => ops.find((o) => o.method.startsWith(needle));
 
-    expect(byMethod('olv.dtm.idw-fill')?.params.coverageMode).toBe(result.dtm!.coverageMode);
+    expect(byMethod('olv.dtm.geodesic-fill')?.params.coverageMode).toBe(result.dtm!.coverageMode);
     const cx = result.complexity as unknown as Record<string, number>;
     expect(byMethod('olv.terrain.vrm')?.params.windowCells).toBe(cx.vrmWindowCells);
     expect(byMethod('olv.terrain.vrm')?.params.windowGroundM).toBe(cx.vrmWindowGroundM);
@@ -416,7 +416,7 @@ describe('accuracy — the declared parameters are the parameters that ran', () 
     );
     expect(methods.some((m) => m.startsWith('olv.terrain.vrm'))).toBe(false);
     expect(methods.some((m) => m.startsWith('olv.validation.holdout-rmse'))).toBe(false);
-    expect(methods.some((m) => m.startsWith('olv.dtm.idw-fill'))).toBe(true);
+    expect(methods.some((m) => m.startsWith('olv.dtm.geodesic-fill'))).toBe(true);
   });
 
   test('a method tag never claims a version the registry does not carry', () => {

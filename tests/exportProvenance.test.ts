@@ -296,7 +296,7 @@ describe('processingManifestFromProvenance — the verify-only manifest assembly
     expect(m.ops.map((op) => op.method)).toEqual([
       'olv.provenance.source-interpretation@1',
       'olv.ground.smrf@1',
-      'olv.dtm.idw-fill@2',
+      'olv.dtm.geodesic-fill@1',
       'olv.validation.holdout-rmse@2',
     ]);
     expect(m.ops.map((op) => op.seq)).toEqual([0, 1, 2, 3]);
@@ -310,7 +310,7 @@ describe('processingManifestFromProvenance — the verify-only manifest assembly
     const m = processingManifestFromProvenance(p);
     const byMethod = new Map(m.ops.map((op) => [op.method, op]));
     // Grid op binds the coverage scope the provenance holds.
-    expect(byMethod.get('olv.dtm.idw-fill@2')?.params).toMatchObject({ coverageMode: 'full' });
+    expect(byMethod.get('olv.dtm.geodesic-fill@1')?.params).toMatchObject({ coverageMode: 'full' });
     // Complexity ops bind their window/radius parameters from the run.
     expect(byMethod.get('olv.terrain.vrm@1')?.params).toEqual({ windowCells: 3, windowGroundM: 3.2 });
     expect(byMethod.get('olv.terrain.tpi@1')?.params).toEqual({ radiusCells: 5, radiusGroundM: 5.5, zUnit: 'm' });

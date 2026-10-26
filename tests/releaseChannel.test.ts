@@ -50,7 +50,7 @@ describe('the release manifest takes its channel from the version', () => {
     releaseAuthoritative: true, gateExit: 0, stages: { mutation: 'executed' }, ...over,
   });
   const build = (version: string, over: Record<string, unknown> = {}) =>
-    buildManifest({ version, evidence: evidence(version, over), assets, builtAt: '2026-01-01T00:00:00.000Z' });
+    buildManifest({ version, evidence: evidence(version, over), assets, builtAt: '2026-01-01T00:00:00.000Z', sourceDateEpoch: '1767225600' });
 
   it('marks a stable version stable and a prerelease prerelease', () => {
     expect(build('0.7.0').manifest!.releaseChannel).toBe('stable');
@@ -66,5 +66,32 @@ describe('the release manifest takes its channel from the version', () => {
   it('refuses development evidence and evidence with no channel', () => {
     expect(build('0.7.0', { releaseChannel: 'development', releaseAuthoritative: false }).ok).toBe(false);
     expect(build('0.7.0', { releaseChannel: undefined }).problems.join(' ')).toMatch(/names no release channel/);
+  });
+});
+
+describe('buildManifest — the reproducible timestamp', () => {
+  const version = '0.7.0';
+  const assets = Object.fromEntries(PAYLOAD_KINDS.map((k) => [k, { file: `${k}.bin`, sizeBytes: 1, sha256: 'a'.repeat(64) }]));
+  const evidence = {
+    version, tag: `v${version}`, commit: 'b'.repeat(40), releaseChannel: 'stable', releaseAuthoritative: true,
+    gateExit: 0, stages: { staticGate: 'passed', mutation: 'not-executed' }, mutation: { measuredAtCommit: 'c'.repeat(40) },
+  };
+  const build = (sourceDateEpoch: string | null) =>
+    buildManifest({ version, evidence, assets, builtAt: '2026-01-01T00:00:00.000Z', sourceDateEpoch });
+
+  it('records the committer time as a number', () => {
+    const r = build('1767225600');
+    expect(r.ok).toBe(true);
+    expect(r.manifest!.sourceDateEpoch).toBe(1767225600);
+  });
+
+  it('refuses a release manifest with no timestamp, naming the variable', () => {
+    const r = build(null);
+    expect(r.ok).toBe(false);
+    expect(r.problems.some((p: string) => p.includes('SOURCE_DATE_EPOCH'))).toBe(true);
+  });
+
+  it('refuses a value that is not a Unix time in seconds', () => {
+    expect(build('2026-01-01').problems.some((p: string) => p.includes('not a Unix time'))).toBe(true);
   });
 });

@@ -52,6 +52,9 @@ if (exposure.collectionDigest !== manifest.collectionDigest) {
   );
   process.exit(3);
 }
+// Only `exposed` moves a tile. `referenceExposures` (something seen about a
+// holdout tile that is not an OLV result on it) leaves the assignment alone and
+// is carried by the digest below, so the split record changes when one is added.
 const exposedIds = new Set((exposure.exposed ?? []).map((e) => e.tileId));
 const exposureDigest = createHash('sha256').update(exposureText).digest('hex');
 

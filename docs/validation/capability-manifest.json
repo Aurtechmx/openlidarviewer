@@ -302,6 +302,24 @@
       }
     },
     {
+      "id": "field-simulation-exports",
+      "title": "Field Simulation Lab export formats",
+      "status": "stable",
+      "modules": [
+        "src/export/flowPulsePackage.ts",
+        "src/export/terrainAccessPackage.ts",
+        "src/simulation/simulationRunRecord.ts",
+        "src/simulation/flowPulse/flowFieldDigest.ts",
+        "src/simulation/terrainAccess/terrainAccessDigest.ts"
+      ],
+      "claims": [
+        "TERRAIN-FLOW-PULSE",
+        "TERRAIN-FLOW-DEPRESSION-INVENTORY",
+        "TERRAIN-ACCESS"
+      ],
+      "note": "The written shape of what the two Field Simulation Lab panels export: the field digest, the sealed run record, the ZIP layout of the Flow Pulse and Terrain Access packages, and the olv.simulation.* method ids they stamp. These are frozen under the stability policy's export-format rule while the panels that produce them (flow-pulse-lab, terrain-access-lab) stay preview: a panel may change or be withdrawn, and a file it has already written keeps its meaning."
+    },
+    {
       "id": "observatory",
       "title": "Observatory (observation evidence)",
       "status": "preview",

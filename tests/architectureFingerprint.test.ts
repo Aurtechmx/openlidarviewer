@@ -105,13 +105,14 @@ describe('architecture fingerprint', () => {
       evidence,
       assets,
       builtAt: '2026-01-01T00:00:00.000Z',
+      sourceDateEpoch: '1767225600',
       architecture: fp,
     });
     expect(built.ok).toBe(true);
     expect(built.manifest!.architecture).toEqual(fp);
     // The block is optional in the pure builder — omitting it leaves null,
     // never a thrown error, so a caller that has no measurement still builds.
-    const without = buildManifest({ version, evidence, assets, builtAt: '2026-01-01T00:00:00.000Z' });
+    const without = buildManifest({ version, evidence, assets, builtAt: '2026-01-01T00:00:00.000Z', sourceDateEpoch: '1767225600' });
     expect(without.ok).toBe(true);
     expect(without.manifest!.architecture).toBeNull();
   });

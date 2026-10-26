@@ -77,6 +77,20 @@ export function buildManifest({ version, evidence, assets, builtAt, sourceDateEp
   if (!version) problems.push('package version is missing');
   if (!evidence) problems.push('evidence record is missing');
 
+  // A release manifest records the timestamp the archives were built with.
+  // The release workflow never set SOURCE_DATE_EPOCH, so every published
+  // manifest recorded null here while package.sh had resolved the committer
+  // time on its own: the one file meant to bind the build to its inputs did
+  // not say which timestamp went into the zips. The value is the tagged
+  // commit's committer time, as `git log -1 --format=%ct` prints it.
+  const epoch = sourceDateEpoch == null ? null : String(sourceDateEpoch);
+  if (epoch !== null && !/^\d{9,11}$/.test(epoch)) {
+    problems.push(`sourceDateEpoch ${JSON.stringify(sourceDateEpoch)} is not a Unix time in seconds`);
+  }
+  if (evidence?.releaseAuthoritative === true && epoch === null) {
+    problems.push('release manifest requires SOURCE_DATE_EPOCH (the tagged commit\'s committer time); the workflow sets it before packaging and binding');
+  }
+
   if (evidence) {
     if (evidence.version !== version) {
       problems.push(`evidence version ${evidence.version} does not match package ${version}`);
@@ -118,7 +132,7 @@ export function buildManifest({ version, evidence, assets, builtAt, sourceDateEp
       gitCommit: evidence.commit,
       repository: evidence.repository ?? 'Aurtechmx/openlidarviewer',
       builtAt,
-      sourceDateEpoch,
+      sourceDateEpoch: epoch === null ? null : Number(epoch),
       environment: {
         node: evidence.nodeVersion ?? null,
         npm: evidence.npmVersion ?? null,

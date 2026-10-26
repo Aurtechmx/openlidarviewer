@@ -108,7 +108,11 @@ def f32(x):
     return struct.unpack('<f', struct.pack('<f', x))[0]
 
 
-TREE = os.path.realpath(os.path.join(HERE, '..'))
+# A --dir anywhere in this repository, not only this oracle's own tree: the
+# DEM package driver (npm run dem:package) writes the raster and its record
+# under the output directory it was given. Anything outside the repository is
+# still refused.
+TREE = os.path.realpath(os.path.join(HERE, '..', '..', '..'))
 MAX_CELLS = 1_000_000  # far above any committed fixture; bounds every loop below
 
 

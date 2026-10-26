@@ -31,6 +31,22 @@ npm ci
 
 The authoritative deterministic gate is `OLV_GATE_MODE=release npm run gate`; read the verdict from its `GATE EXIT:` line. `npm run test:release` is the static stage that gate runs first (typecheck, lints, all test buckets, both builds, bundle budget, plus plain and live-obfuscated smoke); run on its own it prints no `GATE EXIT:` line and refreshes no evidence. The broader browser matrix that a device varies, the full end-to-end suite and the mobile responsive job, runs in CI (`.github/workflows/ci.yml`), not in `test:release`. The remaining physical-device coverage gaps for a tagged release are recorded in `docs/releases/RELEASE_NOTES_v0.7.1-alpha.1.md`.
 
+### Release gate from the source archive
+
+The published source archive has no `.git`, so a gate run inside it cannot ask git which commit and tag it describes. Release mode takes them from the environment instead, or from the release manifest published beside the archive (`release-manifest-v<version>.json`, downloaded into the directory the archive was extracted into, or into the directory named by `OLV_RELEASE_MANIFEST_DIR`). With the manifest in place the whole reproduction is one command, run from the extracted source directory after `npm ci` and `npm run e2e:browsers`:
+
+```bash
+OLV_GATE_MODE=release npm run gate
+```
+
+Without the manifest, name the identity directly; both values are required and the commit is the full 40-character sha:
+
+```bash
+OLV_GATE_MODE=release OLV_RELEASE_COMMIT=<sha> OLV_RELEASE_TAG=v<version> npm run gate
+```
+
+The record it writes to `release/test-evidence-v<version>.json` carries `source: "archive"` and `identityFrom` (`environment`, or the manifest file name), where a run inside a checkout carries `source: "git"`. The figures are the same; the field records that the run could not confirm the identity itself. A manifest for a different version in the same directory is reported and not used.
+
 ### End-to-end browsers
 
 `npm ci` installs the Playwright *package* but not its browsers, so a fresh
@@ -53,4 +69,4 @@ npm run e2e:browsers
 
 ## Expected outputs
 
-The committed reference outputs live under `benchmarks/out/` (`metrics.{json,md}`, calibration, and registration-bias files). `npm run repro` regenerates them; a clean run reproduces the committed values.
+`npm run repro` writes `metrics.{json,md}`, the calibration file and the registration-bias file under `benchmarks/out/`. That directory is generated and git-ignored, not committed: the expected values live in the assertions of `tests/reproPack.test.ts`, which the pack checks on every run, so a clean run under the pinned Node version writes the same figures it asserts. To compare two runs, keep the first `benchmarks/out/` and diff it against the second.

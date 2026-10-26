@@ -497,7 +497,7 @@ claims:
   - claimId: DTM
     product: DTM (bare-earth grid)
     algorithm: Gridded interpolation of ground-classified returns
-    methodId: olv.dtm.idw-fill
+    methodId: olv.dtm.geodesic-fill
     algorithmVersion: v0.4.4
     claim: "Bare-earth elevation grid over covered cells; gaps left empty or interpolated, never fabricated."
     currentEvidence: E4_CROSS_IMPLEMENTATION_VALIDATED
@@ -1323,13 +1323,13 @@ claims:
     softwareStatus: shipping
     evidenceLevel: E3_SYNTHETICALLY_VALIDATED
     externalValidationStatus: pending
-    approvedClaim: "Deterministic D8 flow routing and accumulation, cross-checked field by field against a second, independently written implementation on eight fixtures — seven hand-built analytic terrains and one real, licensed terrain crop — and against a hand-derived closed-form direction on several of them; not field-validated and not a hydraulic or hydrologic model."
+    approvedClaim: "Deterministic D8 flow routing, accumulation and Priority-Flood conditioning, cross-checked field by field against a second, independently written implementation on eight fixtures (seven hand-built analytic terrains and one real, licensed terrain crop), with the conditioned surface compared exactly to the last float64 step, and against a hand-derived closed-form direction on several of them; not field-validated and not a hydraulic or hydrologic model."
     prohibitedClaim: ["flood prediction", "runoff discharge", "water depth", "storm simulation", "field-validated drainage accuracy", "hydraulic or hydrologic model", "externally validated routing"]
     scope:
       supported: []
       unsupported:
         - "Any hydraulic or hydrologic claim: infiltration, channel hydraulics, flood depth or time-to-peak prediction. Accumulation counts cells, never water, and the pulse is a visual traversal of a routing graph, not a timed flow. The rainfall control's steady-state peak-flow estimate is a separate, narrower claim: TERRAIN-FLOW-RATIONAL-PEAK."
-        - "Field-validated drainage accuracy or external validation. The second implementation (validation/field-simulation/oracle/flow_oracle.py) was written inside this project, in Python rather than TypeScript, to catch transcription slips and axis-scaling mistakes a shared implementation could not — but it is cross-implementation WITHIN the project, not against an independent external tool, and a misreading of the published method shared by both would survive the comparison undetected. Synthetic validation is also not field validation, independent of that distinction."
+        - "Field-validated drainage accuracy or external validation. The second implementation (validation/field-simulation/oracle/flow_oracle.py, covering D8 routing, accumulation and Priority-Flood conditioning) was written inside this project, in Python rather than TypeScript, to catch transcription slips and axis-scaling mistakes a shared implementation could not, but it is cross-implementation WITHIN the project, not against an independent external tool, and a misreading of the published method shared by both would survive the comparison undetected. Synthetic validation is also not field validation, independent of that distinction."
         - "Multi-flow-direction or D-infinity routing; only single-flow-direction D8 ships in this release."
         - "A depression's measured extent, fill volume or outlet elevation as a physical quantity — see TERRAIN-FLOW-DEPRESSION-INVENTORY, a separate, more weakly evidenced claim."
         - "Terrain built from a resident-only or sampled source, where the claim describes only the part of the source that was walked; the run's own limitations state which applied."

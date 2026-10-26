@@ -66,6 +66,15 @@ honesty rules as stable ones: a refusal stays a refusal, and a preview figure
 is never presented as a measurement. Nothing in a session or export format may
 depend on a preview capability staying as it is.
 
+A preview panel can write a stable file. The Field Simulation Lab export
+formats are such a case and are listed in the manifest as their own stable
+capability (`field-simulation-exports`): the field digest, the sealed run
+record, the ZIP layout of the Flow Pulse and Terrain Access packages and the
+`olv.simulation.*` method ids they stamp follow the export-format rule above,
+so a file already written keeps its meaning even if the panel that wrote it
+changes or is withdrawn. The panels themselves (`flow-pulse-lab`,
+`terrain-access-lab`) stay preview.
+
 Hidden. The code is in the source tree and is not offered to users. It makes
 no promise of any kind. A module listed in
 `docs/validation/unreachable-modules.json` is always hidden, and a public

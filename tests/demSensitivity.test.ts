@@ -10,12 +10,12 @@
 import { readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, it, expect } from 'vitest';
+import { sensitivityExpectedJson } from './support/demOracleFixtures';
 import { extractEntry } from './helpers/zipReader';
 import { DEM_PKG_OPTS, decodeBands, demResultFor } from './helpers/demPackageFixture';
 import { buildDemPackage } from '../src/terrain/export/demPackage';
 import {
   SENSITIVITY_ENSEMBLE,
-  TERRAIN_SENSITIVITY_BANDS,
   TERRAIN_SENSITIVITY_METHOD_ID,
   SensitivityGridMismatchError,
   runSensitivityEnsemble,
@@ -275,26 +275,8 @@ describe('terrain sensitivity oracle fixture', () => {
     epsg: 32610, isGeographic: false, verticalUnit: 'm', demValues: grids[0].z,
   };
   const bytes = writeTerrainSensitivityGeoTiff(grids, geo);
-  const b = terrainSensitivityBands(grids);
-  const written = (i: number): boolean => grids[0].coverage[i] !== 0 && Number.isFinite(grids[0].z[i]);
-  const expected = {
-    note: 'TypeScript values for terrain_sensitivity.tif; grid order, row 0 = south. null = NoData or no height.',
-    cols: COLS,
-    rows: ROWS,
-    cellSize: grids[0].cellSizeM,
-    xllCorner: geo.xllCorner,
-    yllCorner: geo.yllCorner,
-    epsg: geo.epsg,
-    noData: geo.noData,
-    bandNames: [...TERRAIN_SENSITIVITY_BANDS],
-    bandUnits: ['m', 'members'],
-    members: SENSITIVITY_ENSEMBLE.map((m) => m.label),
-    memberHeights: grids.map((g) => Array.from(g.z, (v, i) => (g.coverage[i] !== 0 && Number.isFinite(v) ? v : null))),
-    sensitivityRange: Array.from(b.range, (v, i) => (written(i) ? v : null)),
-    sensitivityMembers: Array.from(b.members, (v, i) => (written(i) ? v : null)),
-    sha256: sha256Hex(bytes),
-  };
-  const json = `${JSON.stringify(expected, null, 2)}\n`;
+  // The record the Python reader checks; shared with the DEM package driver.
+  const json = sensitivityExpectedJson({ grids, geo, bytes });
   if (process.env.OLV_WRITE_SENSITIVITY_FIXTURE === '1') {
     writeFileSync(join(DIR, 'terrain_sensitivity.tif'), bytes);
     writeFileSync(join(DIR, 'expected.json'), json);

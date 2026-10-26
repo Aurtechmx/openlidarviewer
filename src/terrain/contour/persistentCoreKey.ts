@@ -65,7 +65,7 @@ export const PERSISTENT_CORE_KEY_VERSION = 2;
 export const TERRAIN_CORE_METHOD_IDS: readonly string[] = [
   'olv.ground.smrf',
   'olv.class.derived-heuristic',
-  'olv.dtm.idw-fill',
+  'olv.dtm.geodesic-fill',
   'olv.terrain.slope-horn',
   'olv.terrain.vrm',
   'olv.terrain.tpi',

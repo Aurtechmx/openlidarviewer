@@ -68,6 +68,14 @@ export interface MethodEntry extends MethodRef {
    * Repo-relative `src/…` paths; the registry test asserts each one exists.
    */
   readonly implementation: readonly string[];
+  /**
+   * Set on a deprecated id: the `id@version` tag that now names the same
+   * method. The id itself stays registered so exports and sessions stamped
+   * with it keep resolving, which the "id never changes once published" rule
+   * above requires; new records are stamped with the superseding id, and the
+   * registry test asserts the two entries share their implementation.
+   */
+  readonly supersededBy?: string;
 }
 
 /**
@@ -190,17 +198,45 @@ export const METHOD_REGISTRY: Readonly<Record<string, MethodEntry>> = {
     category: 'terrain',
     implementation: ['src/terrain/complexity/terrainPositionIndex.ts'],
   },
-  // Id is a stable legacy token (predates the geodesic upgrade) kept so existing
-  // exports/sessions stamped `olv.dtm.idw-fill@1` stay resolvable; the shipped
-  // fill is geodesic — an Euclidean IDW prefill only SEEDS it — so the name and
-  // summary describe the actual algorithm, not just the prefill.
+  // The shipped DTM fill is geodesic: an Euclidean IDW prefill only SEEDS a
+  // provisional surface that is then refined along in-surface geodesic
+  // distance (src/terrain/ground/geodesicFill.ts). The id names that
+  // algorithm. `olv.dtm.geodesic-fill@1` computes exactly what the legacy
+  // `olv.dtm.idw-fill@2` below computed; the legacy id predates the geodesic
+  // upgrade and stays registered, marked superseded, so exports and sessions
+  // stamped with it keep resolving.
+  'olv.dtm.geodesic-fill': {
+    id: 'olv.dtm.geodesic-fill',
+    // v1 of this id: only cells inside the data footprint (the closing of the
+    // measured cells by an 8-cell disc, plus voids the data encloses) are
+    // filled. This is the behaviour olv.dtm.idw-fill@2 introduced; idw-fill@1
+    // filled every void within the fill radius, outside the survey too.
+    version: 1,
+    name: 'DTM rasterisation with geodesic-distance void fill',
+    summary:
+      'Bins ground returns to a grid, then fills interior voids by geodesic-distance ' +
+      'propagation from measured cells (an Euclidean IDW prefill seeds a provisional ' +
+      'surface, refined along in-surface geodesic distance), tracking measured vs interpolated cells. ' +
+      'Cells outside the data footprint are left as no data.',
+    citation: 'Internal composition (geodesic-distance void fill with an IDW prefill); no single source method.',
+    category: 'dtm',
+    implementation: [
+      'src/terrain/ground/surfaceFromRaster.ts',
+      'src/terrain/ground/geodesicFill.ts',
+      'src/terrain/ground/coverageFootprint.ts',
+    ],
+  },
+  // Deprecated alias of olv.dtm.geodesic-fill, kept so existing exports and
+  // sessions stamped `olv.dtm.idw-fill@1` or `@2` stay resolvable. The name
+  // described the prefill, not the algorithm; nothing new is stamped with it.
   'olv.dtm.idw-fill': {
     id: 'olv.dtm.idw-fill',
     // v2: only cells inside the data footprint (the closing of the measured
     // cells by an 8-cell disc, plus voids the data encloses) are filled; v1
     // filled every void within the fill radius, outside the survey too.
     version: 2,
-    name: 'DTM rasterisation with geodesic-distance void fill',
+    supersededBy: 'olv.dtm.geodesic-fill@1',
+    name: 'DTM rasterisation with geodesic-distance void fill (legacy id)',
     summary:
       'Bins ground returns to a grid, then fills interior voids by geodesic-distance ' +
       'propagation from measured cells (an Euclidean IDW prefill seeds a provisional ' +

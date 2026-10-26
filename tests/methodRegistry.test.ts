@@ -151,3 +151,24 @@ describe('the contour generalization records describe the pass that runs', () =>
     }
   });
 });
+
+describe('superseded ids', () => {
+  it('olv.dtm.idw-fill still resolves and names the id that replaced it', () => {
+    const legacy = method('olv.dtm.idw-fill');
+    expect(legacy).not.toBeNull();
+    expect(legacy!.supersededBy).toBe('olv.dtm.geodesic-fill@1');
+    expect(methodTag(methodRef('olv.dtm.idw-fill'))).toBe('olv.dtm.idw-fill@2');
+  });
+
+  it('every supersededBy names a registered method at its current version, sharing the implementation', () => {
+    for (const entry of Object.values(METHOD_REGISTRY)) {
+      if (!entry.supersededBy) continue;
+      const [id, version] = entry.supersededBy.split('@');
+      const target = method(id);
+      expect(target, `${entry.id} is superseded by unregistered ${id}`).not.toBeNull();
+      expect(String(target!.version)).toBe(version);
+      expect(target!.supersededBy).toBeUndefined();
+      expect([...target!.implementation]).toEqual([...entry.implementation]);
+    }
+  });
+});
