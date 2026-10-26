@@ -207,14 +207,14 @@ export function lodLine(s: LodSelection | null): string | null {
   if (!s || s.state === 'UNGRADED' || s.state === 'NOT_TESTED') return null;
   const limit = limitLabel(s.tauMetres);
   if (s.state === 'NONE') {
-    return `No level of detail is certified for the ${limit} limit under faithful rounding (bound ${formatPrecisionMetres(s.bMetres ?? Number.NaN)}).`;
+    return `No level of detail is within the ${limit} limit under faithful rounding (bound ${formatPrecisionMetres(s.bMetres ?? Number.NaN)}).`;
   }
   const sum = `${formatPrecisionMetres(s.hMetres ?? 0)} + ${formatPrecisionMetres(s.bMetres ?? Number.NaN)} ≤ ${limit}`;
   if (s.level === 0) {
-    return `Coarsest certified level: full resolution (bound ${formatPrecisionMetres(s.bMetres ?? Number.NaN)} ≤ ${limit}, faithful rounding). No coarser level fits.`;
+    return `Coarsest level within the limit: full resolution (bound ${formatPrecisionMetres(s.bMetres ?? Number.NaN)} ≤ ${limit}, faithful rounding). No coarser level fits.`;
   }
   const share = s.pointsKept !== null && s.pointsFull > 0 ? `, ${((s.pointsKept / s.pointsFull) * 100).toFixed(1)}% of points` : '';
-  return `Coarsest certified level: ${cellLabel(s.cellSizeMetres ?? Number.NaN)}${share} (${sum}, faithful rounding). Not drawn in this version.`;
+  return `Coarsest level within the limit: ${cellLabel(s.cellSizeMetres ?? Number.NaN)}${share} (${sum}, faithful rounding). Not drawn in this version.`;
 }
 
 /** Check the active scan at the current view against `tauMetres`; `lod` also selects its certified level. */

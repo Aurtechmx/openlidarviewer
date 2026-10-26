@@ -66,7 +66,7 @@ export const HELP_TOPICS: readonly HelpTopic[] = [
     title: 'Analyse',
     summary: 'Terrain analysis, contours, classification, the Dataset Story.',
     paragraphs: [
-      'Terrain analysis classifies ground and builds the DTM. It validates the surface against held-out returns and states what the result can support. Contour Studio runs on that core. A derived classification is a heuristic the app computed, never a producer classification.',
+      'Terrain analysis classifies ground and builds the DTM. It checks the surface against held-out returns (an internal check, not checkpoint accuracy) and states what the result can support. Contour Studio runs on that core. A derived classification is a heuristic the app computed, never a producer classification.',
     ],
     actionIds: ['analyse.run', 'analyse.contours', 'analyse.flowPulse', 'analyse.observatory', 'tool.classify', 'tool.fillUnclassified', 'story.dataset'],
     keywords: ['terrain', 'dtm', 'contour', 'ground', 'classification', 'derived', 'analysis', 'story'],

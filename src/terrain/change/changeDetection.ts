@@ -174,6 +174,9 @@ export function detectChange(
   const vM = Number.isFinite(options.verticalUnitToMetres) && (options.verticalUnitToMetres as number) > 0
     ? (options.verticalUnitToMetres as number)
     : hM;
+  if (options.horizontalUnitToMetres != null && !(Number.isFinite(options.verticalUnitToMetres) && (options.verticalUnitToMetres as number) > 0)) {
+    warnings.push('Vertical unit assumed equal to the horizontal unit: the source declares no height unit.');
+  }
   const cellArea = (cellSizeM * hM) * (cellSizeM * hM);
 
   const diff = new Float32Array(W * H);

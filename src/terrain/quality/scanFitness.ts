@@ -520,7 +520,7 @@ export function buildScanFitness(inp: FitnessInputs): ScanFitness {
   } else if (inp.status === 'Preview') {
     verdict = limiterClause ? `Preview only${limiterClause}.` : 'Preview — re-run on the full cloud for a settled grade.';
   } else if (reviews.length === 0) {
-    verdict = 'Ready for terrain products — coverage, density and accuracy all pass.';
+    verdict = 'Ready for terrain products — coverage, density and hold-out residuals all pass.';
   } else {
     // A 'Good' gate with a soft caveat on one axis — positive, but honest.
     verdict = `Usable, with caveats${limiterClause}.`;

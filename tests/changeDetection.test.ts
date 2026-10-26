@@ -167,3 +167,14 @@ describe('no comparable cells yields no estimate, not zero', () => {
     expect(s.lost).toBe(0);
   });
 });
+
+describe('vertical unit assumed from the horizontal unit', () => {
+  it('says so when no vertical unit was given', () => {
+    const r = detectChange(grid(2, 2, 1, 0), grid(2, 2, 1, 1), { horizontalUnitToMetres: 0.3048 });
+    expect(r.warnings.join(' ')).toMatch(/vertical unit assumed equal to the horizontal unit/i);
+  });
+  it('stays quiet when the vertical unit was given', () => {
+    const r = detectChange(grid(2, 2, 1, 0), grid(2, 2, 1, 1), { horizontalUnitToMetres: 0.3048, verticalUnitToMetres: 0.3048 });
+    expect(r.warnings.join(' ')).not.toMatch(/assumed/i);
+  });
+});
