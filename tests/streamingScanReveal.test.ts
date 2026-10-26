@@ -13,13 +13,13 @@ import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { revealStreamingScanChrome } from '../src/ui/streamingScanReveal';
+import { revealStreamingScanChrome, restoreEmptyStateAfterStream } from '../src/ui/streamingScanReveal';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 
-function spyChrome() {
-  const calls: string[] = [];
-  const dock = {
+/** A dock that records each call it receives into `calls`. */
+function spyDock(calls: string[]) {
+  return {
     setEmpty: (v: boolean) => calls.push(`dock.setEmpty(${v})`),
     setMeasureEnabled: (v: boolean) => calls.push(`dock.setMeasureEnabled(${v})`),
     setAnnotateEnabled: (v: boolean) => calls.push(`dock.setAnnotateEnabled(${v})`),
@@ -28,6 +28,11 @@ function spyChrome() {
     setCloseEnabled: (v: boolean) => calls.push(`dock.setCloseEnabled(${v})`),
     setBackend: (b: string) => calls.push(`dock.setBackend(${b})`),
   };
+}
+
+function spyChrome() {
+  const calls: string[] = [];
+  const dock = spyDock(calls);
   const inspector = { setEmpty: (v: boolean) => calls.push(`inspector.setEmpty(${v})`) };
   const navBar = {
     element: { classList: { remove: (t: string) => calls.push(`navBar.remove(${t})`) } },
@@ -97,5 +102,38 @@ describe('streaming scan reveal', () => {
     const disables = (main + openScanSrc).match(/dock\.setCloseEnabled\(false\)/g) ?? [];
     expect(enables).toHaveLength(1);
     expect(disables).toHaveLength(1);
+  });
+});
+
+describe('restoring the empty state after a stream came down', () => {
+  // The out-of-core open puts a preview on screen through the streaming
+  // attach, which hides the empty state and reveals the dock and nav bar. A
+  // cancel or a build failure detached the preview and left that chrome over a
+  // blank stage, with no way back to the Open-a-scan state.
+  it('undoes every step of the reveal and shows the empty state', () => {
+    const calls: string[] = [];
+    const dock = spyDock(calls);
+    restoreEmptyStateAfterStream({
+      dock,
+      inspector: { setEmpty: (v: boolean) => calls.push(`inspector.setEmpty(${v})`) },
+      navBar: { element: { classList: { add: (t: string) => calls.push(`navBar.add(${t})`) } } },
+      body: { classList: { remove: (t: string) => calls.push(`body.remove(${t})`) } },
+      stage: { showEmptyState: () => calls.push('stage.showEmptyState()') },
+    });
+    expect(calls).toContain('dock.setEmpty(true)');
+    expect(calls).toContain('inspector.setEmpty(true)');
+    expect(calls).toContain('dock.setMeasureEnabled(false)');
+    expect(calls).toContain('dock.setAnnotateEnabled(false)');
+    expect(calls).toContain('dock.setInspectEnabled(false)');
+    expect(calls).toContain('dock.setProbeEnabled(false)');
+    expect(calls).toContain('dock.setCloseEnabled(false)');
+    expect(calls).toContain('navBar.add(olv-hidden)');
+    expect(calls).toContain('body.remove(olv-has-scan)');
+    expect(calls).toContain('stage.showEmptyState()');
+  });
+
+  it('is what the local open hands the out-of-core bridge for a preview that comes down', () => {
+    const src = readFileSync(resolve(ROOT, 'src/app/openScan.ts'), 'utf8');
+    expect(src).toContain('restoreEmptyState: () => restoreEmptyStateAfterStream(');
   });
 });

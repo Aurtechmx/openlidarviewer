@@ -87,6 +87,8 @@ export function fakeWork() {
     },
     annotate: {
       clear: a.clear,
+      reset: a.clear,
+      resetHistory: vi.fn(),
       claimUnowned: a.claimUnowned,
       getAnnotations: () => a.items,
       remove: vi.fn((id: string) => { a.removeOne(id); }),
@@ -211,6 +213,7 @@ export function makeDeps(opts: { hasStreamingCloud?: boolean } = {}) {
     stage: { hideEmptyState: vi.fn() },
     body: { classList: { add: vi.fn() } },
     setPhase: vi.fn(),
+    restoreEmptyState: vi.fn(),
     debug: false,
     streaming: s.streaming,
   };

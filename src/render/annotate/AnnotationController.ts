@@ -584,7 +584,7 @@ export class AnnotationController {
     this._emit();
   }
 
-  /** Remove every annotation. */
+  /** Remove every annotation. The user's own action, so it can be undone. */
   clear(): void {
     if (this._annotations.length === 0) return;
     this._snapshot();
@@ -592,6 +592,26 @@ export class AnnotationController {
     this._selectedId = null;
     this._sync();
     this._emit();
+  }
+
+  /**
+   * Remove every annotation and forget the undo history: the scan they sat on
+   * closed or was replaced, so an undo on the next scan must not bring them
+   * back at positions that mean nothing there.
+   */
+  reset(): void {
+    this.resetHistory();
+    if (this._annotations.length === 0) return;
+    this._annotations = [];
+    this._selectedId = null;
+    this._sync();
+    this._emit();
+  }
+
+  /** Forget the undo and redo history; the annotations stay. */
+  resetHistory(): void {
+    this._undoStack = [];
+    this._redoStack = [];
   }
 
   /** Select an annotation (or pass `null` to clear the selection). */

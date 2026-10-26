@@ -47,6 +47,12 @@ export interface HeavyLasBridgeDeps {
   readonly body: { classList: { add(token: string): void } };
   /** A basic phase string for the drop-zone / streaming panel. */
   setPhase(phase: string): void;
+  /**
+   * A preview came down and left the viewer with no cloud and no stream: put
+   * the empty state back (the preview's attach had hidden it and revealed the
+   * scan chrome). Absent, the chrome stays as the attach left it.
+   */
+  restoreEmptyState?(): void;
   readonly debug: boolean;
   /**
    * The streaming surfaces a committed scan reveals — the same

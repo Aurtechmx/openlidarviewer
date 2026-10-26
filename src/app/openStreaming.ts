@@ -248,10 +248,12 @@ export function settleReplacedWork(
   const laterA = seen ? (stores.annotate.getAnnotations?.() ?? []).filter((a) => !seen.annotations.has(a.id)).length : 0;
   if (decision.outcome === 'replace') {
     if (laterM + laterA === 0) {
-      v.measure.clear(); v.annotate.clear();
+      v.measure.clear(); v.annotate.reset();
     } else {
       for (const id of seen!.measurements) stores.measure.removeMeasurement?.(id);
       for (const id of seen!.annotations) stores.annotate.remove?.(id);
+      // The removed annotations belonged to the replaced scan: no undo brings them back.
+      v.annotate.resetHistory();
     }
     deps.bookmarks.clear(); deps.refreshViewsUI();
     if (laterM + laterA === 0) return;
@@ -296,9 +298,15 @@ export function activateCommittedStreamingCloud(
   deps: OpenStreamingDeps,
 ): void {
   deps.stage.hideEmptyState();
+  // A stream that replaced a stream never passed through the panel's hide(),
+  // so the old scan's pause state and full-cloud grade stood on the new one.
+  deps.resetStreamingUiForScan?.();
   dropPendingSessionForStream(deps.showToast, () => {
     const v = deps.getViewer();
-    v.measure.clear(); v.annotate.clear(); deps.bookmarks.clear(); deps.refreshViewsUI();
+    v.measure.clear(); v.annotate.reset(); deps.bookmarks.clear(); deps.refreshViewsUI();
+    // The session was imported on an empty viewer, so its clip box and point
+    // filters were applied as saved; they go with the rest of its work.
+    deps.retireSceneState?.();
   });
   // Local-first counter — the categorical source kind, never the URL. Only a
   // COMMITTED open is counted now, not an attempt that failed to build.
@@ -553,6 +561,8 @@ export interface OpenStreamingDeps {
   // ── Session lifecycle helpers that stay in the shell ──
   /** Tear down any open streaming scan (a failed open tidies up; a replacement supersedes). */
   closeStreaming: () => void;
+  /** A streaming open ended before anything attached: hide and reset its panel, leaving the open scene's cards alone. */
+  abandonStreamingOpen?: () => void;
   /** Free the open static layers — a streaming scan is exclusive. */
   clearOpenStaticLayers: () => void;
   /** Drop the replaced scene's clip box and point filters. */
@@ -561,6 +571,10 @@ export interface OpenStreamingDeps {
   replaceGuard?: (req: ReplaceRequest) => Promise<ReplaceOutcome>;
   /** Drop the previous stream's class tally, report cloud and confidence. */
   resetStreamState: () => void;
+  /** A stream committed over another: abort the old grade and reset the panel's pause and grade controls. */
+  resetStreamingUiForScan?: () => void;
+  /** The published CRS the measurements read in (override applied), or null for a scan with none. */
+  resolvedCrs?: () => { readonly name: string; readonly epsg?: number; readonly linearUnit: string } | null;
   /** Start the ~4 Hz streaming-status poll that drives the panel. */
   startStreamingStatusPolling: () => void;
   /** Reveal the scan-dependent chrome (dock, inspector, nav bar, `olv-has-scan`) for a streaming cloud. */
@@ -1076,6 +1090,13 @@ export async function handleRemoteEpt(
     // or a DOMException named `AbortError` when the Stage URL-field Cancel
     // aborts the linked signal mid-fetch. Both mean "the user changed their
     // mind" — neither is an error to report or count.
+    // Only tidy up when this open left NOTHING valid behind (blocker #4A): a
+    // committed candidate is the current valid scene, and a prior streaming A
+    // survives a candidate that failed before commit (attach is transactional),
+    // so closing in either case would blank a scene the user still has. What
+    // an uncommitted open leaves is its panel, so that is what comes down; the
+    // full close would also clear the cards of a static scan that stays open.
+    if (shouldTidyFailedStreamingOpen(committed, hadStreamingScene)) deps.abandonStreamingOpen?.();
     if (err instanceof LoadCancelledError || isAbortError(err)) {
       deps.dropZone.setProgress(null);
     } else {
@@ -1089,11 +1110,6 @@ export async function handleRemoteEpt(
       deps.dropZone.setError(
         eptUrlMod ? eptUrlMod.describeRemoteEptError(err, url) : describeLoadError(err),
       );
-      // Only tidy up when this failed open left NOTHING valid behind (blocker #4A):
-      // a committed candidate is the current valid scene, and a prior streaming A
-      // survives a candidate that failed before commit (attach is transactional),
-      // so closing in either case would blank a scene the user still has.
-      if (shouldTidyFailedStreamingOpen(committed, hadStreamingScene)) deps.closeStreaming();
     }
   } finally {
     unlinkAbort();

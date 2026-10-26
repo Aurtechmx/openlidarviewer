@@ -78,6 +78,8 @@ export interface StreamingUiCoordinator {
   gradeRunning(): boolean;
   runGrade(): Promise<void>;
   cancelGrade(): void;
+  /** A new streaming scan committed over the old one: abort its grade and reset the panel controls; the poll and the panel stay. */
+  resetForScan(): void;
   /** The streaming scan closed: stop the poll, abort a grade, hide the panel. */
   endSession(): void;
 }
@@ -170,6 +172,11 @@ export function createStreamingUiCoordinator(deps: StreamingUiCoordinatorDeps): 
     gradeRunning: () => gradeRunning,
     runGrade,
     cancelGrade,
+    resetForScan() {
+      // The grade was decoding the scan that is gone; its panel now belongs to the new one.
+      cancelGrade();
+      panel.resetForScan();
+    },
     endSession() {
       stopPolling();
       // The scan the grade was decoding is going away; stop it early.

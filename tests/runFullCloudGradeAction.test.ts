@@ -265,4 +265,33 @@ describe('runFullCloudGrade — host is a plain object, not a Viewer (render-F5)
     expect(panel.setGradeError).toHaveBeenCalledWith('Grade failed: short chunk');
     expect(panel.setGradeCancelled).not.toHaveBeenCalled();
   });
+
+  it('paints nothing when a cancel arrives after the cloud was replaced', async () => {
+    // A new scan committing cancels the running grade; the panel it would
+    // write "Grade cancelled." into now belongs to that new scan.
+    const viewer = mkViewer(sourceA);
+    const ctl = new AbortController();
+    gradeFullCloud.mockImplementation(async () => {
+      viewer.streamingCloud = sourceB;
+      ctl.abort();
+      throw new DOMException('aborted', 'AbortError');
+    });
+    const panel = makePanel();
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    await runFullCloudGrade({ viewer, panel: panel as any, signal: ctl.signal, context: spatialContextFrom(null as never) } as any);
+    expect(panel.setGradeCancelled).not.toHaveBeenCalled();
+    expect(panel.setGradeError).not.toHaveBeenCalled();
+  });
+
+  it('paints nothing when a failure arrives after the cloud was detached', async () => {
+    const viewer = mkViewer(sourceA);
+    gradeFullCloud.mockImplementation(async () => {
+      viewer.streamingCloud = null;
+      throw new Error('short chunk');
+    });
+    const panel = makePanel();
+    await run(viewer, panel);
+    expect(panel.setGradeError).not.toHaveBeenCalled();
+    expect(panel.setGradeCancelled).not.toHaveBeenCalled();
+  });
 });

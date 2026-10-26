@@ -14,62 +14,10 @@
  */
 
 import { describe, it, expect, beforeAll, vi } from 'vitest';
+import { FakeEl, installPanelDom } from './support/streamingPanelDom';
 import type { ColorMode } from '../src/render/colorModes';
 
-class FakeEl {
-  className = '';
-  title = '';
-  type = '';
-  disabled = false;
-  private _text = '';
-  readonly children: FakeEl[] = [];
-  readonly dataset: Record<string, string> = {};
-  readonly style: Record<string, string> = {};
-  private readonly _listeners: (() => void)[] = [];
-  readonly classList = {
-    _set: new Set<string>(),
-    add(c: string): void { this._set.add(c); },
-    remove(c: string): void { this._set.delete(c); },
-    toggle(c: string, on?: boolean): void {
-      const want = on ?? !this._set.has(c);
-      if (want) this._set.add(c); else this._set.delete(c);
-    },
-    contains(c: string): boolean { return this._set.has(c); },
-  };
-  readonly tagName: string;
-  constructor(tagName: string) { this.tagName = tagName; }
-  setAttribute(): void { /* no-op */ }
-  removeAttribute(): void { /* no-op */ }
-  set textContent(v: string) { this._text = v; }
-  get textContent(): string {
-    return [this._text, ...this.children.map((c) => c.textContent)].filter(Boolean).join(' ');
-  }
-  get ownText(): string { return this._text; }
-  append(...kids: FakeEl[]): void { this.children.push(...kids.filter(Boolean)); }
-  replaceChildren(...kids: FakeEl[]): void {
-    this.children.length = 0;
-    this.children.push(...kids.filter(Boolean));
-  }
-  addEventListener(_type: string, handler: () => void): void { this._listeners.push(handler); }
-  blur(): void { /* no-op */ }
-  click(): void { for (const h of this._listeners) h(); }
-  /** Every descendant carrying the chip class, in row order. */
-  chips(): FakeEl[] {
-    const out: FakeEl[] = [];
-    if (this.className.split(' ').includes('olv-chip')) out.push(this);
-    for (const c of this.children) out.push(...c.chips());
-    return out;
-  }
-}
-
-beforeAll(() => {
-  (globalThis as unknown as { document: unknown }).document = {
-    createElement: (tag: string) => new FakeEl(tag),
-  };
-  const g = globalThis as unknown as Record<string, unknown>;
-  g.HTMLInputElement ??= class {};
-  g.HTMLAnchorElement ??= class {};
-});
+beforeAll(installPanelDom);
 
 function callbacks() {
   return {

@@ -36,6 +36,7 @@ import type { ReplaceOutcome, ReplaceRequest } from './discardGuard';
 import { HEADER_PEEK_BYTES, openLocalHeavyLas, describeHeavyRefusal } from './openLocalHeavyLas';
 import { fileSourceFingerprint } from '../io/sourceFingerprint';
 import type { OpenStreamingDeps } from './openStreaming';
+import { removeReplacedStreamWork, staticOwnersOf, staticWorkScope } from './heavyReplace';
 import { availableModes } from '../render/colorModes';
 import { recommendColorMode } from '../render/colorModeRecommend';
 import { increment as recordUsage } from '../diagnostics/usageCounters';
@@ -54,6 +55,7 @@ import type { NavBar } from '../ui/NavBar';
 import type { DebugOverlay } from '../ui/DebugOverlay';
 import type { DropZone, LoadContext } from '../ui/DropZone';
 import { announceProjectReady } from '../ui/ProjectCard';
+import { restoreEmptyStateAfterStream } from '../ui/streamingScanReveal';
 import type { Stage } from '../ui/Stage';
 import type { ScanService } from './ScanService';
 import type { LayerService } from './LayerService';
@@ -153,6 +155,8 @@ export interface OpenScanDeps {
   stage: Pick<Stage, 'hideEmptyState' | 'showEmptyState'>;
   /** Tear down any open streaming scan (a static load replaces it; a failed streaming open tidies up). */
   closeStreaming: () => void;
+  /** A streaming open ended before anything attached: hide and reset its panel, leaving the open scene's cards alone. */
+  abandonStreamingOpen?: () => void;
   /** Ask before a static scan that replaces an open stream discards the work on it. */
   replaceGuard?: (req: ReplaceRequest) => Promise<ReplaceOutcome>;
   /** Drop the replaced scene's clip box and point filters. */
@@ -345,6 +349,15 @@ export async function openScan(file: File, deps: OpenScanDeps): Promise<void> {
         typeof document !== 'undefined' && document.body
           ? document.body
           : { classList: { add: () => {} } },
+      // A preview that comes down over an empty viewer takes the chrome its
+      // attach revealed with it and shows the empty state again.
+      restoreEmptyState: () => restoreEmptyStateAfterStream({
+        dock: deps.dock,
+        inspector: deps.inspector,
+        navBar: deps.navBar,
+        body: typeof document !== 'undefined' && document.body ? document.body : { classList: { remove: () => {} } },
+        stage: deps.stage,
+      }),
       setPhase: (phase) => {
         // Called only once the file is routed out of core, so the scope is known.
         if (!streamed) {
@@ -442,6 +455,9 @@ export async function openScan(file: File, deps: OpenScanDeps): Promise<void> {
     if (err instanceof LoadCancelledError) {
       // A cancelled load is a quiet no-op — no error toast, nothing was added.
       showCancelled(deps);
+      // A COPC open shows its panel before its first read; with no stream
+      // behind it the panel comes down. A stream that was already open keeps its panel.
+      if (!deps.getViewer().hasStreamingCloud) deps.abandonStreamingOpen?.();
     } else {
       // The toast shows a clear, categorised message; the raw error still
       // reaches the console for developers under ?debug=1.
@@ -452,6 +468,9 @@ export async function openScan(file: File, deps: OpenScanDeps): Promise<void> {
       // candidate, and closing it would destroy working state for a file that
       // never arrived.
       if (!hadStreamingOnEntry && deps.getViewer().hasStreamingCloud) deps.closeStreaming();
+      // One that never attached showed only its panel; closing would also
+      // clear the cards of a static scan that is still open.
+      else if (!deps.getViewer().hasStreamingCloud) deps.abandonStreamingOpen?.();
     }
   } finally {
     deps.setLoading(false);
@@ -603,10 +622,19 @@ export async function attachStaticCloud(
   // nodes and the new cloud are both in memory; the stream's point budget
   // caps that overlap.
   // A static scan opened over a stream replaces it, and its measurements and
-  // annotations belong to the stream: ask before they are lost.
-  const replaced: ReplaceOutcome = !viewer.hasStreamingCloud ? 'none' : source.replaced ?? (await deps.replaceGuard?.({ kind: 'scan', name: result.cloud.name })) ?? 'none';
-  if (replaced === 'cancel') throw new LoadCancelledError();
+  // annotations belong to the stream: ask before they are lost. With static
+  // layers beside the stream only the stream's work is at risk, so the
+  // question counts that work alone and Replace removes only what it counted.
   const prior = viewer.clouds();
+  const staticOwners = staticOwnersOf(prior, (cloudId) => deps.layerIdentity.stableIdFor(cloudId));
+  const scope = prior.length === 0 ? undefined : staticWorkScope(viewer, staticOwners);
+  let seen: { measurements: ReadonlySet<string>; annotations: ReadonlySet<string> } | null = null;
+  const ask = async (): Promise<ReplaceOutcome> => {
+    seen = { measurements: new Set(viewer.measure.getMeasurements().map((m) => m.id)), annotations: new Set(viewer.annotate.getAnnotations().map((a) => a.id)) };
+    return (await deps.replaceGuard?.({ kind: 'scan', name: result.cloud.name, ...(scope ? { scope } : {}) })) ?? 'none';
+  };
+  const replaced: ReplaceOutcome = !viewer.hasStreamingCloud ? 'none' : source.replaced ?? (await ask());
+  if (replaced === 'cancel') throw new LoadCancelledError();
   const id = viewer.addCloud(result.cloud);
   source.preview?.dispose();
   if (viewer.hasStreamingCloud) {
@@ -618,7 +646,10 @@ export async function attachStaticCloud(
     // filters go with it; static layers beside it keep theirs.
     if (prior.length === 0) deps.retireSceneState?.();
     viewer.reconfigureForClouds();
-    if (replaced === 'replace') { viewer.measure.clear(); viewer.annotate.clear(); deps.bookmarks.clear(); deps.inspector.setViews([]); }
+    if (replaced === 'replace') {
+      if (prior.length === 0) { viewer.measure.clear(); viewer.annotate.reset(); deps.bookmarks.clear(); deps.inspector.setViews([]); }
+      else removeReplacedStreamWork(viewer, staticOwners, seen);
+    }
   }
   deps.stage.hideEmptyState();
   // COMMIT BOUNDARY. The cloud is in the scene and nothing below rolls that
@@ -729,7 +760,7 @@ export async function attachStaticCloud(
   // matched and rebased onto this scan, so its restored work is not cleared.
   const pendingSession = takePendingSessionRestore();
   const freshProject = shouldResetSavedWork(viewer.clouds().length);
-  if (freshProject && !pendingSession) { deps.bookmarks.clear(); viewer.annotate.clear(); }
+  if (freshProject && !pendingSession) { deps.bookmarks.clear(); viewer.annotate.reset(); }
   deps.refreshAnnotationPanel();
 
   // ── Inspector setup — wrapped in defensive try/catches so a single
@@ -835,11 +866,13 @@ export async function attachStaticCloud(
 
   // The waiting session is matched against this scan and rebased once. On a
   // refusal its toast says why, and the work restored in the session's own
-  // frame is removed rather than left misplaced on this scan.
+  // frame is removed rather than left misplaced on this scan, along with the
+  // clip box and point filters the import applied to the empty viewer.
   if (pendingSession && freshProject) {
     void deps.importSession(pendingSession, { reapply: true }).then((ok) => {
       if (ok !== false || deps.scans.activeId !== id) return;
-      viewer.measure.clear(); viewer.annotate.clear(); deps.bookmarks.clear(); deps.inspector.setViews([]);
+      viewer.measure.clear(); viewer.annotate.reset(); deps.bookmarks.clear(); deps.inspector.setViews([]);
+      deps.retireSceneState?.();
       deps.refreshAnnotationPanel();
     });
   }

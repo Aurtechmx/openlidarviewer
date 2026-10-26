@@ -55,7 +55,7 @@ import { RecommendedViewChip } from './ui/RecommendedViewChip';
 import { recommendCameraPreset, flatnessFromBounds, describeProjectSize } from './render/camera/recommendView';
 import type { WorkflowEvent } from './render/workflow/workflowRecorder';
 import { matchesShortcut } from './render/workflow/workflowConfig';
-import { LassoVolumeTool } from './ui/LassoVolumeTool';
+import { LassoVolumeTool, armLasso, disarmLasso, type LassoArmingDeps } from './ui/LassoVolumeTool';
 import {
   downloadBytes as downloadFileBytes,
   downloadText,
@@ -259,7 +259,7 @@ import { placedWorldOrigin } from './terrain/canonicalFrame';
 import { createAppRuntime } from './app/AppRuntime';
 import { createLayerService } from './app/LayerService';
 import { createViewBookmarks } from './app/viewBookmarks';
-import { createScanService, survivorAfterRemoval } from './app/ScanService';
+import { createScanService, survivorAfterRemoval, refreshActiveLayerSurfaces, refreshStreamSurfaces } from './app/ScanService';
 import { createScanRouteService } from './app/ScanRouteService';
 import { createProjectFrameService, projectFrameInputFrom, sessionImportOrigins } from './app/projectFrame';
 
@@ -559,9 +559,7 @@ const lassoVolumeTool = new LassoVolumeTool(stage.canvas, {
     // technical users expect after seeing a result. They can re-arm
     // by clicking the Lasso button or pressing L again.
     viewer.setSelectionHighlight(out.selectionByCloudId);
-    lassoVolumeTool.disable();
-    viewer.setLassoMode(false);
-    syncLassoButton();
+    disarmLasso(lassoArming);
     // The lasso result is in the source CRS's native linear units. Convert to
     // metres before stamping m³ / m² — areas by lin², volumes by lin³ — the
     // same factor the measure tool uses. (The CRS gate below still blocks
@@ -609,11 +607,7 @@ const lassoVolumeTool = new LassoVolumeTool(stage.canvas, {
     );
   },
   onCancel: () => {
-    viewer?.clearSelectionHighlight();
-    lassoVolumeTool.disable();
-    viewer?.setLassoMode(false);
-    syncLassoButton();
-    pendingLassoSave = null;
+    disarmLasso(lassoArming, { clearHighlight: true, clearPending: true });
     showLassoToast('Lasso cancelled — back to navigation.');
   },
 });
@@ -666,6 +660,8 @@ function syncLassoButton(): void {
   if (!lassoButton) return;
   lassoButton.classList.toggle('olv-mkind-active', lassoVolumeTool.enabled);
 }
+/** Every arm and disarm goes through these, so the overlay, the viewer mode and the button never disagree. */
+const lassoArming: LassoArmingDeps = { tool: lassoVolumeTool, viewer: () => viewer, syncButton: syncLassoButton, clearPending: () => { pendingLassoSave = null; } };
 viewerLoaded.then((v) => {
   lassoButton = v.measure.addAuxKindButton(
     'Lasso volume',
@@ -673,19 +669,8 @@ viewerLoaded.then((v) => {
       '• Click again or press Esc to exit and return to navigation.\n' +
       '• Click "Save to session" on the result toast to keep it.',
     () => {
-      if (lassoVolumeTool.enabled) {
-        lassoVolumeTool.disable();
-        v.setLassoMode(false);
-        v.clearSelectionHighlight();
-        showLassoToast('Lasso off — back to navigation.');
-      } else {
-        lassoVolumeTool.enable();
-        v.setLassoMode(true);
-        showLassoToast(
-          'Lasso armed — draw a shape on the canvas. Press Esc to cancel and return to navigation.',
-        );
-      }
-      syncLassoButton();
+      if (disarmLasso(lassoArming, { clearHighlight: true })) showLassoToast('Lasso off — back to navigation.');
+      else { armLasso(lassoArming); showLassoToast('Lasso armed — draw a shape on the canvas. Press Esc to cancel and return to navigation.'); }
     },
     // Gestalt proximity: Lasso renders directly AFTER the Volume
     // button in the kind row, so the eye reads it as a sibling
@@ -810,7 +795,7 @@ function showInstantAnswer(scanLabel: string): void {
           compareLoadedLayers();
           break;
         case 'volume':
-          lassoVolumeTool.enable();
+          armLasso(lassoArming);
           break;
         case 'floorplan':
           // Ensure the (lazy) Object panel is mounted before revealing it, so
@@ -1482,13 +1467,7 @@ const keyBindingDeps: KeyBindingDeps = {
     measureUndoPoint: () => viewer?.measure.undoLastPoint(),
     onEscape: () => {
       let handled = reclassifyUi?.disarm() === true; // a separately owned lasso
-      if (lassoVolumeTool.enabled) {
-        lassoVolumeTool.disable();
-        viewer?.setLassoMode(false);
-        viewer?.clearSelectionHighlight();
-        syncLassoButton();
-        handled = true;
-      }
+      if (disarmLasso(lassoArming, { clearHighlight: true })) handled = true;
       if (viewer?.measureMode) {
         viewer.setMeasureMode(false);
         handled = true;
@@ -1496,15 +1475,8 @@ const keyBindingDeps: KeyBindingDeps = {
       if (handled) showLassoToast('Back to navigation.'); else if (!viewer?.toolActive) return workspaceShell?.focus.escape(); // Focus mode last
     },
     toggleLasso: () => {
-      if (lassoVolumeTool.enabled) {
-        lassoVolumeTool.disable();
-        viewer?.setLassoMode(false);
-        showLassoToast('Lasso volume off.');
-      } else {
-        lassoVolumeTool.enable();
-        viewer?.setLassoMode(true);
-        showLassoToast('Lasso volume armed — draw a shape on the canvas.');
-      }
+      if (disarmLasso(lassoArming)) showLassoToast('Lasso volume off.');
+      else { armLasso(lassoArming); showLassoToast('Lasso volume armed — draw a shape on the canvas.'); }
     },
     setCameraPreset: (preset) => navWiring.applyCameraPreset(preset), // tells Plan View too
     toast: (message) => showLassoToast(message),
@@ -3540,7 +3512,7 @@ const openScanDeps: OpenScanDeps = {
   isTouchFirst: isTouchFirstDevice,
   deviceMemoryGB,
   stage,
-  closeStreaming, retireSceneState, replaceGuard: (req) => requestReplace(req),
+  closeStreaming, abandonStreamingOpen, retireSceneState, replaceGuard: (req) => requestReplace(req),
   scans,
   layerIdentity: runtime.layerIdentity,
   inspector,
@@ -3617,10 +3589,10 @@ const openStreamingDeps: OpenStreamingDeps = {
   crsCoordinator,
   bookmarks,
   isPhone,
-  closeStreaming,
+  closeStreaming, abandonStreamingOpen, resolvedCrs: () => crsService.current(),
   clearOpenStaticLayers, retireSceneState, replaceGuard: (req) => requestReplace(req),
   resetStreamState,
-  startStreamingStatusPolling: () => streamingUi.startPolling(),
+  startStreamingStatusPolling: () => streamingUi.startPolling(), resetStreamingUiForScan: () => streamingUi.resetForScan(),
   revealStreamingChrome: () => revealStreamingScanChrome({
     dock, inspector, navBar, backend: viewer.activeBackend(), body: document.body,
   }),
@@ -3757,13 +3729,15 @@ async function handleRemoteCopc(url: string, signal?: AbortSignal): Promise<void
     // decision, not a load failure.
     if (err instanceof LoadCancelledError || isAbortError(err)) {
       dropZone.setProgress(null);
+      if (!viewer.hasStreamingCloud) abandonStreamingOpen(); // the panel went up before the first read
     } else {
       if (debug) console.error('OpenLiDARViewer — remote COPC error', err);
       recordUsage('error', 'load');
       dropZone.setError(describeRemoteCopcError(err, url));
-      // Transactional: a failed open left the prior scene untouched, so keep it
-      // — only tidy the streaming chrome when no streaming scene remains.
-      if (!viewer.hasStreamingCloud) closeStreaming();
+      // Transactional: a failed open left the prior scene untouched, so keep it.
+      // With no stream behind it only the panel comes down; the full close
+      // would also clear the cards of a static scan that is still open.
+      if (!viewer.hasStreamingCloud) abandonStreamingOpen();
     }
   } finally {
     unlinkAbort();
@@ -3771,6 +3745,10 @@ async function handleRemoteCopc(url: string, signal?: AbortSignal): Promise<void
   }
 }
 
+/** A streaming open ended before anything attached: hide and reset its panel and drop its benchmark, leaving the open scene's cards alone. */
+function abandonStreamingOpen(): void {
+  streamingUi.endSession(); streamingBenchmark = null; coarseStableFired = false;
+}
 /** Close a streaming scan: stop polling, detach, restore the static panel. */
 function closeStreaming(): void {
   // A new streaming scan must re-seed its filter controls from its own data.
@@ -3962,6 +3940,7 @@ async function loadFromUrl(url: string, name: string): Promise<void> {
  */
 /** The open scene closed or was replaced: its clip box and point filters go with it. The next reveal fits the clip to the new scan. */
 function retireSceneState(): void {
+  disarmLasso(lassoArming, { clearHighlight: true, clearPending: true }); // the lasso and its waiting result were on the scene that is going
   clipPanel.setVisible(false); clipFlow.reset(); // hiding the clip panel also clears the active clip
   viewer.setElevationFilter(undefined); inspector.setElevationExtent(null); activeElevFilter = null;
   viewer.setIntensityFilter(undefined); inspector.setIntensityExtent(null); activeIntenFilter = null;
@@ -4067,7 +4046,7 @@ function resetToEmptyState(): void {
   document.body.classList.remove('olv-has-scan');
   scans.clear();
   bookmarks.clear();
-  viewer.annotate.clear();
+  viewer.annotate.reset();
   refreshMeasurePanel();
   refreshAnnotationPanel();
 }
@@ -4150,7 +4129,7 @@ function compareLoadedLayers(): void {
 }
 
 
-function activateLayer(id: string): void { if (scans.activeId === id) return; scans.setActive(id); const c = scans.activeCloud(); if (c) { crsCoordinator.refreshCrsForStaticCloud(c); inspectorCards.refreshProvenance(c, id); inspectorCards.refreshDatasetIntelligenceFromStaticCloud(c); } } // select a static layer and re-resolve its CRS (so the measure units), provenance and dataset card
+function activateLayer(id: string): void { if (scans.activeId === id) { return; } scans.setActive(id); const c = scans.activeCloud(); if (c) refreshActiveLayerSurfaces({ refreshCrs: (cl) => crsCoordinator.refreshCrsForStaticCloud(cl), refreshProvenance: (cl, layerId) => inspectorCards.refreshProvenance(cl, layerId), refreshDatasetIntelligence: (cl) => inspectorCards.refreshDatasetIntelligenceFromStaticCloud(cl), refreshClassLegend, syncColorMode: syncColorModeForActive, setDetail: (shown, total) => inspector.setDetail(shown, total), setReport: (cl) => inspector.setReport(runModules(cl, currentClassScope(cl))) }, c, id); } // a static layer became the active scan: its CRS (so the measure units), cards, class legend, colour chips, point count and Scan Report
 function removeCloud(id: string): void {
   const next = survivorAfterRemoval(viewer.clouds(), id, scans.activeId); viewer.removeCloud(id); // removing the active layer promotes a survivor
   inspector.removeCloud(id);
@@ -4160,12 +4139,12 @@ function removeCloud(id: string): void {
   if (layers.solo === id) layers.solo = null;
   if (next && next !== scans.activeId) activateLayer(next); else scans.clearIf(id); inspector.compareDifference.dropStale(); // a comparison on this scan goes with it
   captureProvenance.clearIf(id); exportPanel.forgetFindingsFor(id); // a removed scan's saved findings go with it
-  if (viewer.clouds().length === 0) resetToEmptyState();
+  if (viewer.clouds().length === 0 && !viewer.hasStreamingCloud) resetToEmptyState(); // a stream opened beside the static layers stays
   else {
     layerService.refreshCrsFlags();
     layerService.applyVisibility();
     inspector.setElevationExtent(viewer.elevationExtent()); inspector.setIntensityExtent(viewer.intensityExtent());
-    syncProjectElevationScale();
+    syncProjectElevationScale(); const sc = viewer.streamingCloud; if (viewer.clouds().length === 0 && sc) refreshStreamSurfaces({ refreshCrs: (s) => crsCoordinator.refreshCrsForStreamingCloud(s as unknown as Parameters<typeof crsCoordinator.refreshCrsForStreamingCloud>[0]), refreshProvenance: (s) => inspectorCards.refreshProvenanceFromStreaming(s), refreshDatasetIntelligence: () => inspector.clearDatasetIntelligence() /* the removed layer's card; an out-of-core source, the one stream that opens beside static layers, has none of its own */, streamClasses: () => runtime.streamingClasses.aggregate(), reseedLegend: (classes) => { classLegendPanel.setClasses(classes); classLegendPanel.setStreamingMode(true); if (classLegendPanel.hasClasses()) { classLegendPanel.show(); } else { classLegendPanel.hide(); } viewer.applyClassVisibility(classLegendPanel.getVisibility()); syncInspectClassScope(); }, refreshReport: refreshScopedReport }, sc); // the stream is the whole scene again: its CRS, cards, legend and report
   }
 }
 

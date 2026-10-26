@@ -115,7 +115,7 @@ function fakeViewer(initial: Array<{ id: string; owner?: { layerId: string; fram
   return {
     measurements, annotations,
     measure: { clear: vi.fn(() => { measurements.length = 0; }), claimUnowned: claim(measurements) },
-    annotate: { clear: vi.fn(() => { annotations.length = 0; }), claimUnowned: claim(annotations) },
+    annotate: { reset: vi.fn(() => { annotations.length = 0; }), resetHistory: vi.fn(), claimUnowned: claim(annotations) },
   };
 }
 
@@ -193,7 +193,7 @@ function listingViewer(initial: string[]) {
   return {
     measurements, annotations,
     measure: { clear: vi.fn(() => { measurements.length = 0; }), claimUnowned: claim(measurements), getMeasurements: () => measurements, removeMeasurement: drop(measurements) },
-    annotate: { clear: vi.fn(() => { annotations.length = 0; }), claimUnowned: claim(annotations), getAnnotations: () => annotations, remove: drop(annotations) },
+    annotate: { reset: vi.fn(() => { annotations.length = 0; }), resetHistory: vi.fn(), claimUnowned: claim(annotations), getAnnotations: () => annotations, remove: drop(annotations) },
   };
 }
 

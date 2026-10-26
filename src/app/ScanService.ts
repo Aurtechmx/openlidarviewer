@@ -131,3 +131,86 @@ export function survivorAfterRemoval(order: readonly string[], removedId: string
   if (i < 0) return null;
   return order[i + 1] ?? order[i - 1] ?? null;
 }
+
+/*
+ * What the Inspector describes when the active scan changes without an open.
+ *
+ * A static open fills the per-scan surfaces for the scan it attached: the CRS,
+ * the provenance and Dataset Intelligence cards, the class legend, the colour
+ * chips, the point-count detail and the Scan Report. Removing the active layer
+ * promotes a survivor, and picking another layer makes it active, and both
+ * used to refresh only the first three, so the legend, chips, detail and
+ * report kept describing a layer that was no longer active, or no longer
+ * open. The same list is refreshed here for the layer that became active, in
+ * the order the open uses: the legend first, because the report's class scope
+ * reads it.
+ */
+
+export interface ActiveLayerSurfaceDeps<Cloud> {
+  refreshCrs(cloud: Cloud): void;
+  refreshProvenance(cloud: Cloud, layerId: string): void;
+  refreshDatasetIntelligence(cloud: Cloud): void;
+  /**
+   * Seed the class legend from the layer's classes. Resets the class filter to
+   * all visible, as the open does: the filter was a selection over another
+   * layer's classes.
+   */
+  refreshClassLegend(classification: ArrayLike<number> | undefined, sample: { readonly loaded: number; readonly declared?: number }): void;
+  /** Re-sync the colour chips to the layer's available modes and its live mode. */
+  syncColorMode(): void;
+  /** The point-count detail: shown against the file's decoded total. */
+  setDetail(shown: number, total: number): void;
+  /** The Scan Report for the layer, in the class scope the legend now shows. */
+  setReport(cloud: Cloud): void;
+}
+
+/** The fields the refresh reads off the layer's cloud. */
+export interface ActiveLayerCloud {
+  readonly pointCount: number;
+  readonly declaredPointCount?: number;
+  readonly decodedPointCount?: number;
+  readonly classification?: ArrayLike<number>;
+}
+
+/** A static layer became the active scan: describe it everywhere the open would. */
+export function refreshActiveLayerSurfaces<Cloud extends ActiveLayerCloud>(
+  deps: ActiveLayerSurfaceDeps<Cloud>,
+  cloud: Cloud,
+  layerId: string,
+): void {
+  deps.refreshCrs(cloud);
+  deps.refreshProvenance(cloud, layerId);
+  deps.refreshDatasetIntelligence(cloud);
+  deps.refreshClassLegend(cloud.classification, { loaded: cloud.pointCount, declared: cloud.declaredPointCount });
+  deps.syncColorMode();
+  deps.setDetail(cloud.pointCount, cloud.decodedPointCount ?? cloud.pointCount);
+  deps.setReport(cloud);
+}
+
+/** What the shell refreshes when a stream becomes the whole scene again. */
+export interface StreamSurfaceDeps<Stream> {
+  refreshCrs(stream: Stream): void;
+  refreshProvenance(stream: Stream): void;
+  /** The Dataset Intelligence card described the removed layer: fill it from the stream, or clear it when the stream has none. */
+  refreshDatasetIntelligence(stream: Stream): void;
+  /** The stream's session class tally, by code. */
+  streamClasses(): Map<number, number>;
+  /** Put the stream's classes back on the legend in place of the removed layer's. */
+  reseedLegend(classes: Map<number, number>): void;
+  /** The streaming Scan Report, in the legend's class scope. */
+  refreshReport(): void;
+}
+
+/**
+ * The last static layer beside an out-of-core stream was removed. The stream
+ * stays, so the scene is not empty, but the removed layer was the active scan
+ * and the per-scan surfaces described it: the CRS the measurements read in,
+ * the cards, the class legend and the report return to the stream's.
+ */
+export function refreshStreamSurfaces<Stream>(deps: StreamSurfaceDeps<Stream>, stream: Stream): void {
+  deps.refreshCrs(stream);
+  deps.refreshProvenance(stream);
+  deps.refreshDatasetIntelligence(stream);
+  deps.reseedLegend(deps.streamClasses());
+  deps.refreshReport();
+}

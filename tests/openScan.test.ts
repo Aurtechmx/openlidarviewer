@@ -21,6 +21,7 @@ import {
 } from '../src/app/openScan';
 import type { HeavyOpenResult } from '../src/app/heavyLasTypes';
 import { LoadError } from '../src/io/loadErrors';
+import { LoadCancelledError } from '../src/io/loadFile';
 import { COPC_DETECT_MIN_BYTES } from '../src/io/copc/copcDetect';
 import type { Viewer } from '../src/render/Viewer';
 import type { ClassScope } from '../src/render/class/classScope';
@@ -113,6 +114,7 @@ function makeDeps(over: { loading?: boolean } = {}) {
     openLocalCopc: vi.fn(async () => {}),
     loadLocalSource: vi.fn(async () => { throw new Error('loader not exercised in this test'); }),
     closeStreaming: vi.fn(),
+    abandonStreamingOpen: vi.fn(),
   };
 
   // One stable viewer stub, not a fresh object per call: the router reads
@@ -141,6 +143,7 @@ function makeDeps(over: { loading?: boolean } = {}) {
     deviceMemoryGB: () => 8,
     stage: { hideEmptyState: vi.fn(), showEmptyState: vi.fn() },
     closeStreaming: calls.closeStreaming,
+    abandonStreamingOpen: calls.abandonStreamingOpen,
     scans: { setActive: vi.fn(), activeId: null } as unknown as OpenScanDeps['scans'],
     layerIdentity: { bindOnLoad: vi.fn(() => null), ensureStoresWired: vi.fn(), stableIdFor: vi.fn(() => null) },
     inspector: {} as unknown as OpenScanDeps['inspector'],
@@ -260,7 +263,35 @@ describe('openScan — the file router', () => {
     expect(calls.openLocalCopc).toHaveBeenCalledTimes(1);
     expect(calls.setError).toHaveBeenCalledTimes(1);
     expect(calls.closeStreaming).toHaveBeenCalledTimes(1);
+    // Closing the half-open stream hides its panel; nothing more to abandon.
+    expect(calls.abandonStreamingOpen).not.toHaveBeenCalled();
     expect(calls.setLoading).toHaveBeenLastCalledWith(false);
+  });
+
+  it('hides the streaming panel when a COPC open fails before anything attached', async () => {
+    // The COPC open shows its panel on "Loading metadata…" before the first
+    // read. A failure before the attach left that panel up, with nothing
+    // streaming behind it, and the only teardown also cleared the cards of a
+    // static scan that was still open.
+    const { deps, calls } = makeDeps();
+    calls.openLocalCopc.mockImplementationOnce(async () => { throw new Error('not a COPC file'); });
+
+    await openScan(fakeFile('cloud.copc.laz', copcHead()), deps);
+
+    expect(calls.setError).toHaveBeenCalledTimes(1);
+    expect(calls.abandonStreamingOpen).toHaveBeenCalledTimes(1);
+    expect(calls.closeStreaming).not.toHaveBeenCalled();
+  });
+
+  it('hides the streaming panel when a COPC open is cancelled before anything attached', async () => {
+    const { deps, calls } = makeDeps();
+    calls.openLocalCopc.mockImplementationOnce(async () => { throw new LoadCancelledError(); });
+
+    await openScan(fakeFile('cloud.copc.laz', copcHead()), deps);
+
+    expect(calls.setError).not.toHaveBeenCalled();
+    expect(calls.abandonStreamingOpen).toHaveBeenCalledTimes(1);
+    expect(calls.closeStreaming).not.toHaveBeenCalled();
   });
 
   it('leaves a streaming scan that was already open when a later open fails', async () => {
@@ -275,6 +306,8 @@ describe('openScan — the file router', () => {
 
     expect(calls.setError).toHaveBeenCalledTimes(1);
     expect(calls.closeStreaming).not.toHaveBeenCalled();
+    // The open scene's panel describes the stream that stays.
+    expect(calls.abandonStreamingOpen).not.toHaveBeenCalled();
   });
 });
 

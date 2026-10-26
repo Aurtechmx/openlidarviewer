@@ -40,6 +40,13 @@ describe('removing a layer only warns when it closes the scan', () => {
     for (const count of [2, 3, 12]) expect(removalClosesScan(count)).toBe(false);
   });
 
+  it('does not treat the last static layer as a scan close while a stream is open', () => {
+    // An out-of-core stream opened beside a static layer stays when that layer
+    // goes, so nothing closes and nothing is cleared.
+    expect(removalClosesScan(1, true)).toBe(false);
+    expect(removalClosesScan(1, false)).toBe(true);
+  });
+
   it('errs toward warning when the count is somehow zero', () => {
     // A row exists, so the count should never be 0. If it is, the tree is not
     // what this code thinks it is, and a confirm is the safe side to be wrong on.
@@ -55,7 +62,7 @@ describe('removing a layer only warns when it closes the scan', () => {
       inspectorSrc.indexOf("const crs = el('span'"),
     );
     expect(handler).not.toBe('');
-    expect(handler).toContain('removalClosesScan(this._layerRows.size)');
+    expect(handler).toContain('removalClosesScan(this._layerRows.size, this._streaming)');
     expect(handler).toContain('openConfirm(');
     // The confirm has to name what is actually lost. A dialog that says only
     // "are you sure" would pass a shape check and tell the user nothing.

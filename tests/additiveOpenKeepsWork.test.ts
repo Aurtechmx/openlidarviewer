@@ -64,7 +64,7 @@ describe('the load path applies that rule', () => {
     // `shouldResetSavedWork(viewer.clouds().length)` after the extraction; a
     // session waiting for this scan is applied again instead of cleared.
     const guarded =
-      /const freshProject = shouldResetSavedWork\(viewer\.clouds\(\)\.length\);\s*if \(freshProject && !pendingSession\) \{[^}]*bookmarks\.clear\(\);[^}]*viewer\.annotate\.clear\(\);[^}]*\}/;
+      /const freshProject = shouldResetSavedWork\(viewer\.clouds\(\)\.length\);\s*if \(freshProject && !pendingSession\) \{[^}]*bookmarks\.clear\(\);[^}]*viewer\.annotate\.reset\(\);[^}]*\}/;
     expect(
       guarded.test(loadSource),
       'The reset must stay gated on there being at most one cloud. An ' +

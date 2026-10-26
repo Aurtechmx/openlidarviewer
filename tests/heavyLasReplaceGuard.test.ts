@@ -271,6 +271,37 @@ describe('heavy open over static layers only', () => {
     expect(t.annotations[0]!.owner).toEqual({ layerId: 'stable-s1', frame: 'project' });
   });
 
+  it('says so when the stream publishes a coordinate system the open scan did not have', async () => {
+    // The static layer stays the active scan while the stream's CRS becomes the
+    // published one, so the layer's measurements read in the stream's units.
+    const t = setup({ statics: ['s1'], answer: 'confirm' });
+    const feet = { name: 'NAD83 / Texas Central (ftUS)', epsg: 2277, linearUnit: 'us-foot' };
+    const metres = { name: 'WGS 84 / UTM zone 14N', epsg: 32614, linearUnit: 'metre' };
+    let published: typeof feet | null = feet;
+    const streaming = t.streaming as unknown as { resolvedCrs?: () => typeof feet | null; showToast: ReturnType<typeof vi.fn>; crsCoordinator: { refreshCrsForStreamingCloud: ReturnType<typeof vi.fn> } };
+    streaming.resolvedCrs = () => published;
+    streaming.showToast = vi.fn();
+    streaming.crsCoordinator.refreshCrsForStreamingCloud.mockImplementation(() => { published = metres; });
+
+    const result = await t.open();
+
+    expect(result.status).toBe('attached');
+    expect(streaming.showToast).toHaveBeenCalledTimes(1);
+    expect(streaming.showToast.mock.calls[0]![0]).toMatch(/EPSG:32614.*EPSG:2277|EPSG:2277.*EPSG:32614/);
+  });
+
+  it('says nothing when the stream shares the open scan\'s coordinate system', async () => {
+    const t = setup({ statics: ['s1'], answer: 'confirm' });
+    const metres = { name: 'WGS 84 / UTM zone 14N', epsg: 32614, linearUnit: 'metre' };
+    const streaming = t.streaming as unknown as { resolvedCrs?: () => typeof metres | null; showToast: ReturnType<typeof vi.fn> };
+    streaming.resolvedCrs = () => metres;
+    streaming.showToast = vi.fn();
+
+    await t.open();
+
+    expect(streaming.showToast).not.toHaveBeenCalled();
+  });
+
   it('over an empty viewer the preview promotes without a question or a clear', async () => {
     const t = setup({ answer: 'confirm' });
     const result = await t.open();

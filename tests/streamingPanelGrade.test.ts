@@ -9,79 +9,14 @@
  */
 
 import { describe, it, expect, beforeAll } from 'vitest';
+import { FakeEl, installPanelDom, noopPanelCallbacks } from './support/streamingPanelDom';
 
-class FakeEl {
-  className = '';
-  title = '';
-  type = '';
-  disabled = false;
-  private _text = '';
-  readonly children: FakeEl[] = [];
-  readonly dataset: Record<string, string> = {};
-  readonly style: Record<string, string> = {};
-  readonly classList = {
-    _set: new Set<string>(),
-    add(c: string): void { this._set.add(c); },
-    remove(c: string): void { this._set.delete(c); },
-    toggle(c: string): void { this._set.has(c) ? this._set.delete(c) : this._set.add(c); },
-    contains(c: string): boolean { return this._set.has(c); },
-  };
-  readonly tagName: string;
-  constructor(tagName: string) { this.tagName = tagName; }
-  setAttribute(): void { /* no-op */ }
-  removeAttribute(): void { /* no-op */ }
-  set textContent(v: string) { this._text = v; }
-  get textContent(): string {
-    return [this._text, ...this.children.map((c) => c.textContent)].filter(Boolean).join(' ');
-  }
-  append(...kids: FakeEl[]): void { this.children.push(...kids.filter(Boolean)); }
-  replaceChildren(...kids: FakeEl[]): void { this.children.length = 0; this.children.push(...kids.filter(Boolean)); }
-  addEventListener(): void { /* no-op */ }
-  blur(): void { /* no-op */ }
-  click(): void { /* no-op */ }
-  /** Recursively collect every descendant whose own text equals `label`. */
-  findByText(label: string): FakeEl[] {
-    const out: FakeEl[] = [];
-    if (this._text === label) out.push(this);
-    for (const c of this.children) out.push(...c.findByText(label));
-    return out;
-  }
-  /** First descendant whose own text contains `substr`, or undefined. */
-  findContaining(substr: string): FakeEl | undefined {
-    if (this._text.includes(substr)) return this;
-    for (const c of this.children) {
-      const hit = c.findContaining(substr);
-      if (hit) return hit;
-    }
-    return undefined;
-  }
-}
-
-beforeAll(() => {
-  (globalThis as unknown as { document: unknown }).document = {
-    createElement: (tag: string) => new FakeEl(tag),
-  };
-  // `el()` narrows with `node instanceof HTMLInputElement / HTMLAnchorElement`
-  // before applying `type` / `href`. Those constructors don't exist in the node
-  // test env, so define stand-ins; a FakeEl is never an instance, so the
-  // narrowing simply skips (the panel sets `type:'button'` on its collapse btn).
-  const g = globalThis as unknown as Record<string, unknown>;
-  g.HTMLInputElement ??= class {};
-  g.HTMLAnchorElement ??= class {};
-});
-
-/** Minimal callbacks — every method a no-op; the grade flow is driven directly. */
-function noopCallbacks() {
-  return {
-    onColorMode() {}, onQuality() {}, onPauseToggle() {}, onClearCache() {},
-    onGradeFullCloud() {}, onCancelGrade() {},
-  };
-}
+beforeAll(installPanelDom);
 
 describe('StreamingPanel — full-cloud grade surface', () => {
   it('renders the "Grade full cloud" button and the section label', async () => {
     const { StreamingPanel } = await import('../src/ui/StreamingPanel');
-    const panel = new StreamingPanel(noopCallbacks());
+    const panel = new StreamingPanel(noopPanelCallbacks());
     const root = panel.element as unknown as FakeEl;
     expect(root.findByText('Grade full cloud')).toHaveLength(1);
     expect(root.findByText('Full-cloud grade')).toHaveLength(1);
@@ -89,7 +24,7 @@ describe('StreamingPanel — full-cloud grade surface', () => {
 
   it('setGradeBusy turns the button into an enabled Cancel control and shows progress', async () => {
     const { StreamingPanel } = await import('../src/ui/StreamingPanel');
-    const panel = new StreamingPanel(noopCallbacks());
+    const panel = new StreamingPanel(noopPanelCallbacks());
     const root = panel.element as unknown as FakeEl;
     const btn = root.findByText('Grade full cloud')[0];
 
@@ -102,7 +37,7 @@ describe('StreamingPanel — full-cloud grade surface', () => {
 
   it('setGradeCancelled resets the button label and shows a neutral note (no error)', async () => {
     const { StreamingPanel } = await import('../src/ui/StreamingPanel');
-    const panel = new StreamingPanel(noopCallbacks());
+    const panel = new StreamingPanel(noopPanelCallbacks());
     const root = panel.element as unknown as FakeEl;
     const btn = root.findByText('Grade full cloud')[0];
 
@@ -118,7 +53,7 @@ describe('StreamingPanel — full-cloud grade surface', () => {
 
   it('setGradeResult renders scope + lines + note and re-enables the button', async () => {
     const { StreamingPanel } = await import('../src/ui/StreamingPanel');
-    const panel = new StreamingPanel(noopCallbacks());
+    const panel = new StreamingPanel(noopPanelCallbacks());
     const root = panel.element as unknown as FakeEl;
     const btn = root.findByText('Grade full cloud')[0];
 
@@ -137,7 +72,7 @@ describe('StreamingPanel — full-cloud grade surface', () => {
 
   it('setGradeError re-enables the button, flags the error class, and shows the message', async () => {
     const { StreamingPanel } = await import('../src/ui/StreamingPanel');
-    const panel = new StreamingPanel(noopCallbacks());
+    const panel = new StreamingPanel(noopPanelCallbacks());
     const root = panel.element as unknown as FakeEl;
     const btn = root.findByText('Grade full cloud')[0];
 
@@ -149,7 +84,7 @@ describe('StreamingPanel — full-cloud grade surface', () => {
 
   it('hide() resets the grade result and re-enables the button for the next scan', async () => {
     const { StreamingPanel } = await import('../src/ui/StreamingPanel');
-    const panel = new StreamingPanel(noopCallbacks());
+    const panel = new StreamingPanel(noopPanelCallbacks());
     const root = panel.element as unknown as FakeEl;
     const btn = root.findByText('Grade full cloud')[0];
 

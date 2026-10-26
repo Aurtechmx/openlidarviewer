@@ -217,6 +217,26 @@ describe('heavy open — preview-first attach and swap', () => {
     expect(detachStreamingCloud).toHaveBeenCalledTimes(1);
     // The partial store was discarded.
     expect(opfs.topLevel()).toEqual([]);
+    // The preview's attach hid the empty state and revealed the dock and nav
+    // bar over an empty viewer; with the preview gone the empty state is back.
+    expect(deps.restoreEmptyState).toHaveBeenCalledTimes(1);
+  });
+
+  it('restores the empty state when the build fails after the preview on an empty viewer', async () => {
+    const n = 400_000;
+    const buffer = lasBytes(n);
+    const range = new RecordingRange(new ArrayBufferRangeSource(buffer));
+    const { file } = spyFile('heavy.las', buffer.byteLength);
+    const { deps, attachStreamingCloud, detachStreamingCloud } = makeDeps();
+    const { env } = makeEnv({ range });
+    env.runIndex = async () => { throw new Error('index build failed'); };
+
+    const result = await openLocalHeavyLas(file, new AbortController().signal, deps, env);
+
+    expect(result.status).toBe('failed');
+    expect(attachStreamingCloud).toHaveBeenCalledTimes(1);
+    expect(detachStreamingCloud).toHaveBeenCalledTimes(1);
+    expect(deps.restoreEmptyState).toHaveBeenCalledTimes(1);
   });
 });
 
@@ -243,6 +263,8 @@ describe('heavy open over a stream that is already on screen', () => {
     expect(result.status).toBe('cancelled');
     expect(attachStreamingCloud).not.toHaveBeenCalled();
     expect(detachStreamingCloud).not.toHaveBeenCalled();
+    // The stream the user had is still the scene: nothing to restore.
+    expect(deps.restoreEmptyState).not.toHaveBeenCalled();
   });
 
   it('attaches only the full source when the build completes', async () => {
