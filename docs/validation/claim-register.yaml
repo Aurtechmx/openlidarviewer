@@ -4,7 +4,7 @@
 # identifiers + gate logic.
 #
 # Honesty rules (do not violate when editing):
-#   - currentEvidence must reflect evidence that EXISTS today. Seventeen claims
+#   - currentEvidence must reflect evidence that EXISTS today. Eighteen claims
 #     currently reach E4. Five are algorithm cross-implementations against
 #     GDAL 3.13.1 on a frozen analytic fixture: SLOPE-RASTER, ASPECT-RASTER,
 #     HILLSHADE and CONTOURS (0.5 degree for slope and aspect, 1.0 8-bit level
@@ -36,7 +36,16 @@
 #     diagnostics rather than independent checkpoint accuracy. That R leg
 #     recomputes RMSE, bias and the NVA figure from frozen residual vectors
 #     (checkpointAccuracy / computeVerticalAccuracy), not holdoutValidateDtm,
-#     and excludes P95, so the VVA figure is its own claim, VVA-P95, at E3. The slope,
+#     and excludes P95, so the VVA figure is its own claim, VVA-P95, at E3. The
+#     eighteenth is TERRAIN-FLOW-PULSE, compared on real terrain against outputs
+#     two other programs published: TauDEM 5.3.8 PitRemove (spill level
+#     identical on 119,119 distinct cells of two Bear Creek crops, 172,702 cell
+#     comparisons over three runs) and GRASS GIS 8.3.2 (D8 direction,
+#     catchment and accumulation on one 25 m window of a Reunion catchment,
+#     within tolerance of a single-flow router whose module is inferred from
+#     its output encoding, not exactly), under gates
+#     preregistered in validation/protocols/flow-pulse-external-references-v1.md
+#     before the router ran on that data. The slope,
 #     hillshade and contour tolerances were registered
 #     before the reference was generated: all three were fixed in the harness
 #     commit a78b0f9 on 2026-07-05, weeks ahead of their results. ASPECT-RASTER
@@ -52,10 +61,13 @@
 #     validation has been run). Synthetic known-truth fixtures alone remain E3,
 #     not accuracy.
 #   - externalValidationStatus is `pending` wherever external data is required
-#     and unavailable. Seventeen study manifests under
+#     and unavailable. Twenty-two study manifests under
 #     validation/cross-implementation/studies/ record an independent reference
-#     that agreed (six GDAL, four PDAL, one SAGA, one OGR/SpatiaLite with R, one
-#     GeographicLib with PROJ, two GRASS, and two against R), one per E4 claim.
+#     that agreed. Seventeen hold up the first seventeen E4 claims, one each
+#     (six GDAL, four PDAL, one SAGA, one OGR/SpatiaLite with R, one
+#     GeographicLib with PROJ, two GRASS, and two against R). Four hold up
+#     TERRAIN-FLOW-PULSE (one TauDEM, three GRASS GIS), and one supports
+#     TERRAIN-FLOW-DEPRESSION-INVENTORY (TauDEM).
 #     The runtime view, REFERENCE_SLOTS in src/validation/crossCheck.ts, holds
 #     sixteen slots: thirteen read `supplied`; CHANGE-RASTER and CHANGE-VOLUME
 #     read `pending` there although their GRASS references are committed and
@@ -65,9 +77,11 @@
 #   - prohibitedClaim lists statements the current evidence does NOT support.
 #   - scope states, in the shape the study manifests use, what the evidence
 #     covers (scope.supported, dataset + parameter-set pairs) and what it does
-#     not (scope.unsupported). A claim below E4 has no cross-implementation
-#     study behind it, so its scope.supported is empty and the boundary lives
-#     entirely in scope.unsupported. scripts/lint-claim-register.mjs refuses a
+#     not (scope.unsupported). A claim below E4 usually has no
+#     cross-implementation study behind it, so its scope.supported is empty and
+#     the boundary lives entirely in scope.unsupported. The exception is
+#     TERRAIN-FLOW-DEPRESSION-INVENTORY, at its required E3 with a study behind
+#     its conditioned mode only, which is why it is not at E4. scripts/lint-claim-register.mjs refuses a
 #     claim with no scope, and refuses a scope.supported entry no supporting
 #     study supports.
 #   - supportingStudies names the cross-implementation study manifests behind an
@@ -1310,10 +1324,11 @@ claims:
     methodId: olv.simulation.terrain-flow.d8
     algorithmVersion: v0.7.0-alpha.1
     claim: "Routes deterministic topographic surface flow over an OLV DTM using a registered D8 model, with explicit raw or conditioned-depression handling, and reports paths, contributing area, accumulation, sinks and outlets."
-    currentEvidence: E3_SYNTHETICALLY_VALIDATED
+    currentEvidence: E4_CROSS_IMPLEMENTATION_VALIDATED
     requiredEvidence: E4_CROSS_IMPLEMENTATION_VALIDATED
-    supportingTests: [tests/d8Flow.test.ts, tests/flowAccumulation.test.ts, tests/priorityFlood.test.ts, tests/priorityFloodRandomGrids.test.ts, tests/dtmFlowGrid.test.ts, tests/flowPulseRunner.test.ts, tests/flowPulseFieldDigest.test.ts, tests/fieldSimulationOracleAgreement.test.ts, tests/flowPulseRealTerrainDigest.test.ts]
-    supportingDatasets: [hand-built analytic fixtures TF-1 through TF-7 (validation/field-simulation/fixtures/), sl-field-real-terrain (TF-8: a real 40x40 m crop of OLV's own DTM over the VT StREAM Lab survey, OpenTopography DOI 10.5069/G9NZ85W7)]
+    supportingTests: [tests/d8Flow.test.ts, tests/flowAccumulation.test.ts, tests/priorityFlood.test.ts, tests/priorityFloodRandomGrids.test.ts, tests/dtmFlowGrid.test.ts, tests/flowPulseRunner.test.ts, tests/flowPulseFieldDigest.test.ts, tests/fieldSimulationOracleAgreement.test.ts, tests/flowPulseRealTerrainDigest.test.ts, tests/flowPulseExternalReferences.test.ts, tests/flowPulseRichDemReferences.test.ts]
+    supportingDatasets: [hand-built analytic fixtures TF-1 through TF-7 (validation/field-simulation/fixtures/), sl-field-real-terrain (TF-8: a real 40x40 m crop of OLV's own DTM over the VT StREAM Lab survey, OpenTopography DOI 10.5069/G9NZ85W7), OLV-DS-117-BEAR-CREEK-TAUDEM-PITFILL, OLV-DS-119-BEAR-CREEK-TAUDEM-FILL-A, OLV-DS-120-BEAR-CREEK-TAUDEM-FILL-B, OLV-DS-118-REUNION-GRASS-FLOW, OLV-DS-121-REUNION-PLUIES-GRASS-WINDOW, OLV-DS-124-RICHDEM-DEPRESSIONS-TESTDEM1, OLV-DS-125-RICHDEM-DEPRESSIONS-TESTDEM1-FILLED, OLV-DS-126-RICHDEM-FLOWACCUM-TESTDEM1-D8, OLV-DS-127-RICHDEM-FLOWACCUM-TESTDEM1-ACCUM]
+    supportingStudies: [TERRAIN-FLOW-PULSE-TAUDEM-PITREMOVE-BEAR-CREEK, TERRAIN-FLOW-PULSE-GRASS-D8-REUNION, TERRAIN-FLOW-PULSE-GRASS-CATCHMENT-REUNION, TERRAIN-FLOW-PULSE-GRASS-ACCUMULATION-REUNION]
     units: [dimensionless-cell-count, square-metres]
     crsDatum: "Physical distance only, via per-axis metric cell size; refuses on a geographic frame with unresolved latitude; withholds square-metre area (cell counts remain) when the horizontal scale is unresolved."
     assumptions: ["single-flow-direction only (no multi-flow or D-infinity)", "NoData is a routing wall, never crossed", "raw mode leaves depressions unfilled unless conditioning is explicitly selected", "a conditioned surface is a second, disposable copy; the canonical DTM is never mutated"]
@@ -1321,18 +1336,34 @@ claims:
     exportAllowed: true
     userLabel: "Topographic flow routing (simulated)"
     softwareStatus: shipping
-    evidenceLevel: E3_SYNTHETICALLY_VALIDATED
-    externalValidationStatus: pending
-    approvedClaim: "Deterministic D8 flow routing, accumulation and Priority-Flood conditioning, cross-checked field by field against a second, independently written implementation on eight fixtures (seven hand-built analytic terrains and one real, licensed terrain crop), with the conditioned surface compared exactly to the last float64 step, and against a hand-derived closed-form direction on several of them; not field-validated and not a hydraulic or hydrologic model."
-    prohibitedClaim: ["flood prediction", "runoff discharge", "water depth", "storm simulation", "field-validated drainage accuracy", "hydraulic or hydrologic model", "externally validated routing"]
+    evidenceLevel: E4_CROSS_IMPLEMENTATION_VALIDATED
+    externalValidationStatus: partial
+    approvedClaim: "Deterministic D8 flow routing and accumulation over an optional Priority-Flood surface. Conditioning is identical to TauDEM 5.3.8 PitRemove on two Bear Creek crops (119,119 distinct cells; 172,702 cell comparisons across three runs: crop A, crop B with NoData as outlet, crop B with NoData as wall), on crops chosen so that a fill computed on the crop alone reproduces TauDEM's whole-grid fill. Routing agrees with the GRASS GIS 8.3.2 output within the stated tolerances, not exactly, on one 25 m window of a Reunion catchment (the module, inferred from the output encoding to be r.watershed in single-flow mode, a least-cost router, is not named by the dataset): 99.2% of uniquely steepest cells take the same direction, the catchment from the mouth has a Jaccard index of 0.999, and 95.2% of catchment cells are within 5% of the accumulation. Also checked field by field against a second implementation written in this project on eight fixtures. Not field-validated and not a hydraulic or hydrologic model."
+    prohibitedClaim: ["flood prediction", "runoff discharge", "water depth", "storm simulation", "field-validated drainage accuracy", "hydraulic or hydrologic model", "externally validated routing", "routing identical to GRASS", "validated flow length"]
     scope:
-      supported: []
+      supported:
+        - datasetId: OLV-DS-119-BEAR-CREEK-TAUDEM-FILL-A
+          parameterSetId: PS-FLOW-PRIORITY-FLOOD-NODATA-OUTLET
+        - datasetId: OLV-DS-120-BEAR-CREEK-TAUDEM-FILL-B
+          parameterSetId: PS-FLOW-PRIORITY-FLOOD-NODATA-OUTLET
+        - datasetId: OLV-DS-120-BEAR-CREEK-TAUDEM-FILL-B
+          parameterSetId: PS-FLOW-PRIORITY-FLOOD-NODATA-WALL
+        - datasetId: OLV-DS-121-REUNION-PLUIES-GRASS-WINDOW
+          parameterSetId: PS-FLOW-D8-RAW-25M
+        - datasetId: OLV-DS-121-REUNION-PLUIES-GRASS-WINDOW
+          parameterSetId: PS-FLOW-D8-CONDITIONED-OUTLET-25M
       unsupported:
         - "Any hydraulic or hydrologic claim: infiltration, channel hydraulics, flood depth or time-to-peak prediction. Accumulation counts cells, never water, and the pulse is a visual traversal of a routing graph, not a timed flow. The rainfall control's steady-state peak-flow estimate is a separate, narrower claim: TERRAIN-FLOW-RATIONAL-PEAK."
-        - "Field-validated drainage accuracy or external validation. The second implementation (validation/field-simulation/oracle/flow_oracle.py, covering D8 routing, accumulation and Priority-Flood conditioning) was written inside this project, in Python rather than TypeScript, to catch transcription slips and axis-scaling mistakes a shared implementation could not, but it is cross-implementation WITHIN the project, not against an independent external tool, and a misreading of the published method shared by both would survive the comparison undetected. Synthetic validation is also not field validation, independent of that distinction."
+        - "Field-validated drainage accuracy. The E4 evidence is agreement with two other programs, TauDEM and GRASS GIS, on archival data. Agreement is not accuracy against the ground, and archival data cannot reach E5."
+        - "Exact agreement with GRASS GIS routing. The reference is a least-cost router (the module, r.watershed in single-flow mode, is inferred from the output encoding and is not named by the dataset) whose 'filled' DEM still holds closed depressions, so agreement is within the stated tolerances only."
+        - "Terrain in general. The two Bear Creek crops were selected, from the DEM and TauDEM's output, as windows where a fill computed on the crop alone (draining to the crop edge) reproduces TauDEM's whole-grid fill; they are not a random sample of terrain."
+        - "Agreement with GRASS beyond one window. All three GRASS comparisons rest on a single 589 x 294 window of one catchment (Riviere des Pluies, Reunion)."
+        - "D8 tie order and flat resolution. The direction comparison excludes every tied cell, and the conditioned surfaces are compared only through the catchment and the accumulation."
+        - "Flow length and the rainfall control's peak-flow estimate (TERRAIN-FLOW-RATIONAL-PEAK); neither was compared."
         - "Multi-flow-direction or D-infinity routing; only single-flow-direction D8 ships in this release."
-        - "A depression's measured extent, fill volume or outlet elevation as a physical quantity — see TERRAIN-FLOW-DEPRESSION-INVENTORY, a separate, more weakly evidenced claim."
+        - "A depression's measured extent, fill volume or outlet elevation as a physical quantity. See TERRAIN-FLOW-DEPRESSION-INVENTORY, a separate claim."
         - "Terrain built from a resident-only or sampled source, where the claim describes only the part of the source that was walked; the run's own limitations state which applied."
+    scopeNote: "E4 rests on four studies pre-registered in validation/protocols/flow-pulse-external-references-v1.md, whose thresholds were fixed after a feasibility run of a separate scratch implementation and before Flow Pulse was run on the data. TERRAIN-FLOW-PULSE-TAUDEM-PITREMOVE-BEAR-CREEK finds the spill level identical to TauDEM 5.3.8 PitRemove on all 119,119 distinct valid cells of two Bear Creek crops (172,702 cell comparisons across three runs: crop A, crop B with NoData as outlet, crop B with NoData as wall), on crops selected so that a fill computed on the crop alone reproduces TauDEM's whole-grid fill. Against GRASS GIS 8.3.2 (module inferred from the output encoding, not named by the dataset) on the single Riviere des Pluies window, TERRAIN-FLOW-PULSE-GRASS-D8-REUNION finds 70,098 of 70,656 uniquely steepest catchment cells (99.21%) take the same direction against a 98% gate, TERRAIN-FLOW-PULSE-GRASS-CATCHMENT-REUNION finds a catchment Jaccard index of 0.9990 against 0.99, and TERRAIN-FLOW-PULSE-GRASS-ACCUMULATION-REUNION finds 95.2% of catchment cells within 5% of the accumulation against 90%, 87.0% exact. The second implementation in validation/field-simulation/oracle/ was written in this project and remains a separate, weaker check. requiredEvidence is E4, so the claim now meets it; E5 would need a prospective field study. Corroboration from a third implementation: on RichDEM's own 10 x 10 test grids (validation/protocols/richdem-references-v1.md, pre-registered), the spill level equals the expected fill of PriorityFlood_Barnes2014 and the four other RichDEM fill routines on all 100 cells, and accumulation over RichDEM's directions equals its d8_flow_accum expectation on all 100 cells. RichDEM is the implementation the Priority-Flood paper was released with. Those grids are too small to move the level, and Garbrecht and Martz flat resolution, which RichDEM implements and Flow Pulse does not, is outside the claim."
 
   - claimId: TERRAIN-FLOW-DEPRESSION-INVENTORY
     product: Terrain Flow Pulse depression inventory (§10.10)
@@ -1340,11 +1371,12 @@ claims:
     methodId: olv.simulation.terrain-flow.depression-inventory
     algorithmVersion: v0.7.0-alpha.1
     claim: "Catalogues individual sinks (raw mode) or filled depressions (conditioned mode) with cell count, area, maximum fill depth and outlet elevation, largest first and deterministically ordered."
-    currentEvidence: E2_ANALYTICALLY_VERIFIED
+    currentEvidence: E3_SYNTHETICALLY_VALIDATED
     requiredEvidence: E3_SYNTHETICALLY_VALIDATED
-    requiredEvidenceNote: "Capped below TERRAIN-FLOW-PULSE's own E4 target for now: this is a new derived computation over already-registered, already-validated arrays, and the honest next step is validating it across the full TF-1..TF-8 fixture set the routing claim already uses, not reaching past that to cross-implementation before the fixture-set validation exists."
-    supportingTests: [tests/depressionInventory.test.ts, tests/flowDepressionFlats.test.ts]
-    supportingDatasets: [notched-bowl fixture (validation/field-simulation/fixtures/bowl-notched.json), a two-depression composite grid constructed for the tie-break test]
+    requiredEvidenceNote: "Capped below TERRAIN-FLOW-PULSE's own E4 target for now: this is a new derived computation over already-registered, already-validated arrays, and the honest next step is validating it across the full TF-1..TF-8 fixture set the routing claim already uses, not reaching past that to cross-implementation before the fixture-set validation exists. Both steps now exist: conditioned mode was compared against TauDEM 5.3.8 PitRemove on real terrain, and the inventory was checked across all eight TF fixtures and five constructed grids (validation/protocols/depression-inventory-synthetic-suite-v1.md); see scopeNote."
+    supportingTests: [tests/depressionInventory.test.ts, tests/flowDepressionFlats.test.ts, tests/flowPulseExternalReferences.test.ts, tests/flowDepressionInventorySuite.test.ts, tests/flowPulseRichDemReferences.test.ts]
+    supportingDatasets: [notched-bowl fixture (validation/field-simulation/fixtures/bowl-notched.json), a two-depression composite grid constructed for the tie-break test, the TF-1 to TF-8 fixtures (validation/field-simulation/fixtures/), five constructed edge-case grids (validation/field-simulation/depression-cases/), OLV-DS-117-BEAR-CREEK-TAUDEM-PITFILL, OLV-DS-119-BEAR-CREEK-TAUDEM-FILL-A, OLV-DS-120-BEAR-CREEK-TAUDEM-FILL-B, OLV-DS-124-RICHDEM-DEPRESSIONS-TESTDEM1, OLV-DS-125-RICHDEM-DEPRESSIONS-TESTDEM1-FILLED]
+    supportingStudies: [TERRAIN-FLOW-DEPRESSION-INVENTORY-TAUDEM-BEAR-CREEK]
     units: [dimensionless-cell-count, square-metres]
     crsDatum: "Area withheld when the horizontal scale is unresolved, the same gate TERRAIN-FLOW-PULSE uses."
     assumptions: ["8-connected adjacency, matching the D8 neighbour set", "a filled cell is always interior; Priority-Flood never raises a boundary seed", "a cell is filled only when its original height is strictly below the spill level it was reached from (Barnes, Lehman & Mulla 2014); a level flat lifted by the epsilon alone is not a depression, and fill depth is spill level minus original height"]
@@ -1352,17 +1384,23 @@ claims:
     exportAllowed: true
     userLabel: "Depression inventory (simulated)"
     softwareStatus: shipping
-    evidenceLevel: E2_ANALYTICALLY_VERIFIED
-    externalValidationStatus: none
-    approvedClaim: "Depression grouping, cell count, area, fill depth and outlet elevation checked against hand-derived expected values on one analytic fixture (the notched bowl already used for TF-2) and against a constructed two-depression grid for the ordering rule; not yet exercised across the full fixture set and not field-validated."
+    evidenceLevel: E3_SYNTHETICALLY_VALIDATED
+    externalValidationStatus: partial
+    approvedClaim: "In conditioned mode, the depression inventory matches TauDEM 5.3.8 PitRemove on two Bear Creek crops: all 187 depressions agree on count, cell count, area, maximum fill depth and spill level, and the filled cells agree cell for cell. Across all eight TF fixtures and five constructed grids (nested depressions, corner-only contact, a depression open to the border, an enclosed NoData hole, non-square cells), with NoData read as a wall and as an outlet, the extents, cell counts, areas, deepest fill, spill levels, outlet elevations and total fill volume equal hand-derived values and an in-project Python oracle; area is withheld when the horizontal scale is unresolved. Grouping and ordering are also checked on a constructed two-depression grid. Raw mode, which lists D8 sinks as one-cell candidates, was not compared. Not field-validated."
     prohibitedClaim: ["every single-cell sink is a natural pond", "validated depression extent on arbitrary terrain", "field-validated fill volume", "surveyed pond area"]
 
     scope:
-      supported: []
+      supported:
+        - datasetId: OLV-DS-119-BEAR-CREEK-TAUDEM-FILL-A
+          parameterSetId: PS-FLOW-PRIORITY-FLOOD-NODATA-OUTLET
+        - datasetId: OLV-DS-120-BEAR-CREEK-TAUDEM-FILL-B
+          parameterSetId: PS-FLOW-PRIORITY-FLOOD-NODATA-OUTLET
       unsupported:
-        - "Arbitrary terrain. Only one notched-bowl fixture and one constructed multi-depression grid have hand-derived expected values today; the TF-1..TF-8 fixture set this claim's parent routing claim already validates against has not yet been extended to depression figures."
+        - "Raw mode compared against any reference. It lists the D8 sinks of the raw surface as one-cell candidates; their classification rests on TERRAIN-FLOW-PULSE's fixture comparisons, and the inventory's own raw output was not compared."
+        - "A filled component holding more than one fill level, or a depression enclosed by NoData. Neither occurs on the compared crops."
         - "A raw-mode single-cell sink read as a measured depression extent. Raw mode reports a candidate location only — see the module's own doc on why filling, not the raw pass, is what measures an extent."
         - "Fill-volume accuracy. The reported area figure is `cells x cell area`, a proxy under the assumption each filled cell's rise is uniform across it, never a surveyed or integrated volume."
+    scopeNote: "Required E3 met; conditioned mode at E4. TERRAIN-FLOW-DEPRESSION-INVENTORY-TAUDEM-BEAR-CREEK, pre-registered in validation/protocols/flow-pulse-external-references-v1.md, compares the conditioned inventory with TauDEM 5.3.8 PitRemove on two Bear Creek crops and finds all 187 depressions identical (62 and 125) with the filled mask equal on every cell. The claim also covers raw mode, which that study did not compare, so the recorded level is E3 rather than E4. The synthetic-suite check its requiredEvidenceNote asked for has also run: validation/protocols/depression-inventory-synthetic-suite-v1.md, pre-registered with its expected records, found every figure equal on all eight TF fixtures and five constructed grids in both NoData readings (TF-8: 34 depressions and 6.905701 m3 as a wall, 8 and 0.298096 m3 as an outlet). That oracle is this project's own Python, so it supports E3 and not more. Corroboration from RichDEM: the conditioned inventory lists exactly the three depressions of RichDEM's expected fill of its testdem1 test grid, with matching cells, areas, depths and outlet elevations (validation/protocols/richdem-references-v1.md); a 10 x 10 test grid moves no level. Archival data cannot reach E5."
 
 
   - claimId: TERRAIN-FLOW-RATIONAL-PEAK

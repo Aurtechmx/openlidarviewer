@@ -1,0 +1,45 @@
+{
+ "schemaVersion": 1,
+ "protocolId": "PROTO-FLOW-ACCUMULATION-GRASS-REUNION",
+ "example": false,
+ "title": "Conditioned D8 accumulation against GRASS GIS 8.3.2 on the Riviere des Pluies catchment",
+ "question": "On catchment cells, is the upstream cell count of Flow Pulse's conditioned run within 5% of the absolute GRASS GIS 8.3.2 accumulation on at least 90% of cells?",
+ "recordWrittenOn": "2026-10-25",
+ "referenceTool": "GRASS GIS",
+ "referenceVersion": "8.3.2 (from the GeoTIFF software tag; module not named by the dataset)",
+ "claims": [
+  {
+   "claimId": "TERRAIN-FLOW-PULSE",
+   "datasetIds": [
+    "OLV-DS-118-REUNION-GRASS-FLOW",
+    "OLV-DS-121-REUNION-PLUIES-GRASS-WINDOW"
+   ],
+   "parameterSetIds": [
+    "PS-FLOW-D8-CONDITIONED-OUTLET-25M"
+   ],
+   "metrics": {
+    "toleranceAbs": 0.05,
+    "toleranceUnit": "relative to the absolute GRASS accumulation",
+    "minimumComparableCells": 50000,
+    "requiredWithinToleranceFraction": 0.9
+   },
+   "toleranceDerivation": "5% relative, on at least 0.90 of catchment cells. Accumulation is a sum over every upstream cell, so one routing difference upslope moves every value below it; a relative tolerance lets a large trunk value absorb a small upstream difference while a small headwater value still has to match. Thresholds set after a feasibility run of a separate scratch implementation (Python with numpy, not Flow Pulse code, not committed) against the same references, and before Flow Pulse was run on them. That run gave 0.9921 direction agreement, catchment Jaccard 0.9990 and 0.952 of catchment cells within 5% of the accumulation. The minimum of 50,000 is below the 72,078 catchment cells. The exact-match fraction is reported with no threshold.",
+   "freeze": {
+    "status": "preregistered",
+    "on": "2026-10-25",
+    "witnessCommit": "aca8a782430ab840414b24bc87ed0b9e53033baf",
+    "witness": "validation/protocols/flow-pulse-external-references-v1.md at aca8a78 states G5, its threshold, the cells it compares and the Flow Pulse parameters, and lists this protocol's metrics block. That commit adds the three fixtures and no Flow Pulse result: the comparison test arrives in the next commit and the measured values after it. The threshold was set after a feasibility run of a separate scratch implementation against the same references, so it is blind to Flow Pulse's result and not to the references.",
+    "atInstant": "2026-10-25T16:44:54-07:00",
+    "resultLandedOn": "2026-10-25",
+    "resultAtInstant": "2026-10-25T17:03:20-07:00",
+    "resultCommit": "f85b5b1d23f1b5d2d30348d0bb3f936c81da20bd"
+   }
+  }
+ ],
+ "decisionRule": "G5 passes if at least 0.90 of catchment cells have an upstream cell count within 5% of the absolute GRASS accumulation, with at least 50,000 cells compared. It is one of the four gates TERRAIN-FLOW-PULSE needs for E4. A failed gate is not re-run with a different threshold, parameter, cell selection or code.",
+ "notes": [
+  "Pre-registered in validation/protocols/flow-pulse-external-references-v1.md.",
+  "GRASS reference properties that bound agreement below 100%: the module routes by least cost rather than by steepest descent on a filled surface, the published \"filled\" DEM still holds closed depressions, and the published accumulation disagrees with the published directions on about 0.14% of cells."
+ ],
+ "digest": "sha256:1c33fe7373e6ea57a8bc70b24b837f70eb0c745778f551e8f19c5f9c5a0f88b9"
+}

@@ -1,0 +1,45 @@
+{
+ "schemaVersion": 1,
+ "protocolId": "PROTO-FLOW-D8-GRASS-REUNION",
+ "example": false,
+ "title": "Raw D8 direction against GRASS GIS 8.3.2 on the Riviere des Pluies catchment",
+ "question": "On a 25 m window of the Reunion DEM, does Flow Pulse's raw D8 direction agree with the GRASS GIS 8.3.2 direction on at least 98% of catchment cells whose steepest descent is unique?",
+ "recordWrittenOn": "2026-10-25",
+ "referenceTool": "GRASS GIS",
+ "referenceVersion": "8.3.2 (from the GeoTIFF software tag; module not named by the dataset)",
+ "claims": [
+  {
+   "claimId": "TERRAIN-FLOW-PULSE",
+   "datasetIds": [
+    "OLV-DS-118-REUNION-GRASS-FLOW",
+    "OLV-DS-121-REUNION-PLUIES-GRASS-WINDOW"
+   ],
+   "parameterSetIds": [
+    "PS-FLOW-D8-RAW-25M"
+   ],
+   "metrics": {
+    "toleranceAbs": 0,
+    "toleranceUnit": "D8 direction code",
+    "minimumComparableCells": 50000,
+    "requiredWithinToleranceFraction": 0.98
+   },
+   "toleranceDerivation": "0.98 of cells. Only cells with a unique steepest descent are compared, so tie order cannot decide agreement. The reference routes by least cost, not by steepest descent, so some disagreement on non-tied cells is expected from the reference's method. A systematic error in direction encoding, row orientation or diagonal distance would change most cells and fall far below the threshold. Thresholds set after a feasibility run of a separate scratch implementation (Python with numpy, not Flow Pulse code, not committed) against the same references, and before Flow Pulse was run on them. That run gave 0.9921 direction agreement, catchment Jaccard 0.9990 and 0.952 of catchment cells within 5% of the accumulation. The minimum of 50,000 is below the 70,656 cells the selection takes from the reference data.",
+   "freeze": {
+    "status": "preregistered",
+    "on": "2026-10-25",
+    "witnessCommit": "aca8a782430ab840414b24bc87ed0b9e53033baf",
+    "witness": "validation/protocols/flow-pulse-external-references-v1.md at aca8a78 states G3, its threshold, the cells it compares and the Flow Pulse parameters, and lists this protocol's metrics block. That commit adds the three fixtures and no Flow Pulse result: the comparison test arrives in the next commit and the measured values after it. The threshold was set after a feasibility run of a separate scratch implementation against the same references, so it is blind to Flow Pulse's result and not to the references.",
+    "atInstant": "2026-10-25T16:44:54-07:00",
+    "resultLandedOn": "2026-10-25",
+    "resultAtInstant": "2026-10-25T17:03:20-07:00",
+    "resultCommit": "f85b5b1d23f1b5d2d30348d0bb3f936c81da20bd"
+   }
+  }
+ ],
+ "decisionRule": "G3 passes if at least 0.98 of the selected cells have the Flow Pulse direction (index 0 mapped to 8, 1..7 unchanged) equal to the absolute GRASS code, with at least 50,000 cells compared. It is one of the four gates TERRAIN-FLOW-PULSE needs for E4; see PROTO-FLOW-PITREMOVE-TAUDEM-BEAR-CREEK. A failed gate is not re-run with a different threshold, parameter, cell selection or code.",
+ "notes": [
+  "Pre-registered in validation/protocols/flow-pulse-external-references-v1.md.",
+  "GRASS reference properties that bound agreement below 100%: the module routes by least cost rather than by steepest descent on a filled surface, the published \"filled\" DEM still holds closed depressions, and the published accumulation disagrees with the published directions on about 0.14% of cells."
+ ],
+ "digest": "sha256:77549b174b39f08cf5c71e1fdfecd6e18f0cdc7094ff0406896a9e708e8dfeeb"
+}

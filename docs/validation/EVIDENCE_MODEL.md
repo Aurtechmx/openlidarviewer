@@ -58,14 +58,23 @@ been exercised over, it can move a claim to E4 against an independent
 implementation, and it is how a weakness gets found. It sits at E4, and a
 register entry should say so.
 
-Of the 40 registered claims, 22 currently sit below their required level. Nineteen
-of those require E5. Two require only E4: CONTOURS-CARTOGRAPHIC, where a
+Of the 40 registered claims, 20 currently sit below their required level. Nineteen
+of those require E5. One requires only E4: CONTOURS-CARTOGRAPHIC, where a
 generalized contour needs the same independent check the analytical line
-already has and does not have it, and TERRAIN-FLOW-PULSE, a new v0.7 field
-simulation whose second implementation (see below) was written inside this
-project rather than against an external tool. The last, TERRAIN-FLOW-DEPRESSION-INVENTORY,
-requires only E3: it is a new derived computation checked so far against one
-hand-derived analytic fixture. None of them is waiting on a download.
+already has and does not have it. None of them is waiting on a download.
+
+TERRAIN-FLOW-PULSE, the v0.7 field simulation, used to sit below its required
+E4, because its second implementation had been written inside this project. It
+now meets E4 on archival data, as described above: a
+study pre-registered in `validation/protocols/flow-pulse-external-references-v1.md`
+compared it with TauDEM 5.3.8 PitRemove on two Bear Creek crops (conditioning
+identical on every compared cell) and with GRASS GIS 8.3.2 on a 25 m Reunion
+catchment (routing within the stated tolerances of a single-flow router whose
+module, inferred from the output encoding to be `r.watershed`, the dataset does
+not name; not exactly). The same comparison took TERRAIN-FLOW-DEPRESSION-INVENTORY
+to its required E3: its conditioned mode matches TauDEM depression for
+depression, while its raw mode was not compared. Neither claim can reach E5 from
+that data, for the ordering reason above.
 
 ## Per-claim fields
 
@@ -159,7 +168,7 @@ when the mechanism is actually run against real data and the result committed.
   tool such as GDAL, PDAL, SAGA, R or PROJ on a frozen fixture. Three are
   `pending` (GROUND-FILTER, CHANGE-RASTER, CHANGE-VOLUME). No reference output
   is bundled for a slot that has not been compared, and none is fabricated.
-  The 17 claims at E4 in the claim register are a separate count.
+  The 18 claims at E4 in the claim register are a separate count.
 - Internal error. `src/terrain/validate/spatialBlockHoldout.ts` adds a
   spatially-blocked hold-out with a bootstrap CI alongside the random point
   hold-out. It complements rather than replaces it: blocking changes the spatial

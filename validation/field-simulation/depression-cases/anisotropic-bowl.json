@@ -1,0 +1,43 @@
+{
+ "name": "anisotropic-bowl",
+ "why": "A one-cell pit at 2 in ground at 6, on cells 2 m east-west by 3 m north-south, so area and volume carry a cell area other than 1: the pit fills to 6, area 6 m2, volume 24 m3.",
+ "cellMetresX": 2,
+ "cellMetresY": 3,
+ "z": [
+  [
+   6,
+   6,
+   6,
+   6,
+   6
+  ],
+  [
+   6,
+   6,
+   6,
+   6,
+   6
+  ],
+  [
+   6,
+   6,
+   2,
+   6,
+   6
+  ],
+  [
+   6,
+   6,
+   6,
+   6,
+   6
+  ],
+  [
+   6,
+   6,
+   6,
+   6,
+   6
+  ]
+ ]
+}

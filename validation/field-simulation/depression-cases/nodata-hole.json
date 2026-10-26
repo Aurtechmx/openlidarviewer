@@ -1,0 +1,43 @@
+{
+ "name": "nodata-hole",
+ "why": "An enclosed NoData cell inside a basin. Read as a wall the basin fills to its rim at 9 around the hole; read as an outlet every cell beside the hole is an exit and nothing fills.",
+ "cellMetresX": 1,
+ "cellMetresY": 1,
+ "z": [
+  [
+   9,
+   9,
+   9,
+   9,
+   9
+  ],
+  [
+   9,
+   5,
+   5,
+   5,
+   9
+  ],
+  [
+   9,
+   5,
+   null,
+   3,
+   9
+  ],
+  [
+   9,
+   5,
+   5,
+   5,
+   9
+  ],
+  [
+   9,
+   9,
+   9,
+   9,
+   9
+  ]
+ ]
+}

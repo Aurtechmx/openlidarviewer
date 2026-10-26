@@ -1,0 +1,77 @@
+{
+ "schemaVersion": 1,
+ "protocolId": "PROTO-FLOW-PITREMOVE-TAUDEM-BEAR-CREEK",
+ "example": false,
+ "title": "Priority-Flood spill level and conditioned depression inventory against TauDEM 5.3.8 PitRemove on two Bear Creek crops",
+ "question": "On two 256 x 256 windows of a USGS NED DEM, does Flow Pulse's Priority-Flood spill level equal TauDEM 5.3.8 PitRemove's filled elevation on every valid cell, and does its conditioned depression inventory match TauDEM's filled depressions in count, cell count, area, maximum fill depth and spill level?",
+ "recordWrittenOn": "2026-10-25",
+ "referenceTool": "TauDEM",
+ "referenceVersion": "5.3.8 (PitRemove, run by Riverscapes TauDEM 1.2.3)",
+ "claims": [
+  {
+   "claimId": "TERRAIN-FLOW-PULSE",
+   "datasetIds": [
+    "OLV-DS-117-BEAR-CREEK-TAUDEM-PITFILL",
+    "OLV-DS-119-BEAR-CREEK-TAUDEM-FILL-A",
+    "OLV-DS-120-BEAR-CREEK-TAUDEM-FILL-B"
+   ],
+   "parameterSetIds": [
+    "PS-FLOW-PRIORITY-FLOOD-NODATA-OUTLET",
+    "PS-FLOW-PRIORITY-FLOOD-NODATA-WALL"
+   ],
+   "metrics": {
+    "toleranceAbs": 0,
+    "toleranceUnit": "metre, after casting both sides to Float32",
+    "minimumComparableCells": 172702,
+    "requiredWithinToleranceFraction": 1
+   },
+   "toleranceDerivation": "Zero after casting both sides to Float32, derived from the method rather than from a result. Both programs fill each depression to its spill level with no gradient, and a spill level is always one of the input elevations, so no arithmetic stands between the two outputs: any difference is a different spill level, which is a different answer and not rounding. The minimum is every valid cell of the three runs (65,536 on crop A, 53,583 on crop B with NoData as an outlet and again as a wall), so no cell may be skipped.",
+   "freeze": {
+    "status": "preregistered",
+    "on": "2026-10-25",
+    "witnessCommit": "aca8a782430ab840414b24bc87ed0b9e53033baf",
+    "witness": "validation/protocols/flow-pulse-external-references-v1.md at aca8a78 states G1, its threshold, the cells it compares and the Flow Pulse parameters, and lists this protocol's metrics block. That commit adds the three fixtures and no Flow Pulse result: the comparison test arrives in the next commit and the measured values after it. The threshold was set after a feasibility run of a separate scratch implementation against the same references, so it is blind to Flow Pulse's result and not to the references.",
+    "atInstant": "2026-10-25T16:44:54-07:00",
+    "resultLandedOn": "2026-10-25",
+    "resultAtInstant": "2026-10-25T17:03:20-07:00",
+    "resultCommit": "f85b5b1d23f1b5d2d30348d0bb3f936c81da20bd"
+   }
+  },
+  {
+   "claimId": "TERRAIN-FLOW-DEPRESSION-INVENTORY",
+   "datasetIds": [
+    "OLV-DS-117-BEAR-CREEK-TAUDEM-PITFILL",
+    "OLV-DS-119-BEAR-CREEK-TAUDEM-FILL-A",
+    "OLV-DS-120-BEAR-CREEK-TAUDEM-FILL-B"
+   ],
+   "parameterSetIds": [
+    "PS-FLOW-PRIORITY-FLOOD-NODATA-OUTLET"
+   ],
+   "metrics": {
+    "toleranceAbs": 0,
+    "toleranceUnit": "depressions matching on every listed field (cell count, area, maximum fill depth, spill level)",
+    "minimumComparableCells": 187,
+    "requiredWithinToleranceFraction": 1
+   },
+   "toleranceDerivation": "Zero, derived from the method rather than from a result. Given equal spill levels, the filled mask, the 8-connected components, their cell counts, their areas (cell count times one fixed cell area on both sides), their deepest fill (spill level minus the same Float32 input) and their spill level all follow without new arithmetic. On the reference every depression is filled to one level, which equals its lowest unraised rim cell, so the spill level is well defined on both sides. The minimum is every reference depression (62 on crop A, 125 on crop B), and the depression count on each crop must also match.",
+   "freeze": {
+    "status": "preregistered",
+    "on": "2026-10-25",
+    "witnessCommit": "aca8a782430ab840414b24bc87ed0b9e53033baf",
+    "witness": "validation/protocols/flow-pulse-external-references-v1.md at aca8a78 states G2, its threshold, the cells it compares and the Flow Pulse parameters, and lists this protocol's metrics block. That commit adds the three fixtures and no Flow Pulse result: the comparison test arrives in the next commit and the measured values after it. The threshold was set after a feasibility run of a separate scratch implementation against the same references, so it is blind to Flow Pulse's result and not to the references.",
+    "atInstant": "2026-10-25T16:44:54-07:00",
+    "resultLandedOn": "2026-10-25",
+    "resultAtInstant": "2026-10-25T17:03:20-07:00",
+    "resultCommit": "f85b5b1d23f1b5d2d30348d0bb3f936c81da20bd"
+   }
+  }
+ ],
+ "decisionRule": "G1 passes only if every one of the 172,702 compared cells is equal. G2 passes only if, on both crops, the filled mask equals the TauDEM raised mask cell for cell, the depression count is 62 on crop A and 125 on crop B, and every reference depression has a Flow Pulse depression with the same lowest member cell, cell count, area, maximum fill depth and spill level. TERRAIN-FLOW-PULSE is recorded at E4 only if G1 here and G3, G4 and G5 in the GRASS protocols all pass. TERRAIN-FLOW-DEPRESSION-INVENTORY is recorded as meeting its required E3, with conditioned mode at E4, only if G1 and G2 pass. A failed gate is not re-run with a different threshold, parameter, cell selection or code.",
+ "notes": [
+  "Pre-registered in validation/protocols/flow-pulse-external-references-v1.md, which carries every gate of this study, the GRASS gates included.",
+  "The crops were chosen, from the DEM and TauDEM output only, as windows where a fill that drains to the crop edge reproduces TauDEM's whole-grid fill exactly. That keeps every compared depression inside its crop and means the crops are not a random sample of the grid.",
+  "The Bear Creek cell size (7.42 m by 10.29 m) approximates one cell at the crop centre. No gate here depends on distance, and the area check uses the same cell size on both sides.",
+  "Raw mode, the D8 tie order and flat resolution are not covered. Agreement with TauDEM is not accuracy against the ground."
+ ],
+ "digest": "sha256:1991c9dd122f6058d9e68cf3fcaabdd8a80fb0c25951aea214ceab635449db9b"
+}

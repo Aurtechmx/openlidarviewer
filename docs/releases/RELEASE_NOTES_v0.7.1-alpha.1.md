@@ -111,7 +111,7 @@ Observatory (a preview) with stations and a slice plane, a results shelf, a sess
 
 ## Evidence and limits
 
-The register holds 40 claims, 17 of them at E4 and none at E5. Flow Pulse (E3), its depression inventory (E2), its rainfall peak-flow estimate (E2), Terrain Access (E3) and VVA-P95 (E3) are new, and no existing claim changed level. three.js advanced to 0.186.
+The register holds 40 claims, 18 of them at E4 and none at E5. Flow Pulse (E4, from its comparison with TauDEM and GRASS GIS on real terrain), its depression inventory (E3), its rainfall peak-flow estimate (E2), Terrain Access (E3) and VVA-P95 (E3) are new, and no existing claim changed level. three.js advanced to 0.186.
 
 Nothing here is a survey-grade result; held-out validation against independent reference data has not been done. Figures from a display sample describe the points held, not the whole file. Observatory is a preview that uses resident points and declared stations, Flow Pulse and Terrain Access run on the main thread, registration is not exposed beyond Compare elevation's planar fit, one streamed source is open at a time, and an E57 of about 900 MB or more is refused before its points are read.
 

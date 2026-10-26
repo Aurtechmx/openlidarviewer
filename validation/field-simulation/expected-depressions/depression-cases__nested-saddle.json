@@ -1,0 +1,83 @@
+{
+ "fixture": "depression-cases/nested-saddle.json",
+ "cols": 7,
+ "rows": 5,
+ "cellMetresX": 1.0,
+ "cellMetresY": 1.0,
+ "wall": {
+  "cellsUnreachable": 0,
+  "depressionCount": 1,
+  "filledCellCount": 15,
+  "fillDepthSum": 23.0,
+  "fillVolumeM3": 23.0,
+  "depressions": [
+   {
+    "seedCell": 8,
+    "cells": [
+     8,
+     9,
+     10,
+     11,
+     12,
+     15,
+     16,
+     17,
+     18,
+     19,
+     22,
+     23,
+     24,
+     25,
+     26
+    ],
+    "cellCount": 15,
+    "areaM2": 15.0,
+    "maxFillDepth": 5.0,
+    "fillDepthSum": 23.0,
+    "fillVolumeM3": 23.0,
+    "spillLevels": [
+     6.0
+    ],
+    "outletElevation": 6.0
+   }
+  ]
+ },
+ "outlet": {
+  "cellsUnreachable": 0,
+  "depressionCount": 1,
+  "filledCellCount": 15,
+  "fillDepthSum": 23.0,
+  "fillVolumeM3": 23.0,
+  "depressions": [
+   {
+    "seedCell": 8,
+    "cells": [
+     8,
+     9,
+     10,
+     11,
+     12,
+     15,
+     16,
+     17,
+     18,
+     19,
+     22,
+     23,
+     24,
+     25,
+     26
+    ],
+    "cellCount": 15,
+    "areaM2": 15.0,
+    "maxFillDepth": 5.0,
+    "fillDepthSum": 23.0,
+    "fillVolumeM3": 23.0,
+    "spillLevels": [
+     6.0
+    ],
+    "outletElevation": 6.0
+   }
+  ]
+ }
+}

@@ -64,7 +64,7 @@ Marketing superlatives, "best", "industry-leading", "most accurate",
 
 ## What the software currently claims
 
-- Seventeen products are at E4. Five are algorithm checks against GDAL:
+- Eighteen products are at E4. Five are algorithm checks against GDAL:
   `SLOPE-RASTER`, `ASPECT-RASTER`, `HILLSHADE`, `CONTOURS` and `MEAS-AREA`
   each agree with GDAL 3.13.1 and with the closed-form gradient on the same
   frozen analytic fixture within their tolerances (0.5° for slope
@@ -159,6 +159,24 @@ Marketing superlatives, "best", "industry-leading", "most accurate",
   against surveyed field change, and the protocol freeze is `adopted-with-result`
   rather than a preregistration, because it landed in the same commit as the
   first result.
+- `TERRAIN-FLOW-PULSE` is the eighteenth, and it is the flow router, compared on
+  real terrain against outputs two other programs published. On two Bear Creek
+  crops the Priority-Flood spill level equals TauDEM 5.3.8 PitRemove's filled
+  elevation on all 119,119 distinct cells (172,702 cell comparisons across
+  three runs: crop A, crop B with NoData as outlet, crop B with NoData as
+  wall). The crops were chosen so that a fill computed on the crop alone
+  reproduces TauDEM's whole-grid fill. On one 25 m window of the Riviere des
+  Pluies catchment, Reunion, against GRASS GIS 8.3.2: 99.2% of catchment cells
+  with a unique steepest descent take the same D8 direction, the catchment from
+  the mouth has a Jaccard index of 0.999, and 95.2% of catchment cells are within
+  5% of the accumulation. All four gates were preregistered before the router
+  ran on these data, after a feasibility run of a separate scratch
+  implementation. The GRASS module is not named by the dataset; from the output
+  encoding it is inferred to be `r.watershed` in single-flow mode, a least-cost
+  router. Its "filled" DEM still holds closed depressions, so routing agrees
+  within tolerance and not exactly.
+  Tie order, flat resolution, flow length and the peak-flow estimate were not
+  compared, and agreement on archival data is not accuracy against the ground.
 - Every other terrain product tops out at E3. No product is field-validated.
 - Local files are processed on this device; remote datasets stream only when
   selected. Nothing is uploaded.

@@ -1,0 +1,55 @@
+{
+ "fixture": "depression-cases/anisotropic-bowl.json",
+ "cols": 5,
+ "rows": 5,
+ "cellMetresX": 2.0,
+ "cellMetresY": 3.0,
+ "wall": {
+  "cellsUnreachable": 0,
+  "depressionCount": 1,
+  "filledCellCount": 1,
+  "fillDepthSum": 4.0,
+  "fillVolumeM3": 24.0,
+  "depressions": [
+   {
+    "seedCell": 12,
+    "cells": [
+     12
+    ],
+    "cellCount": 1,
+    "areaM2": 6.0,
+    "maxFillDepth": 4.0,
+    "fillDepthSum": 4.0,
+    "fillVolumeM3": 24.0,
+    "spillLevels": [
+     6.0
+    ],
+    "outletElevation": 6.0
+   }
+  ]
+ },
+ "outlet": {
+  "cellsUnreachable": 0,
+  "depressionCount": 1,
+  "filledCellCount": 1,
+  "fillDepthSum": 4.0,
+  "fillVolumeM3": 24.0,
+  "depressions": [
+   {
+    "seedCell": 12,
+    "cells": [
+     12
+    ],
+    "cellCount": 1,
+    "areaM2": 6.0,
+    "maxFillDepth": 4.0,
+    "fillDepthSum": 4.0,
+    "fillVolumeM3": 24.0,
+    "spillLevels": [
+     6.0
+    ],
+    "outletElevation": 6.0
+   }
+  ]
+ }
+}
