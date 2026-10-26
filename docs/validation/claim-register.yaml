@@ -61,13 +61,15 @@
 #     validation has been run). Synthetic known-truth fixtures alone remain E3,
 #     not accuracy.
 #   - externalValidationStatus is `pending` wherever external data is required
-#     and unavailable. Twenty-two study manifests under
+#     and unavailable. Twenty-four study manifests under
 #     validation/cross-implementation/studies/ record an independent reference
 #     that agreed. Seventeen hold up the first seventeen E4 claims, one each
 #     (six GDAL, four PDAL, one SAGA, one OGR/SpatiaLite with R, one
 #     GeographicLib with PROJ, two GRASS, and two against R). Four hold up
 #     TERRAIN-FLOW-PULSE (one TauDEM, three GRASS GIS), and one supports
-#     TERRAIN-FLOW-DEPRESSION-INVENTORY (TauDEM).
+#     TERRAIN-FLOW-DEPRESSION-INVENTORY (TauDEM). Two more support DTM median
+#     gridding on measured cells (R terra, and SciPy, whose bin edges this
+#     project supplies).
 #     The runtime view, REFERENCE_SLOTS in src/validation/crossCheck.ts, holds
 #     sixteen slots: thirteen read `supplied`; CHANGE-RASTER and CHANGE-VOLUME
 #     read `pending` there although their GRASS references are committed and
@@ -516,19 +518,19 @@ claims:
     claim: "Bare-earth elevation grid over covered cells; gaps left empty or interpolated, never fabricated."
     currentEvidence: E4_CROSS_IMPLEMENTATION_VALIDATED
     requiredEvidence: E5_EXTERNALLY_VALIDATED
-    supportingTests: [tests/terrainTruth.dtm.test.ts, tests/groundFilterPdalAgreement.test.ts]
-    supportingDatasets: [synthetic analytic surfaces, seeded bare-earth point clouds with PDAL writers.gdal reference]
-    supportingStudies: [DTM-PDAL-WRITERS-GDAL-CELL-CENTRED]
+    supportingTests: [tests/terrainTruth.dtm.test.ts, tests/groundFilterPdalAgreement.test.ts, tests/dtmMedianCrossCheck.test.ts]
+    supportingDatasets: [synthetic analytic surfaces, seeded bare-earth point clouds with PDAL writers.gdal reference, seeded point clouds with R terra and SciPy median references]
+    supportingStudies: [DTM-PDAL-WRITERS-GDAL-CELL-CENTRED, DTM-MEDIAN-R-TERRA-RASTERIZE, DTM-MEDIAN-SCIPY-BINNED-STATISTIC]
     units: [metres]
     crsDatum: "Metric; refuses geographic-degree area/volume derivatives."
     assumptions: ["interpolation model as configured", "coverage-gated"]
     failureModes: ["large voids", "steep breaklines", "vegetation leakage from ground filter"]
     exportAllowed: true
-    userLabel: "Cross-implementation validated DTM (min-return gridding only; the live DTM uses median)"
+    userLabel: "Cross-implementation validated DTM median gridding on measured cells; filled cells not covered"
     softwareStatus: shipping
     evidenceLevel: E4_CROSS_IMPLEMENTATION_VALIDATED
     externalValidationStatus: partial
-    approvedClaim: "DTM min-return gridding agreed with PDAL writers.gdal on three seeded bare-earth clouds, over 7500 cells within the 5e-5 m registered tolerance (max difference under 4e-6 m). Still validated against analytic surfaces on covered cells."
+    approvedClaim: "DTM median gridding on measured cells agreed with R terra and SciPy on 18498 cells (SciPy: 18655) across eight seeded clouds, within the 1e-6 m registered tolerance after float32 rounding; interpolated (filled) cells are not covered. Min-return gridding agreed with PDAL writers.gdal over 7500 cells within 5e-5 m. Still validated against analytic surfaces on covered cells."
     prohibitedClaim: ["field-validated DTM accuracy", "independent checkpoint accuracy", "ground-classification accuracy", "full point-cloud-to-DTM pipeline validated", "real-terrain void interpolation validated"]
     scope:
       supported:
@@ -538,6 +540,22 @@ claims:
           parameterSetId: PS-DTM-MIN-CELL1-R045
         - datasetId: OLV-DS-014-PC-BARE-RIDGE
           parameterSetId: PS-DTM-MIN-CELL1-R045
+        - datasetId: OLV-DS-007-PC-PLANE-BUILDINGS
+          parameterSetId: PS-DTM-MEDIAN-CELL1-ORIGIN0
+        - datasetId: OLV-DS-008-PC-ROLLING-BUILDINGS
+          parameterSetId: PS-DTM-MEDIAN-CELL1-ORIGIN0
+        - datasetId: OLV-DS-009-PC-RIDGE-BUILDINGS
+          parameterSetId: PS-DTM-MEDIAN-CELL1-ORIGIN0
+        - datasetId: OLV-DS-010-PC-PLANE-LOWBLUNDERS
+          parameterSetId: PS-DTM-MEDIAN-CELL1-ORIGIN0
+        - datasetId: OLV-DS-011-PC-PLANE-GAP
+          parameterSetId: PS-DTM-MEDIAN-CELL1-ORIGIN0
+        - datasetId: OLV-DS-012-PC-BARE-PLANE
+          parameterSetId: PS-DTM-MEDIAN-CELL1-ORIGIN0
+        - datasetId: OLV-DS-013-PC-BARE-ROLLING
+          parameterSetId: PS-DTM-MEDIAN-CELL1-ORIGIN0
+        - datasetId: OLV-DS-014-PC-BARE-RIDGE
+          parameterSetId: PS-DTM-MEDIAN-CELL1-ORIGIN0
       unsupported:
         - "Real terrain. The evidence is analytic surfaces and seeded synthetic clouds."
         - "Ground classification. The three supporting clouds are bare-earth by construction, so the cross-check exercises the min-return gridding, not the ground filter. That step is GROUND-FILTER, still partial."
@@ -545,7 +563,8 @@ claims:
         - "Independent checkpoint accuracy, which needs checkpoints this project does not have."
         - "Large voids and steep breaklines. Interpolation across them is not exercised by the supporting clouds."
         - "Vegetation leakage inherited from the ground filter."
-        - "Median aggregation, which the live DTM uses (LIVE_DTM_AGGREGATION). The PDAL study covers min-return gridding only."
+        - "Interpolated (IDW fill) cells. The median studies compare measured cells only, cells holding at least one return; the void fill is not cross-checked."
+        - "Independence of the SciPy leg. SciPy computes the median and bin assignment over bin edges this project supplies; R terra builds its own grid and is the independent reference. The fixtures and the comparison harness are this project's own for both."
 
   - claimId: DSM
     product: DSM (top surface)

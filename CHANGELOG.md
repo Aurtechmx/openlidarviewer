@@ -42,6 +42,10 @@ The format is based on Keep a Changelog and the project follows Semantic Version
 - A remote COPC whose server answers a range request with 416 is reported as a file that changed on the server, or as a read past its end, instead of an unexpected-status transport error.
 - A remote COPC read cancelled while its data is arriving, or cut off when the connection drops, now fails with a clear cancelled or connection-closed reason instead of a raw browser error.
 
+### Validation
+
+- The live DTM's median gridding on measured cells agreed with R terra and SciPy on eight seeded point clouds (18498 and 18655 cells, within the 1e-6 m tolerance registered before the references were generated; occupancy masks match). The DTM claim now names this scope. Interpolated (filled) cells are not covered.
+
 ## [0.7.1-alpha.1] - 2026-10-25
 
 A development cut on the way to v0.7.1. It carries no DOI, and its test figures
