@@ -54,6 +54,12 @@ export function extentFrameVerdict(crs: CrsInfo | ResolvedCrs | null | undefined
 }
 
 /**
+ * The qualifier every Density and Spacing value carries: both are the count
+ * over the axis-aligned bounding box, not over the area the points occupy.
+ */
+export const BOUNDING_BOX_ESTIMATE = '(bounding-box estimate)';
+
+/**
  * The method tag the static and streaming Density and Spacing rows are
  * computed under (`methodRegistry.ts`). v2 leaves Withheld points out of the
  * count; v1 counted them.
@@ -118,8 +124,8 @@ export function streamingExtentRows(
     const densityUnit = unitConfirmed ? ' pts/m²' : ' pts/unit²';
     const spacingUnit = unitConfirmed ? ' m' : ' (source units)';
     rows.push(
-      { label: 'Density', value: `${density.toFixed(1)}${densityUnit}`, scoped: true },
-      { label: 'Spacing', value: `${spacing.toFixed(2)}${spacingUnit}`, scoped: true },
+      { label: 'Density', value: `${density.toFixed(1)}${densityUnit} ${BOUNDING_BOX_ESTIMATE}`, scoped: true },
+      { label: 'Spacing', value: `${spacing.toFixed(2)}${spacingUnit} ${BOUNDING_BOX_ESTIMATE}`, scoped: true },
       // The total is the header's: no flag was read, so how many of those
       // points are Withheld is unknown and none are excluded.
       {

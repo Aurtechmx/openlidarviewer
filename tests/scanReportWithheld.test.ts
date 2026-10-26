@@ -39,8 +39,8 @@ describe('scan report density — Withheld excluded, Overlap kept', () => {
   it('counts 6 of 8 points when two are Withheld and two are Overlap', () => {
     const c = cloud({ classificationFlags: new Uint8Array([0, W, 0, O, W, O, 0, 0]) });
     expect(row(c, 'Point Count')).toBe('8');
-    expect(row(c, 'Density')).toBe('1.5 pts/m²');
-    expect(row(c, 'Spacing')).toBe(`${(Math.sqrt(4 / 6) * 100).toFixed(1)} cm`);
+    expect(row(c, 'Density')).toBe('1.5 pts/m² (bounding-box estimate)');
+    expect(row(c, 'Spacing')).toBe(`${(Math.sqrt(4 / 6) * 100).toFixed(1)} cm (bounding-box estimate)`);
     expect(row(c, 'Density basis')).toBe(
       `6 of 8 analysed; Withheld excluded: 2 (${SCAN_DENSITY_METHOD_TAG})`,
     );
@@ -48,13 +48,13 @@ describe('scan report density — Withheld excluded, Overlap kept', () => {
 
   it('is unchanged when no point is Withheld', () => {
     const c = cloud({ classificationFlags: new Uint8Array([0, O, 0, O, 0, O, 0, 0]) });
-    expect(row(c, 'Density')).toBe('2.0 pts/m²');
+    expect(row(c, 'Density')).toBe('2.0 pts/m² (bounding-box estimate)');
     expect(row(c, 'Density basis')).toContain('8 of 8 analysed; Withheld excluded: 0');
   });
 
   it("records 'unknown' and counts every point when the cloud carries no flags", () => {
     const c = cloud();
-    expect(row(c, 'Density')).toBe('2.0 pts/m²');
+    expect(row(c, 'Density')).toBe('2.0 pts/m² (bounding-box estimate)');
     expect(row(c, 'Density basis')).toContain('Withheld excluded: unknown');
   });
 

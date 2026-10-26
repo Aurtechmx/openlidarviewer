@@ -101,11 +101,12 @@ describe('Scan Report — sample and nominal bases', () => {
     const d = rowByLabel(rows, 'Density').value;
     expect(parseFloat(d)).toBeCloseTo(10, 3);
     expect(d).toContain('mean: declared count over the display-sample footprint');
+    expect(d).toContain('bounding-box estimate');
     const s = rowByLabel(rows, 'Spacing').value;
     expect(s).toContain('nominal');
   });
-  test('(9) a fully loaded cloud keeps the bare figure', () => {
-    expect(rowByLabel(scanReport.run(fullCloud()).rows, 'Density').value).toBe('1.0 pts/unit²');
+  test('(9) a fully loaded cloud keeps the figure, with its bounding-box basis', () => {
+    expect(rowByLabel(scanReport.run(fullCloud()).rows, 'Density').value).toBe('1.0 pts/unit² (bounding-box estimate)');
   });
   test('(10) in-memory resolution says "mean over the reach", not "typical"', () => {
     const cloud = new PointCloud({

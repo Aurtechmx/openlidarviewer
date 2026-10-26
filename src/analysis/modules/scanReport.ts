@@ -10,7 +10,7 @@ import { estimateInMemoryPrecision } from '../../geo/inMemoryPrecision';
 import { inMemoryPrecisionRows } from '../inMemoryPrecisionRows';
 import { drawPrecisionRows } from '../drawPrecisionRows';
 import { drawPrecisionUnitOf, evaluateDrawPrecision, tileFromLocalFloat32 } from '../../science/drawPrecision';
-import { SCAN_DENSITY_METHOD_TAG } from '../streamingExtentRows';
+import { BOUNDING_BOX_ESTIMATE, SCAN_DENSITY_METHOD_TAG } from '../streamingExtentRows';
 
 /** ", N flagged invalid and masked" when the file flags points whose `bit` attribute is not a measurement. */
 function maskedNote(cloud: PointCloud, bit: number): string {
@@ -290,7 +290,11 @@ export const scanReport: AnalysisModule = {
     // Both figures are nominal averages (count ÷ footprint), and on a strided
     // load they mix bases — the header's count over the SAMPLE's footprint —
     // so the row says so rather than reading as a measured density.
-    const mixedBasis = strided ? ' (mean: declared count over the display-sample footprint)' : '';
+    // Every load says the footprint is the axis-aligned bounding box: on a
+    // rotated or irregular coverage it reads sparser than the occupied area.
+    const mixedBasis = strided
+      ? ' (bounding-box estimate; mean: declared count over the display-sample footprint)'
+      : ` ${BOUNDING_BOX_ESTIMATE}`;
     if (upRefusal) {
       rows.push(withScope(rowWarn('Density', upRefusal), scope));
     } else if (footprintArea <= 0 || densityN === 0) {
@@ -309,7 +313,9 @@ export const scanReport: AnalysisModule = {
     } else {
       const spacing = Math.sqrt(footprintArea / densityN);
       const spacingValue = basis.unitKnown ? formatLength(spacing) : `${spacing.toFixed(2)} (source units)`;
-      const spacingBasis = strided ? ' (nominal: √(display-sample footprint ÷ declared count))' : '';
+      const spacingBasis = strided
+        ? ' (bounding-box estimate; nominal: √(display-sample footprint ÷ declared count))'
+        : ` ${BOUNDING_BOX_ESTIMATE}`;
       rows.push(withScope(rowInfo('Spacing', `${spacingValue}${spacingBasis}`), scope));
     }
     // What the two figures above were computed over, and under which method.
