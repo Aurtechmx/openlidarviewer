@@ -28,6 +28,9 @@
 
 import { isEditableTarget, isTypingTarget, measureKeyAction } from './shortcuts';
 import { CAMERA_PRESET_KEY } from '../render/camera/cameraPresets';
+// The global Undo and Redo handlers' bodies, re-exported here so the shell
+// reaches them through the module that already defines `GlobalActionHandlers`.
+export { undoLastEdit, redoLastEdit, type EditHistoryDeps } from '../app/editHistoryActions';
 
 /** A key-event shape a `KeyMatch` is tested against. */
 type KeyEventLike = Pick<
@@ -388,7 +391,7 @@ export function buildViewerKeyBindings(
       when: (ctx) => !ctx.isEditable && ctx.isMeasureMode(),
       run: (_ctx, e) => {
         const action = measureKeyAction(e, deps.isDrafting());
-        if (!action) return false; // chord with nothing drafted falls through
+        if (!action) return false; // Enter with nothing drafted falls through
         if (action === 'finish') deps.measureFinish();
         else deps.measureUndoPoint();
         return true;

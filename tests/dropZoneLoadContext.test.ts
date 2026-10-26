@@ -6,25 +6,11 @@
  * from one open can draw over the next.
  */
 
-import { describe, it, expect, beforeAll, beforeEach, afterEach, vi } from 'vitest';
-import { Node0, installBusyScanDom } from './helpers/busyScanDom';
+import { describe, it, expect, vi } from 'vitest';
+import { Node0, useBusyScanDomWithFakeTimers } from './helpers/busyScanDom';
 import { createDisplayThrottle } from '../src/ui/displayThrottle';
 
-beforeAll(() => {
-  installBusyScanDom();
-});
-
-beforeEach(() => {
-  vi.useFakeTimers();
-  (globalThis as unknown as Record<string, unknown>).window = {
-    setTimeout: (fn: () => void, ms: number) => setTimeout(fn, ms),
-    clearTimeout: (h: ReturnType<typeof setTimeout>) => clearTimeout(h),
-  };
-});
-
-afterEach(() => {
-  vi.useRealTimers();
-});
+useBusyScanDomWithFakeTimers();
 
 async function freshZone() {
   const { DropZone } = await import('../src/ui/DropZone');

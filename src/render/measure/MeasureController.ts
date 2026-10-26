@@ -15,6 +15,7 @@
 import { areaRingVerdictCached } from './areaValidity';
 import type * as THREE from 'three/webgpu';
 import { el, politeStatus } from '../../ui/dom';
+import { installNativeTitleStrip, setStrippableTitle } from './nativeTitleStrip';
 import {
   KIND_ICON,
   ICON_UNDO,
@@ -71,9 +72,11 @@ import {
   formatProfileHeadline,
   formatBoxHeadline,
   formatVolume,
+  formatElevation,
   formatUnitUnverified,
   UNIT_UNVERIFIED_MEASURE_NOTICE,
   GEOGRAPHIC_CRS_MEASURE_NOTICE,
+  volumeBaseLevelClause,
   volumeCaveatClauses,
   volumeFiguresWithheld,
   volumeWithheldClause,
@@ -132,6 +135,13 @@ const COARSE_POINTER =
   window.matchMedia('(pointer: coarse)').matches;
 const VERB = COARSE_POINTER ? 'Tap' : 'Click';
 const VERB_LOWER = VERB.toLowerCase();
+
+const UNDO_TITLE = 'Remove the last point you placed (or press Backspace, or Ctrl/Cmd+Z).';
+/** The Undo button while nothing is drafted: it is disabled, and the tooltip says why. */
+const UNDO_DISABLED_TITLE = 'Undo last point (Backspace or Ctrl/Cmd+Z). Nothing to undo: the shape is finished.';
+/** The hint when Undo is asked for with nothing drafted. */
+export const NOTHING_TO_UNDO_HINT =
+  'Nothing to undo here. To remove a finished measurement, use Delete on its result card or × in the Measurements list.';
 
 /** Inline crosshair glyph for the snap toggle (kept local to avoid touching the icon set). */
 const SNAP_ICON =
@@ -378,6 +388,13 @@ export interface MeasurementSummary {
    */
   areaMetrics?: AreaBreakdown;
   volumeResidentOnly?: boolean;
+  /**
+   * Volume only — the base level cut and fill are measured against, as the
+   * row's clause: "Base level 412.35 m (median of the outline's vertex
+   * heights)", marked local when the scene has no datum. The panel row, the
+   * copied text and the PDF row all carry it.
+   */
+  volumeBaseLevel?: string;
 }
 
 /** Snap targeting mode: off, to real returns only, or to measurement geometry. */
@@ -395,6 +412,7 @@ export class MeasureController {
   /** Phone-only copy of the instruction; shown beside the tool rail. */
   private readonly _phoneHintEl: HTMLElement;
   private readonly _clearBtn: HTMLButtonElement;
+  private readonly _undoBtn: HTMLButtonElement;
   private readonly _unitsBtn: HTMLButtonElement;
   /** Finish-polygon button — shown only while a polygon draft is open. */
   private readonly _finishBtn: HTMLButtonElement | null = null;
@@ -473,7 +491,8 @@ export class MeasureController {
   // `x`/`y` are where the press began; `moved` turns true past the drag slop,
   // and only then does the press edit the vertex. A press released inside the
   // slop is a click on the vertex, which places a point there.
-  private _drag: { id: string; vi: number; x: number; y: number; moved: boolean } | null = null;
+  /** `start` is every point of the dragged measurement as it was, for an Esc during the drag. */
+  private _drag: { id: string; vi: number; x: number; y: number; moved: boolean; start: Vec3[] } | null = null;
   /** Where the last canvas press began, so a click that ended a drag places nothing. */
   private _press: { x: number; y: number; slop: number } | null = null;
   /** Bumped by every whole-list replace, so an Undo never restores into another list. */
@@ -653,14 +672,16 @@ export class MeasureController {
     const undoBtn = el('button', {
       className: 'olv-measure-undo olv-micon-btn',
       unsafeHtml: ICON_UNDO + '<span class="olv-mlabel">Undo</span>',
-      title: 'Remove the last point you placed (or press Backspace, or Ctrl/Cmd+Z).',
+      title: UNDO_DISABLED_TITLE,
       tip: 'Undo last point · ⌫ or Ctrl/⌘ Z',
       ariaLabel: 'Undo last point (Backspace, or Ctrl+Z)',
     });
+    undoBtn.disabled = true;
     undoBtn.addEventListener('click', () => {
       undoBtn.blur();
       this.undoLastPoint();
     });
+    this._undoBtn = undoBtn;
     // Finish polygon — shown only while a polygon-kind draft is open
     // (area / volume / polyline / profile). The button is the touch
     // equivalent of double-click / Enter and the explicit
@@ -682,7 +703,7 @@ export class MeasureController {
     this._clearBtn = el('button', {
       className: 'olv-measure-clear olv-micon-btn olv-hidden',
       unsafeHtml: ICON_CLEAR + '<span class="olv-mlabel">Clear</span>',
-      title: 'Delete every measurement on the scan',
+      title: 'Delete every measurement on the scan. Undo is offered for 8 seconds.',
       tip: 'Clear all measurements',
       ariaLabel: 'Clear all measurements',
     });
@@ -750,76 +771,7 @@ export class MeasureController {
       ]),
     ]);
 
-    // The toolbar uses a custom, styled hover tooltip (CSS `data-tip`). To stop
-    // the browser's native `title` bubble from doubling up, strip `title` while
-    // a control is hovered/focused and restore it on leave — the rich `title`
-    // text stays the canonical accessible/help string the rest of the time.
-    //
-    // Hover and focus are tracked SEPARATELY. They used to share one flag, so
-    // whichever ended first restored `title` even though the other was still
-    // active. A click is exactly that case: the kind handler calls `btn.blur()`,
-    // the resulting `focusout` restored `title` while the pointer was still over
-    // the button, and the native bubble reappeared on top of the custom tip —
-    // the doubling this code exists to prevent. Chromium focuses a button on
-    // mousedown so it hit the bug on every click; WebKit does not focus buttons
-    // on mousedown, so it never fired the restore and behaved correctly. The
-    // cross-browser run is what surfaced the difference.
-    const hovered = new WeakSet<HTMLElement>();
-    const focused = new WeakSet<HTMLElement>();
-
-    const buttonFor = (e: Event): HTMLElement | null =>
-      ((e.target as HTMLElement | null)?.closest('button') as HTMLElement | null) ?? null;
-
-    /**
-     * True when the event leaves the button entirely. `pointerout` and
-     * `focusout` also fire when moving between a button's own children (the
-     * inline SVG icon and the label span), which would otherwise restore and
-     * re-strip `title` on every internal crossing.
-     */
-    const leavesButton = (e: Event, btn: HTMLElement): boolean => {
-      const to = (e as PointerEvent | FocusEvent).relatedTarget as Node | null;
-      return !(to && btn.contains(to));
-    };
-
-    const strip = (btn: HTMLElement): void => {
-      if (btn.title) {
-        btn.dataset.nativeTitle = btn.title;
-        btn.removeAttribute('title');
-      }
-    };
-    /** Restore only once BOTH hover and focus have cleared. */
-    const restoreIfIdle = (btn: HTMLElement): void => {
-      if (hovered.has(btn) || focused.has(btn)) return;
-      if (btn.dataset.nativeTitle != null) {
-        btn.title = btn.dataset.nativeTitle;
-        delete btn.dataset.nativeTitle;
-      }
-    };
-
-    this.hint.addEventListener('pointerover', (e) => {
-      const btn = buttonFor(e);
-      if (!btn) return;
-      hovered.add(btn);
-      strip(btn);
-    });
-    this.hint.addEventListener('pointerout', (e) => {
-      const btn = buttonFor(e);
-      if (!btn || !leavesButton(e, btn)) return;
-      hovered.delete(btn);
-      restoreIfIdle(btn);
-    });
-    this.hint.addEventListener('focusin', (e) => {
-      const btn = buttonFor(e);
-      if (!btn) return;
-      focused.add(btn);
-      strip(btn);
-    });
-    this.hint.addEventListener('focusout', (e) => {
-      const btn = buttonFor(e);
-      if (!btn || !leavesButton(e, btn)) return;
-      focused.delete(btn);
-      restoreIfIdle(btn);
-    });
+    installNativeTitleStrip(this.hint);
 
     this._renderKindButtons();
 
@@ -1218,8 +1170,18 @@ export class MeasureController {
           ? areaBreakdown(m.points, this._worldUp, f, this._effVertical())
           : undefined,
       volumeResidentOnly: m.volumeResidentOnly,
+      volumeBaseLevel: this._volumeBaseLevel(m),
       trust: m.trust,
     };
+  }
+
+  /** The volume's base level as an elevation, through the datum offset the profile rows use; local without a datum. */
+  private _volumeBaseLevel(m: Measurement): string | undefined {
+    const v = m.volume;
+    if (m.kind !== 'volume' || !v || !Number.isFinite(v.referenceZ) || this._verticalRefused || this._verticalUnitInvalid) return undefined;
+    const level = (v.referenceZ + (this._originUp ?? 0)) * this._effVertical();
+    const text = this._unitUnverified() || this._heightUnverified() ? formatUnitUnverified(level) : formatElevation(level, this._units);
+    return volumeBaseLevelClause(text, this._originUp !== null);
   }
 
   /**
@@ -1976,21 +1938,29 @@ export class MeasureController {
     return [p[0], p[1], p[2]];
   }
 
-  /** Remove the most recently placed vertex of the in-progress measurement. */
+  /** Remove the most recently placed vertex of the in-progress measurement; with none, say so. */
   undoLastPoint(): void {
-    if (!this._draft) return;
+    if (!this._draft) {
+      this._setHintText(NOTHING_TO_UNDO_HINT);
+      return;
+    }
     this._draft.points.pop();
     if (this._draft.points.length === 0) this._draft = null;
     this._updateHint();
   }
 
-  /** Remove every measurement. */
+  /** Called after Clear with every removed measurement, for an Undo. Set by the panel mount. */
+  onClearAll: ((removed: RemovedMeasurement[]) => void) | null = null;
+
+  /** Remove every measurement at once; {@link onClearAll} receives them for an Undo. */
   clear(): void {
+    const removed = this._measurements;
     this._epoch++;
     this._measurements = [];
     this._draft = null;
     this._updateHint();
     this._emitChange();
+    if (removed.length > 0) this.onClearAll?.(removed.map((measurement, index) => ({ measurement, index, epoch: this._epoch })));
   }
 
   /** Project all measurements and redraw. Called once per frame by the Viewer. */
@@ -2207,6 +2177,7 @@ export class MeasureController {
   private _renderKindButtons(): void {
     for (const [k, btn] of this._kindButtons) {
       btn.classList.toggle('olv-mkind-active', k === this._kind);
+      btn.setAttribute('aria-pressed', String(k === this._kind)); // the chosen kind, for a screen reader
     }
   }
 
@@ -2231,12 +2202,34 @@ export class MeasureController {
     const mid = target?.dataset.mid ?? null;
     const viAttr = target?.dataset.vi ?? null;
     if (mid === null || viAttr === null) return;
+    const m = this._measurements.find((x) => x.id === mid);
+    if (!m) return;
     e.preventDefault();
-    this._drag = { id: mid, vi: Number(viAttr), x: e.clientX, y: e.clientY, moved: false };
+    const start = m.points.map((p): Vec3 => [p[0], p[1], p[2]]);
+    this._drag = { id: mid, vi: Number(viAttr), x: e.clientX, y: e.clientY, moved: false, start };
     this._dragRect = this._draw.element.getBoundingClientRect();
     this._cursor = null;
     window.addEventListener('pointermove', this._onDragMove);
     window.addEventListener('pointerup', this._onDragUp);
+    window.addEventListener('keydown', this._onDragKey, true);
+  }
+
+  /** Esc while a handle is dragged: the vertex goes back where the drag began, and the key goes no further. */
+  private readonly _onDragKey = (e: KeyboardEvent): void => {
+    if (e.key !== 'Escape') return;
+    e.preventDefault();
+    e.stopImmediatePropagation();
+    this.cancelDrag();
+  };
+
+  /** End a handle drag with the measurement as it was before it. True when a drag was open. */
+  cancelDrag(): boolean {
+    const drag = this._drag;
+    if (!drag) return false;
+    const m = this._measurements.find((x) => x.id === drag.id);
+    if (m && drag.moved) drag.start.forEach((p, i) => { m.points[i] = [p[0], p[1], p[2]]; });
+    this._endDrag();
+    return true;
   }
 
   /** Track the drag pointer; the actual re-pick is coalesced into `render`. */
@@ -2299,6 +2292,7 @@ export class MeasureController {
     this._dragDirty = false;
     window.removeEventListener('pointermove', this._onDragMove);
     window.removeEventListener('pointerup', this._onDragUp);
+    window.removeEventListener('keydown', this._onDragKey, true);
     // Released without moving: a click on the vertex, not an edit.
     if (!drag.moved) {
       if (e) this._placeOnVertex(draggedId, drag.vi, e.clientX, e.clientY);
@@ -2515,6 +2509,10 @@ export class MeasureController {
       this._kind === 'profile';
     const ready = !!d && isPolygonKind && d.points.length >= MIN_POINTS[d.kind];
     this._finishBtn.classList.toggle('olv-hidden', !ready);
+    // Undo has a point to remove only while a draft holds one.
+    const canUndo = !!d && d.points.length > 0;
+    this._undoBtn.disabled = !canUndo;
+    setStrippableTitle(this._undoBtn, canUndo ? UNDO_TITLE : UNDO_DISABLED_TITLE);
   }
 
   private _composeHint(): string {

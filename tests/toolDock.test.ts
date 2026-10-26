@@ -291,3 +291,41 @@ describe('the More disclosure across viewport tiers', () => {
     expect(base).not.toContain('olv-tool-probe');
   });
 });
+
+describe('Copy view link', () => {
+  function dockWithShare(onShare: () => void | boolean | Promise<void | boolean>) {
+    const dock = new ToolDock({
+      onFrameAll: noop, onSnapshot: noop, onShare, onMeasureToggle: noop, onInspectToggle: noop,
+      onProbeToggle: noop, onAnnotateToggle: noop, onAnalyseToggle: noop, onHelp: noop, onCommandPalette: noop, onClose: noop,
+    });
+    const button = buttons(dock).find((b) => b.classList.contains('olv-tool-share'))!;
+    const label = () => button.querySelector('.olv-tool-label')!.textContent;
+    return { dock, button, label };
+  }
+
+  it('says Link copied only once the clipboard took the link', async () => {
+    const copied = dockWithShare(async () => true);
+    copied.button.dispatchEvent({ type: 'click', detail: 1 });
+    expect(copied.label()).toBe('Copy view link');
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(copied.label()).toBe('Link copied');
+
+    const blocked = dockWithShare(async () => false);
+    blocked.button.dispatchEvent({ type: 'click', detail: 1 });
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(blocked.label()).toBe('Copy view link');
+  });
+
+  it('is disabled while a stream is the scene, with the tooltip saying why, and re-enabled for a file', () => {
+    const { dock, button } = dockWithShare(noop);
+    const enabledTitle = button.title;
+    dock.setShareEnabled(false);
+    expect(button.disabled).toBe(true);
+    expect(button.title).toBe('View links work for scans opened from a file.');
+    dock.setShareEnabled(true);
+    expect(button.disabled).toBe(false);
+    expect(button.title).toBe(enabledTitle);
+  });
+});

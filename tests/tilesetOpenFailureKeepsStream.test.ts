@@ -35,14 +35,15 @@ const REFUSED = 'http://127.0.0.1:8080/tileset.json';
 describe('a tileset open that fails before its commit', () => {
   it('keeps a stream that was on screen before the open', async () => {
     const d = deps(true);
-    await openRemoteTileset(REFUSED, undefined, d as never);
+    // The refusal is shown on the drop zone and rethrown for the URL field's inline error.
+    await expect(openRemoteTileset(REFUSED, undefined, d as never)).rejects.toThrow();
     expect(d.dropZone.setError).toHaveBeenCalled();
     expect(d.closeStreaming).not.toHaveBeenCalled();
   });
 
   it('still tidies the streaming chrome when no stream was open', async () => {
     const d = deps(false);
-    await openRemoteTileset(REFUSED, undefined, d as never);
+    await openRemoteTileset(REFUSED, undefined, d as never).catch(() => {});
     expect(d.closeStreaming).toHaveBeenCalledTimes(1);
   });
 });

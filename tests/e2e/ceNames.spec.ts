@@ -42,6 +42,8 @@ test('the dock, the palette and the launcher use the same names', async ({ page 
   await expect(page.locator('.olv-palette-row').first()).toBeVisible();
   const titles = await page.locator('.olv-palette-row .olv-palette-row-title').allTextContents();
   for (const name of Object.values(names)) expect(titles, name).toContain(name);
+  // The file actions are palette entries too, under their registry names.
+  for (const name of ['Open scan', 'Open session', 'Save session', 'Report PDF']) expect(titles, name).toContain(name);
   await page.keyboard.press('Escape');
 
   await page.locator('.olv-ws-tab[data-mode="work"]').click();

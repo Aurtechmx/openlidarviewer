@@ -2,6 +2,7 @@ import { el } from './dom';
 import { createBusyScanController, type BusyScanController } from './busyScan';
 import { clamp01 } from '../numeric';
 import { createDisplayThrottle, type DisplayThrottle } from './displayThrottle';
+import { SESSION_LOG_OPEN_EVENT } from '../app/sessionLog/sessionLog';
 
 /** What is known about the file an open is reading, as plain text. */
 export interface LoadContext {
@@ -51,6 +52,19 @@ export const CHECKING_FILE = 'Checking file…';
  * `.olv-toast` (see tests/e2e/a11yAnnouncements.spec.ts's header comment),
  * which the single-region `.olv-lasso-toast` doesn't need.
  */
+/** A paused error never resumes with less than this on the clock. */
+const ERROR_RESUME_MIN_MS = 1500;
+
+/**
+ * How long an error toast stays: the longer of 6 s and 0.4 s per word, so a
+ * refusal that explains itself can be read to the end, capped at 30 s. With a
+ * copyable report it stays at least the 20 s it always did.
+ */
+export function errorToastDuration(text: string, hasReport: boolean): number {
+  const words = text.trim().split(/\s+/).filter(Boolean).length;
+  return Math.min(30_000, Math.max(hasReport ? 20_000 : 6_000, words * 400));
+}
+
 export class DropZone {
   /** The toast element — mount it into the overlay. */
   readonly toast: HTMLElement;
@@ -68,6 +82,15 @@ export class DropZone {
   /** Copies the open failure report; shown only with an error that has one. */
   private readonly _copy: HTMLButtonElement;
   private _report = '';
+  /** The error toast's own close control. */
+  private readonly _dismiss: HTMLButtonElement;
+  /** Opens the Session log, where the message is recorded with what led to it. */
+  private readonly _logBtn: HTMLButtonElement;
+  /** How long the current error has left on screen, and when that was last measured. */
+  private _errorRemaining = 0;
+  private _errorArmedAt = 0;
+  /** True while a hover or focus holds the error on screen. */
+  private _errorPaused = false;
   /** Visually-hidden polite live region — mirrors progress / preload text. */
   private readonly _srStatus: HTMLElement;
   /** Visually-hidden assertive live region — mirrors error text. */
@@ -137,7 +160,7 @@ export class DropZone {
     this._queueLabel = el('span', { className: 'olv-toast-queue olv-hidden' });
 
     this._copy = el('button', {
-      className: 'olv-toast-cancel olv-hidden',
+      className: 'olv-toast-cancel olv-toast-copy olv-hidden',
       text: 'Copy report',
       tip: 'Copy what was found in this file as plain text: size, content type and format evidence. No file name, path or coordinates.',
     });
@@ -151,6 +174,26 @@ export class DropZone {
         () => { this._copy.textContent = 'Report copied'; },
         () => { this._copy.textContent = 'Copy blocked by the browser'; },
       );
+    });
+
+    this._dismiss = el('button', {
+      className: 'olv-toast-cancel olv-toast-dismiss olv-hidden',
+      text: '×',
+      title: 'Dismiss message',
+      ariaLabel: 'Dismiss message',
+    });
+    this._dismiss.type = 'button';
+    this._dismiss.addEventListener('click', () => this._hideError());
+    this._logBtn = el('button', {
+      className: 'olv-toast-cancel olv-toast-log olv-hidden',
+      text: 'Show in Session log',
+      title: 'Open the Session log, which keeps this message with what led to it.',
+    });
+    this._logBtn.type = 'button';
+    this._logBtn.addEventListener('click', () => {
+      // The workspace shell answers this event with the page's opener.
+      if (typeof CustomEvent !== 'function' || typeof document.dispatchEvent !== 'function') return;
+      document.dispatchEvent(new CustomEvent(SESSION_LOG_OPEN_EVENT, { detail: { respond: () => {} } }));
     });
 
     this._barFill = el('span', { className: 'olv-toast-bar-fill' });
@@ -182,10 +225,18 @@ export class DropZone {
       this._cancel,
       this._cancelRest,
       this._copy,
+      this._logBtn,
+      this._dismiss,
     ]);
     // Visibility is driven by .olv-hidden so theming + reduced-motion
     // overrides hit the toast the same way they hit every other surface.
     this.toast = el('div', { className: 'olv-toast olv-hidden' }, [this._context, row, this._note, this._bar]);
+    // An error stays while it is being read or reached: hovering or focusing
+    // the toast holds it, and leaving lets the rest of its time run.
+    this.toast.addEventListener('pointerenter', () => this._pauseErrorHide());
+    this.toast.addEventListener('pointerleave', () => this._resumeErrorHide());
+    this.toast.addEventListener('focusin', () => this._pauseErrorHide());
+    this.toast.addEventListener('focusout', () => this._resumeErrorHide());
     // Screen-reader announcements live in two PERMANENTLY rendered,
     // visually-hidden nodes rather than on the toast itself: the toast hides
     // via `display:none`, which removes it from the accessibility tree, so
@@ -293,10 +344,42 @@ export class DropZone {
   /** Cancel a pending error auto-hide so it cannot hide a newer toast state. */
   private _clearHideTimer(): void {
     this._copy.classList.add('olv-hidden');
+    this._dismiss.classList.add('olv-hidden');
+    this._logBtn.classList.add('olv-hidden');
+    this._errorPaused = false;
     if (this._hideTimer !== null) {
       window.clearTimeout(this._hideTimer);
       this._hideTimer = null;
     }
+  }
+
+  /** Start (or restart) the error's remaining time. */
+  private _armErrorHide(): void {
+    this._errorArmedAt = Date.now();
+    this._hideTimer = window.setTimeout(() => this._hideError(), this._errorRemaining);
+  }
+
+  /** Hold the error on screen while it is hovered or focused. */
+  private _pauseErrorHide(): void {
+    if (this._hideTimer === null || !this.toast.classList.contains('olv-toast-error')) return;
+    window.clearTimeout(this._hideTimer);
+    this._hideTimer = null;
+    // What is left runs after the pointer or focus leaves; never less than a moment.
+    this._errorRemaining = Math.max(ERROR_RESUME_MIN_MS, this._errorRemaining - (Date.now() - this._errorArmedAt));
+    this._errorPaused = true;
+  }
+
+  private _resumeErrorHide(): void {
+    if (!this._errorPaused) return;
+    this._errorPaused = false;
+    this._armErrorHide();
+  }
+
+  /** Take the error off screen, with its controls and announcement. */
+  private _hideError(): void {
+    this._clearHideTimer();
+    this.toast.classList.add('olv-hidden');
+    this._srAlert.textContent = '';
   }
 
   /** The open in progress; pass it back with updates so a stale one is dropped. */
@@ -585,9 +668,11 @@ export class DropZone {
   }
 
   /**
-   * Show an error message in the toast. Auto-hides after 6 s, or 20 s when a
-   * `report` is offered through the Copy report control. Ends any open, so its
-   * file context is cleared and a late update from it is dropped.
+   * Show an error message in the toast. It stays for the longer of 6 s and
+   * 0.4 s per word (20 s at least when a `report` is offered through the Copy
+   * report control), up to 30 s, and holds while hovered or focused. Dismiss
+   * and Show in Session log sit beside it. Ends any open, so its file context
+   * is cleared and a late update from it is dropped.
    */
   setError(text: string, report?: string): void {
     this._clearHideTimer();
@@ -614,12 +699,11 @@ export class DropZone {
     // assertive) — a load failure should interrupt; routine progress should
     // not.
     this._srAlert.textContent = text;
+    this._dismiss.classList.remove('olv-hidden');
+    this._logBtn.classList.remove('olv-hidden');
     this.toast.classList.remove('olv-hidden');
-    this._hideTimer = window.setTimeout(() => {
-      this._hideTimer = null;
-      this.toast.classList.add('olv-hidden');
-      this._srAlert.textContent = '';
-    }, report ? 20000 : 6000);
+    this._errorRemaining = errorToastDuration(text, report !== undefined);
+    this._armErrorHide();
   }
 
   /**

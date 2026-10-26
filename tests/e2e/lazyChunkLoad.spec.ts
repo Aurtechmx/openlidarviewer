@@ -202,7 +202,7 @@ test.describe('lazily loaded viewer tools', () => {
       page.waitForEvent('download', { timeout: 20_000 }),
       page.locator('.olv-tool-snapshot').first().click(),
     ]);
-    expect(download.suggestedFilename()).toBe('openlidarviewer.png');
+    expect(download.suggestedFilename()).toMatch(/^.+-view-\d{8}-\d{6}\.png$/);
     expect(failures, failures.join('\n')).toEqual([]);
   });
 

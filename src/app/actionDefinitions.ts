@@ -51,7 +51,12 @@ export interface ActionRegistryDeps {
   syncLassoButton: () => void;
   runDeriveClassification: () => Promise<void>;
   saveSnapshot: () => void | Promise<void>;
-  copyShareLink: () => void | Promise<void>;
+  copyShareLink: () => void | Promise<unknown>;
+  /** The session file, the scan picker and the PDF report, as the panels run them. */
+  exportSession: () => unknown;
+  handleFile: (file: File) => unknown;
+  openScan: () => void;
+  exportReport: () => void | Promise<void>;
   terrainAnalysisEntry: TerrainAnalysisEntryDeps;
   observatoryEntry: ObservatoryEntryDeps;
   runFillUnclassified: () => Promise<void>;
@@ -114,6 +119,10 @@ export function buildActionRegistry(deps: ActionRegistryDeps): Action[] {
   const exports_ = contributeExportActions({
     saveSnapshot: deps.saveSnapshot,
     copyShareLink: deps.copyShareLink,
+    exportSession: deps.exportSession,
+    handleFile: deps.handleFile,
+    openScan: deps.openScan,
+    exportReport: deps.exportReport,
     buildCurrentStoryInputs: deps.buildCurrentStoryInputs,
     showLassoToast: deps.showLassoToast,
   });

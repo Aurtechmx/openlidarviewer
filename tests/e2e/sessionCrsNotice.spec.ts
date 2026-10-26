@@ -58,7 +58,7 @@ test.describe('session coordinate-system notice', () => {
       api.placeMeasurementPoint({ x: 7, y: 6, z: 1 });
     });
     const download = first.waitForEvent('download');
-    await first.locator('.olv-mp-action', { hasText: 'Export' }).click();
+    await first.locator('.olv-mp-action', { hasText: 'Save session' }).click();
     const saved = readFileSync((await (await download).path())!, 'utf8');
     expect((JSON.parse(saved) as Session).crs).toMatchObject({ epsg: 32613, userConfirmed: true, source: 'user-override' });
     await first.context().close();

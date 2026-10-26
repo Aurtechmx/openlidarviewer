@@ -26,6 +26,8 @@ import { upVectorOf } from '../geo/frame/layerUpFrame';
 import { cloudUpAxisMoved, setCloudUpResolver } from '../render/layerUpRegistry';
 import { bindMeasureUnitFrames, chainUnitFrame, type LayerUnitSource, type MeasureUnitFrames } from './measureLayerUnits';
 import { buildMeasureConfidenceContext } from './measureConfidenceContext';
+import { buildResultModel } from './measureResultModel';
+import { copyToClipboard } from '../ui/clipboard';
 import { loadMeasurePanel, loadProfileWorkbenchRuntime } from '../lazyChunks';
 import { retryableOnce, mountPanelOnce } from './lazySurfaceLoad';
 
@@ -247,9 +249,19 @@ export function createMeasurePanelMount(deps: MeasurePanelMountDeps): MeasurePan
     }, deps.toast, () => deps.getViewer().measure.drafting);
   }
 
+  /** The Clear button's Undo: every measurement goes back in its old order, in one change. */
+  function offerUndoAll(removed: RemovedMeasurement[]): void {
+    const n = removed.length;
+    panel?.offerUndo(`Deleted ${n} ${n === 1 ? 'measurement' : 'measurements'}.`, () => {
+      const measure = deps.getViewer().measure;
+      if (measure.holdChange(() => removed.map((r) => measure.restoreMeasurement(r)).some(Boolean))) refresh();
+    }, deps.toast, () => deps.getViewer().measure.drafting);
+  }
+
   /** Construct the panel; the controller drives its measurement list. */
   function construct(Ctor: MeasurePanelCtor): MeasurePanel {
     const viewer = deps.getViewer();
+    viewer.measure.onClearAll = offerUndoAll;
     return new Ctor({
       onDelete: (id) => {
         // The dock plots THIS measurement's corridor, and a deleted
@@ -257,6 +269,14 @@ export function createMeasurePanelMount(deps: MeasurePanelMountDeps): MeasurePan
         if (id === dockedId) closeWorkbench();
         const removed = viewer.measure.removeMeasurement(id);
         if (removed) offerUndo(removed);
+      },
+      // The row's Copy writes exactly what the result card's Copy writes.
+      onCopy: (id) => {
+        const s = viewer.measure.getSummaries().find((x) => x.id === id);
+        if (!s) return;
+        const model = buildResultModel(s, buildMeasureConfidenceContext(viewer, deps.crsService.current(), deps.crsService.context()));
+        if (model.copyText === null) { deps.toast?.('No value to copy for this measurement.'); return; }
+        void copyToClipboard(model.copyText).then((ok) => deps.toast?.(ok ? 'Result copied.' : 'Could not copy the result.'));
       },
       onRename: (id, name) => viewer.measure.renameMeasurement(id, name),
       onExport: () => void deps.exportSession(),

@@ -30,7 +30,7 @@ import { detectCopc } from '../io/copc/copcDetect';
 import { formatProgress, loadStageLabel } from '../io/loadProgress';
 import { loadContextFacts, streamingContextFacts } from '../io/loadScope';
 import { sniffFormat } from '../io/sniffFormat';
-import { describeLoadError, LoadError } from '../io/loadErrors';
+import { describeLoadError, graphicsReady, LoadError } from '../io/loadErrors';
 import { LoadCancelledError } from '../io/loadFile';
 import type { ReplaceOutcome, ReplaceRequest } from './discardGuard';
 import { HEADER_PEEK_BYTES, openLocalHeavyLas, describeHeavyRefusal } from './openLocalHeavyLas';
@@ -309,6 +309,9 @@ export async function openScan(file: File, deps: OpenScanDeps): Promise<void> {
   try {
     // ensure the lazy-loaded Viewer is ready before touching it.
     await deps.viewerReady;
+    // A graphics backend that cannot start is reported as that, before the
+    // file is read, so a decode never runs into a renderer that is not there.
+    await graphicsReady(deps.getViewer().ready);
     hadStreamingOnEntry = deps.getViewer().hasStreamingCloud;
     // One read of the file's first 64 KiB serves every prefix consumer on
     // this path: the COPC sniff here (589 bytes), the heavy peek (64 KiB) and
@@ -747,6 +750,7 @@ export async function attachStaticCloud(
   deps.dock.setProbeEnabled(true);
   deps.dock.setAnnotateEnabled(true);
   deps.dock.setCloseEnabled(true);
+  deps.dock.setShareEnabled?.(true); // a file-opened scan is what a view link restores onto
   deps.navBar.element.classList.remove('olv-hidden');
   deps.navBar.setMode('orbit');
   deps.navBar.flashHelp();

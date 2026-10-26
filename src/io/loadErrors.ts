@@ -50,12 +50,39 @@ export class LoadError extends Error {
    * user and is shown in place of the category message.
    */
   readonly report?: string;
-  constructor(category: LoadErrorCategory, message: string, report?: string, options?: { cause?: unknown }) {
-    super(message, options);
+  /**
+   * True when `message` was written for the user and must reach the toast as
+   * it is: a refusal that names the file's size and the way round it, say.
+   * Without it, or a report, the toast shows the category's general message
+   * and the message is a developer's detail for the console.
+   */
+  readonly userFacing: boolean;
+  constructor(category: LoadErrorCategory, message: string, report?: string, options?: { cause?: unknown; userFacing?: boolean }) {
+    super(message, options?.cause !== undefined ? { cause: options.cause } : undefined);
     this.name = 'LoadError';
     this.category = category;
     if (report !== undefined) this.report = report;
+    this.userFacing = options?.userFacing === true;
     Object.defineProperty(this, LOAD_ERROR_BRAND, { value: true });
+  }
+}
+
+/** The message shown when neither graphics backend can start, so no scan can be drawn. */
+export const GRAPHICS_UNAVAILABLE_MESSAGE =
+  'This browser could not start 3D graphics. Neither WebGPU nor WebGL 2 is available. '
+  + 'Turn on hardware acceleration in the browser settings, or try another browser.';
+
+/**
+ * Wait for the viewer's graphics backend. A failed start becomes a user-facing
+ * {@link LoadError}, so every open path's catch shows the same plain message
+ * instead of reading the renderer's throw as a fault in the file.
+ */
+export async function graphicsReady(ready: Promise<unknown> | undefined): Promise<void> {
+  if (!ready) return;
+  try {
+    await ready;
+  } catch (cause) {
+    throw new LoadError('gpu-limitation', GRAPHICS_UNAVAILABLE_MESSAGE, undefined, { cause, userFacing: true });
   }
 }
 
@@ -125,7 +152,7 @@ export function classifyLoadError(message: string): LoadErrorCategory {
  */
 export function describeLoadError(error: unknown): string {
   if (error instanceof LoadError) {
-    return error.report !== undefined ? error.message : messageForCategory(error.category);
+    return error.report !== undefined || error.userFacing ? error.message : messageForCategory(error.category);
   }
   const message = error instanceof Error ? error.message : String(error);
   if (!message) return messageForCategory('decode-failure');

@@ -11,10 +11,10 @@
  *  - The editable-target check reading only the event target's tag name, so a
  *    keystroke inside a contenteditable's inner span, or inside the panel's
  *    name field, pops a vertex instead of undoing the text.
- *  - The chord being claimed with the tool armed but nothing drawn. The caller
- *    consumes whatever this returns, so a non-null answer there would
- *    preventDefault over a focused field's own undo and over the global
- *    annotation undo.
+ *  - The chord falling through with the tool armed but nothing drawn. The
+ *    tool answers it ("Nothing to undo here"), so the global annotation undo
+ *    cannot fire under an open Measure tool. A focused field keeps its own
+ *    undo through the editable-target check.
  */
 import { describe, it, expect } from 'vitest';
 import { isEditableTarget, measureKeyAction } from '../src/ui/shortcuts';
@@ -78,10 +78,12 @@ describe('measure undo chord', () => {
     expect(isEditableTarget(null)).toBe(false);
   });
 
-  it('does not claim the chord with measure mode armed but nothing drawn', () => {
-    expect(measureKeyAction(key({ key: 'z', metaKey: true }), false)).toBeNull();
-    expect(measureKeyAction(key({ key: 'z', ctrlKey: true }), false)).toBeNull();
-    expect(handle(key({ key: 'z', metaKey: true }), false).prevented).toBe(false);
+  it('claims the chord with measure mode armed but nothing drawn, so the tool can say there is nothing to undo', () => {
+    expect(measureKeyAction(key({ key: 'z', metaKey: true }), false)).toBe('undo');
+    expect(measureKeyAction(key({ key: 'z', ctrlKey: true }), false)).toBe('undo');
+    expect(handle(key({ key: 'z', metaKey: true }), false).prevented).toBe(true);
+    // Enter still has nothing to finish, so it stays with the focused control.
+    expect(measureKeyAction(key({ key: 'Enter' }), false)).toBeNull();
   });
 
   it('leaves the event unconsumed when it belongs to a text field', () => {

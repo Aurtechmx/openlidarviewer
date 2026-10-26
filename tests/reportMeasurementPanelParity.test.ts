@@ -15,6 +15,7 @@ import type { Measurement, MeasurementKind, UnitSystem, Vec3 } from '../src/rend
 import type { Viewer } from '../src/render/Viewer';
 import { installFakeDom } from './support/measurePanelDom';
 import { stubDownloadGlobals } from './helpers/downloadGlobalsStub';
+import { measurementRowText } from '../src/app/measureResultModel';
 
 beforeAll(() => installFakeDom({ ns: true }));
 
@@ -109,7 +110,8 @@ describe('PDF measurement rows read as the panel does', () => {
   for (const f of FRAMES) {
     it(`every kind, ${f.label}`, async () => {
       const measure = controllers.get(f.label)!;
-      const panel = new Map(measure.getSummaries().map((s) => [s.id, s.value]));
+      // The row as the panel prints it: the headline, with a volume's base level under it.
+      const panel = new Map(measure.getSummaries().map((s) => [s.id, measurementRowText(s)]));
       const rows = composeReportInputs(await capturedInputs(measure)).measurements;
       expect(rows.map((r) => r.name)).toEqual(FIXTURES.map((m) => m.id));
       for (const r of rows) expect(r.value, `${r.kind} ${r.name}`).toBe(panel.get(r.name));

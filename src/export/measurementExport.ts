@@ -620,6 +620,8 @@ export function measurementsToGeoJSON(
       // measurementsToCsv.
       if (m.kind === 'volume' && m.volume?.gridAuthority) properties.grid_authority = gridAuthorityExportValue(m.volume.gridAuthority);
       if (m.kind === 'volume' && m.volume?.method) properties.volume_method = m.volume.method;
+      const baseLevel = volumeBaseLevel(m, ctx);
+      if (baseLevel !== null) properties.base_level = baseLevel;
       const w = m.kind === 'volume' ? m.volume?.withheld : undefined;
       if (w) Object.assign(properties, { source_points: w.source, withheld_excluded: w.excluded, analysed_points: w.analysed });
       // Only a volume measured on a reduced source states how; a whole one adds nothing.
@@ -780,6 +782,22 @@ export function sourceUnitKey(key: string): string {
   return key;
 }
 
+/**
+ * A polygon volume's base level in the output frame's vertical: the reference
+ * plane's height, carried to the output through the same mapping as the
+ * vertices, so the CSV and GeoJSON state it beside the coordinates it applies
+ * to. Null for every other kind, and when the frame refuses heights.
+ */
+function volumeBaseLevel(m: Measurement, ctx: MeasurementExportContext): number | null {
+  const v = m.volume;
+  const p = m.points[0];
+  if (m.kind !== 'volume' || !v || !p || !Number.isFinite(v.referenceZ) || ctx.verticalRefused || ctx.verticalScaleInvalid) return null;
+  const up = ctx.up;
+  const d = v.referenceZ - (p[0] * up[0] + p[1] * up[1] + p[2] * up[2]);
+  const onPlane: Vec3 = [p[0] + d * up[0], p[1] + d * up[1], p[2] + d * up[2]];
+  return roundMeasured(ctx.toOutput(onPlane, m)[2]);
+}
+
 /** Rewrite every unit-bearing key of a metrics record. Unitless keys pass through. */
 function inSourceUnits<T>(metrics: Record<string, T>): Record<string, T> {
   return Object.fromEntries(Object.entries(metrics).map(([k, v]) => [sourceUnitKey(k), v]));
@@ -790,6 +808,8 @@ const CSV_COLUMNS = [
   'length_m', 'horizontal_m', 'vertical_m', 'rise_m', 'run_m',
   'grade_pct', 'angle_deg', 'area_m2', 'horizontal_area_m2', 'perimeter_m',
   'width_m', 'depth_m', 'height_m', 'volume_m3', 'cut_m3', 'fill_m3', 'net_m3',
+  // A polygon volume's base level, in the output frame's vertical like the geometry.
+  'base_level',
   // A grid-owned lasso volume's coverage verdict, and the point-sample
   // cross-check kept beside its canonical cut_m3/fill_m3/net_m3 above — blank
   // on every other kind, and on a volume record from before the switch or
@@ -884,6 +904,8 @@ export function measurementsToCsv(
     };
     if (m.kind === 'volume' && m.volume?.gridAuthority) base.grid_authority = gridAuthorityExportValue(m.volume.gridAuthority);
     if (m.kind === 'volume' && m.volume?.method) base.volume_method = m.volume.method;
+    const baseLevel = volumeBaseLevel(m, ctx);
+    if (baseLevel !== null) base.base_level = baseLevel;
     const w = m.kind === 'volume' ? m.volume?.withheld : undefined;
     if (w) Object.assign(base, { source_points: w.source, withheld_excluded: w.excluded, analysed_points: w.analysed });
     if (w?.reduction) Object.assign(base, reductionExportFields(w));

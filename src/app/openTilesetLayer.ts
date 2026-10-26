@@ -446,13 +446,14 @@ export async function openRemoteTileset(
       // A deliberate refusal already says what is wrong and what would be lost.
       // Everything else goes through the classifier, where the category is the
       // useful thing to say.
-      deps.dropZone.setError(
-        err instanceof TilesetRefusal ? err.message : describeLoadError(err),
-      );
+      const message = err instanceof TilesetRefusal ? err.message : describeLoadError(err);
+      deps.dropZone.setError(message);
       // Tidy up only when this open left nothing valid behind: a committed
       // candidate is the scene now, and a stream that was on screen before the
       // open survives a candidate that failed before the commit.
       if (shouldTidyFailedStreamingOpen(committed, hadStreamingScene)) deps.closeStreaming();
+      // Rethrown so the Stage's URL field shows the message inline with Retry.
+      throw new Error(message, { cause: err });
     }
   } finally {
     unlinkAbort();

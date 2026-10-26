@@ -12,9 +12,11 @@
  *
  * `actionDescriptors.ts` keys these names by registry id, and its
  * `SURFACE_DESCRIPTORS` covers the actions that have a control but no palette
- * entry (the palette itself, Help, opening and closing a scan, the session
- * file, the live probe and the Analyse mode), so they have a registry
- * descriptor too.
+ * entry (the palette itself, Help, closing a scan, the live probe and the
+ * Analyse mode), so they have a registry descriptor too. Opening a scan,
+ * saving and opening a session and the PDF report used to be left out of the
+ * palette on purpose, as file-picker and download actions; they are listed
+ * now, so a user who searches for them finds them.
  *
  * Pure data with no imports, so the startup shell can read it without pulling
  * in the palette matcher or the id table.
@@ -38,7 +40,9 @@ export const COMMANDS = 'Commands';
 export const HELP = 'Help';
 export const OPEN_SCAN = 'Open scan';
 export const CLOSE_SCAN = 'Close scan';
-export const EXPORT_SESSION = 'Export session';
+export const SAVE_SESSION = 'Save session';
+export const OPEN_SESSION = 'Open session';
+export const REPORT_PDF = 'Report PDF';
 
 /** A camera preset's name, from the preset's own label ("Top" gives "Top view"). */
 export function cameraPresetTitle(label: string): string {

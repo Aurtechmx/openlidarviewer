@@ -54,6 +54,9 @@ export type { LoadStage, ProgressUpdate } from './loadProgress';
 const HEAD_SLICE_BYTES = 16384;
 
 /** Thrown when a load is cancelled through its `AbortSignal`. */
+// The shell reaches the typed load error through this module, which it already imports.
+export { LoadError } from './loadErrors';
+
 export class LoadCancelledError extends Error {
   constructor() {
     super('Load cancelled');
@@ -318,6 +321,8 @@ async function preflightFile(
           `names its .pnts tiles by relative path, and a file picked off disk ` +
           `has no directory to resolve them against. Paste the tileset.json URL ` +
           `into the URL field to open it.`,
+        undefined,
+        { userFacing: true },
       );
     }
     // Nothing the fast sniff knows. The lazily loaded probe registry weighs the
@@ -382,7 +387,7 @@ function e57Refusal(file: File, preflight: FilePreflight): LoadError | undefined
     );
   }
   if (!preflight.e57.plan.fits) {
-    return new LoadError('memory-constraint', e57TooLargeMessage(file.name, preflight.e57.plan));
+    return new LoadError('memory-constraint', e57TooLargeMessage(file.name, preflight.e57.plan), undefined, { userFacing: true });
   }
   return undefined;
 }
@@ -420,6 +425,8 @@ function nonStreamingOverCeilingRefusal(
       `can be given, and this format is decoded in full before it can be downsampled, so ` +
       `the open would run the tab out of memory. Convert to COPC/EPT (PDAL or untwine) to ` +
       `stream it instead.`,
+    undefined,
+    { userFacing: true },
   );
 }
 
@@ -431,7 +438,7 @@ function nonStreamingOverCeilingRefusal(
  */
 function wholeFileCapRefusal(file: File, format: SourceFormat): LoadError | undefined {
   if (!exceedsWholeFileCap(file.size)) return undefined;
-  return new LoadError('memory-constraint', wholeFileTooLargeMessage(format));
+  return new LoadError('memory-constraint', wholeFileTooLargeMessage(format), undefined, { userFacing: true });
 }
 
 /**

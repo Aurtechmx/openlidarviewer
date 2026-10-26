@@ -6,6 +6,8 @@
  * class-selector `querySelector`, and listeners a test can fire.
  */
 
+import { beforeAll, beforeEach, afterEach, vi } from 'vitest';
+
 export class Node0 {
   readonly children: Node0[] = [];
   readonly attrs: Record<string, string> = {};
@@ -103,4 +105,24 @@ export function installBusyScanDom(): void {
   };
   g.HTMLInputElement ??= class {};
   g.HTMLAnchorElement ??= class {};
+}
+
+/**
+ * Registers the hooks a DropZone test needs: the recording DOM once, then per
+ * test fake timers and a `window` whose timers are the fake ones.
+ */
+export function useBusyScanDomWithFakeTimers(): void {
+  beforeAll(() => {
+    installBusyScanDom();
+  });
+  beforeEach(() => {
+    vi.useFakeTimers();
+    (globalThis as unknown as Record<string, unknown>).window = {
+      setTimeout: (fn: () => void, ms: number) => setTimeout(fn, ms),
+      clearTimeout: (h: ReturnType<typeof setTimeout>) => clearTimeout(h),
+    };
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+  });
 }

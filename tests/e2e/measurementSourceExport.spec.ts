@@ -231,7 +231,7 @@ test('a session saved and reopened with two scans keeps each point on the scan i
   await place(page, 'distance', A_DIST.map((p) => add(p, off.a)), false, 'geom-a.las');
   await expect(page.locator('.olv-mp-row')).toHaveCount(1, { timeout: 5_000 });
   await showWorkspaceMode(page, 'work');
-  const [saved] = await Promise.all([page.waitForEvent('download'), page.locator('.olv-mp-action', { hasText: 'Export' }).click()]);
+  const [saved] = await Promise.all([page.waitForEvent('download'), page.locator('.olv-mp-action', { hasText: 'Save session' }).click()]);
   const sessionText = readFileSync((await saved.path())!, 'utf8');
   expect(sessionText).toContain('pickLayers');
 

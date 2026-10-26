@@ -8,6 +8,7 @@ import {
   isNonTerrainVerdict,
   exportGeoContext,
   generateReportPdf,
+  runReportExport,
   type ReportExportDeps,
 } from '../src/app/reportExport';
 import type { ResolvedCrs } from '../src/geo/CoordinateTypes';
@@ -380,15 +381,15 @@ describe('generateReportPdf — the report assembly body', () => {
     expect(inputs.templateId).toBe('engineering-inspection');
   });
 
-  it('warns via the drop zone when the engine drops sections but still ships the PDF', async () => {
+  it('returns the sections the engine dropped and still ships the PDF; the run, not the assembly, warns', async () => {
     const { deps, setError, generateReport } = makeReportDeps({
       staticCloud,
       failedSections: ['visuals', 'notes'],
     });
-    await generateReportPdf('survey-summary', deps);
+    const failed = await generateReportPdf('survey-summary', deps);
     expect(generateReport).toHaveBeenCalledTimes(1);
-    expect(setError).toHaveBeenCalledTimes(1);
-    expect(setError.mock.calls[0]![0]).toContain('visuals, notes');
+    expect(failed).toEqual(['visuals', 'notes']);
+    expect(setError).not.toHaveBeenCalled();
   });
 
   it('throws "Load a scan first." when neither a static nor a streaming cloud is present', async () => {
@@ -400,5 +401,59 @@ describe('generateReportPdf — the report assembly body', () => {
   it('propagates a report-engine failure to the caller', async () => {
     const { deps } = makeReportDeps({ staticCloud, generateReject: true });
     await expect(generateReportPdf('survey-summary', deps)).rejects.toThrow('pdf-lib exploded');
+  });
+});
+
+describe('runReportExport — the export as the panel and the palette run it', () => {
+  function runDeps(over: { failed?: string[]; reject?: boolean } = {}) {
+    const calls: string[] = [];
+    const generate = vi.fn(async (id: string) => {
+      calls.push(`generate(${id})`);
+      if (over.reject) throw new Error('pdf-lib exploded');
+      return over.failed ?? [];
+    });
+    const dropZone = {
+      setProgress: vi.fn((text: string | null) => { calls.push(`progress(${text})`); }),
+      setError: vi.fn((text: string) => { calls.push(`error(${text})`); }),
+    };
+    const deps = {
+      generate,
+      dropZone,
+      sourceDigestReady: () => true,
+      loadReportEngine: vi.fn(async () => ({ DEFAULT_TEMPLATE_ID: 'technical-report' })),
+    } as unknown as Parameters<typeof runReportExport>[1];
+    return { deps, calls, dropZone, generate };
+  }
+
+  it('clears the progress toast before it warns about dropped sections, so the warning stays visible', async () => {
+    const { deps, calls } = runDeps({ failed: ['visuals', 'notes'] });
+    await runReportExport('survey-summary', deps);
+    expect(calls).toEqual([
+      'progress(Generating report…)',
+      'generate(survey-summary)',
+      'progress(null)',
+      'error(Report saved without these sections: visuals, notes. Check the affected inputs for unusual characters and export again.)',
+    ]);
+  });
+
+  it('says nothing more than the cleared progress for a whole PDF', async () => {
+    const { deps, dropZone } = runDeps();
+    await runReportExport('survey-summary', deps);
+    expect(dropZone.setProgress).toHaveBeenLastCalledWith(null);
+    expect(dropZone.setError).not.toHaveBeenCalled();
+  });
+
+  it('takes the engine default template when none is named', async () => {
+    const { deps, generate } = runDeps();
+    await runReportExport(null, deps);
+    expect(generate).toHaveBeenCalledWith('technical-report');
+  });
+
+  it('reports a failed render through the error toast', async () => {
+    const { deps, dropZone } = runDeps({ reject: true });
+    const err = vi.spyOn(console, 'error').mockImplementation(() => {});
+    await runReportExport('survey-summary', deps);
+    expect(dropZone.setError).toHaveBeenCalledWith('Report generation failed: pdf-lib exploded');
+    err.mockRestore();
   });
 });

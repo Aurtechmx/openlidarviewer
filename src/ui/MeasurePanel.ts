@@ -240,6 +240,8 @@ function safeFileName(name: string): string {
 export interface MeasurePanelCallbacks {
   /** Delete the measurement with this id. */
   onDelete: (id: string) => void;
+  /** Copy the row's result, with its caveat, as the result card's Copy does; absent hides the action. */
+  onCopy?: (id: string) => void;
   /** Rename the measurement with this id. */
   onRename: (id: string, name: string) => void;
   /** Export the current session to a JSON file. */
@@ -432,7 +434,7 @@ export class MeasurePanel {
     });
     const importBtn = el('button', {
       className: 'olv-mp-action',
-      text: 'Open',
+      text: actionTitle('session.open'),
       title:
         'Open a saved .olvsession to restore measurements, annotations, views, ' +
         'camera and render settings. You can also drag the ' +
@@ -1237,9 +1239,10 @@ export class MeasurePanel {
   }
 
   /**
-   * Bring one measurement's row into view and focus its name field, so the
-   * result card's "Open details" lands on the row it is about. False when the
-   * panel has no such row (it was deleted, or the list has not rendered).
+   * Bring one measurement's row into view and focus the row itself, so the
+   * result card's "Open details" lands on the row it is about without opening
+   * its name for editing or focusing a field a collapsed sheet hides. False
+   * when the panel has no such row (it was deleted, or the list has not rendered).
    */
   focusRow(id: string): boolean {
     const row = Array.from(this._list.querySelectorAll<HTMLElement>('.olv-mp-row')).find(
@@ -1247,7 +1250,18 @@ export class MeasurePanel {
     );
     if (!row) return false;
     row.scrollIntoView?.({ block: 'nearest' });
-    row.querySelector<HTMLElement>('.olv-mp-name')?.focus();
+    row.tabIndex = -1;
+    row.focus();
+    return true;
+  }
+
+  /**
+   * Delete one measurement the way its row's × does, for the result card's
+   * Delete. False when the panel lists no such row.
+   */
+  deleteRow(id: string): boolean {
+    if (!this._summaries.some((s) => s.id === id)) return false;
+    this._cb.onDelete(id);
     return true;
   }
 
@@ -1365,6 +1379,12 @@ export class MeasurePanel {
     // measurements feed the aggregate. Owned by the panel — the
     // controller is informed only at aggregate time.
     const children: HTMLElement[] = [dot, name, value, del];
+    const onCopy = this._cb.onCopy;
+    if (onCopy) {
+      const copy = el('button', { className: 'olv-mp-profile-pdf olv-mp-copy', text: 'Copy', title: 'Copy this result, with its caveat, to the clipboard', ariaLabel: `Copy ${s.name}` });
+      copy.addEventListener('click', () => onCopy(s.id));
+      children.splice(children.indexOf(del), 0, copy);
+    }
     const onClip = this._cb.onUseAsClip;
     if (s.kind === 'box' && onClip) {
       const clip = el('button', { className: 'olv-mp-profile-pdf olv-mp-use-clip', text: 'Clip', title: 'Use as clipping region', ariaLabel: `Use ${s.name} as clipping region` });
@@ -1458,6 +1478,14 @@ export class MeasurePanel {
       ? el('div', { className: 'olv-mp-chart-caveat olv-mp-vunit-note', text: VERTICAL_UNIT_BORROWED_NOTE })
       : null;
     const breakdownEls = [breakdownLine, vunitNote].filter((e): e is HTMLDivElement => e !== null);
+    // Volume: the base level cut and fill are measured against, under the headline.
+    if (s.volumeBaseLevel) {
+      breakdownEls.push(el('div', {
+        className: 'olv-mp-breakdown olv-mp-base-level',
+        text: s.volumeBaseLevel,
+        title: 'The horizontal plane cut and fill are measured against: the median of the outline\'s vertex heights, as an elevation when the scan has a datum.',
+      }));
+    }
 
     // Profile-only: render a compact height-vs-distance chart strip
     // beneath the headline row. The chart is a single inline SVG, no

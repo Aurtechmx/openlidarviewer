@@ -29,7 +29,7 @@ import { LoadCancelledError } from '../io/loadFile';
 import { dropPendingSessionForStream } from './pendingSessionRestore';
 import type { ReplaceOutcome, ReplaceRequest } from './discardGuard';
 import { RETIRED_SCAN_OWNER } from './measurementOwnership';
-import { describeLoadError } from '../io/loadErrors';
+import { describeLoadError, graphicsReady, LoadError } from '../io/loadErrors';
 import { increment as recordUsage } from '../diagnostics/usageCounters';
 import { remoteCopcName, remoteEptName } from './remoteSourceNaming';
 import { catalogueItemFor } from './pcCatalogueCrs';
@@ -633,7 +633,7 @@ export async function openStreamingCopc(
   deps.streamingPanel.show();
 
   const viewer = deps.getViewer();
-  await viewer.ready;
+  await graphicsReady(viewer.ready);
   // Inspector stays visible during streaming — it carries the sections
   // that work uniformly against either source type (Scan report,
   // Provenance, Coordinate system, Image export, Report PDF). The
@@ -835,10 +835,8 @@ export async function handleRemoteEpt(
     // next step and sends no manifest request.
     controller.signal.throwIfAborted();
     const check = eptUrlMod.validateRemoteEptUrl(url);
-    if (!check.ok) {
-      deps.dropZone.setError(`${check.reason} Enter the full https://…/ept.json URL.`);
-      return;
-    }
+    // Written for the user; the catch below shows it as it is and rethrows it.
+    if (!check.ok) throw new LoadError('unsupported-format', `${check.reason} Enter the full https://…/ept.json URL.`, undefined, { userFacing: true });
     // Every remote request below uses the validator's RETURNED url, not the raw
     // input. `validateRemoteEptUrl` -> `validateRemoteCopcUrl` runs the shared
     // host-safety gate (`isBlockedHost` rejects loopback, private, link-local and
@@ -925,7 +923,7 @@ export async function handleRemoteEpt(
       throw new Error(`Not a valid EPT manifest — ${detection.reason}`);
     }
 
-    await viewer.ready;
+    await graphicsReady(viewer.ready);
     controller.signal.throwIfAborted();
     deps.streamingPanel.setPhase('Building hierarchy…');
     deps.streamingPanel.show();
@@ -1107,9 +1105,17 @@ export async function handleRemoteEpt(
       // 404, 5xx, hierarchy vs. tile fetch, and transport failures.
       // Fall back to the generic classifier when the EPT chunk itself
       // failed to load (so `eptUrlMod` never arrived).
-      deps.dropZone.setError(
-        eptUrlMod ? eptUrlMod.describeRemoteEptError(err, url) : describeLoadError(err),
-      );
+      // A refusal written for the user (the URL gate, a graphics backend that
+      // cannot start) is shown as it is and began no streaming work to tidy;
+      // anything else is classified.
+      const refused = err instanceof LoadError && err.userFacing;
+      let message: string;
+      if (refused) message = err.message;
+      else if (eptUrlMod) message = eptUrlMod.describeRemoteEptError(err, url);
+      else message = describeLoadError(err);
+      deps.dropZone.setError(message);
+      // Rethrown so the Stage's URL field shows the message inline with Retry.
+      throw new Error(message, { cause: err });
     }
   } finally {
     unlinkAbort();

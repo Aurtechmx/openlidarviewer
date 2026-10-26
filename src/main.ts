@@ -42,7 +42,7 @@ import {
   type OpenStreamingDeps,
 } from './app/openStreaming';
 import {
-  generateReportPdf as runGenerateReportPdf, ownershipViewOf, handOverLayerWork,
+  generateReportPdf as runGenerateReportPdf, runReportExport, ownershipViewOf, handOverLayerWork,
   exportGeoContext as runExportGeoContext,
   type GeoExportContext,
   type ReportExportDeps,
@@ -58,7 +58,7 @@ import {
   downloadBytes as downloadFileBytes,
   downloadText,
 } from './io/download';
-import { noteEdit, pickUndo, pickRedo, withSuppressed } from './ui/undoRouter';
+import { noteEdit, withSuppressed } from './ui/undoRouter';
 // The Measurements panel is lazy-mounted on the first scan load (never in the
 // empty-state shell); its whole mount lifecycle lives in `measurePanelMount.ts`,
 // which pulls the panel class through `loadMeasurePanel()` inside `ensure()`.
@@ -95,7 +95,7 @@ import { createScanRouteCoordinator, routeUnitFrame, type SpaceExportContext } f
 import { TERRAIN_METRIC_VERSION } from './terrain/datasetIntelligence';
 import { ExportPanel, exportClassFacts, exportLayerHooks } from './ui/ExportPanel';
 import { lonLatMapContext } from './export/lonLatMapper';
-import { runFindingsExport, writeScanScopedExport, spaceContextStillCurrent, SPACE_CONTEXT_MOVED, SESSION_EXPORT_SCAN_CHANGED_REFUSAL, sessionSaveNotice } from './export/exportScanIdentity';
+import { runFindingsExport, writeScanScopedExport, spaceContextStillCurrent, SPACE_CONTEXT_MOVED, SESSION_EXPORT_SCAN_CHANGED_REFUSAL, sessionSavedNotice } from './export/exportScanIdentity';
 import {
   crsIsKnown,
   exportScanFootprintKml,
@@ -115,11 +115,11 @@ import { decodeFull } from './convert/decodeFull';
 import { createHelpOverlayLazy, createLazySingleton, createLazySurfaceLoader, buttonLazyTrigger, dialogOpen, retryableOnce, mountPanelOnce } from './app/helpOverlayLazy';
 import {
   buildViewerKeyBindings,
-  installKeyDispatch,
+  installKeyDispatch, undoLastEdit, redoLastEdit, type EditHistoryDeps,
   type GlobalActionHandlers,
   type KeyBindingDeps,
 } from './ui/keyBindings';
-import { LoadCancelledError, warmParseWorker } from './io/loadFile';
+import { LoadCancelledError, LoadError, warmParseWorker } from './io/loadFile';
 import { LocalFileSource } from './io/LocalFileSource';
 import { deviceCaps } from './render/deviceProfile';
 // `startEmbedBridge` is only wired in `?embed=1` mode.
@@ -1394,8 +1394,7 @@ const ensureActionRegistry = retryableOnce((): Promise<Action[]> => loadActionRe
   ensureWorkflowConfigPanel,
   ensureShortcutSheet: () => ensureShortcutSheet((sheet) => sheet.open()), // wrapped so a "Try again" retry opens the sheet too
   hasScan,
-  saveSnapshot,
-  copyShareLink,
+  saveSnapshot, copyShareLink, exportSession, handleFile, openScan: () => stage.promptAddDataset(), exportReport: () => exportReportPdf(null),
   terrainAnalysisEntry: {
     showAnalyseMode: () => showWorkspaceMode('analyse'), showPage: (page) => workspaceShell?.openAnalysePage(page),
     showPanel: () => ensureAnalysePanel().then((p) => { p.setVisible(true); return { hasResult: p.currentResultForProvenance() != null, flowInput: p.flowPulseInput(), terrainAccessInput: p.terrainAccessInput() }; }),
@@ -1495,7 +1494,7 @@ const helpOverlay = createHelpOverlayLazy(stage.overlay, { getActions: () => ens
 const dock = new ToolDock({
   onFrameAll: () => navWiring.frameAll(),
   onSnapshot: () => void saveSnapshot(),
-  onShare: () => void copyShareLink(),
+  onShare: () => copyShareLink(),
   onMeasureToggle: () => { runTool('measure'); },
   onInspectToggle: () => { runTool('inspect'); },
   onProbeToggle: () => viewer.setProbeMode(!viewer.probeMode),
@@ -2312,28 +2311,9 @@ const exportPanel = new ExportPanel({
       currentClassScopeStamp,
       withoutReferencePlane: (render) => inspector.referencePlane?.without(render) ?? render(),
     }),
-  onExportReport: (templateId) => {
-    // Generate a PDF report from the live scan state + annotations +
-    // measurements. The whole `src/report/` module + pdf-lib (~150 KB)
-    // lives behind `loadReportEngine()`; first click downloads both. The
-    // report covers what the scan-report card already does on PNG
-    // exports, but as a multi-page PDF with the full Inspector context.
-    // The progress toast surfaces while the lazy module loads and the PDF
-    // renders, and says when it waits for the source file's checksum;
-    // failures route through the same toast UI as every other export.
-    dropZone.setProgress(sourceDigestReady(scans.activeCloud()) ? 'Generating report…' : 'Generating report: checking the source file first…');
-    return generateReportPdf(templateId)
-      .then(() => {
-        recordUsage('report', templateId);
-        dropZone.setProgress(null);
-      })
-      .catch((err: unknown) => {
-        recordUsage('error', 'report');
-        const msg = err instanceof Error ? err.message : String(err);
-        console.error('[report]', err);
-        dropZone.setError(`Report generation failed: ${msg}`);
-      });
-  },
+  // A PDF report from the live scan state, annotations and measurements; the
+  // `src/report/` module and pdf-lib load on the first click (reportExport.ts).
+  onExportReport: (templateId) => exportReportPdf(templateId),
   // Allocation-free summary for the live panel — NEVER snapshots the streaming
   // resident set (that ~150 MB materialization is deferred to the Export click
   // via getCloud below). Reads scalar facts (resident count, colour/CRS
@@ -2456,7 +2436,7 @@ exportPanel.setCrsKnown(crsIsKnown(crsService.current()));
 // and their viewer wiring are built in clipMount.ts over the pure `clipBox` core.
 const { clipPanel, clipFlow } = mountClip({ overlay: stage.overlay, viewer: () => viewer, ready: () => viewerReady, toast: showLassoToast, workflow: workflowController,
   activeId: () => scans.activeId, activeLayerId: () => (scans.activeId ? runtime.layerIdentity.stableIdFor(scans.activeId) : null), revealScene: () => workspaceShell?.revealScene(),
-  openPage: (p) => workspaceShell?.openToolPage(p), measurePanel: () => measureMount.panel, crs: crsService });
+  openPage: (p, o) => workspaceShell?.openToolPage(p, o), measurePanel: () => measureMount.panel, crs: crsService });
 
 // The Tools tab held only the Clip box until a tool had been used, so it could
 // not say what the tab was for. This card (lazy chunk) lists the tools from the
@@ -2865,6 +2845,7 @@ void viewerLoaded.then(() => {
     // embed leaves these keys unbound). A tool shortcut needs a loaded scan and
     // is inert behind any open dialog, Help included.
     const toolsReady = (): boolean => hasScan() && !dialogOpen();
+    const editHistory: EditHistoryDeps = { viewer: () => viewer, activeId: () => scans.activeId, blocked: () => helpOverlay.isOpen(), refreshClassUi: () => reclassifyUi?.refresh(), toast: showLassoToast };
     globalActionHandlers = {
       onAnnotate: () => { if (toolsReady()) runTool('annotate'); },
       onMeasure: () => { if (toolsReady()) runTool('measure'); },
@@ -2877,30 +2858,8 @@ void viewerLoaded.then(() => {
         if (id && !helpOverlay.isOpen()) viewer.annotate.remove(id);
       },
       onToggleHelp: () => helpOverlay.toggle(),
-      onUndo: () => {
-        if (helpOverlay.isOpen()) return;
-        const id = scans.activeId;
-        const canClass = !!id && viewer.canUndoClassification(id);
-        const pick = pickUndo(viewer.annotate.canUndo, canClass);
-        if (!pick) return;
-        withSuppressed(() => {
-          if (pick === 'classification' && id) viewer.undoClassification(id);
-          else viewer.annotate.undo();
-        });
-        if (pick === 'classification') reclassifyUi?.refresh();
-      },
-      onRedo: () => {
-        if (helpOverlay.isOpen()) return;
-        const id = scans.activeId;
-        const canClass = !!id && viewer.canRedoClassification(id);
-        const pick = pickRedo(viewer.annotate.canRedo, canClass);
-        if (!pick) return;
-        withSuppressed(() => {
-          if (pick === 'classification' && id) viewer.redoClassification(id);
-          else viewer.annotate.redo();
-        });
-        if (pick === 'classification') reclassifyUi?.refresh();
-      },
+      onUndo: () => { undoLastEdit(editHistory); },
+      onRedo: () => { redoLastEdit(editHistory); },
     };
   } else {
     // Bare mode (embed / ?ui=minimal): the dock and panels are hidden, but
@@ -2963,10 +2922,10 @@ if (embedConfig.autoloadSample) {
 // and asks the user to confirm the host before any fetch; Cancel stays idle.
 // Being async, it also runs after module evaluation (no TDZ on prewarm state).
 const copcUrlParam = urlParams.get('copc');
-if (copcUrlParam) void loadRemoteDeepLink().then((m) => m.confirmDeepLinkedRemote(copcUrlParam)).then((d) => {
-  if (d.kind === 'open') void handleRemoteUrl(d.url);
-  else if (d.kind === 'invalid') dropZone.setError(d.reason);
-});
+if (copcUrlParam) void (async () => {
+  const d = await (await loadRemoteDeepLink()).confirmDeepLinkedRemote(copcUrlParam);
+  if (d.kind === 'open') handleRemoteUrl(d.url).catch(() => { /* shown by the handler */ });
+  else if (d.kind === 'invalid') dropZone.setError(d.reason); })();
 
 // The developer performance overlay — surfaced only by `?debug=1` or
 // `?benchmark=1`. It polls the viewer for live frame stats on a throttled
@@ -3235,8 +3194,12 @@ schedulePrewarm();
  * (capture lens) decisions; here we bind the shell's running state through
  * `reportExportDeps`.
  */
-function generateReportPdf(templateId: string): Promise<void> {
+function generateReportPdf(templateId: string): Promise<readonly string[]> {
   return runGenerateReportPdf(templateId, reportExportDeps);
+}
+/** The report export with its progress toast and partial-PDF warning; `null` takes the default template. */
+function exportReportPdf(templateId: string | null): Promise<void> {
+  return runReportExport(templateId, { generate: generateReportPdf, dropZone, sourceDigestReady: () => sourceDigestReady(scans.activeCloud()), loadReportEngine });
 }
 
 /**
@@ -3386,8 +3349,9 @@ function applyView(index: number): void { navWiring.restoreCamera(() => viewStat
  * Copy a link that reproduces the current view — camera, colour mode, point
  * sizing, and the selected annotation — to the clipboard. No scan data is
  * encoded; the recipient opens the same scan and the view is restored on top.
+ * True when the clipboard took the link; every entry (dock, palette) gets the toast.
  */
-async function copyShareLink(): Promise<void> {
+async function copyShareLink(): Promise<boolean> {
   const state: ShareState = {
     camera: viewer.getCameraState(),
     pointSize: viewer.pointSize,
@@ -3401,10 +3365,14 @@ async function copyShareLink(): Promise<void> {
   const link = `${window.location.origin}${window.location.pathname}#s=${encoded}`;
   try {
     await navigator.clipboard.writeText(link);
+    showLassoToast('View link copied. It restores the camera and colour settings on the same scan file.');
+    return true;
   } catch {
     // Clipboard unavailable (e.g. an insecure context) — leave the state in
     // the address bar so the user can still copy the link from there.
     window.location.hash = `s=${encoded}`;
+    showLassoToast('Copying was blocked. The link is in the address bar.');
+    return false;
   }
 }
 
@@ -3443,7 +3411,7 @@ async function exportSession(): Promise<boolean> {
     refuse: () => showLassoToast(SESSION_EXPORT_SCAN_CHANGED_REFUSAL),
     // Both lazy imports resolve before any state is read; their exports spread into one deps object.
     load: async () => ({ ...(await loadSession()), ...(await loadExportProvenance()), ...(await loadSessionSnapshot()) }),
-    write: (json) => { downloadText(`${baseName(viewer.streamingCloud?.name ?? scans.activeCloud()?.name ?? 'openlidarviewer')}.olvsession`, json); const note = sessionSaveNotice(editedStaticLayerNames(viewer).length > 0); if (note) showLassoToast(note); },
+    write: (json) => { downloadText(`${baseName(viewer.streamingCloud?.name ?? scans.activeCloud()?.name ?? 'openlidarviewer')}.olvsession`, json); showLassoToast(sessionSavedNotice(discardableWork(), editedStaticLayerNames(viewer).length > 0)); },
     serialize: (m) => m.serializeActiveSession(m, { ...sessionSnapshotDeps, onWithheld: showLassoToast }),
   });
 }
@@ -3685,10 +3653,7 @@ async function handleRemoteCopc(url: string, signal?: AbortSignal): Promise<void
     // malformed URL always surfaces an error toast, even if the Viewer chunk
     // hasn't loaded yet or the GPU backend can't initialise.
     const check = validateRemoteCopcUrl(url);
-    if (!check.ok) {
-      dropZone.setError(`${check.reason} Enter an https:// URL to a COPC (.copc.laz) file.`);
-      return;
-    }
+    if (!check.ok) throw new LoadError('unsupported-format', `${check.reason} Enter an https:// URL to a COPC (.copc.laz) file.`, undefined, { userFacing: true });
     // Fire the streaming-chunk pre-warm immediately — these dynamic
     // imports are independent of `viewerLoaded` and the HEAD probe, and
     // each one is a separate HTTP fetch. Parallelising them with the
@@ -3731,11 +3696,11 @@ async function handleRemoteCopc(url: string, signal?: AbortSignal): Promise<void
     } else {
       if (debug) console.error('OpenLiDARViewer — remote COPC error', err);
       recordUsage('error', 'load');
-      dropZone.setError(describeRemoteCopcError(err, url));
-      // Transactional: a failed open left the prior scene untouched, so keep it.
-      // With no stream behind it only the panel comes down; the full close
-      // would also clear the cards of a static scan that is still open.
-      if (!viewer.hasStreamingCloud) abandonStreamingOpen();
+      const message = describeRemoteCopcError(err, url); dropZone.setError(message);
+      // Transactional: a failed open left the prior scene untouched, so keep it. With no stream
+      // behind it only the panel comes down (a URL refused before the Viewer exists has none).
+      if (viewer && !viewer.hasStreamingCloud) abandonStreamingOpen();
+      throw new Error(message, { cause: err }); // the Stage field shows it inline with Retry
     }
   } finally {
     unlinkAbort();
@@ -4192,7 +4157,7 @@ async function saveSnapshot(): Promise<void> {
     viewer,
     classScopeStamp: currentClassScopeStamp,
     referencePlaneNote: () => inspector.referencePlane?.figureNote() ?? null,
-    onError,
+    onError, toast: showLassoToast, baseName: () => baseName(viewer.streamingCloud?.name ?? scans.activeCloud()?.name ?? lastCloudName),
   };
   await loadSnapshotAction().then((m) => m.saveSnapshot(deps), () => onError('Could not save the view'));
 }

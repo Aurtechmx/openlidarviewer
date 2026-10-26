@@ -269,7 +269,7 @@ describe('shouldDropCandidateOnPostCommitCancel — a post-commit cancel never b
 describe('handleRemoteEpt — the guarded remote-open decisions', () => {
   it('refuses a second open while one is in flight, without claiming the flag', async () => {
     const { deps, calls } = makeDeps({ loading: true });
-    await handleRemoteEpt('https://example.com/ept.json', undefined, deps);
+    await handleRemoteEpt('https://example.com/ept.json', undefined, deps).catch(() => {});
     expect(calls.showToast).toHaveBeenCalledWith(expect.stringContaining('Already loading'));
     // Never even loaded the EPT chunk, and never claimed the load flag.
     expect(calls.loadEpt).not.toHaveBeenCalled();
@@ -278,7 +278,8 @@ describe('handleRemoteEpt — the guarded remote-open decisions', () => {
 
   it('surfaces a validation failure on the drop zone and never touches the viewer', async () => {
     const { deps, calls } = makeDeps({ validate: { ok: false, reason: 'That is not an http(s) URL.' } });
-    await handleRemoteEpt('ftp://nope/ept.json', undefined, deps);
+    // A failed open rejects with the message it showed, so the Stage's URL field can show it inline too.
+    await expect(handleRemoteEpt('ftp://nope/ept.json', undefined, deps)).rejects.toThrow();
     // The pure gate ran and its reason reached the user, with the ept.json hint.
     expect(calls.validateRemoteEptUrl).toHaveBeenCalledTimes(1);
     expect(calls.setError).toHaveBeenCalledWith(
@@ -295,7 +296,7 @@ describe('handleRemoteEpt — the guarded remote-open decisions', () => {
 
   it('claims the flag and proceeds past the guard for a valid, unclaimed open', async () => {
     const { deps, calls } = makeDeps({ validate: { ok: true }, loadEptRejects: true });
-    await handleRemoteEpt('https://example.com/ept.json', undefined, deps);
+    await handleRemoteEpt('https://example.com/ept.json', undefined, deps).catch(() => {});
     // Valid URL ⇒ the guard let it through: the flag is claimed and the EPT
     // chunk pre-warm + load both fire.
     expect(calls.setLoading).toHaveBeenNthCalledWith(1, true);
@@ -307,7 +308,7 @@ describe('handleRemoteEpt — the guarded remote-open decisions', () => {
     // The EPT chunk itself fails to load, so `eptUrlMod` never arrives and the
     // catch falls back to the generic classifier — the honest error path.
     const { deps, calls } = makeDeps({ validate: { ok: true }, loadEptRejects: true });
-    await handleRemoteEpt('https://example.com/ept.json', undefined, deps);
+    await handleRemoteEpt('https://example.com/ept.json', undefined, deps).catch(() => {});
     expect(calls.setError).toHaveBeenCalledTimes(1);
     // A failed open that attached nothing leaves no scan to close: the
     // streaming panel it showed is hidden, and the cards of a static scan
@@ -348,10 +349,14 @@ describe('handleRemoteEpt — the guarded remote-open decisions', () => {
         eptUrlSearch: vi.fn(() => ''),
         createEptTransport: vi.fn(),
       });
-      const p = handleRemoteEpt('https://example.com/ept.json', undefined, deps);
+      // The open rethrows the classified message so the Stage URL field can show
+      // it inline; the rejection is observed before the timer fires.
+      const rejection = expect(
+        handleRemoteEpt('https://example.com/ept.json', undefined, deps),
+      ).rejects.toThrow('classified EPT error');
       // Fire the internal 20 s manifest deadline while the fetch is still hanging.
       await vi.advanceTimersByTimeAsync(20_000);
-      await p;
+      await rejection;
       // The stall was surfaced as an error, NOT swallowed as a cancel...
       expect(calls.setError).toHaveBeenCalled();
       // ...and classified as a timeout: the error handed to the describer carries

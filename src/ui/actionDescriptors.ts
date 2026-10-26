@@ -8,7 +8,7 @@
  */
 
 import type { ActionDescriptor } from './actionRegistry';
-import { FRAME_ALL, ORTHOGRAPHIC, PLAN_VIEW, NAVIGATION_PANEL, MEASURE, INSPECT, PROBE, ANNOTATE, CLIP_BOX, SAVE_SNAPSHOT, COPY_VIEW_LINK, ANALYSE, COMMANDS, HELP, OPEN_SCAN, CLOSE_SCAN, EXPORT_SESSION } from './actionNames';
+import { FRAME_ALL, ORTHOGRAPHIC, PLAN_VIEW, NAVIGATION_PANEL, MEASURE, INSPECT, PROBE, ANNOTATE, CLIP_BOX, SAVE_SNAPSHOT, COPY_VIEW_LINK, ANALYSE, COMMANDS, HELP, OPEN_SCAN, CLOSE_SCAN, SAVE_SESSION, OPEN_SESSION, REPORT_PDF } from './actionNames';
 export const ACTION_TITLES = {
   'camera.frame-all': FRAME_ALL,
   'camera.orthographic': ORTHOGRAPHIC,
@@ -26,7 +26,9 @@ export const ACTION_TITLES = {
   'help.open': HELP,
   'scan.open': OPEN_SCAN,
   'scan.close': CLOSE_SCAN,
-  'session.export': EXPORT_SESSION,
+  'session.export': SAVE_SESSION,
+  'session.open': OPEN_SESSION,
+  'report.pdf': REPORT_PDF,
 } as const;
 
 export type NamedActionId = keyof typeof ACTION_TITLES;
@@ -36,13 +38,15 @@ export function actionTitle(id: NamedActionId): string {
   return ACTION_TITLES[id];
 }
 
-/** Descriptors for actions offered by a control but not listed in the palette. */
+/**
+ * Descriptors for actions offered by a control but not listed in the palette.
+ * Opening a scan, the session file and the PDF report are palette actions
+ * (`app/actions/exportActions.ts`), so they are not here.
+ */
 export const SURFACE_DESCRIPTORS: readonly ActionDescriptor[] = [
   { id: 'tool.probe', title: ACTION_TITLES['tool.probe'], section: 'Tools', hint: 'Hover the scan to read each point live, with no click.' },
   { id: 'tool.analyse', title: ACTION_TITLES['tool.analyse'], section: 'Analyse', hint: 'Show or hide the terrain analysis panel.' },
   { id: 'palette.open', title: ACTION_TITLES['palette.open'], section: 'Help', hint: 'Search every action.' },
   { id: 'help.open', title: ACTION_TITLES['help.open'], section: 'Help', hint: 'Workflows, navigation and scientific states.' },
-  { id: 'scan.open', title: ACTION_TITLES['scan.open'], section: 'Data', hint: 'Open a point cloud from this device.' },
   { id: 'scan.close', title: ACTION_TITLES['scan.close'], section: 'Data', hint: 'Close the scan and return to the start.' },
-  { id: 'session.export', title: ACTION_TITLES['session.export'], section: 'Export', hint: 'Save measurements, annotations and views as an .olvsession file.' },
 ];

@@ -74,7 +74,7 @@ test('random bytes get the failure report with Copy report', async ({ page }) =>
   await expect(page.locator('.olv-toast-text')).toContainText('compressed or encrypted');
   await expect(page.locator('.olv-toast').getByRole('button', { name: 'Copy report', exact: true })).toBeVisible();
   // The label changes on click, so hold the control by position, not by name.
-  const copy = page.locator('.olv-toast-row button').last();
+  const copy = page.locator('.olv-toast-row .olv-toast-copy');
   await copy.click();
   await expect(copy).toHaveText('Report copied');
   const copied = await page.evaluate(() => (window as unknown as { __copied: string[] }).__copied);
@@ -146,7 +146,7 @@ test('unreadable bytes get the open advice and keep the loaded scene', async ({ 
   await page.dispatchEvent('body', 'drop', { dataTransfer });
 
   await expect(page.locator('.olv-toast')).toHaveClass(/olv-toast-error/, { timeout: 30_000 });
-  await expect(page.locator('.olv-toast-text')).toContainText('To view a scan, open it as LAS/LAZ, E57, PLY, PCD, PTX, PTS or XYZ.');
+  await expect(page.locator('.olv-toast-text')).toContainText('Export it as LAS/LAZ, E57, PLY, PCD, PTX, PTS or XYZ from the software that made it, then open that file.');
   await expect(page.locator('.olv-toast').getByRole('button', { name: 'Copy report', exact: true })).toBeVisible();
   await expect(page.locator('.olv-empty')).toBeHidden();
   expect(await points()).toBe(before);

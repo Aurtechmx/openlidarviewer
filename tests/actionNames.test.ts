@@ -40,7 +40,7 @@ describe('the name table', () => {
   it('gives every control-only action a descriptor with its registry name', () => {
     const ids = SURFACE_DESCRIPTORS.map((d) => d.id);
     expect(new Set(ids).size).toBe(ids.length);
-    for (const id of ['palette.open', 'scan.open', 'scan.close', 'session.export', 'tool.probe']) {
+    for (const id of ['palette.open', 'scan.close', 'tool.probe']) {
       const d = SURFACE_DESCRIPTORS.find((x) => x.id === id);
       expect(d, id).toBeDefined();
       expect(d!.title).toBe(ACTION_TITLES[id as NamedActionId]);

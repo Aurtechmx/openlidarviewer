@@ -60,7 +60,7 @@ async function annotate(page: Page, title: string): Promise<void> {
 async function exportSession(page: Page): Promise<{ annotations: Array<{ title: string; worldPosition: { x: number; y: number }; owner?: { layerId?: string } }> }> {
   await openToolPage(page, 'Measure');
   const wait = page.waitForEvent('download');
-  await page.locator('.olv-mp-action', { hasText: 'Export' }).click();
+  await page.locator('.olv-mp-action', { hasText: 'Save session' }).click();
   return JSON.parse(readFileSync((await (await wait).path())!, 'utf8'));
 }
 

@@ -114,7 +114,18 @@ test.describe('location bar', () => {
     await expectPath(loc, 'Tools › Measure');
     await expect(loc.locator('.olv-loc-back')).toBeVisible();
     const sheet = page.locator('.olv-mobile-sheet');
+    // A head tap opens the sheet to half height, with the scene above it.
     await page.locator('.olv-msheet-handle').click();
+    await expect(sheet).toHaveAttribute('data-detent', 'half');
+    await expectPath(loc, 'Tools › Measure');
+    // Drag the handle to the top: the sheet snaps to full.
+    const top = await page.locator('.olv-msheet-handle').boundingBox();
+    if (!top) throw new Error('no sheet handle');
+    await page.mouse.move(top.x + top.width / 2, top.y + top.height / 2);
+    await page.mouse.down();
+    for (let y = top.y; y >= 40; y -= 20) await page.mouse.move(top.x + top.width / 2, y);
+    await page.mouse.move(top.x + top.width / 2, 40);
+    await page.mouse.up();
     await expect(sheet).toHaveAttribute('data-detent', 'full');
     await expectPath(loc, 'Tools › Measure');
     // Drag the handle to mid-screen: the sheet snaps to half.

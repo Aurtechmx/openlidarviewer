@@ -91,6 +91,7 @@ describe('main.ts export callbacks hand back their promise', () => {
   });
 
   it('returns the report build, so its button waits for it', () => {
-    expect(callback('onExportReport')).toMatch(/return generateReportPdf\(/);
+    // exportReportPdf hands back runReportExport's promise (reportExport.ts).
+    expect(callback('onExportReport')).toMatch(/onExportReport: \(templateId\) => exportReportPdf\(/);
   });
 });

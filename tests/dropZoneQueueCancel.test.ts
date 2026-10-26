@@ -4,24 +4,10 @@
  * the queue; one file keeps the single Cancel; a failure does not stop the rest.
  */
 
-import { describe, it, expect, beforeAll, beforeEach, afterEach, vi } from 'vitest';
-import { Node0, installBusyScanDom } from './helpers/busyScanDom';
+import { describe, it, expect } from 'vitest';
+import { Node0, useBusyScanDomWithFakeTimers } from './helpers/busyScanDom';
 
-beforeAll(() => {
-  installBusyScanDom();
-});
-
-beforeEach(() => {
-  vi.useFakeTimers();
-  (globalThis as unknown as Record<string, unknown>).window = {
-    setTimeout: (fn: () => void, ms: number) => setTimeout(fn, ms),
-    clearTimeout: (h: ReturnType<typeof setTimeout>) => clearTimeout(h),
-  };
-});
-
-afterEach(() => {
-  vi.useRealTimers();
-});
+useBusyScanDomWithFakeTimers();
 
 type Zone = import('../src/ui/DropZone').DropZone;
 type Step = (zone: Zone, name: string, done: () => void) => Promise<void> | void;

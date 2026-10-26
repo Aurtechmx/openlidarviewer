@@ -183,7 +183,7 @@ test.describe('golden journey', () => {
     await openToolPage(page, 'Measure');
     const [session] = await Promise.all([
       page.waitForEvent('download'),
-      page.locator('.olv-mp-action', { hasText: 'Export' }).click(),
+      page.locator('.olv-mp-action', { hasText: 'Save session' }).click(),
     ]);
     const sessionPath = await expectNonEmptyDownload(session, /^terrain-access-utm.*\.olvsession$/);
     const sessionText = readFileSync(sessionPath, 'utf8');

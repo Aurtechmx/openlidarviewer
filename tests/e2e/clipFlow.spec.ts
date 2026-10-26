@@ -100,7 +100,7 @@ test('Result card: a finished measurement keeps its result beside the viewport',
   // A distance has no clip action.
   await expect(card.locator('.olv-result-clip')).toBeHidden();
   await card.getByRole('button', { name: 'Open details' }).click();
-  await expect(page.locator('.olv-mp-row .olv-mp-name').last()).toBeFocused();
+  await expect(page.locator('.olv-mp-row').last()).toBeFocused();
 
   // A Box adds the clip action; only one card ever exists.
   await placeBox(page);

@@ -44,6 +44,7 @@ function verifyAction() {
   const actions = contributeExportActions({
     saveSnapshot: vi.fn(),
     copyShareLink: vi.fn(),
+    exportSession: vi.fn(), handleFile: vi.fn(), openScan: vi.fn(), exportReport: vi.fn(),
     buildCurrentStoryInputs: () => ({}) as never,
     showLassoToast: (message, action) => { toasts.push({ message, action }); },
   });
@@ -95,6 +96,7 @@ describe('report.verify palette search', () => {
     const actions = contributeExportActions({
       saveSnapshot: vi.fn(),
       copyShareLink: vi.fn(),
+      exportSession: vi.fn(), handleFile: vi.fn(), openScan: vi.fn(), exportReport: vi.fn(),
       buildCurrentStoryInputs: () => ({}) as never,
       showLassoToast: () => {},
     });
