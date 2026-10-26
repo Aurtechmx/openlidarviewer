@@ -44,7 +44,7 @@ compared with an independent field result.
 
 ## Evidence levels
 
-No existing claim changed evidence level. The register holds 39 claims, 17 of
+No existing claim changed evidence level. The register holds 40 claims, 17 of
 them at E4 and none at E5. Five claims are new:
 
 | Claim | Level |
