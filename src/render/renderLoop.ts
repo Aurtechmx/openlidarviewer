@@ -289,7 +289,15 @@ export function runRenderFrame(host: RenderLoopHost): void {
   }
 
   // After render, camera matrices are current — project the tool overlays.
-  if (host.toolMode() === 'measure' && !host.measureDragging() && host.pointerMoved()) {
+  // The hover pick scans every visible point, so it waits while the camera is
+  // being driven, like the probe below; the unconsumed pointer flag lets it
+  // run once the camera settles.
+  if (
+    host.toolMode() === 'measure' &&
+    !host.measureDragging() &&
+    host.pointerMoved() &&
+    shouldRunProbePick({ userInteracting: host.userInteracting(), tweening: false })
+  ) {
     host.clearPointerMoved();
     const ndc = host.pointerNdc();
     const hit = host.pointerOnCanvas() ? host.pickPoint(ndc.x, ndc.y) : null;

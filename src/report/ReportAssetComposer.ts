@@ -89,6 +89,11 @@ export interface ComposeReportInputs {
   /** The step each measurement's positions are held at on its own layer(s); a headline below it is withheld. */
   readonly positionSteps?: (m: Measurement) => AxisSteps | null;
   /**
+   * The Measurements panel's row text by measurement id, so each PDF row reads
+   * exactly as the panel does. Omitted: the rows are formatted by the report.
+   */
+  readonly measurementValues?: ReadonlyMap<string, string>;
+  /**
    * Why measurements were left out of this scan's report (taken on another
    * scan, or on one whose owner cannot be resolved). Printed under the
    * Measurements heading; omitted when nothing was withheld.
@@ -161,6 +166,7 @@ export function composeReportInputs(input: ComposeReportInputs): ReportInputs {
       input.verticalRefused ?? false,
       input.verticalScaleInvalid ?? false,
       input.positionSteps,
+      input.measurementValues,
     ),
     ...(input.measurementsWithheld ? { measurementsWithheld: input.measurementsWithheld } : {}),
     technicalNotes: input.technicalNotes,

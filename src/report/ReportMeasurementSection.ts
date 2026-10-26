@@ -159,10 +159,10 @@ function computeValue(
   steps: AxisSteps | null = null,
 ): string {
   // One shared, up-axis- and compound-CRS-correct computation for every kind;
-  // this function only formats the metre values it returns (M6).
-  // Pass full precision (6 dp) — the formatters below apply the report's own
-  // adaptive sub-centimetre rounding, so the PDF matches the live panel to the
-  // digit rather than inheriting the tabular exports' millimetre columns (M6).
+  // this function only formats the metre values it returns (M6). It is the
+  // fallback for a caller with no live Measure tool: its own formatting can
+  // differ from the panel's (decimals, dm³, the bearing), so the live export
+  // passes the panel's row text instead (see `panelValues`).
   const mm = measurementMetrics(m, up, unitToMetres, verticalToMetres, 6, steps);
   switch (m.kind) {
     case 'distance':
@@ -185,9 +185,8 @@ function computeValue(
     case 'box':
       return mm.volume_m3 != null ? formatVolume(mm.volume_m3, system, verified) : '—';
     case 'volume': {
-      // Mirror the live headline (see MeasureController._headlineText) so the
-      // PDF and the panel agree to the digit, caveats included: the clauses
-      // come from the one builder both surfaces share (volumeCaveats).
+      // The caveat clauses come from the builder the panel also uses
+      // (volumeCaveats); the figures are formatted here.
       if (mm.area_m2 == null) return '—';
       const area = formatAreaHonest(mm.area_m2, system, verified);
       const v = m.volume;
@@ -398,6 +397,12 @@ export function buildMeasurementRows(
    * number; absent: nothing is withheld on that basis.
    */
   positionSteps?: (m: Measurement) => AxisSteps | null,
+  /**
+   * The Measurements panel's own row text, by measurement id. When given, a
+   * row prints exactly what the panel shows, refusals included; a measurement
+   * missing from it is formatted here.
+   */
+  panelValues?: ReadonlyMap<string, string>,
 ): readonly ReportMeasurementRow[] {
   const f = Number.isFinite(unitToMetres) && unitToMetres > 0 ? unitToMetres : 1;
   const vf = Number.isFinite(verticalToMetres) && verticalToMetres > 0 ? verticalToMetres : f;
@@ -411,9 +416,8 @@ export function buildMeasurementRows(
     return {
       name: m.name,
       kind: m.kind,
-      value: note !== null
-        ? note
-        : computeValue(m, unitSystem, worldUp, f, vf, unitsVerified, steps),
+      value: panelValues?.get(m.id)
+        ?? (note !== null ? note : computeValue(m, unitSystem, worldUp, f, vf, unitsVerified, steps)),
       pointCount: m.points.length,
       ...(m.kind === 'volume' && !refused && reducedSampleCaveat(m.volume?.withheld)
         ? { note: reducedSampleCaveat(m.volume?.withheld) as string }

@@ -155,6 +155,8 @@ export interface OpenScanDeps {
   closeStreaming: () => void;
   /** Ask before a static scan that replaces an open stream discards the work on it. */
   replaceGuard?: (req: ReplaceRequest) => Promise<ReplaceOutcome>;
+  /** Drop the replaced scene's clip box and point filters. */
+  retireSceneState?: () => void;
   /** Active-scan selection + lookup. */
   scans: Pick<ScanService, 'setActive' | 'activeId'>;
   /**
@@ -612,6 +614,9 @@ export async function attachStaticCloud(
     // pivot over the stream as well. Close the stream, then size them again
     // for the static clouds that remain.
     deps.closeStreaming();
+    // A stream that was the whole scene is replaced, and its clip box and
+    // filters go with it; static layers beside it keep theirs.
+    if (prior.length === 0) deps.retireSceneState?.();
     viewer.reconfigureForClouds();
     if (replaced === 'replace') { viewer.measure.clear(); viewer.annotate.clear(); deps.bookmarks.clear(); deps.inspector.setViews([]); }
   }

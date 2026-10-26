@@ -3540,7 +3540,7 @@ const openScanDeps: OpenScanDeps = {
   isTouchFirst: isTouchFirstDevice,
   deviceMemoryGB,
   stage,
-  closeStreaming, replaceGuard: (req) => requestReplace(req),
+  closeStreaming, retireSceneState, replaceGuard: (req) => requestReplace(req),
   scans,
   layerIdentity: runtime.layerIdentity,
   inspector,
@@ -3618,7 +3618,7 @@ const openStreamingDeps: OpenStreamingDeps = {
   bookmarks,
   isPhone,
   closeStreaming,
-  clearOpenStaticLayers, replaceGuard: (req) => requestReplace(req),
+  clearOpenStaticLayers, retireSceneState, replaceGuard: (req) => requestReplace(req),
   resetStreamState,
   startStreamingStatusPolling: () => streamingUi.startPolling(),
   revealStreamingChrome: () => revealStreamingScanChrome({
@@ -3960,14 +3960,20 @@ async function loadFromUrl(url: string, name: string): Promise<void> {
  * and by the Close action: clears tools, measurements, saved views, and the
  * panels, then shows the empty state so another scan can be loaded.
  */
+/** The open scene closed or was replaced: its clip box and point filters go with it. The next reveal fits the clip to the new scan. */
+function retireSceneState(): void {
+  clipPanel.setVisible(false); clipFlow.reset(); // hiding the clip panel also clears the active clip
+  viewer.setElevationFilter(undefined); inspector.setElevationExtent(null); activeElevFilter = null;
+  viewer.setIntensityFilter(undefined); inspector.setIntensityExtent(null); activeIntenFilter = null;
+  visuals.resetStreamingFilterSeed();
+}
 function resetToEmptyState(): void {
   viewer.setMeasureMode(false);
   viewer.setInspectMode(false); viewer.setAnnotateMode(false);
   viewer.clearMeasurements(); clearPendingSessionRestore();
   // No scan open → take the compass down (nothing to orient).
   compass.refresh();
-  // Hiding the clip panel also clears the active clip (see ClipPanel.setVisible).
-  clipPanel.setVisible(false); clipFlow.reset();
+  retireSceneState();
   // Hide + clear the Analyse panel so it doesn't linger with stale terrain
   // results after the scan is closed. v0.4.0. Null-safe (lazy-mounted); also
   // reset the tracked desired state so a fresh open starts hidden/collapsed.
@@ -4004,14 +4010,6 @@ function resetToEmptyState(): void {
   // a different cloud with stale trust.
   viewer.setCoverageGrid(null);
   inspector.setCoverageAvailable(false);
-  // No scan → clear any elevation filter and hide its control.
-  viewer.setElevationFilter(undefined);
-  inspector.setElevationExtent(null);
-  viewer.setIntensityFilter(undefined);
-  inspector.setIntensityExtent(null);
-  activeElevFilter = null;
-  activeIntenFilter = null;
-  visuals.resetStreamingFilterSeed();
   // Hide + clear the class legend (and Process Studio) so neither lingers with a
   // stale scan after close. v0.4.1.
   classLegendPanel.setClasses(new Map());

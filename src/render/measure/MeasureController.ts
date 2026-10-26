@@ -1670,6 +1670,7 @@ export class MeasureController {
     if (this._noticeTimer !== undefined) clearTimeout(this._noticeTimer);
     this._noticeTimer = undefined;
     this._active = on;
+    this._snap.setWarming(on);
     this._draft = null;
     this._cursor = null;
     if (!on) this._endDrag();

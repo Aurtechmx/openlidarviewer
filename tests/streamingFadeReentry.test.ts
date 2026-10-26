@@ -156,3 +156,24 @@ describe('fade-out / re-residency race', () => {
     expect(rec.remove.filter((m) => m === mesh1)).toHaveLength(1);
   });
 });
+
+describe('eviction without fades', () => {
+  test('an evicted node leaves no visibility entry behind', () => {
+    const rec: Recorder = { build: 0, add: [], remove: [], begin: [], end: [] };
+    const { viewer } = makeFakeViewer(rec);
+    const renderer = new StreamingRenderer(viewer, fakeSource, 'rgb', { fadeIn: false });
+    const store = (renderer as unknown as { _visibility: { ids(): Iterable<string> } })._visibility;
+
+    for (let i = 0; i < 50; i++) {
+      const node = makeNode(`N${i}`, 1);
+      renderer.onNodeReady(node, makeChunk());
+      // A replace frontier hides it, so the store records a reason for it.
+      renderer.applyReplaceVisibility(new Set([`N${i}`]));
+      renderer.onNodeEvicted(node);
+    }
+
+    expect(renderer.residentMeshCount).toBe(0);
+    expect(rec.remove).toHaveLength(50);
+    expect([...store.ids()]).toEqual([]);
+  });
+});

@@ -102,11 +102,11 @@ export function idwFill(
         const cHi = col + radius;
         for (let r = rLo; r <= rHi; r++) {
           if (r < 0 || r >= rows) continue;
-          const onRowEdge = r === rLo || r === rHi;
-          for (let c = cLo; c <= cHi; c++) {
+          // Perimeter only: full rows on top/bottom, else just the two end
+          // columns, still visited left to right so the sums are unchanged.
+          const step = r === rLo || r === rHi ? 1 : cHi - cLo;
+          for (let c = cLo; c <= cHi; c += step) {
             if (c < 0 || c >= cols) continue;
-            // Perimeter only: full rows on top/bottom, else just the ends.
-            if (!onRowEdge && c !== cLo && c !== cHi) continue;
             const j = r * cols + c;
             if (hadData[j] !== 1) continue;
             const dr = r - row;
