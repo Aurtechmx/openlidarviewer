@@ -142,7 +142,12 @@ describe('the generated registry stays synced with the YAML source', () => {
 
   it('matches the source on current / required / exportAllowed for every claim', () => {
     for (const [id, y] of Object.entries(fromYaml)) {
-      expect(EVIDENCE_REGISTRY[id], `missing runtime entry: ${id}`).toEqual(y);
+      expect(core(EVIDENCE_REGISTRY[id]), `missing runtime entry: ${id}`).toEqual(y);
     }
   });
 });
+
+/** The current / required / exportAllowed fields; scope parameter sets are checked in scopedEvidence tests. */
+function core(e: { current: string; required: string; exportAllowed: boolean } | undefined) {
+  return e && { current: e.current, required: e.required, exportAllowed: e.exportAllowed };
+}

@@ -342,7 +342,7 @@ function lodRecord(s: LodSelection): object {
   return {
     method: methodTag(methodRef(DRAW_PRECISION_LOD_METHOD_ID)),
     rule: 'coarsest level k with sigma * H_k + B_k <= tau, B_k under faithful rounding',
-    scope: 'single node: the whole draw; no camera regions, no multi-node selection; the level is selected and certified, not drawn',
+    scope: 'single node: the whole draw; no camera regions, no multi-node selection; the level is selected within the limit, not drawn',
     state: s.state,
     level: s.level,
     cellSizeMetres: s.cellSizeMetres,

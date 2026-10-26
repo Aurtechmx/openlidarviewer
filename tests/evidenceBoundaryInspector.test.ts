@@ -85,45 +85,45 @@ describe('buildEvidenceContractView — mirrors resolveEvidence, explains the en
     expect(statusOf(view.envelopeChecks, 'cellSize')).toBe('unconstrained');
   });
 
-  it('methodDigest mismatch: that field mismatch, effective drops to baseline (out-of-scope)', () => {
+  it('methodDigest mismatch: that field mismatch, not covered (out-of-scope)', () => {
     const view = assertMirrorsAuthority(
       'DTM',
       { ...IN_ENVELOPE, methodDigest: 'digest-XXX' },
       RECORDS,
     );
-    expect(view.effectiveEvidence).toBe('E4_CROSS_IMPLEMENTATION_VALIDATED');
+    expect(view.effectiveEvidence).toBeNull();
     expect(view.resolutionState).toBe('external-evidence-out-of-scope');
     expect(statusOf(view.envelopeChecks, 'methodDigest')).toBe('mismatch');
     expect(statusOf(view.envelopeChecks, 'horizontalEpsg')).toBe('match');
   });
 
-  it('EPSG mismatch: that field mismatch, effective = baseline', () => {
+  it('EPSG mismatch: that field mismatch, not covered, no inherited level', () => {
     const view = assertMirrorsAuthority(
       'DTM',
       { ...IN_ENVELOPE, horizontalEpsg: 32614 },
       RECORDS,
     );
-    expect(view.effectiveEvidence).toBe('E4_CROSS_IMPLEMENTATION_VALIDATED');
+    expect(view.effectiveEvidence).toBeNull();
     expect(statusOf(view.envelopeChecks, 'horizontalEpsg')).toBe('mismatch');
   });
 
-  it('geoid mismatch: that field mismatch, effective = baseline', () => {
+  it('geoid mismatch: that field mismatch, not covered, no inherited level', () => {
     const view = assertMirrorsAuthority(
       'DTM',
       { ...IN_ENVELOPE, geoidModel: 'GEOID12B' },
       RECORDS,
     );
-    expect(view.effectiveEvidence).toBe('E4_CROSS_IMPLEMENTATION_VALIDATED');
+    expect(view.effectiveEvidence).toBeNull();
     expect(statusOf(view.envelopeChecks, 'geoidModel')).toBe('mismatch');
   });
 
-  it('terrain mismatch (forest): that field mismatch, effective = baseline', () => {
+  it('terrain mismatch (forest): that field mismatch, not covered, no inherited level', () => {
     const view = assertMirrorsAuthority(
       'DTM',
       { ...IN_ENVELOPE, terrainStratum: 'forest' },
       RECORDS,
     );
-    expect(view.effectiveEvidence).toBe('E4_CROSS_IMPLEMENTATION_VALIDATED');
+    expect(view.effectiveEvidence).toBeNull();
     expect(statusOf(view.envelopeChecks, 'terrainStratum')).toBe('mismatch');
   });
 
@@ -139,7 +139,8 @@ describe('buildEvidenceContractView — mirrors resolveEvidence, explains the en
   it('no scoped record for the claim: empty envelopeChecks, baseline reflected', () => {
     const view = assertMirrorsAuthority('DTM', IN_ENVELOPE);
     expect(view.envelopeChecks).toEqual([]);
-    expect(view.effectiveEvidence).toBe('E4_CROSS_IMPLEMENTATION_VALIDATED');
+    // The live DTM is outside the register's parameter-set scope.
+    expect(view.effectiveEvidence).toBeNull();
     expect(view.matchedStudy).toBeNull();
   });
 

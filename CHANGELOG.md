@@ -15,7 +15,7 @@ are not release-authoritative. v0.7.0 is the current published release.
 - The PDF report prints each measurement as the Measurements panel shows it. It used to format the figures itself, with more decimals, cubic metres where the panel shows cubic decimetres, no bearing on a distance and no angle on a slope.
 - On phones, a streamed scan no longer keeps a visibility record for every node it evicts.
 - DEM packages export on DEMs with more than 250,000 measured cells. The attention raster used to stop the export there.
-- The terrain report no longer shows the live DTM at E4. No registered study covers its settings, and the row now says so.
+- The terrain report, DEM package and export provenance no longer give the live DTM the registry E4. The DTM study covers min-return gridding only, and the live DTM uses median aggregation, so these now say the DTM is not covered by the registered studies.
 - Map sheets and the terrain report's contour rows use the cartographic contour claim when contours are generalised or smoothed, as the GeoJSON and DXF exports do.
 - The map sheet calls its accuracy block an internal hold-out check instead of survey accuracy.
 - Ground confidence on the readiness card shows measured and interpolated cells as two figures. The Inspector shows the measured-cell figure.
