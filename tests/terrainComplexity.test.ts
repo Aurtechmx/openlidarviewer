@@ -569,6 +569,15 @@ describe('summariseTerrainComplexity — windows, units, and derived confidence'
     expect(summariseTerrainComplexity({ ...base, cols: 0, rows: 0 })).toBeNull();
   });
 
+  test('caveats a summary over many interpolated cells', () => {
+    const mixed = new Uint8Array(cols * rows).fill(2);
+    for (let i = 0; i < mixed.length; i += 2) mixed[i] = 1; // half interpolated
+    const s = summariseTerrainComplexity({ ...base, coverage: mixed })!;
+    expect(s.warnings.join(' ')).toMatch(/interpolated/);
+    const measured = summariseTerrainComplexity({ ...base, coverage: new Uint8Array(cols * rows).fill(2) })!;
+    expect(measured.warnings.join(' ')).not.toMatch(/interpolated/);
+  });
+
   test('feet Z units are labelled ft (TPI scales with Z; the label says so)', () => {
     const s = summariseTerrainComplexity({ ...base, verticalUnitToMetres: 0.3048 })!;
     expect(s.zUnitLabel).toBe('ft');

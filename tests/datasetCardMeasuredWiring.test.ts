@@ -35,8 +35,12 @@ const stridedCloud = {
 const fullCloud = { ...stridedCloud, pointCount: 53_670_848 };
 
 const run = {
-  dtm: { analyzedPointCount: 2_700_000, coverageMode: 'full' as const },
-  quality: { meanCellConfidence: 81, groundPointRatio: 0.42 },
+  // Measured cells average 81; the interpolated cell (10) must not pull it down.
+  dtm: {
+    analyzedPointCount: 2_700_000, coverageMode: 'full' as const,
+    coverage: new Uint8Array([2, 2, 1]), confidence: new Float32Array([80, 82, 10]),
+  },
+  quality: { meanCellConfidence: 57, groundPointRatio: 0.42 },
 };
 
 describe('static strided load — header constants are not measurements', () => {
@@ -94,7 +98,7 @@ describe('a finished terrain run feeds the static card', () => {
     const out = summariseDataset(last());
     expect(out?.details.analyzedPointCount).toBe(2_700_000);
     expect(out?.details.engineStatus).toBe('active');
-    expect(out?.confidence.label).toBe('81%');
+    expect(out?.confidence.label).toBe('81% measured cells');
     expect(out?.confidence.band).toBe('green');
     expect(out?.groundVisibility.bucket).toBe('good');
     // A 'full' engine mode does not re-promote a display sample to "Full Dataset".
@@ -113,7 +117,7 @@ describe('a finished terrain run feeds the static card', () => {
     const { inspector, last } = makeInspector();
     const cards = createInspectorCardRefreshers(inspector);
     cards.refreshDatasetIntelligenceFromStaticCloud(stridedCloud);
-    cards.noteTerrainRun({ ...run, quality: { meanCellConfidence: Number.NaN, groundPointRatio: Number.NaN } });
+    cards.noteTerrainRun({ ...run, dtm: { ...run.dtm, confidence: new Float32Array([NaN, NaN, NaN]) }, quality: { meanCellConfidence: Number.NaN, groundPointRatio: Number.NaN } });
     const out = summariseDataset(last());
     expect(out?.confidence.label).toBe('—');
     expect(out?.groundVisibility.label).toBe('—');

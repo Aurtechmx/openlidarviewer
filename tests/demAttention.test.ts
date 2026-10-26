@@ -295,6 +295,25 @@ describe('cells the residual sampling skipped', () => {
     expect(terrainAttentionReadmeLines('a.tif', full).join('\n')).toContain('Codes 6 to 8 are reserved.');
   });
 
+  it('writes a grid above the sample limit: skipped cells NoData in band 1, 8 in band 2', () => {
+    const big = grid(flat, 600, 500); // 300,000 measured cells, above the 250,000 limit
+    const r = reconstructionResidual(big);
+    expect(r.unsampled).not.toBeNull();
+    const bb = terrainAttentionBands(inputs(big, { residual: r.residual, residualUnsampled: r.unsampled }));
+    const tif = writeTerrainAttentionGeoTiff(bb, big, { xllCorner: 0, yllCorner: 0, epsg: 32610, isGeographic: false, demValues: big.z });
+    const [lv, rs] = decodeByteBands(tif);
+    let skipped = 0;
+    for (let i = 0; i < big.z.length; i++) {
+      if (r.unsampled![i] === 1) {
+        skipped++;
+        expect(lv[i]).toBe(ATTENTION_NO_DATA);
+        expect(rs[i]).toBe(RC.UNRESOLVED);
+      }
+    }
+    expect(skipped).toBe(r.measuredCells - r.sampledCells);
+    expect(skipped).toBeGreaterThan(0);
+  });
+
   it('has no mask, and changes nothing, when every cell was rebuilt', () => {
     expect(reconstructionResidual(g).unsampled).toBeNull();
   });

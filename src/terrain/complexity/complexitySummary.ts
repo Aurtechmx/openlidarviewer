@@ -331,6 +331,21 @@ export function summariseTerrainComplexity(
     seen.add(w);
     warnings.push(w);
   }
+  // Filled cells are smooth by construction: VRM reads lower and TPI nearer 0
+  // there, and the void caveat above counts only empty cells.
+  let filled = 0;
+  let covered = 0;
+  for (let i = 0; i < n; i++) {
+    const c = input.coverage[i];
+    if (c > 0) covered++;
+    if (c === 1) filled++;
+  }
+  if (covered > 0 && filled / covered > 0.1) {
+    warnings.push(
+      `${Math.round((100 * filled) / covered)}% of the summarised cells are interpolated, `
+      + 'where VRM reads lower and TPI nearer 0 than measured ground would',
+    );
+  }
   const density =
     horizontalResolved &&
     input.groundDensityPerM2 != null &&

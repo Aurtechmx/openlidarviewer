@@ -139,13 +139,13 @@ const REASON = {
   unknownVertical:
     'Vertical units are unknown; metric-supported contour intervals cannot be claimed.',
   geographicCrs:
-    'The current CRS is geographic; validated area and scale calculations require a projected frame.',
+    'The current CRS is geographic; area and scale calculations require a projected frame.',
   localCrs:
-    'The current CRS is a local frame; validated area and scale calculations require a projected frame.',
+    'The current CRS is a local frame; area and scale calculations require a projected frame.',
   geocentricCrs:
-    'The current CRS is geocentric (Earth-centred X/Y/Z); validated area and scale calculations require a projected frame.',
+    'The current CRS is geocentric (Earth-centred X/Y/Z); area and scale calculations require a projected frame.',
   unprojectedCrs:
-    'Validated area and scale calculations require a projected frame, which this scan does not have.',
+    'Area and scale calculations require a projected frame, which this scan does not have.',
   sparseSupport: 'Terrain support is too sparse for a contour deliverable.',
   tooMuchUnsupported: 'The selected area has too much unsupported surface.',
   streaming:

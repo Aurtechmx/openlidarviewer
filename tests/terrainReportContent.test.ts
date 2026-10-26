@@ -25,6 +25,7 @@
 
 import { describe, it, expect } from 'vitest';
 import {
+  DTM_NOT_COVERED,
   buildTerrainReportContent,
   type TerrainReportContent,
 } from '../src/terrain/export/terrainReportContent';
@@ -785,18 +786,23 @@ describe('buildTerrainReportContent — every row names its basis', () => {
   it('#8 carries the registry evidence level per product, from the export resolver', () => {
     const c = buildTerrainReportContent(readyResult(), OPTS);
     const byLabel = Object.fromEntries(c.products.map((p) => [p.label, p.evidence]));
-    // DTM claim: the SAME resolution the provenance stamps.
-    expect(byLabel['DTM/DEM export']).toBe('E4 — Cross-implementation validated (baseline)');
-    expect(c.provenance.evidenceResolution?.effectiveEvidence).toBe('E4_CROSS_IMPLEMENTATION_VALIDATED');
-    expect(byLabel['Contours']).toBe('E4 — Cross-implementation validated (baseline)');
-    expect(byLabel['Map sheet']).toBe('E4 — Cross-implementation validated (baseline)');
+    // The live DTM matches no registered study, so it does not inherit the baseline E4.
+    expect(byLabel['DTM/DEM export']).toBe(DTM_NOT_COVERED);
+    expect(byLabel['DTM/DEM export']).not.toContain('E4');
+    // Smoothed contours: the cartographic claim, as the GeoJSON and DXF exports use.
+    expect(byLabel['Contours']).toBe('E2 — Analytically verified (baseline)');
+    expect(byLabel['Map sheet']).toBe('E2 — Analytically verified (baseline)');
     expect(byLabel['Profiles']).toBe('E4 — Cross-implementation validated (baseline)');
     expect(byLabel['Measurements']).toBe('no single registered claim');
     expect(byLabel['Terrain review']).toBe('no single registered claim');
-    const ps = section(c, 'Terrain Products Available');
-    expect(ps.rows.find((r) => r.label === 'Contours')?.value).toBe(
-      'Available · Evidence level: E4 — Cross-implementation validated (baseline)',
-    );
+  });
+
+  it('#8b keeps the CONTOURS claim for crisp contours', () => {
+    const base = readyResult();
+    const r = { ...base, generationParams: { ...base.generationParams, contourStyle: 'crisp' } } as AnalyseContoursResult;
+    const byLabel = Object.fromEntries(buildTerrainReportContent(r, OPTS).products.map((p) => [p.label, p.evidence]));
+    expect(byLabel['Contours']).toBe('E4 — Cross-implementation validated (baseline)');
+    expect(byLabel['Map sheet']).toBe('E4 — Cross-implementation validated (baseline)');
   });
 
   it('#9 carries the panel tooltips as Definitions, single-sourced', async () => {

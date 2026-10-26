@@ -30,7 +30,7 @@ test('the Performance panel checks precision at this view and copies a certifica
   await expect(line).toHaveClass(/is-checked/);
   // The check also names the coarsest certified level for this view, or that none fits.
   await expect(section.locator('.olv-precision-lod')).toHaveText(
-    /^(Coarsest certified level: .*faithful rounding\)\. (No coarser level fits|Not drawn in this version)\.|No level of detail is certified for the .* limit under faithful rounding \(bound .*\)\.)$/,
+    /^(Coarsest level within the limit: .*faithful rounding\)\. (No coarser level fits|Not drawn in this version)\.|No level of detail is within the .* limit under faithful rounding \(bound .*\)\.)$/,
   );
 
   const copy = section.getByRole('button', { name: 'Copy certificate' });

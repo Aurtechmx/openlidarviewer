@@ -14,9 +14,18 @@ are not release-authoritative. v0.7.0 is the current published release.
 - A scan that replaces the open one, such as a streamed scan opened over static layers or a static scan opened over a stream, starts with the clip box off and the elevation and intensity filters cleared. It used to keep the previous scan's clip box, and a stream opened over another stream kept the old filter range. A scan added beside open layers keeps both.
 - The PDF report prints each measurement as the Measurements panel shows it. It used to format the figures itself, with more decimals, cubic metres where the panel shows cubic decimetres, no bearing on a distance and no angle on a slope.
 - On phones, a streamed scan no longer keeps a visibility record for every node it evicts.
+- DEM packages export on DEMs with more than 250,000 measured cells. The attention raster used to stop the export there.
+- The terrain report, DEM package and export provenance no longer give the live DTM the registry E4. The DTM study covers min-return gridding only, and the live DTM uses median aggregation, so these now say the DTM is not covered by the registered studies.
+- Map sheets and the terrain report's contour rows use the cartographic contour claim when contours are generalised or smoothed, as the GeoJSON and DXF exports do.
+- The map sheet calls its accuracy block an internal hold-out check instead of survey accuracy.
+- Ground confidence on the readiness card shows measured and interpolated cells as two figures. The Inspector shows the measured-cell figure.
+- Change detection says when it assumed the vertical unit from the horizontal unit.
+- The terrain complexity summary warns when more than 10% of its cells are interpolated.
+- Wording: the scan fitness verdict names hold-out residuals, Contour Studio no longer calls area and scale "validated", the precision check no longer says "certified level", and the Analyse help calls the hold-out an internal check.
 
 ### Changed
 
+- Contour GeoJSON features carry the pooled run score as `presentationSupport` instead of `meanConfidence`.
 - Measuring costs less on large scans. The hover pick waits while the camera moves, and snap grids are built while the Measure tool is open instead of for every scan as it opens.
 - Terrain void filling visits only the edge of each search ring. Filled heights are unchanged.
 

@@ -696,7 +696,7 @@ export function summariseDataset(input: DatasetIntelligenceInput): DatasetIntell
   const confidenceValue = confidenceHasSignal ? confidenceRaw : Number.NaN;
   const band = confidenceBand(confidenceRaw);
   const confidenceLabel = confidenceHasSignal
-    ? `${Math.round(clamp(confidenceRaw, 0, 100))}%`
+    ? `${Math.round(clamp(confidenceRaw, 0, 100))}% measured cells`
     : '—';
   return {
     density: {

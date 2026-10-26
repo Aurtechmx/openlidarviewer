@@ -26,11 +26,12 @@ for (const raw of yaml.split('\n')) {
   const line = raw.trim();
   let m;
   if ((m = line.match(/^-?\s*claimId:\s*(\S+)/))) {
-    cur = { id: m[1], current: null, required: null, exportAllowed: null };
+    cur = { id: m[1], current: null, required: null, exportAllowed: null, parameterSets: [] };
     claims.push(cur);
   } else if (cur && (m = line.match(/^currentEvidence:\s*(\S+)/))) cur.current = m[1];
   else if (cur && (m = line.match(/^requiredEvidence:\s*(\S+)/))) cur.required = m[1];
   else if (cur && (m = line.match(/^exportAllowed:\s*(true|false)/))) cur.exportAllowed = m[1] === 'true';
+  else if (cur && (m = line.match(/^parameterSetId:\s*(\S+)/)) && !cur.parameterSets.includes(m[1])) cur.parameterSets.push(m[1]);
 }
 
 for (const c of claims) {
@@ -43,7 +44,9 @@ for (const c of claims) {
 const body = claims
   .map(
     (c) =>
-      `  '${c.id}': { current: '${c.current}', required: '${c.required}', exportAllowed: ${c.exportAllowed} },`,
+      `  '${c.id}': { current: '${c.current}', required: '${c.required}', exportAllowed: ${c.exportAllowed}`
+      + (c.parameterSets.length ? `, scopedParameterSets: [${c.parameterSets.map((p) => `'${p}'`).join(', ')}]` : '')
+      + ' },',
   )
   .join('\n');
 
@@ -62,6 +65,8 @@ export interface RegistryEntry {
   readonly current: EvidenceLevel;
   readonly required: EvidenceLevel;
   readonly exportAllowed: boolean;
+  /** Parameter sets the claim's supporting studies cover (scope.supported); absent when none are declared. */
+  readonly scopedParameterSets?: readonly string[];
 }
 
 export const EVIDENCE_REGISTRY: Readonly<Record<string, RegistryEntry>> = {

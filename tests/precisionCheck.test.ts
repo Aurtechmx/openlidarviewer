@@ -260,7 +260,7 @@ describe('the certified level of detail', () => {
     expect(r.state).toBe('PASS');
     expect(r.lod?.state).toBe('NONE');
     expect(r.lod!.bMetres!).toBeGreaterThan(0.001);
-    expect(lodLine(r.lod)).toMatch(/^No level of detail is certified for the 1 mm limit under faithful rounding \(bound .* mm\)\.$/);
+    expect(lodLine(r.lod)).toMatch(/^No level of detail is within the 1 mm limit under faithful rounding \(bound .* mm\)\.$/);
   });
 
   it('at 1 cm a millimetre grid fits, and keeps every point of a cloud metres apart', () => {
@@ -268,20 +268,20 @@ describe('the certified level of detail', () => {
     expect(r.lod!.level).toBeGreaterThan(0);
     expect(r.lod!.cellSizeMetres!).toBeLessThan(0.01);
     expect(r.lod!.pointsKept).toBe(r.lod!.pointsFull);
-    expect(lodLine(r.lod)).toMatch(/^Coarsest certified level: \d+ mm cells, 100\.0% of points \(.* ≤ 1 cm, faithful rounding\)\. Not drawn in this version\.$/);
+    expect(lodLine(r.lod)).toMatch(/^Coarsest level within the limit: \d+ mm cells, 100\.0% of points \(.* ≤ 1 cm, faithful rounding\)\. Not drawn in this version\.$/);
   });
 
   it('names full resolution when no coarser level fits', () => {
     const r = readPrecision(deps(), 0.0015, { lod: 'count' });
     expect(r.lod?.state).toBe('CERTIFIED');
     expect(r.lod?.level).toBe(0);
-    expect(lodLine(r.lod)).toMatch(/^Coarsest certified level: full resolution \(bound .* mm ≤ 1\.50 mm, faithful rounding\)\. No coarser level fits\.$/);
+    expect(lodLine(r.lod)).toMatch(/^Coarsest level within the limit: full resolution \(bound .* mm ≤ 1\.50 mm, faithful rounding\)\. No coarser level fits\.$/);
   });
 
   it('names a coarser level, its share of points and that it is not drawn, when one fits', () => {
     const r = readPrecision(deps(), 100, { lod: 'count' });
     expect(r.lod!.level).toBeGreaterThan(0);
-    expect(lodLine(r.lod)).toMatch(/^Coarsest certified level: .* cells, \d+\.\d% of points \(.* ≤ .*, faithful rounding\)\. Not drawn in this version\.$/);
+    expect(lodLine(r.lod)).toMatch(/^Coarsest level within the limit: .* cells, \d+\.\d% of points \(.* ≤ .*, faithful rounding\)\. Not drawn in this version\.$/);
   });
 
   it('is recorded in the certificate with its rule and the narrow claim it supports', () => {

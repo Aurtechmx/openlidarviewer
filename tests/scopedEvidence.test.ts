@@ -59,34 +59,34 @@ describe('resolveEvidence — scoped overlay fails closed', () => {
     expect(r.baselineEvidence).toBe('E4_CROSS_IMPLEMENTATION_VALIDATED');
   });
 
-  it('wrong methodDigest → baseline (external-evidence-out-of-scope)', () => {
+  it('wrong methodDigest → not covered, no inherited level (external-evidence-out-of-scope)', () => {
     const r = resolveEvidence('DTM', { ...IN_ENVELOPE, methodDigest: 'digest-XXX' }, RECORDS);
-    expect(r.effectiveEvidence).toBe('E4_CROSS_IMPLEMENTATION_VALIDATED');
+    expect(r.effectiveEvidence).toBeNull();
     expect(r.resolutionState).toBe('external-evidence-out-of-scope');
     expect(r.matchedScopedStudy).toBeNull();
   });
 
   it('wrong horizontalEpsg → baseline (out-of-scope)', () => {
     const r = resolveEvidence('DTM', { ...IN_ENVELOPE, horizontalEpsg: 32614 }, RECORDS);
-    expect(r.effectiveEvidence).toBe('E4_CROSS_IMPLEMENTATION_VALIDATED');
+    expect(r.effectiveEvidence).toBeNull();
     expect(r.resolutionState).toBe('external-evidence-out-of-scope');
   });
 
   it('wrong verticalEpsg → baseline (out-of-scope)', () => {
     const r = resolveEvidence('DTM', { ...IN_ENVELOPE, verticalEpsg: 5701 }, RECORDS);
-    expect(r.effectiveEvidence).toBe('E4_CROSS_IMPLEMENTATION_VALIDATED');
+    expect(r.effectiveEvidence).toBeNull();
     expect(r.resolutionState).toBe('external-evidence-out-of-scope');
   });
 
   it('wrong geoidModel → baseline (out-of-scope)', () => {
     const r = resolveEvidence('DTM', { ...IN_ENVELOPE, geoidModel: 'GEOID12B' }, RECORDS);
-    expect(r.effectiveEvidence).toBe('E4_CROSS_IMPLEMENTATION_VALIDATED');
+    expect(r.effectiveEvidence).toBeNull();
     expect(r.resolutionState).toBe('external-evidence-out-of-scope');
   });
 
   it('broadened terrainStratum (forest) not in envelope → baseline (out-of-scope)', () => {
     const r = resolveEvidence('DTM', { ...IN_ENVELOPE, terrainStratum: 'forest' }, RECORDS);
-    expect(r.effectiveEvidence).toBe('E4_CROSS_IMPLEMENTATION_VALIDATED');
+    expect(r.effectiveEvidence).toBeNull();
     expect(r.resolutionState).toBe('external-evidence-out-of-scope');
   });
 
@@ -107,11 +107,12 @@ describe('resolveEvidence — scoped overlay fails closed', () => {
 
 describe('resolveEvidence — regression: no scoped record resolves as baseline', () => {
   it('a claim with NO scoped record resolves exactly as baseline (with default empty set)', () => {
-    const r = resolveEvidence('DTM', IN_ENVELOPE);
+    // A DTM built with the studied parameter set: E4, but its required bar
+    // is E5, so absent scope it stays exploratory.
+    const r = resolveEvidence('DTM', { ...IN_ENVELOPE, parameterSetId: 'PS-DTM-MIN-CELL1-R045' });
     expect(r.effectiveEvidence).toBe('E4_CROSS_IMPLEMENTATION_VALIDATED');
     expect(r.baselineEvidence).toBe('E4_CROSS_IMPLEMENTATION_VALIDATED');
     expect(r.matchedScopedStudy).toBeNull();
-    // DTM is E4 but its required bar is E5, so absent scope it stays exploratory.
     expect(r.resolutionState).toBe('exploratory');
   });
 
@@ -164,11 +165,50 @@ describe('committed scoped records cannot promote a real artifact', () => {
       // this committed record — it must never rise above baseline.
       for (const claimId of ['DTM', 'DSM', 'CHM', rec.claimId]) {
         const r = resolveEvidence(claimId, REAL, [rec]);
-        if (r.baselineEvidence !== null) {
+        if (r.baselineEvidence !== null && r.effectiveEvidence !== null) {
           expect(r.effectiveEvidence).toBe(r.baselineEvidence);
         }
         expect(r.resolutionState).not.toBe('validated-in-scope');
       }
     });
   }
+});
+
+describe('not covered vs no scoped studies', () => {
+  it('a claim with scoped studies that none match inherits no level', () => {
+    const r = resolveEvidence('DTM', { ...IN_ENVELOPE, methodDigest: 'digest-XXX' }, RECORDS);
+    expect(r.effectiveEvidence).toBeNull();
+    expect(r.baselineEvidence).toBe('E4_CROSS_IMPLEMENTATION_VALIDATED');
+    expect(r.applicabilityVerdict).toMatch(/not covered/i);
+  });
+  it('a claim with no scoped studies keeps its baseline', () => {
+    const r = resolveEvidence('DSM', IN_ENVELOPE, []);
+    expect(r.effectiveEvidence).toBe('E4_CROSS_IMPLEMENTATION_VALIDATED');
+  });
+});
+
+describe('register parameter-set scope', () => {
+  it('the live DTM, built with a set no study covers, inherits no level', () => {
+    const r = resolveEvidence('DTM');
+    expect(r.effectiveEvidence).toBeNull();
+    expect(r.baselineEvidence).toBe('E4_CROSS_IMPLEMENTATION_VALIDATED');
+    expect(r.resolutionState).toBe('external-evidence-out-of-scope');
+    expect(r.applicabilityVerdict).toMatch(/not covered/i);
+  });
+  it('a DTM built with the studied set keeps its baseline', () => {
+    expect(resolveEvidence('DTM', { parameterSetId: 'PS-DTM-MIN-CELL1-R045' }).effectiveEvidence).toBe('E4_CROSS_IMPLEMENTATION_VALIDATED');
+  });
+  it('a claim that declares no scoped studies keeps its baseline', () => {
+    expect(resolveEvidence('MEAS-DISTANCE').effectiveEvidence).toBe('E3_SYNTHETICALLY_VALIDATED');
+  });
+});
+
+describe('DEM package evidence contract for the live DTM', () => {
+  it('prints not covered, never an inherited E4', async () => {
+    const { renderEvidenceContract } = await import('../src/terrain/export/demPackage');
+    const { buildEvidenceContractView } = await import('../src/validation/evidenceBoundaryInspector');
+    const text = renderEvidenceContract(buildEvidenceContractView('DTM')).join('\n');
+    expect(text).toMatch(/Effective\s+not covered by the registered studies/);
+    expect(text).not.toMatch(/Effective\s+E4/);
+  });
 });

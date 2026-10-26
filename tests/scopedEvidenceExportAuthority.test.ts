@@ -134,7 +134,8 @@ describe('resolveExportEvidence — the one authoritative export-evidence resolv
     // With NO scoped record at all, the note is the caller's baseline wording.
     const bare = resolveExportEvidence('DTM', undefined, [], 'baseline');
     expect(bare.note).toBe('baseline');
-    expect(bare.effectiveEvidence).toBe(bare.baselineEvidence);
+    // The live DTM's parameter set is outside the DTM study scope: no level.
+    expect(bare.effectiveEvidence).toBeNull();
 
     // With scoped records present but no context, applicability is unknown and
     // the level still stays at baseline (never promoted).
@@ -154,18 +155,14 @@ describe('resolveExportEvidence — the one authoritative export-evidence resolv
     expect(provenanceJson(p).evidence).toBe(p.evidenceResolution!.note);
   });
 
-  it('out-of-scope context: baseline everywhere (never the scoped level)', () => {
+  it('out-of-scope context: not covered everywhere (no inherited level)', () => {
     const res = resolveExportEvidence('DTM', OUT_OF_SCOPE, RECORDS, 'baseline');
-    expect(res.effectiveEvidence).toBe(res.baselineEvidence);
+    expect(res.effectiveEvidence).toBeNull();
     expect(res.applicabilityStatus).toBe('external-evidence-out-of-scope');
 
     const p = buildFor(OUT_OF_SCOPE);
-    expect(p.evidenceResolution?.effectiveEvidence).toBe(
-      p.evidenceResolution?.baselineEvidence,
-    );
-    expect(p.scopedEvidence?.effectiveEvidence).toBe(
-      p.scopedEvidence?.baselineEvidence,
-    );
+    expect(p.evidenceResolution?.effectiveEvidence).toBeNull();
+    expect(p.scopedEvidence?.effectiveEvidence).toBeNull();
     // The note must not assert the scoped level.
     expect(provenanceJson(p).evidence).not.toContain('E5');
   });

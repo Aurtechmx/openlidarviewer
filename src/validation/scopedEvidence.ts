@@ -176,6 +176,12 @@ export interface EvidenceContext {
   readonly studyArea?: string;
   /** Representative slope, degrees, of this artifact (checked against slopeRange). */
   readonly slopeDegrees?: number;
+  /**
+   * The parameter set this artifact was built with, checked against the
+   * register's scope.supported. Omitted: the shipped product's set
+   * ({@link LIVE_PARAMETER_SET}), when one is declared.
+   */
+  readonly parameterSetId?: string;
   /** Aggregation this artifact was built with. */
   readonly aggregation?: string;
   /** Interpolation/fill this artifact was built with. */
@@ -224,6 +230,16 @@ const SAFETY_CRITICAL: readonly (keyof ApplicabilityEnvelope)[] = [
  * their own synthetic records explicitly.
  */
 export const SCOPED_EVIDENCE_RECORDS: readonly ScopedEvidenceRecord[] = [];
+
+/**
+ * The parameter set each shipped product is built with, for claims whose
+ * register scope names the parameter sets its studies covered. The live DTM
+ * aggregates by median (LIVE_DTM_AGGREGATION) with void fill; the DTM study
+ * covers min-return gridding (PS-DTM-MIN-CELL1-R045) only.
+ */
+export const LIVE_PARAMETER_SET: Readonly<Record<string, string>> = {
+  DTM: 'PS-DTM-LIVE-MEDIAN-FILL',
+};
 
 interface MatchOutcome {
   readonly matched: boolean;
@@ -279,7 +295,7 @@ function baselineState(entry: RegistryEntry | undefined): ResolutionState {
  *      `validated-in-scope` (the highest matching scoped level wins).
  *   4. No match, and the mismatch was a missing safety-critical key ⇒ baseline,
  *      `applicability-unknown`.
- *   5. No match with a complete context ⇒ baseline, `external-evidence-out-of-scope`.
+ *   5. No match with a complete context ⇒ no level (not covered), `external-evidence-out-of-scope`.
  */
 export function resolveEvidence(
   claimId: string,
@@ -289,6 +305,23 @@ export function resolveEvidence(
   const entry = EVIDENCE_REGISTRY[claimId];
   const baseline = entry?.current ?? null;
   const forClaim = records.filter((r) => r.claimId === claimId);
+
+  // A claim whose studies name the parameter sets they covered: a product
+  // built with another set is not covered and inherits no level. A claim that
+  // declares none keeps the baseline below.
+  const covered = entry?.scopedParameterSets;
+  const paramSet = context?.parameterSetId ?? LIVE_PARAMETER_SET[claimId];
+  if (forClaim.length === 0 && covered && covered.length > 0 && paramSet != null && !covered.includes(paramSet)) {
+    return {
+      baselineEvidence: baseline,
+      effectiveEvidence: null,
+      matchedScopedStudy: null,
+      applicabilityVerdict:
+        `Not covered by the registered studies: they cover ${covered.join(', ')}, and this `
+        + `artifact was built with ${paramSet}, so no evidence level is inherited.`,
+      resolutionState: 'external-evidence-out-of-scope',
+    };
+  }
 
   if (forClaim.length === 0) {
     return {
@@ -356,11 +389,13 @@ export function resolveEvidence(
 
   return {
     baselineEvidence: baseline,
-    effectiveEvidence: baseline,
+    // Not covered: the claim's level rests on studies this artifact is outside
+    // of, so it inherits none (a claim with no scoped studies keeps baseline).
+    effectiveEvidence: null,
     matchedScopedStudy: null,
     applicabilityVerdict:
-      'External field evidence exists for this method, but this artifact is outside '
-      + 'every registered study envelope; the baseline level stands.',
+      'Not covered by the registered studies: this artifact is outside every '
+      + 'registered study envelope, so no evidence level is inherited.',
     resolutionState: 'external-evidence-out-of-scope',
   };
 }
@@ -430,6 +465,13 @@ function effectiveExportGate(
   effectiveEvidence: EvidenceLevel | null,
 ): ExportDecision {
   const entry = EVIDENCE_REGISTRY[claimId];
+  if (entry && effectiveEvidence == null) {
+    return {
+      allowed: entry.exportAllowed,
+      exploratoryOnly: true,
+      reason: `"${claimId}" is not covered by its registered studies for this artifact; exportable only as exploratory.`,
+    };
+  }
   if (!entry || effectiveEvidence == null) {
     return {
       allowed: false,
@@ -457,9 +499,12 @@ export function resolveExportEvidence(
         + r.matchedScopedStudy + '). Applies only within that scope.';
       break;
     case 'external-evidence-out-of-scope':
-      note =
-        'Evidence: external field evidence exists for this DTM method, but this '
-        + 'dataset is outside the validated study scope. Baseline level stands.';
+      // Outside the register's parameter-set scope (no scoped record): the
+      // caller's gate note already names the uncovered configuration.
+      note = !(records ?? SCOPED_EVIDENCE_RECORDS).some((x) => x.claimId === claimId) && baselineNote != null
+        ? baselineNote
+        : 'Evidence: not covered by the registered studies; this dataset is outside '
+          + 'every study envelope, so no evidence level is inherited.';
       break;
     case 'applicability-unknown':
       note =

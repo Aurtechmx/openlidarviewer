@@ -82,6 +82,13 @@ function model(features: ContourFeature[], crs: string | null = 'EPSG:32610'): C
 }
 
 describe('toGeoJSON', () => {
+  it('exports the pooled run score as presentationSupport, not meanConfidence', () => {
+    const gj = toGeoJSON(model([feat('solid', [[0, 0], [1, 1]], 10, true)])) as any;
+    const p = gj.features[0].properties;
+    expect(p.presentationSupport).toBe(90);
+    expect('meanConfidence' in p).toBe(false);
+  });
+
   const m = model([
     feat('solid', [[0, 0], [1, 1]], 10, true, false, 1 /* PROV_M: measured */),
     feat('dashed', [[1, 1], [2, 1]], 11, false, false, 2 /* PROV_I: interpolated */),

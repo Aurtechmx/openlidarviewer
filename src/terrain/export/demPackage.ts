@@ -421,7 +421,7 @@ export function renderEvidenceContract(view: EvidenceContractView): string[] {
     `Evidence contract`,
     `  Claim          ${view.claimId}`,
     `  Baseline       ${view.baselineEvidence ?? 'none recorded'}`,
-    `  Effective      ${view.effectiveEvidence ?? 'none recorded'}`,
+    `  Effective      ${view.effectiveEvidence ?? (view.resolutionState === 'external-evidence-out-of-scope' ? 'not covered by the registered studies' : 'none recorded')}`,
     `  Resolution     ${view.resolutionState}`,
     `  Matched study  ${view.matchedStudy ?? 'none applies'}`,
     `  Verdict        ${view.applicabilityVerdict}`,

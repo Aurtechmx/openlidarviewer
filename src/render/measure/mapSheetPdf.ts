@@ -61,14 +61,22 @@ import { winAnsiSafe } from '../../winAnsiText';
 import type { ClaimId } from '../../validation/evidenceRegistry';
 
 /**
- * The claim the map sheet stands on (§19). A printed contour map sheet is the
- * CONTOURS product — synthetically validated (E3) but below its required E4
- * cross-implementation bar, so the gate marks it exploratory. The sheet stamps
- * that verdict in its collar (see {@link mapSheetEvidenceNote}) so a printed
- * deliverable carries the same honest status as the GeoJSON / DXF / DEM exports
- * of the same scan, never reading as a validated survey product.
+ * The claim a crisp contour map sheet stands on (§19): CONTOURS, whose E4 rests
+ * on the analytical geometry. A generalised or smoothed sheet stands on
+ * CONTOURS-CARTOGRAPHIC instead ({@link mapSheetClaim}), as the GeoJSON and
+ * DXF exports do.
  */
 export const MAP_SHEET_CLAIM: ClaimId = 'CONTOURS';
+
+/** The claim for a sheet drawn in `style`, with the purpose's generalisation. */
+export function mapSheetClaim(
+  style: string | null | undefined,
+  purpose: Pick<MapSheetPurpose, 'generalizeToleranceCells' | 'cartographicSmoothing'> | null | undefined,
+): ClaimId {
+  if (style !== 'crisp') return 'CONTOURS-CARTOGRAPHIC';
+  if (purpose && (purpose.generalizeToleranceCells > 0 || purpose.cartographicSmoothing)) return 'CONTOURS-CARTOGRAPHIC';
+  return MAP_SHEET_CLAIM;
+}
 
 /**
  * The evidence-gate note for the map sheet, DERIVED from the one gate (never
@@ -277,7 +285,7 @@ export function contourDrawStyle(isIndex: boolean, basis: ContourLineKind): Cont
  */
 export function readinessNote(readiness: SheetReadiness): string {
   return readiness === 'ready'
-    ? 'Validated against held-out ground - not a survey certification.'
+    ? 'Checked against internal hold-out ground - not field accuracy, not a survey certification.'
     : 'PREVIEW - not survey-grade until validated against control.';
 }
 
@@ -568,6 +576,7 @@ function drawPurposeAppendix(
   font: PDFFont,
   bold: PDFFont,
 ): void {
+  const sheetClaim = mapSheetClaim(input.model.contourStyle, purpose);
   const size = input.sheet ?? 'letter';
   const orient = input.orientation ?? 'portrait';
   let [PW, PH] = SHEET_PT[size];
@@ -643,8 +652,8 @@ function drawPurposeAppendix(
     // Lead with the honesty disclaimer so it can never read as a certification.
     const lines: Array<[string, ReturnType<typeof rgb>]> = [
       ['This appendix records OpenLiDARViewer\'s INTERNAL validation state for this surface. It is NOT a survey certification and does NOT raise the evidence level of this deliverable.', warn],
-      [mapSheetEvidenceNote(), INK],
-      [mapSheetEvidenceLine(), evidenceStatus(MAP_SHEET_CLAIM) === 'validated' ? DIM : warn],
+      [mapSheetEvidenceNote(sheetClaim), INK],
+      [mapSheetEvidenceLine(sheetClaim), evidenceStatus(sheetClaim) === 'validated' ? DIM : warn],
       [readinessNote(input.readiness ?? 'previewOnly'), input.readiness === 'ready' ? INK : warn],
     ];
     for (const [ln, c] of lines) {
@@ -1075,6 +1084,7 @@ function drawTitleBlock(
   text: (s: string, x: number, y: number, sz: number, f?: PDFFont, c?: ReturnType<typeof rgb>) => void,
   rightText: (s: string, xRight: number, y: number, sz: number, f?: PDFFont, c?: ReturnType<typeof rgb>) => void,
 ): void {
+  const sheetClaim = mapSheetClaim(input.model.contourStyle, input.purpose);
   const topY = M + TB;
   page.drawLine({ start: { x: M, y: topY }, end: { x: PW - M, y: topY }, thickness: 1, color: FRAME });
 
@@ -1241,7 +1251,7 @@ function drawTitleBlock(
   const accHeading =
     prov && (prov.accuracy?.accuracyOnSample || prov.exportReadiness !== 'Ready')
       ? 'Hold-out accuracy (preview)'
-      : 'Survey accuracy';
+      : 'Internal hold-out accuracy';
   rightText(accHeading, rxr, topY - 16, 9, bold);
   page.drawLine({ start: { x: rxr - bold.widthOfTextAtSize(accHeading, 9), y: topY - 21 }, end: { x: rxr, y: topY - 21 }, thickness: 0.6, color: FRAME });
   // ' m' is unconditional and correct here: these figures are metres by
@@ -1316,8 +1326,8 @@ function drawTitleBlock(
   const noteWrapped = wrapTextToWidth(note, rcw, 6.5, boldMeasure, 3);
   const noteTopY = Math.min(topY - 84, accCol.bottomY - 11);
   noteWrapped.forEach((ln, i) => rightText(ln, rxr, noteTopY - i * 8, 6.5, bold, readiness === 'ready' ? INK : warn));
-  const evLine = mapSheetEvidenceLine();
-  const evColor = evidenceStatus(MAP_SHEET_CLAIM) === 'validated' ? DIM : warn;
+  const evLine = mapSheetEvidenceLine(sheetClaim);
+  const evColor = evidenceStatus(sheetClaim) === 'validated' ? DIM : warn;
   const evWrapped = wrapTextToWidth(evLine, rcw, 6, measure, 3);
   const evStartY = noteTopY - noteWrapped.length * 8 - 5;
   evWrapped.forEach((ln, i) => rightText(ln, rxr, evStartY - i * 8, 6, font, evColor));

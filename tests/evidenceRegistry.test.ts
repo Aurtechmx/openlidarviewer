@@ -40,7 +40,7 @@ describe('runtime evidence registry vs YAML register', () => {
   it('matches the YAML on current / required / exportAllowed for every claim', () => {
     for (const [id, y] of Object.entries(fromYaml)) {
       expect(EVIDENCE_REGISTRY[id], `missing runtime entry: ${id}`).toBeDefined();
-      expect(EVIDENCE_REGISTRY[id]).toEqual(y);
+      expect(core(EVIDENCE_REGISTRY[id])).toEqual(y);
     }
   });
 });
@@ -67,3 +67,8 @@ describe('export gate', () => {
     expect(d.reason).toMatch(/unregistered|no evidence-register/i);
   });
 });
+
+/** The current / required / exportAllowed fields; scope parameter sets are checked in scopedEvidence tests. */
+function core(e: { current: string; required: string; exportAllowed: boolean } | undefined) {
+  return e && { current: e.current, required: e.required, exportAllowed: e.exportAllowed };
+}
