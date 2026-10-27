@@ -89,6 +89,7 @@ import { flowDischargeLegend, hillshade, type ActivationSource, type FlowChannel
 import { buildIdentityLabel } from '../../build/buildIdentity';
 import { channelMinCount, isChannel, logScale } from '../../render/flowOverlayGeometry';
 import { CELL_NODATA } from '../../simulation/flowPulse/flowTypes';
+import { overlayRegistry } from '../../app/overlayRegistry';
 
 /** The analysed surface and the frame facts the Analyse panel holds for it. */
 export interface FlowPulseLabInput {
@@ -679,6 +680,7 @@ export function acquireFlowOverlay(
   if (persistentFlowOverlay && persistentFlowOverlay.isStale?.() === true) {
     persistentFlowOverlay.overlay.dispose();
     persistentFlowOverlay = null;
+    overlayRegistry.changed();
   }
   if (!persistentFlowOverlay) {
     // On by default: the drainage in 3D is the result most readers came for.
@@ -706,7 +708,31 @@ export function disposePersistentFlowOverlay(): void {
   if (!persistentFlowOverlay) return;
   persistentFlowOverlay.overlay.dispose();
   persistentFlowOverlay = null;
+  overlayRegistry.changed();
 }
+
+/** The open Lab's toggle, so a switch made elsewhere updates its pressed state. */
+const flowToggleSyncs = new Set<(on: boolean) => void>();
+
+/**
+ * The drainage lines in the Created layers list. Visibility lives on the
+ * persisted overlay (`overlayOn`), the same flag the Lab toggle writes, so
+ * both controls read one state. Listed only while drainage has been uploaded.
+ */
+overlayRegistry.register({
+  id: 'flow-drainage',
+  label: 'Drainage lines',
+  isAvailable: () => (persistentFlowOverlay?.overlay.accumulationCellCount ?? 0) > 0,
+  get: () => persistentFlowOverlay?.overlayOn ?? false,
+  set: (on) => {
+    const p = persistentFlowOverlay;
+    if (!p) return;
+    p.overlayOn = on;
+    // A hidden mesh is skipped by the renderer, so a hidden overlay costs no draw time.
+    p.overlay.setAccumulationVisible(on);
+    for (const fn of [...flowToggleSyncs]) fn(on);
+  },
+});
 
 // Registered once, at module load (i.e. the first time this chunk actually
 // loads — opening the Lab, or its export action). `registerFlowOverlayInvalidator`
@@ -836,8 +862,16 @@ function mountFlowPulseInteractive(
     if (persistentFlowOverlay) persistentFlowOverlay.overlayOn = overlayOn;
     overlayToggle.setAttribute('aria-pressed', overlayOn ? 'true' : 'false');
     applyOverlayVisibility();
+    overlayRegistry.changed();
     announce(overlayOn ? 'Flow accumulation overlay on.' : 'Flow accumulation overlay off.');
   });
+  const syncToggle = (on: boolean): void => {
+    overlayOn = on;
+    overlayToggle.setAttribute('aria-pressed', on ? 'true' : 'false');
+    // Turning on from the list with nothing uploaded yet draws the current run.
+    if (on) applyOverlayVisibility();
+  };
+  flowToggleSyncs.add(syncToggle);
   const overlayLegend = el('div', {
     className: 'olv-flow-overlay-legend',
     text: 'Drainage lines on a log scale: wider and brighter lines mean more cells drain through that point. It counts cells, not water.',
@@ -859,6 +893,9 @@ function mountFlowPulseInteractive(
         buildFlowAccumulationBuffers(outcome.grid, outcome.routed, outcome.accumulation, overlayFrame),
       );
       flowOverlay.setAccumulationVisible(true);
+    } else if (!outcome.ok) {
+      // A failed run has no drainage to show, so the list shows no row for it.
+      flowOverlay.clearAccumulation();
     } else {
       flowOverlay.setAccumulationVisible(false);
     }
@@ -1100,6 +1137,7 @@ function mountFlowPulseInteractive(
     clearSelectionDrawing();
     applyRainfall();
     applyOverlayVisibility();
+    overlayRegistry.changed();
     const metricField = displayChannelField(outcome, rainfall) != null;
     rainAssumptions.replaceChildren(
       el('p', { className: 'olv-flow-rain-assumptions-title', text: 'Rainfall estimate: what it assumes' }),
@@ -1194,9 +1232,13 @@ function mountFlowPulseInteractive(
       rainFrame = 0;
       grid.dispose();
       chip.dispose();
-      if (!overlayOn && persistentFlowOverlay) {
+      flowToggleSyncs.delete(syncToggle);
+      // A hidden overlay that was drawn stays (hidden) so the Created layers
+      // list can switch it back on; one never drawn is released.
+      if (!overlayOn && persistentFlowOverlay && persistentFlowOverlay.overlay.accumulationCellCount === 0) {
         persistentFlowOverlay.overlay.dispose();
         persistentFlowOverlay = null;
+        overlayRegistry.changed();
       }
     },
   };
