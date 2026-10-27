@@ -87,7 +87,7 @@ import { computeSharedElevationRange, applyElevationColors, colorOptsForMode, up
 import { type ActiveColorbar } from './activeColorbar';
 import type { NoDataCapture, SizedCapture, SnapshotHost, SnapshotOptions } from './snapshot';
 import { runRenderFrame, feedFrameMs, governDpr, governPoints, type RenderLoopHost } from './renderLoop';
-import { type BoxBounds, type ClipBox, type ClipLayerCount, type VerticalExtent, ClipBoxGpu, ClipOutline, FilterFolds, clipFrameBounds, clipKeepsPoint, clipPickAccept, countKept, verticalExtentOf } from './clip/clipGpu';
+import { type BoxBounds, type ClipBox, type ClipLayerCount, type VerticalExtent, ClipBoxGpu, ClipOutline, FilterFolds, clipFrameBounds, clipKeepsPoint, clipPickAccept, countKept, streamingClipBounds, verticalExtentOf } from './clip/clipGpu';
 import { edlDefaultEnabled, EDL_DEFAULTS } from './edl';
 import { angularVelocity } from './angularVelocity';
 import { refinementDprTarget, shouldApplyDpr, DPR_MOTION_FLOOR } from './adaptiveDpr';
@@ -2206,7 +2206,7 @@ export class Viewer {
   setClipOutline(box: BoxBounds | null, active: boolean): void { (this._clipOutline ??= new ClipOutline(this.derivedLayerHost())).show(box, active); }
 
   /** The visible scan's extent along its up axis in the clip's frame (see `clipFromBoxMeasurement`). */
-  clipVerticalExtent(): VerticalExtent | null { return verticalExtentOf(this.mergedVisibleBounds(), this._worldUp.z === 1 ? 2 : 1); }
+  clipVerticalExtent(): VerticalExtent | null { return verticalExtentOf(this.mergedVisibleBounds(true), this._worldUp.z === 1 ? 2 : 1); }
 
   /**
    * Glide the camera to the kept volume of a keep-inside clip, so the orbit
@@ -2214,7 +2214,7 @@ export class Viewer {
    * there is no such clip.
    */
   frameClip(): boolean {
-    const b = clipFrameBounds(this._clip, this.mergedVisibleBounds());
+    const b = clipFrameBounds(this._clip, this.mergedVisibleBounds(true));
     if (!b) return false;
     this._frameBox(new THREE.Box3(new THREE.Vector3(...b.min), new THREE.Vector3(...b.max)));
     return true;
@@ -4964,15 +4964,15 @@ export class Viewer {
   /**
    * The one scene-bounds merge (layerPlacement.mergePlacedBounds): camera
    * framing and the orbit clamp read the same placed union, so the two can
-   * never disagree on where the visible data sits. Scene frame; public for the reference plane.
+   * never disagree on where the visible data sits. Scene frame. `tight` swaps a streamed scan's octree cube for its data extent (clip box, reference plane).
    */
-  mergedVisibleBounds(): [number, number, number, number, number, number] | null {
+  mergedVisibleBounds(tight = false): [number, number, number, number, number, number] | null {
     const layers: Array<{ bounds: ReturnType<PointCloud['bounds']>; placement?: LayerSpatialTransform | null }> = [];
     for (const entry of this._clouds.values()) {
       if (!entry.mesh.visible) continue;
       layers.push({ bounds: entry.cloud.bounds(), placement: entry.placement });
     }
-    return mergePlacedBounds(layers, this._streaming ? this._streaming.cloud.localBounds() : null);
+    return mergePlacedBounds(layers, !this._streaming ? null : tight ? streamingClipBounds(this._streaming.cloud) : this._streaming.cloud.localBounds());
   }
 
   private _visibleBoundingSphere(): THREE.Sphere | null {

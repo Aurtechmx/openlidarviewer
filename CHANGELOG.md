@@ -82,6 +82,7 @@ has not been done. v0.7.0 is the current published release.
 - An E57 file that holds images but no 3D scans is refused with a message saying how many images it holds and that images are not displayed, instead of a generic decoding failure. A file with both scans and images opens with a warning that the images are not displayed.
 - A remote COPC whose server answers a range request with 416 is reported as a file that changed on the server, or as a read past its end, instead of an unexpected-status transport error.
 - A remote COPC read cancelled while its data is arriving, or cut off when the connection drops, now fails with a clear cancelled or connection-closed reason instead of a raw browser error.
+- On a streamed scan, the clip box, Fit to scan, the clip's height and the reference plane follow the scan's data extent. They used to follow the octree's root cube, so the box was roughly as tall as it was wide.
 
 ### Validation
 

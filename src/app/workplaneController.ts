@@ -75,7 +75,7 @@ export interface WorkplaneViewer {
   /** The scan point under a screen position, in scene coordinates. */
   pickPoint(ndcX: number, ndcY: number): { x: number; y: number; z: number } | null;
   /** The visible scan's box in scene coordinates, `[minX, minY, minZ, maxX, maxY, maxZ]`. */
-  mergedVisibleBounds(): readonly number[] | null;
+  mergedVisibleBounds(tight?: boolean): readonly number[] | null;
   readonly measure: { readonly worldUp: readonly number[]; readonly datumResolved: boolean };
   clouds(): readonly string[];
   readonly hasStreamingCloud: boolean;
@@ -200,7 +200,7 @@ export function createWorkplaneController(deps: WorkplaneControllerDeps): Workpl
   const idleScratch: number[] = [];
   const fillIdle = (viewer: NonNullable<ReturnType<typeof deps.viewer>>): number[] => {
     const cam = viewer.getCameraState();
-    const b = viewer.mergedVisibleBounds();
+    const b = viewer.mergedVisibleBounds(true);
     const s = idleScratch;
     s.length = 0;
     s.push(...cam.position, ...cam.target, cam.fov ?? DEFAULT_FOV, viewer.orthographic ? 1 : 0, deps.canvas.clientHeight || 1);
@@ -236,7 +236,7 @@ export function createWorkplaneController(deps: WorkplaneControllerDeps): Workpl
 
   /** The visible scan's box in source coordinates, or null. Every visible layer counts. */
   const sourceBox = (): { min: Vec3; max: Vec3 } | null => {
-    const b = deps.viewer()?.mergedVisibleBounds();
+    const b = deps.viewer()?.mergedVisibleBounds(true);
     if (!b || b.length < 6 || !b.every(Number.isFinite)) return null;
     const d = datum();
     return { min: [b[0] + d[0], b[1] + d[1], b[2] + d[2]], max: [b[3] + d[0], b[4] + d[1], b[5] + d[2]] };

@@ -30,7 +30,7 @@ import type { SceneOverlayHost } from '../sceneLineOverlay';
 
 // The viewer reaches the whole clip through this one module (the pure region
 // logic in `clipBox` plus the GPU fold below), keeping its import list short.
-export { clipFrameBounds, clipKeepsPoint, clipPickAccept, countKept, verticalExtentOf } from './clipBox';
+export { clipFrameBounds, clipKeepsPoint, clipPickAccept, countKept, streamingClipBounds, verticalExtentOf } from './clipBox';
 export type { ClipBox, ClipLayerCount, VerticalExtent } from './clipBox';
 export type { BoxBounds } from '../measure/geometry';
 

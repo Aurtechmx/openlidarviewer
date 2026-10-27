@@ -87,7 +87,7 @@ export function mountClip(d: ClipMountDeps): ClipMount {
       v.setClip(clip);
     },
     onOutline: (box, active) => live()?.setClipOutline(box, active),
-    fitBounds: () => fitMergedBounds(live()?.mergedVisibleBounds() ?? null),
+    fitBounds: () => fitMergedBounds(live()?.mergedVisibleBounds(true) ?? null),
     keptCount: () => clipCountFor(live(), d.activeId()),
     // The units the Inspect card gives the same local X, Y, Z (none asserted when unknown).
     units: () => {
