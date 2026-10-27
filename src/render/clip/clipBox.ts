@@ -194,3 +194,19 @@ export function clipFrameBounds(
   const max: Vec3 = [Math.min(clip.box.max[0], data[3]), Math.min(clip.box.max[1], data[4]), Math.min(clip.box.max[2], data[5])];
   return max[0] > min[0] && max[1] > min[1] && max[2] > min[2] ? { min, max } : null;
 }
+
+/**
+ * A streamed scan's bounds for the clip box, Fit to scan and the reference
+ * plane: the declared data extent (`dataBounds`), which is tight, rather than
+ * the octree root cube (`localBounds`), which is as tall as it is wide. Falls
+ * back to the cube when the declared box is unreadable (a non-finite corner,
+ * or no span on any axis, as in a zeroed header), the same test as scanPrecision.
+ */
+export function streamingClipBounds(cloud: {
+  dataBounds(): readonly number[];
+  localBounds(): readonly number[];
+}): readonly number[] {
+  const d = cloud.dataBounds();
+  const readable = d.length >= 6 && d.slice(0, 6).every(Number.isFinite) && (d[3] > d[0] || d[4] > d[1] || d[5] > d[2]);
+  return readable ? d : cloud.localBounds();
+}
