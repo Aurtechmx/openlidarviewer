@@ -247,3 +247,21 @@ describe('Layer Health placement and mode switches', () => {
     expect(body).not.toMatch(/showWorkspaceMode/);
   });
 });
+
+describe('Created layers on the Data home', () => {
+  // Terrain overlays matter most on a scan with no classes, so the list must
+  // sit under the Classes block in both cases, never inside the Classes panel.
+  it('sits directly under the Classes block for a scan with no classes, and with classes', async () => {
+    for (const rows of [[], CLASSES]) {
+      const extra = new FakeEl('section');
+      extra.className = 'olv-overlay-switches';
+      const t = await home({ classRows: () => rows, afterClasses: extra });
+      const kids = t.root.children;
+      const i = kids.indexOf(extra);
+      expect(i).toBeGreaterThan(0);
+      expect(kids[i - 1].hasClass('olv-data-class-section')).toBe(true);
+      expect(extra.hidden).toBeFalsy();
+      expect(t.byLabel('Classes').textContent).toContain(rows.length ? '6 detected' : 'None detected');
+    }
+  });
+});

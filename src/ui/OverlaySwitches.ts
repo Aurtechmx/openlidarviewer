@@ -1,7 +1,7 @@
 /**
  * OverlaySwitches.ts
  *
- * The "Created layers" list under the Classes list in Data: one checkbox row
+ * The "Created layers" list under the Classes block on the Data home: one checkbox row
  * per generated scene overlay, styled like the class rows above it. It reads
  * and writes through the overlay registry only, so it stays in step with the
  * Analyse checkbox and the Lab toggles. Hidden until an overlay exists.

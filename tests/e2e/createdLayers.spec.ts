@@ -4,7 +4,7 @@
  * checkbox both ways, and closing the scan removes it.
  */
 import { test, expect } from '@playwright/test';
-import { dropDenseGridPly, openAnalysePage, openAnalysePanel, closeScanFromDock } from './helpers';
+import { dropDenseGridPly, openAnalysePage, openAnalysePanel, closeScanFromDock, showWorkspaceMode } from './helpers';
 
 test.describe('created layers list', () => {
   test.slow();
@@ -24,6 +24,11 @@ test.describe('created layers list', () => {
     await expect(row).toHaveCount(1);
     const listBox = row.locator('input[type="checkbox"]');
     await expect(listBox).toBeChecked();
+
+    // The list shows on the Data tab, directly under the Classes block.
+    await showWorkspaceMode(page, 'data');
+    await expect(section).toBeVisible();
+    await expect(page.locator('.olv-data-home .olv-data-class-section + .olv-overlay-switches')).toHaveCount(1);
 
     // Analyse checkbox off: the list follows.
     await openAnalysePage(page, 'contours');

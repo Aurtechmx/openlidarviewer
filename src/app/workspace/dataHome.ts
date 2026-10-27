@@ -27,6 +27,11 @@ export interface DataHomeDeps {
   openSource(): void;
   openLayerHealth(): void;
   openFile(): void;
+  /**
+   * Shown directly under the Classes block whether or not the scan has
+   * classes (the Created layers list; it hides itself until an overlay exists).
+   */
+  afterClasses?: HTMLElement;
 }
 
 export interface DataHome {
@@ -103,7 +108,9 @@ export function createDataHome(d: DataHomeDeps): DataHome {
     el('p', { text: 'Open a point cloud to begin' }),
     openBtn,
   ]);
-  const element = el('section', { className: 'olv-data-home' }, [empty, classes.root, section, source.root, health.root]);
+  const element = el('section', { className: 'olv-data-home' }, [
+    empty, classes.root, section, ...(d.afterClasses ? [d.afterClasses] : []), source.root, health.root,
+  ]);
   element.setAttribute('aria-label', 'Data');
 
   const refresh = (): void => {

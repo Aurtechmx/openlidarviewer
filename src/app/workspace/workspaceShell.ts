@@ -269,7 +269,12 @@ export function mountWorkspaceShell(d: WorkspaceShellDeps): WorkspaceShell {
   // Layer Health stays in the Inspector, which is per-scan.
   const dataEls = d.inspector.workspaceDataElements();
   const rightCollapsed = (): boolean => d.rightRail.classList.contains('olv-right-collapsed');
+  // Created layers: the generated overlays' checkboxes, directly under the
+  // Classes block on the Data home, shown with or without classes.
+  const createdLayers = createOverlaySwitches(overlayRegistry);
+  d.addTeardown(createdLayers.dispose);
   const dataHome = createDataHome({
+    afterClasses: createdLayers.element,
     hasScan: d.hasScan,
     classRows: () => d.classLegend.classSummary(),
     classesSampled: () => d.classLegend.isSampled(),
@@ -285,12 +290,6 @@ export function mountWorkspaceShell(d: WorkspaceShellDeps): WorkspaceShell {
   refreshDataHome = dataHome.refresh;
   d.addTeardown(d.inspector.onSourceChange(dataHome.refresh));
   decorateViewRail(d.inspector.element, () => router?.navigate({ mode: 'analyse', page: null }, true));
-  // Created layers: the generated overlays' checkboxes, directly under the class rows.
-  const createdLayers = createOverlaySwitches(overlayRegistry);
-  const classFooter = d.classLegend.element.querySelector?.('.olv-cl-footer');
-  if (classFooter) classFooter.after(createdLayers.element);
-  else d.classLegend.element.append(createdLayers.element);
-  d.addTeardown(createdLayers.dispose);
   // Asking for the View rail ends Focus mode first, so the rail opens from the
   // state the user left, not from Focus mode's transient collapse.
   const expandRightRail = (): void => { focus?.exit(); d.overlay.querySelector<HTMLButtonElement>('.olv-right-rail-tab')?.click(); };
