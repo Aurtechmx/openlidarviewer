@@ -15,7 +15,9 @@ describe('the armed lasso does not cover the panels', () => {
 
   it('mounts under the panel overlay, not above it', () => {
     expect(src).not.toMatch(/z-index:\s*3\b/);
-    expect(src).toMatch(/z-index:var\(--z-content\)/);
+    const css = readFileSync(new URL('../src/styles/60-measure-inspect.css', import.meta.url), 'utf8');
+    expect(src).toMatch(/'class', 'olv-lasso-svg'/);
+    expect(css).toMatch(/\.olv-lasso-svg\s*\{[^}]*z-index:\s*var\(--z-content\)/);
   });
 
   it('keeps the panel overlay above the lasso in the token scale', () => {
