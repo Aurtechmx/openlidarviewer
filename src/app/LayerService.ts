@@ -301,6 +301,7 @@ export function createLayerService(deps: LayerServiceDeps): LayerService {
         locked: viewer.isCloudLocked(id),
         epsg: crs.epsg,
         crsName: known ? crs.name : undefined,
+        ...(crs.localFrameName !== undefined ? { localFrameName: crs.localFrameName } : {}),
         verticalDatum: crs.verticalDatum,
         verticalEpsg: crs.verticalEpsg,
         // ResolvedCrs carries `kind`, not the CrsInfo `isGeographic` flag.
@@ -355,7 +356,7 @@ export function createLayerService(deps: LayerServiceDeps): LayerService {
     // aligns in X/Y, where the agreement is real, and keeps its own Z — the
     // doubt now gates the product instead of only annotating it.
     const inputs = infos.map((i) => ({
-      id: i.id, epsg: i.epsg, crsName: i.crsName,
+      id: i.id, epsg: i.epsg, crsName: i.crsName, localFrameName: i.localFrameName,
       verticalDatum: i.verticalDatum, verticalEpsg: i.verticalEpsg,
     }));
     // A placement is sticky while its layer stays open. A layer judged against

@@ -32,6 +32,7 @@ The format is based on Keep a Changelog and the project follows Semantic Version
 
 ### Fixed
 
+- A LAS file whose WKT is a named local or engineering CRS (`LOCAL_CS`, `ENGCRS`) keeps that name and is treated as a local frame. Two layers in local frames with different names are reported as mismatched, are not combined, and change detection between them is refused. Two layers naming the same local frame are reported as unverified rather than matching.
 - A refusal written for the user, such as the tileset-by-URL guidance, the E57 and whole-file size caps and a graphics backend that cannot start, reaches the toast as written instead of as the category's general sentence.
 - A browser with neither WebGPU nor WebGL 2 is told so when a scan opens, instead of the failure being reported as a fault in the file.
 - A URL that fails to open shows its message under the URL field with Retry, for COPC, EPT and 3D Tiles alike.

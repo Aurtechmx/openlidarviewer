@@ -17,6 +17,7 @@
  */
 import { compareCodeUnits } from '../canonicalHash';
 import { resolveVerticalEpsg } from '../geo/height';
+import { localFrameKey } from '../geo/CoordinateTypes';
 
 /** What a layer has proven about its relationship to the project frame. */
 export type LayerCompatibility =
@@ -36,6 +37,8 @@ export interface CompatibilityInput {
   readonly epsg?: number;
   /** Display name of the horizontal CRS, used only when no code exists. */
   readonly crsName?: string;
+  /** Declared name of a local / engineering CRS, when the source carries one. */
+  readonly localFrameName?: string;
   /** Vertical datum identifier as declared, or null when undeclared. */
   readonly verticalDatum?: string | null;
   /** Vertical CRS EPSG code, when the source declared one. Authoritative. */
@@ -90,6 +93,7 @@ export function verticalReferenceKey(l: CompatibilityInput): string | null {
  */
 export function horizontalKey(l: CompatibilityInput): string | null {
   if (l.epsg !== undefined && Number.isFinite(l.epsg)) return `epsg:${l.epsg}`;
+  if (l.localFrameName?.trim()) return localFrameKey(l.localFrameName);
   const name = l.crsName?.trim();
   return name ? `name:${name.toLowerCase()}` : null;
 }
@@ -172,6 +176,11 @@ export function classifyLayerCompatibility(
     }
     if (key !== referenceKey) {
       out.set(l.id, 'incompatible');
+      continue;
+    }
+    // A shared local-frame name does not prove a shared origin or axes.
+    if (key.startsWith('local:')) {
+      out.set(l.id, 'unknown');
       continue;
     }
     const vertical = verticalReferenceKey(l);

@@ -143,6 +143,11 @@ export interface ResolvedCrs {
    */
   readonly horizontalDatum?: string;
   /**
+   * The declared name of a local / engineering CRS read from the source WKT.
+   * Absent for the generic local case (`localCrs()`, a user's "local" choice).
+   */
+  readonly localFrameName?: string;
+  /**
    * Z-axis unit conversion to metres, when the source declares a vertical unit
    * distinct from the horizontal one. Absent ⇒ use {@link linearUnitToMetres}
    * (the GeoTIFF default: vertical units follow the model's linear units).
@@ -236,6 +241,7 @@ export function resolvedFromCrsInfo(
   if (!info) return null;
   let kind: CrsKind = info.isGeographic ? 'geographic' : 'projected';
   if (info.geocentric) kind = 'geocentric';
+  if (info.localFrame) kind = 'local';
   // Confidence: EPSG + WKT = high, EPSG OR a recognisable name = medium.
   // The CrsInfo always has a `name`, so the discriminator is EPSG.
   let confidence: CrsConfidence;
@@ -269,7 +275,17 @@ export function resolvedFromCrsInfo(
     // registry fallback by EPSG when this is absent — kept out of here to avoid
     // a CoordinateTypes → CrsRegistry import cycle.
     horizontalDatum: info.horizontalDatum,
+    ...(info.localFrame ? { localFrameName: info.name } : {}),
   };
+}
+
+/**
+ * The comparison key for a named local / engineering frame. Names are compared
+ * case-insensitively with whitespace collapsed. A shared key is never proof of
+ * a shared frame; a different key is proof of a different one.
+ */
+export function localFrameKey(name: string): string {
+  return `local:${name.trim().replace(/\s+/g, ' ').toLowerCase()}`;
 }
 
 /**

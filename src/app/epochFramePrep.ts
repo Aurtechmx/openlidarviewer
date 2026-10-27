@@ -121,6 +121,16 @@ export function epochUnitMismatchLines(header: string, reason: EpochRefusal = 'v
   ];
 }
 
+/**
+ * Two epochs in named local frames with different names are in different
+ * frames: a difference between them would measure the frames, not the ground.
+ */
+function localFrameRefusal(a: SpatialContext, b: SpatialContext): string | null {
+  if (!a.localFrameName || !b.localFrameName) return null;
+  if (!compareSpatialFrames(a, b).horizontalFrameConflict) return null;
+  return `the epochs are in different local frames (${a.localFrameName} vs ${b.localFrameName}).`;
+}
+
 /** Resolve both epochs' frames (override-aware) and the comparability verdict. */
 export function prepareEpochFrames(
   crsService: CrsService,
@@ -136,7 +146,8 @@ export function prepareEpochFrames(
   // A depth-down, geocentric or Web Mercator epoch is refused before anything
   // else: d = (after − before) would read a depth decrease (a physical rise) as
   // a loss, and the other two have no ground-metre plane to grid on.
-  const frameRefusal = elevationWorkflowRefusal(ctxA) ?? elevationWorkflowRefusal(ctxB);
+  const frameRefusal =
+    elevationWorkflowRefusal(ctxA) ?? elevationWorkflowRefusal(ctxB) ?? localFrameRefusal(ctxA, ctxB);
   const unitsOk = epochVerticalScalesComparable(ctxA, ctxB);
   const axisOk = epochUpAxisContractHolds(a, b);
   let reason: EpochRefusal | null = null;

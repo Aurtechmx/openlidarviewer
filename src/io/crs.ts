@@ -135,6 +135,13 @@ export interface CrsInfo {
    */
   readonly horizontalDatum?: string;
   /**
+   * Set when the WKT root is a local or engineering CRS (WKT1 `LOCAL_CS`, WKT2
+   * `ENGCRS` / `ENGINEERINGCRS`). `name` then carries that CRS's own name. Two
+   * local frames with different names are different frames; two with the same
+   * name are not thereby proven to be the same one.
+   */
+  readonly localFrame?: true;
+  /**
    * Set when the CRS is not from the file but asserted by a catalogue source's
    * product specification (`src/io/catalog/catalogueCrs.ts`); names the
    * assertion, e.g. "swisstopo LV95".
@@ -597,8 +604,10 @@ export function crsFromWkt(wkt: string): CrsInfo {
   // …); for a projected CRS that is the PROJCS, whose name wins over the nested
   // base GEOGCS. A compound with no inner named CRS falls back to its own
   // COMPD_CS name, which describes the whole compound.
+  const localRoot = root !== null && root !== undefined && isLocalCrsKeyword(root.keyword);
   const rawName =
     firstName(horizNodes, isHorizontalCrsKeyword)
+    ?? (localRoot ? wktNodeName(root) : undefined)
     ?? (root && isCompoundKeyword(root.keyword) ? wktNodeName(root) : undefined)
     ?? 'Unknown CRS';
 
@@ -682,6 +691,7 @@ export function crsFromWkt(wkt: string): CrsInfo {
     ...verticalUnitFields(vUnit),
     horizontalDatum,
     ...(geocentric ? { geocentric: true } : {}),
+    ...(localRoot && !projectedPresent && !isGeographic && !geocentric ? { localFrame: true as const } : {}),
     ...(verticalNode && verticalAxisIsDown(verticalNode) ? { verticalAxisDown: true } : {}),
   };
 }
@@ -769,6 +779,11 @@ function isVerticalKeyword(k: string): boolean {
 /** The compound-CRS keywords (WKT1 `COMPD_CS`, WKT2 `COMPOUNDCRS`). */
 function isCompoundKeyword(k: string): boolean {
   return k === 'COMPD_CS' || k === 'COMPOUNDCRS';
+}
+
+/** A local / engineering CRS root (WKT1 `LOCAL_CS`, WKT2 `ENGCRS` / `ENGINEERINGCRS`). */
+function isLocalCrsKeyword(k: string): boolean {
+  return k === 'LOCAL_CS' || k === 'ENGCRS' || k === 'ENGINEERINGCRS';
 }
 
 /** A horizontal CRS node — the one whose name and authority describe the frame. */

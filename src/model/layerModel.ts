@@ -16,6 +16,8 @@
  * "matches". A real mismatch produces a plain-language summary the UI surfaces.
  */
 
+import { localFrameKey } from '../geo/CoordinateTypes';
+
 export interface LayerInfo {
   readonly id: string;
   readonly name: string;
@@ -26,6 +28,8 @@ export interface LayerInfo {
   readonly epsg?: number;
   /** Human CRS label (e.g. "WGS 84 / UTM zone 12N"), when known. */
   readonly crsName?: string;
+  /** Declared name of a local / engineering CRS, when the source carries one. */
+  readonly localFrameName?: string;
   /** Vertical datum label or `EPSG:<code>`, when the source declares one. */
   readonly verticalDatum?: string;
   /** True when the CRS is geographic (lat/lon). */
@@ -81,6 +85,12 @@ export interface CrsMismatch {
   /** Layers carrying no declarable CRS — can't be compared (distinct from mismatching). */
   readonly unknown: readonly string[];
   /**
+   * Layers in a named local frame that share the reference's name. A shared
+   * name is not a shared origin, so these are unverified, never matching.
+   * Present only when non-empty.
+   */
+  readonly localUnverified?: readonly string[];
+  /**
    * Layers whose heights can't be confirmed to sit on the reference's vertical
    * datum, because a datum is missing on one side or on both.
    *
@@ -98,6 +108,7 @@ export interface CrsMismatch {
 /** A stable horizontal-CRS key for a layer, or null when none is declared. */
 export function horizontalKey(layer: LayerInfo): string | null {
   if (typeof layer.epsg === 'number') return `EPSG:${layer.epsg}`;
+  if (layer.localFrameName?.trim()) return localFrameKey(layer.localFrameName);
   const name = layer.crsName?.trim();
   if (!name) return null;
   // The CRS parsers emit "Unknown CRS" (and "Unknown CRS (truncated …)") as a
@@ -177,7 +188,12 @@ export function detectCrsMismatch(layers: readonly LayerInfo[]): CrsMismatch {
   // declares none (nothing to compare against, so no layer's heights can be
   // confirmed). Both are "don't know", never "differ".
   const verticalUnconfirmed: string[] = [];
+  const localUnverified: string[] = [];
   for (const { layer, key } of known) {
+    if (key === referenceKey && key.startsWith('local:')) {
+      localUnverified.push(layer.id);
+      continue;
+    }
     if (key !== referenceKey) {
       mismatched.push({
         id: layer.id,
@@ -203,11 +219,21 @@ export function detectCrsMismatch(layers: readonly LayerInfo[]): CrsMismatch {
     verticalUnconfirmed.push(layer.id);
   }
 
+  const localNote =
+    localUnverified.length > 1
+      ? `${localUnverified.length} layers name the same local frame (${referenceLabel}) — ` +
+        `a shared name does not confirm a shared origin, so alignment is unverified.`
+      : '';
+  const withLocal = <T extends CrsMismatch>(m: T): T =>
+    localUnverified.length > 0 ? { ...m, localUnverified } : m;
+
   if (mismatched.length === 0) {
-    return empty(
-      verticalUnconfirmed.length > 0 ? heightNote(verticalUnconfirmed.length) : '',
+    const base = empty(
+      [localNote, verticalUnconfirmed.length > 0 ? heightNote(verticalUnconfirmed.length) : '']
+        .filter((s) => s.length > 0).join(' '),
       verticalUnconfirmed,
     );
+    return withLocal(base);
   }
 
   const n = mismatched.length;
@@ -217,7 +243,7 @@ export function detectCrsMismatch(layers: readonly LayerInfo[]): CrsMismatch {
       : '';
   const heightSuffix =
     verticalUnconfirmed.length > 0 ? ` ${heightNote(verticalUnconfirmed.length)}` : '';
-  return {
+  return withLocal({
     hasMismatch: true,
     referenceLabel,
     mismatched,
@@ -226,5 +252,5 @@ export function detectCrsMismatch(layers: readonly LayerInfo[]): CrsMismatch {
     summary:
       `${n} layer${n === 1 ? '' : 's'} don't share the reference CRS ` +
       `(${referenceLabel}) — an overlay may be misaligned.${unknownNote}${heightSuffix}`,
-  };
+  });
 }
