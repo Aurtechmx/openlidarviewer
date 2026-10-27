@@ -94,7 +94,7 @@
     "components": 36
   },
   "science": {
-    "e4ClaimCount": 17,
+    "e4ClaimCount": 18,
     "e4Claims": [
       "MEAS-AREA",
       "E57-INGEST",
@@ -112,7 +112,8 @@
       "HOLDOUT-RMSE",
       "NVA-VVA",
       "CHANGE-RASTER",
-      "CHANGE-VOLUME"
+      "CHANGE-VOLUME",
+      "TERRAIN-FLOW-PULSE"
     ],
     "suppliedReferenceSlots": 13
   }

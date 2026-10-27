@@ -44,7 +44,10 @@ F10 refuses a protocol written afterwards. A study whose
 chosen knowing the answer." The tolerance has to be committed while the result is
 still unknown.
 F9 refuses operators who built the software: `operators.independent` cannot
-be true for anyone affiliated with this project.
+be true for anyone affiliated with this project. Each operator also has an entry
+in `operators.members` (`affiliation`, `independent`), one per operator, so the
+list length must equal `operators.count`. F9 fails if any member is not
+independent, and if the group is called independent while a member is not.
 
 The consequence is easy to miss when reading the ladder alone. An archival
 dataset cannot reach E5, however good it is. A published survey with a thousand independent checkpoints was observed

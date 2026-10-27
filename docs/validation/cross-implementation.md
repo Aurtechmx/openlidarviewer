@@ -22,8 +22,16 @@ The live DTM uses median aggregation, and its median gridding on measured cells
 was also compared against R terra 1.9.46 `rasterize(fun = median)` and SciPy
 1.17.1 `binned_statistic_2d(statistic = 'median')` on eight seeded clouds,
 agreeing on 18498 and 18655 cells within 1×10⁻⁶ m after float32 rounding, with
-matching occupancy masks. terra is the independent reference; SciPy bins over
-edges this project supplies. Interpolated (filled) cells are not covered.
+matching occupancy masks, on a 1 m grid with origin (0, 0). Under protocol v2
+and v3 the same comparison at 0.25, 0.5, 1, 2 and 5 m cells, with the grid
+origin at the data minimum as `rasterizeDtm` builds it, agreed on 39850, 28499,
+10980, 2808 and 447 cells; cells on an edge where a return lies were left out of every leg. A
+seeded range study (protocol v5, rerunning v4 with exact reference I/O after v4
+failed on 9-decimal reference output) agreed on 37012 cells over 50 cell sizes
+from 0.1 to 10 m, on small and UTM-scale coordinates after LAS ingest, including
+float32 ties. A DTM outside 0.1 to 10 m is not covered. terra is the independent reference;
+SciPy bins over edges this project supplies. Interpolated (filled) cells are
+not covered.
 and `CHM` (clamped DSM minus DTM) was compared against the PDAL max grid
 minus the PDAL min grid on the same clouds. The last two are terrain descriptors,
 each checked three ways against an independent tool AND the closed form on a

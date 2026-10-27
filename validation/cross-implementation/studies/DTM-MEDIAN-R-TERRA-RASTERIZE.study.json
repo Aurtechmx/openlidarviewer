@@ -8,7 +8,9 @@
     "Scope is measured cells only. Interpolated (IDW fill) cells are not covered: rasterizeDtm does not fill.",
     "terra builds the grid from the extent and resolution and does its own point-to-cell assignment and median. The fixtures and the comparison harness are this project's own.",
     "160 cells that share an edge on which an input return lies exactly were left out of the terra leg, as the protocol fixed in advance: terra numbers rows from the top and its rule for a return on an interior edge differs. That is an edge convention, not a median question.",
-    "The numbers are computed by tests/dtmMedianCrossCheck.test.ts."
+    "The numbers are computed by tests/dtmMedianCrossCheck.test.ts.",
+    "scripts/dtm-median-reference-terra.R was extended on 2026-10-26 for protocols dtm-median-gridding-v2 and v3; its v1 part is unchanged, and rerunning it reproduces the v1 outputs listed here byte for byte.",
+    "The reference script was extended again on 2026-10-26 for protocols v4 and v5 (range study); the code for this study is unchanged and its outputs reproduce byte for byte."
   ],
   "protocolDigest": "sha256:95c36571581ceeda665e6b8675cb26a0403e2a84890774b6912b73dfb87ee6ea",
   "candidate": {
@@ -100,7 +102,7 @@
     }
   ],
   "metrics": {
-    "toleranceAbs": 0.000001,
+    "toleranceAbs": 1e-06,
     "toleranceUnit": "metre (OLV float32 against the reference rounded to float32)",
     "minimumComparableCells": 15000,
     "requiredWithinToleranceFraction": 1
@@ -196,7 +198,7 @@
     },
     {
       "path": "scripts/dtm-median-reference-terra.R",
-      "sha256": "71436549a206375d518bcd3550a03bdf44acf06c9901babd0120d03d504b37b9",
+      "sha256": "5d85958c74bf19bd7643faf02e5fac478964e9c904ae588dca6f5cb88a691f73",
       "role": "reference-command"
     },
     {

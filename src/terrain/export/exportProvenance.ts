@@ -41,7 +41,9 @@ import { evidenceRank, INDEPENDENCE_FLOOR } from '../../validation/evidenceLevel
 import { governingClaim } from '../../validation/evidenceComposition';
 import {
   dtmCellsEvidenceText,
+  liveDtmGridRule,
   resolveExportEvidence,
+  type DtmGridRule,
   type EvidenceContext,
   type ExportEvidenceResolution,
   type ScopedEvidenceRecord,
@@ -94,7 +96,7 @@ export { NOT_SURVEY_GRADE_NOTE };
 export const EVIDENCE_GATE_NOTE: string = !exportGate('DTM').exploratoryOnly
   ? 'Evidence: meets the required validation level for this product.'
   : evidenceRank(EVIDENCE_REGISTRY['DTM'].current) >= evidenceRank(INDEPENDENCE_FLOOR)
-    ? 'Evidence: exploratory export. The independent-tool cross-checks cover DTM median gridding on measured cells only; filled cells are not covered. They cover a 3x3 TPI, which this export does not use (the TPI here uses a 2 to 10 cell radius). The DTM has not reached its required external field-validation level and is not field-validated against ground control. Do not present as a validated deliverable.'
+    ? 'Evidence: exploratory export. The independent-tool cross-checks cover DTM median gridding on measured cells only, at cell sizes from 0.1 to 10 m with the grid origin at the data minimum; other cell sizes and filled cells are not covered. They cover a 3x3 TPI, which this export does not use (the TPI here uses a 2 to 10 cell radius). The DTM has not reached its required external field-validation level and is not field-validated against ground control. Do not present as a validated deliverable.'
     : 'Evidence: exploratory export. Terrain products are validated only against synthetic known-truth (pre-E4) — not cross-validated against an independent tool, and not field-validated. Do not present as a validated deliverable.';
 
 /**
@@ -207,6 +209,8 @@ export interface ExportScopedEvidence {
   readonly resolutionState: string;
   /** The method digest the resolution was keyed on, or null when not supplied. */
   readonly methodDigest: string | null;
+  /** The DTM grid this run used, which decides whether its measured cells are covered. */
+  readonly dtmGrid?: DtmGridRule;
 }
 
 /**
@@ -637,7 +641,7 @@ export function buildExportProvenance(
     transform: opts.transform ?? null,
     // Scope-aware evidence: resolved only when the path supplied a context/digest.
     // Absent (null) otherwise, which keeps the export byte-identical to before.
-    scopedEvidence: buildScopedEvidence(opts),
+    scopedEvidence: buildScopedEvidence(opts, liveDtmGridRule(dtm)),
     // The ONE authoritative resolution every evidence surface below derives from.
     evidenceResolution: buildEvidenceResolution(opts),
   };
@@ -713,7 +717,7 @@ function buildEvidenceResolution(opts: ExportProvenanceOptions): ExportEvidenceR
  * resolver defaults to the empty shipped record set, so with today's registry a
  * real export never rises above its baseline level.
  */
-function buildScopedEvidence(opts: ExportProvenanceOptions): ExportScopedEvidence | null {
+function buildScopedEvidence(opts: ExportProvenanceOptions, dtmGrid?: DtmGridRule): ExportScopedEvidence | null {
   const hasSignal =
     opts.evidenceContext != null || (opts.methodDigest != null && opts.methodDigest !== '');
   if (!hasSignal) return null;
@@ -723,6 +727,7 @@ function buildScopedEvidence(opts: ExportProvenanceOptions): ExportScopedEvidenc
     ...(opts.methodDigest != null && opts.evidenceContext?.methodDigest == null
       ? { methodDigest: opts.methodDigest }
       : {}),
+    ...(dtmGrid && opts.evidenceContext?.dtmGrid == null ? { dtmGrid } : {}),
   };
   // Derived from the SAME authoritative resolver as the note / gate / analysis
   // record, so the disclosure block can never disagree with them.
@@ -735,6 +740,7 @@ function buildScopedEvidence(opts: ExportProvenanceOptions): ExportScopedEvidenc
     applicabilityVerdict: r.applicabilityVerdict,
     resolutionState: r.applicabilityStatus,
     methodDigest: context.methodDigest ?? null,
+    ...(dtmGrid ? { dtmGrid } : {}),
   };
 }
 
@@ -1054,7 +1060,7 @@ export function provenanceLines(p: ExportProvenance): string[] {
       kv(
         'Scoped evidence',
         `${s.resolutionState}; baseline ${s.baselineEvidence ?? 'unregistered'} → effective `
-          + `${s.effectiveEvidence ?? (s.resolutionState === 'external-evidence-out-of-scope' ? (s.claimId === 'DTM' ? dtmCellsEvidenceText() : 'not covered by the registered studies') : 'unregistered')}; study ${s.matchedScopedStudy ?? 'none'}`,
+          + `${s.effectiveEvidence ?? (s.resolutionState === 'external-evidence-out-of-scope' ? (s.claimId === 'DTM' ? dtmCellsEvidenceText(s.dtmGrid) : 'not covered by the registered studies') : 'unregistered')}; study ${s.matchedScopedStudy ?? 'none'}`,
       ),
     );
   }

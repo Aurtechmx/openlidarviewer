@@ -23,6 +23,7 @@ import { requireBinaryOnPath } from './lib/binaryOnPath.mjs';
 import { releaseDocsFor } from './lib/releaseDocs.mjs';
 import { collectArtifactHashProblems } from './lib/evidenceArtifactHashes.mjs';
 import { commitDriftNote, resolveHeadCommit } from './lib/evidenceCommitNote.mjs';
+import { scienceRegisterProblems } from './lib/evidenceRegisterSync.mjs';
 
 const GIT = requireBinaryOnPath('git');
 
@@ -137,6 +138,11 @@ const EXPECTED_RUNS = (() => {
   }
   return out;
 })();
+// The E4 claims the record lists must be the register's.
+for (const p of scienceRegisterProblems(evidence.science, read('docs/validation/claim-register.yaml'))) {
+  problems.push(`test-evidence.json: ${p}`);
+}
+
 for (const [name, b] of Object.entries(evidence.buckets)) {
   if (!(b.passed > 0)) problems.push(`${EVIDENCE}: bucket "${name}" passed ${b.passed} tests.`);
   const want = EXPECTED_RUNS[name];

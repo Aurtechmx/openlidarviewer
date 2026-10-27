@@ -27,7 +27,7 @@ import { fileURLToPath } from 'node:url';
 
 // Kept on one line: @ts-expect-error applies to the line that follows it.
 // @ts-expect-error — plain .mjs script, no types
-import { protocolDigestOf, CHECKPOINT_USAGES as SCRIPT_USAGES, LEAKING_USAGES as SCRIPT_LEAKING, FIELD_STATUSES } from '../scripts/verify-field-study.mjs';
+import { protocolDigestOf, CHECKPOINT_USAGES as SCRIPT_USAGES, LEAKING_USAGES as SCRIPT_LEAKING, FIELD_STATUSES, chiSquareLower1, reportedHalfUlp } from '../scripts/verify-field-study.mjs';
 import { CHECKPOINT_USAGES, LEAKING_USAGES, checkpointAccuracy } from '../src/validation/checkpointAccuracy';
 import { EVIDENCE_LEVELS } from '../src/validation/evidenceLevel';
 
@@ -126,6 +126,10 @@ function makeStudy(): { dir: string; record: Json } {
       independent: true,
       independenceNote: 'separate setups, no shared walkthrough, results exchanged after both finished',
       affiliations: ['Test Survey Co', 'Second Survey Co'],
+      members: [
+        { affiliation: 'Test Survey Co', independent: true },
+        { affiliation: 'Second Survey Co', independent: true },
+      ],
     },
     candidate: {
       revision: 'a'.repeat(40),
@@ -267,6 +271,7 @@ describe('verify-field-study', () => {
     const r = check((rec) => {
       rec.operators.count = 1;
       rec.operators.affiliations = ['Test Survey Co'];
+      rec.operators.members = [{ affiliation: 'Test Survey Co', independent: true }];
     });
     expect(r.code).toBe(1);
     expect(rules(r.out)).toContain('F9-OPERATORS');
@@ -437,5 +442,100 @@ describe('the record-level refusal matches the array-level one', () => {
   it('permits no status outside its own vocabulary', () => {
     const schema = JSON.parse(readFileSync(join(ROOT, 'validation/field/field-study.schema.json'), 'utf8'));
     expect(schema.properties.status.enum).toEqual(FIELD_STATUSES);
+  });
+});
+
+describe('operator independence per member', () => {
+  it('F9 rejects a group called independent when one member is not', () => {
+    const r = check((rec) => {
+      rec.operators.members[1].independent = false;
+    });
+    expect(r.code).toBe(1);
+    expect(r.out).toContain('contradicts its members');
+    expect(rules(r.out)).toContain('F9-OPERATORS');
+  });
+
+  it('F9 rejects a dependent member even when the group is not called independent', () => {
+    const r = check((rec) => {
+      rec.operators.independent = false;
+      rec.operators.members[1].independent = false;
+    });
+    expect(r.code).toBe(1);
+    expect(rules(r.out)).toContain('F9-OPERATORS');
+  });
+
+  it('F9 rejects a member list whose length differs from count', () => {
+    const r = check((rec) => { rec.operators.members.pop(); });
+    expect(r.code).toBe(1);
+    expect(rules(r.out)).toContain('F9-OPERATORS');
+  });
+
+  it('F1 rejects a record without members', () => {
+    const r = check((rec) => { delete rec.operators.members; });
+    expect(r.code).toBe(1);
+    expect(rules(r.out)).toContain('F1-SCHEMA');
+  });
+});
+
+describe('summary statistics must be internally consistent', () => {
+  const withResult = (result: Json) => check((rec) => {
+    rec.status = 'meets';
+    rec.statusReason = 'within tolerance';
+    rec.checkpoints.rawPath = 'protocol.md';
+    rec.checkpoints.rawSha256 = sha256('# test protocol\n\nFrozen before fieldwork.\n');
+    rec.result = { usableCheckpoints: 50, withinToleranceFraction: 1, ...result };
+  });
+
+  it('F16 rejects |bias| above RMSE', () => {
+    const r = withResult({ rmse: 0.08, bias: 0.5, maxAbsResidual: 0.12 });
+    expect(r.code).toBe(1);
+    expect(r.out).toContain('exceeds RMSE');
+  });
+
+  it('F16 rejects RMSE above the largest residual', () => {
+    const r = withResult({ rmse: 0.5, bias: 0, maxAbsResidual: 0.12 });
+    expect(r.code).toBe(1);
+    expect(r.out).toContain('exceeds maxAbsResidual');
+  });
+
+  it('F16 rejects NMAD above 1.4826 times the largest residual', () => {
+    const r = withResult({ rmse: 0.08, bias: 0.01, nmad: 0.25, maxAbsResidual: 0.12 });
+    expect(r.code).toBe(1);
+    expect(r.out).toContain('NMAD');
+  });
+
+  it('accepts figures that differ only by their reported rounding', () => {
+    // |bias| 0.081 vs RMSE 0.08: within half a unit of each last decimal.
+    const r = withResult({ rmse: 0.08, bias: 0.081, maxAbsResidual: 0.12 });
+    expect(r.out).toContain('verify:field-study OK');
+  });
+
+  it('F17 warns, without failing, on an RMSE just below sigma', () => {
+    // 50 · 0.025² / 0.03² = 34.7, above the lower 1% quantile 29.71.
+    const r = withResult({ rmse: 0.025, bias: 0.002, maxAbsResidual: 0.06 });
+    expect(r.code).toBe(0);
+    expect(r.out).toContain('warning');
+    expect(r.out).toContain('F17-BELOW-INSTRUMENT-RESOLUTION');
+  });
+});
+
+describe('chiSquareLower1', () => {
+  // Lower 1% points of chi-square from standard tables.
+  it.each([
+    [1, 0.000157], [2, 0.0201], [5, 0.554], [10, 2.558], [20, 8.260], [30, 14.953],
+    [40, 22.164], [50, 29.707], [60, 37.485], [100, 70.065],
+  ])('n = %i gives %f', (n, expected) => {
+    expect(Math.abs(chiSquareLower1(n) - expected) / expected).toBeLessThan(0.005);
+  });
+
+  it('refuses a non-integer degree of freedom', () => {
+    expect(() => chiSquareLower1(0)).toThrow();
+    expect(() => chiSquareLower1(2.5)).toThrow();
+  });
+
+  it('reads the reported precision of a figure', () => {
+    expect(reportedHalfUlp(0.08)).toBeCloseTo(0.005, 12);
+    expect(reportedHalfUlp(3)).toBe(0.5);
+    expect(reportedHalfUlp(1e-7)).toBeCloseTo(5e-8, 18);
   });
 });

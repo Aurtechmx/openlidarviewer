@@ -21,7 +21,8 @@ was set up, no checkpoint was surveyed, and nobody went to a site.
 An instrument with a stated accuracy and a calibration date, the survey method
 and reference frame, where the checkpoints came from and how many there were,
 how each one was used, how many operators worked and whether they were
-independent of each other and of this project, a protocol frozen before anyone
+independent of each other and of this project (`operators.members` holds one
+`{affiliation, independent}` entry per operator), a protocol frozen before anyone
 went to the site, and an explicit list of what the study does not cover.
 
 ## What the verifier refuses
@@ -36,9 +37,21 @@ that function.
 
 It also refuses a protocol registered after fieldwork started, a tolerance edited
 after the fact (the protocol digest stops matching), an operator affiliated with
-this project counted as independent, a status the numbers do not support, a scope
-broader than the strata surveyed, and an RMSE below the reference instrument's own
-stated accuracy.
+this project counted as independent, any operator recorded as not independent, a
+status the numbers do not support, summary statistics that contradict each other
+(|bias| above RMSE, RMSE above the largest residual, NMAD above 1.4826 times the
+largest residual), and a scope broader than the strata surveyed.
+
+The statistics checks allow a slack of 1e-9 relative to the larger figure plus
+half a unit in the last decimal place each figure was reported with, so two
+values rounded to the millimetre may differ by up to a millimetre.
+
+An RMSE below the reference instrument's stated accuracy σ is a warning. It fails
+only when n·RMSE²/σ² is below the lower 1% quantile of χ² with n degrees of
+freedom (tabulated for n ≤ 30, Wilson–Hilferty above): a value that small would
+occur less than 1% of the time if the reference errors alone had standard
+deviation σ. The record format does not say whether a figure is presented as
+product accuracy, so a null `uncertaintyCombinationId` is not checked on its own.
 
 ## Why it stays empty until it is not
 

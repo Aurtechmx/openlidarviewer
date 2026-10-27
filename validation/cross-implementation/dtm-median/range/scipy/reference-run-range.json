@@ -1,0 +1,262 @@
+{
+  "tool": "scipy.stats.binned_statistic_2d",
+  "statistic": "median",
+  "protocol": "validation/protocols/dtm-median-gridding-v4.md",
+  "scipy": "1.17.1",
+  "numpy": "2.4.6",
+  "python": "3.11.15",
+  "platform": "darwin-arm64",
+  "commandLine": "python3 -I scripts/dtm-median-reference-scipy.py",
+  "outputs": [
+    {
+      "draw": 0,
+      "path": "validation/cross-implementation/dtm-median/range/scipy/draw-00__median.asc",
+      "sha256": "c61b0d0858421354e065c3d2c2686dac5efe0bbc3e54d81bb7b6e28813b7f4fe"
+    },
+    {
+      "draw": 1,
+      "path": "validation/cross-implementation/dtm-median/range/scipy/draw-01__median.asc",
+      "sha256": "80ea1c500c8c45aa048ae07fb37f2290db81e7960420dfb69bef90e077e33c15"
+    },
+    {
+      "draw": 2,
+      "path": "validation/cross-implementation/dtm-median/range/scipy/draw-02__median.asc",
+      "sha256": "a2ee46114fea70d48581c8b349c324f26e1355f9e784e6bdee35e296ecd8e600"
+    },
+    {
+      "draw": 3,
+      "path": "validation/cross-implementation/dtm-median/range/scipy/draw-03__median.asc",
+      "sha256": "1328e93f1c81c5904a67afbb0b4d6535f9620a7e3ed9729d87bfec4414e09d13"
+    },
+    {
+      "draw": 4,
+      "path": "validation/cross-implementation/dtm-median/range/scipy/draw-04__median.asc",
+      "sha256": "b036fcb35f0caad9da61c8b5b58fc58fce0dfd4f51e57c22b47b6b303d1297e2"
+    },
+    {
+      "draw": 5,
+      "path": "validation/cross-implementation/dtm-median/range/scipy/draw-05__median.asc",
+      "sha256": "42fd2b37435d73a4222960088724ddaf992ac4ac6d261b23deaf56b3248c22be"
+    },
+    {
+      "draw": 6,
+      "path": "validation/cross-implementation/dtm-median/range/scipy/draw-06__median.asc",
+      "sha256": "6dd4d9a831559e8383dcb51f4e7f43b9a3c01e8a85d01189d59ad32c1319db3d"
+    },
+    {
+      "draw": 7,
+      "path": "validation/cross-implementation/dtm-median/range/scipy/draw-07__median.asc",
+      "sha256": "a0b58585077eb89e9ed486271b3a4a03c981b9c1ca09745fca4b180b249b5bc8"
+    },
+    {
+      "draw": 8,
+      "path": "validation/cross-implementation/dtm-median/range/scipy/draw-08__median.asc",
+      "sha256": "0a48103a53e66c1f634b5aec4f4c2edb387722bd8fac372ea897175df8fc7456"
+    },
+    {
+      "draw": 9,
+      "path": "validation/cross-implementation/dtm-median/range/scipy/draw-09__median.asc",
+      "sha256": "a5221dbaa17738e8a63e63d82227fb29f47f1ed6bf86737b9e528c29ff041d9c"
+    },
+    {
+      "draw": 10,
+      "path": "validation/cross-implementation/dtm-median/range/scipy/draw-10__median.asc",
+      "sha256": "b06059f239825227fafef5637dde27cd0c78a90fae5bc930d6c7d36bd4ba9190"
+    },
+    {
+      "draw": 11,
+      "path": "validation/cross-implementation/dtm-median/range/scipy/draw-11__median.asc",
+      "sha256": "3504356b7c3b2bee95bdd58e334fef08eac83323d17244fbcd8e3e43a034ef0d"
+    },
+    {
+      "draw": 12,
+      "path": "validation/cross-implementation/dtm-median/range/scipy/draw-12__median.asc",
+      "sha256": "006d731b0b4945cd8b2ea50686e1d3c2c359212c96f47c5c3fd05fcbfe27d56a"
+    },
+    {
+      "draw": 13,
+      "path": "validation/cross-implementation/dtm-median/range/scipy/draw-13__median.asc",
+      "sha256": "5772ef1bc7fab0a5b53820ed1984b2522767966faf14eae4c0d0f0fc9fd4df56"
+    },
+    {
+      "draw": 14,
+      "path": "validation/cross-implementation/dtm-median/range/scipy/draw-14__median.asc",
+      "sha256": "c49dc5ee6e6249516ffabb9d8c9b7103b2f62610810804e299ca055fa357ef1f"
+    },
+    {
+      "draw": 15,
+      "path": "validation/cross-implementation/dtm-median/range/scipy/draw-15__median.asc",
+      "sha256": "a1bba0eb9cb1db7432b4831adf930f3ca0880abd22d6a0061401545558d8a9e0"
+    },
+    {
+      "draw": 16,
+      "path": "validation/cross-implementation/dtm-median/range/scipy/draw-16__median.asc",
+      "sha256": "aab24aaaa99821edf555da4aeb007e47da45e3a049c831e31e0b7b734a892b3d"
+    },
+    {
+      "draw": 17,
+      "path": "validation/cross-implementation/dtm-median/range/scipy/draw-17__median.asc",
+      "sha256": "d919b82992ab548c5b50ea4d6493f8567d0cc3d99b6b88d18cde125b81bdc62f"
+    },
+    {
+      "draw": 18,
+      "path": "validation/cross-implementation/dtm-median/range/scipy/draw-18__median.asc",
+      "sha256": "72c81f413e287cd829a1292febd0d55f8255af0f457ca604537e410a4d23760b"
+    },
+    {
+      "draw": 19,
+      "path": "validation/cross-implementation/dtm-median/range/scipy/draw-19__median.asc",
+      "sha256": "7a2d6c6b43bb45f17c674d043a9974b50278be2a6f1af40b8a1cdbea266071f3"
+    },
+    {
+      "draw": 20,
+      "path": "validation/cross-implementation/dtm-median/range/scipy/draw-20__median.asc",
+      "sha256": "b3dee055e7ccf764403f616bc2640f388a3fce6cd2bfac26e710c8ef1e3feaa0"
+    },
+    {
+      "draw": 21,
+      "path": "validation/cross-implementation/dtm-median/range/scipy/draw-21__median.asc",
+      "sha256": "f7fc150d1e1bf5181c328010bbdc48c47dc54aeca1ca1b0f5bbe51ee5fdd19e9"
+    },
+    {
+      "draw": 22,
+      "path": "validation/cross-implementation/dtm-median/range/scipy/draw-22__median.asc",
+      "sha256": "cf3e325b586ac1e40fbfc745306890a80302406ca66d82363f691def4e99fe4b"
+    },
+    {
+      "draw": 23,
+      "path": "validation/cross-implementation/dtm-median/range/scipy/draw-23__median.asc",
+      "sha256": "fe317bbfe9fdf2152cc572906fce80d90a582afb951c475fc07c4cbb20685c1b"
+    },
+    {
+      "draw": 24,
+      "path": "validation/cross-implementation/dtm-median/range/scipy/draw-24__median.asc",
+      "sha256": "4b329d0b681bc650dca46c3e4e06f3515ae7b0ad3292a506e96020afac52a1e2"
+    },
+    {
+      "draw": 25,
+      "path": "validation/cross-implementation/dtm-median/range/scipy/draw-25__median.asc",
+      "sha256": "815a2c770d8eb4bdffbfd31d79a30090fd050620e0e2bc47594548a0a433c3ad"
+    },
+    {
+      "draw": 26,
+      "path": "validation/cross-implementation/dtm-median/range/scipy/draw-26__median.asc",
+      "sha256": "75f126061c9333663a00dc780598ef87e8a7758369f55899c3e820bc55cc23b7"
+    },
+    {
+      "draw": 27,
+      "path": "validation/cross-implementation/dtm-median/range/scipy/draw-27__median.asc",
+      "sha256": "81af0287ecf95bbf2172e31695d6c71a2931f4c9b3a63fbb110691f584b6f293"
+    },
+    {
+      "draw": 28,
+      "path": "validation/cross-implementation/dtm-median/range/scipy/draw-28__median.asc",
+      "sha256": "acea1d724987a9a70f6569bc61192792e696f299c825d1f21ce0b19506d207dc"
+    },
+    {
+      "draw": 29,
+      "path": "validation/cross-implementation/dtm-median/range/scipy/draw-29__median.asc",
+      "sha256": "43bb1c1ca627f6ae6a9dadf7ef6d81682d1fe0ba4b7967852ca40a2365601a7b"
+    },
+    {
+      "draw": 30,
+      "path": "validation/cross-implementation/dtm-median/range/scipy/draw-30__median.asc",
+      "sha256": "8ca3a64645440da171cdd177f9a928636e76ab87648d278f7f65f2922f33c13d"
+    },
+    {
+      "draw": 31,
+      "path": "validation/cross-implementation/dtm-median/range/scipy/draw-31__median.asc",
+      "sha256": "ddb3c46a02b051ef7032e73cf462a3a64d9f106755298fb43b2f1dfda5c9c25c"
+    },
+    {
+      "draw": 32,
+      "path": "validation/cross-implementation/dtm-median/range/scipy/draw-32__median.asc",
+      "sha256": "eb1f75af5a76b13f8736dabb2db90302c9c341d40caac9b1747f7b5cd70e8610"
+    },
+    {
+      "draw": 33,
+      "path": "validation/cross-implementation/dtm-median/range/scipy/draw-33__median.asc",
+      "sha256": "741a9904c58cb4bfe7e35c70bb969081eb5066d720ca740cb8859df09a16e2f5"
+    },
+    {
+      "draw": 34,
+      "path": "validation/cross-implementation/dtm-median/range/scipy/draw-34__median.asc",
+      "sha256": "7ae3bc0bdd257892b8d18e307ce33d4510d5d1a5507861cb5fd8b5952bc57fc5"
+    },
+    {
+      "draw": 35,
+      "path": "validation/cross-implementation/dtm-median/range/scipy/draw-35__median.asc",
+      "sha256": "68a5893e892b67fbb5f6072c3379c8385513eacc5a2558ba8aeb537f2a67facf"
+    },
+    {
+      "draw": 36,
+      "path": "validation/cross-implementation/dtm-median/range/scipy/draw-36__median.asc",
+      "sha256": "c110889204cb16c7c617cd8e2bc40b47685503e548f7857325430e4480e39fcb"
+    },
+    {
+      "draw": 37,
+      "path": "validation/cross-implementation/dtm-median/range/scipy/draw-37__median.asc",
+      "sha256": "9cb7eea0f0f28ea849634c7d1edf77c5db1a69d2f923e6b8cd3077b12e035033"
+    },
+    {
+      "draw": 38,
+      "path": "validation/cross-implementation/dtm-median/range/scipy/draw-38__median.asc",
+      "sha256": "3e0f3bbd6bf076b218755f60c62886ab6d6aea92b5b59441a948547c14fd45b6"
+    },
+    {
+      "draw": 39,
+      "path": "validation/cross-implementation/dtm-median/range/scipy/draw-39__median.asc",
+      "sha256": "1397040a251f1426738ef975df66df98773d8e2e73cc25d2af2d4407e329b07a"
+    },
+    {
+      "draw": 40,
+      "path": "validation/cross-implementation/dtm-median/range/scipy/draw-40__median.asc",
+      "sha256": "d72bbe16a8132f46a8e62a7c5393a7554d794df01734464703a3e8dd8094fedf"
+    },
+    {
+      "draw": 41,
+      "path": "validation/cross-implementation/dtm-median/range/scipy/draw-41__median.asc",
+      "sha256": "246acaf032fe232cb0da10920b77ffbeabfda14028bb85720839b4628f2f62ae"
+    },
+    {
+      "draw": 42,
+      "path": "validation/cross-implementation/dtm-median/range/scipy/draw-42__median.asc",
+      "sha256": "8e46147bf8b27c0251800df0b95f1656a69d6f73abf316027fd99477b182e85d"
+    },
+    {
+      "draw": 43,
+      "path": "validation/cross-implementation/dtm-median/range/scipy/draw-43__median.asc",
+      "sha256": "428ac79434f91b7be0cee3523fb95dbc186de3a4dd765939d40c5dab0a21a229"
+    },
+    {
+      "draw": 44,
+      "path": "validation/cross-implementation/dtm-median/range/scipy/draw-44__median.asc",
+      "sha256": "d7cbac8dde94556100f5557abb736ef62854344efd9fb4399648545a750e1312"
+    },
+    {
+      "draw": 45,
+      "path": "validation/cross-implementation/dtm-median/range/scipy/draw-45__median.asc",
+      "sha256": "e28bffe976ee975ab3542aaa762196f1aa9cc6ba13bac4fc6d55d6aad0a8ae07"
+    },
+    {
+      "draw": 46,
+      "path": "validation/cross-implementation/dtm-median/range/scipy/draw-46__median.asc",
+      "sha256": "1d1d6726d6bf53b8188e7e85c8b425a91ebf19fd2b29e35678e93b92558819e1"
+    },
+    {
+      "draw": 47,
+      "path": "validation/cross-implementation/dtm-median/range/scipy/draw-47__median.asc",
+      "sha256": "760cd06aab89d741cdf994bdf27adeceb494bb6455672ecc2ab49606498881ce"
+    },
+    {
+      "draw": 48,
+      "path": "validation/cross-implementation/dtm-median/range/scipy/draw-48__median.asc",
+      "sha256": "20fe44b1976d4679eff6d9206f80fc60838a43f916cab48cd82a07923db6112f"
+    },
+    {
+      "draw": 49,
+      "path": "validation/cross-implementation/dtm-median/range/scipy/draw-49__median.asc",
+      "sha256": "2ca2995ca36d614064692a76a54489f1121778949e4b8b234f215b3fcb826c33"
+    }
+  ]
+}

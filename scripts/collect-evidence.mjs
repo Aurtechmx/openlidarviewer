@@ -37,6 +37,7 @@ import { resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { requireBinaryOnPath } from './lib/binaryOnPath.mjs';
 import { isCliEntry } from './lib/isCliEntry.mjs';
+import { e4ClaimsFromRegister } from './lib/evidenceRegisterSync.mjs';
 
 // Spawned programs are resolved to an absolute path by reading PATH, so the
 // path that runs is a value this script can name rather than whatever the OS
@@ -609,9 +610,7 @@ function main() {
   let science = null;
   try {
     const reg = readFileSync(resolve(ROOT, 'docs/validation/claim-register.yaml'), 'utf8');
-    const e4 = [...reg.matchAll(/claimId:\s*([A-Z0-9-]+)[\s\S]*?currentEvidence:\s*(E\d)_/g)]
-      .filter((m) => m[2] === 'E4')
-      .map((m) => m[1]);
+    const e4 = e4ClaimsFromRegister(reg);
     const cc = readFileSync(resolve(ROOT, 'src/validation/crossCheck.ts'), 'utf8');
     science = {
       e4ClaimCount: e4.length,

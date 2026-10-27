@@ -19,10 +19,10 @@
     "not-executed",
     "pending"
   ],
-  "studiesRead": 26,
-  "countedStudies": 25,
+  "studiesRead": 38,
+  "countedStudies": 37,
   "byStatus": {
-    "agree": 24,
+    "agree": 36,
     "partial": 1
   },
   "byClaim": {
@@ -116,9 +116,9 @@
       ]
     },
     "DTM": {
-      "studies": 3,
+      "studies": 15,
       "byStatus": {
-        "agree": 3
+        "agree": 15
       },
       "datasetIds": [
         "OLV-DS-007-PC-PLANE-BUILDINGS",
@@ -128,10 +128,17 @@
         "OLV-DS-011-PC-PLANE-GAP",
         "OLV-DS-012-PC-BARE-PLANE",
         "OLV-DS-013-PC-BARE-ROLLING",
-        "OLV-DS-014-PC-BARE-RIDGE"
+        "OLV-DS-014-PC-BARE-RIDGE",
+        "OLV-DS-130-DTM-MEDIAN-RANGE-DRAWS"
       ],
       "parameterSetIds": [
+        "PS-DTM-MEDIAN-CELL0P25-ORIGINMIN",
+        "PS-DTM-MEDIAN-CELL0P5-ORIGINMIN",
         "PS-DTM-MEDIAN-CELL1-ORIGIN0",
+        "PS-DTM-MEDIAN-CELL1-ORIGINMIN",
+        "PS-DTM-MEDIAN-CELL2-ORIGINMIN",
+        "PS-DTM-MEDIAN-CELL5-ORIGINMIN",
+        "PS-DTM-MEDIAN-RANGE-0P1-10-ORIGINMIN",
         "PS-DTM-MIN-CELL1-R045"
       ]
     },
@@ -299,10 +306,10 @@
     }
   },
   "agreement": {
-    "denominator": 25,
+    "denominator": 37,
     "denominatorMeaning": "studies whose status is agree, partial or disagree",
-    "agree": 24,
-    "fraction": 0.96
+    "agree": 36,
+    "fraction": 0.972972972972973
   },
   "excludedFromCounts": [
     {

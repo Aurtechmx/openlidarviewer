@@ -87,6 +87,10 @@
     "affiliations": [
       "EXAMPLE ORGANISATION A (unaffiliated with this project)",
       "EXAMPLE ORGANISATION B (unaffiliated with this project)"
+    ],
+    "members": [
+      { "affiliation": "EXAMPLE ORGANISATION A (unaffiliated with this project)", "independent": true },
+      { "affiliation": "EXAMPLE ORGANISATION B (unaffiliated with this project)", "independent": true }
     ]
   },
   "candidate": {

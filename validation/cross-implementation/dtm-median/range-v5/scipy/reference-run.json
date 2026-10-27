@@ -1,0 +1,262 @@
+{
+  "tool": "scipy.stats.binned_statistic_2d",
+  "statistic": "median",
+  "protocol": "validation/protocols/dtm-median-gridding-v5.md",
+  "scipy": "1.17.1",
+  "numpy": "2.4.6",
+  "python": "3.11.15",
+  "platform": "darwin-arm64",
+  "commandLine": "python3 -I scripts/dtm-median-reference-scipy.py",
+  "outputs": [
+    {
+      "draw": 0,
+      "path": "validation/cross-implementation/dtm-median/range-v5/scipy/draw-00__median.hex.asc",
+      "sha256": "d3340b462bc99093ac77456a5e25f59a2aa12b1a44f14fbda05f7c8f92c5d419"
+    },
+    {
+      "draw": 1,
+      "path": "validation/cross-implementation/dtm-median/range-v5/scipy/draw-01__median.hex.asc",
+      "sha256": "c2619c196f3a95a546dd65d05f8480a381f9230d80a73294b312ff6b25762b03"
+    },
+    {
+      "draw": 2,
+      "path": "validation/cross-implementation/dtm-median/range-v5/scipy/draw-02__median.hex.asc",
+      "sha256": "fcf8ca9513301874472aa5cd84c698727564022f7bb16de5d456636aa0b1f45d"
+    },
+    {
+      "draw": 3,
+      "path": "validation/cross-implementation/dtm-median/range-v5/scipy/draw-03__median.hex.asc",
+      "sha256": "5603a935e4073f7045d85d60b7f2648624cef16ba813992c56b9d444118f982a"
+    },
+    {
+      "draw": 4,
+      "path": "validation/cross-implementation/dtm-median/range-v5/scipy/draw-04__median.hex.asc",
+      "sha256": "2b97343124692030563af6f4f1aa3491ec40599149e1e5c67256f13f954b7fa9"
+    },
+    {
+      "draw": 5,
+      "path": "validation/cross-implementation/dtm-median/range-v5/scipy/draw-05__median.hex.asc",
+      "sha256": "43b24e08c60d1ef263f32b174b1aade88ee3bf33d4178f8d523fe9288b440271"
+    },
+    {
+      "draw": 6,
+      "path": "validation/cross-implementation/dtm-median/range-v5/scipy/draw-06__median.hex.asc",
+      "sha256": "8a0a003f463a3b51fc54babd2e6b81d3793b80d6431a63ad6c4e1320263b5413"
+    },
+    {
+      "draw": 7,
+      "path": "validation/cross-implementation/dtm-median/range-v5/scipy/draw-07__median.hex.asc",
+      "sha256": "3ccab5943adbdcd6d76943711805b2507bb84ded87037d70f841c8ae0c1e8048"
+    },
+    {
+      "draw": 8,
+      "path": "validation/cross-implementation/dtm-median/range-v5/scipy/draw-08__median.hex.asc",
+      "sha256": "4a3ea082331f25fabc34228d2ca145774318de7adac8032d0630df68f92dfb51"
+    },
+    {
+      "draw": 9,
+      "path": "validation/cross-implementation/dtm-median/range-v5/scipy/draw-09__median.hex.asc",
+      "sha256": "8a0d94152a69265d769fa9ea6091592a46219fc3be80f5e601f09d6d54d433d0"
+    },
+    {
+      "draw": 10,
+      "path": "validation/cross-implementation/dtm-median/range-v5/scipy/draw-10__median.hex.asc",
+      "sha256": "bec2bb52fd96305d5f3a4d278aebb98fc9b22641fa6a4c5b0604576d3fd0694c"
+    },
+    {
+      "draw": 11,
+      "path": "validation/cross-implementation/dtm-median/range-v5/scipy/draw-11__median.hex.asc",
+      "sha256": "67eda82666cad61184d58b6352ca76f874903de3e7e21c498004424b76916804"
+    },
+    {
+      "draw": 12,
+      "path": "validation/cross-implementation/dtm-median/range-v5/scipy/draw-12__median.hex.asc",
+      "sha256": "1fc189ef4c1deedcf560a9e276471a03f58e7298a409e1b7643dd09e1b35ede9"
+    },
+    {
+      "draw": 13,
+      "path": "validation/cross-implementation/dtm-median/range-v5/scipy/draw-13__median.hex.asc",
+      "sha256": "9a32f715c78b81ba0841242a36dfbc42e0c204727b42632511ac6ab6a4a88bea"
+    },
+    {
+      "draw": 14,
+      "path": "validation/cross-implementation/dtm-median/range-v5/scipy/draw-14__median.hex.asc",
+      "sha256": "60ab1203f8b8b43ac5465f0e78c940d5ab1dd960472c295d6674d6e6c18016f6"
+    },
+    {
+      "draw": 15,
+      "path": "validation/cross-implementation/dtm-median/range-v5/scipy/draw-15__median.hex.asc",
+      "sha256": "990a0cbe8d9a224445d925ae21102eba882a0b99333474b7bc46f6ed3cee8dca"
+    },
+    {
+      "draw": 16,
+      "path": "validation/cross-implementation/dtm-median/range-v5/scipy/draw-16__median.hex.asc",
+      "sha256": "16820390712a931a69470e182f6c77becc149bf98c37be895ab58f2037fc66e6"
+    },
+    {
+      "draw": 17,
+      "path": "validation/cross-implementation/dtm-median/range-v5/scipy/draw-17__median.hex.asc",
+      "sha256": "4e5f3aa0cd922cdcb56c3124513c034d2a898e09e7aa08f9f72f81c1c57e40fe"
+    },
+    {
+      "draw": 18,
+      "path": "validation/cross-implementation/dtm-median/range-v5/scipy/draw-18__median.hex.asc",
+      "sha256": "0bc141a849712daf625ce5f25d9d58ae22afe87e2e21239f59b390eb707a9b95"
+    },
+    {
+      "draw": 19,
+      "path": "validation/cross-implementation/dtm-median/range-v5/scipy/draw-19__median.hex.asc",
+      "sha256": "caf29f79c008b2a7ce12e52144970d4d248075a1758f0ce03a956f945933ec05"
+    },
+    {
+      "draw": 20,
+      "path": "validation/cross-implementation/dtm-median/range-v5/scipy/draw-20__median.hex.asc",
+      "sha256": "4c10e272c3dffdc7cef2a6a16977fc0e8a1cae48179738ce8e2eacfee030dd21"
+    },
+    {
+      "draw": 21,
+      "path": "validation/cross-implementation/dtm-median/range-v5/scipy/draw-21__median.hex.asc",
+      "sha256": "da21a24701293a0b008489f480ace16068e68fafc64a7b33ab1ea0edd5e2f392"
+    },
+    {
+      "draw": 22,
+      "path": "validation/cross-implementation/dtm-median/range-v5/scipy/draw-22__median.hex.asc",
+      "sha256": "aa45d8309b9d67662d83ec46b9da328c5e5000c556866dcf662c6b0bfda26168"
+    },
+    {
+      "draw": 23,
+      "path": "validation/cross-implementation/dtm-median/range-v5/scipy/draw-23__median.hex.asc",
+      "sha256": "5c6bec9f41f20b7ad2998e9efd83deb3859dd9d7260d36edad9f8b338fe83334"
+    },
+    {
+      "draw": 24,
+      "path": "validation/cross-implementation/dtm-median/range-v5/scipy/draw-24__median.hex.asc",
+      "sha256": "32e200f558d98f52df14104ef52c544dcf83d1868b07fcbfbcc28faf8180c9c8"
+    },
+    {
+      "draw": 25,
+      "path": "validation/cross-implementation/dtm-median/range-v5/scipy/draw-25__median.hex.asc",
+      "sha256": "e3a0465d3d036469848c37eb5a56ef00a5689d8e08bee4f06b317cd763659464"
+    },
+    {
+      "draw": 26,
+      "path": "validation/cross-implementation/dtm-median/range-v5/scipy/draw-26__median.hex.asc",
+      "sha256": "d415d89bd5db34b7f2eedbd35b75f3fb81760fdf2b3fc4efe4d8590fb27624c1"
+    },
+    {
+      "draw": 27,
+      "path": "validation/cross-implementation/dtm-median/range-v5/scipy/draw-27__median.hex.asc",
+      "sha256": "946b33c9c9f0e3c9047876d535f842068eb12d9949ef493edfc4d3f4efa288af"
+    },
+    {
+      "draw": 28,
+      "path": "validation/cross-implementation/dtm-median/range-v5/scipy/draw-28__median.hex.asc",
+      "sha256": "cf3f264d0412554f327e7f8c3b0b51a80a371f316dab2881fd3779c32d8d33e1"
+    },
+    {
+      "draw": 29,
+      "path": "validation/cross-implementation/dtm-median/range-v5/scipy/draw-29__median.hex.asc",
+      "sha256": "b18aa3b593e1166fa38b7f34224f9a848eea9a6c5a4cb0e53b309a27d3b4ce35"
+    },
+    {
+      "draw": 30,
+      "path": "validation/cross-implementation/dtm-median/range-v5/scipy/draw-30__median.hex.asc",
+      "sha256": "4ff0e1815439dc064e770c3264f6e50006e859900eb37dd341c9f28af38c2137"
+    },
+    {
+      "draw": 31,
+      "path": "validation/cross-implementation/dtm-median/range-v5/scipy/draw-31__median.hex.asc",
+      "sha256": "c495295c38765c04477824179ae9e690300a19fc665a7133cc9051fca2e602a6"
+    },
+    {
+      "draw": 32,
+      "path": "validation/cross-implementation/dtm-median/range-v5/scipy/draw-32__median.hex.asc",
+      "sha256": "d0e3e8f112a9b274b240c727d940b661e2392e9fb50e846031118a9be4720256"
+    },
+    {
+      "draw": 33,
+      "path": "validation/cross-implementation/dtm-median/range-v5/scipy/draw-33__median.hex.asc",
+      "sha256": "50ac8a4de53f8a915571ea51ff709e95e5344f0f8102ea191afab33e3496e8e2"
+    },
+    {
+      "draw": 34,
+      "path": "validation/cross-implementation/dtm-median/range-v5/scipy/draw-34__median.hex.asc",
+      "sha256": "fbe355c186afc228e273fa6e5aff2f08bcc96f2b77cca404edb22e857f8c4669"
+    },
+    {
+      "draw": 35,
+      "path": "validation/cross-implementation/dtm-median/range-v5/scipy/draw-35__median.hex.asc",
+      "sha256": "09f9a3fcaca4c65f6540293842c4622813afb60847ef5244a2133c324d0dc913"
+    },
+    {
+      "draw": 36,
+      "path": "validation/cross-implementation/dtm-median/range-v5/scipy/draw-36__median.hex.asc",
+      "sha256": "bb146675d39f473ffc84bd85852c90bed7771be76e304d2ea3a279fa9e8ba08a"
+    },
+    {
+      "draw": 37,
+      "path": "validation/cross-implementation/dtm-median/range-v5/scipy/draw-37__median.hex.asc",
+      "sha256": "b623628c35430da15d8411c023fc1cc03886844d8c5fac77dd14e87d2de50728"
+    },
+    {
+      "draw": 38,
+      "path": "validation/cross-implementation/dtm-median/range-v5/scipy/draw-38__median.hex.asc",
+      "sha256": "30357f92dfb1070b7267868deb0ced5e985b816dabeb3622bc9a8c6747af4364"
+    },
+    {
+      "draw": 39,
+      "path": "validation/cross-implementation/dtm-median/range-v5/scipy/draw-39__median.hex.asc",
+      "sha256": "29dab9324fa3a49e1352d894f73f6420ec0cef1ac5052330bb307e08d53f1f4c"
+    },
+    {
+      "draw": 40,
+      "path": "validation/cross-implementation/dtm-median/range-v5/scipy/draw-40__median.hex.asc",
+      "sha256": "e6589616a23771468a55d7f2a54082c6bf2bd2398065d8237199aa58467035f3"
+    },
+    {
+      "draw": 41,
+      "path": "validation/cross-implementation/dtm-median/range-v5/scipy/draw-41__median.hex.asc",
+      "sha256": "16fda74c447052a046ba4575f15f7668afd6b0a4dabdd1e669a05bc15386307a"
+    },
+    {
+      "draw": 42,
+      "path": "validation/cross-implementation/dtm-median/range-v5/scipy/draw-42__median.hex.asc",
+      "sha256": "d0ee0d21be327da08290a5c7dfc81db4c2535ac2b6844e68e2ec26ccd563d714"
+    },
+    {
+      "draw": 43,
+      "path": "validation/cross-implementation/dtm-median/range-v5/scipy/draw-43__median.hex.asc",
+      "sha256": "02023a47013353113842a9d5cf93133df09256e2ff1aa375f6ee54520a2c7802"
+    },
+    {
+      "draw": 44,
+      "path": "validation/cross-implementation/dtm-median/range-v5/scipy/draw-44__median.hex.asc",
+      "sha256": "599afeda0e1bbf8252a2d8d490d38d3d8f9536c70fce4313e16ad875234e7991"
+    },
+    {
+      "draw": 45,
+      "path": "validation/cross-implementation/dtm-median/range-v5/scipy/draw-45__median.hex.asc",
+      "sha256": "aabb678d8256a19356c2ac9f84df9339af2f03ea0b5fe6c9b3ff896edfdff03f"
+    },
+    {
+      "draw": 46,
+      "path": "validation/cross-implementation/dtm-median/range-v5/scipy/draw-46__median.hex.asc",
+      "sha256": "5dc4d01676cfe50de6556d1b5d2a5a4d7fc514e263d14f1795ff0ce72ab06897"
+    },
+    {
+      "draw": 47,
+      "path": "validation/cross-implementation/dtm-median/range-v5/scipy/draw-47__median.hex.asc",
+      "sha256": "d02c8d0731d2629204f4d52a2a17fbf4dc6228a8bd4b2d85ed747603a663e3b0"
+    },
+    {
+      "draw": 48,
+      "path": "validation/cross-implementation/dtm-median/range-v5/scipy/draw-48__median.hex.asc",
+      "sha256": "31209dfaa2bc9be62e2d7511689e335798f1e04fbda4a2c5f7f31d5ef0dce209"
+    },
+    {
+      "draw": 49,
+      "path": "validation/cross-implementation/dtm-median/range-v5/scipy/draw-49__median.hex.asc",
+      "sha256": "84f26ee0affdca57fe3947783fc563f2efd79aea3c211520c2941eb5dde04376"
+    }
+  ]
+}

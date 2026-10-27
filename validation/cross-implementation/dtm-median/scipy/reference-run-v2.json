@@ -1,0 +1,292 @@
+{
+  "tool": "scipy.stats.binned_statistic_2d",
+  "statistic": "median",
+  "protocol": "validation/protocols/dtm-median-gridding-v2.md",
+  "scipy": "1.17.1",
+  "numpy": "2.4.6",
+  "python": "3.11.15",
+  "platform": "darwin-arm64",
+  "commandLine": "python3 -I scripts/dtm-median-reference-scipy.py",
+  "outputs": [
+    {
+      "fixture": "pc-01-plane-buildings",
+      "cellSize": 0.25,
+      "returns": 9196,
+      "path": "validation/cross-implementation/dtm-median/scipy/cell0.25/pc-01-plane-buildings__median.asc",
+      "sha256": "46bf8bd7f5fadb0e3a9eedc8598da0373c6967f8f6cea95d5949a918eacdda72"
+    },
+    {
+      "fixture": "pc-02-rolling-buildings",
+      "cellSize": 0.25,
+      "returns": 9228,
+      "path": "validation/cross-implementation/dtm-median/scipy/cell0.25/pc-02-rolling-buildings__median.asc",
+      "sha256": "145b9d3ab3751b06e84770d2deeed44338cfca7e05d12ad7308369b12fa7324b"
+    },
+    {
+      "fixture": "pc-03-ridge-buildings",
+      "cellSize": 0.25,
+      "returns": 9234,
+      "path": "validation/cross-implementation/dtm-median/scipy/cell0.25/pc-03-ridge-buildings__median.asc",
+      "sha256": "d436beb311f5403011f8232e6120d6df9f522df170d691b9a53655c882682e68"
+    },
+    {
+      "fixture": "pc-04-plane-lowblunders",
+      "cellSize": 0.25,
+      "returns": 9193,
+      "path": "validation/cross-implementation/dtm-median/scipy/cell0.25/pc-04-plane-lowblunders__median.asc",
+      "sha256": "bf63177c22d15506baba6530d018e7c3489727b66d6b0b6bb82c62f5df13dd1a"
+    },
+    {
+      "fixture": "pc-05-plane-gap",
+      "cellSize": 0.25,
+      "returns": 8658,
+      "path": "validation/cross-implementation/dtm-median/scipy/cell0.25/pc-05-plane-gap__median.asc",
+      "sha256": "9ea4a2cb8caf8118326d3313c40f015c94cbac4939af7ad935a3f537eaf1f7c6"
+    },
+    {
+      "fixture": "pc-06-bare-plane",
+      "cellSize": 0.25,
+      "returns": 2500,
+      "path": "validation/cross-implementation/dtm-median/scipy/cell0.25/pc-06-bare-plane__median.asc",
+      "sha256": "411e4bc4f74df620452404eac8fcc195e3327077fce6405bbb4ec51a9f8f122b"
+    },
+    {
+      "fixture": "pc-07-bare-rolling",
+      "cellSize": 0.25,
+      "returns": 2500,
+      "path": "validation/cross-implementation/dtm-median/scipy/cell0.25/pc-07-bare-rolling__median.asc",
+      "sha256": "ebf289cf74e6754637259069920870cce49de94e7f862a1229b1388621afb4a7"
+    },
+    {
+      "fixture": "pc-08-bare-ridge",
+      "cellSize": 0.25,
+      "returns": 2500,
+      "path": "validation/cross-implementation/dtm-median/scipy/cell0.25/pc-08-bare-ridge__median.asc",
+      "sha256": "ed4b4d29fb2204360e3d6ec35739a6348421922323cd41c696def4b235aeb81d"
+    },
+    {
+      "fixture": "pc-01-plane-buildings",
+      "cellSize": 0.5,
+      "returns": 9196,
+      "path": "validation/cross-implementation/dtm-median/scipy/cell0.5/pc-01-plane-buildings__median.asc",
+      "sha256": "823b3c501a5d7dfd303996999f7a14df6b69875aee77d00f5135b52b89aa2de1"
+    },
+    {
+      "fixture": "pc-02-rolling-buildings",
+      "cellSize": 0.5,
+      "returns": 9228,
+      "path": "validation/cross-implementation/dtm-median/scipy/cell0.5/pc-02-rolling-buildings__median.asc",
+      "sha256": "125cbe24944f4f3ac69e67c0aadbd8e8e68f8b10c71f35bfe920a953e9bc5e1c"
+    },
+    {
+      "fixture": "pc-03-ridge-buildings",
+      "cellSize": 0.5,
+      "returns": 9234,
+      "path": "validation/cross-implementation/dtm-median/scipy/cell0.5/pc-03-ridge-buildings__median.asc",
+      "sha256": "0bc982c94000318a607d1206e28e7e3777a1d6d8406413301a09d7a6b6461a97"
+    },
+    {
+      "fixture": "pc-04-plane-lowblunders",
+      "cellSize": 0.5,
+      "returns": 9193,
+      "path": "validation/cross-implementation/dtm-median/scipy/cell0.5/pc-04-plane-lowblunders__median.asc",
+      "sha256": "7878edf9e3e189829c4019d534ce65dc0794b43c9473d55adbc4f022275ab454"
+    },
+    {
+      "fixture": "pc-05-plane-gap",
+      "cellSize": 0.5,
+      "returns": 8658,
+      "path": "validation/cross-implementation/dtm-median/scipy/cell0.5/pc-05-plane-gap__median.asc",
+      "sha256": "00d82b91e78100dd00489f1e4a884f56f6bb6c7336a545ff8edbc1e83b961f5e"
+    },
+    {
+      "fixture": "pc-06-bare-plane",
+      "cellSize": 0.5,
+      "returns": 2500,
+      "path": "validation/cross-implementation/dtm-median/scipy/cell0.5/pc-06-bare-plane__median.asc",
+      "sha256": "537fa5023a22a181e7da491dc172540ddc0643bb20e7a76ee5bbf94bf2ae3c00"
+    },
+    {
+      "fixture": "pc-07-bare-rolling",
+      "cellSize": 0.5,
+      "returns": 2500,
+      "path": "validation/cross-implementation/dtm-median/scipy/cell0.5/pc-07-bare-rolling__median.asc",
+      "sha256": "1f0de19e780e6cb778801be2c43e5ed0f9e7630bac35589a43ee63f37cc06d75"
+    },
+    {
+      "fixture": "pc-08-bare-ridge",
+      "cellSize": 0.5,
+      "returns": 2500,
+      "path": "validation/cross-implementation/dtm-median/scipy/cell0.5/pc-08-bare-ridge__median.asc",
+      "sha256": "a62bf75ede4b11e5e8c5b49f244ada4e7752c0957e3b9cf5f87618b09992d3cb"
+    },
+    {
+      "fixture": "pc-01-plane-buildings",
+      "cellSize": 1,
+      "returns": 9196,
+      "path": "validation/cross-implementation/dtm-median/scipy/cell1/pc-01-plane-buildings__median.asc",
+      "sha256": "11459062bfa82b58f5196fa094a3f5d3ee5f49d5954639895da57182332b687e"
+    },
+    {
+      "fixture": "pc-02-rolling-buildings",
+      "cellSize": 1,
+      "returns": 9228,
+      "path": "validation/cross-implementation/dtm-median/scipy/cell1/pc-02-rolling-buildings__median.asc",
+      "sha256": "04b75ccd8b87fd4df63cc63816b84bc113dd247c40b1cc7bee5319e1c1a124bb"
+    },
+    {
+      "fixture": "pc-03-ridge-buildings",
+      "cellSize": 1,
+      "returns": 9234,
+      "path": "validation/cross-implementation/dtm-median/scipy/cell1/pc-03-ridge-buildings__median.asc",
+      "sha256": "ef69d749739ab608ec33152286c48ca829c5a037a0420ef1f79fc09516795797"
+    },
+    {
+      "fixture": "pc-04-plane-lowblunders",
+      "cellSize": 1,
+      "returns": 9193,
+      "path": "validation/cross-implementation/dtm-median/scipy/cell1/pc-04-plane-lowblunders__median.asc",
+      "sha256": "d4d5d7c7bde3acd56e9d1bfa56bc7daccd132510573b6e3bcb3443a2f2197f91"
+    },
+    {
+      "fixture": "pc-05-plane-gap",
+      "cellSize": 1,
+      "returns": 8658,
+      "path": "validation/cross-implementation/dtm-median/scipy/cell1/pc-05-plane-gap__median.asc",
+      "sha256": "83aacd9204b28df2a37063154208d9cb73b409b466308abefe7215a555b18285"
+    },
+    {
+      "fixture": "pc-06-bare-plane",
+      "cellSize": 1,
+      "returns": 2500,
+      "path": "validation/cross-implementation/dtm-median/scipy/cell1/pc-06-bare-plane__median.asc",
+      "sha256": "36d1dc657db24fd8c78846c7b740c01517be731c00380fab96cefa1441d7fa2e"
+    },
+    {
+      "fixture": "pc-07-bare-rolling",
+      "cellSize": 1,
+      "returns": 2500,
+      "path": "validation/cross-implementation/dtm-median/scipy/cell1/pc-07-bare-rolling__median.asc",
+      "sha256": "39f45fded485ad09c328085e66e5eba706ccefe08c3e05d925972bb9c232a1f3"
+    },
+    {
+      "fixture": "pc-08-bare-ridge",
+      "cellSize": 1,
+      "returns": 2500,
+      "path": "validation/cross-implementation/dtm-median/scipy/cell1/pc-08-bare-ridge__median.asc",
+      "sha256": "40e242ee0db8c362a11bd4580523c0de85f6ac644600cbcba386ef45800de568"
+    },
+    {
+      "fixture": "pc-01-plane-buildings",
+      "cellSize": 2,
+      "returns": 9196,
+      "path": "validation/cross-implementation/dtm-median/scipy/cell2/pc-01-plane-buildings__median.asc",
+      "sha256": "bdecb2274833dd31af5341aaefe86c91aa01e13309083655375be69a727dbf3d"
+    },
+    {
+      "fixture": "pc-02-rolling-buildings",
+      "cellSize": 2,
+      "returns": 9228,
+      "path": "validation/cross-implementation/dtm-median/scipy/cell2/pc-02-rolling-buildings__median.asc",
+      "sha256": "2e9bd97d61284cb79f65842162b66cb2ecac2fc736fd8a20d18bf91bd34d0f46"
+    },
+    {
+      "fixture": "pc-03-ridge-buildings",
+      "cellSize": 2,
+      "returns": 9234,
+      "path": "validation/cross-implementation/dtm-median/scipy/cell2/pc-03-ridge-buildings__median.asc",
+      "sha256": "1185993af4db0d71ce9cadf7623617000b28c7b2b8c2377ebe1db7c551eccab3"
+    },
+    {
+      "fixture": "pc-04-plane-lowblunders",
+      "cellSize": 2,
+      "returns": 9193,
+      "path": "validation/cross-implementation/dtm-median/scipy/cell2/pc-04-plane-lowblunders__median.asc",
+      "sha256": "e3ba99072120b721d417d9ad75940862b2a1272ced01952d8501002afeab3f26"
+    },
+    {
+      "fixture": "pc-05-plane-gap",
+      "cellSize": 2,
+      "returns": 8658,
+      "path": "validation/cross-implementation/dtm-median/scipy/cell2/pc-05-plane-gap__median.asc",
+      "sha256": "69891fbedecfcec1cbf212e5bf31e056eb7f736dc8d2bbb3d0f8e54b6e5d69b6"
+    },
+    {
+      "fixture": "pc-06-bare-plane",
+      "cellSize": 2,
+      "returns": 2500,
+      "path": "validation/cross-implementation/dtm-median/scipy/cell2/pc-06-bare-plane__median.asc",
+      "sha256": "7d1131eabd2be743a50cfef8156d5ea1c686566cc63846ca16a9bf5441ba2d3a"
+    },
+    {
+      "fixture": "pc-07-bare-rolling",
+      "cellSize": 2,
+      "returns": 2500,
+      "path": "validation/cross-implementation/dtm-median/scipy/cell2/pc-07-bare-rolling__median.asc",
+      "sha256": "7e68ee56402cce1de334057de89dca4c21207e9cadeb636fabb2c2d7ab9499be"
+    },
+    {
+      "fixture": "pc-08-bare-ridge",
+      "cellSize": 2,
+      "returns": 2500,
+      "path": "validation/cross-implementation/dtm-median/scipy/cell2/pc-08-bare-ridge__median.asc",
+      "sha256": "0aa32efe4eb68c3c59cd8ef113935993b49094edcb0f10e40f2eba26a83eb4e1"
+    },
+    {
+      "fixture": "pc-01-plane-buildings",
+      "cellSize": 5,
+      "returns": 9196,
+      "path": "validation/cross-implementation/dtm-median/scipy/cell5/pc-01-plane-buildings__median.asc",
+      "sha256": "5b04b2f843766015374949df7f032628055d1ce4755ad87d0624069a8dc70f02"
+    },
+    {
+      "fixture": "pc-02-rolling-buildings",
+      "cellSize": 5,
+      "returns": 9228,
+      "path": "validation/cross-implementation/dtm-median/scipy/cell5/pc-02-rolling-buildings__median.asc",
+      "sha256": "3596292c2ee620b60822d23d47da36e695fa4835c5d63e9fc59579eccb5f8b77"
+    },
+    {
+      "fixture": "pc-03-ridge-buildings",
+      "cellSize": 5,
+      "returns": 9234,
+      "path": "validation/cross-implementation/dtm-median/scipy/cell5/pc-03-ridge-buildings__median.asc",
+      "sha256": "00beebd0cdf01b9890759bbf7642376730c53bc626d94be3a87ea5ae76736c09"
+    },
+    {
+      "fixture": "pc-04-plane-lowblunders",
+      "cellSize": 5,
+      "returns": 9193,
+      "path": "validation/cross-implementation/dtm-median/scipy/cell5/pc-04-plane-lowblunders__median.asc",
+      "sha256": "719aa022e79811bc32fe518bfb0efd60a7d75997f95b945c1cb5e1e57cf4850e"
+    },
+    {
+      "fixture": "pc-05-plane-gap",
+      "cellSize": 5,
+      "returns": 8658,
+      "path": "validation/cross-implementation/dtm-median/scipy/cell5/pc-05-plane-gap__median.asc",
+      "sha256": "ececfa1ff991e928b4c7d3c3a7c91cfb5b6486144136cc88ea9329240108e43c"
+    },
+    {
+      "fixture": "pc-06-bare-plane",
+      "cellSize": 5,
+      "returns": 2500,
+      "path": "validation/cross-implementation/dtm-median/scipy/cell5/pc-06-bare-plane__median.asc",
+      "sha256": "3cc123a36780e3d36b9f34032c6baa4db3c0e483d0f9f5637fbf9dfab09f805c"
+    },
+    {
+      "fixture": "pc-07-bare-rolling",
+      "cellSize": 5,
+      "returns": 2500,
+      "path": "validation/cross-implementation/dtm-median/scipy/cell5/pc-07-bare-rolling__median.asc",
+      "sha256": "ec94655b78054e5beaf43231397a5449b4ddcea7570824cad59c9139fc178ce5"
+    },
+    {
+      "fixture": "pc-08-bare-ridge",
+      "cellSize": 5,
+      "returns": 2500,
+      "path": "validation/cross-implementation/dtm-median/scipy/cell5/pc-08-bare-ridge__median.asc",
+      "sha256": "a33a4fc83b7fec907e22a4c9f26479f9794729f1a43ba4c06ddc12a15abd9eee"
+    }
+  ]
+}

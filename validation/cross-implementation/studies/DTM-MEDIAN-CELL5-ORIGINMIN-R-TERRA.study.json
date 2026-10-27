@@ -1,0 +1,303 @@
+{
+  "schemaVersion": 1,
+  "studyId": "DTM-MEDIAN-CELL5-ORIGINMIN-R-TERRA",
+  "claimId": "DTM",
+  "example": false,
+  "notes": [
+    "The tolerance and minimum cell count were registered in the protocol commit named under protocolRef before any reference grid for this parameter set was generated, and are unchanged.",
+    "Scope is measured cells only. Interpolated (IDW fill) cells are not covered: rasterizeDtm does not fill.",
+    "OLV is given only the cell size; rasterizeDtm builds the grid from the data minimum. The reference is given the same origin and extent computed by that rule. Every input is shifted by (+0.37, +0.61) m so the origin is off the integer lattice.",
+    "339 cells that share an interior edge on which an input return lies were left out of every leg, as the protocol fixed in advance. That is an edge convention, not a median question.",
+    "The numbers are computed by tests/dtmMedianCrossCheck.test.ts.",
+    "The reference script and reference-run-v2.json were extended on 2026-10-26 for protocol v3 (1 m cells); this parameter set's outputs are unchanged byte for byte.",
+    "The reference script was extended again on 2026-10-26 for protocols v4 and v5 (range study); the code for this study is unchanged and its outputs reproduce byte for byte."
+  ],
+  "protocolDigest": "sha256:61d278867ec4675d8959a8a9a63189416d303a4d7635f14f4c8a0ec89b9a85a1",
+  "candidate": {
+    "revision": "7d4c9e7dfadfe987ecc36e4fa4e8ecb54f3b5c93",
+    "version": "0.7.1-alpha.1",
+    "algorithmVersion": "v0.4.4"
+  },
+  "reference": {
+    "tool": "R terra",
+    "version": "1.9.46 (R 4.6.1)",
+    "containerDigest": null,
+    "containerPinning": "not-executed",
+    "containerPinningNote": "No container was used; the executable path, the versions recorded in reference-run.json and the exact command line stand in for a container digest.",
+    "executablePath": "/opt/homebrew/bin/Rscript",
+    "commandLine": "Rscript --vanilla scripts/dtm-median-reference-terra.R",
+    "platform": "darwin-arm64"
+  },
+  "datasets": [
+    {
+      "datasetId": "OLV-DS-007-PC-PLANE-BUILDINGS",
+      "description": "Plane with three buildings; ground-labelled returns only, several per cell, empty cells under the roofs.",
+      "path": "validation/cross-implementation/pdal-pipeline/fixtures/pc-01-plane-buildings.csv",
+      "sha256": "2c637ecd6dfc90eb545c515fdc39139705bacafed4668d15f2c35a89bfef4b20"
+    },
+    {
+      "datasetId": "OLV-DS-008-PC-ROLLING-BUILDINGS",
+      "description": "Rolling surface with three buildings; ground-labelled returns only.",
+      "path": "validation/cross-implementation/pdal-pipeline/fixtures/pc-02-rolling-buildings.csv",
+      "sha256": "bd8061653cca198f19aa660fe76730c0a61010c6bfe23c6158f4779747f1267a"
+    },
+    {
+      "datasetId": "OLV-DS-009-PC-RIDGE-BUILDINGS",
+      "description": "V ridge with three buildings; ground-labelled returns only.",
+      "path": "validation/cross-implementation/pdal-pipeline/fixtures/pc-03-ridge-buildings.csv",
+      "sha256": "e95edbb37a3faac063bbe9e10cf6a6a43e83986d440ba3c361e9dd668deb539f"
+    },
+    {
+      "datasetId": "OLV-DS-010-PC-PLANE-LOWBLUNDERS",
+      "description": "Plane with buildings and low blunders; ground-labelled returns only.",
+      "path": "validation/cross-implementation/pdal-pipeline/fixtures/pc-04-plane-lowblunders.csv",
+      "sha256": "fec9aa3c5e0ac1d2805dc8112f8bffcbf03a1c36b06f6bc782c71ea1c2ef742e"
+    },
+    {
+      "datasetId": "OLV-DS-011-PC-PLANE-GAP",
+      "description": "Plane with a 12 m square data gap; ground-labelled returns only, so the occupancy mask carries the gap.",
+      "path": "validation/cross-implementation/pdal-pipeline/fixtures/pc-05-plane-gap.csv",
+      "sha256": "6998a0bb0c451442ee3cca3a1f5b59d66f5da8ae3f0c843133cf4750c61cdfac"
+    },
+    {
+      "datasetId": "OLV-DS-012-PC-BARE-PLANE",
+      "description": "Bare plane, one return per 1 m cell at the cell centre.",
+      "path": "validation/cross-implementation/pdal-pipeline/fixtures/pc-06-bare-plane.csv",
+      "sha256": "2bcb9132ce3e87bdec776068e225fde2ea9dd6781a405c23a947dcb53f116fdc"
+    },
+    {
+      "datasetId": "OLV-DS-013-PC-BARE-ROLLING",
+      "description": "Bare rolling surface, one return per cell at the cell centre.",
+      "path": "validation/cross-implementation/pdal-pipeline/fixtures/pc-07-bare-rolling.csv",
+      "sha256": "8db84cf15fbf5e0692e2b0fcdb777949eed1e02a52804df5356f8df8939145ca"
+    },
+    {
+      "datasetId": "OLV-DS-014-PC-BARE-RIDGE",
+      "description": "Bare V ridge, one return per cell at the cell centre.",
+      "path": "validation/cross-implementation/pdal-pipeline/fixtures/pc-08-bare-ridge.csv",
+      "sha256": "03bf9091125bb9d466081f37638f0daa1d0b139aee6e9d584dacbda9d05f52e2"
+    }
+  ],
+  "parameterSets": [
+    {
+      "id": "PS-DTM-MEDIAN-CELL5-ORIGINMIN",
+      "description": "Per-cell median, 5 m cells, grid origin at the minimum x and y of the input and extent from the rasterizeDtm rule (cols = floor((max - min) / s) + 1). Even counts take the mean of the two middle values. Empty cells are NoData.",
+      "candidateParameters": {
+        "function": "rasterizeDtm",
+        "aggregation": "median",
+        "cellSizeM": 5,
+        "grid": "derived by rasterizeDtm from the data minimum",
+        "inputShiftM": [
+          0.37,
+          0.61
+        ],
+        "verticalAxis": "z"
+      },
+      "referenceParameters": {
+        "function": "terra::rasterize",
+        "fun": "median",
+        "field": "z",
+        "template": "rast(ext(ox, ox + cols * 5, oy, oy + rows * 5), ncols = cols, nrows = rows)",
+        "R": "4.6.1"
+      }
+    }
+  ],
+  "metrics": {
+    "toleranceAbs": 1e-06,
+    "toleranceUnit": "metre (OLV float32 against the reference rounded to float32)",
+    "minimumComparableCells": 400,
+    "requiredWithinToleranceFraction": 1
+  },
+  "status": "agree",
+  "statusReason": "All 447 compared measured cells across the eight scenes are within 1e-6 m of the float32-rounded R terra median (largest difference 0 m), and the occupancy masks match with no mismatched cell. The largest unrounded difference is 3.78e-6 m. SciPy and R terra agree with each other under the same rule.",
+  "result": {
+    "comparableCells": 447,
+    "skippedCells": 339,
+    "withinToleranceFraction": 1,
+    "maxAbsDiff": 0
+  },
+  "rawArtifacts": [
+    {
+      "path": "validation/cross-implementation/pdal-pipeline/fixtures/pc-01-plane-buildings.csv",
+      "sha256": "2c637ecd6dfc90eb545c515fdc39139705bacafed4668d15f2c35a89bfef4b20",
+      "role": "candidate-input"
+    },
+    {
+      "path": "validation/cross-implementation/pdal-pipeline/fixtures/pc-01-plane-buildings.truth",
+      "sha256": "4191c118c0b105e64acf9f02f1ef0215abcf24b3c0cf4176a36cdf6fc5d90580",
+      "role": "candidate-input"
+    },
+    {
+      "path": "validation/cross-implementation/pdal-pipeline/fixtures/pc-02-rolling-buildings.csv",
+      "sha256": "bd8061653cca198f19aa660fe76730c0a61010c6bfe23c6158f4779747f1267a",
+      "role": "candidate-input"
+    },
+    {
+      "path": "validation/cross-implementation/pdal-pipeline/fixtures/pc-02-rolling-buildings.truth",
+      "sha256": "4c00bcb62e7efca7d643e40bde8ba5d7d482e11350a6094079ace446b869a23d",
+      "role": "candidate-input"
+    },
+    {
+      "path": "validation/cross-implementation/pdal-pipeline/fixtures/pc-03-ridge-buildings.csv",
+      "sha256": "e95edbb37a3faac063bbe9e10cf6a6a43e83986d440ba3c361e9dd668deb539f",
+      "role": "candidate-input"
+    },
+    {
+      "path": "validation/cross-implementation/pdal-pipeline/fixtures/pc-03-ridge-buildings.truth",
+      "sha256": "debd3d622fecdcee36f8a89c00222d9adb00b77863709e7f97b9236595dea9d0",
+      "role": "candidate-input"
+    },
+    {
+      "path": "validation/cross-implementation/pdal-pipeline/fixtures/pc-04-plane-lowblunders.csv",
+      "sha256": "fec9aa3c5e0ac1d2805dc8112f8bffcbf03a1c36b06f6bc782c71ea1c2ef742e",
+      "role": "candidate-input"
+    },
+    {
+      "path": "validation/cross-implementation/pdal-pipeline/fixtures/pc-04-plane-lowblunders.truth",
+      "sha256": "279f5c4921b90bfa7037d6fd762b0a23879b4947edf94e37d56fdf6f21925b44",
+      "role": "candidate-input"
+    },
+    {
+      "path": "validation/cross-implementation/pdal-pipeline/fixtures/pc-05-plane-gap.csv",
+      "sha256": "6998a0bb0c451442ee3cca3a1f5b59d66f5da8ae3f0c843133cf4750c61cdfac",
+      "role": "candidate-input"
+    },
+    {
+      "path": "validation/cross-implementation/pdal-pipeline/fixtures/pc-05-plane-gap.truth",
+      "sha256": "fcca577c95a628b1f1462b29ff00548fb8e7099ecc4450934643fdfd70addc47",
+      "role": "candidate-input"
+    },
+    {
+      "path": "validation/cross-implementation/pdal-pipeline/fixtures/pc-06-bare-plane.csv",
+      "sha256": "2bcb9132ce3e87bdec776068e225fde2ea9dd6781a405c23a947dcb53f116fdc",
+      "role": "candidate-input"
+    },
+    {
+      "path": "validation/cross-implementation/pdal-pipeline/fixtures/pc-06-bare-plane.truth",
+      "sha256": "e49bd0b91e5726e5c9e190aa8e3e25f1e02667047f9051bf11f9032b1a85c531",
+      "role": "candidate-input"
+    },
+    {
+      "path": "validation/cross-implementation/pdal-pipeline/fixtures/pc-07-bare-rolling.csv",
+      "sha256": "8db84cf15fbf5e0692e2b0fcdb777949eed1e02a52804df5356f8df8939145ca",
+      "role": "candidate-input"
+    },
+    {
+      "path": "validation/cross-implementation/pdal-pipeline/fixtures/pc-07-bare-rolling.truth",
+      "sha256": "e49bd0b91e5726e5c9e190aa8e3e25f1e02667047f9051bf11f9032b1a85c531",
+      "role": "candidate-input"
+    },
+    {
+      "path": "validation/cross-implementation/pdal-pipeline/fixtures/pc-08-bare-ridge.csv",
+      "sha256": "03bf9091125bb9d466081f37638f0daa1d0b139aee6e9d584dacbda9d05f52e2",
+      "role": "candidate-input"
+    },
+    {
+      "path": "validation/cross-implementation/pdal-pipeline/fixtures/pc-08-bare-ridge.truth",
+      "sha256": "e49bd0b91e5726e5c9e190aa8e3e25f1e02667047f9051bf11f9032b1a85c531",
+      "role": "candidate-input"
+    },
+    {
+      "path": "scripts/dtm-median-reference-terra.R",
+      "sha256": "5d85958c74bf19bd7643faf02e5fac478964e9c904ae588dca6f5cb88a691f73",
+      "role": "reference-command"
+    },
+    {
+      "path": "validation/protocols/dtm-median-gridding-v2.md",
+      "sha256": "c38187f890c3b40c0a3ef33c4ab7a1e753eda9ab8feb7cbcef6c14bd99a12b67",
+      "role": "reference-command"
+    },
+    {
+      "path": "validation/cross-implementation/dtm-median/terra/cell5/pc-01-plane-buildings__median.asc",
+      "sha256": "993e40f80258d31d03a156aecc05f0df75f9b9bea16e7a7642e24db022a8c2de",
+      "role": "reference-output"
+    },
+    {
+      "path": "validation/cross-implementation/dtm-median/terra/cell5/pc-02-rolling-buildings__median.asc",
+      "sha256": "c1270529c1d355bd310f8f117985c9a6e052f08da3c85bf104626b7ebdc7ecd2",
+      "role": "reference-output"
+    },
+    {
+      "path": "validation/cross-implementation/dtm-median/terra/cell5/pc-03-ridge-buildings__median.asc",
+      "sha256": "b22985efcac1d16187fc1783cb2a40881810ae28f7c1d571ff87132cc1e77400",
+      "role": "reference-output"
+    },
+    {
+      "path": "validation/cross-implementation/dtm-median/terra/cell5/pc-04-plane-lowblunders__median.asc",
+      "sha256": "fa7e181d28b7d94f302ab714fb1892bf8d17d5ce46e0980058fbc621e603e94f",
+      "role": "reference-output"
+    },
+    {
+      "path": "validation/cross-implementation/dtm-median/terra/cell5/pc-05-plane-gap__median.asc",
+      "sha256": "bfe7b5392ebe2ccc5fb104d4618b7a812da6be45d70bd6c7f1afc24860c753f6",
+      "role": "reference-output"
+    },
+    {
+      "path": "validation/cross-implementation/dtm-median/terra/cell5/pc-06-bare-plane__median.asc",
+      "sha256": "482c57d03c0d6466b01ded5e7ff610d3312ea8866b8f8f157532c1393a9b0937",
+      "role": "reference-output"
+    },
+    {
+      "path": "validation/cross-implementation/dtm-median/terra/cell5/pc-07-bare-rolling__median.asc",
+      "sha256": "9423f9fa7bf47221b16d98600769b77ee02b14c8d7e2ee83b2fe344f5ac830b3",
+      "role": "reference-output"
+    },
+    {
+      "path": "validation/cross-implementation/dtm-median/terra/cell5/pc-08-bare-ridge__median.asc",
+      "sha256": "9397162291f49b1d1a3cd9c69112d7db9cc321c624a76567a72ca757f28b97f6",
+      "role": "reference-output"
+    },
+    {
+      "path": "validation/cross-implementation/dtm-median/terra/reference-run-v2.json",
+      "sha256": "668b444dc3b3ea4f7799dea26689ea5960cead8b351c1c804bc7045225b69faf",
+      "role": "reference-environment"
+    }
+  ],
+  "derivedArtifacts": [],
+  "scope": {
+    "supported": [
+      {
+        "datasetId": "OLV-DS-007-PC-PLANE-BUILDINGS",
+        "parameterSetId": "PS-DTM-MEDIAN-CELL5-ORIGINMIN"
+      },
+      {
+        "datasetId": "OLV-DS-008-PC-ROLLING-BUILDINGS",
+        "parameterSetId": "PS-DTM-MEDIAN-CELL5-ORIGINMIN"
+      },
+      {
+        "datasetId": "OLV-DS-009-PC-RIDGE-BUILDINGS",
+        "parameterSetId": "PS-DTM-MEDIAN-CELL5-ORIGINMIN"
+      },
+      {
+        "datasetId": "OLV-DS-010-PC-PLANE-LOWBLUNDERS",
+        "parameterSetId": "PS-DTM-MEDIAN-CELL5-ORIGINMIN"
+      },
+      {
+        "datasetId": "OLV-DS-011-PC-PLANE-GAP",
+        "parameterSetId": "PS-DTM-MEDIAN-CELL5-ORIGINMIN"
+      },
+      {
+        "datasetId": "OLV-DS-012-PC-BARE-PLANE",
+        "parameterSetId": "PS-DTM-MEDIAN-CELL5-ORIGINMIN"
+      },
+      {
+        "datasetId": "OLV-DS-013-PC-BARE-ROLLING",
+        "parameterSetId": "PS-DTM-MEDIAN-CELL5-ORIGINMIN"
+      },
+      {
+        "datasetId": "OLV-DS-014-PC-BARE-RIDGE",
+        "parameterSetId": "PS-DTM-MEDIAN-CELL5-ORIGINMIN"
+      }
+    ],
+    "unsupported": [
+      "Interpolated (IDW fill) cells. Only cells holding at least one return are compared.",
+      "Ground classification. The scattered scenes use the generator's ground labels, not the ground filter.",
+      "Other cell sizes, and grids not built by the data-minimum rule. This study covers 5 m cells only.",
+      "Agreement with another implementation is not accuracy against ground truth."
+    ]
+  },
+  "protocolRef": {
+    "protocolId": "PROTO-DTM-MEDIAN-CELL5-TERRA",
+    "digest": "sha256:9da8cf45701cf323a111652d23868187b3d63eb2453a7fa37c568bbc48f3d620"
+  }
+}

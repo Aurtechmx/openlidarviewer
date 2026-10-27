@@ -166,6 +166,49 @@ export function parseClaimIds(yamlText) {
   return ids;
 }
 
+/** NMAD scale factor (1.4826, the normal-consistent MAD constant). */
+export const NMAD_K = 1.4826;
+
+/**
+ * Half a unit in the last decimal place a number was reported with: 0.08 →
+ * 0.005, 0.1234 → 0.00005, 3 → 0.5. Exponent notation is honoured.
+ */
+export function reportedHalfUlp(x) {
+  if (!Number.isFinite(x)) return 0;
+  const s = String(Math.abs(x));
+  const m = /^(\d+)(?:\.(\d+))?(?:e([+-]\d+))?$/i.exec(s);
+  if (!m) return 0;
+  const decimals = (m[2]?.length ?? 0) - Number(m[3] ?? 0);
+  return 0.5 * 10 ** -decimals;
+}
+
+/**
+ * Slack for comparing two reported statistics: 1e-9 relative to the larger
+ * magnitude, plus half the last reported decimal of each. A pair reported to
+ * the millimetre may disagree by up to a millimetre from rounding alone.
+ */
+export function statsSlack(a, b) {
+  return 1e-9 * Math.max(Math.abs(a), Math.abs(b)) + reportedHalfUlp(a) + reportedHalfUlp(b);
+}
+
+/**
+ * Lower 1% quantile of χ² with n degrees of freedom. Tabulated for n ≤ 30
+ * (standard tables, four significant figures); Wilson–Hilferty above, whose
+ * error at n > 30 is well under 1%.
+ */
+const CHI2_LOWER_1PCT = [
+  0.0001571, 0.02010, 0.1148, 0.2971, 0.5543, 0.8721, 1.239, 1.646, 2.088, 2.558,
+  3.053, 3.571, 4.107, 4.660, 5.229, 5.812, 6.408, 7.015, 7.633, 8.260,
+  8.897, 9.542, 10.20, 10.86, 11.52, 12.20, 12.88, 13.56, 14.26, 14.95,
+];
+export function chiSquareLower1(n) {
+  if (!(Number.isInteger(n) && n >= 1)) throw new RangeError(`degrees of freedom must be a positive integer, got ${n}`);
+  if (n <= CHI2_LOWER_1PCT.length) return CHI2_LOWER_1PCT[n - 1];
+  const z = -2.3263478740408408; // standard normal 1% quantile
+  const k = 2 / (9 * n);
+  return n * (1 - k + z * Math.sqrt(k)) ** 3;
+}
+
 /**
  * Verify one record. `ctx` supplies `record`, `file`, `schema`, `claimIds`,
  * `readArtifact` and `artifactRoot`. Returns `[{ rule, message }]`; empty means
@@ -176,6 +219,7 @@ export function collectFieldProblems(ctx) {
   const { record: r, file, schema, claimIds, readArtifact, artifactRoot } = ctx;
   const problems = [];
   const add = (rule, message) => problems.push({ rule, message: `${file}: ${message}` });
+  const warn = (rule, message) => ctx.warnings?.push({ rule, message: `${file}: ${message}` });
 
   // ── F1. Shape first, so no rule below reads a field that is not there ──────
   const schemaErrors = [];
@@ -252,6 +296,16 @@ export function collectFieldProblems(ctx) {
 
   // ── F9. Operator independence means more than a boolean ───────────────────
   const op = r.operators;
+  if (op.members.length !== op.count) {
+    add('F9-OPERATORS', `operators.members lists ${op.members.length} operator(s) but operators.count is ${op.count}; each operator needs one entry.`);
+  }
+  const dependent = op.members.filter((m) => !m.independent);
+  if (dependent.length > 0) {
+    add('F9-OPERATORS', `${dependent.length} operator(s) in operators.members are not independent (${dependent.map((m) => JSON.stringify(m.affiliation)).join(', ')}); operator technique stays an unmeasured confound.`);
+    if (op.independent) {
+      add('F9-OPERATORS', 'operators.independent is true but at least one member is recorded as not independent; the group flag contradicts its members.');
+    }
+  }
   if (op.independent) {
     if (op.count < 2) {
       add('F9-OPERATORS', `operators.independent is true with ${op.count} operator(s); one operator cannot be independent of themselves, so operator technique stays an unmeasured confound.`);
@@ -354,13 +408,35 @@ export function collectFieldProblems(ctx) {
     if (res.usableCheckpoints > independentCount) {
       add('F16-STATUS-VS-RESULT', `${res.usableCheckpoints} checkpoint(s) entered the statistics but only ${independentCount} are recorded as independent.`);
     }
+    // Internal consistency of the summary statistics. |bias| <= RMSE and
+    // RMSE <= max|residual| hold for any sample; NMAD = 1.4826 × median|r − median|
+    // cannot exceed 1.4826 × max|residual| either. See statsSlack for the slack.
+    if (Math.abs(res.bias) > res.rmse + statsSlack(res.bias, res.rmse)) {
+      add('F16-STATUS-VS-RESULT', `|bias| ${Math.abs(res.bias)} exceeds RMSE ${res.rmse}; no sample has a mean error larger than its root-mean-square error.`);
+    }
+    if (res.rmse > res.maxAbsResidual + statsSlack(res.rmse, res.maxAbsResidual)) {
+      add('F16-STATUS-VS-RESULT', `RMSE ${res.rmse} exceeds maxAbsResidual ${res.maxAbsResidual}; a root-mean-square cannot exceed the largest value it averages.`);
+    }
+    if (typeof res.nmad === 'number' && res.nmad > NMAD_K * res.maxAbsResidual + 1e-9 * res.nmad + reportedHalfUlp(res.nmad) + NMAD_K * reportedHalfUlp(res.maxAbsResidual)) {
+      add('F16-STATUS-VS-RESULT', `NMAD ${res.nmad} exceeds ${NMAD_K} × maxAbsResidual (${NMAD_K * res.maxAbsResidual}); the figures are inconsistent.`);
+    }
     if (res.maxAbsResidual > r.metrics.toleranceAbs && res.withinToleranceFraction === 1) {
       add('F16-STATUS-VS-RESULT', `every checkpoint is reported within ±${r.metrics.toleranceAbs} ${r.metrics.toleranceUnit} while maxAbsResidual is ${res.maxAbsResidual}.`);
     }
-    // A survey cannot resolve an error smaller than the survey's own accuracy.
+    // An RMSE below the instrument's stated sigma is possible by chance, so it
+    // is a warning. It fails only when n·RMSE²/σ² falls below the lower 1%
+    // quantile of χ² with n degrees of freedom: if the reference errors alone
+    // had sigma σ, a figure that small would occur less than 1% of the time.
     const instrumentSigma = r.instrument.statedAccuracy.verticalMetres;
-    if (res.rmse < instrumentSigma) {
-      add('F17-BELOW-INSTRUMENT-RESOLUTION', `the reported RMSE ${res.rmse} is below the reference instrument's own stated accuracy ${instrumentSigma} (${r.instrument.statedAccuracy.confidenceLevel}, ${r.instrument.statedAccuracy.source}); the survey cannot resolve an error smaller than its own uncertainty, so the figure describes the instrument and not the product.`);
+    const n = res.usableCheckpoints;
+    if (res.rmse < instrumentSigma && instrumentSigma > 0 && n >= 1) {
+      const stat = (n * res.rmse * res.rmse) / (instrumentSigma * instrumentSigma);
+      const q = chiSquareLower1(n);
+      if (stat < q) {
+        add('F17-BELOW-INSTRUMENT-RESOLUTION', `the reported RMSE ${res.rmse} over ${n} checkpoint(s) gives n·RMSE²/σ² = ${stat.toPrecision(4)}, below the lower 1% χ² quantile ${q.toPrecision(4)} for the reference instrument's stated accuracy ${instrumentSigma} (${r.instrument.statedAccuracy.confidenceLevel}, ${r.instrument.statedAccuracy.source}); the survey cannot plausibly resolve an error that small, so the figure describes the instrument and not the product.`);
+      } else {
+        warn('F17-BELOW-INSTRUMENT-RESOLUTION', `the reported RMSE ${res.rmse} is below the reference instrument's stated accuracy ${instrumentSigma}; within chance for ${n} checkpoint(s) (n·RMSE²/σ² = ${stat.toPrecision(4)}, lower 1% quantile ${q.toPrecision(4)}), but the figure is bounded by the instrument.`);
+      }
     }
   }
 
@@ -405,8 +481,9 @@ export function verifyFieldStudies(opts = {}) {
   const claimIds = parseClaimIds(readFileSync(registerPath, 'utf8'));
 
   const seenIds = new Map();
+  const warnings = [];
   const studies = loadStudies(studiesDir).map(({ name, record }) => {
-    const problems = collectFieldProblems({ record, file: name, schema, claimIds, readArtifact, artifactRoot });
+    const problems = collectFieldProblems({ record, file: name, schema, claimIds, readArtifact, artifactRoot, warnings });
     const id = record?.studyId;
     if (typeof id === 'string') {
       if (seenIds.has(id)) {
@@ -421,6 +498,7 @@ export function verifyFieldStudies(opts = {}) {
     artifactRoot,
     studies,
     problems: studies.flatMap((s) => s.problems),
+    warnings,
   };
 }
 
@@ -449,6 +527,7 @@ if (isMain()) {
     process.exit(2);
   }
 
+  for (const w of out.warnings) console.log(`  ! [${w.rule}] warning: ${w.message}`);
   if (out.problems.length > 0) {
     console.error('verify:field-study FAILED\n');
     for (const p of out.problems) console.error(`  • [${p.rule}] ${p.message}`);

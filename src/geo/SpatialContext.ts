@@ -87,6 +87,8 @@ export interface SpatialContext {
   readonly epsg?: number;
   /** Coarse CRS shape — `projected` / `geographic` / `local` / `unknown`. */
   readonly kind: CrsKind;
+  /** Declared name of a local / engineering CRS from the source WKT; absent otherwise. */
+  readonly localFrameName?: string;
   /** Convenience mirror of `kind === 'geographic'` (lat/lon in degrees). */
   readonly isGeographic: boolean;
 
@@ -295,6 +297,7 @@ export function spatialContextFrom(
     crsName: resolved.name,
     epsg: resolved.epsg,
     kind: resolved.kind,
+    ...(resolved.localFrameName !== undefined ? { localFrameName: resolved.localFrameName } : {}),
     isGeographic: resolved.kind === 'geographic',
 
     linearUnit: resolved.linearUnit,

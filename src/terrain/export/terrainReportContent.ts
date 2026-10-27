@@ -55,7 +55,7 @@ import { METRIC_TOOLTIPS, blockedTreatmentContrast } from '../contour/contourCop
 import { horizontalUnitLabel } from '../../units/units';
 import { EVIDENCE_REGISTRY } from '../../validation/claimRegistry.generated';
 import { evidenceLabel, type EvidenceLevel } from '../../validation/evidenceLevel';
-import { dtmCellsEvidenceText } from '../../validation/scopedEvidence';
+import { dtmCellsEvidenceText, liveDtmGridRule } from '../../validation/scopedEvidence';
 import {
   buildExportProvenance,
   provenanceLines,
@@ -161,8 +161,13 @@ const PRODUCT_CLAIM: Readonly<Record<string, string>> = {
 };
 const CONTOUR_PRODUCTS = new Set(['Contours', 'Map sheet']);
 
-/** The DTM row when no study covers the DTM as a whole: what its measured and filled cells resolve to. */
-export const DTM_NOT_COVERED = dtmCellsEvidenceText();
+/**
+ * The DTM row when no study covers the DTM as a whole: what its measured and
+ * filled cells resolve to, for the grid this run used.
+ */
+export function dtmNotCovered(result: Pick<AnalyseContoursResult, 'dtm'>): string {
+  return dtmCellsEvidenceText(liveDtmGridRule(result.dtm));
+}
 
 /** "E4 — Cross-implementation validated" from the registry level id. */
 function fmtLevel(level: EvidenceLevel): string {
@@ -182,10 +187,10 @@ function productEvidence(label: string, provenance: ExportProvenance, result: An
   const res = provenance.evidenceResolution;
   if (res && res.claimId === claimId && res.effectiveEvidence != null) {
     if (res.matchedStudy != null) return `${fmtLevel(res.effectiveEvidence)} (in-scope study ${res.matchedStudy})`;
-    if (claimId === 'DTM') return DTM_NOT_COVERED;
+    if (claimId === 'DTM') return dtmNotCovered(result);
     return `${fmtLevel(res.effectiveEvidence)} (baseline)`;
   }
-  if (claimId === 'DTM') return DTM_NOT_COVERED;
+  if (claimId === 'DTM') return dtmNotCovered(result);
   const entry = EVIDENCE_REGISTRY[claimId];
   return entry ? `${fmtLevel(entry.current)} (baseline)` : 'unregistered (E0)';
 }

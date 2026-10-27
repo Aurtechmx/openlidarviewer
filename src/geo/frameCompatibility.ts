@@ -27,6 +27,7 @@
  */
 
 import { resolveVerticalEpsg } from './height';
+import { localFrameKey } from './CoordinateTypes';
 import type { SpatialContext } from './SpatialContext';
 import { verticalMetresPerUnit } from './SpatialContext';
 
@@ -85,6 +86,9 @@ export interface FrameCompatibility {
  */
 function horizontalIdentity(ctx: SpatialContext): string | undefined {
   if (typeof ctx.epsg === 'number') return `epsg:${ctx.epsg}`;
+  // A named local / engineering frame keys on its name. Two different names are
+  // two frames; the same name is still unverified (see compareSpatialFrames).
+  if (ctx.kind === 'local' && ctx.localFrameName) return localFrameKey(ctx.localFrameName);
   if (ctx.kind === 'unknown' || ctx.kind === 'local') return undefined;
   const name = ctx.crsName.trim();
   return name.length > 0 ? name : undefined;
@@ -167,7 +171,9 @@ export function compareSpatialFrames(
 
   const idA = horizontalIdentity(a);
   const idB = horizontalIdentity(b);
-  const horizontalFrameUnverified = idA === undefined || idB === undefined;
+  // Two local frames sharing a name are not shown to share an origin or axes.
+  const horizontalFrameUnverified =
+    idA === undefined || idB === undefined || (idA === idB && idA.startsWith('local:'));
   let horizontalFrameConflict = !horizontalFrameUnverified && idA !== idB;
   if (horizontalFrameConflict) {
     notes.push(
