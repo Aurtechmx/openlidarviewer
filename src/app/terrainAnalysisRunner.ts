@@ -87,6 +87,7 @@ import { exceedsWholeFileCap } from '../io/loadPlan';
 import { verticalUnitLabel } from '../units/units';
 // The in-memory Float32 precision policy the Contour Studio deliverables gate on.
 import { scanPrecisionPermit } from './scanPrecision';
+import { overlayRegistry } from './overlayRegistry';
 import type { PrecisionPermit } from '../geo/inMemoryPrecision';
 import type { TerrainWithheldOutcome } from '../render/terrainStreamSample';
 
@@ -558,6 +559,30 @@ export function createTerrainAnalysisRunner(
     derivedStore?.setOpacity(layer.id, opacity);
   }
 
+  /**
+   * List the contour layer in the Created layers checkboxes. The derived-layer
+   * record stays the one source of visibility; a store change re-renders the
+   * list and the Analyse checkbox together.
+   */
+  function registerContourOverlay(store: DerivedLayerStore): void {
+    const current = (): DerivedLayer | undefined => store.list().find((l) => l.type === 'contours');
+    overlayRegistry.register({
+      id: 'contours',
+      label: 'Contours',
+      isAvailable: () => current() !== undefined,
+      get: () => current()?.visible ?? false,
+      set: (visible) => {
+        const layer = current();
+        if (layer) applyDerivedVisibility(layer, visible);
+      },
+    });
+    derivedListeners.add(() => {
+      const layer = current();
+      if (layer) getAnalysePanel().syncContourVisible(layer.visible);
+      overlayRegistry.changed();
+    });
+  }
+
   async function showContourLayer(
     result: AnalyseContoursResult,
     scanId: string | null,
@@ -585,6 +610,7 @@ export function createTerrainAnalysisRunner(
         const store = new DerivedLayerStore();
         derivedStore = store;
         store.subscribe(notifyDerived);
+        registerContourOverlay(store);
         contourLayers = createContourLayerService({
           host: viewer.derivedLayerHost(),
           store,

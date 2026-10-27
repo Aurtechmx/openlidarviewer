@@ -548,6 +548,7 @@ export class AnalysePanel {
   private _runUsability: RunUsability | null = null;
   /** Host for the 3D contour derived-layer controls; empty until a layer is drawn. */
   private readonly _contourLayerControls: HTMLElement;
+  private _contourVisCb: HTMLInputElement | null = null;
   /** Mount point for the generic derived-layers list (built by the runner). */
   private readonly _datasetStoryHost: HTMLElement;
   private _datasetStoryOpen = false;
@@ -1468,9 +1469,15 @@ export class AnalysePanel {
     this._datasetStoryHost.replaceChildren(section);
   }
 
+  /** Follow a visibility change made from another control (the Created layers list). */
+  syncContourVisible(visible: boolean): void {
+    if (this._contourVisCb) this._contourVisCb.checked = visible;
+  }
+
   setContourLayerControls(controls: ContourLayerControls | null): void {
     const host = this._contourLayerControls;
     host.replaceChildren();
+    this._contourVisCb = null;
     if (!controls) {
       host.classList.add('olv-hidden');
       return;
@@ -1484,6 +1491,7 @@ export class AnalysePanel {
     const visLabel = el('label', { className: 'olv-analyse-layer-toggle' });
     const visCb = document.createElement('input');
     visCb.type = 'checkbox';
+    this._contourVisCb = visCb;
     visCb.checked = controls.visible;
     visCb.setAttribute('aria-label', 'Show contours in the 3D scene');
     visLabel.append(visCb, el('span', { text: 'Show' }));

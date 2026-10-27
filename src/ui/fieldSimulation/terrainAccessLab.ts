@@ -95,6 +95,7 @@ import { singleLine } from '../../export/safeText';
 import type { buildTerrainAccessPackage, TerrainAccessGridPlacement } from '../../export/terrainAccessPackage';
 import type { DtmGrid } from '../../terrain/ground/cellConfidence';
 import { labRun, publishLabRun, takeResultReopen } from '../../app/results/resultSignals';
+import { overlayRegistry } from '../../app/overlayRegistry';
 
 /** The analysed surface and the frame facts a Terrain Access run needs. */
 export interface TerrainAccessLabInput {
@@ -841,6 +842,7 @@ export function acquireTerrainAccessOverlay(
   if (persistentTerrainAccessOverlay && persistentTerrainAccessOverlay.isStale?.() === true) {
     persistentTerrainAccessOverlay.overlay.dispose();
     persistentTerrainAccessOverlay = null;
+    overlayRegistry.changed();
   }
   if (!persistentTerrainAccessOverlay) {
     persistentTerrainAccessOverlay = { overlay: new TerrainAccessOverlay(host), isStale, overlayOn: false };
@@ -865,7 +867,31 @@ export function disposePersistentTerrainAccessOverlay(): void {
   if (!persistentTerrainAccessOverlay) return;
   persistentTerrainAccessOverlay.overlay.dispose();
   persistentTerrainAccessOverlay = null;
+  overlayRegistry.changed();
 }
+
+/** The open Lab's toggle, so a switch made elsewhere updates its pressed state. */
+const accessToggleSyncs = new Set<(on: boolean) => void>();
+
+/**
+ * The traversability map in the Created layers list. Visibility lives on the
+ * persisted overlay (`overlayOn`), the flag the Lab's "Map in 3D" toggle
+ * writes. Listed only while a map has been uploaded. The route is not
+ * switched here; the Lab always draws it.
+ */
+overlayRegistry.register({
+  id: 'terrain-access-map',
+  label: 'Access map',
+  isAvailable: () => (persistentTerrainAccessOverlay?.overlay.mapCellCount ?? 0) > 0,
+  get: () => persistentTerrainAccessOverlay?.overlayOn ?? false,
+  set: (on) => {
+    const p = persistentTerrainAccessOverlay;
+    if (!p) return;
+    p.overlayOn = on;
+    p.overlay.setMapVisible(on);
+    for (const fn of [...accessToggleSyncs]) fn(on);
+  },
+});
 
 // Registered once, at module load (the first time this lazy chunk actually
 // loads — opening the Lab, or its export action).
@@ -952,6 +978,12 @@ export function mountTerrainAccessInteractive(
     }
   }
 
+  const syncToggle = (on: boolean): void => {
+    overlayOn = on;
+    overlayToggle.setAttribute('aria-pressed', on ? 'true' : 'false');
+    if (on) applyOverlayVisibility();
+  };
+  accessToggleSyncs.add(syncToggle);
   const overlayToggle = button('Map in 3D', 'olv-ta-overlay-toggle', 'Show or hide the traversability map overlay on the 3D view. The route is always drawn.');
   overlayToggle.setAttribute('aria-pressed', overlayOn ? 'true' : 'false');
   overlayToggle.addEventListener('click', () => {
@@ -959,6 +991,7 @@ export function mountTerrainAccessInteractive(
     if (persistentTerrainAccessOverlay) persistentTerrainAccessOverlay.overlayOn = overlayOn;
     overlayToggle.setAttribute('aria-pressed', overlayOn ? 'true' : 'false');
     applyOverlayVisibility();
+    overlayRegistry.changed();
     announce(overlayOn ? 'Traversability map overlay on.' : 'Traversability map overlay off.');
   });
 
@@ -1087,6 +1120,7 @@ export function mountTerrainAccessInteractive(
     overlay?.clearRoute();
     renderSelection();
     applyOverlayVisibility();
+    overlayRegistry.changed();
     runButton.disabled = true;
     runButton.onclick = async () => {
       if (!startCell || !goalCell || !profile || busy) return;
@@ -1181,7 +1215,9 @@ export function mountTerrainAccessInteractive(
     clearResult();
     preview = null;
     profile = null;
-    overlay?.setMapVisible(false);
+    // The map belonged to the profile being edited, so it leaves the list too.
+    overlay?.clearMap();
+    overlayRegistry.changed();
     renderRoot();
   }
 
@@ -1231,9 +1267,13 @@ export function mountTerrainAccessInteractive(
     dispose: () => {
       grid.dispose();
       chip.dispose();
-      if (!overlayOn && persistentTerrainAccessOverlay) {
+      accessToggleSyncs.delete(syncToggle);
+      // A hidden map that was drawn stays (hidden) so the Created layers list
+      // can switch it back on; one never drawn is released.
+      if (!overlayOn && persistentTerrainAccessOverlay && persistentTerrainAccessOverlay.overlay.mapCellCount === 0) {
         persistentTerrainAccessOverlay.overlay.dispose();
         persistentTerrainAccessOverlay = null;
+        overlayRegistry.changed();
       }
     },
   };

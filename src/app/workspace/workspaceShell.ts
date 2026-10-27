@@ -39,6 +39,8 @@ import { mountResultsShelf, type ResultsShelfSources, type ShelfExportPanel, typ
 import { bindFullFile } from '../fullFileActions';
 import { mountLocationBar } from '../../ui/locationBar';
 import { decorateViewRail } from './viewRail';
+import { createOverlaySwitches } from '../../ui/OverlaySwitches';
+import { overlayRegistry } from '../overlayRegistry';
 import { createModeHome, type ModeHome } from './modeHome';
 import { sessionLog, SESSION_LOG_OPEN_EVENT } from '../sessionLog/sessionLog';
 import { installSessionLogRecorder } from '../sessionLog/sessionLogRecorder';
@@ -267,7 +269,12 @@ export function mountWorkspaceShell(d: WorkspaceShellDeps): WorkspaceShell {
   // Layer Health stays in the Inspector, which is per-scan.
   const dataEls = d.inspector.workspaceDataElements();
   const rightCollapsed = (): boolean => d.rightRail.classList.contains('olv-right-collapsed');
+  // Created layers: the generated overlays' checkboxes, directly under the
+  // Classes block on the Data home, shown with or without classes.
+  const createdLayers = createOverlaySwitches(overlayRegistry);
+  d.addTeardown(createdLayers.dispose);
   const dataHome = createDataHome({
+    afterClasses: createdLayers.element,
     hasScan: d.hasScan,
     classRows: () => d.classLegend.classSummary(),
     classesSampled: () => d.classLegend.isSampled(),
