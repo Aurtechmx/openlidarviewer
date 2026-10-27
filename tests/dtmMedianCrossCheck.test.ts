@@ -130,3 +130,100 @@ describe('export evidence note matches the median study scope', () => {
     expect(EVIDENCE_GATE_NOTE).toContain('filled cells are not covered');
   });
 });
+
+// ── Protocol v2: other cell sizes, origin at the data minimum ─────────────────
+// validation/protocols/dtm-median-gridding-v2.md. OLV's side gets only the cell
+// size, so rasterizeDtm's own origin and extent logic builds the grid.
+
+const SHIFT_X = 0.37;
+const SHIFT_Y = 0.61;
+export const V2_SETS = [
+  { id: 'PS-DTM-MEDIAN-CELL0.25-ORIGINMIN', size: 0.25, dir: 'cell0.25', min: 35000 },
+  { id: 'PS-DTM-MEDIAN-CELL0.5-ORIGINMIN', size: 0.5, dir: 'cell0.5', min: 25000 },
+  { id: 'PS-DTM-MEDIAN-CELL2-ORIGINMIN', size: 2, dir: 'cell2', min: 2500 },
+  { id: 'PS-DTM-MEDIAN-CELL5-ORIGINMIN', size: 5, dir: 'cell5', min: 400 },
+] as const;
+
+interface Asc { cols: number; rows: number; x0: number; y0: number; s: number; g: Float64Array }
+
+function loadAscV2(path: string): Asc {
+  const lines = readFileSync(path, 'utf8').trim().split('\n');
+  const h = Object.fromEntries(lines.slice(0, 6).map((l) => { const [k, v] = l.trim().split(/\s+/); return [k, Number(v)]; }));
+  const cols = h.ncols, rows = h.nrows;
+  const g = new Float64Array(cols * rows);
+  const body = lines.slice(6);
+  expect(body.length).toBe(rows);
+  body.forEach((line, i) => {
+    const r = rows - 1 - i;
+    const v = line.trim().split(/\s+/).map(Number);
+    expect(v.length).toBe(cols);
+    v.forEach((val, c) => { g[r * cols + c] = val === -9999 ? Number.NaN : val; });
+  });
+  return { cols, rows, x0: h.xllcorner, y0: h.yllcorner, s: h.cellsize, g };
+}
+
+/** Cells sharing an interior edge on which a return lies within 1e-9 cell widths (v2: every leg). */
+function edgeCellsV2(pts: Pt[], ox: number, oy: number, s: number, cols: number, rows: number): Set<number> {
+  const out = new Set<number>();
+  for (const p of pts) {
+    const u = (p.x - ox) / s, v = (p.y - oy) / s;
+    const ru = Math.round(u), rv = Math.round(v);
+    const ex = Math.abs(u - ru) < 1e-9 && ru > 0 && ru < cols;
+    const ey = Math.abs(v - rv) < 1e-9 && rv > 0 && rv < rows;
+    if (!ex && !ey) continue;
+    const cs = ex ? [ru - 1, ru] : [Math.min(Math.floor(u), cols - 1)];
+    const rs = ey ? [rv - 1, rv] : [Math.min(Math.floor(v), rows - 1)];
+    for (const r of rs) for (const c of cs) if (r >= 0 && r < rows && c >= 0 && c < cols) out.add(r * cols + c);
+  }
+  return out;
+}
+
+function compareV2(a: ArrayLike<number>, ref: Float64Array, skip: Set<number>): Leg {
+  const leg: Leg = { cells: 0, excluded: skip.size, maskMismatch: 0, outside: 0, maxDiff: 0, maxRaw: 0 };
+  for (let c = 0; c < ref.length; c++) {
+    if (skip.has(c)) continue;
+    const ha = !Number.isNaN(a[c]);
+    const hb = !Number.isNaN(ref[c]);
+    if (ha !== hb) { leg.maskMismatch++; continue; }
+    if (!ha) continue;
+    leg.cells++;
+    const d = Math.abs(a[c] - Math.fround(ref[c]));
+    if (d > TOL) leg.outside++;
+    leg.maxDiff = Math.max(leg.maxDiff, d);
+    leg.maxRaw = Math.max(leg.maxRaw, Math.abs(a[c] - ref[c]));
+  }
+  return leg;
+}
+
+describe('DTM median gridding at other cell sizes (protocol dtm-median-gridding-v2)', () => {
+  for (const set of V2_SETS) {
+    const v2 = { scipy: [] as Leg[], terra: [] as Leg[], refs: [] as Leg[] };
+    let gridAgrees = true;
+    for (const name of NAMES) {
+      const pts = loadInput(name).map((p) => ({ x: p.x + SHIFT_X, y: p.y + SHIFT_Y, z: p.z }));
+      const raster = rasterizeDtm(pts, new Uint8Array(pts.length).fill(1), { aggregation: LIVE_DTM_AGGREGATION, cellSizeM: set.size });
+      const scipy = loadAscV2(`${REF}scipy/${set.dir}/${name}__median.asc`);
+      const terra = loadAscV2(`${REF}terra/${set.dir}/${name}__median.asc`);
+      const gr = raster;
+      for (const ref of [scipy, terra]) {
+        if (ref.cols !== gr.cols || ref.rows !== gr.rows || ref.x0 !== gr.originH1 || ref.y0 !== gr.originH2) gridAgrees = false;
+      }
+      const skip = edgeCellsV2(pts, gr.originH1, gr.originH2, set.size, gr.cols, gr.rows);
+      v2.scipy.push(compareV2(raster.z, scipy.g, skip));
+      v2.terra.push(compareV2(raster.z, terra.g, skip));
+      v2.refs.push(compareV2(Float64Array.from(scipy.g, (v) => Math.fround(v)), terra.g, skip));
+    }
+    it(`${set.id}: the references were given rasterizeDtm's own grid`, () => {
+      expect(gridAgrees).toBe(true);
+    });
+    for (const key of ['scipy', 'terra', 'refs'] as const) {
+      it(`${set.id} ${key === 'refs' ? 'SciPy against terra' : `OLV against ${key}`}: occupancy matches and every cell is within 1e-6 m`, () => {
+        const t = sum(v2[key]);
+        console.log(`[dtm-median-v2] ${set.id} ${key}: cells=${t.cells} excluded=${t.excluded} maskMismatch=${t.maskMismatch} outside=${t.outside} maxDiff=${t.maxDiff} maxRaw=${t.maxRaw}`);
+        expect(t.maskMismatch).toBe(0);
+        expect(t.outside).toBe(0);
+        expect(t.cells).toBeGreaterThanOrEqual(set.min);
+      });
+    }
+  }
+});

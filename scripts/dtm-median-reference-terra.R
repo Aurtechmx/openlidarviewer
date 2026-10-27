@@ -37,3 +37,46 @@ js <- c("{",
   '  "commandLine": "Rscript --vanilla scripts/dtm-median-reference-terra.R",',
   '  "outputs": [', paste(rows, collapse = ",\n"), "  ]", "}")
 writeLines(js, paste0(out, "reference-run.json"))
+
+# Protocol v2 (validation/protocols/dtm-median-gridding-v2.md): cell sizes
+# 0.25, 0.5, 2 and 5 m, input shifted by (+0.37, +0.61) m, origin at the data
+# minimum and extent from the rasterizeDtm rule. Writes
+# terra/cell<s>/<fixture>__median.asc and terra/reference-run-v2.json.
+rows2 <- character(0)
+for (s in c(0.25, 0.5, 2, 5)) {
+  dir <- paste0(out, "cell", s, "/")
+  dir.create(dir, showWarnings = FALSE)
+  for (nm in names) {
+    a <- read.csv(paste0(fix, nm, ".csv"))
+    truth <- as.integer(strsplit(trimws(readChar(paste0(fix, nm, ".truth"), 1e7)), "")[[1]])
+    sel <- a[truth == 1, ]
+    x <- sel$X + 0.37
+    y <- sel$Y + 0.61
+    ox <- min(x); oy <- min(y)
+    nc <- floor((max(x) - ox) / s) + 1
+    nr <- floor((max(y) - oy) / s) + 1
+    tpl <- rast(ext(ox, ox + nc * s, oy, oy + nr * s), ncols = nc, nrows = nr, crs = "local")
+    v <- vect(data.frame(x = x, y = y, z = sel$Z), geom = c("x", "y"), crs = "local")
+    r <- rasterize(v, tpl, field = "z", fun = median)
+    m <- as.matrix(r, wide = TRUE)
+    path <- paste0(dir, nm, "__median.asc")
+    con <- file(path, "w")
+    writeLines(c(sprintf("ncols %d", nc), sprintf("nrows %d", nr), sprintf("xllcorner %.17g", ox),
+                 sprintf("yllcorner %.17g", oy), sprintf("cellsize %.17g", s), "NODATA_value -9999"), con)
+    for (i in 1:nr) writeLines(paste(ifelse(is.na(m[i, ]), "-9999", sprintf("%.9f", m[i, ])), collapse = " "), con)
+    close(con)
+    h <- system2("shasum", c("-a", "256", path), stdout = TRUE)
+    rows2 <- c(rows2, sprintf('    {"fixture": "%s", "cellSize": %s, "returns": %d, "path": "%s", "sha256": "%s"}',
+                              nm, s, nrow(sel), path, sub(" .*", "", h)))
+  }
+}
+js2 <- c("{",
+  '  "tool": "terra::rasterize",', '  "fun": "median",',
+  '  "protocol": "validation/protocols/dtm-median-gridding-v2.md",',
+  sprintf('  "R": "%s",', paste(R.version$major, R.version$minor, sep = ".")),
+  sprintf('  "terra": "%s",', as.character(packageVersion("terra"))),
+  sprintf('  "gdal": "%s",', gdal()),
+  sprintf('  "platform": "%s",', R.version$platform),
+  '  "commandLine": "Rscript --vanilla scripts/dtm-median-reference-terra.R",',
+  '  "outputs": [', paste(rows2, collapse = ",\n"), "  ]", "}")
+writeLines(js2, paste0(out, "reference-run-v2.json"))
