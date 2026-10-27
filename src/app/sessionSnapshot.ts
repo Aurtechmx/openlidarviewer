@@ -19,6 +19,7 @@ import { resolveLayerUpFrame } from '../geo/frame/layerUpFrame';
 import { TERRAIN_METRIC_VERSION } from '../terrain/datasetIntelligence';
 import { partitionSessionWork, type OwnershipView } from './measurementOwnership';
 import { buildSessionProjectFrame, carryHeldSessionWork, type HeldSessionWork, type SessionFrameInput, type SessionProjectFrame } from '../io/sessionFrame';
+import { overlayRegistry } from './overlayRegistry';
 
 export type SessionWriterModules = typeof import('../io/session') &
   Partial<typeof import('../terrain/export/exportProvenance')>;
@@ -222,5 +223,6 @@ export function serializeActiveSession(
     crs: deps.crs() ?? undefined,
     layerGroups: deps.layerGroups(),
     referencePlane: deps.referencePlane?.(),
+    overlayVisibility: overlayRegistry.snapshot(),
   });
 }

@@ -64,6 +64,7 @@ import type { ReplaceOutcome, ReplaceRequest } from './discardGuard';
 import type { StoredView } from './appContext';
 import type { Measurement } from '../render/measure/types';
 import type { Annotation } from '../render/annotate/types';
+import { overlayRegistry } from './overlayRegistry';
 
 // Re-exported so `sessionIo`'s public API is unchanged — `openScan.ts` reads
 // `scanFactsFromStatic` off `./sessionScanFacts` directly (the hot scan-open path
@@ -710,6 +711,10 @@ export async function importSession(
     if (work.layerGroups) deps.restoreLayerGroups(work.layerGroups);
     // A view setting, additive within v8: absent leaves the plane as it is.
     if (session.referencePlane) deps.restoreReferencePlane?.(session.referencePlane);
+    // Overlays are rebuilt by re-running their analysis; the saved shown or
+    // hidden state is applied when each one is next generated. A file
+    // without the field clears any earlier preference.
+    overlayRegistry.restore(session.overlayVisibility);
     deps.refreshMeasurePanel();
     deps.refreshAnnotationPanel();
 

@@ -116,6 +116,19 @@ import { parseWorkplaneSettings, type WorkplaneSettings } from '../model/workpla
  */
 export const SESSION_VERSION = 8;
 
+/** Keep only `id: boolean` entries with a short plain id; null when none survive. */
+export function sanitizeOverlayVisibility(raw: unknown): Record<string, boolean> | null {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null;
+  const out: Record<string, boolean> = {};
+  let n = 0;
+  for (const [id, v] of Object.entries(raw as Record<string, unknown>)) {
+    if (typeof v !== 'boolean' || !/^[a-z0-9-]{1,64}$/.test(id) || n >= 32) continue;
+    out[id] = v;
+    n += 1;
+  }
+  return n > 0 ? out : null;
+}
+
 /** Schema versions `parseSession` can read. */
 const SUPPORTED_VERSIONS: ReadonlySet<number> = new Set([1, 2, 3, 4, 5, 6, 7, 8]);
 
@@ -357,6 +370,13 @@ export interface InspectionSession {
   /** The reference plane's settings, a view setting; absent when it was never used. */
   referencePlane?: WorkplaneSettings;
   /**
+   * Shown or hidden state of each generated scene overlay (contours, drainage
+   * lines, access map), keyed by overlay id. Additive within v8 and read
+   * version-independently: a file without it restores every overlay at its
+   * default, and a non-boolean entry is dropped.
+   */
+  overlayVisibility?: Record<string, boolean>;
+  /**
    * v8. The project frame: the one origin the project's layers map into, plus
    * a record per layer (see `io/sessionFrame.ts`). Present only for a session
    * that actually describes a project frame; absent means the pre-v8 reading
@@ -479,6 +499,8 @@ export function serializeSession(
   const groups = sanitizeLayerGroups(session.layerGroups);
   if (groups.length > 0) doc.layerGroups = groups;
   if (session.referencePlane) doc.referencePlane = session.referencePlane;
+  const overlayVisibility = sanitizeOverlayVisibility(session.overlayVisibility);
+  if (overlayVisibility) doc.overlayVisibility = overlayVisibility;
   if (session.upFrame) doc.upFrame = { axis: session.upFrame.axis, basis: session.upFrame.basis };
   // v8. The project frame, validated here as well as on read, so this app can
   // never write a session it would itself refuse to open.
@@ -695,6 +717,8 @@ export function parseSession(text: string): InspectionSession {
   if (layerGroups.length > 0) out.layerGroups = layerGroups;
   const referencePlane = parseWorkplaneSettings(raw.referencePlane);
   if (referencePlane) out.referencePlane = referencePlane;
+  const overlayVisibility = sanitizeOverlayVisibility(raw.overlayVisibility);
+  if (overlayVisibility) out.overlayVisibility = overlayVisibility;
   // v8. The project frame. Version-independent on read, like the other
   // additive fields, so a file that carries one is never stripped by a round
   // trip. An inconsistent frame THROWS (see `sessionFrame.ts`): it decides
