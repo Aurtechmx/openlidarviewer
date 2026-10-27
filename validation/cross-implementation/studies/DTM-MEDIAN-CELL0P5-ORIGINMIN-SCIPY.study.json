@@ -8,7 +8,8 @@
     "Scope is measured cells only. Interpolated (IDW fill) cells are not covered: rasterizeDtm does not fill.",
     "OLV is given only the cell size; rasterizeDtm builds the grid from the data minimum. The reference is given the same origin and extent computed by that rule. Every input is shifted by (+0.37, +0.61) m so the origin is off the integer lattice.",
     "29752 cells that share an interior edge on which an input return lies were left out of every leg, as the protocol fixed in advance. That is an edge convention, not a median question.",
-    "The numbers are computed by tests/dtmMedianCrossCheck.test.ts."
+    "The numbers are computed by tests/dtmMedianCrossCheck.test.ts.",
+    "The reference script and reference-run-v2.json were extended on 2026-10-26 for protocol v3 (1 m cells); this parameter set's outputs are unchanged byte for byte."
   ],
   "protocolDigest": "sha256:337fca58c5d778363ee0b5a2936360ea9df0e9a72ed25065bbad28c50dd784b3",
   "candidate": {
@@ -99,7 +100,7 @@
     }
   ],
   "metrics": {
-    "toleranceAbs": 0.000001,
+    "toleranceAbs": 1e-06,
     "toleranceUnit": "metre (OLV float32 against the reference rounded to float32)",
     "minimumComparableCells": 25000,
     "requiredWithinToleranceFraction": 1
@@ -195,7 +196,7 @@
     },
     {
       "path": "scripts/dtm-median-reference-scipy.py",
-      "sha256": "6fd345c27ffd049813c45d7998e7aa67e964dd4022cbfea734292bf9a6bb7794",
+      "sha256": "d5beedb1ca1b0dfda4f39a8f91cff19dbe1fe511e7b70fa2bc34e34daed5a493",
       "role": "reference-command"
     },
     {
@@ -245,7 +246,7 @@
     },
     {
       "path": "validation/cross-implementation/dtm-median/scipy/reference-run-v2.json",
-      "sha256": "902595a2f76242ba53700bad0068cccacc8ea9d8e9bc2261441f0fb9cb28f5c0",
+      "sha256": "18bb38b4eea85111f0950f219a0639fd5e9901bceda2b8f9a17e16928940a23c",
       "role": "reference-environment"
     }
   ],

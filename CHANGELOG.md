@@ -32,7 +32,7 @@ The format is based on Keep a Changelog and the project follows Semantic Version
 
 ### Fixed
 
-- The DTM evidence line in the terrain report, the DEM package evidence contract and export provenance printed E4 on measured cells for every DTM, although the median studies covered one 1 m grid with its origin at (0, 0). It now reads E4 only when the run's cell size is a studied size and its grid origin is at the data minimum, and "measured cells not covered" otherwise, including at 1 m.
+- The DTM evidence line in the terrain report, the DEM package evidence contract and export provenance printed E4 on measured cells for every DTM, although the median studies covered one 1 m grid with its origin at (0, 0). It now reads E4 only when the run's cell size is a studied size (0.25, 0.5, 1, 2 or 5 m) and its grid origin is at the data minimum, and "measured cells not covered" otherwise.
 - A LAS file whose WKT is a named local or engineering CRS (`LOCAL_CS`, `ENGCRS`) keeps that name and is treated as a local frame. Two layers in local frames with different names are reported as mismatched, are not combined, and change detection between them is refused. Two layers naming the same local frame are reported as unverified rather than matching.
 - A refusal written for the user, such as the tileset-by-URL guidance, the E57 and whole-file size caps and a graphics backend that cannot start, reaches the toast as written instead of as the category's general sentence.
 - A browser with neither WebGPU nor WebGL 2 is told so when a scan opens, instead of the failure being reported as a fault in the file.
@@ -46,7 +46,7 @@ The format is based on Keep a Changelog and the project follows Semantic Version
 
 ### Validation
 
-- DTM median gridding on measured cells compared with R terra and SciPy at 0.25, 0.5, 2 and 5 m cells, with the grid origin at the data minimum as `rasterizeDtm` builds it, under protocol `validation/protocols/dtm-median-gridding-v2.md` committed before the runs. Every compared cell agreed within 1e-6 m after float32 rounding (39850, 28499, 2808 and 447 cells) with matching occupancy masks. The eight study manifests are added and those parameter sets join the DTM claim's scope. No evidence level changed.
+- DTM median gridding on measured cells compared with R terra and SciPy at 0.25, 0.5, 1, 2 and 5 m cells, with the grid origin at the data minimum as `rasterizeDtm` builds it, under protocols `validation/protocols/dtm-median-gridding-v2.md` and `-v3.md`, each committed before its runs. Every compared cell agreed within 1e-6 m after float32 rounding (39850, 28499, 10980, 2808 and 447 cells) with matching occupancy masks. The ten study manifests are added and those parameter sets join the DTM claim's scope. No evidence level changed.
 - The E4 count in the test-evidence record, the claim register notes and THREATS_TO_VALIDITY.md now reads 18, matching the register. `lint:evidence` fails when the record's E4 claims differ from the register's.
 - Field-study records list each operator in `operators.members` with an affiliation and an independence flag; the verifier fails a record whose member count differs from `operators.count`, whose members include one who is not independent, or whose group flag contradicts its members.
 - The field-study verifier rejects a result whose |bias| exceeds its RMSE, whose RMSE exceeds its largest residual, or whose NMAD exceeds 1.4826 times its largest residual, allowing for the precision the figures were reported with.

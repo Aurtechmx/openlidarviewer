@@ -31,8 +31,22 @@ describe('live DTM evidence by cell class and grid', () => {
     expect(dtmCellsEvidenceText(at(0.3))).toMatch(/^measured cells not covered/);
   });
 
-  it('a 1 m live grid is not covered: the 1 m study used an origin at (0, 0)', () => {
-    expect(resolveEvidence('DTM', { cells: 'measured', dtmGrid: at(1) }).effectiveEvidence).toBeNull();
+  it('the default 1 m grid with the data-minimum origin resolves to E4 (protocol v3)', () => {
+    expect(dtmMeasuredParameterSet(at(1))).toBe('PS-DTM-MEDIAN-CELL1-ORIGINMIN');
+    expect(resolveEvidence('DTM', { cells: 'measured', dtmGrid: at(1) }).effectiveEvidence).toBe('E4_CROSS_IMPLEMENTATION_VALIDATED');
+  });
+
+  it('1 m with any other origin rule maps to the not-studied set, never to a data-minimum set', () => {
+    // The v1 1 m study used origin (0, 0); the live path never builds that grid,
+    // and a grid stated as another rule must not borrow the data-minimum study.
+    const other = { cellSizeM: 1, origin: 'other' as const };
+    expect(dtmMeasuredParameterSet(other)).toBe('PS-DTM-MEDIAN-NOT-STUDIED');
+    expect(resolveEvidence('DTM', { cells: 'measured', dtmGrid: other }).effectiveEvidence).toBeNull();
+  });
+
+  it('the live path states the data-minimum origin for the grid the run used', async () => {
+    const { liveDtmGridRule } = await import('../src/validation/scopedEvidence');
+    expect(liveDtmGridRule({ cellSizeM: 1 })).toEqual({ cellSizeM: 1, origin: 'data-minimum' });
   });
 
   it('a studied size with another origin rule is not covered', () => {

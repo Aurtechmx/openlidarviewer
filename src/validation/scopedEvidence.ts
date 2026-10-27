@@ -269,13 +269,14 @@ export interface DtmGridRule {
 
 /**
  * The median parameter sets studied with the data-minimum origin rule, by
- * cell size (validation/protocols/dtm-median-gridding-v2.md). The 1 m study
+ * cell size (validation/protocols/dtm-median-gridding-v2.md and -v3.md). The v1 1 m study
  * (PS-DTM-MEDIAN-CELL1-ORIGIN0) used an origin at (0, 0), which no live DTM
  * uses, so it is not listed here.
  */
 export const STUDIED_DTM_MEDIAN_SETS: ReadonlyArray<{ readonly cellSizeM: number; readonly parameterSetId: string }> = [
   { cellSizeM: 0.25, parameterSetId: 'PS-DTM-MEDIAN-CELL0P25-ORIGINMIN' },
   { cellSizeM: 0.5, parameterSetId: 'PS-DTM-MEDIAN-CELL0P5-ORIGINMIN' },
+  { cellSizeM: 1, parameterSetId: 'PS-DTM-MEDIAN-CELL1-ORIGINMIN' },
   { cellSizeM: 2, parameterSetId: 'PS-DTM-MEDIAN-CELL2-ORIGINMIN' },
   { cellSizeM: 5, parameterSetId: 'PS-DTM-MEDIAN-CELL5-ORIGINMIN' },
 ];

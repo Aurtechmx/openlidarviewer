@@ -23,9 +23,9 @@ was also compared against R terra 1.9.46 `rasterize(fun = median)` and SciPy
 1.17.1 `binned_statistic_2d(statistic = 'median')` on eight seeded clouds,
 agreeing on 18498 and 18655 cells within 1×10⁻⁶ m after float32 rounding, with
 matching occupancy masks, on a 1 m grid with origin (0, 0). Under protocol v2
-the same comparison at 0.25, 0.5, 2 and 5 m cells, with the grid origin at the
-data minimum as `rasterizeDtm` builds it, agreed on 39850, 28499, 2808 and 447
-cells; cells on an edge where a return lies were left out of every leg. A DTM
+and v3 the same comparison at 0.25, 0.5, 1, 2 and 5 m cells, with the grid
+origin at the data minimum as `rasterizeDtm` builds it, agreed on 39850, 28499,
+10980, 2808 and 447 cells; cells on an edge where a return lies were left out of every leg. A DTM
 at any other cell size is not covered. terra is the independent reference;
 SciPy bins over edges this project supplies. Interpolated (filled) cells are
 not covered.
