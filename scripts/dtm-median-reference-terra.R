@@ -80,3 +80,41 @@ js2 <- c("{",
   '  "commandLine": "Rscript --vanilla scripts/dtm-median-reference-terra.R",',
   '  "outputs": [', paste(rows2, collapse = ",\n"), "  ]", "}")
 writeLines(js2, paste0(out, "reference-run-v2.json"))
+
+# Protocol v4 (validation/protocols/dtm-median-gridding-v4.md): 50 seeded draws
+# from range/fixtures/ (local coordinates after OLV's ingest rule), grid from
+# the data minimum. Writes range/terra/draw-NN__median.asc and
+# range/terra/reference-run-range.json.
+rf <- "validation/cross-implementation/dtm-median/range/fixtures/"
+ro <- "validation/cross-implementation/dtm-median/range/terra/"
+dir.create(ro, showWarnings = FALSE, recursive = TRUE)
+draws <- read.csv(paste0(rf, "draws.csv"))
+rows3 <- character(0)
+for (k in seq_len(nrow(draws))) {
+  d <- draws$draw[k]; s <- draws$cellSize[k]
+  a <- read.csv(sprintf("%sdraw-%02d.csv", rf, d))
+  ox <- min(a$x); oy <- min(a$y)
+  nc <- floor((max(a$x) - ox) / s) + 1
+  nr <- floor((max(a$y) - oy) / s) + 1
+  tpl <- rast(ext(ox, ox + nc * s, oy, oy + nr * s), ncols = nc, nrows = nr, crs = "local")
+  v <- vect(a, geom = c("x", "y"), crs = "local")
+  r <- rasterize(v, tpl, field = "z", fun = median)
+  m <- as.matrix(r, wide = TRUE)
+  path <- sprintf("%sdraw-%02d__median.asc", ro, d)
+  con <- file(path, "w")
+  writeLines(c(sprintf("ncols %d", nc), sprintf("nrows %d", nr), sprintf("xllcorner %.17g", ox),
+               sprintf("yllcorner %.17g", oy), sprintf("cellsize %.17g", s), "NODATA_value -9999"), con)
+  for (i in 1:nr) writeLines(paste(ifelse(is.na(m[i, ]), "-9999", sprintf("%.9f", m[i, ])), collapse = " "), con)
+  close(con)
+  h <- system2("shasum", c("-a", "256", path), stdout = TRUE)
+  rows3 <- c(rows3, sprintf('    {"draw": %d, "path": "%s", "sha256": "%s"}', d, path, sub(" .*", "", h)))
+}
+js3 <- c("{",
+  '  "tool": "terra::rasterize",', '  "fun": "median",',
+  '  "protocol": "validation/protocols/dtm-median-gridding-v4.md",',
+  sprintf('  "R": "%s",', paste(R.version$major, R.version$minor, sep = ".")),
+  sprintf('  "terra": "%s",', as.character(packageVersion("terra"))),
+  sprintf('  "platform": "%s",', R.version$platform),
+  '  "commandLine": "Rscript --vanilla scripts/dtm-median-reference-terra.R",',
+  '  "outputs": [', paste(rows3, collapse = ",\n"), "  ]", "}")
+writeLines(js3, paste0(ro, "reference-run-range.json"))

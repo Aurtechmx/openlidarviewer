@@ -228,3 +228,85 @@ describe('DTM median gridding at other cell sizes (protocol dtm-median-gridding-
     }
   }
 });
+
+// ── Protocol v4: 50 seeded draws over 0.1 to 10 m ─────────────────────────────
+// validation/protocols/dtm-median-gridding-v4.md. The fixtures hold local
+// coordinates after OLV's LAS ingest rule; OLV gets only the cell size.
+
+const RANGE = `${REF}range/`;
+const RANGE_MIN_CELLS = 600;
+
+interface Draw { draw: number; cellSize: number; large: boolean }
+
+function loadDraws(): Draw[] {
+  return readFileSync(`${RANGE}fixtures/draws.csv`, 'utf8').trim().split('\n').slice(1).map((l) => {
+    const f = l.split(',');
+    return { draw: Number(f[0]), cellSize: Number(f[1]), large: f[2] === '1' };
+  });
+}
+
+export const RANGE_DRAWS = loadDraws();
+
+describe('DTM median gridding over 0.1 to 10 m (protocol dtm-median-gridding-v4)', () => {
+  const failures: string[] = [];
+  const rows: { d: Draw; legs: Record<'scipy' | 'terra' | 'refs', Leg>; gridOk: boolean }[] = [];
+  for (const d of RANGE_DRAWS) {
+    const nn = String(d.draw).padStart(2, '0');
+    const pts = readFileSync(`${RANGE}fixtures/draw-${nn}.csv`, 'utf8').trim().split('\n').slice(1)
+      .map((l) => { const [x, y, z] = l.split(',').map(Number); return { x, y, z }; });
+    const raster = rasterizeDtm(pts, new Uint8Array(pts.length).fill(1), { aggregation: LIVE_DTM_AGGREGATION, cellSizeM: d.cellSize });
+    const scipy = loadAscV2(`${RANGE}scipy/draw-${nn}__median.asc`);
+    const terra = loadAscV2(`${RANGE}terra/draw-${nn}__median.asc`);
+    const gridOk = [scipy, terra].every((r) => r.cols === raster.cols && r.rows === raster.rows
+      && r.x0 === raster.originH1 && r.y0 === raster.originH2);
+    const skip = edgeCellsV2(pts, raster.originH1, raster.originH2, d.cellSize, raster.cols, raster.rows);
+    const legs = {
+      scipy: compareV2(raster.z, scipy.g, skip),
+      terra: compareV2(raster.z, terra.g, skip),
+      refs: compareV2(Float64Array.from(scipy.g, (v) => Math.fround(v)), terra.g, skip),
+    };
+    rows.push({ d, legs, gridOk });
+    for (const [k, t] of Object.entries(legs)) {
+      if (!gridOk || t.maskMismatch > 0 || t.outside > 0 || t.cells < RANGE_MIN_CELLS) {
+        failures.push(`draw ${d.draw} s=${d.cellSize} large=${d.large} ${k}: grid=${gridOk} cells=${t.cells} excluded=${t.excluded} maskMismatch=${t.maskMismatch} outside=${t.outside} maxDiff=${t.maxDiff}`);
+      }
+    }
+  }
+
+  it('draws 50 cell sizes across 0.1 to 10 m, both ends included, small and large coordinates', () => {
+    expect(RANGE_DRAWS).toHaveLength(50);
+    expect(Math.min(...RANGE_DRAWS.map((d) => d.cellSize))).toBe(0.1);
+    expect(Math.max(...RANGE_DRAWS.map((d) => d.cellSize))).toBe(10);
+    expect(RANGE_DRAWS.filter((d) => d.large)).toHaveLength(25);
+  });
+
+  // Result: the study FAILS its registered rule, so the scope is not widened.
+  // Two causes, both in how the references were written and read, not in the
+  // median:
+  // 1. The reference grids are written to 9 decimals. An even-count median is
+  //    the exact midpoint of two float32 values, a float32 tie. OLV rounds the
+  //    exact midpoint to even; the 9-decimal print lands just off the tie, so
+  //    fround(reference) can pick the neighbouring float32, one step (1.9e-6 m
+  //    at these heights) away. The unrounded difference stays below 1e-6 m.
+  // 2. R's CSV reader does not round every 17-digit decimal correctly, so in
+  //    some draws terra's grid origin is one ulp off OLV's; no cell changes.
+  // These assertions pin that diagnosis so the record cannot drift.
+  it('records the failing result and its diagnosis (scope not widened)', () => {
+    const tot = (k: 'scipy' | 'terra' | 'refs') => sum(rows.map((r) => r.legs[k]));
+    const bad = new Set(failures.map((f) => f.split(' ')[1]));
+    console.log(`[dtm-median-v4] draws failing the registered rule: ${bad.size} of ${rows.length}; grid-origin mismatches (terra): ${rows.filter((r) => !r.gridOk).length}`);
+    for (const k of ['scipy', 'terra', 'refs'] as const) {
+      const t = tot(k);
+      console.log(`[dtm-median-v4] ${k}: draws=${rows.length} cells=${t.cells} excluded=${t.excluded} maskMismatch=${t.maskMismatch} outside=${t.outside} maxDiff=${t.maxDiff} maxRaw=${t.maxRaw}`);
+    }
+    console.log(`[dtm-median-v4] fewest compared cells in a draw: ${Math.min(...rows.map((r) => Math.min(r.legs.scipy.cells, r.legs.terra.cells)))}`);
+    expect(failures.length).toBeGreaterThan(0);
+    const all = rows.flatMap((r) => [r.legs.scipy, r.legs.terra]);
+    // Occupancy always matches and the references agree with each other on values.
+    expect(all.every((t) => t.maskMismatch === 0)).toBe(true);
+    expect(rows.every((r) => r.legs.refs.outside === 0 && r.legs.refs.maskMismatch === 0)).toBe(true);
+    // Every rounded failure is one float32 step, and the unrounded difference is under 1e-6 m.
+    expect(Math.max(...all.map((t) => t.maxRaw))).toBeLessThan(1e-6);
+    expect(Math.max(...all.map((t) => t.maxDiff))).toBeLessThanOrEqual(2 ** -19);
+  });
+});

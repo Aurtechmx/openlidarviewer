@@ -9,7 +9,8 @@
     "OLV is given only the cell size; rasterizeDtm builds the grid from the data minimum. The reference is given the same origin and extent computed by that rule. Every input is shifted by (+0.37, +0.61) m so the origin is off the integer lattice.",
     "1961 cells that share an interior edge on which an input return lies were left out of every leg, as the protocol fixed in advance. That is an edge convention, not a median question.",
     "The numbers are computed by tests/dtmMedianCrossCheck.test.ts.",
-    "The reference script and reference-run-v2.json were extended on 2026-10-26 for protocol v3 (1 m cells); this parameter set's outputs are unchanged byte for byte."
+    "The reference script and reference-run-v2.json were extended on 2026-10-26 for protocol v3 (1 m cells); this parameter set's outputs are unchanged byte for byte.",
+    "The reference script was extended again on 2026-10-26 for protocol v4 (range study); the code for this study is unchanged and its outputs reproduce byte for byte."
   ],
   "protocolDigest": "sha256:b51bbf6e0400d330de50935fe45ce7155cbd0db7d4a30045e2808ac15ce0ece6",
   "candidate": {
@@ -198,7 +199,7 @@
     },
     {
       "path": "scripts/dtm-median-reference-terra.R",
-      "sha256": "42a84cb2539075e1fe5467b4aa13041f3509180b58bc16aaf9086190b6a7786e",
+      "sha256": "ca72cbd26e6297c284a856a370db9bd92e86d557bb862fe8993c58f78db403c1",
       "role": "reference-command"
     },
     {

@@ -88,3 +88,36 @@ json.dump({
     'commandLine': 'python3 -I scripts/dtm-median-reference-scipy.py',
     'outputs': outputs2,
 }, open(OUT + 'reference-run-v2.json', 'w'), indent=2)
+
+# Protocol v4 (validation/protocols/dtm-median-gridding-v4.md): 50 seeded draws
+# from range/fixtures/, grid from the data minimum. Writes
+# range/scipy/draw-NN__median.asc and range/scipy/reference-run-range.json.
+import csv
+RF = 'validation/cross-implementation/dtm-median/range/fixtures/'
+RO = 'validation/cross-implementation/dtm-median/range/scipy/'
+os.makedirs(RO, exist_ok=True)
+outputs3 = []
+for row in csv.DictReader(open(RF + 'draws.csv')):
+    d, s = int(row['draw']), float(row['cellSize'])
+    a = np.loadtxt(f'{RF}draw-{d:02d}.csv', delimiter=',', skiprows=1)
+    x, y = a[:, 0], a[:, 1]
+    ox, oy = float(x.min()), float(y.min())
+    nc = int(math.floor((x.max() - ox) / s)) + 1
+    nr = int(math.floor((y.max() - oy) / s)) + 1
+    ex = ox + s * np.arange(nc + 1, dtype=float)
+    ey = oy + s * np.arange(nr + 1, dtype=float)
+    stat = binned_statistic_2d(x, y, a[:, 2], statistic='median', bins=[ex, ey]).statistic.T
+    path = f'{RO}draw-{d:02d}__median.asc'
+    with open(path, 'w') as f:
+        f.write(f'ncols {nc}\nnrows {nr}\nxllcorner {ox!r}\nyllcorner {oy!r}\ncellsize {s!r}\nNODATA_value -9999\n')
+        for r in range(nr - 1, -1, -1):
+            f.write(' '.join('-9999' if np.isnan(v) else f'{v:.9f}' for v in stat[r]) + '\n')
+    outputs3.append({'draw': d, 'path': path, 'sha256': sha(path)})
+json.dump({
+    'tool': 'scipy.stats.binned_statistic_2d', 'statistic': 'median',
+    'protocol': 'validation/protocols/dtm-median-gridding-v4.md',
+    'scipy': scipy.__version__, 'numpy': np.__version__,
+    'python': platform.python_version(), 'platform': f'{sys.platform}-{platform.machine()}',
+    'commandLine': 'python3 -I scripts/dtm-median-reference-scipy.py',
+    'outputs': outputs3,
+}, open(RO + 'reference-run-range.json', 'w'), indent=2)
