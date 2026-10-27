@@ -138,8 +138,8 @@ describe('export evidence note matches the median study scope', () => {
 const SHIFT_X = 0.37;
 const SHIFT_Y = 0.61;
 export const V2_SETS = [
-  { id: 'PS-DTM-MEDIAN-CELL0.25-ORIGINMIN', size: 0.25, dir: 'cell0.25', min: 35000 },
-  { id: 'PS-DTM-MEDIAN-CELL0.5-ORIGINMIN', size: 0.5, dir: 'cell0.5', min: 25000 },
+  { id: 'PS-DTM-MEDIAN-CELL0P25-ORIGINMIN', size: 0.25, dir: 'cell0.25', min: 35000 },
+  { id: 'PS-DTM-MEDIAN-CELL0P5-ORIGINMIN', size: 0.5, dir: 'cell0.5', min: 25000 },
   { id: 'PS-DTM-MEDIAN-CELL2-ORIGINMIN', size: 2, dir: 'cell2', min: 2500 },
   { id: 'PS-DTM-MEDIAN-CELL5-ORIGINMIN', size: 5, dir: 'cell5', min: 400 },
 ] as const;

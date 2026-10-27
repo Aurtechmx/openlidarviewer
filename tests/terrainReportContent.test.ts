@@ -25,7 +25,7 @@
 
 import { describe, it, expect } from 'vitest';
 import {
-  DTM_NOT_COVERED,
+  dtmNotCovered,
   buildTerrainReportContent,
   type TerrainReportContent,
 } from '../src/terrain/export/terrainReportContent';
@@ -786,10 +786,11 @@ describe('buildTerrainReportContent — every row names its basis', () => {
   it('#8 carries the registry evidence level per product, from the export resolver', () => {
     const c = buildTerrainReportContent(readyResult(), OPTS);
     const byLabel = Object.fromEntries(c.products.map((p) => [p.label, p.evidence]));
-    // The live DTM as a whole matches no registered study: the row gives E4 to
-    // its measured cells only and says filled cells are not covered.
-    expect(byLabel['DTM/DEM export']).toBe(DTM_NOT_COVERED);
-    expect(byLabel['DTM/DEM export']).toMatch(/^E4 \(Cross-implementation validated\) on measured cells; filled cells not covered/);
+    // The live DTM as a whole matches no registered study. This run's 1 m grid
+    // with its origin at the data minimum is not a studied grid, so its
+    // measured cells are not covered either.
+    expect(byLabel['DTM/DEM export']).toBe(dtmNotCovered(readyResult()));
+    expect(byLabel['DTM/DEM export']).toMatch(/^measured cells not covered; filled cells not covered/);
     // Smoothed contours: the cartographic claim, as the GeoJSON and DXF exports use.
     expect(byLabel['Contours']).toBe('E2 — Analytically verified (baseline)');
     expect(byLabel['Map sheet']).toBe('E2 — Analytically verified (baseline)');

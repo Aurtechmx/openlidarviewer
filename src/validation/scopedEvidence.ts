@@ -185,10 +185,15 @@ export interface EvidenceContext {
   /**
    * For the live DTM, which of its cells the artifact stands for: measured
    * cells (at least one return, median aggregated) or filled (interpolated)
-   * cells. Selects the parameter set from {@link LIVE_DTM_CELL_PARAMETER_SET}
+   * cells. Selects the parameter set (see {@link dtmMeasuredParameterSet})
    * when no explicit parameterSetId is given.
    */
   readonly cells?: DtmCellClass;
+  /**
+   * For the live DTM's measured cells, the grid the run used. Required for
+   * coverage: without it, measured cells resolve to not covered.
+   */
+  readonly dtmGrid?: DtmGridRule;
   /** Aggregation this artifact was built with. */
   readonly aggregation?: string;
   /** Interpolation/fill this artifact was built with. */
@@ -243,7 +248,7 @@ export const SCOPED_EVIDENCE_RECORDS: readonly ScopedEvidenceRecord[] = [];
  * register scope names the parameter sets its studies covered. The live DTM
  * as a whole aggregates by median (LIVE_DTM_AGGREGATION) with void fill, which
  * no study covers; its measured cells are covered (see
- * {@link LIVE_DTM_CELL_PARAMETER_SET}).
+ * {@link dtmMeasuredParameterSet}).
  */
 export const LIVE_PARAMETER_SET: Readonly<Record<string, string>> = {
   DTM: 'PS-DTM-LIVE-MEDIAN-FILL',
@@ -253,20 +258,59 @@ export const LIVE_PARAMETER_SET: Readonly<Record<string, string>> = {
 export type DtmCellClass = 'measured' | 'filled';
 
 /**
- * The parameter set each kind of live DTM cell is built with. Measured cells
- * are median gridded on a 1-unit cell with the origin at 0, the configuration
- * the R terra and SciPy median studies cover. Filled cells come from the void
- * fill, which no study covers.
+ * How a DTM's grid was laid out: its cell size and where its origin sits.
+ * `data-minimum` is the rule rasterizeDtm and the ground filter use: the
+ * origin at the minimum x and y of the gridded input. Anything else is `other`.
  */
-export const LIVE_DTM_CELL_PARAMETER_SET: Readonly<Record<DtmCellClass, string>> = {
-  measured: 'PS-DTM-MEDIAN-CELL1-ORIGIN0',
-  filled: 'PS-DTM-LIVE-MEDIAN-FILL',
-};
+export interface DtmGridRule {
+  readonly cellSizeM: number;
+  readonly origin: 'data-minimum' | 'other';
+}
+
+/**
+ * The median parameter sets studied with the data-minimum origin rule, by
+ * cell size (validation/protocols/dtm-median-gridding-v2.md). The 1 m study
+ * (PS-DTM-MEDIAN-CELL1-ORIGIN0) used an origin at (0, 0), which no live DTM
+ * uses, so it is not listed here.
+ */
+export const STUDIED_DTM_MEDIAN_SETS: ReadonlyArray<{ readonly cellSizeM: number; readonly parameterSetId: string }> = [
+  { cellSizeM: 0.25, parameterSetId: 'PS-DTM-MEDIAN-CELL0P25-ORIGINMIN' },
+  { cellSizeM: 0.5, parameterSetId: 'PS-DTM-MEDIAN-CELL0P5-ORIGINMIN' },
+  { cellSizeM: 2, parameterSetId: 'PS-DTM-MEDIAN-CELL2-ORIGINMIN' },
+  { cellSizeM: 5, parameterSetId: 'PS-DTM-MEDIAN-CELL5-ORIGINMIN' },
+];
+
+/** A measured-cell parameter set no study covers: any grid not in {@link STUDIED_DTM_MEDIAN_SETS}. */
+export const DTM_MEDIAN_NOT_STUDIED = 'PS-DTM-MEDIAN-NOT-STUDIED';
+
+/** Filled cells come from the void fill, which no study covers. */
+export const LIVE_DTM_FILLED_PARAMETER_SET = 'PS-DTM-LIVE-MEDIAN-FILL';
+
+/**
+ * The parameter set a live DTM's measured cells were built with. Covered only
+ * when the grid uses the data-minimum origin and its cell size matches a
+ * studied size to within 1e-9; otherwise, or when the grid is not known, the
+ * not-studied set, which resolves to not covered.
+ */
+export function dtmMeasuredParameterSet(grid?: DtmGridRule | null): string {
+  if (grid == null || grid.origin !== 'data-minimum' || !Number.isFinite(grid.cellSizeM)) return DTM_MEDIAN_NOT_STUDIED;
+  const hit = STUDIED_DTM_MEDIAN_SETS.find((s) => Math.abs(s.cellSizeM - grid.cellSizeM) <= 1e-9);
+  return hit?.parameterSetId ?? DTM_MEDIAN_NOT_STUDIED;
+}
+
+/**
+ * The grid rule of a DTM built by analyseContours. Its grid always comes from
+ * the ground filter, which places the origin at the data minimum.
+ */
+export function liveDtmGridRule(dtm: { readonly cellSizeM: number } | null | undefined): DtmGridRule | undefined {
+  return dtm == null ? undefined : { cellSizeM: dtm.cellSizeM, origin: 'data-minimum' };
+}
 
 /** The parameter set an artifact was built with: explicit, by DTM cell class, or the shipped product's. */
 function artifactParameterSet(claimId: string, context?: EvidenceContext): string | undefined {
   if (context?.parameterSetId != null) return context.parameterSetId;
-  if (claimId === 'DTM' && context?.cells != null) return LIVE_DTM_CELL_PARAMETER_SET[context.cells];
+  if (claimId === 'DTM' && context?.cells === 'filled') return LIVE_DTM_FILLED_PARAMETER_SET;
+  if (claimId === 'DTM' && context?.cells === 'measured') return dtmMeasuredParameterSet(context.dtmGrid);
   return LIVE_PARAMETER_SET[claimId];
 }
 
@@ -564,8 +608,8 @@ export function resolveExportEvidence(
  * prints: the level its measured cells resolve to, and that filled cells are
  * not covered. Both halves come from {@link resolveEvidence}.
  */
-export function dtmCellsEvidenceText(): string {
-  const measured = resolveEvidence('DTM', { cells: 'measured' }).effectiveEvidence;
+export function dtmCellsEvidenceText(grid?: DtmGridRule | null): string {
+  const measured = resolveEvidence('DTM', { cells: 'measured', ...(grid ? { dtmGrid: grid } : {}) }).effectiveEvidence;
   const filled = resolveEvidence('DTM', { cells: 'filled' }).effectiveEvidence;
   const measuredText = measured == null
     ? 'measured cells not covered'

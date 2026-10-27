@@ -8,7 +8,8 @@
     "Scope is measured cells only. Interpolated (IDW fill) cells are not covered: rasterizeDtm does not fill.",
     "SciPy computes the per-cell median and the bin assignment, but over bin edges this project supplies; the fixtures and the comparison harness are this project's own. It is the weaker of the two references.",
     "The SciPy leg compares every cell.",
-    "The numbers are computed by tests/dtmMedianCrossCheck.test.ts."
+    "The numbers are computed by tests/dtmMedianCrossCheck.test.ts.",
+    "scripts/dtm-median-reference-scipy.py was extended on 2026-10-26 for protocol dtm-median-gridding-v2; its v1 part is unchanged, and rerunning it reproduces the v1 outputs listed here byte for byte."
   ],
   "protocolDigest": "sha256:0dcbfcfde85e123fdafc374ba1f1b160fee11cda85d930af2d1a7338ab3939a3",
   "candidate": {
@@ -100,7 +101,7 @@
     }
   ],
   "metrics": {
-    "toleranceAbs": 0.000001,
+    "toleranceAbs": 1e-06,
     "toleranceUnit": "metre (OLV float32 against the reference rounded to float32)",
     "minimumComparableCells": 15000,
     "requiredWithinToleranceFraction": 1
@@ -196,7 +197,7 @@
     },
     {
       "path": "scripts/dtm-median-reference-scipy.py",
-      "sha256": "054963139c7e1e43c6fb7ce41e94f4ebde2d1f6f01e80c1d8541bb90da532fc3",
+      "sha256": "6fd345c27ffd049813c45d7998e7aa67e964dd4022cbfea734292bf9a6bb7794",
       "role": "reference-command"
     },
     {

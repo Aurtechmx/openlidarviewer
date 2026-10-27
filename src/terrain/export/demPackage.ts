@@ -29,7 +29,7 @@ import {
   buildEvidenceContractView,
   type EvidenceContractView,
 } from '../../validation/evidenceBoundaryInspector';
-import { dtmCellsEvidenceText } from '../../validation/scopedEvidence';
+import { dtmCellsEvidenceText, liveDtmGridRule, type DtmGridRule } from '../../validation/scopedEvidence';
 import { buildScientificArtifactPassport } from '../../science/scientificArtifactPassport';
 import { dtmProductDigest } from '../../science/dtmProductDigest';
 import type { AnalysedBasis } from './analysedBasis';
@@ -428,7 +428,7 @@ function coverageLabel(mode: string): string {
 function evidenceContractLines(result: AnalyseContoursResult): string[] {
   const claims = dtmArtifactClaims(result);
   if (claims.length === 0) return [];
-  return renderEvidenceContract(buildEvidenceContractView(claims[0]));
+  return renderEvidenceContract(buildEvidenceContractView(claims[0]), liveDtmGridRule(result.dtm));
 }
 
 /**
@@ -440,19 +440,19 @@ function evidenceContractLines(result: AnalyseContoursResult): string[] {
  * field reads as a level that exists and happens to be empty, which is the
  * opposite of what it means.
  */
-function effectiveContractText(view: EvidenceContractView): string {
+function effectiveContractText(view: EvidenceContractView, grid?: DtmGridRule): string {
   if (view.effectiveEvidence != null) return view.effectiveEvidence;
   if (view.resolutionState !== 'external-evidence-out-of-scope') return 'none recorded';
   // The DTM as a whole is not covered, but its measured cells are: say both.
-  return view.claimId === 'DTM' ? dtmCellsEvidenceText() : 'not covered by the registered studies';
+  return view.claimId === 'DTM' ? dtmCellsEvidenceText(grid) : 'not covered by the registered studies';
 }
 
-export function renderEvidenceContract(view: EvidenceContractView): string[] {
+export function renderEvidenceContract(view: EvidenceContractView, grid?: DtmGridRule): string[] {
   const lines = [
     `Evidence contract`,
     `  Claim          ${view.claimId}`,
     `  Baseline       ${view.baselineEvidence ?? 'none recorded'}`,
-    `  Effective      ${effectiveContractText(view)}`,
+    `  Effective      ${effectiveContractText(view, grid)}`,
     `  Resolution     ${view.resolutionState}`,
     `  Matched study  ${view.matchedStudy ?? 'none applies'}`,
     `  Verdict        ${view.applicabilityVerdict}`,
