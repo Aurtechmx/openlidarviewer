@@ -121,3 +121,44 @@ json.dump({
     'commandLine': 'python3 -I scripts/dtm-median-reference-scipy.py',
     'outputs': outputs3,
 }, open(RO + 'reference-run-range.json', 'w'), indent=2)
+
+# Protocol v5 (validation/protocols/dtm-median-gridding-v5.md): the v4 draws,
+# read exactly from range/fixtures/draw-NN.f64, every output value written as a
+# hex float (checked to parse back to the same double). Writes
+# range-v5/scipy/draw-NN__median.hex.asc and range-v5/scipy/reference-run.json.
+R5 = 'validation/cross-implementation/dtm-median/range-v5/scipy/'
+os.makedirs(R5, exist_ok=True)
+
+
+def hx(v):
+    h = float(v).hex()
+    assert float.fromhex(h) == float(v)
+    return h
+
+
+outputs5 = []
+for row in csv.DictReader(open(RF + 'draws.csv')):
+    d, s = int(row['draw']), float(row['cellSize'])
+    a = np.fromfile(f'{RF}draw-{d:02d}.f64', dtype='<f8').reshape(-1, 3)
+    assert len(a) == int(row['points'])
+    x, y = a[:, 0], a[:, 1]
+    ox, oy = float(x.min()), float(y.min())
+    nc = int(math.floor((x.max() - ox) / s)) + 1
+    nr = int(math.floor((y.max() - oy) / s)) + 1
+    ex = ox + s * np.arange(nc + 1, dtype=float)
+    ey = oy + s * np.arange(nr + 1, dtype=float)
+    stat = binned_statistic_2d(x, y, a[:, 2], statistic='median', bins=[ex, ey]).statistic.T
+    path = f'{R5}draw-{d:02d}__median.hex.asc'
+    with open(path, 'w') as f:
+        f.write(f'ncols {nc}\nnrows {nr}\nxllcorner {hx(ox)}\nyllcorner {hx(oy)}\ncellsize {hx(s)}\nNODATA_value -9999\n')
+        for r in range(nr - 1, -1, -1):
+            f.write(' '.join('-9999' if np.isnan(v) else hx(v) for v in stat[r]) + '\n')
+    outputs5.append({'draw': d, 'path': path, 'sha256': sha(path)})
+json.dump({
+    'tool': 'scipy.stats.binned_statistic_2d', 'statistic': 'median',
+    'protocol': 'validation/protocols/dtm-median-gridding-v5.md',
+    'scipy': scipy.__version__, 'numpy': np.__version__,
+    'python': platform.python_version(), 'platform': f'{sys.platform}-{platform.machine()}',
+    'commandLine': 'python3 -I scripts/dtm-median-reference-scipy.py',
+    'outputs': outputs5,
+}, open(R5 + 'reference-run.json', 'w'), indent=2)

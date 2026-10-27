@@ -310,3 +310,84 @@ describe('DTM median gridding over 0.1 to 10 m (protocol dtm-median-gridding-v4)
     expect(Math.max(...all.map((t) => t.maxDiff))).toBeLessThanOrEqual(2 ** -19);
   });
 });
+
+// ── Protocol v5: the v4 draws with exact reference I/O ────────────────────────
+// validation/protocols/dtm-median-gridding-v5.md. Inputs reach R and SciPy as
+// binary float64; reference grids are hex floats, parsed exactly here.
+
+const V5 = `${REF}range-v5/`;
+
+/** Exact parse of a C99 hex float (`0x1.8p+3`, `-0x0p+0`). */
+export function parseHexFloat(t: string): number {
+  const m = /^(-?)0x([0-9a-f]+)(?:\.([0-9a-f]*))?p([+-]\d+)$/i.exec(t);
+  if (!m) throw new Error(`not a hex float: ${t}`);
+  const frac = m[3] ?? '';
+  const digits = (m[2] + frac).replace(/^0+(?=.)/, '');
+  if (digits.length > 14) throw new Error(`hex float wider than 53 bits: ${t}`);
+  const v = parseInt(digits, 16) * 2 ** (Number(m[4]) - 4 * frac.length);
+  return m[1] === '-' ? -v : v;
+}
+
+function loadHexAsc(path: string): Asc {
+  const lines = readFileSync(path, 'utf8').trim().split('\n');
+  const h = Object.fromEntries(lines.slice(0, 6).map((l) => l.trim().split(/\s+/)));
+  const cols = Number(h.ncols), rows = Number(h.nrows);
+  const g = new Float64Array(cols * rows);
+  lines.slice(6).forEach((line, i) => {
+    const v = line.trim().split(/\s+/);
+    expect(v.length).toBe(cols);
+    v.forEach((t, c) => { g[(rows - 1 - i) * cols + c] = t === '-9999' ? Number.NaN : parseHexFloat(t); });
+  });
+  return { cols, rows, x0: parseHexFloat(h.xllcorner), y0: parseHexFloat(h.yllcorner), s: parseHexFloat(h.cellsize), g };
+}
+
+describe('DTM median gridding over 0.1 to 10 m with exact reference I/O (protocol dtm-median-gridding-v5)', () => {
+  it('parses hex floats exactly', () => {
+    for (const v of [0, 1, -2.5, 0.1, 16.609499931335449, 5.616494445418821, Math.fround(19.741)]) {
+      const t = v === 0 ? '0x0p+0' : `${v < 0 ? '-' : ''}0x${(Math.abs(v) / 2 ** Math.floor(Math.log2(Math.abs(v)))).toString(16)}p${Math.floor(Math.log2(Math.abs(v))) >= 0 ? '+' : ''}${Math.floor(Math.log2(Math.abs(v)))}`;
+      expect(parseHexFloat(t)).toBe(v);
+    }
+  });
+
+  const failures: string[] = [];
+  const rows: Record<'scipy' | 'terra' | 'refs', Leg>[] = [];
+  let inputsExact = true;
+  for (const d of RANGE_DRAWS) {
+    const nn = String(d.draw).padStart(2, '0');
+    const pts = readFileSync(`${RANGE}fixtures/draw-${nn}.csv`, 'utf8').trim().split('\n').slice(1)
+      .map((l) => { const [x, y, z] = l.split(',').map(Number); return { x, y, z }; });
+    const bin = new Float64Array(new Uint8Array(readFileSync(`${RANGE}fixtures/draw-${nn}.f64`)).buffer);
+    if (bin.length !== pts.length * 3 || pts.some((p, i) => p.x !== bin[3 * i] || p.y !== bin[3 * i + 1] || p.z !== bin[3 * i + 2])) inputsExact = false;
+    const raster = rasterizeDtm(pts, new Uint8Array(pts.length).fill(1), { aggregation: LIVE_DTM_AGGREGATION, cellSizeM: d.cellSize });
+    const scipy = loadHexAsc(`${V5}scipy/draw-${nn}__median.hex.asc`);
+    const terra = loadHexAsc(`${V5}terra/draw-${nn}__median.hex.asc`);
+    const gridOk = [scipy, terra].every((r) => r.cols === raster.cols && r.rows === raster.rows
+      && r.x0 === raster.originH1 && r.y0 === raster.originH2 && r.s === d.cellSize);
+    const skip = edgeCellsV2(pts, raster.originH1, raster.originH2, d.cellSize, raster.cols, raster.rows);
+    const legs = {
+      scipy: compareV2(raster.z, scipy.g, skip),
+      terra: compareV2(raster.z, terra.g, skip),
+      refs: compareV2(Float64Array.from(scipy.g, (v) => Math.fround(v)), terra.g, skip),
+    };
+    rows.push(legs);
+    for (const [k, t] of Object.entries(legs)) {
+      if (!gridOk || t.maskMismatch > 0 || t.outside > 0 || t.cells < RANGE_MIN_CELLS) {
+        failures.push(`draw ${d.draw} s=${d.cellSize} large=${d.large} ${k}: grid=${gridOk} cells=${t.cells} excluded=${t.excluded} maskMismatch=${t.maskMismatch} outside=${t.outside} maxDiff=${t.maxDiff} maxRaw=${t.maxRaw}`);
+      }
+    }
+  }
+
+  it('every input the references read is bit-identical to the fixture', () => {
+    expect(inputsExact).toBe(true);
+    const sizes = new Float64Array(new Uint8Array(readFileSync(`${RANGE}fixtures/cellsizes.f64`)).buffer);
+    expect([...sizes]).toEqual(RANGE_DRAWS.map((d) => d.cellSize));
+  });
+
+  it('every draw passes against SciPy and terra, and the references agree', () => {
+    for (const k of ['scipy', 'terra', 'refs'] as const) {
+      const t = sum(rows.map((r) => r[k]));
+      console.log(`[dtm-median-v5] ${k}: draws=${rows.length} cells=${t.cells} excluded=${t.excluded} maskMismatch=${t.maskMismatch} outside=${t.outside} maxDiff=${t.maxDiff} maxRaw=${t.maxRaw}`);
+    }
+    expect(failures).toEqual([]);
+  });
+});

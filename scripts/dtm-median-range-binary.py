@@ -16,3 +16,10 @@ for d in range(50):
     back = struct.unpack(f'<{len(vals)}d', blob)
     assert all(struct.pack('<d', a) == struct.pack('<d', b) for a, b in zip(vals, back)), d
     open(f'{F}draw-{d:02d}.f64', 'wb').write(blob)
+
+# The cell sizes are inputs too: cellsizes.f64 holds the 50 sizes from
+# draws.csv as little-endian float64, in draw order, checked the same way.
+sizes = [float(r.split(',')[1]) for r in open(F + 'draws.csv').read().strip().split('\n')[1:]]
+blob = struct.pack(f'<{len(sizes)}d', *sizes)
+assert list(struct.unpack(f'<{len(sizes)}d', blob)) == sizes
+open(F + 'cellsizes.f64', 'wb').write(blob)

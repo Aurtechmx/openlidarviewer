@@ -118,3 +118,44 @@ js3 <- c("{",
   '  "commandLine": "Rscript --vanilla scripts/dtm-median-reference-terra.R",',
   '  "outputs": [', paste(rows3, collapse = ",\n"), "  ]", "}")
 writeLines(js3, paste0(ro, "reference-run-range.json"))
+
+# Protocol v5 (validation/protocols/dtm-median-gridding-v5.md): the v4 draws,
+# read exactly from range/fixtures/draw-NN.f64, every output value written as a
+# hex float. Writes range-v5/terra/draw-NN__median.hex.asc and
+# range-v5/terra/reference-run.json.
+r5 <- "validation/cross-implementation/dtm-median/range-v5/terra/"
+dir.create(r5, showWarnings = FALSE, recursive = TRUE)
+rows5 <- character(0)
+# Cell sizes read exactly from binary; read.csv does not round every decimal correctly.
+sizes5 <- readBin(paste0(rf, "cellsizes.f64"), "double", n = nrow(draws), size = 8, endian = "little")
+stopifnot(length(sizes5) == nrow(draws), all(abs(sizes5 - draws$cellSize) <= 4 * .Machine$double.eps * sizes5))
+for (k in seq_len(nrow(draws))) {
+  d <- draws$draw[k]
+  fx <- sprintf("%sdraw-%02d.f64", rf, d)
+  vals <- readBin(fx, "double", n = file.size(fx) / 8, size = 8, endian = "little")
+  stopifnot(length(vals) == 3 * draws$points[k])
+  a <- data.frame(x = vals[c(TRUE, FALSE, FALSE)], y = vals[c(FALSE, TRUE, FALSE)], z = vals[c(FALSE, FALSE, TRUE)])
+  s <- sizes5[k]
+  ox <- min(a$x); oy <- min(a$y)
+  nc <- floor((max(a$x) - ox) / s) + 1
+  nr <- floor((max(a$y) - oy) / s) + 1
+  tpl <- rast(ext(ox, ox + nc * s, oy, oy + nr * s), ncols = nc, nrows = nr, crs = "local")
+  r <- rasterize(vect(a, geom = c("x", "y"), crs = "local"), tpl, field = "z", fun = median)
+  m <- as.matrix(r, wide = TRUE)
+  path <- sprintf("%sdraw-%02d__median.hex.asc", r5, d)
+  con <- file(path, "w")
+  writeLines(c(sprintf("ncols %d", nc), sprintf("nrows %d", nr), sprintf("xllcorner %a", ox),
+               sprintf("yllcorner %a", oy), sprintf("cellsize %a", s), "NODATA_value -9999"), con)
+  for (i in 1:nr) writeLines(paste(ifelse(is.na(m[i, ]), "-9999", sprintf("%a", m[i, ])), collapse = " "), con)
+  close(con)
+  h <- system2("shasum", c("-a", "256", path), stdout = TRUE)
+  rows5 <- c(rows5, sprintf('    {"draw": %d, "path": "%s", "sha256": "%s"}', d, path, sub(" .*", "", h)))
+}
+writeLines(c("{",
+  '  "tool": "terra::rasterize",', '  "fun": "median",',
+  '  "protocol": "validation/protocols/dtm-median-gridding-v5.md",',
+  sprintf('  "R": "%s",', paste(R.version$major, R.version$minor, sep = ".")),
+  sprintf('  "terra": "%s",', as.character(packageVersion("terra"))),
+  sprintf('  "platform": "%s",', R.version$platform),
+  '  "commandLine": "Rscript --vanilla scripts/dtm-median-reference-terra.R",',
+  '  "outputs": [', paste(rows5, collapse = ",\n"), "  ]", "}"), paste0(r5, "reference-run.json"))
