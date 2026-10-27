@@ -23,6 +23,7 @@ import {
   type ChangeDetectionOptions,
 } from './changeDetection';
 import { changeVolumeUncertainty } from './changeUncertainty';
+import { formatVolumeNumber } from '../../render/measure/types';
 import {
   describeLevelOfDetection,
   fixedLevelOfDetection,
@@ -525,12 +526,12 @@ export function summarizeChange(comparison: EpochComparison, ctx: ChangeSummaryC
     );
   } else {
     lines.push(
-      `Net volume change (raw, all comparable cells, no LoD threshold): ${s.rawNetVolumeM3.toFixed(1)} m³.`,
+      `Net volume change (raw, all comparable cells, no LoD threshold): ${formatVolumeNumber(s.rawNetVolumeM3)} m³.`,
     );
     lines.push(
       `Detectable gross change (above the ${comparison.levelOfDetectionM} m level of detection): ` +
-        `gain ${s.detectableGainVolumeM3.toFixed(1)} m³, loss ${s.detectableLossVolumeM3.toFixed(1)} m³, ` +
-        `thresholded net ${s.detectableNetVolumeM3.toFixed(1)} m³ — thresholding the net biases it ` +
+        `gain ${formatVolumeNumber(s.detectableGainVolumeM3)} m³, loss ${formatVolumeNumber(s.detectableLossVolumeM3)} m³, ` +
+        `thresholded net ${formatVolumeNumber(s.detectableNetVolumeM3)} m³ — thresholding the net biases it ` +
         `(uncorrelated sub-LoD error should cancel, not zero out asymmetrically), so the raw net above ` +
         `is the reported net figure.${incompleteTag}`,
     );
@@ -567,8 +568,8 @@ export function summarizeChange(comparison: EpochComparison, ctx: ChangeSummaryC
       } else {
         lines.push(
           u.detectable
-            ? `Independent-cell model uncertainty: ±${u.sigmaM3.toFixed(1)} m³ (1σ, ${(u.relativeError * 100).toFixed(0)}% relative). Net volume exceeds the selected 1.96σ threshold under the independent-cell uncertainty model.`
-            : `Independent-cell model uncertainty: ±${u.sigmaM3.toFixed(1)} m³ (1σ) — net volume is below the selected 1.96σ threshold, not distinguishable from noise.`,
+            ? `Independent-cell model uncertainty: ±${formatVolumeNumber(u.sigmaM3)} m³ (1σ, ${(u.relativeError * 100).toFixed(0)}% relative). Net volume exceeds the selected 1.96σ threshold under the independent-cell uncertainty model.`
+            : `Independent-cell model uncertainty: ±${formatVolumeNumber(u.sigmaM3)} m³ (1σ) — net volume is below the selected 1.96σ threshold, not distinguishable from noise.`,
         );
       }
       if (!(ctx.registrationSigmaM && ctx.registrationSigmaM > 0)) {
