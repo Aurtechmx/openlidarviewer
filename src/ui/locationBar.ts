@@ -33,6 +33,7 @@ import { workspaceModeLabel, type WorkspaceMode } from './workspace/DesktopWorks
 import type { WorkspacePage, WorkspaceRouter } from '../app/workspace/workspaceRouter';
 import {
   backTarget,
+  pageShowsBack,
   locationCrumbs,
   CRUMB_SEPARATOR,
   WORKSPACES,
@@ -154,7 +155,7 @@ export function createLocationBar(d: LocationBarDeps): LocationBar {
   const HEADER_ROUTE_BACK = 'olv-has-header-back';
   /** The same, for the phone sheet's location line. */
   const SHEET_ROUTE_BACK = 'olv-has-sheet-back';
-  /** Root class while an Analyse page's own Back is the one Back on a desktop. */
+  /** Root class while a page's own Back is the one Back on a desktop. */
   const PAGE_ROUTE_BACK = 'olv-has-page-back';
   /** Root class while the phone sheet's location line closes an open workspace. */
   const SHEET_CLOSE = 'olv-has-sheet-close';
@@ -243,14 +244,13 @@ export function createLocationBar(d: LocationBarDeps): LocationBar {
     paint(phone, crumbs, route, ws, scan && mobile);
     // One Back per page in each layout (wayfinding.css). A header Back to the
     // parent names the place the rail's task Back does, so one of the two is
-    // hidden: on an Analyse page the page's own controls stay (its Back, and a
-    // workspace's own Close) and the header's goes while the rail is open; on
-    // every other page the header's stays. On the phone the sheet's location
+    // hidden: on a desktop the page's own controls stay (its Back, and a
+    // workspace's own Close) and the header's goes while the rail is open. On the phone the sheet's location
     // line carries the Back, or a workspace's Close, and the page's own copy
     // of it is hidden the same way.
     const back = scan ? backTarget(route, registry, ws) : null;
     const routeBack = back?.kind === 'route';
-    const pageBack = !!back && !mobile && route.mode === 'analyse';
+    const pageBack = pageShowsBack(back, mobile);
     doc.documentElement?.classList?.toggle(HEADER_ROUTE_BACK, routeBack && !mobile && !pageBack);
     doc.documentElement?.classList?.toggle(PAGE_ROUTE_BACK, pageBack);
     doc.documentElement?.classList?.toggle(SHEET_ROUTE_BACK, routeBack && mobile);

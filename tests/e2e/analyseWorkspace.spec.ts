@@ -66,13 +66,13 @@ test.describe('Analyse home and pages', () => {
     // Make contours lands in Contour Studio on the Contours page.
     await terrain.locator('.olv-at-link', { hasText: 'Make contours' }).click();
     await expect(title(page)).toHaveText('Contours');
-    await expect(back(page)).toHaveText('← Terrain');
+    await expect(back(page)).toHaveText('← Back to Terrain');
     await expect(page.locator('.olv-analyse-contour-deliverable')).not.toHaveClass(/olv-hidden/, { timeout: 20_000 });
     await expect(page.locator('.olv-cs-export-btn', { hasText: /^GeoJSON$/ })).toBeVisible();
 
     await clickTaskBack(page, 'analyse');
     await expect(title(page)).toHaveText('Terrain');
-    await expect(back(page)).toHaveText('← Analyse');
+    await expect(back(page)).toHaveText('← Back to Analyse');
     await clickTaskBack(page, 'analyse');
     await expect(page.locator(`${ANALYSE} .olv-analyse-home`)).toBeVisible();
     await expect(page.locator(`${ANALYSE} .olv-ws-task`)).toBeHidden();

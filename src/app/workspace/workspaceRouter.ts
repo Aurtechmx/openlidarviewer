@@ -107,7 +107,7 @@ export function createWorkspaceRouter(
   function header(m: WorkspaceMode): Header {
     let h = headers.get(m);
     if (!h) {
-      const backBtn = el('button', { className: 'olv-ws-back', type: 'button' });
+      const backBtn = el('button', { className: 'olv-ws-back', type: 'button', tip: 'Go back one level. Escape does the same.' });
       backBtn.addEventListener('click', () => api.back(true));
       const title = el('h2', { className: 'olv-ws-task-title' });
       title.tabIndex = -1;
@@ -206,7 +206,7 @@ export function createWorkspaceRouter(
           h.title.textContent = id ? pages[m]?.[id]?.title ?? '' : '';
           const parent = id ? pages[m]?.[id]?.parent : undefined;
           const to = parent ? pages[m]?.[parent]?.title ?? '' : workspaceModeLabel(m);
-          h.back.textContent = `← ${to}`;
+          h.back.textContent = `← Back to ${to}`;
           h.back.setAttribute('aria-label', `Back to ${to}`);
         }
         host.classList.toggle('has-page', !!id);

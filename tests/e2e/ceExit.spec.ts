@@ -129,7 +129,7 @@ async function sweep(page: Page, size: { width: number; height: number }): Promi
   // One Back on screen, named for Terrain: the page's own on a desktop, the sheet's on a phone.
   const labBack = page.locator('.olv-loc:not([hidden]) .olv-loc-back:visible, #olv-ws-mode-analyse > .olv-ws-task > .olv-ws-back:visible');
   await expect(labBack).toHaveCount(1);
-  await expect(labBack).toHaveText('← Terrain');
+  await expect(labBack).toHaveText(/^← (Back to )?Terrain$/);
   await expect(bar(page).locator('.olv-loc-back')).toHaveAttribute('aria-label', 'Back to Terrain');
   await check('Flow Pulse');
   await labBack.click();
@@ -228,6 +228,22 @@ test.describe('one exit convention', () => {
     await expect(page.locator('.olv-palette')).toBeHidden();
     await page.waitForTimeout(250);
     await expect(bar(page)).toHaveAttribute('data-path', 'Tools › Clip box');
+  });
+
+  test('every Tools page leads with a visible Back to Tools in the rail', async ({ page }) => {
+    await openScan(page, DESKTOP);
+    for (const title of ['Measure', 'Annotate', 'Clip box'] as const) {
+      await openToolPage(page, title);
+      await expect(bar(page)).toHaveAttribute('data-path', `Tools › ${title}`);
+      const back = page.locator('#olv-ws-mode-work > .olv-ws-task > .olv-ws-back');
+      await expect(back).toBeVisible();
+      await expect(back).toHaveText('← Back to Tools');
+      await expect(back).toHaveAttribute('aria-label', 'Back to Tools');
+      await back.focus();
+      await page.keyboard.press('Enter');
+      await expect(bar(page)).toHaveAttribute('data-path', 'Tools');
+      await expect(page.locator('#olv-ws-mode-work > .olv-ws-task')).toBeHidden();
+    }
   });
 
   test('a lab page goes back on Escape, and focus returns to its row', async ({ page }) => {

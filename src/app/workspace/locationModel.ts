@@ -104,3 +104,13 @@ export function backTarget(route: LocationRoute, reg: LocationRegistry, workspac
   const prev = crumbs[crumbs.length - 2];
   return { kind: 'route', to: prev.to as LocationRoute, label: `← ${prev.label}`, name: `Back to ${prev.label}` };
 }
+
+/**
+ * Whether a page's own Back (the button under its title in the rail) is the
+ * one Back on screen. On a desktop it is, for every mode, so the way back sits
+ * where the page is; the header's copy shows only while the rail is collapsed.
+ * On the phone the sheet's location line carries it.
+ */
+export function pageShowsBack(back: BackTarget | null, mobile: boolean): boolean {
+  return !!back && !mobile;
+}

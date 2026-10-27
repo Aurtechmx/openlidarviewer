@@ -161,7 +161,7 @@ describe('Analyse home', () => {
     expect(shell.find((e) => e === body)).toBe(body);
     expect(shell.hasClass('olv-hidden')).toBe(false);
     const back = t.host.find((e) => e.hasClass('olv-ws-back'))!;
-    expect(back.ownText).toBe('← Terrain');
+    expect(back.ownText).toBe('← Back to Terrain');
     back.fire('click');
     expect(t.router.route().page).toBe('terrain');
     // Leaving the page keeps the lab: the palette's Go to shows it as it was.
@@ -231,10 +231,10 @@ describe('Analyse home', () => {
     await t.aw.open('contours');
     expect(t.router.route().page).toBe('contours');
     const back = t.host.find((e) => e.hasClass('olv-ws-back'))!;
-    expect(back.ownText).toBe('← Terrain');
+    expect(back.ownText).toBe('← Back to Terrain');
     back.fire('click');
     expect(t.router.route().page).toBe('terrain');
-    expect(back.ownText).toBe('← Analyse');
+    expect(back.ownText).toBe('← Back to Analyse');
     back.fire('click');
     expect(t.router.route().page).toBeNull();
   });
