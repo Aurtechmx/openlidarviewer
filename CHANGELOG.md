@@ -84,6 +84,7 @@ has not been done. v0.7.0 is the current published release.
 - A remote COPC read cancelled while its data is arriving, or cut off when the connection drops, now fails with a clear cancelled or connection-closed reason instead of a raw browser error.
 - On a streamed scan, the clip box, Fit to scan, the clip's height and the reference plane follow the scan's data extent. They used to follow the octree's root cube, so the box was roughly as tall as it was wide.
 - The lasso volume tool draws again on the built app. Its overlay set its size through a script-written `style` attribute, which the page's Content-Security-Policy blocks, so a drag drew nothing. The overlay now takes its layout from the stylesheet, and `npm run lint:no-inline-style-attr` fails on script-written style attributes in `src/`.
+- Displayed volumes show 5 significant figures, the rule lengths and areas already follow, instead of two fixed decimals. This applies to the lasso result, the measurement panels and the PDF report: 499,909.60 m³ now reads 499,910 m³. CSV and GeoJSON exports keep the full values. A display-sample preview also says that its figure can change between runs.
 
 ### Validation
 

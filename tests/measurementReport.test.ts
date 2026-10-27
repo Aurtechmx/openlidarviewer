@@ -203,7 +203,7 @@ describe('a grid-canonical volume finding', () => {
 
   test('names the cut-fill cross-check as a labelled figure, not the headline', () => {
     const f = measurementsToFindings([gridVolume('v1')], up, 1);
-    expect(f[0].caveats!.join(' ')).toMatch(/Cut-fill cross-check.*cut 30\.00 m³ \/ fill 120\.00 m³/);
+    expect(f[0].caveats!.join(' ')).toMatch(/Cut-fill cross-check.*cut 30\.000 m³ \/ fill 120\.00 m³/);
   });
 
   test('states the grid\'s known limitations (the step, clustered-sparse, and the real-data disagreement)', () => {

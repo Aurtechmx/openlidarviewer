@@ -14,6 +14,7 @@
  * metres / m² / m³.
  */
 
+import { formatVolumeNumber } from './format';
 import { stockpileVolume, type StockpileVolumeResult, type StockpileConfidence } from './stockpileVolume';
 import { stockpileAreaGrid, type StockpileAreaGridResult } from './stockpileAreaGrid';
 import { INTERPOLATED_WITHHOLD, horizontalBasis, interpolationVerdict } from './volume';
@@ -84,6 +85,11 @@ const CONFIDENCE_LABEL: Record<StockpileConfidence, string> = {
   low: 'Sparse or gappy sampling',
 };
 
+/** A stockpile volume: whole cubic metres, capped at 5 significant figures. */
+function vol0(n: number): string {
+  return formatVolumeNumber(n, Math.abs(n) < 1 ? undefined : 0);
+}
+
 function int(n: number): string {
   return Math.round(n).toLocaleString('en-US');
 }
@@ -105,7 +111,7 @@ export function presentStockpile(
   // not a measured coverage interval on the volume.
   const headline = r.withheldReason
     ? `Volume withheld (${r.withheldReason})`
-    : `${int(r.volume * vol)} m³ ± ${int(r.sigma * vol)} m³ (model band)`;
+    : `${vol0(r.volume * vol)} m³ ± ${int(r.sigma * vol)} m³ (model band)`;
   const relative = `±${(r.relativeError * 100).toFixed(1)}%`;
 
   const baseLabel =
@@ -346,9 +352,10 @@ export function stockpileAreaGridToastLine(v: StockpileAreaGridView): string {
   } else {
     // The top tier is still an exploratory preview (VOL-STOCKPILE's approved
     // wording); full coverage only means no PREVIEW reason applies.
-    const state = v.authority === 'measured' ? 'exploratory volume preview' : `PREVIEW (${v.reason})`;
+    const state = v.authority === 'measured' ? 'exploratory volume preview'
+      : `PREVIEW (${v.reason})${v.reason === 'display sample' ? ' · can change between runs' : ''}`;
     line =
-      `Stockpile: ${int(v.volumeM3)} m³ · ${state} · ${support} · area-weighted grid` +
+      `Stockpile: ${vol0(v.volumeM3)} m³ · ${state} · ${support} · area-weighted grid` +
       ` · surface term ± ${int(v.surfaceTermM3)} m³ (incomplete model)` +
       ` · base ${v.baseZM.toFixed(2)} m${v.baseIsElevation ? '' : ' local height'}` +
       ` (lowest ground, ±${v.baseUncertaintyM.toFixed(2)} m, not in the term)`;

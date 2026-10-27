@@ -12,7 +12,7 @@
  * surfaces. The imperial branch and the angle / grade formatters live here too.
  */
 
-import { reducedSampleClause, type UnitSystem, type VolumeRecord } from './types';
+import { DISPLAY_SIG_FIGS, formatVolumeNumber, reducedSampleClause, type UnitSystem, type VolumeRecord } from './types';
 import { noiseExcludedClause } from '../../terrain/ground/classificationFilter';
 // Metres → feet, single-sourced: this module used to keep its own copy.
 import { FT_PER_M as FEET_PER_METRE } from '../../units/units';
@@ -82,7 +82,8 @@ function grouped(value: number, decimals: number): string {
  * figures instead makes the decimal count follow the magnitude: small values
  * gain decimals, large values shed them, so both ends read honestly.
  */
-const DISPLAY_SIG_FIGS = 5;
+// Defined in ./types beside the volume figure formatter, which needs it too.
+export { DISPLAY_SIG_FIGS, formatVolumeNumber };
 
 /**
  * Decimal count for a display-unit value under the {@link DISPLAY_SIG_FIGS}
@@ -342,14 +343,14 @@ export function formatVolume(cubicMetres: number, system: UnitSystem): string {
       const dm3 = cubicMetres * 1000;
       return `${grouped(dm3, displayDecimals(dm3, 0, 4))} dm³`;
     }
-    if (cubicMetres < 1e9) return `${grouped(cubicMetres, 2)} m³`;
+    if (cubicMetres < 1e9) return `${formatVolumeNumber(cubicMetres)} m³`;
     const km3 = cubicMetres / 1e9;
     return `${grouped(km3, displayDecimals(km3, 3, 6))} km³`;
   }
   // Imperial: cubic feet, switching to cubic yards above a yard.
   const cubicFeet = cubicMetres * FEET_PER_METRE * FEET_PER_METRE * FEET_PER_METRE;
   if (cubicFeet < 27) return `${grouped(cubicFeet, displayDecimals(cubicFeet, 1, 4))} ft³`;
-  return `${grouped(cubicFeet / 27, 2)} yd³`;
+  return `${formatVolumeNumber(cubicFeet / 27)} yd³`;
 }
 
 /**

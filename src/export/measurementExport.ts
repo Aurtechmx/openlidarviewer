@@ -30,7 +30,7 @@ import {
 
 /** The refusal rule and wording, for the report and KML serializers. */
 export { GEOGRAPHIC_NOT_AVAILABLE, VERTICAL_NOT_AVAILABLE, VERTICAL_SCALE_NOT_AVAILABLE, geographicRefusesKind };
-export { reducedSampleCaveat } from '../render/measure/types';
+export { formatVolumeNumber, reducedSampleCaveat } from '../render/measure/types';
 /** The position-step rule, for the report serializers. */
 export { HEADLINE_METRIC_KEY, unresolvedMetricKeys, unresolvedReason, type AxisSteps };
 import { lightProvenance, type LightProvenanceInput } from './lightProvenance';
