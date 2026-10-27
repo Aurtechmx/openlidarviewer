@@ -261,7 +261,7 @@
       "description": "Who ran the instrument. One operator is a measurement; independent operators are what turns operator technique from an unmeasured confound into an observed one.",
       "type": "object",
       "additionalProperties": false,
-      "required": ["count", "independent", "independenceNote", "affiliations"],
+      "required": ["count", "independent", "independenceNote", "affiliations", "members"],
       "properties": {
         "count": { "type": "integer", "minimum": 1 },
         "independent": {
@@ -273,6 +273,20 @@
           "type": "array",
           "minItems": 1,
           "items": { "type": "string", "minLength": 1 }
+        },
+        "members": {
+          "description": "One entry per operator; the length must equal count. independent is that operator's own independence from the others and from this project. The group may be called independent only when every member is.",
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["affiliation", "independent"],
+            "properties": {
+              "affiliation": { "type": "string", "minLength": 1 },
+              "independent": { "type": "boolean" }
+            }
+          }
         }
       }
     },

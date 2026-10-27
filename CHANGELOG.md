@@ -45,6 +45,9 @@ The format is based on Keep a Changelog and the project follows Semantic Version
 
 ### Validation
 
+- Field-study records list each operator in `operators.members` with an affiliation and an independence flag; the verifier fails a record whose member count differs from `operators.count`, whose members include one who is not independent, or whose group flag contradicts its members.
+- The field-study verifier rejects a result whose |bias| exceeds its RMSE, whose RMSE exceeds its largest residual, or whose NMAD exceeds 1.4826 times its largest residual, allowing for the precision the figures were reported with.
+- An RMSE below the reference instrument's stated accuracy is now a warning. The verifier fails it only when n·RMSE²/σ² is below the lower 1% quantile of χ² with n degrees of freedom.
 - The live DTM's median gridding on measured cells agreed with R terra and SciPy on eight seeded point clouds (18498 and 18655 cells, within the 1e-6 m tolerance registered before the references were generated; occupancy masks match). The DTM claim now names this scope. Interpolated (filled) cells are not covered. The evidence resolver maps the live DTM's measured cells to that parameter set (E4) and leaves filled cells not covered, and the terrain report, the DEM package evidence contract and the export provenance name measured cells.
 
 ## [0.7.1-alpha.1] - 2026-10-25
