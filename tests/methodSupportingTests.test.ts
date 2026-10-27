@@ -83,6 +83,7 @@ const SUPPORTING_TESTS: Readonly<Record<string, readonly string[]>> = {
     'tests/terrainAccessMethodVersions.test.ts',
   ],
   'olv.density.scan-report': ['tests/scanReportWithheld.test.ts', 'tests/scanReportUnits.test.ts'],
+  'olv.storage.grid-history': ['tests/latticeForensics.test.ts', 'tests/storageHistory.test.ts'],
   'olv.profile.corridor-percentile': [
     'tests/profileWithheld.test.ts',
     'tests/profileSectionSeam.test.ts',

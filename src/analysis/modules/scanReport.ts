@@ -12,6 +12,7 @@ import { inMemoryPrecisionRows } from '../inMemoryPrecisionRows';
 import { drawPrecisionRows } from '../drawPrecisionRows';
 import { drawPrecisionUnitOf, evaluateDrawPrecision, tileFromLocalFloat32 } from '../../science/drawPrecision';
 import { BOUNDING_BOX_ESTIMATE, SCAN_DENSITY_METHOD_TAG } from '../streamingExtentRows';
+import { storageHistoryRow } from '../storageHistoryRow';
 
 /** ", N flagged invalid and masked" when the file flags points whose `bit` attribute is not a measurement. */
 function maskedNote(cloud: PointCloud, bit: number): string {
@@ -385,9 +386,15 @@ export const scanReport: AnalysisModule = {
       ? drawPrecisionRows(evaluateDrawPrecision(tileFromLocalFloat32(sourcePositions(cloud)), options.drawPrecision,
         drawPrecisionUnitOf(ctx, { horizontalKnown: basis.unitKnown, zUp })))
       : [];
+    // Storage history: whether the stored LAS integers are compatible with an
+    // earlier grid (another step, unit or frame). The shell runs the test off
+    // the main thread and threads the outcome in; a caller without it gets no
+    // row, so the pure-module output is unchanged.
+    const storage = options?.storageHistory ? [storageHistoryRow(options.storageHistory)] : [];
     rows.push(
       ...inMemoryPrecisionRows(precision),
       ...draw,
+      ...storage,
       // Attribute coverage.
       rowInfo('RGB', cloud.colors !== undefined ? 'Yes' + maskedNote(cloud, ATTR_COLOUR_INVALID) : 'No'),
       rowInfo(

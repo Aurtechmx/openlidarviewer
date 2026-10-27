@@ -11,6 +11,7 @@ import { describe, expect, test } from 'vitest';
 import { healthCheck } from '../src/analysis/modules/healthCheck';
 import { scanReport } from '../src/analysis/modules/scanReport';
 import { runAnalysisModules } from '../src/app/analysisModuleRegistry';
+import { storageHistoryFor } from '../src/app/storageHistoryReport';
 import { PointCloud } from '../src/model/PointCloud';
 
 function cloud(seed: number): PointCloud {
@@ -43,7 +44,8 @@ describe('scan report run in steps', () => {
   test('the report rows equal the single-task rows, and the run yields between modules', async () => {
     const a = cloud(7);
     const b = cloud(7);
-    const want = [...healthCheck.run(a).rows, ...scanReport.run(a, undefined, {}).rows];
+    // The run adds the storage-grid outcome to the scan report's options, as the shell's report does.
+    const want = [...healthCheck.run(a).rows, ...scanReport.run(a, undefined, { storageHistory: storageHistoryFor(a, undefined) }).rows];
     let yields = 0;
     const got = await runAnalysisModules(b, {}, () => true, async () => { yields++; });
     expect(got).toEqual(want);

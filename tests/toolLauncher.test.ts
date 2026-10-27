@@ -186,6 +186,29 @@ describe('tool launcher', () => {
     expect(titles).toEqual(['Newest']);
   });
 
+  it('a registry read that fails leaves no unhandled rejection, and the next refresh fills the rows', async () => {
+    const { createToolLauncher } = await import('../src/ui/toolLauncher');
+    const unhandled: unknown[] = [];
+    const onUnhandled = (reason: unknown): void => { unhandled.push(reason); };
+    process.on('unhandledRejection', onUnhandled);
+    let fail = true;
+    const l = createToolLauncher({
+      getActions: () => (fail
+        ? Promise.reject(new Error('error loading dynamically imported module'))
+        : Promise.resolve([{ id: 'tool.measure', title: 'Measure', section: 'Tools', run: () => {} }] as Action[])),
+      counts: () => ({ measurements: 0, annotations: 0 }),
+    });
+    await flush();
+    await new Promise((r) => setTimeout(r, 0));
+    process.off('unhandledRejection', onUnhandled);
+    expect(unhandled).toEqual([]);
+    fail = false;
+    l.refresh();
+    await flush();
+    const titles = (l.element as unknown as FakeEl).findAll((e) => e.hasClass('olv-tl-title')).map((t) => t.ownText);
+    expect(titles).toEqual(['Measure']);
+  });
+
   it('reopening a tool that is on resumes its page instead of toggling it off', async () => {
     const run = vi.fn();
     const resume = vi.fn(() => true);

@@ -58,7 +58,7 @@ been exercised over, it can move a claim to E4 against an independent
 implementation, and it is how a weakness gets found. It sits at E4, and a
 register entry should say so.
 
-Of the 40 registered claims, 20 currently sit below their required level. Nineteen
+Of the 41 registered claims, 20 currently sit below their required level. Nineteen
 of those require E5. One requires only E4: CONTOURS-CARTOGRAPHIC, where a
 generalized contour needs the same independent check the analytical line
 already has and does not have it. None of them is waiting on a download.

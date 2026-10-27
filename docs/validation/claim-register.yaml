@@ -1462,3 +1462,32 @@ claims:
         - "Full swept-body vehicle collision. Width is enforced as isotropic dilation of hard-blocked cells; a declared vehicle length is recorded in the run record and diagnostics but not enforced as orientation-dependent collision."
         - "Above-ground obstruction where no DSM/nDSM was supplied — the constraint is inactive, not assumed clear, and the run record states this."
         - "Terrain built from a resident-only or sampled source, where the claim describes only the part of the source that was walked; the run's own limitations state which applied."
+  - claimId: STORAGE-HISTORY
+    product: Scan report "Storage history" row (storage-grid test over LAS and LAZ integers)
+    algorithm: Lattice visibility |sinc(k1) sinc(k2)| of a candidate grid in the stored integers, scored as incoherent window power against a local ring background and an empirical null of 300 random wavevectors; per-peak empirical p-values Fisher-combined, Bonferroni-corrected over the tested candidates, held below 0.01 with the median measured-to-predicted amplitude in [0.5, 2]; coarsest supported step per system reported
+    methodId: olv.storage.grid-history
+    algorithmVersion: v0.7.1
+    claim: "States whether the stored integer X and Y of a resident LAS or LAZ file are compatible with one of a fixed set of candidate earlier storage grids (same-frame refinements of the storage step; 0.001, 0.01 and 0.1 m grids for a file in another unit; 0.01 and 0.1 ft grids turned 0 and whole degrees to 5 either way for a file in metres), naming the grid, its step, unit and rotation, with the combined p-value and amplitude ratio behind it."
+    currentEvidence: E2_ANALYTICALLY_VERIFIED
+    requiredEvidence: E2_ANALYTICALLY_VERIFIED
+    requiredEvidenceNote: "A test over the file's own integers against closed-form predictions: the evidence it needs is that the visibility law, the peak positions and the decision are exact on synthetic histories with a known truth, which the analytic fixtures supply. No external reference implementation of this test exists to compare against, and the row makes no claim about accuracy, provenance or authorship that field data could test."
+    supportingTests: [tests/latticeForensics.test.ts, tests/storageHistory.test.ts, tests/storageHistoryRow.test.ts, tests/storageHistoryReport.test.ts]
+    supportingDatasets: [synthetic re-rounded coordinate sets with a known earlier grid, built in the tests (tests/latticeForensics.test.ts, tests/storageHistory.test.ts)]
+    units: [storage-step-in-file-units, metres, feet, cycles-per-storage-unit]
+    crsDatum: "Reads the LAS header scale and offset and the resolved linear unit. With no established unit only the unit-free same-frame refinements are tested and the step is shown in source units; a geographic frame is not tested."
+    assumptions: ["the loaded positions reproduce the file's integers exactly (checked: every recovered value within 0.25 of an integer, else not tested)", "the earlier grid, if any, is one of the candidates: a grid at another step, unit or rotation is not searched for", "windows of fixed size with at least 40 points; at most 12 000 points in at least 20 windows enter", "the empirical null of 300 wavevectors bounds one peak's p-value at 1/301; the combined value below that is a model figure, not a calibrated probability", "international and US survey feet are not told apart at the window sizes used"]
+    failureModes: ["a grid turned by an angle outside the whole-degree sweep is not found", "a file whose earlier grid is finer than the storage step beyond the amplitude floor (visibility under 0.01) reads none detected", "a display sample or a strided load tests a subset of the points, which lowers the power but not the meaning", "fewer than 2 000 points, a degenerate footprint or points too sparse for 20 windows read not tested"]
+    exportAllowed: true
+    userLabel: "Storage history (compatibility with a candidate earlier storage grid; preview)"
+    softwareStatus: shipping
+    evidenceLevel: E2_ANALYTICALLY_VERIFIED
+    externalValidationStatus: none
+    approvedClaim: "On synthetic coordinate sets with a known history the visibility law matches its closed form, a 0.0137 m grid turned 0.21 rad and re-rounded at 0.01 m is measured within 5 percent of the predicted amplitude, a single-quantisation control supports no candidate, a 0.01 m refinement of a 0.001 m file is recovered as the most specific grid, and a 0.01 US survey foot grid turned 3 degrees stored at 0.001 m is recovered at its step and rotation; the row states compatibility of the stored integers with a named candidate grid and nothing more."
+    prohibitedClaim: ["the file was produced by a named software, person or organisation", "the file was converted, reprojected, edited or tampered with", "the file's provenance or authorship", "the earlier grid is the only grid the integers are compatible with", "a detection probability or false-alarm rate on real files", "survey accuracy or coordinate accuracy of any kind"]
+    scope:
+      supported: []
+      unsupported:
+        - "Any statement about who or what produced the file, or about editing, conversion or tampering. A supported grid is a grid the stored integers are compatible with; the test does not identify the operation that left it."
+        - "Grids outside the candidate set: another step, another unit, or a rotation that is not a whole degree within 5 of the file axes."
+        - "Calibrated probabilities. The per-peak p-value floor is 1/301 and the Fisher-combined value below it is a model figure; the Bonferroni correction covers the tested candidates only."
+        - "Streamed sources (COPC, EPT, 3D Tiles), voxel-reduced loads and non-LAS formats, where the stored integers are not available; the row says the test did not run."
