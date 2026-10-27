@@ -51,13 +51,13 @@ json.dump({
     'outputs': outputs,
 }, open(OUT + 'reference-run.json', 'w'), indent=2)
 
-# Protocol v2 (validation/protocols/dtm-median-gridding-v2.md): cell sizes
-# 0.25, 0.5, 2 and 5 m, input shifted by (+0.37, +0.61) m, origin at the data
+# Protocols v2 and v3 (validation/protocols/dtm-median-gridding-v2.md, -v3.md): cell sizes
+# 0.25, 0.5, 1 (v3), 2 and 5 m, input shifted by (+0.37, +0.61) m, origin at the data
 # minimum and extent from the rasterizeDtm rule. Writes
 # scipy/cell<s>/<fixture>__median.asc and scipy/reference-run-v2.json.
 import math, os
 outputs2 = []
-for s in [0.25, 0.5, 2, 5]:
+for s in [0.25, 0.5, 1, 2, 5]:
     d = f'{OUT}cell{s:g}/'
     os.makedirs(d, exist_ok=True)
     for name in NAMES:

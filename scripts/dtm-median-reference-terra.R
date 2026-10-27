@@ -38,12 +38,12 @@ js <- c("{",
   '  "outputs": [', paste(rows, collapse = ",\n"), "  ]", "}")
 writeLines(js, paste0(out, "reference-run.json"))
 
-# Protocol v2 (validation/protocols/dtm-median-gridding-v2.md): cell sizes
-# 0.25, 0.5, 2 and 5 m, input shifted by (+0.37, +0.61) m, origin at the data
+# Protocols v2 and v3 (validation/protocols/dtm-median-gridding-v2.md, -v3.md): cell sizes
+# 0.25, 0.5, 1 (v3), 2 and 5 m, input shifted by (+0.37, +0.61) m, origin at the data
 # minimum and extent from the rasterizeDtm rule. Writes
 # terra/cell<s>/<fixture>__median.asc and terra/reference-run-v2.json.
 rows2 <- character(0)
-for (s in c(0.25, 0.5, 2, 5)) {
+for (s in c(0.25, 0.5, 1, 2, 5)) {
   dir <- paste0(out, "cell", s, "/")
   dir.create(dir, showWarnings = FALSE)
   for (nm in names) {

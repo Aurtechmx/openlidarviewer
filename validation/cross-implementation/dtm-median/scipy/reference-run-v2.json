@@ -122,6 +122,62 @@
     },
     {
       "fixture": "pc-01-plane-buildings",
+      "cellSize": 1,
+      "returns": 9196,
+      "path": "validation/cross-implementation/dtm-median/scipy/cell1/pc-01-plane-buildings__median.asc",
+      "sha256": "11459062bfa82b58f5196fa094a3f5d3ee5f49d5954639895da57182332b687e"
+    },
+    {
+      "fixture": "pc-02-rolling-buildings",
+      "cellSize": 1,
+      "returns": 9228,
+      "path": "validation/cross-implementation/dtm-median/scipy/cell1/pc-02-rolling-buildings__median.asc",
+      "sha256": "04b75ccd8b87fd4df63cc63816b84bc113dd247c40b1cc7bee5319e1c1a124bb"
+    },
+    {
+      "fixture": "pc-03-ridge-buildings",
+      "cellSize": 1,
+      "returns": 9234,
+      "path": "validation/cross-implementation/dtm-median/scipy/cell1/pc-03-ridge-buildings__median.asc",
+      "sha256": "ef69d749739ab608ec33152286c48ca829c5a037a0420ef1f79fc09516795797"
+    },
+    {
+      "fixture": "pc-04-plane-lowblunders",
+      "cellSize": 1,
+      "returns": 9193,
+      "path": "validation/cross-implementation/dtm-median/scipy/cell1/pc-04-plane-lowblunders__median.asc",
+      "sha256": "d4d5d7c7bde3acd56e9d1bfa56bc7daccd132510573b6e3bcb3443a2f2197f91"
+    },
+    {
+      "fixture": "pc-05-plane-gap",
+      "cellSize": 1,
+      "returns": 8658,
+      "path": "validation/cross-implementation/dtm-median/scipy/cell1/pc-05-plane-gap__median.asc",
+      "sha256": "83aacd9204b28df2a37063154208d9cb73b409b466308abefe7215a555b18285"
+    },
+    {
+      "fixture": "pc-06-bare-plane",
+      "cellSize": 1,
+      "returns": 2500,
+      "path": "validation/cross-implementation/dtm-median/scipy/cell1/pc-06-bare-plane__median.asc",
+      "sha256": "36d1dc657db24fd8c78846c7b740c01517be731c00380fab96cefa1441d7fa2e"
+    },
+    {
+      "fixture": "pc-07-bare-rolling",
+      "cellSize": 1,
+      "returns": 2500,
+      "path": "validation/cross-implementation/dtm-median/scipy/cell1/pc-07-bare-rolling__median.asc",
+      "sha256": "39f45fded485ad09c328085e66e5eba706ccefe08c3e05d925972bb9c232a1f3"
+    },
+    {
+      "fixture": "pc-08-bare-ridge",
+      "cellSize": 1,
+      "returns": 2500,
+      "path": "validation/cross-implementation/dtm-median/scipy/cell1/pc-08-bare-ridge__median.asc",
+      "sha256": "40e242ee0db8c362a11bd4580523c0de85f6ac644600cbcba386ef45800de568"
+    },
+    {
+      "fixture": "pc-01-plane-buildings",
       "cellSize": 2,
       "returns": 9196,
       "path": "validation/cross-implementation/dtm-median/scipy/cell2/pc-01-plane-buildings__median.asc",
