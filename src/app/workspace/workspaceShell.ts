@@ -39,6 +39,8 @@ import { mountResultsShelf, type ResultsShelfSources, type ShelfExportPanel, typ
 import { bindFullFile } from '../fullFileActions';
 import { mountLocationBar } from '../../ui/locationBar';
 import { decorateViewRail } from './viewRail';
+import { createOverlaySwitches } from '../../ui/OverlaySwitches';
+import { overlayRegistry } from '../overlayRegistry';
 import { createModeHome, type ModeHome } from './modeHome';
 import { sessionLog, SESSION_LOG_OPEN_EVENT } from '../sessionLog/sessionLog';
 import { installSessionLogRecorder } from '../sessionLog/sessionLogRecorder';
@@ -283,6 +285,12 @@ export function mountWorkspaceShell(d: WorkspaceShellDeps): WorkspaceShell {
   refreshDataHome = dataHome.refresh;
   d.addTeardown(d.inspector.onSourceChange(dataHome.refresh));
   decorateViewRail(d.inspector.element, () => router?.navigate({ mode: 'analyse', page: null }, true));
+  // Created layers: the generated overlays' checkboxes, directly under the class rows.
+  const createdLayers = createOverlaySwitches(overlayRegistry);
+  const classFooter = d.classLegend.element.querySelector?.('.olv-cl-footer');
+  if (classFooter) classFooter.after(createdLayers.element);
+  else d.classLegend.element.append(createdLayers.element);
+  d.addTeardown(createdLayers.dispose);
   // Asking for the View rail ends Focus mode first, so the rail opens from the
   // state the user left, not from Focus mode's transient collapse.
   const expandRightRail = (): void => { focus?.exit(); d.overlay.querySelector<HTMLButtonElement>('.olv-right-rail-tab')?.click(); };
