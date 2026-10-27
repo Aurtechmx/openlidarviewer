@@ -34,8 +34,12 @@ describe('computeTerrainReadiness', () => {
     expect(r.dtmQuality.value).toMatch(/measured/);
     expect(r.dtmQuality.rating).not.toBe('weak');
     // Measured and interpolated cells are reported apart, never pooled.
-    expect(r.groundConfidence.value).toMatch(/% measured/);
-    expect(r.groundConfidence.value).toMatch(/interpolated/);
+    // The figures are mean scores, not shares: no percent sign, so they
+    // cannot be read against the Measured coverage card's share.
+    expect(r.groundConfidence.value).toMatch(/^\d+\/100$/);
+    expect(r.groundConfidence.value).not.toMatch(/%/);
+    expect(r.groundConfidence.detail).toMatch(/mean score: measured cells \d+\/100 · interpolated cells (\d+\/100|none)/);
+    expect(r.groundConfidence.detail).not.toMatch(/%/);
   });
 
   it('reports unavailable contour readiness when no points are given', () => {

@@ -254,6 +254,17 @@ describe('confidenceBand', () => {
 
 // ── Empty state — summariser returns null when nothing's known ───
 
+describe('summariseDataset — metric stability label', () => {
+  it('writes the measured-cell mean score as x/100, not as a share of cells', () => {
+    const out = summariseDataset({
+      pointCount: 1_000_000,
+      bboxVolume: 100_000,
+      coverageMeta: { coverage: 'full', sourcePointCount: 1, analyzedPointCount: 1, confidence: 78, warnings: [] },
+    });
+    expect(out?.confidence.label).toBe('78/100 on measured cells');
+  });
+});
+
 describe('summariseDataset — empty state', () => {
   it('returns null when no fields at all are supplied', () => {
     expect(summariseDataset({})).toBeNull();
@@ -285,7 +296,7 @@ describe('summariseDataset — empty state', () => {
     if (out) {
       expect(out.coverage.label).toBe('Full Dataset');
       expect(out.confidence.band).toBe('green');
-      expect(out.confidence.label).toBe('92% measured cells');
+      expect(out.confidence.label).toBe('92/100 on measured cells');
       expect(out.coverage.streamingWarning).toBeUndefined();
       expect(out.details.coverageMode).toBe('Full Dataset');
       expect(out.details.engineStatus).toBe('active');

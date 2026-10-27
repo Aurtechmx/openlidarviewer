@@ -98,7 +98,7 @@ describe('a finished terrain run feeds the static card', () => {
     const out = summariseDataset(last());
     expect(out?.details.analyzedPointCount).toBe(2_700_000);
     expect(out?.details.engineStatus).toBe('active');
-    expect(out?.confidence.label).toBe('81% measured cells');
+    expect(out?.confidence.label).toBe('81/100 on measured cells');
     expect(out?.confidence.band).toBe('green');
     expect(out?.groundVisibility.bucket).toBe('good');
     // A 'full' engine mode does not re-promote a display sample to "Full Dataset".
