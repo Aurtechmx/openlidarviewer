@@ -148,10 +148,13 @@ export function computeTerrainReadiness(
   const tol = result.confidenceToleranceM;
 
   // ── Ground confidence ────────────────────────────────────────────────
-  // Shown as two figures, measured and interpolated, never one pooled mean.
+  // Shown as two mean scores, measured and interpolated cells, never one
+  // pooled mean. Scores are written x/100, not %, so they cannot be read as
+  // shares of the surface (the Measured coverage card carries the share).
   const split = splitCellConfidence(result.dtm.coverage, result.dtm.confidence);
-  const half = (v: number): string => (Number.isFinite(v) ? pct(v / 100) : '—');
-  const splitValue = `${half(split.measured)} measured · ${half(split.interpolated)} interpolated`;
+  const score = (v: number): string => (Number.isFinite(v) ? `${Math.round(v)}/100` : 'none');
+  const splitValue = score(Number.isFinite(split.measured) ? split.measured : meanConf);
+  const splitDetail = `Cell confidence mean score: measured cells ${score(split.measured)} · interpolated cells ${score(split.interpolated)}`;
   let groundRating = rate(meanConf);
   // A confident-looking surface that is mostly interpolated should not
   // read "excellent" — temper by how much was actually measured.
@@ -174,7 +177,7 @@ export function computeTerrainReadiness(
     label: 'Ground confidence',
     rating: groundRating,
     value: Number.isFinite(meanConf) ? splitValue : '—',
-    detail: confidenceDetail,
+    detail: Number.isFinite(meanConf) ? `${splitDetail} · ${confidenceDetail}` : confidenceDetail,
   };
 
   // ── DTM quality ──────────────────────────────────────────────────────

@@ -452,6 +452,18 @@ export function readinessCardParts(
   };
 }
 
+/**
+ * Whether ground was provided by the file: class 2 among the analysed codes and
+ * the codes read from the source. Derived or cleared codes are not provided.
+ * (Excluded vegetation/building/noise returns say nothing about ground.)
+ */
+export function providedGroundClass(
+  r: Pick<AnalyseContoursResult, 'groundClassPresent'>,
+  provenance: string | undefined,
+): boolean {
+  return r.groundClassPresent === true && provenance === 'source';
+}
+
 export class AnalysePanel {
   /** The panel element — append to the stage overlay (see main.ts). */
   readonly element: HTMLElement;
@@ -894,6 +906,12 @@ export class AnalysePanel {
    * is active. Gated on the host returning extraction input — a scan with no
    * building- or wire-classified points shows no launcher.
    */
+  /** Provenance of the active scan's classification, or undefined when unknown. */
+  private _activeClassProvenance(): string | undefined {
+    const scanId = this._cb.getActiveScanId?.() ?? null;
+    return scanId ? this._cb.getFeatureCloud?.(scanId)?.classificationProvenance : undefined;
+  }
+
   private _refreshFeatureLauncher(): void {
     const scanId = this._cb.getActiveScanId?.() ?? null;
     const cloud = scanId ? this._cb.getFeatureCloud?.(scanId) ?? null : null;
@@ -3295,7 +3313,7 @@ export class AnalysePanel {
     const t = r.cellStatusTally;
     const covered = t.measured + t.interpolated + t.lowConfidence + t.edgeRisk;
     const densityFloor = densityReferenceFloorFor(r.accuracyStandards.densityReferenceFloorsMet, this._contourFrame?.analysedBasis, r.dtm.coverageMode);
-    const hasClass = r.excludedByClassification > 0;
+    const hasClass = providedGroundClass(r, this._activeClassProvenance());
     // Whether the source linear unit is confirmed — the same gate every other
     // unit consumer applies (`isLinearUnitKnown`, which the resolved factor in
     // the map context is set from; a centimetre grid is known by its factor). An unknown-unit or

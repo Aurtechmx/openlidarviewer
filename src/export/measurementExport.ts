@@ -35,6 +35,9 @@ export { formatVolumeNumber, reducedSampleCaveat } from '../render/measure/types
 export { HEADLINE_METRIC_KEY, unresolvedMetricKeys, unresolvedReason, type AxisSteps };
 import { lightProvenance, type LightProvenanceInput } from './lightProvenance';
 import {
+  BOX_NO_HEIGHT_NOTE,
+  CLIP_REGION_NOTE,
+  flatBox,
   distance,
   polylineLength,
   profileMetrics,
@@ -289,8 +292,10 @@ export function measurementMetrics(
       const mb = boxMetrics(boxFromCorners(mp[0], mp[1]), up);
       set('width_m', mb.width);
       set('depth_m', mb.depth);
-      set('height_m', mb.height);
-      set('volume_m3', mb.volume);
+      // A clip region's height is the scan's, not measured; no height is no
+      // volume, not a volume of 0 (see boxVolumeWithheldNote).
+      if (m.clipRegion !== true) set('height_m', mb.height);
+      if (m.clipRegion !== true && !flatBox(pts[0], pts[1], up)) set('volume_m3', mb.volume);
       break;
     }
     case 'volume':
@@ -370,6 +375,13 @@ export function areaWithheldNote(
   const Vv = Number.isFinite(verticalToMetres) && verticalToMetres > 0 ? verticalToMetres : unitToMetres;
   const v = ringVerdict(m.points, m.points.map((p) => toMetricFrame(p, up, unitToMetres, Vv)));
   return v.ok ? undefined : `Area withheld: ${v.text}`;
+}
+
+/** The stated reason a complete Box reports no volume, or undefined when it reports one. */
+export function boxVolumeWithheldNote(m: Measurement, up: Vec3): string | undefined {
+  if (m.kind !== 'box' || !isComplete(m)) return undefined;
+  if (m.clipRegion === true) return CLIP_REGION_NOTE;
+  return flatBox(m.points[0], m.points[1], up) ? BOX_NO_HEIGHT_NOTE : undefined;
 }
 
 /** Why an Angle reports no angle: an arm has zero length, so the angle is undefined. */
@@ -563,10 +575,11 @@ function unresolvedProps(m: Measurement, ctx: MeasurementExportContext, steps: A
 }
 
 /** The `area_withheld` property for a record whose ring establishes no area. */
-function areaNoteProp(m: Measurement, ctx: MeasurementExportContext): { area_withheld?: string; angle_withheld?: string } {
+function areaNoteProp(m: Measurement, ctx: MeasurementExportContext): { area_withheld?: string; angle_withheld?: string; volume_withheld?: string } {
   const note = areaWithheldNote(m, ctx.up, ctx.unitToMetres, ctx.verticalUnitToMetres);
   const angle = angleWithheldNote(m, ctx.up, ctx.unitToMetres, ctx.verticalUnitToMetres);
-  return { ...(note ? { area_withheld: note } : {}), ...(angle ? { angle_withheld: angle } : {}) };
+  const box = boxVolumeWithheldNote(m, ctx.up);
+  return { ...(note ? { area_withheld: note } : {}), ...(angle ? { angle_withheld: angle } : {}), ...(box ? { volume_withheld: box } : {}) };
 }
 
 /**
@@ -880,7 +893,8 @@ export function measurementsToCsv(
     const refused = refusalNote(m, ctx.geographic, ctx.verticalRefused, ctx.verticalScaleInvalid);
     const withGeo = refused ? `${units}; ${refused}` : units;
     const note = areaWithheldNote(m, ctx.up, ctx.unitToMetres, ctx.verticalUnitToMetres)
-      ?? angleWithheldNote(m, ctx.up, ctx.unitToMetres, ctx.verticalUnitToMetres);
+      ?? angleWithheldNote(m, ctx.up, ctx.unitToMetres, ctx.verticalUnitToMetres)
+      ?? boxVolumeWithheldNote(m, ctx.up);
     const withNote = note ? `${withGeo}; ${note}` : withGeo;
     const unresolved = unresolvedNote(m, ctx.up, ctx.unitToMetres, ctx.verticalUnitToMetres, ctx.positionSteps?.(m) ?? null);
     return unresolved ? `${withNote}; ${unresolved}` : withNote;

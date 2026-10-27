@@ -457,6 +457,17 @@ export function boxMetrics(box: BoxBounds, up: Vec3 = [0, 0, 1]): BoxMetrics {
   return { width, depth, height, volume, surfaceArea };
 }
 
+/** Why a Box reports no volume: its two corners sit at one height. */
+export const BOX_NO_HEIGHT_NOTE = 'Volume withheld: the box has no height (both corners at one level); set a height to measure a volume.';
+
+/** Why a clip-region Box reports no height or volume. */
+export const CLIP_REGION_NOTE = "Clip region: drawn with Draw clipping box, it spans the scan's full height, so it has no measured height or volume.";
+
+/** True when a box's two corners sit at one height along `up`: it has no height, so no volume. */
+export function flatBox(a: Vec3, b: Vec3, up: Vec3 = [0, 0, 1]): boolean {
+  return Math.abs((b[0] - a[0]) * up[0] + (b[1] - a[1]) * up[1] + (b[2] - a[2]) * up[2]) < 1e-6;
+}
+
 /**
  * The 8 corners of a box in a stable order suitable for wireframe overlay
  * rendering. Order is (low-Z then high-Z, each square traversed CCW from

@@ -18,7 +18,7 @@
 import type { ExportDigests } from '../science/exportDigestRecord';
 import { formatGroupedInt } from '../science/withheldCounts';
 import type { Measurement, Vec3 } from '../render/measure/types';
-import { areaWithheldNote, formatVolumeNumber, measurementMetrics, refusalNote, roundMeasured, reducedSampleCaveat, unresolvedMetricKeys, unresolvedNote, type AxisSteps } from './measurementExport';
+import { areaWithheldNote, boxVolumeWithheldNote, formatVolumeNumber, measurementMetrics, refusalNote, roundMeasured, reducedSampleCaveat, unresolvedMetricKeys, unresolvedNote, type AxisSteps } from './measurementExport';
 import {
   buildReportManifest,
   canonicalize,
@@ -183,7 +183,7 @@ export function measurementsToFindings(
     }
     // An Area ring that establishes no area is recorded as an explicit null with
     // the reason; the perimeter is not promoted to its headline.
-    const areaNote = areaWithheldNote(m, up, unitToMetres, verticalToMetres);
+    const areaNote = areaWithheldNote(m, up, unitToMetres, verticalToMetres) ?? boxVolumeWithheldNote(m, up);
     if (areaNote) {
       const label = m.name?.trim() || `${m.kind} ${i + 1}`;
       findings.push({ label, value: null, unit: '', caveats: [areaNote] });

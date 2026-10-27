@@ -1554,6 +1554,7 @@ function parseMeasurements(v: unknown): Measurement[] {
       points,
       closed: item.closed === true ? true : undefined,
     };
+    if (k === 'box' && item.clipRegion === true) m.clipRegion = true;
     // v6 — the per-measurement honesty grade travels with the measurement so a
     // shared Evidence Capsule keeps its red/yellow/green verdict + reasons, not
     // just the number. The recipient sees the AUTHOR's trust assessment (what

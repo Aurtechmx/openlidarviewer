@@ -367,13 +367,19 @@ export function formatBoxHeadline(
   fmtLen?: (v: number) => string,
   fmtVol: (v: number) => string = (v) => formatVolume(v, system),
 ): string {
-  if (fmtLen) return `${fmtLen(width)} × ${fmtLen(depth)} × ${fmtLen(height)}  · ${fmtVol(volume)}`;
+  // NaN height: a clip region, footprint only. NaN volume: no height, withheld.
+  if (Number.isNaN(height)) {
+    const sides = fmtLen ? [fmtLen(width), fmtLen(depth)] : (() => { const u = sharedLengthUnit([width, depth], system); return [width, depth].map((x) => inSharedUnit(x, u)); })();
+    return `${sides[0]} × ${sides[1]}  · clip region: full scan height`;
+  }
+  const noHeight = Number.isNaN(volume) ? 'no volume: set a height' : null;
+  if (fmtLen) return `${fmtLen(width)} × ${fmtLen(depth)} × ${fmtLen(height)}  · ${noHeight ?? fmtVol(volume)}`;
   // One unit for the three sides, at one decimal count, and the volume in the
   // cube of that unit: "13.200 m × 4.800 m × 0.005 m · 0.31680 m³", never
   // "13.200 m × 4.8000 m × 0.5000 cm · 317 dm³".
   const unit = sharedLengthUnit([width, depth, height], system);
   const [w, d, h] = [width, depth, height].map((x) => inSharedUnit(x, unit));
-  let v = '—';
+  let v = noHeight ?? '—';
   if (Number.isFinite(volume) && volume >= 0) {
     const cubic = volume * unit.perMetre ** 3;
     v = `${grouped(cubic, displayDecimals(cubic, 0, 6))} ${unit.unit}³`;

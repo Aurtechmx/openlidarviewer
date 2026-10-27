@@ -438,9 +438,9 @@ export interface TerrainCore {
    * A file can be fully classified in the sense that every point holds a code
    * and still be almost entirely code 1, which is what a raw airborne tile
    * usually is; the fitness panel needs the measured share rather than the
-   * mere presence of the attribute.
+   * mere presence of the attribute. `groundClassPresent`: any return is ASPRS class 2.
    */
-  readonly unclassifiedFraction: number | null;
+  readonly unclassifiedFraction: number | null; readonly groundClassPresent: boolean;
   readonly excludedByClassification: number;
   /**
    * ASPRS-2014-style hold-out figures (NVA, VVA) plus the USGS 3DEP density
@@ -609,7 +609,7 @@ export interface AnalyseContoursResult {
   readonly cellMetrics: CellMetricsSummary;
   /** Classified vegetation/building/noise returns dropped before ground filtering. */
   /** Passed through unchanged from `TerrainCore`. */
-  readonly unclassifiedFraction: TerrainCore['unclassifiedFraction'];
+  readonly unclassifiedFraction: TerrainCore['unclassifiedFraction']; readonly groundClassPresent: boolean;
   readonly excludedByClassification: number;
   /**
    * ASPRS-2014-style hold-out figures (NVA, VVA) plus the USGS 3DEP density
@@ -998,6 +998,7 @@ export function computeTerrainCore(
     }
     return n > 0 ? unclassified / n : null;
   })();
+  const groundClassPresent = params.classification != null && Array.prototype.includes.call(params.classification, 2);
   let groundPts: ReadonlyArray<TerrainPoint> = classFilter.points;
   if (classFilter.excludedCount > 0) {
     warnings.push(
@@ -1554,7 +1555,7 @@ export function computeTerrainCore(
     quality,
     qualityScore,
     cellMetrics,
-    unclassifiedFraction,
+    unclassifiedFraction, groundClassPresent,
     excludedByClassification: classFilter.excludedCount,
     accuracyStandards,
     verticalScaleResolved,
@@ -1597,7 +1598,7 @@ function coreResultFields(
   | 'dtm' | 'validation' | 'reliabilitySplit' | 'blockedAccuracy' | 'verticalScaleResolved'
   | 'horizontalScaleResolved' | 'confidenceOrdering' | 'confidenceCalibrationApplied'
   | 'confidenceToleranceM' | 'quality' | 'qualityScore' | 'cellMetrics' | 'surface'
-  | 'unclassifiedFraction' | 'excludedByClassification' | 'accuracyStandards'
+  | 'unclassifiedFraction' | 'groundClassPresent' | 'excludedByClassification' | 'accuracyStandards'
   | 'cellStatusTally' | 'complexity' | 'gridRecommendation' | 'gate' | 'inputSha256'
 > {
   return {
@@ -1619,7 +1620,7 @@ function coreResultFields(
     qualityScore: core.qualityScore,
     cellMetrics: core.cellMetrics,
     surface: core.surface,
-    unclassifiedFraction: core.unclassifiedFraction,
+    unclassifiedFraction: core.unclassifiedFraction, groundClassPresent: core.groundClassPresent,
     excludedByClassification: core.excludedByClassification,
     accuracyStandards: core.accuracyStandards,
     cellStatusTally: core.cellStatusTally,

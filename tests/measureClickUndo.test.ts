@@ -7,7 +7,7 @@
  *   - a click on an existing vertex handle places a point on that vertex, and a
  *     press that moves still drags the vertex;
  *   - a deleted measurement comes back with its id, name, owner and place;
- *   - a box whose corners sit at one height says why its volume is 0.
+ *   - a box whose corners sit at one height says why it has no volume.
  */
 
 import { describe, it, expect, beforeAll } from 'vitest';
@@ -151,12 +151,12 @@ describe('Undo of a delete', () => {
 });
 
 describe('a flat box', () => {
-  it('says why its volume is 0', async () => {
+  it('says why it has no volume', async () => {
     const { measure } = await makeController();
     measure.setKind('box');
     measure.addPoint([0, 0, 100]);
     measure.addPoint([4, 4, 100]);
-    expect(measure.hint.textContent).toMatch(/flat: both corners are at one height, so its volume is 0/);
+    expect(measure.hint.textContent).toMatch(/flat: both corners are at one height, so it has no volume/);
   });
 });
 
@@ -259,5 +259,25 @@ describe('a point snapped onto another scan\'s measurement records that scan', (
     const d = measure.getMeasurements()[1]!;
     expect(d.points[1]).toEqual([105, 0, 0]);
     expect(d.pickLayers).toEqual(['scan-a', 'scan-b']);
+  });
+});
+
+describe('a box drawn with Draw clipping box', () => {
+  it('is marked a clip region and shows no volume; a Box tool box keeps it', async () => {
+    const { measure } = await makeController();
+    measure.setKind('box');
+    measure.boxFootprint = true;
+    measure.addPoint([0, 0, 0]);
+    measure.addPoint([4, 4, 3]);
+    measure.boxFootprint = false;
+    measure.addPoint([0, 0, 0]);
+    measure.addPoint([2, 2, 2]);
+    const [clip, box] = measure.getMeasurements();
+    expect(clip.clipRegion).toBe(true);
+    expect(box.clipRegion).toBeUndefined();
+    const [sc, sb] = measure.getSummaries();
+    expect(sc.value).toMatch(/clip region: full scan height/);
+    expect(sc.value).not.toMatch(/³/);
+    expect(sb.value).toMatch(/· 8\b/);
   });
 });

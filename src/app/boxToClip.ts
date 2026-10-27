@@ -44,7 +44,7 @@ export function useBoxAsClip(deps: BoxToClipDeps, id: string, opts: BoxToClipOpt
     activeLayerId: deps.activeLayerId(),
     layerCount: deps.layerCount(),
     vertical: deps.verticalExtent?.() ?? null,
-    fullHeight: opts.fullHeight === true,
+    fullHeight: opts.fullHeight === true || (m as { clipRegion?: boolean } | undefined)?.clipRegion === true,
   });
   if (!result.ok) {
     deps.toast(result.reason);
