@@ -45,6 +45,7 @@ The format is based on Keep a Changelog and the project follows Semantic Version
 
 ### Validation
 
+- The E4 count in the test-evidence record, the claim register notes and THREATS_TO_VALIDITY.md now reads 18, matching the register. `lint:evidence` fails when the record's E4 claims differ from the register's.
 - Field-study records list each operator in `operators.members` with an affiliation and an independence flag; the verifier fails a record whose member count differs from `operators.count`, whose members include one who is not independent, or whose group flag contradicts its members.
 - The field-study verifier rejects a result whose |bias| exceeds its RMSE, whose RMSE exceeds its largest residual, or whose NMAD exceeds 1.4826 times its largest residual, allowing for the precision the figures were reported with.
 - An RMSE below the reference instrument's stated accuracy is now a warning. The verifier fails it only when n·RMSE²/σ² is below the lower 1% quantile of χ² with n degrees of freedom.

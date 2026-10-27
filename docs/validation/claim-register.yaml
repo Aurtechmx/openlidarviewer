@@ -63,10 +63,11 @@
 #   - externalValidationStatus is `pending` wherever external data is required
 #     and unavailable. Twenty-four study manifests under
 #     validation/cross-implementation/studies/ record an independent reference
-#     that agreed. Seventeen hold up the first seventeen E4 claims, one each
+#     that agreed. Seventeen hold up the seventeen claims that reached E4
+#     before 0.7, one each
 #     (six GDAL, four PDAL, one SAGA, one OGR/SpatiaLite with R, one
 #     GeographicLib with PROJ, two GRASS, and two against R). Four hold up
-#     TERRAIN-FLOW-PULSE (one TauDEM, three GRASS GIS), and one supports
+#     TERRAIN-FLOW-PULSE, the eighteenth E4 claim (one TauDEM, three GRASS GIS), and one supports
 #     TERRAIN-FLOW-DEPRESSION-INVENTORY (TauDEM). Two more support DTM median
 #     gridding on measured cells (R terra, and SciPy, whose bin edges this
 #     project supplies).
@@ -176,7 +177,8 @@ schemaVersion: 1
 # scan output that names the population each reported number describes. The E5
 # work registers the Rogue tiles and makes the dev/holdout split deterministic
 # and exposure-honest; the holdout has not been run, so no product advances
-# beyond E4 and the register stands at 17 there and none at E5.
+# beyond E4 and the register stood at 17 there and none at E5 at 0.6.8. It
+# holds 18 at E4 since TERRAIN-FLOW-PULSE reached E4 in 0.7, and none at E5.
 softwareVersion: 0.7.1-alpha.1
 generated: 2026-10-18
 validationOwner: A. Urias / Aurtech
