@@ -43,6 +43,7 @@ import { formatArea, formatVolumeNumber, displayDecimals, volumeCaveatClauses, v
 // the scene's real up-axis and per-axis units; this module only formats them.
 import {
   areaWithheldNote,
+  boxVolumeWithheldNote,
   measurementMetrics,
   reducedSampleCaveat,
   refusalNote,
@@ -185,7 +186,8 @@ function computeValue(
       if (mm.grade_pct != null) return `${mm.grade_pct.toFixed(2)}%`;
       return mm.rise_m != null ? 'vertical' : '—';
     case 'box':
-      return mm.volume_m3 != null ? formatVolume(mm.volume_m3, system, verified) : '—';
+      if (mm.volume_m3 != null) return formatVolume(mm.volume_m3, system, verified);
+      return boxVolumeWithheldNote(m, up) ?? '—';
     case 'volume': {
       // The caveat clauses come from the builder the panel also uses
       // (volumeCaveats); the figures are formatted here.

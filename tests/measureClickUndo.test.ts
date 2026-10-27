@@ -7,7 +7,7 @@
  *   - a click on an existing vertex handle places a point on that vertex, and a
  *     press that moves still drags the vertex;
  *   - a deleted measurement comes back with its id, name, owner and place;
- *   - a box whose corners sit at one height says why its volume is 0.
+ *   - a box whose corners sit at one height says why it has no volume.
  */
 
 import { describe, it, expect, beforeAll } from 'vitest';
@@ -151,12 +151,12 @@ describe('Undo of a delete', () => {
 });
 
 describe('a flat box', () => {
-  it('says why its volume is 0', async () => {
+  it('says why it has no volume', async () => {
     const { measure } = await makeController();
     measure.setKind('box');
     measure.addPoint([0, 0, 100]);
     measure.addPoint([4, 4, 100]);
-    expect(measure.hint.textContent).toMatch(/flat: both corners are at one height, so its volume is 0/);
+    expect(measure.hint.textContent).toMatch(/flat: both corners are at one height, so it has no volume/);
   });
 });
 

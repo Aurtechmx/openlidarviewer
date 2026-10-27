@@ -53,6 +53,7 @@ import {
   elevationDatumOffset,
   toMetricFrame, unresolvedHeadlineFor, unresolvedKeysFor, type AxisSteps,
 } from './geometry';
+import { flatBox } from './geometry';
 import { resizeBoxByCorner, BOX_CORNER_INDICES, type BoxCornerIndex } from './boxEdit';
 import { areaBreakdown, lineBreakdown } from './measureBreakdown';
 import type { AreaBreakdown, LineBreakdown } from './measureBreakdown';
@@ -117,10 +118,6 @@ const CLICK_SLOP_PX = 4;
 const CLOSE_RADIUS_PX = 16;
 
 /** Whether two box corners sit at one height along `up`, so the box has no volume. */
-function flatBox(a: Vec3, b: Vec3, up: Vec3): boolean {
-  return Math.abs((b[0] - a[0]) * up[0] + (b[1] - a[1]) * up[1] + (b[2] - a[2]) * up[2]) < 1e-6;
-}
-
 /** A deleted measurement and where it sat, for an Undo. */
 export interface RemovedMeasurement {
   readonly measurement: Measurement;
@@ -2438,7 +2435,7 @@ export class MeasureController {
           m.width * this._unitToMetres,
           m.depth * this._unitToMetres,
           m.height * this._effVertical(),
-          m.volume * this._unitToMetres * this._unitToMetres * this._effVertical(),
+          flatBox(p[0], p[1], this._worldUp) ? Number.NaN : m.volume * this._unitToMetres * this._unitToMetres * this._effVertical(),
           this._units,
           ...(this._unitUnverified() ? [formatUnitUnverified, formatUnitUnverified] as const : []),
         );
@@ -2547,7 +2544,7 @@ export class MeasureController {
         if (n === 1) return `${VERB} the opposite corner. ${this.boxFootprint ? "The clip keeps this footprint at the scan's full height" : 'The box spans the height between the two corners'}`;
         const last = this._measurements[this._measurements.length - 1];
         if (!this.boxFootprint && last?.kind === 'box' && last.points.length >= 2 && flatBox(last.points[0], last.points[1], this._worldUp)) {
-          return `That box is flat: both corners are at one height, so its volume is 0. ${VERB} the second corner on a higher surface`;
+          return `That box is flat: both corners are at one height, so it has no volume. ${VERB} the second corner on a higher surface`;
         }
         return `${VERB} one corner of the box`;
       }
