@@ -64,7 +64,6 @@ has not been done. v0.7.0 is the current published release.
 - The terrain report, DEM package and export provenance no longer give the live DTM the registry E4. The DTM study covers min-return gridding only, and the live DTM uses median aggregation, so these said the DTM was not covered by the registered studies. The median studies under Validation below now cover measured cells for cell sizes from 0.1 to 10 m with the grid origin at the data minimum.
 - Map sheets and the terrain report's contour rows use the cartographic contour claim when contours are generalised or smoothed, as the GeoJSON and DXF exports do.
 - The map sheet calls its accuracy block an internal hold-out check instead of survey accuracy.
-- Ground confidence on the readiness card shows measured and interpolated cells as two figures. The Inspector shows the measured-cell figure.
 - Change detection says when it assumed the vertical unit from the horizontal unit.
 - The terrain complexity summary warns when more than 10% of its cells are interpolated.
 - Wording: the scan fitness verdict names hold-out residuals, Contour Studio no longer calls area and scale "validated", the precision check no longer says "certified level", and the Analyse help calls the hold-out an internal check.
@@ -88,6 +87,7 @@ has not been done. v0.7.0 is the current published release.
 - The readiness card's Ground confidence printed the measured-cell and interpolated-cell mean confidence as "78% measured · 40% interpolated", which read as shares of the surface and disagreed with the Measured coverage card beside it. It now shows the measured-cell mean as 78/100 and names both means in its detail line ("measured cells 78/100 · interpolated cells 40/100"); the Inspector's Metric stability row reads "78/100 on measured cells". The share of measured and interpolated cells is on the Measured coverage card only.
 - The scan fitness Classification row said "No ground classification" on a file whose returns carry class 2 whenever it had no vegetation, building or noise returns, because it tested for excluded classes instead of ground. It now reads ground as provided when the analysed codes include class 2 and the classification came from the file, matching the Terrain readiness check.
 - A Box with both corners at one height, such as a footprint drawn with Draw clipping box on level ground, read "0 m³". It has no height, so its volume is withheld: the panel reads "no volume: set a height", the CSV evidence cell and the report finding state the reason, and the GeoJSON carries `volume_withheld` instead of `volume_m3`. Width, depth and the clip are unchanged.
+- A box drawn with Draw clipping box is recorded as a clip region. It reads "21.0 m × 23.0 m · clip region: full scan height" with no height or volume, the CSV evidence cell and report finding say why, and the GeoJSON carries `volume_withheld`. It becomes a clip at the scan's full height also from the Measurements row and after a session reload. A box drawn with the Box tool keeps its height and volume.
 
 ### Validation
 

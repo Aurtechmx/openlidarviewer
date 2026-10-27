@@ -261,3 +261,23 @@ describe('a point snapped onto another scan\'s measurement records that scan', (
     expect(d.pickLayers).toEqual(['scan-a', 'scan-b']);
   });
 });
+
+describe('a box drawn with Draw clipping box', () => {
+  it('is marked a clip region and shows no volume; a Box tool box keeps it', async () => {
+    const { measure } = await makeController();
+    measure.setKind('box');
+    measure.boxFootprint = true;
+    measure.addPoint([0, 0, 0]);
+    measure.addPoint([4, 4, 3]);
+    measure.boxFootprint = false;
+    measure.addPoint([0, 0, 0]);
+    measure.addPoint([2, 2, 2]);
+    const [clip, box] = measure.getMeasurements();
+    expect(clip.clipRegion).toBe(true);
+    expect(box.clipRegion).toBeUndefined();
+    const [sc, sb] = measure.getSummaries();
+    expect(sc.value).toMatch(/clip region: full scan height/);
+    expect(sc.value).not.toMatch(/³/);
+    expect(sb.value).toMatch(/· 8\b/);
+  });
+});

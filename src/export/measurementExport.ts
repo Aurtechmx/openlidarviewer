@@ -36,6 +36,7 @@ export { HEADLINE_METRIC_KEY, unresolvedMetricKeys, unresolvedReason, type AxisS
 import { lightProvenance, type LightProvenanceInput } from './lightProvenance';
 import {
   BOX_NO_HEIGHT_NOTE,
+  CLIP_REGION_NOTE,
   flatBox,
   distance,
   polylineLength,
@@ -291,9 +292,10 @@ export function measurementMetrics(
       const mb = boxMetrics(boxFromCorners(mp[0], mp[1]), up);
       set('width_m', mb.width);
       set('depth_m', mb.depth);
-      set('height_m', mb.height);
-      // No height is no volume, not a volume of 0 (see boxVolumeWithheldNote).
-      if (!flatBox(pts[0], pts[1], up)) set('volume_m3', mb.volume);
+      // A clip region's height is the scan's, not measured; no height is no
+      // volume, not a volume of 0 (see boxVolumeWithheldNote).
+      if (m.clipRegion !== true) set('height_m', mb.height);
+      if (m.clipRegion !== true && !flatBox(pts[0], pts[1], up)) set('volume_m3', mb.volume);
       break;
     }
     case 'volume':
@@ -377,7 +379,9 @@ export function areaWithheldNote(
 
 /** The stated reason a complete Box reports no volume, or undefined when it reports one. */
 export function boxVolumeWithheldNote(m: Measurement, up: Vec3): string | undefined {
-  return m.kind === 'box' && isComplete(m) && flatBox(m.points[0], m.points[1], up) ? BOX_NO_HEIGHT_NOTE : undefined;
+  if (m.kind !== 'box' || !isComplete(m)) return undefined;
+  if (m.clipRegion === true) return CLIP_REGION_NOTE;
+  return flatBox(m.points[0], m.points[1], up) ? BOX_NO_HEIGHT_NOTE : undefined;
 }
 
 /** Why an Angle reports no angle: an arm has zero length, so the angle is undefined. */

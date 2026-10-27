@@ -2080,6 +2080,7 @@ export class MeasureController {
     // pre-identity byte shape is preserved exactly (see LayerIdentityService).
     const owner = this._newOwner();
     if (owner && !m.owner) m.owner = owner;
+    if (m.kind === 'box' && this.boxFootprint) m.clipRegion = true;
     this._measurements.push(m);
     this._draft = null;
     this._emitChange();
@@ -2428,14 +2429,15 @@ export class MeasureController {
       }
       case 'box': {
         if (p.length < 2) return '—';
-        const m = boxMetrics(boxFromCorners(p[0], p[1]), this._worldUp);
+        const clip = m.clipRegion === true || (this.boxFootprint && !this._measurements.includes(m));
+        const mb = boxMetrics(boxFromCorners(p[0], p[1]), this._worldUp);
         return formatBoxHeadline(
           // Horizontal axes ×f, the up axis (height) ×vertical factor, volume
           // f²·vertical — each a pure monomial, so a compound CRS reads honest.
-          m.width * this._unitToMetres,
-          m.depth * this._unitToMetres,
-          m.height * this._effVertical(),
-          flatBox(p[0], p[1], this._worldUp) ? Number.NaN : m.volume * this._unitToMetres * this._unitToMetres * this._effVertical(),
+          mb.width * this._unitToMetres,
+          mb.depth * this._unitToMetres,
+          clip ? Number.NaN : mb.height * this._effVertical(),
+          clip || flatBox(p[0], p[1], this._worldUp) ? Number.NaN : mb.volume * this._unitToMetres * this._unitToMetres * this._effVertical(),
           this._units,
           ...(this._unitUnverified() ? [formatUnitUnverified, formatUnitUnverified] as const : []),
         );

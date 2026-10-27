@@ -328,6 +328,11 @@ export interface Measurement {
   /** Area only — true once the polygon ring has been closed. */
   closed?: boolean;
   /**
+   * Box only — drawn with Draw clipping box. Its footprint is from the two
+   * clicks and its height is the scan's, so it reports no height or volume.
+   */
+  clipRegion?: boolean;
+  /**
    * Profile only — a sampled height-vs-distance series, populated by the
    * controller after the second vertex lands. Optional so a measurement
    * loaded from a pre-chart session file still validates; the panel falls

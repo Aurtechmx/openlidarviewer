@@ -367,7 +367,11 @@ export function formatBoxHeadline(
   fmtLen?: (v: number) => string,
   fmtVol: (v: number) => string = (v) => formatVolume(v, system),
 ): string {
-  // NaN volume: the box has no height, so its volume is withheld, not 0.
+  // NaN height: a clip region, footprint only. NaN volume: no height, withheld.
+  if (Number.isNaN(height)) {
+    const sides = fmtLen ? [fmtLen(width), fmtLen(depth)] : (() => { const u = sharedLengthUnit([width, depth], system); return [width, depth].map((x) => inSharedUnit(x, u)); })();
+    return `${sides[0]} × ${sides[1]}  · clip region: full scan height`;
+  }
   const noHeight = Number.isNaN(volume) ? 'no volume: set a height' : null;
   if (fmtLen) return `${fmtLen(width)} × ${fmtLen(depth)} × ${fmtLen(height)}  · ${noHeight ?? fmtVol(volume)}`;
   // One unit for the three sides, at one decimal count, and the volume in the
