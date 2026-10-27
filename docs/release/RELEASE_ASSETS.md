@@ -1,4 +1,4 @@
-# Release assets — what a published OpenLiDARViewer release contains
+# Release assets: what a published OpenLiDARViewer release contains
 
 The source archive deliberately excludes generated `release/` output, so a
 reviewer holding only the source zip cannot see which external assets exist or
@@ -52,7 +52,7 @@ stated plainly:
 ```
 release-manifest → hashes every PAYLOAD asset (zips, sbom, evidence,
                    gate.log, gate.log.sha256, release notes, deploy smoke)
-                   — never itself, never SHA256SUMS
+                  (never itself, never SHA256SUMS)
 SHA256SUMS       → hashes everything, the manifest included
 ```
 
@@ -66,7 +66,7 @@ directions, so a tampered file fails one side or the other whichever it is.
 shasum -a 256 -c SHA256SUMS
 shasum -a 256 -c gate.log.sha256
 
-# 2. the set is complete and self-consistent — no rebuild required
+# 2. the set is complete and self-consistent: no rebuild required
 npm run release:verify -- --dir <downloaded-assets>
 ```
 
@@ -124,6 +124,6 @@ records that value as `sourceDateEpoch`. `release:verify` refuses a release
 manifest that records none, so the timestamp the archives were built with is
 always readable from the manifest rather than reconstructed.
 
-The deploy archive is **not** claimed to be byte-reproducible — the obfuscator
+The deploy archive is **not** claimed to be byte-reproducible: the obfuscator
 is free to vary between runs. Verify it by hash against the manifest, not by
 rebuilding.

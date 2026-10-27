@@ -152,7 +152,7 @@ under translation.
 Area weighting removes unequal weighting between cells; it does not make a
 cell's median equal the cell's area-average height. Where the surface varies
 inside a cell, where in the cell the points fall moves the figure: on a 16 m
-ramp (exact 2,048 m³) with four points per 2 m cell, the same number of points
+ramp (exact 2,048 m³) with 4 points per 2 m cell, the same number of points
 shifted toward each cell's low side gives 1,920 m³ (−6.25%), and a smooth
 density gradient also biases it
 (`tests/stockpileWithinCellSampling.test.ts`). The ± model band is an
@@ -177,8 +177,8 @@ uniform across the scan.
 ## Hold-out statistics have their own limits
 
 The hold-out builds its validation surface on a grid anchored at the minimum of
-the ground returns, not at the delivered DTM's origin, so its cells can be
-offset from the delivered grid by up to one cell. The hold-out RMSE describes
+the ground returns, not at the delivered DTM's origin, so its cells can sit
+up to one cell off the delivered grid. The hold-out RMSE describes
 that surface, built with the same method and cell size, not the delivered cells
 themselves.
 
@@ -305,9 +305,9 @@ soil strength, traction, track or tyre interaction with the ground, rollover,
 weather and vegetation are not modelled, and no text in the Lab, the run
 record or the export calls a route safe, drivable or passable.
 
-The Lab has three stages: the mobility-profile form; a traversability-map
+The Lab runs in three stages, starting with the mobility-profile form, then a traversability-map
 preview where start and goal are chosen on a keyboard- and pointer-accessible
-result grid, with a "why not?" inspector for any cell; and the completed run,
+result grid, with a "why not?" inspector for any cell, and finally the completed run,
 with route diagnostics and the route drawn on the grid and on the scan. Cell
 readouts give elevation in the dataset's vertical datum and unit, or say it is
 unknown. Lengths, slopes and steps are in metres; a run refuses by name
@@ -355,7 +355,7 @@ The default evidence-gap policy is exploratory. Under it, a cell whose slope
 or aspect used a substituted Horn neighbour (the grid's outer ring or beside a
 NoData void) is allowed, and so is a cell with no above-ground return when the
 obstruction limit is evaluated: such a cell passes the obstruction limit
-because nothing was measured above it, not because it was shown to be clear.
+because nothing was measured above it. Nothing showed it was free of obstruction.
 Cross-slope, longitudinal grade and an evaluated ruggedness limit are then
 marked `estimated`, not `evaluated`, when any route cell used a substituted
 neighbour, and the obstruction limit is marked `estimated` when any route
@@ -575,7 +575,7 @@ gives the reason. The scale widens on an axis whose extent would need more than
 - The point-cloud converter writes the source coordinates in their stored
   axis order. It does not infer an up axis from the scan's shape, and the
   viewer's display orientation does not change an exported coordinate. A
-  local PLY, OBJ or glTF model with no CRS is rotated from Y-up to Z-up,
+  local PLY, OBJ or glTF model with no CRS is rotated to Z-up from Y-up,
   (x, y, z) written as (x, -z, y), only when "Rotate a local Y-up model to
   Z-up" is ticked; the report and the file's conversion record say so. That
   option is refused when the export keeps or assigns a CRS and for a format
@@ -1018,7 +1018,7 @@ The View panel's reference plane is a visual grid at an elevation the user
 sets. It has these limits:
 
 - Nothing snaps to it. Measurements, picks and the clip box ignore it.
-- A plane through three picked points passes through those three points
+- A plane through 3 picked points passes through those points
   exactly. It is not fitted to the scan around them, so the noise in each pick
   goes straight into its tilt.
 - "Use scan minimum" takes the lowest point in the scan, which is often a
@@ -1085,8 +1085,8 @@ source, or COPC, so each region is held near its own origin.
 The scan report's "Draw precision bound" row bounds the error of the eye-space
 position of each point centre, `modelView * vec4(p, 1.0)` in binary32, under
 round-to-nearest arithmetic, for the camera at the moment the report was
-generated. It does not cover projection, the divide by w, the point sprite
-size, depth or survey accuracy, and it never stops a draw. It is computed for
+generated. Projection, the divide by w and the point sprite size are outside it, as
+are depth and survey accuracy, and it never stops a draw. It is computed for
 the active static cloud only; streaming scans and the Observatory overlay are
 not evaluated. The storage error is a worst-case figure from the Float32
 buffer, because binary64 source positions are not kept after load. With no

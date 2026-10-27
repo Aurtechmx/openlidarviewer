@@ -19,16 +19,14 @@ v0.6.6 remain available under MIT.
 - Opening a file while static layers and a stream are both open asks only about the stream's work, and Replace removes only that work. Saved views stay.
 - Replacing one stream with another resets the Streaming panel's grade figures and pause state, and cancels a grade still running on the old stream.
 - Removing the active layer refreshes the class legend, colour chips, point count and scan report for the layer that takes its place. The class filter resets to all visible.
-- Removing the last static layer beside an open stream keeps the stream.
-- Close and a replacing open disarm the lasso.
+- Removing the last static layer beside an open stream keeps the stream instead of resetting the app to the empty state, and both Close and a replacing open disarm the lasso so its button stays in sync.
 - A cancelled or failed COPC, EPT or out-of-core open returns the panels to their earlier state.
 - A stream opened beside a static scan in a different coordinate system shows a notice.
 
 ## Measurement
 
 - When the grid volume is withheld, the cut-fill cross-check volume is withheld too, in the panel, the toast, the PDF and the CSV and GeoJSON exports.
-- The full-coverage lasso stockpile reads "exploratory volume preview" instead of "MEASURED".
-- The lasso toast warns when the lasso was drawn more than 20° from plan view.
+- The full-coverage lasso stockpile reads "exploratory volume preview" instead of "MEASURED", as the stockpile claim allows at every tier, and the lasso toast warns when the lasso was drawn more than 20° from plan view, where raised points can fall outside the footprint.
 - Point-sample stockpile confidence is capped by footprint coverage.
 - Box volume cites its own claim, MEAS-BOX (E3), instead of the cut-fill claim.
 - The MEAS-AREA wording describes the area the tool reports: the area in the polygon's own plane, which equals the planimetric area for a horizontal polygon.
@@ -85,7 +83,7 @@ v0.6.6 remain available under MIT.
 
 ## Format robustness
 
-A pinned corpus of upstream test files from LASzip, laspy, libE57Format, PROJ and the Point Cloud Library opens through the normal load path. Five loader fixes came with it:
+A pinned corpus of upstream test files from LASzip, laspy, libE57Format, PROJ and the Point Cloud Library opens through the normal load path. Five loader fixes came with it.
 
 - A LAS file whose ESRI WKT names a vertical CRS (`VERTCS`) takes its horizontal unit from the projected CRS. A file in US survey feet used to report metres.
 - A LAZ file with an invalid compression record is refused with the faulty field named.
@@ -118,9 +116,9 @@ The register holds 41 claims, 18 of them at E4 and none at E5. Since v0.7.0, MEA
 
 ## Changes that affect scripts
 
-- Stockpile CSV and GeoJSON: `grid_authority=measured` is now `exploratory_full_coverage`. `preview` and `withheld` are unchanged.
-- Contour GeoJSON: `meanConfidence` is now `presentationSupport`.
-- Measurement CSV and GeoJSON: polygon volumes add a `base_level` column and property.
+- Stockpile CSV and GeoJSON exports write `grid_authority=exploratory_full_coverage` where they wrote `measured`. `preview` and `withheld` are unchanged.
+- Contour GeoJSON features carry `presentationSupport` in place of `meanConfidence`.
+- Polygon volumes add a `base_level` column to the measurement CSV and a `base_level` property to its GeoJSON.
 - Box measurements in CSV and GeoJSON cite MEAS-BOX instead of VOL-POINT-SAMPLE.
 - A withheld stockpile volume exports no cross-check volume.
 - DTM provenance cites `olv.dtm.geodesic-fill@1` instead of `olv.dtm.idw-fill`, and its evidence line reads E4 or "measured cells not covered" by the rule above.

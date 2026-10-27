@@ -56,5 +56,5 @@ data.gouv.fr under Licence Ouverte 2.0 (Etalab)
 Zenodo depositor does not state the upstream licence; the CC-BY-4.0 record is
 the licence relied on for the derived grids.
 
-Modified: each fixture is a window of the source rasters, re-encoded as JSON,
+Each fixture changes its source: it is a window of the source rasters, re-encoded as JSON,
 with the catchment polygon rasterised onto the window grid.

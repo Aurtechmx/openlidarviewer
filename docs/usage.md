@@ -117,7 +117,7 @@ Report PDF. Export → Report PDF builds a multi-page report from the live worki
 
 <!-- #region session-reference -->
 <!-- The region markers on this page let the docs site's "Embed & session
-     reference" include these sections verbatim — this file stays the single
+     reference" include these sections verbatim; this file stays the single
      canonical copy. Keep the markers around their sections when editing. -->
 Session round-trip (`.olvsession`). The session Export saves the full working state to a `.olvsession` JSON file. The file holds the camera, render settings and active colour mode. It also stores the annotations, measurements and named views, along with the scan metadata. Import loads one back, restoring the camera and view exactly. Measurements and annotations are matched to open scans by source content rather than file name; work for a scan that is not open is kept, placed when that scan is opened later in the same page, and written back by the next save. Class edits are not stored in the session file. To keep a reclassification, export the scan as LAS at display resolution. Older measurement-only and v2 session files still open via the v1/v2/v3 schema back-compat in the parser.
 <!-- #endregion session-reference -->

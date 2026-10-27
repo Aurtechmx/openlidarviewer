@@ -66,11 +66,11 @@ preregistered weeks ahead and the third was not.
 
 `status` has two values and they are not interchangeable:
 
-- `preregistered` — a commit shows this tolerance while the claim had no
+- `preregistered`: a commit shows this tolerance while the claim had no
   result, so the result cannot have chosen it. `witnessCommit` is the
   **earliest** such commit; a later one that also shows the tolerance proves
   less.
-- `adopted-with-result` — the tolerance was fixed in the same change that
+- `adopted-with-result`: the tolerance was fixed in the same change that
   produced the numbers. Often defensible, when a sibling claim's tolerance is
   carried over on the merits. Never a preregistration, and it may not be
   written as one.

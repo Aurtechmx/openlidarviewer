@@ -5,7 +5,7 @@ point-cloud data. It measures scans, analyses terrain, and writes reports you
 can reproduce. This file maps the deposit: what the archive holds, and where
 its provenance lives.
 
-The version, publication date, authors, and license are in `CITATION.cff`.
+The version and publication date are in `CITATION.cff`, as are the authors and license.
 The `CHANGELOG.md` records the same date under the matching version heading.
 
 ## Provenance: how to tie this archive to a commit
@@ -25,7 +25,7 @@ development runs.
 ## What to read first
 
 - `docs/releases/RELEASE_NOTES_v0.7.1-alpha.1.md`: what changed in this release.
-- `docs/releases/VALIDATION_REPORT_v0.7.1-alpha.1.md`: what was and was not tested, and the honest gaps.
+- `docs/releases/VALIDATION_REPORT_v0.7.1-alpha.1.md`: what was tested and what was not.
 - `docs/releases/KNOWN_LIMITATIONS_v0.7.1-alpha.1.md`: the documented limits.
 - `REPRODUCIBILITY.md` and `docs/releases/REPRODUCIBILITY_v0.7.1-alpha.1.md`: how to rebuild, test,
   and regenerate the reported figures. The versioned file ties each figure to
@@ -46,7 +46,7 @@ development runs.
 
 - `src/`: application source.
 - `tests/`: the test suite.
-- `scripts/`: the build, lint, and release tooling.
+- `scripts/`: build and release tooling, lints included.
 - `docs/` and `docs-site/`: documentation and the validation site source.
 - `benchmarks/`: the frozen benchmark protocol.
 - `public/`: static assets served with the app.
