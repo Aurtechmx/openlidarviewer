@@ -162,6 +162,7 @@
     "lint:claims-language": "node scripts/lint-claims-language.mjs",
     "lint:archive-vocab": "node scripts/lint-archive-vocab.mjs",
     "lint:csp-html": "node scripts/lint-csp-html.mjs",
+    "lint:no-inline-style-attr": "node scripts/lint-no-inline-style-attr.mjs",
     "lint:html-assets": "node scripts/lint-html-assets.mjs",
     "lint:python-version": "node scripts/lint-python-version.mjs",
     "lint:no-host-paths": "node scripts/lint-no-host-paths.mjs",

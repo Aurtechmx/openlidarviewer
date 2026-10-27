@@ -480,6 +480,29 @@ export function isFull(m: Measurement): boolean {
 }
 
 /**
+ * How many significant figures a displayed length, area or volume aims to
+ * show. See `displayDecimals` in ./format for the full policy.
+ */
+export const DISPLAY_SIG_FIGS = 5;
+
+/**
+ * A volume figure (no unit) at {@link DISPLAY_SIG_FIGS} significant figures,
+ * digit-grouped, signed: 499,909.6 reads "499,910", 12.3456 reads "12.346",
+ * 0.5 reads "0.5000" (never zero for a small real volume). The decimal count
+ * follows the magnitude, up to 4, as lengths and areas do. Display text only:
+ * the CSV and GeoJSON exports keep the full value.
+ */
+export function formatVolumeNumber(value: number, maxDecimals?: number): string {
+  if (!Number.isFinite(value)) return '—';
+  const rounded = Number(value.toPrecision(DISPLAY_SIG_FIGS));
+  const abs = Math.abs(rounded);
+  const cap = maxDecimals ?? 4;
+  const forSigFigs = abs > 0 ? DISPLAY_SIG_FIGS - 1 - Math.floor(Math.log10(abs)) : 0;
+  const decimals = Math.min(cap, Math.max(0, forSigFigs));
+  return rounded.toLocaleString('en-US', { minimumFractionDigits: decimals, maximumFractionDigits: decimals });
+}
+
+/**
  * The caveat a figure computed on voxel centroids carries, or null when the
  * walk's noise and Withheld labels were usable.
  */

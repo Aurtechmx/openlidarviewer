@@ -20,10 +20,10 @@ function statedM3(shown: string): number {
 }
 
 describe('formatVolume', () => {
-  it.each([2_345_678, 1_499_000, 999_999_999])('%d m³ stays in cubic metres at its own precision', (v) => {
+  it.each([2_345_678, 1_499_000, 999_999_999])('%d m³ stays in cubic metres at 5 significant figures', (v) => {
     const shown = formatVolume(v, 'metric');
     expect(shown).toMatch(/ m³$/);
-    expect(Math.abs(statedM3(shown) - v)).toBeLessThanOrEqual(0.005);
+    expect(Math.abs(statedM3(shown) - v) / v).toBeLessThanOrEqual(5e-5);
   });
 
   it('switches to km³ at a cubic kilometre, with significant figures', () => {
@@ -37,9 +37,9 @@ describe('formatVolume', () => {
     expect(formatVolume(0.0004, 'imperial')).not.toMatch(/^0(\.0+)? ft³$/);
   });
 
-  it('keeps the cubic-metre and cubic-yard bands as they were', () => {
+  it('shows the cubic-metre and cubic-yard bands at 5 significant figures', () => {
     expect(formatVolume(304.8, 'metric')).toBe('304.80 m³');
-    expect(formatVolume(1000 * 0.3048 ** 3, 'imperial')).toBe('37.04 yd³');
+    expect(formatVolume(1000 * 0.3048 ** 3, 'imperial')).toBe('37.037 yd³');
   });
 });
 
@@ -58,7 +58,7 @@ describe('PDF report imperial volume', () => {
   it('converts with the exact yard (1 / 0.9144³ yd³ per m³)', () => {
     const m = { id: 'b', kind: 'box', name: 'B', points: [[0, 0, 0], [100, 100, 100]] } as unknown as Measurement;
     const v = buildMeasurementRows([m], 'imperial')[0].value;
-    expect(Number(v.replace(/[^0-9.]/g, ''))).toBeCloseTo(1e6 / 0.9144 ** 3, 1);
+    expect(Number(v.replace(/[^0-9.]/g, ''))).toBe(Number((1e6 / 0.9144 ** 3).toPrecision(5)));
   });
 });
 
@@ -110,7 +110,7 @@ describe('chain total display', () => {
     } as unknown as Measurement;
     const r = aggregate([v], 'sum', 'volume-net');
     expect(r.value).toBeCloseTo(-3, 9);
-    expect(formatChainResult(r)).toBe('-3.00 m³');
+    expect(formatChainResult(r)).toBe('-3.0000 m³');
   });
 
   it('source units keep the significant-figure policy without converting', () => {

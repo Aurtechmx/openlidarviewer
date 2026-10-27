@@ -8,6 +8,7 @@
 
 import type { VolumeResult } from './volume';
 import type { VolumeRecord } from './types';
+export { formatVolumeNumber } from './types';
 
 /** Points inside the footprint at or above which the volume is high confidence. */
 const HIGH_CONFIDENCE_POINTS = 1000;

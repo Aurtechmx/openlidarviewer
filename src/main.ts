@@ -250,7 +250,7 @@ import { createInspectorCardRefreshers } from './app/inspectorCardRefreshers';
 import { installStaleChunkRecovery, makeAmbiguousChunkHandler } from './app/staleChunkReload';
 import { createCrsCoordinator } from './app/crsCoordinator';
 import { remoteCopcName, describeRemoteCopcError } from './app/remoteSourceNaming';
-import { deriveVolumeRecord } from './render/measure/measureDerivations';
+import { deriveVolumeRecord, formatVolumeNumber } from './render/measure/measureDerivations';
 import { serviceWorkerUrl } from './app/swUrl';
 import { createTerrainAnalysisRunner } from './app/terrainAnalysisRunner';
 import { placedWorldOrigin } from './terrain/canonicalFrame';
@@ -597,7 +597,7 @@ const lassoVolumeTool = new LassoVolumeTool(stage.canvas, {
     }
     const crsCaveat = volumeUnitCaveat(ctx, crsVerdict.validity);
     showLassoToast(
-      `${stock?.headline ?? `Volume · net ${(out.result.net * vol).toFixed(2)} m³`} · ` +
+      `${stock?.headline ?? `Volume · net ${formatVolumeNumber(out.result.net * vol)} m³`} · ` +
         `footprint ${areaM2} m² · ${out.selectedCount.toLocaleString()} points${budgetCaption}${crsCaveat} · ${out.selectionBasis.clause}.${stock?.suffix ?? ''} Estimate from the point cloud, not survey-grade.`,
       pendingLassoSave && crsVerdict.canSaveMeasurement
         ? { label: 'Save to session', onClick: saveLassoVolumeIfPending }

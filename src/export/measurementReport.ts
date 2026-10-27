@@ -18,7 +18,7 @@
 import type { ExportDigests } from '../science/exportDigestRecord';
 import { formatGroupedInt } from '../science/withheldCounts';
 import type { Measurement, Vec3 } from '../render/measure/types';
-import { areaWithheldNote, measurementMetrics, refusalNote, roundMeasured, reducedSampleCaveat, unresolvedMetricKeys, unresolvedNote, type AxisSteps } from './measurementExport';
+import { areaWithheldNote, formatVolumeNumber, measurementMetrics, refusalNote, roundMeasured, reducedSampleCaveat, unresolvedMetricKeys, unresolvedNote, type AxisSteps } from './measurementExport';
 import {
   buildReportManifest,
   canonicalize,
@@ -253,13 +253,13 @@ export function measurementsToFindings(
         );
         if (vol.crossCheck && vol.gridAuthority !== 'withheld') {
           caveats.push(
-            `Cut-fill cross-check (${vol.crossCheck.method}): cut ${(vol.crossCheck.cut * V).toFixed(2)} ${u('m³')} / fill ${(vol.crossCheck.fill * V).toFixed(2)} ${u('m³')}.`,
+            `Cut-fill cross-check (${vol.crossCheck.method}): cut ${formatVolumeNumber((vol.crossCheck.cut * V))} ${u('m³')} / fill ${formatVolumeNumber((vol.crossCheck.fill * V))} ${u('m³')}.`,
           );
         }
         caveats.push(GRID_KNOWN_LIMITATIONS, GRID_ACCURACY_EVIDENCE);
       } else {
         caveats.push(
-          `Cut ${((vol.cut ?? 0) * V).toFixed(2)} ${u('m³')} / fill ${((vol.fill ?? 0) * V).toFixed(2)} ${u('m³')} over ${footprint} footprint${vol.method ? ` (${vol.method})` : ''}.`,
+          `Cut ${formatVolumeNumber(((vol.cut ?? 0) * V))} ${u('m³')} / fill ${formatVolumeNumber(((vol.fill ?? 0) * V))} ${u('m³')} over ${footprint} footprint${vol.method ? ` (${vol.method})` : ''}.`,
           vol.coverageFraction !== undefined
             ? `Area-weighted grid integration: ${(vol.coverageFraction * 100).toFixed(0)}% of the footprint measured from points, ${((vol.interpolatedFraction ?? 0) * 100).toFixed(0)}% interpolated from neighbouring cells, ${((vol.excludedFraction ?? 0) * 100).toFixed(0)}% outside the scanned extent and left out. Above 25% interpolated the volume is low-confidence; above 50% it is withheld.`
             : 'Point-sample integration (method before olv.volume.stockpile@3) assumes uniform coverage inside the polygon.',

@@ -42,6 +42,10 @@
       "group": "static"
     },
     {
+      "script": "lint:no-inline-style-attr",
+      "group": "static"
+    },
+    {
       "script": "lint:html-assets",
       "group": "static"
     },

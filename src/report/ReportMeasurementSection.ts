@@ -34,7 +34,7 @@ import {
 // polygon reads the same units in the PDF report as on the overlay — the same
 // surface that produced it. Length and volume keep this module's own
 // cm/ha-free report conventions; only area was drifting (acre vs sq ft).
-import { formatArea, displayDecimals, volumeCaveatClauses, volumeFiguresWithheld, volumeWithheldClause } from '../render/measure/format';
+import { formatArea, formatVolumeNumber, displayDecimals, volumeCaveatClauses, volumeFiguresWithheld, volumeWithheldClause } from '../render/measure/format';
 // The headline VALUES come from the one shared metrics function every other
 // surface (live panel, CSV, GeoJSON, KML, integrity) uses, so the PDF can never
 // diverge again — it was its own second engine that assumed X/Y horizontal +
@@ -112,13 +112,15 @@ function formatLinear(metres: number, system: UnitSystem, verified = true): stri
  */
 function formatVolume(cubicMetres: number, system: UnitSystem, verified = true): string {
   if (!Number.isFinite(cubicMetres)) return '—';
-  if (!verified) return `${cubicMetres.toFixed(displayDecimals(cubicMetres, 2, 4))} ${SOURCE_UNIT}³`;
+  // 5 significant figures, as on screen: two fixed decimals on a 500,000 m³
+  // preview claimed a precision the sample does not have.
+  if (!verified) return `${formatVolumeNumber(cubicMetres)} ${SOURCE_UNIT}³`;
   if (system === 'imperial') {
     // Exact: one yard is 0.9144 m, so a cubic metre is 1 / 0.9144³ yd³.
     const cuYd = (cubicMetres * FT_PER_M ** 3) / 27;
-    return `${cuYd.toFixed(displayDecimals(cuYd, 2, 4))} yd³`;
+    return `${formatVolumeNumber(cuYd)} yd³`;
   }
-  return `${cubicMetres.toFixed(displayDecimals(cubicMetres, 2, 4))} m³`;
+  return `${formatVolumeNumber(cubicMetres)} m³`;
 }
 
 /**

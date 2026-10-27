@@ -15,6 +15,7 @@
  * Lives in the lazy stockpile chunk (loaded through `loadStockpilePresenter`),
  * so none of it lands in the startup shell.
  */
+import { formatVolumeNumber } from './format';
 import type { VolumeRecord, VolumeWithheldCounts } from './types';
 import { reducedSampleClause } from './types';
 import { capConfidenceByCoverage } from './measureDerivations';
@@ -113,7 +114,7 @@ export function buildStockpileResult(
   return record;
 }
 
-const m3 = (n: number, vol: number): string => `${(n * vol).toFixed(2)} m³`;
+const m3 = (n: number, vol: number): string => `${formatVolumeNumber(n * vol)} m³`;
 
 /**
  * The toast's volume clause, read from the result. `vol` is the native→m³

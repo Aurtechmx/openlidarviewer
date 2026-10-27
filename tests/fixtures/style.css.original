@@ -3936,6 +3936,19 @@ body:has(.olv-colorbar.olv-colorbar-floating) .olv-project-card {
   .olv-measure-clear, .olv-measure-done, .olv-inspect-copy { transition: none; }
 }
 
+
+/* Lasso overlay. Kept here, not in a style attribute: the page CSP drops
+   script-written style attributes. Below `.olv-overlay` (--z-scene-overlay),
+   which holds every panel, so the armed lasso never eats panel clicks. */
+.olv-lasso-svg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  cursor: crosshair;
+  z-index: var(--z-content);
+  touch-action: none;
+}
 /* ───────────────────────────────────────────────────────────────────────────
    Mobile & touch — safe-area insets, the file-picker button, responsive
    layout, the Scan Info bottom sheet, and 44 px touch targets.

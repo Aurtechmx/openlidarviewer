@@ -150,10 +150,10 @@ describe('formatAreaRender (B2: areas scale by the factor squared)', () => {
 describe('formatVolumeRender (B2: volumes scale by the factor cubed)', () => {
   // International foot here so the imperial round-trip is exact.
   const INTL_FOOT = 0.3048;
-  it('1000 ft³ = 28.32 m³ = 37.04 yd³', () => {
+  it('1000 ft³ = 28.317 m³ = 37.037 yd³', () => {
     // 1000 × 0.3048³ = 28.316846592 m³.
-    expect(formatVolumeRender(1000, INTL_FOOT, 'metric')).toBe('28.32 m³');
+    expect(formatVolumeRender(1000, INTL_FOOT, 'metric')).toBe('28.317 m³');
     // Back through 35.31466672 ft³/m³ = 1000 ft³ = 37.037 yd³.
-    expect(formatVolumeRender(1000, INTL_FOOT, 'imperial')).toBe('37.04 yd³');
+    expect(formatVolumeRender(1000, INTL_FOOT, 'imperial')).toBe('37.037 yd³');
   });
 });
