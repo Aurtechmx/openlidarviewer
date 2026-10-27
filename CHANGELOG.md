@@ -4,6 +4,12 @@ The format is based on Keep a Changelog and the project follows Semantic Version
 
 ## [Unreleased]
 
+## [0.7.1-alpha.1] - 2026-10-25
+
+An alpha on the way to v0.7.1. It has no tag and no DOI, its test figures are
+not release-authoritative, and the real-scan walkthrough in the packaged build
+has not been done. v0.7.0 is the current published release.
+
 ### Added
 
 - Open scan, Open session, Save session and Report PDF in the command palette. They run the same paths as their controls; Report PDF uses the default template.
@@ -18,6 +24,23 @@ The format is based on Keep a Changelog and the project follows Semantic Version
 
 ### Changed
 
+- Contour GeoJSON features carry the pooled run score as `presentationSupport` instead of `meanConfidence`.
+- The lasso stockpile toast warns when the lasso was drawn more than 20° from straight down: raised points can then fall outside the footprint, and the toast says to draw in plan view.
+- The PDF report's profile slope summary labels its third figure "Net … (total rise ÷ total run)" instead of "Avg". It is the summed rise over the summed run of the covered segments, not an average of the grades.
+- Box measurements in CSV and GeoJSON exports cite a new MEAS-BOX claim (E3) for the box's own extents and volume. They cited the cut-fill volume claim, VOL-POINT-SAMPLE, which describes a different estimator.
+- The MEAS-AREA claim describes the area the tool reports: the area in the polygon's own plane, which equals the planimetric area for a horizontal polygon. Its scope now states that the cross-implementation comparison covers horizontal polygons only.
+- The approved wording for MEAS-AREA, E57-INGEST, TPI and VRM no longer calls their tolerances preregistered. Each protocol was adopted together with its result, and the wording now says so.
+- The Scan Report's Density and Spacing values say "(bounding-box estimate)" on every scan, static or streamed. Both are the point count over the axis-aligned bounding box, so a diagonal strip or gappy coverage reads sparser than the area the points cover. Before, only a display-sample load said how they were worked out.
+- The lasso stockpile toast no longer says "MEASURED" for a footprint with full coverage. It says "exploratory volume preview", as the stockpile volume's claim allows at every tier. In CSV and GeoJSON exports, `grid_authority` writes that tier as `exploratory_full_coverage` instead of `measured`; `preview` and `withheld` are unchanged.
+- Measuring costs less on large scans. The hover pick waits while the camera moves, and snap grids are built while the Measure tool is open instead of for every scan as it opens.
+- Terrain void filling visits only the edge of each search ring. Filled heights are unchanged.
+- The page downloads about 240 KiB less (gzip) before a scan opens. The 3D renderer loads when you open a scan or when the browser is idle.
+- Opening the file picker starts loading the viewer and the file reader, as dragging a file over the page already did.
+- Large LAS, LAZ and E57 files reach their final points sooner.
+- Streamed scans spend less time choosing nodes while the camera moves, and a node keeps its shader through its fade in and fade out.
+- Turning the class, elevation or intensity filter on or off rebuilds the point shaders only the first time after a scan opens.
+- A scan without RGB is coloured once when it opens, and colouring by class takes about a quarter of the time.
+- The scan report fills in after a large scan opens without holding the page for half a second.
 - TERRAIN-FLOW-PULSE moves from E3 to E4. A comparison pre-registered in `validation/protocols/flow-pulse-external-references-v1.md`, with its gates fixed before Flow Pulse was run on the data, checked it against outputs two other programs published for real terrain. On two Bear Creek crops of a USGS NED DEM, chosen so that a fill computed on the crop alone reproduces TauDEM's whole-grid fill, the Priority-Flood spill level equals TauDEM 5.3.8 PitRemove's filled elevation on all 119,119 distinct cells (172,702 cell comparisons across three runs: crop A, crop B with NoData as outlet, crop B with NoData as wall). On one 25 m window of the Riviere des Pluies catchment, Reunion, against GRASS GIS 8.3.2: 99.21% of catchment cells with a unique steepest descent take the same D8 direction (gate 98%), the catchment from the mouth has a Jaccard index of 0.9990 (gate 0.99), and 95.2% of catchment cells are within 5% of the accumulation (gate 90%; 87.0% exact). The GRASS module is not named by the dataset; from the output encoding it is inferred to be r.watershed in single-flow mode, a least-cost router, so routing agrees within these tolerances and not exactly. D8 tie order, flat resolution, flow length and the peak-flow estimate were not compared, and agreement on archival data is not field validation.
 - TERRAIN-FLOW-DEPRESSION-INVENTORY moves from E2 to its required E3. In conditioned mode, all 187 depressions on the two Bear Creek crops match TauDEM's filled depressions on count, cell count, area, maximum fill depth and spill level, which puts that mode at E4; raw mode was not compared, so the claim is recorded at E3. A second pre-registered check, `validation/protocols/depression-inventory-synthetic-suite-v1.md`, compared the inventory across all eight TF fixtures and five new constructed grids (nested depressions, corner-only contact, a depression open to the border, an enclosed NoData hole, non-square cells) with hand-derived values and an in-project Python oracle, in both NoData readings: every extent, count, area, depth, spill level, outlet elevation and fill volume agrees, area is withheld without a resolved horizontal scale, and the exported accumulation grid reads back north row first with its corner in place.
 - The Measurements panel's session buttons read Save session and Open session. Every save ends in a toast stating how many measurements, annotations and saved views the file holds and that it holds no points.
@@ -32,6 +55,22 @@ The format is based on Keep a Changelog and the project follows Semantic Version
 
 ### Fixed
 
+- Dataset Intelligence gives no density tier on a Web Mercator or geocentric frame, or on a frame with no local vertical, as the Scan Report gives no pts/m² there. It used to tier those scans as if their grid units were ground metres.
+- The stockpile volume breakdown caps its confidence by how much of the footprint the scan covers, as the volume record already did. Dense, even sampling over part of a footprint no longer reads high confidence.
+- A scan that replaces the open one, such as a streamed scan opened over static layers or a static scan opened over a stream, starts with the clip box off and the elevation and intensity filters cleared. It used to keep the previous scan's clip box, and a stream opened over another stream kept the old filter range. A scan added beside open layers keeps both.
+- The PDF report prints each measurement as the Measurements panel shows it. It used to format the figures itself, with more decimals, cubic metres where the panel shows cubic decimetres, no bearing on a distance and no angle on a slope.
+- On phones, a streamed scan no longer keeps a visibility record for every node it evicts.
+- DEM packages export on DEMs with more than 250,000 measured cells. The attention raster used to stop the export there.
+- The terrain report, DEM package and export provenance no longer give the live DTM the registry E4. The DTM study covers min-return gridding only, and the live DTM uses median aggregation, so these said the DTM was not covered by the registered studies. The median studies under Validation below now cover measured cells for cell sizes from 0.1 to 10 m with the grid origin at the data minimum.
+- Map sheets and the terrain report's contour rows use the cartographic contour claim when contours are generalised or smoothed, as the GeoJSON and DXF exports do.
+- The map sheet calls its accuracy block an internal hold-out check instead of survey accuracy.
+- Ground confidence on the readiness card shows measured and interpolated cells as two figures. The Inspector shows the measured-cell figure.
+- Change detection says when it assumed the vertical unit from the horizontal unit.
+- The terrain complexity summary warns when more than 10% of its cells are interpolated.
+- Wording: the scan fitness verdict names hold-out residuals, Contour Studio no longer calls area and scale "validated", the precision check no longer says "certified level", and the Analyse help calls the hold-out an internal check.
+- A withheld stockpile volume shows no cut-fill cross-check figure either, in the Measurements panel, the toast, the PDF report and the CSV and GeoJSON exports. The grid is withheld for a footprint the scan does not support, and the cross-check covered the same footprint.
+- A scan opened after you changed the height trim is coloured with that trim, as the colour key states. It used the default trim of 5.
+- With the project-wide height scale on, adding a layer in another colour mode leaves the height colours of the other layers on the range the colour key states. It used to widen their range to the new layer's heights.
 - The DTM evidence line in the terrain report, the DEM package evidence contract and export provenance printed E4 on measured cells for every DTM, although the median studies covered one 1 m grid with its origin at (0, 0). It now reads E4 only when the run's cell size is within the studied range of 0.1 to 10 m and its grid origin is at the data minimum, and "measured cells not covered" otherwise.
 - A LAS file whose WKT is a named local or engineering CRS (`LOCAL_CS`, `ENGCRS`) keeps that name and is treated as a local frame. Two layers in local frames with different names are reported as mismatched, are not combined, and change detection between them is refused. Two layers naming the same local frame are reported as unverified rather than matching.
 - A refusal written for the user, such as the tileset-by-URL guidance, the E57 and whole-file size caps and a graphics backend that cannot start, reaches the toast as written instead of as the category's general sentence.
@@ -54,50 +93,6 @@ The format is based on Keep a Changelog and the project follows Semantic Version
 - The field-study verifier rejects a result whose |bias| exceeds its RMSE, whose RMSE exceeds its largest residual, or whose NMAD exceeds 1.4826 times its largest residual, allowing for the precision the figures were reported with.
 - An RMSE below the reference instrument's stated accuracy is now a warning. The verifier fails it only when n·RMSE²/σ² is below the lower 1% quantile of χ² with n degrees of freedom.
 - The live DTM's median gridding on measured cells agreed with R terra and SciPy on eight seeded point clouds (18498 and 18655 cells, within the 1e-6 m tolerance registered before the references were generated; occupancy masks match). The DTM claim now names this scope. Interpolated (filled) cells are not covered. The evidence resolver maps the live DTM's measured cells to that parameter set (E4) and leaves filled cells not covered, and the terrain report, the DEM package evidence contract and the export provenance name measured cells.
-
-## [0.7.1-alpha.1] - 2026-10-25
-
-A development cut on the way to v0.7.1. It carries no DOI, and its test figures
-are not release-authoritative. v0.7.0 is the current published release.
-
-### Fixed
-
-- Dataset Intelligence gives no density tier on a Web Mercator or geocentric frame, or on a frame with no local vertical, as the Scan Report gives no pts/m² there. It used to tier those scans as if their grid units were ground metres.
-- The stockpile volume breakdown caps its confidence by how much of the footprint the scan covers, as the volume record already did. Dense, even sampling over part of a footprint no longer reads high confidence.
-- A scan that replaces the open one, such as a streamed scan opened over static layers or a static scan opened over a stream, starts with the clip box off and the elevation and intensity filters cleared. It used to keep the previous scan's clip box, and a stream opened over another stream kept the old filter range. A scan added beside open layers keeps both.
-- The PDF report prints each measurement as the Measurements panel shows it. It used to format the figures itself, with more decimals, cubic metres where the panel shows cubic decimetres, no bearing on a distance and no angle on a slope.
-- On phones, a streamed scan no longer keeps a visibility record for every node it evicts.
-- DEM packages export on DEMs with more than 250,000 measured cells. The attention raster used to stop the export there.
-- The terrain report, DEM package and export provenance no longer give the live DTM the registry E4. The DTM study covers min-return gridding only, and the live DTM uses median aggregation, so these now say the DTM is not covered by the registered studies.
-- Map sheets and the terrain report's contour rows use the cartographic contour claim when contours are generalised or smoothed, as the GeoJSON and DXF exports do.
-- The map sheet calls its accuracy block an internal hold-out check instead of survey accuracy.
-- Ground confidence on the readiness card shows measured and interpolated cells as two figures. The Inspector shows the measured-cell figure.
-- Change detection says when it assumed the vertical unit from the horizontal unit.
-- The terrain complexity summary warns when more than 10% of its cells are interpolated.
-- Wording: the scan fitness verdict names hold-out residuals, Contour Studio no longer calls area and scale "validated", the precision check no longer says "certified level", and the Analyse help calls the hold-out an internal check.
-- A withheld stockpile volume shows no cut-fill cross-check figure either, in the Measurements panel, the toast, the PDF report and the CSV and GeoJSON exports. The grid is withheld for a footprint the scan does not support, and the cross-check covered the same footprint.
-- A scan opened after you changed the height trim is coloured with that trim, as the colour key states. It used the default trim of 5.
-- With the project-wide height scale on, adding a layer in another colour mode leaves the height colours of the other layers on the range the colour key states. It used to widen their range to the new layer's heights.
-
-### Changed
-
-- Contour GeoJSON features carry the pooled run score as `presentationSupport` instead of `meanConfidence`.
-- The lasso stockpile toast warns when the lasso was drawn more than 20° from straight down: raised points can then fall outside the footprint, and the toast says to draw in plan view.
-- The PDF report's profile slope summary labels its third figure "Net … (total rise ÷ total run)" instead of "Avg". It is the summed rise over the summed run of the covered segments, not an average of the grades.
-- Box measurements in CSV and GeoJSON exports cite a new MEAS-BOX claim (E3) for the box's own extents and volume. They cited the cut-fill volume claim, VOL-POINT-SAMPLE, which describes a different estimator. The register now holds 40 claims.
-- The MEAS-AREA claim describes the area the tool reports: the area in the polygon's own plane, which equals the planimetric area for a horizontal polygon. Its scope now states that the cross-implementation comparison covers horizontal polygons only.
-- The approved wording for MEAS-AREA, E57-INGEST, TPI and VRM no longer calls their tolerances preregistered. Each protocol was adopted together with its result, and the wording now says so.
-- The Scan Report's Density and Spacing values say "(bounding-box estimate)" on every scan, static or streamed. Both are the point count over the axis-aligned bounding box, so a diagonal strip or gappy coverage reads sparser than the area the points cover. Before, only a display-sample load said how they were worked out.
-- The lasso stockpile toast no longer says "MEASURED" for a footprint with full coverage. It says "exploratory volume preview", as the stockpile volume's claim allows at every tier. In CSV and GeoJSON exports, `grid_authority` writes that tier as `exploratory_full_coverage` instead of `measured`; `preview` and `withheld` are unchanged.
-- Measuring costs less on large scans. The hover pick waits while the camera moves, and snap grids are built while the Measure tool is open instead of for every scan as it opens.
-- Terrain void filling visits only the edge of each search ring. Filled heights are unchanged.
-- The page downloads about 240 KiB less (gzip) before a scan opens. The 3D renderer loads when you open a scan or when the browser is idle.
-- Opening the file picker starts loading the viewer and the file reader, as dragging a file over the page already did.
-- Large LAS, LAZ and E57 files reach their final points sooner.
-- Streamed scans spend less time choosing nodes while the camera moves, and a node keeps its shader through its fade in and fade out.
-- Turning the class, elevation or intensity filter on or off rebuilds the point shaders only the first time after a scan opens.
-- A scan without RGB is coloured once when it opens, and colouring by class takes about a quarter of the time.
-- The scan report fills in after a large scan opens without holding the page for half a second.
 
 ## [0.7.0] - 2026-10-24
 

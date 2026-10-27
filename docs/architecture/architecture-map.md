@@ -414,4 +414,4 @@ change. A map that drifts from the tree is worse than no map.
 
 One convention makes that work: a destination marked *(planned)* is an extraction
 target that does not exist yet, and the check skips it. When the extraction lands,
-drop the marker: from then on the path is held to account like any other.
+drop the marker, and the check then covers the path like any other.

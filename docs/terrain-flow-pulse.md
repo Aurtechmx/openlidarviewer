@@ -209,7 +209,7 @@ interior sinks by construction, so a sink count read off the conditioned
 routing would mostly report that conditioning worked rather than how many
 depressions the raw terrain held.
 
-Ordering is deterministic: depressions rank by largest cell count first.
+Depressions rank by largest cell count first, in a deterministic order.
 Single-cell raw candidates, which carry no size to rank by, order by grid
 position instead. Both tie-break on the lowest member cell index, never on
 component-discovery order.
@@ -446,7 +446,7 @@ only the field digest tells them apart.
 `src/export/flowPulsePackage.ts` builds the Flow Pulse deliverable as one
 ZIP, through the function `buildFlowPulsePackage`. It follows the pattern
 `src/terrain/export/demPackage.ts` already established for the DEM
-deliverable: a pure function from a result to ZIP bytes, reusing that
+deliverable: a pure function that turns a result into ZIP bytes, reusing that
 package's own Esri ASCII Grid writer rather than a new one.
 
 The package contains an accumulation raster and a direction raster, one

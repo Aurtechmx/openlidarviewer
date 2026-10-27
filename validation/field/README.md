@@ -31,7 +31,7 @@ The one that matters is checkpoint leakage. `src/validation/checkpointAccuracy.t
 refuses a checkpoint set whose members were used as control, in registration, for
 parameter tuning or for manual correction: an accuracy figure over them measures
 the fit, not the error. That protects a function call. `verify-field-study.mjs`
-applies the same refusal to a whole record, which is the half that was missing —
+applies the same refusal to a whole record, which is the half that was missing:
 a record can carry leaked checkpoints and an RMSE without ever passing through
 that function.
 

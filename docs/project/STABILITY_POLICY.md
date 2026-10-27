@@ -80,7 +80,7 @@ no promise of any kind. A module listed in
 `docs/validation/unreachable-modules.json` is always hidden, and a public
 document may name a hidden capability only to say it is not available.
 
-A capability moves from hidden to preview, or from preview to stable, in a
+A capability moves one step up, hidden to preview or preview to stable, in a
 commit that changes the manifest together with the code that reaches it.
 `lint:capability-manifest` fails when a stable or preview capability rests on
 an unreachable module, when a listed module does not exist, when a cited claim
