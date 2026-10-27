@@ -6,6 +6,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   backTarget,
+  pageShowsBack,
   locationCrumbs,
   locationText,
   WORKSPACES,
@@ -104,5 +105,22 @@ describe('backTarget', () => {
       label: 'Close Contour Studio',
       name: 'Close Contour Studio',
     });
+  });
+});
+
+describe('pageShowsBack', () => {
+  it('a desktop page keeps its own Back in every mode, not only Analyse', () => {
+    for (const route of [
+      { mode: 'work', page: 'measure' },
+      { mode: 'work', page: 'clip' },
+      { mode: 'data', page: 'classes' },
+      { mode: 'analyse', page: 'terrain' },
+    ] as const) {
+      expect(pageShowsBack(backTarget(route, registry), false)).toBe(true);
+    }
+  });
+  it('a mode home has no Back, and the phone sheet carries it instead', () => {
+    expect(pageShowsBack(backTarget({ mode: 'work', page: null }, registry), false)).toBe(false);
+    expect(pageShowsBack(backTarget({ mode: 'work', page: 'clip' }, registry), true)).toBe(false);
   });
 });

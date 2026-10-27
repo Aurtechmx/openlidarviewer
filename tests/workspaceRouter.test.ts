@@ -104,6 +104,21 @@ describe('workspaceRouter', () => {
     expect(t.router.route()).toEqual({ mode: 'work', page: null });
   });
 
+  it.each([['measure', 'Measure'], ['annotate', 'Annotate'], ['clip', 'Clip box']])(
+    'the %s page leads with a labelled Back to Tools that goes to the Tools home', async (page, title) => {
+      const t = await make();
+      t.router.navigate({ mode: 'work', page });
+      expect(t.title().ownText).toBe(title);
+      const back = t.header().find((e) => e.hasClass('olv-ws-back'))!;
+      expect(back.tagName).toBe('button');
+      expect(back.ownText).toBe('← Back to Tools');
+      expect(back.attrs['aria-label']).toBe('Back to Tools');
+      back.fire('click');
+      expect(t.router.route()).toEqual({ mode: 'work', page: null });
+      expect(t.off(t.launcher)).toBe(false);
+      expect(t.header().hidden).toBe(true);
+    });
+
   it('the header back button (a real button, so Enter/Space work) goes home and focuses the launcher', async () => {
     const t = await make();
     t.router.navigate({ mode: 'work', page: 'clip' });

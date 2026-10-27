@@ -142,12 +142,11 @@
 /* One Back per page in each layout. The header bar's Back and the page's own
    (the task header in the rail) name the same place: both go to the page's
    parent or the mode home (locationModel.ts backTarget, workspaceRouter.ts
-   sync), so one of them is hidden. An Analyse page keeps its own on a desktop,
-   a button under the page title, and the header's goes while the rail is
+   sync), so one of them is hidden. On a desktop every page keeps its own, a
+   button under the page title, and the header's goes while the rail is
    open; with the rail collapsed (or Focus mode) the header's is the way back.
-   Every other page keeps the header's. While a workspace is open the header
-   control closes it, which the workspace's own Close at its top does too, so
-   on an Analyse page that one stays instead; the page's Back goes elsewhere
+   While a workspace is open the header control closes it, which the
+   workspace's own Close at its top does too, so that one stays instead; the page's Back goes elsewhere
    (its parent) and stays. On the phone the sheet's location line carries the
    Back, or the workspace's Close, so the page's own copy is hidden there.
    locationBar.ts sets the root classes. */
