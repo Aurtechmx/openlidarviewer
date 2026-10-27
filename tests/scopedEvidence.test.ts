@@ -204,11 +204,11 @@ describe('register parameter-set scope', () => {
 });
 
 describe('DEM package evidence contract for the live DTM', () => {
-  it('prints not covered, never an inherited E4', async () => {
+  it('gives E4 to measured cells only, never to the whole DTM', async () => {
     const { renderEvidenceContract } = await import('../src/terrain/export/demPackage');
     const { buildEvidenceContractView } = await import('../src/validation/evidenceBoundaryInspector');
     const text = renderEvidenceContract(buildEvidenceContractView('DTM')).join('\n');
-    expect(text).toMatch(/Effective\s+not covered by the registered studies/);
-    expect(text).not.toMatch(/Effective\s+E4/);
+    expect(text).toMatch(/Effective\s+E4 \(Cross-implementation validated\) on measured cells; filled cells not covered by the registered studies/);
+    expect(text).not.toMatch(/Effective\s+E4_/);
   });
 });

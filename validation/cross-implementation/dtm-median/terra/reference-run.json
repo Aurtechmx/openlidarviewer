@@ -1,0 +1,19 @@
+{
+  "tool": "terra::rasterize",
+  "fun": "median",
+  "R": "4.6.1",
+  "terra": "1.9.46",
+  "gdal": "3.13.3",
+  "platform": "aarch64-apple-darwin25.4.0",
+  "commandLine": "Rscript --vanilla scripts/dtm-median-reference-terra.R",
+  "outputs": [
+    {"fixture": "pc-01-plane-buildings", "returns": 9196, "path": "validation/cross-implementation/dtm-median/terra/pc-01-plane-buildings__median.asc", "sha256": "e3a54d7cbc0021343061e8ac98db120cd39b865d862f85287b881fd4af33ceab"},
+    {"fixture": "pc-02-rolling-buildings", "returns": 9228, "path": "validation/cross-implementation/dtm-median/terra/pc-02-rolling-buildings__median.asc", "sha256": "cf4eca6d17b110ac288bcd08d85361633f6d1581aa7e73200c6f3b40462d3d42"},
+    {"fixture": "pc-03-ridge-buildings", "returns": 9234, "path": "validation/cross-implementation/dtm-median/terra/pc-03-ridge-buildings__median.asc", "sha256": "79dd7f62b743bd6959c66adfc32b57573bfea995ee9ea6d347937a8ba0e3413e"},
+    {"fixture": "pc-04-plane-lowblunders", "returns": 9193, "path": "validation/cross-implementation/dtm-median/terra/pc-04-plane-lowblunders__median.asc", "sha256": "716252a8267f4b342311337b9ed800a0254b8f1e6eb1b2941d3b166538b56915"},
+    {"fixture": "pc-05-plane-gap", "returns": 8658, "path": "validation/cross-implementation/dtm-median/terra/pc-05-plane-gap__median.asc", "sha256": "8a21b87a8151135b887386825f8e8970e0f1d7587c6f77d6b65bec74a279c301"},
+    {"fixture": "pc-06-bare-plane", "returns": 2500, "path": "validation/cross-implementation/dtm-median/terra/pc-06-bare-plane__median.asc", "sha256": "e1becc03f0fe4493c447876826eeea6ed828f847f63e3be974b9558d3e786184"},
+    {"fixture": "pc-07-bare-rolling", "returns": 2500, "path": "validation/cross-implementation/dtm-median/terra/pc-07-bare-rolling__median.asc", "sha256": "7619d38bf4cbfaf5a5787635b775fe02c4ccdeb2c0399087e1d8c7f6eaafc390"},
+    {"fixture": "pc-08-bare-ridge", "returns": 2500, "path": "validation/cross-implementation/dtm-median/terra/pc-08-bare-ridge__median.asc", "sha256": "4032bbc301d538df6df464b458a174e01ea2672257909b63601638d211f39485"}
+  ]
+}

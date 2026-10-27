@@ -17,7 +17,13 @@ GDAL `gdal_contour` on a separate frozen analytic tilted plane (where linear
 interpolation is exact, so the tolerance measures agreement, not interpolation
 noise). The other three are surface-gridding checks against PDAL: `DSM` (max
 return) and `DTM` (min return) were compared against PDAL 2.10.2
-`writers.gdal` on three seeded synthetic clouds each, agreeing over 7500 cells,
+`writers.gdal` on three seeded synthetic clouds each, agreeing over 7500 cells.
+The live DTM uses median aggregation, and its median gridding on measured cells
+was also compared against R terra 1.9.46 `rasterize(fun = median)` and SciPy
+1.17.1 `binned_statistic_2d(statistic = 'median')` on eight seeded clouds,
+agreeing on 18498 and 18655 cells within 1×10⁻⁶ m after float32 rounding, with
+matching occupancy masks. terra is the independent reference; SciPy bins over
+edges this project supplies. Interpolated (filled) cells are not covered.
 and `CHM` (clamped DSM minus DTM) was compared against the PDAL max grid
 minus the PDAL min grid on the same clouds. The last two are terrain descriptors,
 each checked three ways against an independent tool AND the closed form on a
@@ -109,6 +115,7 @@ level.
 | `CONTOURS` | GDAL 3.13.1 `gdal_contour` | `tests/contourCrossCheck.test.ts` | 2,222 vertices | 2.9×10⁻⁵ m vs GDAL (2.0×10⁻⁷ vs closed form) | 0.05 m |
 | `DSM` | PDAL 2.10.2 `writers.gdal` max | `tests/groundFilterPdalAgreement.test.ts` | 7,500 (3 clouds) | under 4×10⁻⁶ m | 5×10⁻⁵ m |
 | `DTM` | PDAL 2.10.2 `writers.gdal` min | `tests/groundFilterPdalAgreement.test.ts` | 7,500 (3 clouds) | under 4×10⁻⁶ m | 5×10⁻⁵ m |
+| `DTM` (median, measured cells) | R terra 1.9.46 `rasterize` median; SciPy 1.17.1 `binned_statistic_2d` median | `tests/dtmMedianCrossCheck.test.ts` | 18,498 terra, 18,655 SciPy (8 clouds) | 0 after float32 rounding (3.8×10⁻⁶ m unrounded) | 1×10⁻⁶ m |
 | `CHM` | PDAL 2.10.2 `writers.gdal` max minus min | `tests/chmCrossCheck.test.ts` | 7,500 (3 clouds) | under 8×10⁻⁶ m | 0.1 m |
 | `TPI` | gdaldem 3.13.1 TPI (+ closed form) | `tests/tpiCrossCheck.test.ts` | 3,364 interior | under 9×10⁻⁷ | 1×10⁻⁵ |
 | `VRM` | SAGA 7.8.2 VRM (+ closed form, ≤1×10⁻⁹) | `tests/vrmCrossCheck.test.ts` | 3,136 interior | under 2×10⁻⁵ vs SAGA | 1×10⁻⁴ |

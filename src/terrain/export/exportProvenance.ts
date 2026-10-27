@@ -40,6 +40,7 @@ import { exportGate, EVIDENCE_REGISTRY } from '../../validation/evidenceRegistry
 import { evidenceRank, INDEPENDENCE_FLOOR } from '../../validation/evidenceLevel';
 import { governingClaim } from '../../validation/evidenceComposition';
 import {
+  dtmCellsEvidenceText,
   resolveExportEvidence,
   type EvidenceContext,
   type ExportEvidenceResolution,
@@ -93,7 +94,7 @@ export { NOT_SURVEY_GRADE_NOTE };
 export const EVIDENCE_GATE_NOTE: string = !exportGate('DTM').exploratoryOnly
   ? 'Evidence: meets the required validation level for this product.'
   : evidenceRank(EVIDENCE_REGISTRY['DTM'].current) >= evidenceRank(INDEPENDENCE_FLOOR)
-    ? 'Evidence: exploratory export. The independent-tool cross-checks cover specific configurations that this export does not use: min-return DTM gridding (this DTM uses median aggregation) and a 3x3 TPI (the TPI here uses a 2 to 10 cell radius). The DTM has not reached its required external field-validation level and is not field-validated against ground control. Do not present as a validated deliverable.'
+    ? 'Evidence: exploratory export. The independent-tool cross-checks cover DTM median gridding on measured cells only; filled cells are not covered. They cover a 3x3 TPI, which this export does not use (the TPI here uses a 2 to 10 cell radius). The DTM has not reached its required external field-validation level and is not field-validated against ground control. Do not present as a validated deliverable.'
     : 'Evidence: exploratory export. Terrain products are validated only against synthetic known-truth (pre-E4) — not cross-validated against an independent tool, and not field-validated. Do not present as a validated deliverable.';
 
 /**
@@ -1053,7 +1054,7 @@ export function provenanceLines(p: ExportProvenance): string[] {
       kv(
         'Scoped evidence',
         `${s.resolutionState}; baseline ${s.baselineEvidence ?? 'unregistered'} → effective `
-          + `${s.effectiveEvidence ?? (s.resolutionState === 'external-evidence-out-of-scope' ? 'not covered by the registered studies' : 'unregistered')}; study ${s.matchedScopedStudy ?? 'none'}`,
+          + `${s.effectiveEvidence ?? (s.resolutionState === 'external-evidence-out-of-scope' ? (s.claimId === 'DTM' ? dtmCellsEvidenceText() : 'not covered by the registered studies') : 'unregistered')}; study ${s.matchedScopedStudy ?? 'none'}`,
       ),
     );
   }

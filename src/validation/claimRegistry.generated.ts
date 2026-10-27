@@ -27,7 +27,7 @@ export const EVIDENCE_REGISTRY: Readonly<Record<string, RegistryEntry>> = {
   'VOL-POINT-SAMPLE': { current: 'E3_SYNTHETICALLY_VALIDATED', required: 'E5_EXTERNALLY_VALIDATED', exportAllowed: true },
   'VOL-STOCKPILE': { current: 'E3_SYNTHETICALLY_VALIDATED', required: 'E5_EXTERNALLY_VALIDATED', exportAllowed: true },
   'GROUND-FILTER': { current: 'E3_SYNTHETICALLY_VALIDATED', required: 'E5_EXTERNALLY_VALIDATED', exportAllowed: true },
-  'DTM': { current: 'E4_CROSS_IMPLEMENTATION_VALIDATED', required: 'E5_EXTERNALLY_VALIDATED', exportAllowed: true, scopedParameterSets: ['PS-DTM-MIN-CELL1-R045'] },
+  'DTM': { current: 'E4_CROSS_IMPLEMENTATION_VALIDATED', required: 'E5_EXTERNALLY_VALIDATED', exportAllowed: true, scopedParameterSets: ['PS-DTM-MIN-CELL1-R045', 'PS-DTM-MEDIAN-CELL1-ORIGIN0'] },
   'DSM': { current: 'E4_CROSS_IMPLEMENTATION_VALIDATED', required: 'E4_CROSS_IMPLEMENTATION_VALIDATED', exportAllowed: true, scopedParameterSets: ['PS-DSM-MAX-CELL1-R045'] },
   'CHM': { current: 'E4_CROSS_IMPLEMENTATION_VALIDATED', required: 'E4_CROSS_IMPLEMENTATION_VALIDATED', exportAllowed: true, scopedParameterSets: ['PS-CHM-DIFF-CELL1-R045'] },
   'CONTOURS': { current: 'E4_CROSS_IMPLEMENTATION_VALIDATED', required: 'E4_CROSS_IMPLEMENTATION_VALIDATED', exportAllowed: true },
