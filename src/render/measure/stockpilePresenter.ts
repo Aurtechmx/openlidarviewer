@@ -111,7 +111,7 @@ export function presentStockpile(
   // not a measured coverage interval on the volume.
   const headline = r.withheldReason
     ? `Volume withheld (${r.withheldReason})`
-    : `${vol0(r.volume * vol)} m³ ± ${int(r.sigma * vol)} m³ (model band)`;
+    : `${vol0(r.volume * vol)} m³ ± ${vol0(r.sigma * vol)} m³ (model band)`;
   const relative = `±${(r.relativeError * 100).toFixed(1)}%`;
 
   const baseLabel =
@@ -141,8 +141,8 @@ export function presentStockpile(
     densityRow,
     { label: 'Base plane', value: baseLabel },
     { label: 'Mean thickness', value: `${(b.meanThickness * vert).toFixed(2)} m` },
-    { label: 'Surface spread term', value: `± ${int(b.samplingError * vol)} m³` },
-    { label: 'Base-plane term', value: `± ${int(b.basePlaneError * vol)} m³` },
+    { label: 'Surface spread term', value: `± ${vol0(b.samplingError * vol)} m³` },
+    { label: 'Base-plane term', value: `± ${vol0(b.basePlaneError * vol)} m³` },
   ];
 
   return {
@@ -356,7 +356,7 @@ export function stockpileAreaGridToastLine(v: StockpileAreaGridView): string {
       : `PREVIEW (${v.reason})${v.reason === 'display sample' ? ' · can change between runs' : ''}`;
     line =
       `Stockpile: ${vol0(v.volumeM3)} m³ · ${state} · ${support} · area-weighted grid` +
-      ` · surface term ± ${int(v.surfaceTermM3)} m³ (incomplete model)` +
+      ` · surface term ± ${vol0(v.surfaceTermM3)} m³ (incomplete model)` +
       ` · base ${v.baseZM.toFixed(2)} m${v.baseIsElevation ? '' : ' local height'}` +
       ` (lowest ground, ±${v.baseUncertaintyM.toFixed(2)} m, not in the term)`;
   }

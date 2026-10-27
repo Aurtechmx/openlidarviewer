@@ -89,7 +89,16 @@ export interface ChainResult {
    * NaN, `unit` is empty, and this is the text to show instead.
    */
   readonly refusal?: string;
+  /** Set when some members were left out for a stated reason the total should carry. */
+  readonly note?: string;
 }
+
+/** A chain over clip-region boxes only: no volume to give. */
+export const CHAIN_CLIP_REGION_WITHHELD =
+  "Volume withheld: a clip region spans the scan's full height, so it has no measured volume.";
+/** A chain that totals real boxes and leaves clip regions out. */
+export const CHAIN_CLIP_REGION_LEFT_OUT =
+  "clip regions left out: they span the scan's full height, so they have no measured volume";
 
 /** The scale context a chain runs in; see {@link aggregate}. */
 export interface ChainScale {
@@ -236,6 +245,8 @@ export function valueForDimension(
       // nothing to a chain total rather than a borrowed cut-and-fill number.
       if (m.kind === 'volume' && m.volume) return m.volume.fill != null ? m.volume.fill * storedVolume : null;
       if (m.kind === 'box' && p.length >= 2) {
+        // A clip region spans the scan's full height: no measured volume.
+        if (m.clipRegion === true) return null;
         // The box is built on metre-frame corners, so the up-aware answer the
         // area branch and the box readout use already carries fH²·fV.
         return boxMetrics(boxFromCorners(p[0], p[1]), worldUp).volume;
@@ -293,7 +304,9 @@ export const CHAIN_UNRESOLVED =
  * every kind `valueForDimension` reads from the points. A figure read from the
  * cloud rather than the points (a volume's cut and fill) has none.
  */
-export function chainMetricKeys(kind: Measurement['kind'], dimension: ChainDimension): readonly string[] {
+export function chainMetricKeys(kind: Measurement['kind'], dimension: ChainDimension, clipRegion = false): readonly string[] {
+  // A clip region has no measured height or volume, so offers neither.
+  if (kind === 'box' && clipRegion && (dimension === 'volume-fill' || dimension === 'height')) return [];
   switch (dimension) {
     case 'length':
       if (kind === 'slope') return ['run_m', 'rise_m'];
@@ -348,7 +361,7 @@ export function aggregate(
   // honest value, so no total, mean or extreme of it is given: the chain is refused.
   if (scale.positionSteps) {
     for (const m of measurements) {
-      const keys = chainMetricKeys(m.kind, dimension);
+      const keys = chainMetricKeys(m.kind, dimension, m.clipRegion === true);
       const steps = keys.length > 0 ? scale.positionSteps(m) : null;
       const unresolved = steps ? unresolvedMetricKeys(m, worldUp, unitToMetres, verticalUnitToMetres, steps) : [];
       if (keys.some((k) => unresolved.includes(k))) {
@@ -368,6 +381,11 @@ export function aggregate(
     if (v !== null && Number.isFinite(v)) values.push(v);
   }
   const contributingCount = values.length;
+  const clipLeftOut = dimension === 'volume-fill' && measurements.some((m) => m.kind === 'box' && m.clipRegion === true);
+  if (clipLeftOut && contributingCount === 0 && operation !== 'count') {
+    return { value: Number.NaN, unit: '', contributingCount: 0, totalCount, operation, dimension, refusal: CHAIN_CLIP_REGION_WITHHELD };
+  }
+  const note = clipLeftOut ? CHAIN_CLIP_REGION_LEFT_OUT : undefined;
   // A geographic frame has no confirmed linear scale either.
   const verified = (scale.unitsVerified ?? true) && scale.geographic !== true;
   const unit = (verified ? DIMENSION_UNIT : SOURCE_UNIT)[dimension] ?? '';
@@ -427,6 +445,7 @@ export function aggregate(
     totalCount,
     operation,
     dimension,
+    ...(note ? { note } : {}),
   };
 }
 
@@ -500,5 +519,5 @@ export function formatChainResult(result: ChainResult, system: UnitSystem = 'met
     default:
       text = `${abs.toFixed(displayDecimals(abs, 2, 4))} ${result.unit}`.trim();
   }
-  return `${sign}${text}`;
+  return `${sign}${text}${result.note ? ` (${result.note})` : ''}`;
 }

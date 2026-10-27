@@ -375,14 +375,14 @@ export function formatBoxHeadline(
   const noHeight = Number.isNaN(volume) ? 'no volume: set a height' : null;
   if (fmtLen) return `${fmtLen(width)} × ${fmtLen(depth)} × ${fmtLen(height)}  · ${noHeight ?? fmtVol(volume)}`;
   // One unit for the three sides, at one decimal count, and the volume in the
-  // cube of that unit: "13.200 m × 4.800 m × 0.005 m · 0.31680 m³", never
+  // cube of that unit: "13.200 m × 4.800 m × 0.005 m · 0.3168 m³", never
   // "13.200 m × 4.8000 m × 0.5000 cm · 317 dm³".
   const unit = sharedLengthUnit([width, depth, height], system);
   const [w, d, h] = [width, depth, height].map((x) => inSharedUnit(x, unit));
   let v = noHeight ?? '—';
   if (Number.isFinite(volume) && volume >= 0) {
     const cubic = volume * unit.perMetre ** 3;
-    v = `${grouped(cubic, displayDecimals(cubic, 0, 6))} ${unit.unit}³`;
+    v = `${formatVolumeNumber(cubic)} ${unit.unit}³`;
   }
   return `${w} × ${d} × ${h}  · ${v}`;
 }

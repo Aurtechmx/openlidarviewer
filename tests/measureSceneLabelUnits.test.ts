@@ -98,7 +98,7 @@ describe('scene labels: confirmed units', () => {
     const { value, labels } = await render(BOX, { crsKnown: true });
     const head = labels.find((l) => l.primary)!.text;
     expect(head).toBe(value);
-    expect(head).toBe('13.2000 m × 4.8000 m × 0.0050 m  · 0.31680 m³');
+    expect(head).toBe('13.2000 m × 4.8000 m × 0.0050 m  · 0.3168 m³');
     expect(head).not.toMatch(/cm|dm³/);
   });
 
@@ -184,7 +184,7 @@ describe('shared-unit formatting', () => {
   });
 
   it('the box and profile headlines use it unless a formatter is passed', () => {
-    expect(formatBoxHeadline(13.2, 4.8, 0.005, 0.3168, 'metric')).toBe('13.2000 m × 4.8000 m × 0.0050 m  · 0.31680 m³');
+    expect(formatBoxHeadline(13.2, 4.8, 0.005, 0.3168, 'metric')).toBe('13.2000 m × 4.8000 m × 0.0050 m  · 0.3168 m³');
     expect(formatBoxHeadline(Number.NaN, 0, 0, Number.NaN, 'imperial')).not.toMatch(/NaN|Infinity/);
     expect(formatProfileHeadline(50, -0.4, -0.8, 'metric')).toBe('50.000 m  · Δh −0.400 m  · -0.8%');
   });
