@@ -24,11 +24,22 @@ describe('live DTM evidence by cell class and grid', () => {
     expect(dtmMeasuredParameterSet(at(2 + 1e-12))).toBe('PS-DTM-MEDIAN-CELL2-ORIGINMIN');
   });
 
-  it('an unstudied cell size is not covered, measured cells included', () => {
-    const r = resolveEvidence('DTM', { cells: 'measured', dtmGrid: at(0.3) });
-    expect(r.effectiveEvidence).toBeNull();
-    expect(r.resolutionState).toBe('external-evidence-out-of-scope');
-    expect(dtmCellsEvidenceText(at(0.3))).toMatch(/^measured cells not covered/);
+  it('any cell size in 0.1 to 10 m resolves to E4 through the range study', () => {
+    for (const s of [0.1, 0.3, 3.7, 10]) {
+      expect(resolveEvidence('DTM', { cells: 'measured', dtmGrid: at(s) }).effectiveEvidence).toBe('E4_CROSS_IMPLEMENTATION_VALIDATED');
+    }
+    expect(dtmMeasuredParameterSet(at(0.3))).toBe('PS-DTM-MEDIAN-RANGE-0P1-10-ORIGINMIN');
+    expect(dtmCellsEvidenceText(at(0.3))).toMatch(/^E4 .*on measured cells/);
+  });
+
+  it('a cell size outside 0.1 to 10 m is not covered, measured cells included', () => {
+    for (const s of [0.05, 0.0999, 10.01, 12]) {
+      const r = resolveEvidence('DTM', { cells: 'measured', dtmGrid: at(s) });
+      expect(r.effectiveEvidence).toBeNull();
+      expect(r.resolutionState).toBe('external-evidence-out-of-scope');
+    }
+    expect(dtmCellsEvidenceText(at(12))).toMatch(/^measured cells not covered/);
+    expect(dtmCellsEvidenceText(at(0.05))).toMatch(/^measured cells not covered/);
   });
 
   it('the default 1 m grid with the data-minimum origin resolves to E4 (protocol v3)', () => {
@@ -89,7 +100,7 @@ describe('surfaces that show DTM evidence pass the run grid', () => {
     const { buildEvidenceContractView } = await import('../src/validation/evidenceBoundaryInspector');
     const view = buildEvidenceContractView('DTM');
     expect(renderEvidenceContract(view, at(0.25)).join('\n')).toMatch(/Effective\s+E4 .*measured cells/);
-    expect(renderEvidenceContract(view, at(0.3)).join('\n')).toMatch(/Effective\s+measured cells not covered/);
+    expect(renderEvidenceContract(view, at(12)).join('\n')).toMatch(/Effective\s+measured cells not covered/);
     expect(renderEvidenceContract(view).join('\n')).toMatch(/Effective\s+measured cells not covered/);
   });
 
@@ -101,7 +112,7 @@ describe('surfaces that show DTM evidence pass the run grid', () => {
   it('the terrain report DTM row', async () => {
     const { dtmNotCovered } = await import('../src/terrain/export/terrainReportContent');
     expect(dtmNotCovered(resultAt(2) as never)).toMatch(/^E4 .*measured cells/);
-    expect(dtmNotCovered(resultAt(0.3) as never)).toMatch(/^measured cells not covered/);
+    expect(dtmNotCovered(resultAt(0.05) as never)).toMatch(/^measured cells not covered/);
     expect(dtmNotCovered(resultAt(2) as never)).toMatch(/filled cells not covered/);
   });
 
@@ -118,6 +129,6 @@ describe('surfaces that show DTM evidence pass the run grid', () => {
       buildExportProvenance(make(cellSizeM), { generatedAt: '2026-10-26T00:00:00.000Z', verticalUnitToMetres: 1, evidenceContext: {} }),
     ).find((l) => l.startsWith('Scoped evidence')) ?? '';
     expect(line(0.5)).toMatch(/E4 .*on measured cells/);
-    expect(line(0.3)).toMatch(/measured cells not covered/);
+    expect(line(12)).toMatch(/measured cells not covered/);
   });
 });

@@ -10,7 +10,7 @@
     "160 cells that share an edge on which an input return lies exactly were left out of the terra leg, as the protocol fixed in advance: terra numbers rows from the top and its rule for a return on an interior edge differs. That is an edge convention, not a median question.",
     "The numbers are computed by tests/dtmMedianCrossCheck.test.ts.",
     "scripts/dtm-median-reference-terra.R was extended on 2026-10-26 for protocols dtm-median-gridding-v2 and v3; its v1 part is unchanged, and rerunning it reproduces the v1 outputs listed here byte for byte.",
-    "The reference script was extended again on 2026-10-26 for protocol v4 (range study); the code for this study is unchanged and its outputs reproduce byte for byte."
+    "The reference script was extended again on 2026-10-26 for protocols v4 and v5 (range study); the code for this study is unchanged and its outputs reproduce byte for byte."
   ],
   "protocolDigest": "sha256:95c36571581ceeda665e6b8675cb26a0403e2a84890774b6912b73dfb87ee6ea",
   "candidate": {
@@ -198,7 +198,7 @@
     },
     {
       "path": "scripts/dtm-median-reference-terra.R",
-      "sha256": "ca72cbd26e6297c284a856a370db9bd92e86d557bb862fe8993c58f78db403c1",
+      "sha256": "5d85958c74bf19bd7643faf02e5fac478964e9c904ae588dca6f5cb88a691f73",
       "role": "reference-command"
     },
     {

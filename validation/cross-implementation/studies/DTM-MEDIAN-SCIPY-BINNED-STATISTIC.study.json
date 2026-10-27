@@ -10,7 +10,7 @@
     "The SciPy leg compares every cell.",
     "The numbers are computed by tests/dtmMedianCrossCheck.test.ts.",
     "scripts/dtm-median-reference-scipy.py was extended on 2026-10-26 for protocols dtm-median-gridding-v2 and v3; its v1 part is unchanged, and rerunning it reproduces the v1 outputs listed here byte for byte.",
-    "The reference script was extended again on 2026-10-26 for protocol v4 (range study); the code for this study is unchanged and its outputs reproduce byte for byte."
+    "The reference script was extended again on 2026-10-26 for protocols v4 and v5 (range study); the code for this study is unchanged and its outputs reproduce byte for byte."
   ],
   "protocolDigest": "sha256:0dcbfcfde85e123fdafc374ba1f1b160fee11cda85d930af2d1a7338ab3939a3",
   "candidate": {
@@ -198,7 +198,7 @@
     },
     {
       "path": "scripts/dtm-median-reference-scipy.py",
-      "sha256": "e28e893cae1d2ea056f90a8398887453b747fa943ea7de7f92f36aac5526c5f6",
+      "sha256": "42563ccf44ad6675de72aacdb8c2389b6a7b32117a519d3b9f31701d3efff06a",
       "role": "reference-command"
     },
     {

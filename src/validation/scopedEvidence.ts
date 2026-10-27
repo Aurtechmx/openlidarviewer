@@ -281,7 +281,14 @@ export const STUDIED_DTM_MEDIAN_SETS: ReadonlyArray<{ readonly cellSizeM: number
   { cellSizeM: 5, parameterSetId: 'PS-DTM-MEDIAN-CELL5-ORIGINMIN' },
 ];
 
-/** A measured-cell parameter set no study covers: any grid not in {@link STUDIED_DTM_MEDIAN_SETS}. */
+/**
+ * The continuous range the seeded range study covers
+ * (validation/protocols/dtm-median-gridding-v5.md): any cell size from 0.1 to
+ * 10 m with the data-minimum origin.
+ */
+export const STUDIED_DTM_MEDIAN_RANGE = { minCellSizeM: 0.1, maxCellSizeM: 10, parameterSetId: 'PS-DTM-MEDIAN-RANGE-0P1-10-ORIGINMIN' } as const;
+
+/** A measured-cell parameter set no study covers: any grid outside {@link STUDIED_DTM_MEDIAN_RANGE}. */
 export const DTM_MEDIAN_NOT_STUDIED = 'PS-DTM-MEDIAN-NOT-STUDIED';
 
 /** Filled cells come from the void fill, which no study covers. */
@@ -289,14 +296,18 @@ export const LIVE_DTM_FILLED_PARAMETER_SET = 'PS-DTM-LIVE-MEDIAN-FILL';
 
 /**
  * The parameter set a live DTM's measured cells were built with. Covered only
- * when the grid uses the data-minimum origin and its cell size matches a
- * studied size to within 1e-9; otherwise, or when the grid is not known, the
- * not-studied set, which resolves to not covered.
+ * when the grid uses the data-minimum origin and its cell size is a studied
+ * size (within 1e-9) or lies in the studied range 0.1 to 10 m; otherwise, or
+ * when the grid is not known, the not-studied set, which resolves to not
+ * covered.
  */
 export function dtmMeasuredParameterSet(grid?: DtmGridRule | null): string {
   if (grid == null || grid.origin !== 'data-minimum' || !Number.isFinite(grid.cellSizeM)) return DTM_MEDIAN_NOT_STUDIED;
   const hit = STUDIED_DTM_MEDIAN_SETS.find((s) => Math.abs(s.cellSizeM - grid.cellSizeM) <= 1e-9);
-  return hit?.parameterSetId ?? DTM_MEDIAN_NOT_STUDIED;
+  if (hit) return hit.parameterSetId;
+  const r = STUDIED_DTM_MEDIAN_RANGE;
+  if (grid.cellSizeM >= r.minCellSizeM - 1e-9 && grid.cellSizeM <= r.maxCellSizeM + 1e-9) return r.parameterSetId;
+  return DTM_MEDIAN_NOT_STUDIED;
 }
 
 /**

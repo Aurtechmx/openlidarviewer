@@ -61,7 +61,7 @@
 #     validation has been run). Synthetic known-truth fixtures alone remain E3,
 #     not accuracy.
 #   - externalValidationStatus is `pending` wherever external data is required
-#     and unavailable. Thirty-four study manifests under
+#     and unavailable. Thirty-six study manifests under
 #     validation/cross-implementation/studies/ record an independent reference
 #     that agreed. Seventeen hold up the seventeen claims that reached E4
 #     before 0.7, one each
@@ -71,7 +71,14 @@
 #     TERRAIN-FLOW-DEPRESSION-INVENTORY (TauDEM). Twelve more support DTM median
 #     gridding on measured cells (R terra, and SciPy, whose bin edges this
 #     project supplies), one pair per grid: 1 m with origin (0, 0), and
-#     0.25, 0.5, 1, 2 and 5 m with the origin at the data minimum.
+#     0.25, 0.5, 1, 2 and 5 m with the origin at the data minimum. Two more
+#     (DTM-MEDIAN-RANGE-0P1-10-*) cover 50 seeded sizes from 0.1 to 10 m
+#     under protocol v5, after v4 failed on reference output precision.
+#     The v2/v3 fixtures hold float64 elevations, so their even-count
+#     medians are never float32 ties. The range draws hold float32-ingested
+#     elevations and include those ties at sizes spanning the v2/v3 sizes;
+#     the tie arithmetic does not depend on cell size, so the v2/v3 sizes
+#     are not rerun on float32 input and rely on the range study for ties.
 #     The runtime view, REFERENCE_SLOTS in src/validation/crossCheck.ts, holds
 #     sixteen slots: thirteen read `supplied`; CHANGE-RASTER and CHANGE-VOLUME
 #     read `pending` there although their GRASS references are committed and
@@ -523,17 +530,17 @@ claims:
     requiredEvidence: E5_EXTERNALLY_VALIDATED
     supportingTests: [tests/terrainTruth.dtm.test.ts, tests/groundFilterPdalAgreement.test.ts, tests/dtmMedianCrossCheck.test.ts]
     supportingDatasets: [synthetic analytic surfaces, seeded bare-earth point clouds with PDAL writers.gdal reference, seeded point clouds with R terra and SciPy median references]
-    supportingStudies: [DTM-PDAL-WRITERS-GDAL-CELL-CENTRED, DTM-MEDIAN-R-TERRA-RASTERIZE, DTM-MEDIAN-SCIPY-BINNED-STATISTIC, DTM-MEDIAN-CELL0P25-ORIGINMIN-R-TERRA, DTM-MEDIAN-CELL0P25-ORIGINMIN-SCIPY, DTM-MEDIAN-CELL0P5-ORIGINMIN-R-TERRA, DTM-MEDIAN-CELL0P5-ORIGINMIN-SCIPY, DTM-MEDIAN-CELL1-ORIGINMIN-R-TERRA, DTM-MEDIAN-CELL1-ORIGINMIN-SCIPY, DTM-MEDIAN-CELL2-ORIGINMIN-R-TERRA, DTM-MEDIAN-CELL2-ORIGINMIN-SCIPY, DTM-MEDIAN-CELL5-ORIGINMIN-R-TERRA, DTM-MEDIAN-CELL5-ORIGINMIN-SCIPY]
+    supportingStudies: [DTM-PDAL-WRITERS-GDAL-CELL-CENTRED, DTM-MEDIAN-R-TERRA-RASTERIZE, DTM-MEDIAN-SCIPY-BINNED-STATISTIC, DTM-MEDIAN-CELL0P25-ORIGINMIN-R-TERRA, DTM-MEDIAN-CELL0P25-ORIGINMIN-SCIPY, DTM-MEDIAN-CELL0P5-ORIGINMIN-R-TERRA, DTM-MEDIAN-CELL0P5-ORIGINMIN-SCIPY, DTM-MEDIAN-CELL1-ORIGINMIN-R-TERRA, DTM-MEDIAN-CELL1-ORIGINMIN-SCIPY, DTM-MEDIAN-CELL2-ORIGINMIN-R-TERRA, DTM-MEDIAN-CELL2-ORIGINMIN-SCIPY, DTM-MEDIAN-CELL5-ORIGINMIN-R-TERRA, DTM-MEDIAN-CELL5-ORIGINMIN-SCIPY, DTM-MEDIAN-RANGE-0P1-10-R-TERRA, DTM-MEDIAN-RANGE-0P1-10-SCIPY]
     units: [metres]
     crsDatum: "Metric; refuses geographic-degree area/volume derivatives."
     assumptions: ["interpolation model as configured", "coverage-gated"]
     failureModes: ["large voids", "steep breaklines", "vegetation leakage from ground filter"]
     exportAllowed: true
-    userLabel: "Cross-implementation validated DTM median gridding on measured cells; filled cells not covered"
+    userLabel: "Cross-implementation validated DTM median gridding on measured cells at 0.1 to 10 m cells; filled cells not covered"
     softwareStatus: shipping
     evidenceLevel: E4_CROSS_IMPLEMENTATION_VALIDATED
     externalValidationStatus: partial
-    approvedClaim: "DTM median gridding on measured cells agreed with R terra and SciPy on 18498 cells (SciPy: 18655) across eight seeded clouds, within the 1e-6 m registered tolerance after float32 rounding, on a 1 m grid with origin (0, 0) and, with the origin at the data minimum, at 0.25, 0.5, 1, 2 and 5 m cells; interpolated (filled) cells are not covered. Min-return gridding agreed with PDAL writers.gdal over 7500 cells within 5e-5 m. Still validated against analytic surfaces on covered cells."
+    approvedClaim: "DTM median gridding on measured cells agreed with R terra and SciPy on 18498 cells (SciPy: 18655) across eight seeded clouds, within the 1e-6 m registered tolerance after float32 rounding, on a 1 m grid with origin (0, 0) and, with the origin at the data minimum, at 0.25, 0.5, 1, 2 and 5 m cells and on 37012 cells over 50 seeded cell sizes from 0.1 to 10 m, including the float32 ties of LAS ingest; interpolated (filled) cells are not covered. Min-return gridding agreed with PDAL writers.gdal over 7500 cells within 5e-5 m. Still validated against analytic surfaces on covered cells."
     prohibitedClaim: ["field-validated DTM accuracy", "independent checkpoint accuracy", "ground-classification accuracy", "full point-cloud-to-DTM pipeline validated", "real-terrain void interpolation validated"]
     scope:
       supported:
@@ -639,6 +646,8 @@ claims:
           parameterSetId: PS-DTM-MEDIAN-CELL5-ORIGINMIN
         - datasetId: OLV-DS-014-PC-BARE-RIDGE
           parameterSetId: PS-DTM-MEDIAN-CELL5-ORIGINMIN
+        - datasetId: OLV-DS-130-DTM-MEDIAN-RANGE-DRAWS
+          parameterSetId: PS-DTM-MEDIAN-RANGE-0P1-10-ORIGINMIN
       unsupported:
         - "Real terrain. The evidence is analytic surfaces and seeded synthetic clouds."
         - "Ground classification. The three supporting clouds are bare-earth by construction, so the cross-check exercises the min-return gridding, not the ground filter. That step is GROUND-FILTER, still partial."
@@ -646,7 +655,7 @@ claims:
         - "Independent checkpoint accuracy, which needs checkpoints this project does not have."
         - "Large voids and steep breaklines. Interpolation across them is not exercised by the supporting clouds."
         - "Vegetation leakage inherited from the ground filter."
-        - "Other cell sizes and grid origins. The median studies cover a 1 m grid with origin (0, 0), and 0.25, 0.5, 1, 2 and 5 m grids with the origin at the data minimum; a DTM at any other cell size is not covered."
+        - "Cell sizes outside 0.1 to 10 m, and grid origins other than the data minimum. The range study tested 50 seeded sizes across 0.1 to 10 m, not every size; a DTM outside that range, or on another origin rule, is not covered."
         - "Interpolated (IDW fill) cells. The median studies compare measured cells only, cells holding at least one return; the void fill is not cross-checked."
         - "Independence of the SciPy leg. SciPy computes the median and bin assignment over bin edges this project supplies; R terra builds its own grid and is the independent reference. The fixtures and the comparison harness are this project's own for both."
 

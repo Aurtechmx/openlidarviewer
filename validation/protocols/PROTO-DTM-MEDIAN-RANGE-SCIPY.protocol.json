@@ -1,0 +1,45 @@
+{
+  "schemaVersion": 1,
+  "protocolId": "PROTO-DTM-MEDIAN-RANGE-SCIPY",
+  "example": false,
+  "title": "DTM median gridding on measured cells over 0.1 to 10 m cells, origin at the data minimum, against SciPy",
+  "question": "Over 50 seeded cell sizes from 0.1 to 10 m, on small and UTM-scale coordinates after OLV's LAS ingest, does rasterizeDtm with median aggregation give the same per-cell median as SciPy on the same points and grid, for cells that hold at least one return?",
+  "recordWrittenOn": "2026-10-26",
+  "referenceTool": "SciPy",
+  "referenceVersion": "1.17.1",
+  "claims": [
+    {
+      "claimId": "DTM",
+      "datasetIds": [
+        "OLV-DS-130-DTM-MEDIAN-RANGE-DRAWS"
+      ],
+      "parameterSetIds": [
+        "PS-DTM-MEDIAN-RANGE-0P1-10-ORIGINMIN"
+      ],
+      "metrics": {
+        "toleranceAbs": 0.000001,
+        "toleranceUnit": "metre (OLV float32 against the reference rounded to float32)",
+        "minimumComparableCells": 30000,
+        "requiredWithinToleranceFraction": 1
+      },
+      "toleranceDerivation": "Both sides take the median of the same returns, so the only expected difference is float32 storage on the OLV side. Rounding the reference to float32 removes that, and 1e-6 m then separates a last-bit difference from a different median. Every cell must pass and the occupancy masks must match exactly.",
+      "freeze": {
+        "status": "preregistered",
+        "on": "2026-10-26",
+        "witnessCommit": "02177f57dbd40d869a248faf811105855f6c051a",
+        "witness": "The commit that adds validation/protocols/dtm-median-gridding-v5.md, which keeps the v4 seed, draws, fixtures, tolerance, edge rule, 600-cell minimum per draw and pass rule, states why v4 failed, and fixes exact reference I/O, before any v5 reference grid existed. The v4 protocol and fixtures were committed before any reference grid at all.",
+        "resultLandedOn": "2026-10-26",
+        "resultCommit": "a33f988339d57ec8f5169610ef9176f32d9afaf2",
+        "atInstant": "2026-10-26T23:08:26-07:00",
+        "resultAtInstant": "2026-10-26T23:10:20-07:00"
+      }
+    }
+  ],
+  "decisionRule": "Agree only when every compared cell is within 1e-6 m after rounding the reference to float32, the occupancy masks match exactly, at least 15000 cells are compared, and the two references (SciPy and R terra) agree with each other under the same rule. Otherwise report the failure with its numbers; the tolerance is never widened.",
+  "notes": [
+    "Transcribes validation/protocols/dtm-median-gridding-v5.md (with v4, which it reruns). It does not create that freeze.",
+    "Protocol v4 failed on the same draws: the reference grids were written to 9 decimals, which moved even-count medians (float32 ties) off the tie. v5 changes only the reference I/O. The v4 record is kept unchanged.",
+    "minimumComparableCells is the total over 50 draws; the protocol also requires at least 600 compared cells in every draw."
+  ],
+  "digest": "sha256:87c7211b20a3834be8ed972e38591309c3c288d42b50a90ef5b368f8f1b15914"
+}

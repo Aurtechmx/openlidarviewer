@@ -96,7 +96,7 @@ export { NOT_SURVEY_GRADE_NOTE };
 export const EVIDENCE_GATE_NOTE: string = !exportGate('DTM').exploratoryOnly
   ? 'Evidence: meets the required validation level for this product.'
   : evidenceRank(EVIDENCE_REGISTRY['DTM'].current) >= evidenceRank(INDEPENDENCE_FLOOR)
-    ? 'Evidence: exploratory export. The independent-tool cross-checks cover DTM median gridding on measured cells only, at 0.25, 0.5, 1, 2 and 5 m cells with the grid origin at the data minimum; other cell sizes and filled cells are not covered. They cover a 3x3 TPI, which this export does not use (the TPI here uses a 2 to 10 cell radius). The DTM has not reached its required external field-validation level and is not field-validated against ground control. Do not present as a validated deliverable.'
+    ? 'Evidence: exploratory export. The independent-tool cross-checks cover DTM median gridding on measured cells only, at cell sizes from 0.1 to 10 m with the grid origin at the data minimum; other cell sizes and filled cells are not covered. They cover a 3x3 TPI, which this export does not use (the TPI here uses a 2 to 10 cell radius). The DTM has not reached its required external field-validation level and is not field-validated against ground control. Do not present as a validated deliverable.'
     : 'Evidence: exploratory export. Terrain products are validated only against synthetic known-truth (pre-E4) — not cross-validated against an independent tool, and not field-validated. Do not present as a validated deliverable.';
 
 /**

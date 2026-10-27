@@ -1,0 +1,882 @@
+{
+  "schemaVersion": 1,
+  "studyId": "DTM-MEDIAN-RANGE-0P1-10-SCIPY",
+  "claimId": "DTM",
+  "example": false,
+  "notes": [
+    "The seed, draws, fixtures, tolerance and minimums were registered in protocol v4 before any reference grid existed; v5 changed only the reference I/O before any v5 run.",
+    "Protocol v4 failed on these draws because the reference grids were written to 9 decimals; that record is kept. Here inputs reach the reference as float64 binary and outputs are hex floats, both checked.",
+    "The first v5 terra pass read the cell sizes from CSV, which R parsed one ulp off in five draws; the protocol requires exact inputs, so the sizes are read from cellsizes.f64. Compared values were the same in both passes.",
+    "Even-count medians here are exact float32 ties, as in real LAS data after float32 ingest; every one agrees.",
+    "Scope is measured cells only. Interpolated (IDW fill) cells are not covered.",
+    "The numbers are computed by tests/dtmMedianCrossCheck.test.ts."
+  ],
+  "protocolDigest": "sha256:a5bf2cdcd62071e26aac0c4ba39cc8b383b62d6e954a9c7a1cbc0d3cc37fdf2a",
+  "candidate": {
+    "revision": "a33f988339d57ec8f5169610ef9176f32d9afaf2",
+    "version": "0.7.1-alpha.1",
+    "algorithmVersion": "v0.4.4"
+  },
+  "reference": {
+    "tool": "SciPy",
+    "version": "1.17.1",
+    "containerDigest": null,
+    "containerPinning": "not-executed",
+    "containerPinningNote": "No container was used; the executable path, the versions recorded in reference-run.json and the exact command line stand in for a container digest.",
+    "executablePath": "/opt/homebrew/opt/python@3.11/libexec/bin/python3",
+    "commandLine": "python3 -I scripts/dtm-median-reference-scipy.py",
+    "platform": "darwin-arm64"
+  },
+  "datasets": [
+    {
+      "datasetId": "OLV-DS-130-DTM-MEDIAN-RANGE-DRAWS",
+      "description": "50 seeded draws (draws.csv indexes draw-NN.csv / draw-NN.f64): cell size log-uniform on 0.1 to 10 m plus 0.1 m and 10 m, alternating UTM-scale and small coordinates, local values after the LAS ingest rule.",
+      "path": "validation/cross-implementation/dtm-median/range/fixtures/draws.csv",
+      "sha256": "184c922cee873cec574351832783e1376d9d32083fab3a83dba340cc8ad02918"
+    }
+  ],
+  "parameterSets": [
+    {
+      "id": "PS-DTM-MEDIAN-RANGE-0P1-10-ORIGINMIN",
+      "description": "Per-cell median, cell size anywhere in 0.1 to 10 m, grid origin at the minimum x and y of the input and extent from the rasterizeDtm rule. Even counts take the mean of the two middle values. Empty cells are NoData.",
+      "candidateParameters": {
+        "function": "rasterizeDtm",
+        "aggregation": "median",
+        "cellSizeM": "per draw, 0.1 to 10",
+        "grid": "derived by rasterizeDtm from the data minimum",
+        "verticalAxis": "z"
+      },
+      "referenceParameters": {
+        "function": "scipy.stats.binned_statistic_2d",
+        "statistic": "median",
+        "input": "numpy.fromfile float64",
+        "output": "float.hex"
+      }
+    }
+  ],
+  "metrics": {
+    "toleranceAbs": 0.000001,
+    "toleranceUnit": "metre (OLV float32 against the reference rounded to float32)",
+    "minimumComparableCells": 30000,
+    "requiredWithinToleranceFraction": 1
+  },
+  "status": "agree",
+  "statusReason": "All 37012 compared measured cells across the 50 draws are within 1e-6 m of the float32-rounded SciPy median (largest difference 0 m), occupancy matches with no mismatched cell, and no draw compares fewer than 715 cells. The largest unrounded difference is 9.54e-7 m, half a float32 step at these heights. SciPy and R terra agree with each other under the same rule.",
+  "result": {
+    "comparableCells": 37012,
+    "skippedCells": 0,
+    "withinToleranceFraction": 1,
+    "maxAbsDiff": 0
+  },
+  "rawArtifacts": [
+    {
+      "path": "validation/cross-implementation/dtm-median/range/fixtures/draws.csv",
+      "sha256": "184c922cee873cec574351832783e1376d9d32083fab3a83dba340cc8ad02918",
+      "role": "candidate-input"
+    },
+    {
+      "path": "validation/cross-implementation/dtm-median/range/fixtures/draw-00.csv",
+      "sha256": "481f1cb9c34e281d6179a13a841caabedd38015ccb100474893257f25ca65174",
+      "role": "candidate-input"
+    },
+    {
+      "path": "validation/cross-implementation/dtm-median/range/fixtures/draw-01.csv",
+      "sha256": "dfe4cbaf2837a2cd6a30dba3ecda8ef1f8ced84b2ca588622d94d693513634be",
+      "role": "candidate-input"
+    },
+    {
+      "path": "validation/cross-implementation/dtm-median/range/fixtures/draw-02.csv",
+      "sha256": "77f4994d62c94328b22185c4dff391c1cbe3ca0874d1f9bf3247f29610294f8d",
+      "role": "candidate-input"
+    },
+    {
+      "path": "validation/cross-implementation/dtm-median/range/fixtures/draw-03.csv",
+      "sha256": "8879eb8bc8790e7ae03f54827b4dd8acdb59d429c279d9ecb2b63a611a7bec02",
+      "role": "candidate-input"
+    },
+    {
+      "path": "validation/cross-implementation/dtm-median/range/fixtures/draw-04.csv",
+      "sha256": "f659612fd87ccc8f70af7b0d425d66570cc5c81b69fe5e9ea147c7b0a09e90f1",
+      "role": "candidate-input"
+    },
+    {
+      "path": "validation/cross-implementation/dtm-median/range/fixtures/draw-05.csv",
+      "sha256": "27ccc8da6698d567ceb65cd5869a184f3a46d5f9a058ed43ef0f4bc6103a57cb",
+      "role": "candidate-input"
+    },
+    {
+      "path": "validation/cross-implementation/dtm-median/range/fixtures/draw-06.csv",
+      "sha256": "0eee1f8d9c9be47fc01b1ae3c77fb28b46422f9a92942e43a32c94ca4fec1c12",
+      "role": "candidate-input"
+    },
+    {
+      "path": "validation/cross-implementation/dtm-median/range/fixtures/draw-07.csv",
+      "sha256": "4ab8fe7897521cfd69fdffec9c2f1a2cd9c8abad97708fb6ebc4e1ffec640020",
+      "role": "candidate-input"
+    },
+    {
+      "path": "validation/cross-implementation/dtm-median/range/fixtures/draw-08.csv",
+      "sha256": "ac541f04822f6c7aadc10f41bc8ad34b618fa1c7421ccddf45652289c54a1314",
+      "role": "candidate-input"
+    },
+    {
+      "path": "validation/cross-implementation/dtm-median/range/fixtures/draw-09.csv",
+      "sha256": "cc89f91b61ab00c5a8a89c390fb1e0ff230f5c70678dfddcd2726cb9b1b23fa5",
+      "role": "candidate-input"
+    },
+    {
+      "path": "validation/cross-implementation/dtm-median/range/fixtures/draw-10.csv",
+      "sha256": "a0736a09b459f47388fee35580aa958f4046d54b5895ebebdde68c48077674f5",
+      "role": "candidate-input"
+    },
+    {
+      "path": "validation/cross-implementation/dtm-median/range/fixtures/draw-11.csv",
+      "sha256": "02f01bce7f9fcf548c5e3df35a5b1495daa7a3323d44a9df58d7443e4883f8c2",
+      "role": "candidate-input"
+    },
+    {
+      "path": "validation/cross-implementation/dtm-median/range/fixtures/draw-12.csv",
+      "sha256": "822ed21ef7bd5d0fca656f29373cf49c7efca9473fbad56b1c411a858171a0f4",
+      "role": "candidate-input"
+    },
+    {
+      "path": "validation/cross-implementation/dtm-median/range/fixtures/draw-13.csv",
+      "sha256": "1bf4b9c59c0c3a92bc6601f9356938822062f619af71716e6764ddd51e321427",
+      "role": "candidate-input"
+    },
+    {
+      "path": "validation/cross-implementation/dtm-median/range/fixtures/draw-14.csv",
+      "sha256": "7e49f9ac313a429c88276e5612e1bf20ebb1507f222081736d41c29dc321292a",
+      "role": "candidate-input"
+    },
+    {
+      "path": "validation/cross-implementation/dtm-median/range/fixtures/draw-15.csv",
+      "sha256": "430434b0cef912bb662dbdb78ea9ad6b253b4752882603848a084fd8b99a4d6a",
+      "role": "candidate-input"
+    },
+    {
+      "path": "validation/cross-implementation/dtm-median/range/fixtures/draw-16.csv",
+      "sha256": "248b65d3437d861ff477cf06bf8268a2675f60c276ce7fe2a5a1715c98b37ea0",
+      "role": "candidate-input"
+    },
+    {
+      "path": "validation/cross-implementation/dtm-median/range/fixtures/draw-17.csv",
+      "sha256": "04aad60302f804ac770aff222387541c42ac57f2b21b417ece062fd520e164ff",
+      "role": "candidate-input"
+    },
+    {
+      "path": "validation/cross-implementation/dtm-median/range/fixtures/draw-18.csv",
+      "sha256": "570119456f9497a10032710be18c360a76bcd05b43fbc347b51c69f44278c585",
+      "role": "candidate-input"
+    },
+    {
+      "path": "validation/cross-implementation/dtm-median/range/fixtures/draw-19.csv",
+      "sha256": "6edd9dec4bf019eeb0281dfa1fd00866bb85d329b32c8911165ada2c1a152795",
+      "role": "candidate-input"
+    },
+    {
+      "path": "validation/cross-implementation/dtm-median/range/fixtures/draw-20.csv",
+      "sha256": "5c8088eea57b253b3a4b506f71e6bea230d4eab4b8ea25f42671fc9708ab4989",
+      "role": "candidate-input"
+    },
+    {
+      "path": "validation/cross-implementation/dtm-median/range/fixtures/draw-21.csv",
+      "sha256": "beb7af22ee092ccdf9fb0084631de67f2ac078815f8c225abecba2f23cac1399",
+      "role": "candidate-input"
+    },
+    {
+      "path": "validation/cross-implementation/dtm-median/range/fixtures/draw-22.csv",
+      "sha256": "7255755505ee0a2c0d499254b7cfad8f80c28406d1d423ba0bc01b120595b880",
+      "role": "candidate-input"
+    },
+    {
+      "path": "validation/cross-implementation/dtm-median/range/fixtures/draw-23.csv",
+      "sha256": "d9ae583b250d4594de760a622cac25f63bc86b9f73ee3958df9ea864f7520347",
+      "role": "candidate-input"
+    },
+    {
+      "path": "validation/cross-implementation/dtm-median/range/fixtures/draw-24.csv",
+      "sha256": "f9568a78ee744d075594866944217198cf4b3c80cacd2a5e87d60c8e3a5eb0c4",
+      "role": "candidate-input"
+    },
+    {
+      "path": "validation/cross-implementation/dtm-median/range/fixtures/draw-25.csv",
+      "sha256": "f6cc569dc912867907193d9bc4d1d504332406e53edca077aba2199abb7a787b",
+      "role": "candidate-input"
+    },
+    {
+      "path": "validation/cross-implementation/dtm-median/range/fixtures/draw-26.csv",
+      "sha256": "74569563c5baa4720a18d9d593df7fda26575509cb6d9a906a06baa5a72646e1",
+      "role": "candidate-input"
+    },
+    {
+      "path": "validation/cross-implementation/dtm-median/range/fixtures/draw-27.csv",
+      "sha256": "aaa877badcdf9f220207c2c9138d03bc8bff1d27cbf9452acc1e184222e8a1c4",
+      "role": "candidate-input"
+    },
+    {
+      "path": "validation/cross-implementation/dtm-median/range/fixtures/draw-28.csv",
+      "sha256": "b407f5c416b09e00ba013cac59af8c39071f0f26d3dcedd9a5bb0fc189c3f526",
+      "role": "candidate-input"
+    },
+    {
+      "path": "validation/cross-implementation/dtm-median/range/fixtures/draw-29.csv",
+      "sha256": "51e61312f0adb1ab72f89ac7c54d6fe99ef97ce155459a737df3c213818ff27b",
+      "role": "candidate-input"
+    },
+    {
+      "path": "validation/cross-implementation/dtm-median/range/fixtures/draw-30.csv",
+      "sha256": "bad87119e11aef73eed8e7f8fb6e87ac7025fca16f5674a441525eed937188d2",
+      "role": "candidate-input"
+    },
+    {
+      "path": "validation/cross-implementation/dtm-median/range/fixtures/draw-31.csv",
+      "sha256": "ee3c6bce4b0200431d4096694dbfb7e2732f738ac9ec5a2c8a21dbbfa3674e58",
+      "role": "candidate-input"
+    },
+    {
+      "path": "validation/cross-implementation/dtm-median/range/fixtures/draw-32.csv",
+      "sha256": "6a500b6a305fc0c4a4fa5212d3ae59ff267541141f5e4ad45b817ea50c8076df",
+      "role": "candidate-input"
+    },
+    {
+      "path": "validation/cross-implementation/dtm-median/range/fixtures/draw-33.csv",
+      "sha256": "8e07452cf7e4de7b2cc6581ca3717c2dbaa737fc0b0de2e1010f59596d5ef58e",
+      "role": "candidate-input"
+    },
+    {
+      "path": "validation/cross-implementation/dtm-median/range/fixtures/draw-34.csv",
+      "sha256": "c5509a233e76bab2c7638a91e4cbe11295e1252cfb37f8c82d7ba7e28d212746",
+      "role": "candidate-input"
+    },
+    {
+      "path": "validation/cross-implementation/dtm-median/range/fixtures/draw-35.csv",
+      "sha256": "70a72aca9e6b00a64791ca6f85ab850c1346feee48e1d5521d59eb14ee4cda07",
+      "role": "candidate-input"
+    },
+    {
+      "path": "validation/cross-implementation/dtm-median/range/fixtures/draw-36.csv",
+      "sha256": "9a01cdd43ed18a8247eb1d298264877a61ed71685d8fb6d1345e4f72ae80c195",
+      "role": "candidate-input"
+    },
+    {
+      "path": "validation/cross-implementation/dtm-median/range/fixtures/draw-37.csv",
+      "sha256": "23ee8d506262905c4d250cfee04d5bcfd1d21340adcea9b77833bae967ffcd0e",
+      "role": "candidate-input"
+    },
+    {
+      "path": "validation/cross-implementation/dtm-median/range/fixtures/draw-38.csv",
+      "sha256": "3c18e62a4f793a4c1389f772b90d9d1a9c1cf76ca2f239fc9c0831ef6c6d12f7",
+      "role": "candidate-input"
+    },
+    {
+      "path": "validation/cross-implementation/dtm-median/range/fixtures/draw-39.csv",
+      "sha256": "8e02261b22dc7f96fc16ee582b5aef53d5e480e117890a5830a421e849cbacb8",
+      "role": "candidate-input"
+    },
+    {
+      "path": "validation/cross-implementation/dtm-median/range/fixtures/draw-40.csv",
+      "sha256": "f738ddb07f7ccd8a75ad5bea12223b7921a54b895e9da871fbdec656a0be0c13",
+      "role": "candidate-input"
+    },
+    {
+      "path": "validation/cross-implementation/dtm-median/range/fixtures/draw-41.csv",
+      "sha256": "524cff6082da34d991b0314aca3bc511fde24b895d459d7a49ba53f001fe9cc1",
+      "role": "candidate-input"
+    },
+    {
+      "path": "validation/cross-implementation/dtm-median/range/fixtures/draw-42.csv",
+      "sha256": "44a321a034a6e4ba86dbe6c6ca9f10e7d8fccf1280d0d72b42b9e7d3ff6b75a0",
+      "role": "candidate-input"
+    },
+    {
+      "path": "validation/cross-implementation/dtm-median/range/fixtures/draw-43.csv",
+      "sha256": "6fa26c494afc31b65e0eb2723b1cf643222355e9184cb3f8d89c0ad26465a24b",
+      "role": "candidate-input"
+    },
+    {
+      "path": "validation/cross-implementation/dtm-median/range/fixtures/draw-44.csv",
+      "sha256": "6f0496daed0cb570f9fdc09b412187f85f6476a619917bf2121584266005f339",
+      "role": "candidate-input"
+    },
+    {
+      "path": "validation/cross-implementation/dtm-median/range/fixtures/draw-45.csv",
+      "sha256": "a102c9c7f204e0b88df22f091e7c93ea9f28a50b15f6d24f3cd0615c2cd77ff7",
+      "role": "candidate-input"
+    },
+    {
+      "path": "validation/cross-implementation/dtm-median/range/fixtures/draw-46.csv",
+      "sha256": "a096326026e3336337a873eec11277b5b423febfba9eb7d85608b4daddc8f2f0",
+      "role": "candidate-input"
+    },
+    {
+      "path": "validation/cross-implementation/dtm-median/range/fixtures/draw-47.csv",
+      "sha256": "129e73dd26c04d78350a8f56814825e19b388f2efe416932635b819258a13535",
+      "role": "candidate-input"
+    },
+    {
+      "path": "validation/cross-implementation/dtm-median/range/fixtures/draw-48.csv",
+      "sha256": "bf8f1f22b5c7bad6ebc040317b752635f3c07362727baa681d673614e6a5fa52",
+      "role": "candidate-input"
+    },
+    {
+      "path": "validation/cross-implementation/dtm-median/range/fixtures/draw-49.csv",
+      "sha256": "ed59e91efcb56858e7ffe476a711f840d8577c741cc98e7b8f90104d1ed8d2d0",
+      "role": "candidate-input"
+    },
+    {
+      "path": "validation/cross-implementation/dtm-median/range/fixtures/draw-00.f64",
+      "sha256": "eb6d91df77164feb4da6cfbfc75d73f263b88c60b848b80202db85e771c35eb9",
+      "role": "candidate-input"
+    },
+    {
+      "path": "validation/cross-implementation/dtm-median/range/fixtures/draw-01.f64",
+      "sha256": "8026c6fb0add2a5a2d6b5c5bfc0767e941506b0d96914d8d72767f9f208f8153",
+      "role": "candidate-input"
+    },
+    {
+      "path": "validation/cross-implementation/dtm-median/range/fixtures/draw-02.f64",
+      "sha256": "0cfcd881ea9228dfb56e3a327fbc1bf65382a50a32b1b2a4711c4d9ee256c98d",
+      "role": "candidate-input"
+    },
+    {
+      "path": "validation/cross-implementation/dtm-median/range/fixtures/draw-03.f64",
+      "sha256": "4a704422ba6bdac48a2aa37f6f7eb96ff5606021540544bf9e20f9b1b6ef745a",
+      "role": "candidate-input"
+    },
+    {
+      "path": "validation/cross-implementation/dtm-median/range/fixtures/draw-04.f64",
+      "sha256": "47aa50c9fa76cafd1ce87498b17a9efa17090b56ac8fb31a373d1c7772b7db02",
+      "role": "candidate-input"
+    },
+    {
+      "path": "validation/cross-implementation/dtm-median/range/fixtures/draw-05.f64",
+      "sha256": "f470a286fee6caac6dffe755e4e06bb9e90b9e53d80fe17102fba07c8ac457da",
+      "role": "candidate-input"
+    },
+    {
+      "path": "validation/cross-implementation/dtm-median/range/fixtures/draw-06.f64",
+      "sha256": "c517cf4526e88bd76c40b9e5a3cab7cfccc5467a4071202c7988bbf0be82546a",
+      "role": "candidate-input"
+    },
+    {
+      "path": "validation/cross-implementation/dtm-median/range/fixtures/draw-07.f64",
+      "sha256": "026a0cd720f72db41b4283beec750e9ef695e5d37960a87f2bc0b3cb0fccf235",
+      "role": "candidate-input"
+    },
+    {
+      "path": "validation/cross-implementation/dtm-median/range/fixtures/draw-08.f64",
+      "sha256": "806c1030182c1be0d0cb672213b4a11d703390a7313aa86178896361fe406e08",
+      "role": "candidate-input"
+    },
+    {
+      "path": "validation/cross-implementation/dtm-median/range/fixtures/draw-09.f64",
+      "sha256": "72d0b63e5764c94f4f55c37605d28ee62cb1c2f74889cd970573e3001417f6a9",
+      "role": "candidate-input"
+    },
+    {
+      "path": "validation/cross-implementation/dtm-median/range/fixtures/draw-10.f64",
+      "sha256": "f2340d9c4cfdc25e96c2a5c71c504d5e9685cda051c9159b15f398975a1a8503",
+      "role": "candidate-input"
+    },
+    {
+      "path": "validation/cross-implementation/dtm-median/range/fixtures/draw-11.f64",
+      "sha256": "237cf79ae92be9ae5e3aec01c66d6a56adfdbfcb4aa8e42a702e0a4d7fb54c10",
+      "role": "candidate-input"
+    },
+    {
+      "path": "validation/cross-implementation/dtm-median/range/fixtures/draw-12.f64",
+      "sha256": "c6cd4033aa5f2b772b26535fbacefe3749a109445eb3c4895b825312ed92739d",
+      "role": "candidate-input"
+    },
+    {
+      "path": "validation/cross-implementation/dtm-median/range/fixtures/draw-13.f64",
+      "sha256": "f63021147324f32242d6dbc2b9dca159af4934e5b7f336fcf71cbc08ef16a71c",
+      "role": "candidate-input"
+    },
+    {
+      "path": "validation/cross-implementation/dtm-median/range/fixtures/draw-14.f64",
+      "sha256": "2a2725ce812172a3ee65e33238685a2066fde7be9bb235697a4130d3a98202e0",
+      "role": "candidate-input"
+    },
+    {
+      "path": "validation/cross-implementation/dtm-median/range/fixtures/draw-15.f64",
+      "sha256": "94a1aca8f442609164ada298aefc4a40ee1469986a00b75f38610b4d2e86b1c3",
+      "role": "candidate-input"
+    },
+    {
+      "path": "validation/cross-implementation/dtm-median/range/fixtures/draw-16.f64",
+      "sha256": "1bb6de32e9a0520ff86208b107bf0f036ff22d33fa5b7b36f6d346c1fc00aa43",
+      "role": "candidate-input"
+    },
+    {
+      "path": "validation/cross-implementation/dtm-median/range/fixtures/draw-17.f64",
+      "sha256": "4199b682a7674140ce4010e8c0d7f20065e30ab1d7e203c4f6627b70a50d0abe",
+      "role": "candidate-input"
+    },
+    {
+      "path": "validation/cross-implementation/dtm-median/range/fixtures/draw-18.f64",
+      "sha256": "19fc0429550c78c45f85cc1b088c1694a1ce204e60aecc52353fe091686530cd",
+      "role": "candidate-input"
+    },
+    {
+      "path": "validation/cross-implementation/dtm-median/range/fixtures/draw-19.f64",
+      "sha256": "6e3fcb9d8088e7311546916ca6c2493826b6ab7e883c879ecd199e83ebcd0fb9",
+      "role": "candidate-input"
+    },
+    {
+      "path": "validation/cross-implementation/dtm-median/range/fixtures/draw-20.f64",
+      "sha256": "eeb59475cbc05b16348f2d857fdf5ee9343291e63bfcc09f0492029c4f66f09c",
+      "role": "candidate-input"
+    },
+    {
+      "path": "validation/cross-implementation/dtm-median/range/fixtures/draw-21.f64",
+      "sha256": "b3506357a9b28833619abc3985db5079c097331fd4d8415908c8d2bdef1d2fdf",
+      "role": "candidate-input"
+    },
+    {
+      "path": "validation/cross-implementation/dtm-median/range/fixtures/draw-22.f64",
+      "sha256": "c394e83f0c27c6c9e24bf293523ff5ec219533354a41b2d7b235d8471fd20a53",
+      "role": "candidate-input"
+    },
+    {
+      "path": "validation/cross-implementation/dtm-median/range/fixtures/draw-23.f64",
+      "sha256": "2aa940f09855acf9b73a234eb8da770c9d4bb0f94b802209ce6d3ab6bf6abe9d",
+      "role": "candidate-input"
+    },
+    {
+      "path": "validation/cross-implementation/dtm-median/range/fixtures/draw-24.f64",
+      "sha256": "319e150642c512939b748cc69a97e34487cc37aefc09a4f0e2931c0612ed32b0",
+      "role": "candidate-input"
+    },
+    {
+      "path": "validation/cross-implementation/dtm-median/range/fixtures/draw-25.f64",
+      "sha256": "1ac8db728abd840b98ea27dad03362e93c7b73ac7900887301c26e2e237ed9c4",
+      "role": "candidate-input"
+    },
+    {
+      "path": "validation/cross-implementation/dtm-median/range/fixtures/draw-26.f64",
+      "sha256": "003d48e6ee1d3bdc2fe8f897062ebf63dbbd4931cb6cb666ac684c22940f7062",
+      "role": "candidate-input"
+    },
+    {
+      "path": "validation/cross-implementation/dtm-median/range/fixtures/draw-27.f64",
+      "sha256": "98b401300e359bfb65c67fde0ee1100cd381d248d4ca9ff565d94dc9116de872",
+      "role": "candidate-input"
+    },
+    {
+      "path": "validation/cross-implementation/dtm-median/range/fixtures/draw-28.f64",
+      "sha256": "54b8beb20be865dfa0e0bf04b3d8c95d187d3468199692526d000e89ce453d12",
+      "role": "candidate-input"
+    },
+    {
+      "path": "validation/cross-implementation/dtm-median/range/fixtures/draw-29.f64",
+      "sha256": "a0a950b4e9edbb7f412177ed993dbf3cb06d72f676d746a7cde4f299a5324338",
+      "role": "candidate-input"
+    },
+    {
+      "path": "validation/cross-implementation/dtm-median/range/fixtures/draw-30.f64",
+      "sha256": "e83ab3abb91c48d2af1e17bc36b7ca56f44d9734836d0629f41611b11b9b4a10",
+      "role": "candidate-input"
+    },
+    {
+      "path": "validation/cross-implementation/dtm-median/range/fixtures/draw-31.f64",
+      "sha256": "d050689624f7bf0094dcf8fc8cd19e59fae9119283e91a01d29e00e5f01b1c1f",
+      "role": "candidate-input"
+    },
+    {
+      "path": "validation/cross-implementation/dtm-median/range/fixtures/draw-32.f64",
+      "sha256": "3535070d3b37e9202540438e65a84b44a47bfab73cc951054d057d6e984b7639",
+      "role": "candidate-input"
+    },
+    {
+      "path": "validation/cross-implementation/dtm-median/range/fixtures/draw-33.f64",
+      "sha256": "f48f4132a1462b45414662b5641fe1091fdc2ea14403df2a4b5af794a62061a2",
+      "role": "candidate-input"
+    },
+    {
+      "path": "validation/cross-implementation/dtm-median/range/fixtures/draw-34.f64",
+      "sha256": "e4a3deab791dabac9ba9425430b8ec5d7359bb3be81f4cda443ce10b92e30a7a",
+      "role": "candidate-input"
+    },
+    {
+      "path": "validation/cross-implementation/dtm-median/range/fixtures/draw-35.f64",
+      "sha256": "a80e9a068d932b381b50c1248980498d8676b6a1936fe4e6aea9077185df3485",
+      "role": "candidate-input"
+    },
+    {
+      "path": "validation/cross-implementation/dtm-median/range/fixtures/draw-36.f64",
+      "sha256": "eb8016b3f06fbdb3a2c3c51d74a0ecbb20909aeb117a5cd4d50e40ba3a5589da",
+      "role": "candidate-input"
+    },
+    {
+      "path": "validation/cross-implementation/dtm-median/range/fixtures/draw-37.f64",
+      "sha256": "37b97ec89f97d8e47e42d824fef7e9d4a778be9fffcd2b5a896cddbe95bf3527",
+      "role": "candidate-input"
+    },
+    {
+      "path": "validation/cross-implementation/dtm-median/range/fixtures/draw-38.f64",
+      "sha256": "999a7e78508e67eb0c9b9fcd475958a8abdbdf9ba61dfb356ab543f2538fa7d4",
+      "role": "candidate-input"
+    },
+    {
+      "path": "validation/cross-implementation/dtm-median/range/fixtures/draw-39.f64",
+      "sha256": "72138714cb651f84a855b5784b9cc40051ec21561f230eb8eaa0093dad6b6a1a",
+      "role": "candidate-input"
+    },
+    {
+      "path": "validation/cross-implementation/dtm-median/range/fixtures/draw-40.f64",
+      "sha256": "74768d3c91ec1a2871e5c29009a72a383c3c95dbe8a804113e520f29786a5ec8",
+      "role": "candidate-input"
+    },
+    {
+      "path": "validation/cross-implementation/dtm-median/range/fixtures/draw-41.f64",
+      "sha256": "de61fc8901492618ea375b140ee37cedc2bf74b04f754ff865c6d984a2e5b05b",
+      "role": "candidate-input"
+    },
+    {
+      "path": "validation/cross-implementation/dtm-median/range/fixtures/draw-42.f64",
+      "sha256": "b2aa1cd908138ba4b6da07f9c44af7714895bd093b2713b20930e3b15b9b2b6d",
+      "role": "candidate-input"
+    },
+    {
+      "path": "validation/cross-implementation/dtm-median/range/fixtures/draw-43.f64",
+      "sha256": "d47cfc7330981f04102ebb54818130bccd57a3fbaca2b6e22ed974542c76cdd6",
+      "role": "candidate-input"
+    },
+    {
+      "path": "validation/cross-implementation/dtm-median/range/fixtures/draw-44.f64",
+      "sha256": "bad2f5516ea45a2a67ac07c9a4543c93c307a94c1a16ce1dcc887ea8acbc6ed0",
+      "role": "candidate-input"
+    },
+    {
+      "path": "validation/cross-implementation/dtm-median/range/fixtures/draw-45.f64",
+      "sha256": "96f28214557c6f639453c6e626efea47d2252250fed6f55c8bc27d88c2f0d62a",
+      "role": "candidate-input"
+    },
+    {
+      "path": "validation/cross-implementation/dtm-median/range/fixtures/draw-46.f64",
+      "sha256": "02f7d84a1aa5636372c3cb638a95f6564780716d4a1ee3fc203f3d50af403ac5",
+      "role": "candidate-input"
+    },
+    {
+      "path": "validation/cross-implementation/dtm-median/range/fixtures/draw-47.f64",
+      "sha256": "b75f8c88ebd829c4832596cb414173405c20c76f63eaace044ab1bb215dfc864",
+      "role": "candidate-input"
+    },
+    {
+      "path": "validation/cross-implementation/dtm-median/range/fixtures/draw-48.f64",
+      "sha256": "0d0f7e12768df60a4c41f66600583bd61a3eeabfca4eae2dc28d2ff722cef3be",
+      "role": "candidate-input"
+    },
+    {
+      "path": "validation/cross-implementation/dtm-median/range/fixtures/draw-49.f64",
+      "sha256": "5b8e101d6e7b765caeb7741493d9fc7086704448a192dd7af840b876cdcff971",
+      "role": "candidate-input"
+    },
+    {
+      "path": "validation/cross-implementation/dtm-median/range/fixtures/cellsizes.f64",
+      "sha256": "af4f4ac528aa10129538f642e52dc23d3b094ee3c6fde7ef532fb6dc6a1711e4",
+      "role": "candidate-input"
+    },
+    {
+      "path": "scripts/dtm-median-range-fixtures.py",
+      "sha256": "c7248de6c20b300c139296c4bd4e4f79c7fc0ae769e31ab74c0ff044f75c110f",
+      "role": "reference-command"
+    },
+    {
+      "path": "scripts/dtm-median-range-binary.py",
+      "sha256": "8e45d62bcd8b493254104b1952ce84d700bdf6f9a6d1eddf0fb7e088f788caac",
+      "role": "reference-command"
+    },
+    {
+      "path": "scripts/dtm-median-reference-scipy.py",
+      "sha256": "42563ccf44ad6675de72aacdb8c2389b6a7b32117a519d3b9f31701d3efff06a",
+      "role": "reference-command"
+    },
+    {
+      "path": "validation/protocols/dtm-median-gridding-v4.md",
+      "sha256": "a9c92b7c1e1be68b2ea1060a6870bfddbd361d6375abbc3ef1866d926546b65d",
+      "role": "reference-command"
+    },
+    {
+      "path": "validation/protocols/dtm-median-gridding-v5.md",
+      "sha256": "5ca19fc553108b59530ea46724e98e067949cdfaf03151ff5a81f6a708022829",
+      "role": "reference-command"
+    },
+    {
+      "path": "validation/cross-implementation/dtm-median/range-v5/scipy/draw-00__median.hex.asc",
+      "sha256": "d3340b462bc99093ac77456a5e25f59a2aa12b1a44f14fbda05f7c8f92c5d419",
+      "role": "reference-output"
+    },
+    {
+      "path": "validation/cross-implementation/dtm-median/range-v5/scipy/draw-01__median.hex.asc",
+      "sha256": "c2619c196f3a95a546dd65d05f8480a381f9230d80a73294b312ff6b25762b03",
+      "role": "reference-output"
+    },
+    {
+      "path": "validation/cross-implementation/dtm-median/range-v5/scipy/draw-02__median.hex.asc",
+      "sha256": "fcf8ca9513301874472aa5cd84c698727564022f7bb16de5d456636aa0b1f45d",
+      "role": "reference-output"
+    },
+    {
+      "path": "validation/cross-implementation/dtm-median/range-v5/scipy/draw-03__median.hex.asc",
+      "sha256": "5603a935e4073f7045d85d60b7f2648624cef16ba813992c56b9d444118f982a",
+      "role": "reference-output"
+    },
+    {
+      "path": "validation/cross-implementation/dtm-median/range-v5/scipy/draw-04__median.hex.asc",
+      "sha256": "2b97343124692030563af6f4f1aa3491ec40599149e1e5c67256f13f954b7fa9",
+      "role": "reference-output"
+    },
+    {
+      "path": "validation/cross-implementation/dtm-median/range-v5/scipy/draw-05__median.hex.asc",
+      "sha256": "43b24e08c60d1ef263f32b174b1aade88ee3bf33d4178f8d523fe9288b440271",
+      "role": "reference-output"
+    },
+    {
+      "path": "validation/cross-implementation/dtm-median/range-v5/scipy/draw-06__median.hex.asc",
+      "sha256": "8a0a003f463a3b51fc54babd2e6b81d3793b80d6431a63ad6c4e1320263b5413",
+      "role": "reference-output"
+    },
+    {
+      "path": "validation/cross-implementation/dtm-median/range-v5/scipy/draw-07__median.hex.asc",
+      "sha256": "3ccab5943adbdcd6d76943711805b2507bb84ded87037d70f841c8ae0c1e8048",
+      "role": "reference-output"
+    },
+    {
+      "path": "validation/cross-implementation/dtm-median/range-v5/scipy/draw-08__median.hex.asc",
+      "sha256": "4a3ea082331f25fabc34228d2ca145774318de7adac8032d0630df68f92dfb51",
+      "role": "reference-output"
+    },
+    {
+      "path": "validation/cross-implementation/dtm-median/range-v5/scipy/draw-09__median.hex.asc",
+      "sha256": "8a0d94152a69265d769fa9ea6091592a46219fc3be80f5e601f09d6d54d433d0",
+      "role": "reference-output"
+    },
+    {
+      "path": "validation/cross-implementation/dtm-median/range-v5/scipy/draw-10__median.hex.asc",
+      "sha256": "bec2bb52fd96305d5f3a4d278aebb98fc9b22641fa6a4c5b0604576d3fd0694c",
+      "role": "reference-output"
+    },
+    {
+      "path": "validation/cross-implementation/dtm-median/range-v5/scipy/draw-11__median.hex.asc",
+      "sha256": "67eda82666cad61184d58b6352ca76f874903de3e7e21c498004424b76916804",
+      "role": "reference-output"
+    },
+    {
+      "path": "validation/cross-implementation/dtm-median/range-v5/scipy/draw-12__median.hex.asc",
+      "sha256": "1fc189ef4c1deedcf560a9e276471a03f58e7298a409e1b7643dd09e1b35ede9",
+      "role": "reference-output"
+    },
+    {
+      "path": "validation/cross-implementation/dtm-median/range-v5/scipy/draw-13__median.hex.asc",
+      "sha256": "9a32f715c78b81ba0841242a36dfbc42e0c204727b42632511ac6ab6a4a88bea",
+      "role": "reference-output"
+    },
+    {
+      "path": "validation/cross-implementation/dtm-median/range-v5/scipy/draw-14__median.hex.asc",
+      "sha256": "60ab1203f8b8b43ac5465f0e78c940d5ab1dd960472c295d6674d6e6c18016f6",
+      "role": "reference-output"
+    },
+    {
+      "path": "validation/cross-implementation/dtm-median/range-v5/scipy/draw-15__median.hex.asc",
+      "sha256": "990a0cbe8d9a224445d925ae21102eba882a0b99333474b7bc46f6ed3cee8dca",
+      "role": "reference-output"
+    },
+    {
+      "path": "validation/cross-implementation/dtm-median/range-v5/scipy/draw-16__median.hex.asc",
+      "sha256": "16820390712a931a69470e182f6c77becc149bf98c37be895ab58f2037fc66e6",
+      "role": "reference-output"
+    },
+    {
+      "path": "validation/cross-implementation/dtm-median/range-v5/scipy/draw-17__median.hex.asc",
+      "sha256": "4e5f3aa0cd922cdcb56c3124513c034d2a898e09e7aa08f9f72f81c1c57e40fe",
+      "role": "reference-output"
+    },
+    {
+      "path": "validation/cross-implementation/dtm-median/range-v5/scipy/draw-18__median.hex.asc",
+      "sha256": "0bc141a849712daf625ce5f25d9d58ae22afe87e2e21239f59b390eb707a9b95",
+      "role": "reference-output"
+    },
+    {
+      "path": "validation/cross-implementation/dtm-median/range-v5/scipy/draw-19__median.hex.asc",
+      "sha256": "caf29f79c008b2a7ce12e52144970d4d248075a1758f0ce03a956f945933ec05",
+      "role": "reference-output"
+    },
+    {
+      "path": "validation/cross-implementation/dtm-median/range-v5/scipy/draw-20__median.hex.asc",
+      "sha256": "4c10e272c3dffdc7cef2a6a16977fc0e8a1cae48179738ce8e2eacfee030dd21",
+      "role": "reference-output"
+    },
+    {
+      "path": "validation/cross-implementation/dtm-median/range-v5/scipy/draw-21__median.hex.asc",
+      "sha256": "da21a24701293a0b008489f480ace16068e68fafc64a7b33ab1ea0edd5e2f392",
+      "role": "reference-output"
+    },
+    {
+      "path": "validation/cross-implementation/dtm-median/range-v5/scipy/draw-22__median.hex.asc",
+      "sha256": "aa45d8309b9d67662d83ec46b9da328c5e5000c556866dcf662c6b0bfda26168",
+      "role": "reference-output"
+    },
+    {
+      "path": "validation/cross-implementation/dtm-median/range-v5/scipy/draw-23__median.hex.asc",
+      "sha256": "5c6bec9f41f20b7ad2998e9efd83deb3859dd9d7260d36edad9f8b338fe83334",
+      "role": "reference-output"
+    },
+    {
+      "path": "validation/cross-implementation/dtm-median/range-v5/scipy/draw-24__median.hex.asc",
+      "sha256": "32e200f558d98f52df14104ef52c544dcf83d1868b07fcbfbcc28faf8180c9c8",
+      "role": "reference-output"
+    },
+    {
+      "path": "validation/cross-implementation/dtm-median/range-v5/scipy/draw-25__median.hex.asc",
+      "sha256": "e3a0465d3d036469848c37eb5a56ef00a5689d8e08bee4f06b317cd763659464",
+      "role": "reference-output"
+    },
+    {
+      "path": "validation/cross-implementation/dtm-median/range-v5/scipy/draw-26__median.hex.asc",
+      "sha256": "d415d89bd5db34b7f2eedbd35b75f3fb81760fdf2b3fc4efe4d8590fb27624c1",
+      "role": "reference-output"
+    },
+    {
+      "path": "validation/cross-implementation/dtm-median/range-v5/scipy/draw-27__median.hex.asc",
+      "sha256": "946b33c9c9f0e3c9047876d535f842068eb12d9949ef493edfc4d3f4efa288af",
+      "role": "reference-output"
+    },
+    {
+      "path": "validation/cross-implementation/dtm-median/range-v5/scipy/draw-28__median.hex.asc",
+      "sha256": "cf3f264d0412554f327e7f8c3b0b51a80a371f316dab2881fd3779c32d8d33e1",
+      "role": "reference-output"
+    },
+    {
+      "path": "validation/cross-implementation/dtm-median/range-v5/scipy/draw-29__median.hex.asc",
+      "sha256": "b18aa3b593e1166fa38b7f34224f9a848eea9a6c5a4cb0e53b309a27d3b4ce35",
+      "role": "reference-output"
+    },
+    {
+      "path": "validation/cross-implementation/dtm-median/range-v5/scipy/draw-30__median.hex.asc",
+      "sha256": "4ff0e1815439dc064e770c3264f6e50006e859900eb37dd341c9f28af38c2137",
+      "role": "reference-output"
+    },
+    {
+      "path": "validation/cross-implementation/dtm-median/range-v5/scipy/draw-31__median.hex.asc",
+      "sha256": "c495295c38765c04477824179ae9e690300a19fc665a7133cc9051fca2e602a6",
+      "role": "reference-output"
+    },
+    {
+      "path": "validation/cross-implementation/dtm-median/range-v5/scipy/draw-32__median.hex.asc",
+      "sha256": "d0e3e8f112a9b274b240c727d940b661e2392e9fb50e846031118a9be4720256",
+      "role": "reference-output"
+    },
+    {
+      "path": "validation/cross-implementation/dtm-median/range-v5/scipy/draw-33__median.hex.asc",
+      "sha256": "50ac8a4de53f8a915571ea51ff709e95e5344f0f8102ea191afab33e3496e8e2",
+      "role": "reference-output"
+    },
+    {
+      "path": "validation/cross-implementation/dtm-median/range-v5/scipy/draw-34__median.hex.asc",
+      "sha256": "fbe355c186afc228e273fa6e5aff2f08bcc96f2b77cca404edb22e857f8c4669",
+      "role": "reference-output"
+    },
+    {
+      "path": "validation/cross-implementation/dtm-median/range-v5/scipy/draw-35__median.hex.asc",
+      "sha256": "09f9a3fcaca4c65f6540293842c4622813afb60847ef5244a2133c324d0dc913",
+      "role": "reference-output"
+    },
+    {
+      "path": "validation/cross-implementation/dtm-median/range-v5/scipy/draw-36__median.hex.asc",
+      "sha256": "bb146675d39f473ffc84bd85852c90bed7771be76e304d2ea3a279fa9e8ba08a",
+      "role": "reference-output"
+    },
+    {
+      "path": "validation/cross-implementation/dtm-median/range-v5/scipy/draw-37__median.hex.asc",
+      "sha256": "b623628c35430da15d8411c023fc1cc03886844d8c5fac77dd14e87d2de50728",
+      "role": "reference-output"
+    },
+    {
+      "path": "validation/cross-implementation/dtm-median/range-v5/scipy/draw-38__median.hex.asc",
+      "sha256": "30357f92dfb1070b7267868deb0ced5e985b816dabeb3622bc9a8c6747af4364",
+      "role": "reference-output"
+    },
+    {
+      "path": "validation/cross-implementation/dtm-median/range-v5/scipy/draw-39__median.hex.asc",
+      "sha256": "29dab9324fa3a49e1352d894f73f6420ec0cef1ac5052330bb307e08d53f1f4c",
+      "role": "reference-output"
+    },
+    {
+      "path": "validation/cross-implementation/dtm-median/range-v5/scipy/draw-40__median.hex.asc",
+      "sha256": "e6589616a23771468a55d7f2a54082c6bf2bd2398065d8237199aa58467035f3",
+      "role": "reference-output"
+    },
+    {
+      "path": "validation/cross-implementation/dtm-median/range-v5/scipy/draw-41__median.hex.asc",
+      "sha256": "16fda74c447052a046ba4575f15f7668afd6b0a4dabdd1e669a05bc15386307a",
+      "role": "reference-output"
+    },
+    {
+      "path": "validation/cross-implementation/dtm-median/range-v5/scipy/draw-42__median.hex.asc",
+      "sha256": "d0ee0d21be327da08290a5c7dfc81db4c2535ac2b6844e68e2ec26ccd563d714",
+      "role": "reference-output"
+    },
+    {
+      "path": "validation/cross-implementation/dtm-median/range-v5/scipy/draw-43__median.hex.asc",
+      "sha256": "02023a47013353113842a9d5cf93133df09256e2ff1aa375f6ee54520a2c7802",
+      "role": "reference-output"
+    },
+    {
+      "path": "validation/cross-implementation/dtm-median/range-v5/scipy/draw-44__median.hex.asc",
+      "sha256": "599afeda0e1bbf8252a2d8d490d38d3d8f9536c70fce4313e16ad875234e7991",
+      "role": "reference-output"
+    },
+    {
+      "path": "validation/cross-implementation/dtm-median/range-v5/scipy/draw-45__median.hex.asc",
+      "sha256": "aabb678d8256a19356c2ac9f84df9339af2f03ea0b5fe6c9b3ff896edfdff03f",
+      "role": "reference-output"
+    },
+    {
+      "path": "validation/cross-implementation/dtm-median/range-v5/scipy/draw-46__median.hex.asc",
+      "sha256": "5dc4d01676cfe50de6556d1b5d2a5a4d7fc514e263d14f1795ff0ce72ab06897",
+      "role": "reference-output"
+    },
+    {
+      "path": "validation/cross-implementation/dtm-median/range-v5/scipy/draw-47__median.hex.asc",
+      "sha256": "d02c8d0731d2629204f4d52a2a17fbf4dc6228a8bd4b2d85ed747603a663e3b0",
+      "role": "reference-output"
+    },
+    {
+      "path": "validation/cross-implementation/dtm-median/range-v5/scipy/draw-48__median.hex.asc",
+      "sha256": "31209dfaa2bc9be62e2d7511689e335798f1e04fbda4a2c5f7f31d5ef0dce209",
+      "role": "reference-output"
+    },
+    {
+      "path": "validation/cross-implementation/dtm-median/range-v5/scipy/draw-49__median.hex.asc",
+      "sha256": "84f26ee0affdca57fe3947783fc563f2efd79aea3c211520c2941eb5dde04376",
+      "role": "reference-output"
+    },
+    {
+      "path": "validation/cross-implementation/dtm-median/range-v5/scipy/reference-run.json",
+      "sha256": "ee1e0324b12417e9407dbad8d2a9ac4f00d9e0c84b1c5e230e598aaa9be5d56c",
+      "role": "reference-environment"
+    }
+  ],
+  "derivedArtifacts": [],
+  "scope": {
+    "supported": [
+      {
+        "datasetId": "OLV-DS-130-DTM-MEDIAN-RANGE-DRAWS",
+        "parameterSetId": "PS-DTM-MEDIAN-RANGE-0P1-10-ORIGINMIN"
+      }
+    ],
+    "unsupported": [
+      "Interpolated (IDW fill) cells. Only cells holding at least one return are compared.",
+      "Ground classification. The fixtures are all ground.",
+      "Cell sizes below 0.1 m or above 10 m, and grids not built by the data-minimum rule.",
+      "Agreement over 50 draws is evidence about the range, not a proof for every size in it, and not accuracy against ground truth."
+    ]
+  },
+  "protocolRef": {
+    "protocolId": "PROTO-DTM-MEDIAN-RANGE-SCIPY",
+    "digest": "sha256:87c7211b20a3834be8ed972e38591309c3c288d42b50a90ef5b368f8f1b15914"
+  }
+}
