@@ -114,6 +114,8 @@ jobs:
       # archive portability writes its record into the gitignored release/.
       - name: CSP lint (no inline script in a shipped page)
         run: npm run lint:csp-html
+      - name: Inline style lint (no script-written style attribute)
+        run: npm run lint:no-inline-style-attr
       - name: HTML asset lint (every local reference in a shipped page resolves)
         run: npm run lint:html-assets
       - name: Python version lint (.python-version and sonar agree)
