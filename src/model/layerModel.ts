@@ -30,6 +30,8 @@ export interface LayerInfo {
   readonly crsName?: string;
   /** Declared name of a local / engineering CRS, when the source carries one. */
   readonly localFrameName?: string;
+  /** Normalised definition of a CRS with no EPSG code; see `CompatibilityInput.crsDefinition`. */
+  readonly crsDefinition?: string;
   /** Vertical datum label or `EPSG:<code>`, when the source declares one. */
   readonly verticalDatum?: string;
   /** True when the CRS is geographic (lat/lon). */

@@ -721,6 +721,45 @@ export function crsFromWkt(wkt: string): CrsInfo {
   };
 }
 
+/** Clauses that describe a CRS (codes, usage, remarks) without defining it. */
+const NON_DEFINING_WKT_KEYWORDS: ReadonlySet<string> = new Set([
+  'AUTHORITY', 'ID', 'USAGE', 'SCOPE', 'AREA', 'BBOX', 'VERTICALEXTENT', 'TEMPORALEXTENT', 'REMARK', 'CITATION', 'URI',
+]);
+
+/**
+ * A comparable form of the horizontal CRS a WKT defines: its projection method,
+ * parameters, datum, ellipsoid, prime meridian, units and axes, with spacing,
+ * case, punctuation and number spelling normalised, and authority codes, usage
+ * and remarks left out. Two CRSs that share a name but differ in any defining
+ * value get different results. A BOUNDCRS is read as its source CRS.
+ * Undefined when the WKT has no horizontal component to compare.
+ */
+export function crsDefinitionKey(wkt: string | undefined): string | undefined {
+  if (!wkt) return undefined;
+  const parsed = parseWkt(wkt.replace(/\0+$/, '').trim());
+  if (!parsed) return undefined;
+  const root = sourceOfBoundCrs(parsed);
+  const horizontal = isCompoundKeyword(root.keyword)
+    ? wktChildNodes(root).find((n) => isHorizontalCrsKeyword(n.keyword) || isLocalCrsKeyword(n.keyword))
+    : isHorizontalCrsKeyword(root.keyword) || isLocalCrsKeyword(root.keyword) ? root : undefined;
+  if (!horizontal || horizontal.children.length === 0) return undefined;
+  const text = (s: string): string => s.toLowerCase().replace(/[^a-z0-9]+/g, '');
+  const canon = (n: WktNode): string => {
+    const parts: string[] = [];
+    for (const c of n.children) {
+      if (c.type === 'node') {
+        if (!NON_DEFINING_WKT_KEYWORDS.has(c.node.keyword)) parts.push(canon(c.node));
+      } else if (c.type === 'number') {
+        parts.push(String(Number(c.value.toPrecision(12))));
+      } else {
+        parts.push(text(c.value));
+      }
+    }
+    return `${n.keyword}[${parts.join(',')}]`;
+  };
+  return canon(horizontal);
+}
+
 /**
  * The tree with every BOUNDCRS replaced by the CRS inside its SOURCECRS, so
  * nothing from a TARGETCRS or a transformation reaches the analysis. A BOUNDCRS

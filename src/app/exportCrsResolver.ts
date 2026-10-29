@@ -19,7 +19,7 @@ import type { PointCloud } from '../model/PointCloud';
 import type { ExportCloudCrs } from '../render/exportAdapter';
 import type { ResolvedCrs } from '../geo/CoordinateTypes';
 import { crsIsKnown } from './kmlActions';
-import { linearUnitLabel, type CrsInfo } from '../io/crs';
+import { crsDefinitionKey, linearUnitLabel, type CrsInfo } from '../io/crs';
 import { datasetIdentity, type CrsService } from '../geo/CrsService';
 import { crsSourceForKind } from './crsCoordinator';
 import type { StreamingSourceKind } from '../render/streaming/StreamingSource';
@@ -33,11 +33,15 @@ export interface ExportCrsResolverDeps {
   readonly activeCloud: () => PointCloud | null;
 }
 
-/** A stable equality key for a resolved CRS: EPSG when known, else the label. */
+/**
+ * A stable equality key for a resolved CRS: EPSG when known, else the label
+ * plus the normalised definition, so two custom CRSs that share a name but not
+ * their parameters conflict.
+ */
 function crsKeyOf(resolved: ResolvedCrs): string {
-  return resolved.epsg != null
-    ? `epsg:${resolved.epsg}`
-    : `name:${resolved.name.trim().toLowerCase()}`;
+  if (resolved.epsg != null) return `epsg:${resolved.epsg}`;
+  const definition = crsDefinitionKey(resolved.wkt);
+  return `name:${resolved.name.trim().toLowerCase()}${definition ? `|${definition}` : ''}`;
 }
 
 /**

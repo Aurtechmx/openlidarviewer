@@ -354,7 +354,7 @@ export function createLayerService(deps: LayerServiceDeps): LayerService {
     // aligns in X/Y, where the agreement is real, and keeps its own Z — the
     // doubt now gates the product instead of only annotating it.
     const inputs = infos.map((i) => ({
-      id: i.id, epsg: i.epsg, crsName: i.crsName, localFrameName: i.localFrameName,
+      id: i.id, epsg: i.epsg, crsName: i.crsName, localFrameName: i.localFrameName, crsDefinition: i.crsDefinition,
       verticalDatum: i.verticalDatum, verticalEpsg: i.verticalEpsg,
     }));
     // A placement is sticky while its layer stays open. A layer judged against

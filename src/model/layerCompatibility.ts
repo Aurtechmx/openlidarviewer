@@ -39,6 +39,11 @@ export interface CompatibilityInput {
   readonly crsName?: string;
   /** Declared name of a local / engineering CRS, when the source carries one. */
   readonly localFrameName?: string;
+  /**
+   * The normalised definition of a CRS that has no EPSG code (see
+   * `crsDefinitionKey`). A name alone does not identify such a CRS.
+   */
+  readonly crsDefinition?: string;
   /** Vertical datum identifier as declared, or null when undeclared. */
   readonly verticalDatum?: string | null;
   /** Vertical CRS EPSG code, when the source declared one. Authoritative. */
@@ -87,15 +92,26 @@ export function verticalReferenceKey(l: CompatibilityInput): string | null {
 /**
  * A stable key for the horizontal frame, or null when nothing was declared.
  *
- * The EPSG code is authoritative; a display name is a fallback that only ever
- * matches another identical name. Two layers with no declaration share a
- * `null` key, which is deliberately NOT a match — see the classifier.
+ * The EPSG code is authoritative. Without one, a CRS is keyed on its name AND
+ * its normalised definition, so two custom projections that share a generic
+ * name but differ in a parameter are different frames. A name with no
+ * definition to compare gets a `name?:` key: a different name still proves a
+ * different frame, the same name proves nothing. Two layers with no
+ * declaration share a `null` key, which is deliberately NOT a match — see the
+ * classifier.
  */
 export function horizontalKey(l: CompatibilityInput): string | null {
   if (l.epsg !== undefined && Number.isFinite(l.epsg)) return `epsg:${l.epsg}`;
   if (l.localFrameName?.trim()) return localFrameKey(l.localFrameName);
   const name = l.crsName?.trim();
-  return name ? `name:${name.toLowerCase()}` : null;
+  if (!name) return null;
+  const definition = l.crsDefinition?.trim();
+  return definition ? `name:${name.toLowerCase()}|${definition}` : `name?:${name.toLowerCase()}`;
+}
+
+/** Whether a shared horizontal key proves nothing about a shared frame. */
+export function sharedKeyIsUnproven(key: string): boolean {
+  return key.startsWith('local:') || key.startsWith('name?:');
 }
 
 /**
@@ -178,8 +194,9 @@ export function classifyLayerCompatibility(
       out.set(l.id, 'incompatible');
       continue;
     }
-    // A shared local-frame name does not prove a shared origin or axes.
-    if (key.startsWith('local:')) {
+    // A shared local-frame name does not prove a shared origin or axes, and a
+    // shared CRS name with no definition to compare does not prove a shared CRS.
+    if (sharedKeyIsUnproven(key)) {
       out.set(l.id, 'unknown');
       continue;
     }
