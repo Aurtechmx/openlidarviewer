@@ -61,7 +61,7 @@ describe('makeLocalToLonLat', () => {
   });
 
   it('reprojects a non-UTM projected CRS (Krovák / EPSG:5514) via proj4 instead of declining', () => {
-    // The scanner-comparison scans (Zenodo 15421291) are EPSG:5514. The UTM probe
+    // The scanner-comparison record (Zenodo 15421291) states EPSG:5514. The UTM probe
     // fails, so the general proj4 path takes over and produces real Czech degrees
     // rather than declining. Origin is a surveyed reference point; [0,0,0] maps to
     // its WGS84 lon/lat (authoritative PROJ: 14.38782, 50.14594).

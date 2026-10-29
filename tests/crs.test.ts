@@ -270,11 +270,23 @@ test('parseCrsFromVlrs — finds an OGC WKT VLR and extracts EPSG', () => {
 
 test('parseCrsFromVlrs — an empty OGC WKT VLR (iPhone COPC) resolves to null, not a crash or a wrong CRS', () => {
   // iPhone 14 Pro COPC exports (e.g. Zenodo 15421291) set the global-encoding WKT
-  // bit and include a record-id 2112 VLR, but its payload is empty. The parser
+  // bit and include a record-id 2112 VLR with no CRS text in it (the real file's
+  // payload is one NUL byte; see the next test). The parser
   // must fall through to "unknown" — an empty declared CRS is not a resolved one —
   // rather than throw or invent a frame. Confirmed against the real file's headers.
   const { buffer, vlrStart, count } = buildVlrBuffer(
     [{ userId: 'LASF_Projection', recordId: 2112, payload: new Uint8Array(0) }],
+    100,
+  );
+  expect(parseCrsFromVlrs(buffer, vlrStart, count)).toBeNull();
+});
+
+test('parseCrsFromVlrs — a WKT VLR holding a single NUL byte (the real iPhone.laz shape) resolves to null', () => {
+  // The Zenodo 15421291 iPhone.laz record-id 2112 VLR declares a 1-byte payload,
+  // a lone terminator. Nothing in it names a CRS, so nothing is resolved: not
+  // EPSG:5514 from the dataset description, the file name or the magnitudes.
+  const { buffer, vlrStart, count } = buildVlrBuffer(
+    [{ userId: 'LASF_Projection', recordId: 2112, payload: new Uint8Array([0]) }],
     100,
   );
   expect(parseCrsFromVlrs(buffer, vlrStart, count)).toBeNull();

@@ -41,6 +41,12 @@ export interface ChunkDecodeMetadata {
   scale: [number, number, number];
   /** LAS offsets. */
   offset: [number, number, number];
+  /**
+   * The node's compressed size as the hierarchy declares it. laz-perf decodes
+   * from a pointer with no length, so a shorter chunk would be decoded from
+   * whatever memory follows it; decompressChunk refuses that when this is set.
+   */
+  compressedBytes?: number;
   /** Render origin, subtracted in float64 before the float32 store. */
   renderOrigin: [number, number, number];
   /**

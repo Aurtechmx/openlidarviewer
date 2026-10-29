@@ -395,6 +395,17 @@ taken from `validation/datasets/dataset-register.yaml`.
 - Committed derivatives: `tests/fixtures/e57-pdal/pdal_sample.csv`,
   `tests/fixtures/e57-pdal/pdal-reference.json`
 
+### OLV-DS-054 and OLV-DS-056: LiDAR Scanners Comparison - Point Clouds
+
+- Creator: Marek Hrdina (Czech University of Life Sciences Prague)
+- Title: LiDAR Scanners Comparison - Point Clouds (`LA03mapry.laz`, `GroundTruth.xlsx`)
+- Link: <https://doi.org/10.5281/zenodo.15421291>
+- Licence: CC BY 4.0, <https://creativecommons.org/licenses/by/4.0/>
+- Modified: 2,000 records of `LA03mapry.laz` (source indices 0, 15,783, 31,566 and so on), copied unchanged into a small LAS file with the source header's point format, scale and offset; and the 13 `ReferencePoints` entries of `GroundTruth.xlsx`, rounded to 6 decimals as CSV. The source files are not redistributed.
+- Committed derivatives:
+  `tests/fixtures/zenodo-15421291/OLV-DS-054-la03-sample.las`,
+  `validation/sphere-accuracy/spheres-epsg5514.csv`
+
 ### OLV-DS-117: TauDEM for Bear Creek
 
 - Creator: Cybercastor (Riverscapes Consortium TauDEM project)

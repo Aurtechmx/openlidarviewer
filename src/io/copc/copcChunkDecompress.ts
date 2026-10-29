@@ -126,6 +126,17 @@ export function decompressChunk(
   chunk: ArrayBuffer | Uint8Array,
   meta: ChunkDecodeMetadata,
 ): Uint8Array {
+  // laz-perf's ChunkDecoder takes a pointer and no length, and reads past the
+  // end of a short input into whatever WASM heap follows it, producing a full
+  // set of points without an error. It cannot detect truncation itself, so the
+  // chunk is checked against the size the hierarchy declared for the node.
+  if (meta.compressedBytes !== undefined && chunk.byteLength !== meta.compressedBytes) {
+    throw new LoadError(
+      'malformed-file',
+      `malformed COPC node chunk: ${chunk.byteLength.toLocaleString('en-US')} bytes where the hierarchy declares ` +
+        `${meta.compressedBytes.toLocaleString('en-US')}; the chunk is truncated or misread, so it is not decoded.`,
+    );
+  }
   // Allocation guard — bound the node's declared count by its compressed
   // bytes, at a floor derived from the record length rather than a flat byte,
   // and by the practical node ceiling BEFORE sizing the output buffer below.

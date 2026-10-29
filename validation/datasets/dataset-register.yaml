@@ -1544,7 +1544,7 @@ datasets:
     evidenceRole: sample-scene
     dataOwner: "Hrdina, Marek (Czech University of Life Sciences Prague)"
     citation: "Hrdina, M. LiDAR Scanners Comparison - Point Clouds, iPhone.laz. Zenodo. https://doi.org/10.5281/zenodo.15421291"
-    knownLimitations: "Recorded as `mls` because the register's vocabulary has no consumer-phone class, and a phone depth sensor is not a survey mobile scanner; the density and the height span below are the honest separation. The only one of the four in PDRF 7 with a WKT CRS record, and the only one small enough to open whole in a browser. A 4.3 m height span over a 119 m plot, against 93 m for the LA03 scan of the same ground, so it covers the floor and not the canopy."
+    knownLimitations: "Recorded as `mls` because the register's vocabulary has no consumer-phone class, and a phone depth sensor is not a survey mobile scanner; the density and the height span below are the honest separation. Read from the bytes: COPC, LAS 1.4, PDRF 7, 60-byte records, scale 0.001, global encoding 16, 130 data nodes, three float64 extra-bytes dimensions NormalX, NormalY and NormalZ, and a qgis statistics EVLR. The record-id 2112 WKT VLR holds one NUL byte and no CRS text, so the file declares no CRS; horizontalCrs above is the publisher's statement in the Zenodo record description, not a property of the file. Intensity, classification, return number and number of returns are 0 on every point, and RGB is 8-bit colour stored as value x 256. The only one of the four small enough to open whole in a browser. A 4.3 m height span over a 119 m plot, against 93 m for the LA03 scan of the same ground, so it covers the floor and not the canopy. Used by `npm run validate:zenodo-small` (docs/validation/zenodo-small-study.md) for decode, attribute, export and CRS-provenance checks only."
     storage: acquired
     localPath: not-vendored
     controlPointIds: []
@@ -1577,7 +1577,7 @@ datasets:
     evidenceRole: checkpoint-source
     dataOwner: "Hrdina, Marek (Czech University of Life Sciences Prague)"
     citation: "Hrdina, M. LiDAR Scanners Comparison - Point Clouds, GroundTruth.xlsx. Zenodo. https://doi.org/10.5281/zenodo.15421291"
-    knownLimitations: "Two sheets of BM-prefixed benchmark identifiers. Independent of every point cloud above in the sense that a survey produced it, and not independent of the study design, since the same team collected both. Nothing here has been used to validate an OLV claim; it is registered so that a study which does can cite the bytes."
+    knownLimitations: "Two sheets. TreesPoints has 236 rows keyed by BM-prefixed tree identifiers (x, y, z, species, DBH, tree height, model height, volume). ReferencePoints has 13 entries, the control point Auto and the spheres Koule01 to Koule12, with x, y, z stored as text. Only ReferencePoints is used here: validation/sphere-accuracy/spheres-epsg5514.csv holds those 13 entries rounded to 6 decimals (largest difference 5.0e-7 m, checked by `npm run validate:zenodo-small`) and feeds tests/sphereAccuracyLayerA.test.ts, which checks distance arithmetic and coordinate handling, not a scan. TreesPoints is not used. The decimals published are not a statement of survey accuracy. Independent of every point cloud above in the sense that a survey produced it, and not independent of the study design, since the same team collected both. Nothing here has validated an OLV accuracy claim."
     storage: acquired
     localPath: not-vendored
     controlPointIds: []

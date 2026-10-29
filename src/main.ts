@@ -97,7 +97,7 @@ import { ExportPanel, exportClassFacts, exportLayerHooks } from './ui/ExportPane
 import { lonLatMapContext } from './export/lonLatMapper';
 import { runFindingsExport, writeScanScopedExport, spaceContextStillCurrent, SPACE_CONTEXT_MOVED, SESSION_EXPORT_SCAN_CHANGED_REFUSAL, sessionSavedNotice } from './export/exportScanIdentity';
 import {
-  crsIsKnown,
+  crsIsKnown, georefKnown,
   exportScanFootprintKml,
   exportSiteKml,
   scanFootprintStatus,
@@ -1316,7 +1316,7 @@ function buildCurrentStoryInputs(): ScanStoryInputs {
   // span² as metres — so the Story / Health omit the area rather than claim a
   // wrong one; a foot-CRS scan otherwise reads ~10.76x too large.
   const areaCrs = crsService.current();
-  // Metadata read is the FALLBACK for georef; when an analysis has run, the
+  // The resolved CRS is the FALLBACK for georef; when an analysis has run, the
   // authoritative quality.crsKnown / quality.datumKnown from storyFacts wins, so
   // the Story / Health never disagree with the panel's own CRS / Datum chips.
   let metaCrsKnown: boolean | undefined;
@@ -1327,9 +1327,12 @@ function buildCurrentStoryInputs(): ScanStoryInputs {
       const b = cloud.bounds();
       areaM2 = footprintAreaM2(b.max[0] - b.min[0], b.max[1] - b.min[1], areaCrs);
       pointCount = cloud.pointCount;
-      const crs = cloud.metadata?.crs as { name?: string; verticalDatum?: unknown } | undefined;
-      metaCrsKnown = !!crs?.name;
-      metaDatumKnown = !!crs?.verticalDatum;
+      // The RESOLVED CRS, not the file's declaration: a CRS the user assigns
+      // in the Coordinate system section (or a declared one they reject) has
+      // to show here without reopening the file. A scan with an empty WKT
+      // record otherwise stayed "Unknown" after the user assigned EPSG:5514,
+      // and a declaration overridden to local coordinates stayed "Known".
+      ({ crsKnown: metaCrsKnown, datumKnown: metaDatumKnown } = georefKnown(areaCrs));
       classification = cloud.classificationProvenance;
     } else if (streaming) {
       // Tight data AABB, not the octree cube — the cube overstates footprint
@@ -1337,12 +1340,9 @@ function buildCurrentStoryInputs(): ScanStoryInputs {
       const lb = streaming.dataBounds();
       areaM2 = footprintAreaM2(lb[3] - lb[0], lb[4] - lb[1], areaCrs);
       pointCount = streaming.sourcePointCount ?? undefined;
-      const sCrs = streaming.crs();
-      metaCrsKnown = !!sCrs?.name;
-      // Read the datum from the streamed source's own CRS (COPC VLRs / EPT srs)
-      // instead of assuming none — a streamed scan can carry a vertical datum
-      // exactly like an uploaded file.
-      metaDatumKnown = !!sCrs?.verticalDatum;
+      // The resolved CRS carries the streamed source's own declaration (COPC
+      // VLRs / EPT srs), its vertical datum included, or the user's override.
+      ({ crsKnown: metaCrsKnown, datumKnown: metaDatumKnown } = georefKnown(areaCrs));
       // Don't claim producer classification a streaming scan may not carry —
       // read the actual availability instead of hardcoding 'source'.
       classification = streaming.availableColorModes().includes('classification') ? 'source' : 'none';
