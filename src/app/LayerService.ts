@@ -34,6 +34,7 @@ import { isLinearUnitKnown } from '../geo/CoordinateTypes';
 import { describeLayerUpFrame, resolveLayerUpFrame, type LayerUpFrame } from '../geo/frame/layerUpFrame';
 import type { SourceFormat } from '../io/sniffFormat';
 import type { ResolvedCrs } from '../geo/CoordinateTypes';
+import { compatibilityFrameOf } from '../model/compatibilityFrame';
 import type { CrsInfo } from '../io/crs';
 import { datasetIdentity, type DatasetIdentity } from '../geo/CrsService';
 import type { AppContext } from './appContext';
@@ -299,11 +300,8 @@ export function createLayerService(deps: LayerServiceDeps): LayerService {
         pointCount: c?.pointCount ?? 0,
         visible: layers.visible.get(id) ?? true,
         locked: viewer.isCloudLocked(id),
-        epsg: crs.epsg,
-        crsName: known ? crs.name : undefined,
-        ...(crs.localFrameName !== undefined ? { localFrameName: crs.localFrameName } : {}),
-        verticalDatum: crs.verticalDatum,
-        verticalEpsg: crs.verticalEpsg,
+        // The classifier facts come from the adapter the streaming path uses too.
+        ...compatibilityFrameOf(crs),
         // ResolvedCrs carries `kind`, not the CrsInfo `isGeographic` flag.
         isGeographic: known ? crs.kind === 'geographic' : undefined,
         linearUnitToMetres: known ? crs.linearUnitToMetres : undefined,

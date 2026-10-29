@@ -16,6 +16,9 @@
 
 import { classifyLayerCompatibility } from '../model/layerCompatibility';
 import type { CompatibilityInput, LayerCompatibility } from '../model/layerCompatibility';
+import { compatibilityFrameOf } from '../model/compatibilityFrame';
+import { resolvedFromCrsInfo, type CrsSource, type ResolvedCrs } from '../geo/CoordinateTypes';
+import type { CrsInfo } from '../io/crs';
 
 /** A layer descriptor without its id — the caller does not assign ids here. */
 export type LayerFrame = Omit<CompatibilityInput, 'id'>;
@@ -48,4 +51,28 @@ export function resolveStreamingCompatibility(
   ];
   const states = classifyLayerCompatibility(inputs);
   return states.get(STREAM_ID) ?? 'unknown';
+}
+
+/**
+ * The CRS a layer is classified on: the host's resolved CRS (override applied)
+ * when a resolver is wired, else the declared metadata. `resolved === undefined`
+ * means no resolver; `null` is a resolver's answer and is kept.
+ */
+export function resolvedOrDeclared(
+  resolved: ResolvedCrs | null | undefined,
+  declared: CrsInfo | null | undefined,
+  source: CrsSource = 'las-vlr',
+): ResolvedCrs | null {
+  return resolved !== undefined ? resolved : resolvedFromCrsInfo(declared ?? undefined, source);
+}
+
+/**
+ * The stream's state from resolved CRSs, through the same descriptor adapter
+ * the static layer list uses, so local-frame identity and overrides reach both.
+ */
+export function resolveStreamingCompatibilityFromCrs(
+  statics: readonly (ResolvedCrs | null)[],
+  stream: ResolvedCrs | null,
+): LayerCompatibility {
+  return resolveStreamingCompatibility(statics.map(compatibilityFrameOf), compatibilityFrameOf(stream));
 }
