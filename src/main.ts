@@ -660,7 +660,7 @@ function syncLassoButton(): void {
 }
 /** Every arm and disarm goes through these, so the overlay, the viewer mode and the button never disagree. */
 const lassoArming: LassoArmingDeps = { tool: lassoVolumeTool, viewer: () => viewer, syncButton: syncLassoButton, clearPending: () => { pendingLassoSave = null; } };
-viewerLoaded.then((v) => {
+void viewerLoaded.then((v) => {
   lassoButton = v.measure.addAuxKindButton(
     'Lasso volume',
     'Lasso Volume — draw a freeform shape on the canvas to measure volume of every 3D point inside.\n' +
