@@ -51,8 +51,8 @@ reported as a pass. `--keep` keeps the intermediate record and LAS files
 (about 800 MB).
 
 The comparison logic has an offline unit test on a synthetic cloud,
-`tests/zenodoStudyCompare.test.ts`. The study itself is not part of
-`vitest run`.
+`tests/zenodoStudyCompare.test.ts`; the command runs it first. The study itself
+is not part of `vitest run`.
 
 ## Paths compared
 

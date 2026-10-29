@@ -15,6 +15,7 @@ import { createRequire } from 'node:module';
 import { fileURLToPath } from 'node:url';
 import os from 'node:os';
 import { startVite } from './pooled.mjs';
+import { isCliEntry } from '../lib/isCliEntry.mjs';
 
 export async function runUi({ repo, input, headed = false }) {
   const require = createRequire(join(repo, 'package.json'));
@@ -101,7 +102,7 @@ export async function runUi({ repo, input, headed = false }) {
   }
 }
 
-if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+if (isCliEntry(import.meta.url)) {
   const repo = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..');
   runUi({ repo, input: process.argv[2], headed: process.argv.includes('--headed') })
     .then((r) => { writeFileSync(process.argv[3], JSON.stringify(r, null, 2)); console.log(JSON.stringify(r, null, 2)); })
