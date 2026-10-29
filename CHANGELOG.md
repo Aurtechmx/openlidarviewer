@@ -115,6 +115,7 @@ has not been done. v0.7.0 is the current published release.
 - An RMSE below the reference instrument's stated accuracy is now a warning. The verifier fails it only when n·RMSE²/σ² is below the lower 1% quantile of χ² with n degrees of freedom.
 - The live DTM's median gridding on measured cells agreed with R terra and SciPy on eight seeded point clouds (18498 and 18655 cells, within the 1e-6 m tolerance registered before the references were generated; occupancy masks match). The DTM claim now names this scope. Interpolated (filled) cells are not covered. The evidence resolver maps the live DTM's measured cells to that parameter set (E4) and leaves filled cells not covered, and the terrain report, the DEM package evidence contract and the export provenance name measured cells.
 - `npm run validate:zenodo-small` now fails a comparison when the reference has an attribute that OLV reads for that format but OLV's output lacks it, including the comparisons of OLV's LAS exports. Attributes a path does not read, such as the scan angle and flag fields on the COPC streaming path, are still reported as not compared.
+- `npm run lint:position-access` fails with a message naming the missing file when its baseline or frames file is absent, instead of writing new ones. It writes them only with `--update`. `--baseline` and `--frames` point it at other copies of those files.
 
 ### Security
 

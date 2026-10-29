@@ -57,8 +57,23 @@ import { fileURLToPath } from 'node:url';
 import { SCOPES, readsOnLine, walkPositionSources } from './lib/positionReads.mjs';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
-const BASELINE = resolve(ROOT, 'docs/validation/position-access-baseline.json');
-const FRAMES = resolve(ROOT, 'docs/validation/position-frames.json');
+/**
+ * `--baseline <file>` and `--frames <file>` read (and with --update write)
+ * copies instead of the committed files, so tests never touch the real ones.
+ */
+function fileOption(flag, fallback) {
+  const i = process.argv.indexOf(flag);
+  if (i === -1) return resolve(ROOT, fallback);
+  const file = process.argv[i + 1];
+  if (!file || file.startsWith('--')) {
+    console.error(`lint:position-access: ${flag} needs a file`);
+    console.error('usage: node scripts/lint-position-access.mjs [--update] [--baseline <file>] [--frames <file>]');
+    process.exit(2);
+  }
+  return resolve(file);
+}
+const BASELINE = fileOption('--baseline', 'docs/validation/position-access-baseline.json');
+const FRAMES = fileOption('--frames', 'docs/validation/position-frames.json');
 const FRAME_DOC = 'docs/validation/position-frames.json';
 const SRC = resolve(ROOT, 'src');
 /** The gate's scope. Stated in the output so its number is comparable, not just different. */
@@ -238,7 +253,15 @@ function existingClassifications() {
   return kept;
 }
 
-if (update || !existsSync(BASELINE) || !existsSync(FRAMES)) {
+const missing = [BASELINE, FRAMES].filter((f) => !existsSync(f));
+if (!update && missing.length > 0) {
+  console.error('lint:position-access FAILED\n');
+  for (const f of missing) console.error(`  • missing ${posix(relative(ROOT, f))}`);
+  console.error('\nNothing was written. Restore the file, or run with --update to regenerate it.');
+  process.exit(1);
+}
+
+if (update) {
   writeFileSync(BASELINE, `${JSON.stringify({ total, files: current }, null, 2)}\n`);
 
   const kept = existingClassifications();
