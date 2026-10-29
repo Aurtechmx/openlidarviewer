@@ -33,7 +33,21 @@ import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { join, relative, resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
+/**
+ * The tree to scan. Defaults to this repository. `--root <dir>` points it at a
+ * fixture tree so tests can inject faults without writing into the repository.
+ */
+function rootArg() {
+  const i = process.argv.indexOf('--root');
+  if (i === -1) return resolve(dirname(fileURLToPath(import.meta.url)), '..');
+  const dir = process.argv[i + 1];
+  if (!dir) {
+    console.error('lint:standards-truth: --root needs a directory');
+    process.exit(2);
+  }
+  return resolve(dir);
+}
+const ROOT = rootArg();
 const VERSION = JSON.parse(readFileSync(resolve(ROOT, 'package.json'), 'utf8')).version;
 
 /** Directories walked for prose and source. */
