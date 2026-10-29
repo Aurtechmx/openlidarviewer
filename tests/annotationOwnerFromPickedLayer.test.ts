@@ -12,18 +12,12 @@ import { describe, it, expect, beforeAll } from 'vitest';
 import { annotationGeorefFor } from '../src/render/annotate/pickGeoref';
 import { createLayerIdentityService } from '../src/app/layerIdentityService';
 import type { LayerFingerprint } from '../src/model/layerIdentity';
-import { FakeEl } from './support/measurePanelDom';
+import { installFakeDom, type FakeEl } from './support/measurePanelDom';
 
 beforeAll(() => {
+  installFakeDom({ ns: true, textarea: true, noResizeObserver: true });
   const g = globalThis as unknown as Record<string, unknown>;
-  g.document = {
-    createElement: (tag: string) => new FakeEl(tag),
-    createElementNS: (_ns: string, tag: string) => new FakeEl(tag),
-    querySelector: () => null,
-  };
-  g.HTMLInputElement = class HTMLInputElement {};
-  g.HTMLAnchorElement = class HTMLAnchorElement {};
-  g.HTMLTextAreaElement = class HTMLTextAreaElement {};
+  (g.document as Record<string, unknown>).querySelector = () => null;
   g.window = { innerWidth: 1280, innerHeight: 800 };
 });
 
