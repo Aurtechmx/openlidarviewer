@@ -37,7 +37,7 @@ describe('legend ticks on a near-flat range', () => {
 
   it('keeps ordinary narrow ranges unchanged', () => {
     const ticks = niceTicks(1500, 1500.0000001, 5);
-    expect(ticks.length).toBe(6);
+    expect(ticks).toHaveLength(6);
   });
 
   it('builds the on-screen legend for an XYZ file whose heights differ by rounding dust', async () => {

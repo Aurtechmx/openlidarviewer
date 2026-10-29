@@ -64,20 +64,18 @@ function decoderFor(colours: Map<number, Rgb[]>, delayMs: Map<number, number>): 
   };
 }
 
-const COUNTS = [1000, 800, 600, 400, 300];
+// Each node has a distinct point count, which the decoder uses as its id.
+const NODES: ReadonlyArray<{ key: [number, number, number, number]; pointCount: number }> = [
+  { key: [0, 0, 0, 0], pointCount: 1000 },
+  { key: [1, 0, 0, 0], pointCount: 800 },
+  { key: [1, 1, 0, 0], pointCount: 600 },
+  { key: [2, 0, 0, 0], pointCount: 400 },
+  { key: [2, 1, 0, 0], pointCount: 300 },
+];
+const COUNTS = NODES.map((n) => n.pointCount);
 
 async function openCloud(): Promise<StreamingPointCloud> {
-  const fixture = buildSyntheticCopc({
-    center: [0, 0, 0],
-    halfsize: 128,
-    nodes: [
-      { key: [0, 0, 0, 0], pointCount: 1000 },
-      { key: [1, 0, 0, 0], pointCount: 800 },
-      { key: [1, 1, 0, 0], pointCount: 600 },
-      { key: [2, 0, 0, 0], pointCount: 400 },
-      { key: [2, 1, 0, 0], pointCount: 300 },
-    ],
-  });
+  const fixture = buildSyntheticCopc({ center: [0, 0, 0], halfsize: 128, nodes: [...NODES] });
   return StreamingPointCloud.open(new ArrayBufferRangeSource(fixture.buffer), 'rgb.copc.laz');
 }
 
