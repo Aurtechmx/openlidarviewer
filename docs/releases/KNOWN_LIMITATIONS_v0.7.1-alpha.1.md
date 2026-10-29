@@ -447,7 +447,7 @@ measurement controller, which took twenty-eight more. The draw precision bound's
 fails the build when either passes its recorded baseline, so a raise is a hand
 edit to `docs/validation/monolith-size-baseline.json` and always shows in the
 diff.
-Fan-out is 95 for the shell, 73 for the renderer, across 1187 modules with no
+Fan-out is 95 for the shell, 73 for the renderer, across 1188 modules with no
 dependency cycles. Fan-out counts the distinct modules a file imports with a
 value import, source files and external packages alike; type-only and dynamic
 imports are not counted. The shell and the renderer figures are held
@@ -720,8 +720,12 @@ project position; a scan whose position cannot be read is refused. Streamed
 USGS EPT datasets are in Web Mercator, so this is what lets them be
 analysed. A geocentric code outside the built-in
 list is recognised only from its WKT or GeoTIFF model type. A WKT
-engineering CRS (ENGCRS, LOCAL_CS) is not yet classified as local and keeps
-its current handling. Reproject refuses a geocentric source or target, because
+engineering CRS (ENGCRS, LOCAL_CS), at the root or as the horizontal part of a
+compound CRS, is a local frame. Two layers naming the same local frame are not
+combined, because a shared name does not show a shared origin; to combine
+them, set the same CRS on each layer. WKT with no horizontal or local CRS that
+can be read (empty, malformed, or vertical only) is treated as no declared CRS.
+A streamed layer is matched against the active scan's resolved CRS. Reproject refuses a geocentric source or target, because
 it maps only horizontal X and Y.
 
 A geographic (degree) scan beyond ±89° latitude is refused by terrain analysis
