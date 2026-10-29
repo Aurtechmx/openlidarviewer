@@ -69,6 +69,9 @@ export function parseResolvedCrs(v: unknown): SerializedResolvedCrs | null {
     // flag only with a factor that can carry it.
     ...(v.linearUnitByFactor === true && v.linearUnit === 'unknown' && v.linearUnitToMetres > 0 ? { linearUnitByFactor: true as const } : {}),
     source: v.source as ResolvedCrs['source'],
+    // Who asserted a catalogue CRS. Dropped on read, a restored catalog-tile
+    // record no longer said whose statement the frame rests on.
+    ...(typeof v.assertedBy === 'string' && v.assertedBy.length > 0 ? { assertedBy: v.assertedBy } : {}),
     confidence: v.confidence as ResolvedCrs['confidence'],
     userConfirmed: v.userConfirmed,
     ...(isFiniteNumber(v.epsg) ? { epsg: v.epsg } : {}),
