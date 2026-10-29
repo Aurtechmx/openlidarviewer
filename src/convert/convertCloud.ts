@@ -373,6 +373,13 @@ export function convertCloud(
       message: `EPSG:${outEpsg} is a ${geo ? 'geographic' : 'projected'} CRS in ${kind.unit === 'us-survey-foot' ? 'US survey feet' : kind.unit === 'foot' ? 'feet' : kind.unit === 'other' ? 'a non-metre unit' : `${kind.unit}s`}.`,
     });
   }
+  // The written WKT alone would read as the source's own declaration.
+  if (mode === 'assign') {
+    record({
+      id: 'crs-assigned', kind: 'reinterpreted', level: 'info', points: g.count, acknowledged: true,
+      message: `EPSG:${outEpsg} assigned at export; coordinates not moved.`,
+    });
+  }
   const filename = `${safeEntryName(baseName(cloud.name), 'converted')}${opts.displaySample ? DISPLAY_SAMPLE_SUFFIX : ''}.${spec.ext}`;
 
   let bytes: Uint8Array;
