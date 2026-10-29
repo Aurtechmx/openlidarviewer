@@ -731,8 +731,10 @@ const NON_DEFINING_WKT_KEYWORDS: ReadonlySet<string> = new Set([
  * parameters, datum, ellipsoid, prime meridian, units and axes, with spacing,
  * case, punctuation and number spelling normalised, and authority codes, usage
  * and remarks left out. Two CRSs that share a name but differ in any defining
- * value get different results. A BOUNDCRS is read as its source CRS.
- * Undefined when the WKT has no horizontal component to compare.
+ * value get different results. The result is `<layout>#<values>`: the layout
+ * (keywords and parameter names) says whether two definitions can be compared
+ * at all. A BOUNDCRS is read as its source CRS. Undefined when the WKT has no
+ * horizontal component to compare.
  */
 export function crsDefinitionKey(wkt: string | undefined): string | undefined {
   if (!wkt) return undefined;
@@ -757,7 +759,19 @@ export function crsDefinitionKey(wkt: string | undefined): string | undefined {
     }
     return `${n.keyword}[${parts.join(',')}]`;
   };
-  return canon(horizontal);
+  // The layout alone: clause keywords and parameter names, no values. Two
+  // definitions are comparable only when their layouts agree; a WKT1 and a
+  // WKT2 spelling of one CRS, or one missing a parameter, are not.
+  const layout = (n: WktNode): string => {
+    const parts: string[] = [];
+    const name = n.keyword === 'PARAMETER' ? wktNodeName(n) : undefined;
+    if (name !== undefined) parts.push(text(name));
+    for (const c of n.children) {
+      if (c.type === 'node' && !NON_DEFINING_WKT_KEYWORDS.has(c.node.keyword)) parts.push(layout(c.node));
+    }
+    return `${n.keyword}[${parts.join(',')}]`;
+  };
+  return `${layout(horizontal)}#${canon(horizontal)}`;
 }
 
 /**

@@ -56,6 +56,33 @@ describe('same-name custom projections compare their definitions', () => {
     notSharingAFrame(pair(compd(), compd(diff)));
   });
 
+  // A pair that cannot be compared: one of them may stay in the frame as the
+  // reference (as one layer would), the other is unknown, never incompatible.
+  const unprovenPair = (v: Map<string, string>) => {
+    expect([v.get('a'), v.get('b')]).toContain('unknown');
+    expect([v.get('a'), v.get('b')]).not.toContain('incompatible');
+  };
+
+  it('comparable definitions that differ are incompatible', () => {
+    const v = pair(projcs({ fe: 500000 }), projcs({ fe: 596000 }));
+    expect([v.get('a'), v.get('b')].sort()).toEqual(['horizontal-only', 'incompatible']);
+  });
+
+  it('a WKT1 and a WKT2 spelling of the same CRS cannot be compared, so the pair is unknown', () => {
+    const wkt2 = 'PROJCRS["Site Grid",BASEGEOGCRS["GRS 1980(IUGG, 1980)",DATUM["unknown",ELLIPSOID["GRS80",6378137,298.257222101,LENGTHUNIT["metre",1]]],PRIMEM["Greenwich",0,ANGLEUNIT["degree",0.0174532925199433]]],CONVERSION["unnamed",METHOD["Transverse Mercator",ID["EPSG",9807]],PARAMETER["Latitude of natural origin",0,ANGLEUNIT["degree",0.0174532925199433]],PARAMETER["Longitude of natural origin",-117,ANGLEUNIT["degree",0.0174532925199433]],PARAMETER["Scale factor at natural origin",1,SCALEUNIT["unity",1]],PARAMETER["False easting",500000,LENGTHUNIT["metre",1]],PARAMETER["False northing",0,LENGTHUNIT["metre",1]]],CS[Cartesian,2],AXIS["easting",east,ORDER[1],LENGTHUNIT["metre",1]],AXIS["northing",north,ORDER[2],LENGTHUNIT["metre",1]]]';
+    expect(resolved(wkt2).name).toBe(resolved(projcs()).name);
+    unprovenPair(pair(projcs(), wkt2));
+  });
+
+  it('a definition missing a parameter cannot be compared, so the pair is unknown', () => {
+    const missing = projcs().replace(',PARAMETER["false_northing",0]', '');
+    unprovenPair(pair(projcs(), missing));
+  });
+
+  it('a name with a definition beside the same name without one is unknown', () => {
+    unprovenPair(classifyLayerCompatibility([input('a', projcs()), { id: 'b', crsName: resolved(projcs()).name }]));
+  });
+
   it('the same definition still matches', () => {
     expect([...pair(compd(), compd()).values()]).toEqual(['verified', 'verified']);
     expect([...pair(projcs(), projcs()).values()]).toEqual(['horizontal-only', 'horizontal-only']);

@@ -24,6 +24,7 @@ import {
   alignsHorizontally,
   alignsVertically,
   horizontalKey as compatibilityKey,
+  compareHorizontalKeys,
   verticalReferenceKey,
   type CompatibilityInput,
   type LayerCompatibility,
@@ -210,8 +211,8 @@ function classifyKeepingPrior(
       continue;
     }
     const key = compatibilityKey(l);
-    if (key === null) out.set(l.id, 'unknown');
-    else if (key !== referenceKey) out.set(l.id, 'incompatible');
+    const comparison = key === null ? 'unproven' : compareHorizontalKeys(key, referenceKey);
+    if (comparison !== 'same') out.set(l.id, comparison === 'different' ? 'incompatible' : 'unknown');
     else {
       const vertical = verticalReferenceKey(l);
       out.set(

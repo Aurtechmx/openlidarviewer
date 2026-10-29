@@ -114,6 +114,47 @@ export function sharedKeyIsUnproven(key: string): boolean {
   return key.startsWith('local:') || key.startsWith('name?:');
 }
 
+/** What two horizontal frames have shown about each other. */
+export type FrameComparison = 'same' | 'different' | 'unproven';
+
+/**
+ * Compare two normalised CRS definitions (see `crsDefinitionKey`). They differ
+ * only when both are present, laid out alike (same clauses, same parameter
+ * names) and carry different values. A missing definition, a WKT1 beside a
+ * WKT2 spelling, or a definition missing a parameter cannot be compared.
+ */
+export function compareCrsDefinitions(a: string | undefined, b: string | undefined): FrameComparison {
+  if (!a || !b) return 'unproven';
+  if (a === b) return 'same';
+  const layout = (d: string): string => (d.includes('#') ? d.slice(0, d.indexOf('#')) : d);
+  return layout(a) === layout(b) ? 'different' : 'unproven';
+}
+
+/** The name and definition inside a name-based key, or null for any other key. */
+function nameKeyParts(key: string): { name: string; definition?: string } | null {
+  if (key.startsWith('name?:')) return { name: key.slice('name?:'.length) };
+  if (!key.startsWith('name:')) return null;
+  const body = key.slice('name:'.length);
+  const bar = body.lastIndexOf('|');
+  return bar < 0 ? { name: body } : { name: body.slice(0, bar), definition: body.slice(bar + 1) };
+}
+
+/**
+ * Compare two horizontal keys from {@link horizontalKey}. Equal keys are the
+ * same frame unless the key proves nothing (a local-frame name, a bare CRS
+ * name). Two keys with the same CRS name are different frames only when their
+ * definitions can be compared and differ; otherwise the pair is unproven.
+ */
+export function compareHorizontalKeys(a: string, b: string): FrameComparison {
+  if (a === b) return sharedKeyIsUnproven(a) ? 'unproven' : 'same';
+  const pa = nameKeyParts(a);
+  const pb = nameKeyParts(b);
+  if (pa && pb && pa.name === pb.name) {
+    return compareCrsDefinitions(pa.definition, pb.definition) === 'different' ? 'different' : 'unproven';
+  }
+  return 'different';
+}
+
 /**
  * Classify every layer against the set's reference frame.
  *
@@ -190,14 +231,12 @@ export function classifyLayerCompatibility(
       out.set(l.id, 'unknown');
       continue;
     }
-    if (key !== referenceKey) {
-      out.set(l.id, 'incompatible');
-      continue;
-    }
     // A shared local-frame name does not prove a shared origin or axes, and a
-    // shared CRS name with no definition to compare does not prove a shared CRS.
-    if (sharedKeyIsUnproven(key)) {
-      out.set(l.id, 'unknown');
+    // shared CRS name whose definitions cannot be compared does not prove a
+    // shared CRS, nor a different one.
+    const comparison = compareHorizontalKeys(key, referenceKey);
+    if (comparison !== 'same') {
+      out.set(l.id, comparison === 'different' ? 'incompatible' : 'unknown');
       continue;
     }
     const vertical = verticalReferenceKey(l);
