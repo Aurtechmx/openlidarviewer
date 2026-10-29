@@ -173,6 +173,21 @@ export function crsIsKnown(resolved: ResolvedCrs | null): boolean {
 }
 
 /**
+ * Whether the active scan's coordinate system and vertical datum are known, for
+ * the Dataset Story and Export readiness rows. Reads the RESOLVED CRS (file
+ * declaration, catalogue assertion or user override), so an assignment made in
+ * the Coordinate system section shows at once; the file's declaration alone
+ * kept a scan the user had georeferenced at "Unknown". Undefined with no scan.
+ */
+export function georefKnown(resolved: ResolvedCrs | null): {
+  readonly crsKnown: boolean | undefined;
+  readonly datumKnown: boolean | undefined;
+} {
+  if (!resolved) return { crsKnown: undefined, datumKnown: undefined };
+  return { crsKnown: crsIsKnown(resolved), datumKnown: !!resolved.verticalDatum };
+}
+
+/**
  * The scan's bounding rectangle in lon/lat for the site file, or null when the
  * extent is unknown, the frame is not Z-up, or a corner leaves the projection.
  */

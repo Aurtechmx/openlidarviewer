@@ -57,6 +57,7 @@ has not been done. v0.7.0 is the current published release.
 ### Fixed
 
 - A Created layers choice restored from a session is now saved again before its overlay is regenerated. Saving and reopening the session no longer loses it, and the recovery copy keeps it too. Closing the scan clears choices that were never applied.
+- The Coordinate system and Vertical datum rows in Export readiness and the Dataset Story follow the coordinate system in use, including one chosen in the Coordinate system section. They used to read only what the file declared, so a scan the user had assigned a CRS to still showed Unknown until it was reopened.
 - An export with an assigned CRS records the assignment in the file. The text record now carries a crs-assigned line naming the EPSG and stating that coordinates were not moved; before, the written WKT read like the source's own declaration.
 - A LAS export says when it writes a return number or number of returns of 0 as 1. LAS starts both at 1 and the writers raise a 0 to 1; that change was not reported before. It now appears in the export log and as a conversion event in the file's own text record.
 - A saved session keeps the name of the catalogue behind a catalogue-asserted CRS when it is opened again. Reading the session used to drop it, so the restored record no longer said whose statement the frame rested on.
