@@ -135,12 +135,18 @@ export interface CrsInfo {
    */
   readonly horizontalDatum?: string;
   /**
-   * Set when the WKT root is a local or engineering CRS (WKT1 `LOCAL_CS`, WKT2
-   * `ENGCRS` / `ENGINEERINGCRS`). `name` then carries that CRS's own name. Two
+   * Set when the WKT root, or a compound CRS's horizontal component, is a local
+   * or engineering CRS (WKT1 `LOCAL_CS`, WKT2 `ENGCRS` / `ENGINEERINGCRS`). `name` then carries that CRS's own name. Two
    * local frames with different names are different frames; two with the same
    * name are not thereby proven to be the same one.
    */
   readonly localFrame?: true;
+  /**
+   * Set when no horizontal or local CRS could be identified in the WKT (empty,
+   * malformed, or a compound / vertical CRS without a horizontal component).
+   * The CRS then resolves as unknown, never as a projected frame.
+   */
+  readonly horizontalUnresolved?: true;
   /**
    * Set when the CRS is not from the file but asserted by a catalogue source's
    * product specification (`src/io/catalog/catalogueCrs.ts`); names the
@@ -604,10 +610,19 @@ export function crsFromWkt(wkt: string): CrsInfo {
   // …); for a projected CRS that is the PROJCS, whose name wins over the nested
   // base GEOGCS. A compound with no inner named CRS falls back to its own
   // COMPD_CS name, which describes the whole compound.
-  const localRoot = root !== null && root !== undefined && isLocalCrsKeyword(root.keyword);
+  // The horizontal component, identified by structure: the root itself, or a
+  // compound's first direct child that is a horizontal or local CRS. Never the
+  // compound's own label and never a nested authority, so an engineering frame
+  // inside COMPOUNDCRS keeps its own name and its local status.
+  const compoundRoot = root != null && isCompoundKeyword(root.keyword);
+  const horizComponent = root == null ? undefined
+    : compoundRoot ? wktChildNodes(root).find((n) => isHorizontalCrsKeyword(n.keyword) || isLocalCrsKeyword(n.keyword))
+    : root;
+  const localNode = horizComponent && isLocalCrsKeyword(horizComponent.keyword) ? horizComponent : undefined;
+  const localRoot = localNode !== undefined;
   const rawName =
-    firstName(horizNodes, isHorizontalCrsKeyword)
-    ?? (localRoot ? wktNodeName(root) : undefined)
+    (localNode ? wktNodeName(localNode) : undefined)
+    ?? firstName(horizNodes, isHorizontalCrsKeyword)
     ?? (root && isCompoundKeyword(root.keyword) ? wktNodeName(root) : undefined)
     ?? 'Unknown CRS';
 
@@ -623,7 +638,7 @@ export function crsFromWkt(wkt: string): CrsInfo {
   // is permissive — AUTHORITY["EPSG","32612"] (WKT1) and ID["EPSG",32612]
   // (WKT2) are both read. Anchored on the horizontal CRS node so a nested
   // unit/datum authority, or a compound's vertical code, cannot win.
-  const horizCrsNode = horizNodes.find((n) => isHorizontalCrsKeyword(n.keyword));
+  const horizCrsNode = localNode ? undefined : horizNodes.find((n) => isHorizontalCrsKeyword(n.keyword));
   const epsg = horizCrsNode ? epsgFromNodeChildren(horizCrsNode) : undefined;
 
   // Linear units. A projected WKT typically contains TWO UNIT clauses:
@@ -692,6 +707,9 @@ export function crsFromWkt(wkt: string): CrsInfo {
     horizontalDatum,
     ...(geocentric ? { geocentric: true } : {}),
     ...(localRoot && !projectedPresent && !isGeographic && !geocentric ? { localFrame: true as const } : {}),
+    // No horizontal or local CRS could be identified (empty, malformed, or a
+    // compound or vertical CRS with no horizontal component).
+    ...(!localRoot && !horizCrsNode ? { horizontalUnresolved: true as const } : {}),
     ...(verticalNode && verticalAxisIsDown(verticalNode) ? { verticalAxisDown: true } : {}),
   };
 }

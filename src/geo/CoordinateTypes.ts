@@ -242,6 +242,7 @@ export function resolvedFromCrsInfo(
   let kind: CrsKind = info.isGeographic ? 'geographic' : 'projected';
   if (info.geocentric) kind = 'geocentric';
   if (info.localFrame) kind = 'local';
+  if (info.horizontalUnresolved) kind = 'unknown';
   // Confidence: EPSG + WKT = high, EPSG OR a recognisable name = medium.
   // The CrsInfo always has a `name`, so the discriminator is EPSG.
   let confidence: CrsConfidence;
