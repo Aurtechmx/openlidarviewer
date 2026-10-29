@@ -329,6 +329,7 @@ function decodeChunkBatch(
     // stages its own WASM copy from whatever it is given, so a view carries the
     // identical bytes with one fewer copy resident. Consumed here in-process.
     chunk: new Uint8Array(span, rel, c.byteLength),
+    compressedBytes: c.byteLength,
     pointCount: c.pointCount,
     firstPointIndex: c.firstPointIndex,
     pointDataRecordFormat: header.pointFormat,

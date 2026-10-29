@@ -59,6 +59,9 @@ has not been done. v0.7.0 is the current published release.
 
 - A Created layers choice restored from a session is now saved again before its overlay is regenerated. Saving and reopening the session no longer loses it, and the recovery copy keeps it too. Closing the scan clears choices that were never applied.
 - A COPC node whose compressed bytes are shorter than the size its hierarchy declares is refused as malformed. The LAZ decoder has no length check of its own and used to return a full set of points, partly decoded from memory past the end of the data.
+- A chunked LAZ file is held to the same rule: a chunk whose bytes differ from the size in the file's chunk table, shorter or longer, is refused as malformed. A COPC node longer than its declared size is refused too.
+- A saved session or recovery copy keeps the Created layers state of every overlay that exists. Up to 32 choices are kept, and choices for overlays not yet regenerated used to fill that limit first, so a session with 32 of them dropped the state of the overlays on screen. Overlays that exist now come first, then pending choices for known overlays.
+- `lint:module-graph --baseline` with no file now exits 2 with a usage message. It used to fall back to the committed baseline.
 - The Coordinate system and Vertical datum rows in Export readiness and the Dataset Story follow the coordinate system in use, including one chosen in the Coordinate system section. They used to read only what the file declared, so a scan the user had assigned a CRS to still showed Unknown until it was reopened.
 - An export with an assigned CRS records the assignment in the file. The text record now carries a crs-assigned line naming the EPSG and stating that coordinates were not moved; before, the written WKT read like the source's own declaration.
 - A LAS export says when it writes a return number or number of returns of 0 as 1. LAS starts both at 1 and the writers raise a 0 to 1; that change was not reported before. It now appears in the export log and as a conversion event in the file's own text record.
@@ -111,6 +114,10 @@ has not been done. v0.7.0 is the current published release.
 - The field-study verifier rejects a result whose |bias| exceeds its RMSE, whose RMSE exceeds its largest residual, or whose NMAD exceeds 1.4826 times its largest residual, allowing for the precision the figures were reported with.
 - An RMSE below the reference instrument's stated accuracy is now a warning. The verifier fails it only when n·RMSE²/σ² is below the lower 1% quantile of χ² with n degrees of freedom.
 - The live DTM's median gridding on measured cells agreed with R terra and SciPy on eight seeded point clouds (18498 and 18655 cells, within the 1e-6 m tolerance registered before the references were generated; occupancy masks match). The DTM claim now names this scope. Interpolated (filled) cells are not covered. The evidence resolver maps the live DTM's measured cells to that parameter set (E4) and leaves filled cells not covered, and the terrain report, the DEM package evidence contract and the export provenance name measured cells.
+
+### Security
+
+- A coordinate system text ending in a long run of NUL characters followed by another character, as an EPT `ept.json` can carry in `srs.wkt`, no longer stalls the tab. Trailing NULs are now trimmed in linear time; the result is unchanged.
 
 ## [0.7.0] - 2026-10-24
 

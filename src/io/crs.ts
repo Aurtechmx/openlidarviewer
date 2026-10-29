@@ -590,8 +590,11 @@ export function bufferRangeReader(buffer: ArrayBuffer): ByteRangeReader {
  * the horizontal slice of a compound CRS decides name / EPSG / unit.
  */
 export function crsFromWkt(wkt: string): CrsInfo {
-  // Trim wrapper whitespace + null terminators.
-  const text = wkt.replace(/\0+$/, '').trim();
+  // Trim wrapper whitespace + null terminators. A scan from the end, not
+  // /\0+$/, which retries from every NUL of a run that is not at the end.
+  let end = wkt.length;
+  while (end > 0 && wkt.charCodeAt(end - 1) === 0) end -= 1;
+  const text = wkt.slice(0, end).trim();
 
   const root = parseWkt(text);
   const nodes = root ? collectWktNodes(root) : [];

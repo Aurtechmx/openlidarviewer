@@ -106,6 +106,39 @@ describe('pending overlay preferences', () => {
     expect(parseSession(JSON.stringify(doc)).overlayVisibility).toEqual({ contours: false });
   });
 
+  it('32 made-up pending ids do not push real overlay states out of a save', () => {
+    const fake: Record<string, boolean> = {};
+    for (let i = 0; i < 32; i += 1) fake[`fake-${i}`] = true;
+    const reg = createOverlayRegistry();
+    const c = owner(reg, 'contours');
+    reg.restore(fake);
+    c.available = true;
+    c.visible = false;
+    reg.changed();
+    const snap = reg.snapshot();
+    expect(snap.contours).toBe(false);
+    expect(Object.keys(snap)).toHaveLength(32);
+    const { reg: reg2, owners } = saveAndReopen(reg, ['contours']);
+    owners.contours.available = true;
+    reg2.changed();
+    expect(owners.contours.visible).toBe(false);
+  });
+
+  it('a pending preference for a registered overlay outranks unknown pending ids', () => {
+    const prefs: Record<string, boolean> = { 'terrain-access-map': false };
+    for (let i = 0; i < 31; i += 1) prefs[`fake-${i}`] = true;
+    const reg = createOverlayRegistry();
+    const c = owner(reg, 'contours');
+    owner(reg, 'terrain-access-map');
+    reg.restore(prefs);
+    c.available = true;
+    reg.changed();
+    const snap = reg.snapshot();
+    expect(snap.contours).toBe(true);
+    expect(snap['terrain-access-map']).toBe(false);
+    expect(Object.keys(snap)).toHaveLength(32);
+  });
+
   it('an older session without the field clears pending preferences', () => {
     const reg = createOverlayRegistry();
     reg.restore({ contours: false });
