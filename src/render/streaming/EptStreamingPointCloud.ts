@@ -144,9 +144,8 @@ export class EptStreamingPointCloud implements StreamingSource {
    * controller that is never aborted once the load succeeds.
    */
   private readonly _lifetime = new AbortController();
-  /** Dataset-level RGB bit-depth, captured from the first decoded RGB tile;
-   *  see {@link noteDecodedRgbDepth}. Undefined until the first colour tile
-   *  lands. */
+  /** Dataset-level RGB bit-depth: `false` once a decoded tile proved 16-bit
+   *  colour (see {@link noteDecodedRgbDepth}), otherwise undefined. */
   private _rgbEightBit: boolean | undefined;
 
   private constructor(
@@ -388,24 +387,23 @@ export class EptStreamingPointCloud implements StreamingSource {
       scale: [1, 1, 1],
       offset: [0, 0, 0],
       renderOrigin: this.renderOrigin,
-      // Dataset-level RGB bit-depth, captured from the first decoded RGB
-      // tile (noteDecodedRgbDepth) so every later tile narrows colour
-      // identically — the same seam the COPC source uses.
+      // Dataset-level RGB bit-depth: 16-bit once any tile proved it
+      // (noteDecodedRgbDepth), else undefined so the tile decides.
       rgbEightBit: this._rgbEightBit,
     };
   }
 
   /**
-   * Capture the RGB bit-depth from the first decoded RGB tile. Once set it is
-   * sticky, so a later all-dark tile (whose own max would read as 8-bit)
-   * can't flip the cloud's colour depth mid-stream. Same contract as the
-   * COPC {@link StreamingSource.noteDecodedRgbDepth} implementation — the
-   * scheduler already calls this after every decode.
+   * Record the RGB bit-depth a decoded tile showed. Only 16-bit is pinned: a
+   * tile with a channel above 255 proves the file stores 16-bit colour, and
+   * every later tile then narrows by the high byte. A tile whose channels all
+   * fit in 8 bits proves nothing (a dark 16-bit tile looks the same), so it
+   * leaves the decision open and each tile decides from its own values. The
+   * result no longer depends on which tile happens to finish decoding first;
+   * the scheduler re-decodes tiles narrowed as 8-bit before the proof arrived.
    */
   noteDecodedRgbDepth(eightBit: boolean | undefined): void {
-    if (this._rgbEightBit === undefined && eightBit !== undefined) {
-      this._rgbEightBit = eightBit;
-    }
+    if (eightBit === false) this._rgbEightBit = false;
   }
 
   // ── EPT-specific helpers ────────────────────────────────────────────────

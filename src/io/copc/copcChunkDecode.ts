@@ -53,8 +53,8 @@ export interface ChunkDecodeMetadata {
    * File-level RGB bit-depth decision. When set, every chunk narrows colour the
    * SAME way (8-bit-in-low-byte copied verbatim vs 16-bit high-byte) instead of
    * each chunk deciding from its own max — so a cloud can't show two nodes in
-   * different colour depths. The source captures it from the first decoded RGB
-   * chunk (see {@link DecodedChunk.rgbEightBit}) and feeds it back here.
+   * different colour depths. A streaming source sets it to false once any decoded
+   * chunk shows a value above 255 (see {@link DecodedChunk.rgbEightBit}).
    */
   rgbEightBit?: boolean;
   /**
@@ -144,7 +144,7 @@ export interface DecodedChunk {
   /**
    * The RGB bit-depth decision this chunk used (true = 8-bit-in-low-byte copied
    * verbatim, false = 16-bit high-byte). Undefined when the chunk carries no
-   * RGB. The source reads it off the first RGB chunk and feeds it back as
+   * RGB. A streaming source pins 16-bit (false) from it and feeds that back as
    * {@link ChunkDecodeMetadata.rgbEightBit} so all later chunks match.
    */
   rgbEightBit?: boolean;

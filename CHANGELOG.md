@@ -107,6 +107,7 @@ has not been done. v0.7.0 is the current published release.
 - A page opened from the Tools or Data tab now shows a "← Back to Tools" (or Data) button under its title on a desktop, as Analyse pages already did. The only way back used to be the small crumb in the top bar. The button goes to the same place as the crumb and Escape; the crumb's Back shows while the left panel is collapsed.
 - A chain total of box volumes added a clip region's full-scan-height volume. A clip region now adds nothing: a chain that mixes it with drawn boxes totals the drawn boxes and says clip regions were left out, and a chain of clip regions only reads "Volume withheld" with the reason.
 - Opening a scan with no colour whose heights differ only by rounding (for example 1500 and 1500.0000000000002) froze the tab and then crashed it while drawing the elevation legend. The legend now shows the two end values for a range that narrow, and snapshots and figures with a legend do the same.
+- Streamed COPC and EPT scans with colour could show different colours depending on which part of the scan loaded first. When the first part to load was very dark, later parts of a 16-bit file showed wrong colours (often black or noise), and parts loaded at the same time could disagree. A scan is now read as 16-bit colour as soon as any part has a value above 255, and parts already shown are reloaded to match, so the final colours are the same in any load order. A file whose colours never go above 255 is still read as 8-bit.
 
 ### Validation
 
