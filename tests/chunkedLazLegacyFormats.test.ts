@@ -43,6 +43,7 @@ describe('chunked LAZ in point format 3', () => {
     for (const c of table.chunks) {
       const raw = decodeLazChunkLocal(lazPerf, {
         chunk: new Uint8Array(buffer, c.byteOffset, c.byteLength).slice(),
+        compressedBytes: c.byteLength,
         pointCount: c.pointCount, firstPointIndex: c.firstPointIndex,
         pointDataRecordFormat: header.pointFormat, pointRecordLength: header.pointDataRecordLength,
         scale: header.scale, offset: header.offset, ctx,

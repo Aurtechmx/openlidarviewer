@@ -251,6 +251,7 @@ async function sampleLaz(
     // those five channels.
     const raw = decodeLazChunkLocal(lazPerf, {
       chunk: bytes,
+      compressedBytes: c.byteLength,
       pointCount: c.pointCount,
       firstPointIndex: c.firstPointIndex,
       pointDataRecordFormat: header.pointFormat,

@@ -104,6 +104,16 @@ describe('lint:module-graph', () => {
     );
   });
 
+  it('--baseline with no value exits 2 with a usage message', () => {
+    const committed = readFileSync(BASELINE, 'utf8');
+    for (const args of [['--baseline'], ['--baseline', '--update']]) {
+      const r = spawnSync('node', ['scripts/lint-module-graph.mjs', ...args], { cwd: ROOT, encoding: 'utf8' });
+      expect(r.status).toBe(2);
+      expect(r.stderr).toContain('--baseline needs a file');
+    }
+    expect(readFileSync(BASELINE, 'utf8')).toBe(committed);
+  });
+
   it('records the most-imported files as unenforced context', () => {
     const doc = JSON.parse(readFileSync(BASELINE, 'utf8'));
     const top = doc.context.topFanIn as Array<{ file: string; importers: number }>;

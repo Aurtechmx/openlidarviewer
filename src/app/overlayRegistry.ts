@@ -108,9 +108,13 @@ export function createOverlayRegistry(): OverlayRegistry {
       return () => { listeners.delete(fn); };
     },
     snapshot() {
-      // Pending first; an available overlay's owner state wins over it.
-      const out: Record<string, boolean> = Object.fromEntries(pending);
+      // Live overlay states first, then pending ids a registered overlay
+      // owns, then the rest, so unknown ids cannot crowd out the cap.
+      const out: Record<string, boolean> = {};
       for (const e of reg.available()) out[e.id] = e.get();
+      const rest = [...pending].filter(([id]) => !(id in out));
+      for (const [id, v] of rest) if (entries.has(id)) out[id] = v;
+      for (const [id, v] of rest) if (!entries.has(id)) out[id] = v;
       return sanitizeOverlayPrefs(out) ?? {};
     },
     restore(prefs) {

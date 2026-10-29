@@ -85,9 +85,14 @@ const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
  */
 const BASELINE = (() => {
   const i = process.argv.indexOf('--baseline');
-  return i !== -1 && process.argv[i + 1]
-    ? resolve(process.argv[i + 1])
-    : resolve(ROOT, 'docs/validation/module-graph-baseline.json');
+  if (i === -1) return resolve(ROOT, 'docs/validation/module-graph-baseline.json');
+  const file = process.argv[i + 1];
+  if (!file || file.startsWith('--')) {
+    console.error('lint:module-graph: --baseline needs a file');
+    console.error('usage: node scripts/lint-module-graph.mjs [--update] [--baseline <file>]');
+    process.exit(2);
+  }
+  return resolve(file);
 })();
 const SRC = resolve(ROOT, 'src');
 

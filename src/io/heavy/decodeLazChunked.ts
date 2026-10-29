@@ -71,6 +71,11 @@ export interface LazChunkJob {
    * would carry its whole backing buffer.
    */
   readonly chunk: ArrayBuffer | Uint8Array;
+  /**
+   * The chunk's size as the LAZ chunk table declares it. decompressChunk
+   * refuses a chunk of any other length, since laz-perf reads past a short one.
+   */
+  readonly compressedBytes: number;
   readonly pointCount: number;
   readonly firstPointIndex: number;
   readonly pointDataRecordFormat: number;
@@ -110,6 +115,7 @@ export interface LazChunkJob {
  */
 export function decodeLazChunkLocal(lazPerf: LazPerfModule, job: LazChunkJob): RawPoints {
   const records = decompressChunk(lazPerf, job.chunk, {
+    compressedBytes: job.compressedBytes,
     pointDataRecordFormat: job.pointDataRecordFormat,
     pointRecordLength: job.pointRecordLength,
     pointCount: job.pointCount,
@@ -232,6 +238,7 @@ async function jobFor(
   const c = planned.range;
   return {
     chunk: await source.readRange(c.byteOffset, c.byteLength, signal),
+    compressedBytes: c.byteLength,
     pointCount: c.pointCount,
     firstPointIndex: c.firstPointIndex,
     pointDataRecordFormat: header.pointFormat,

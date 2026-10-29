@@ -72,8 +72,11 @@ export function makeExportCrsResolver(
     );
 }
 
+/** The facts `datasetIdentity` reads from a source, all optional. */
+type DatasetIdentityFacts = NonNullable<Parameters<typeof datasetIdentity>[0]>;
+
 /** The streaming-source fields the resolver reads. */
-export interface StreamingCrsSource {
+export interface StreamingCrsSource extends DatasetIdentityFacts {
   readonly name: string;
   readonly kind: StreamingSourceKind;
   crs(): CrsInfo | null | undefined;
@@ -93,7 +96,7 @@ export function makeStreamingCrsResolver(
     if (!s) return resolvedExportCrs(null);
     return resolvedExportCrs(crs.resolveFor({
       name: s.name, detected: s.crs() ?? undefined, source: crsSourceForKind(s.kind),
-      identity: datasetIdentity(s as Parameters<typeof datasetIdentity>[0]),
+      identity: datasetIdentity(s),
     }));
   };
 }
