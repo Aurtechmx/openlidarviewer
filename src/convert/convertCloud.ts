@@ -60,6 +60,16 @@ function countOverlapFlag(flags: Uint8Array | null | undefined, count: number): 
   return n;
 }
 
+/** Points whose return number or number of returns is 0. */
+function countZeroReturns(g: { readonly count: number; readonly returnNumber?: Uint8Array; readonly returnCount?: Uint8Array }): number {
+  const rn = g.returnNumber;
+  const rc = g.returnCount;
+  if (!rn && !rc) return 0;
+  let n = 0;
+  for (let i = 0; i < g.count; i++) if ((rn && rn[i] === 0) || (rc && rc[i] === 0)) n++;
+  return n;
+}
+
 /** The refusal a LAS 1.2 write returns when the overlap flag would be dropped. */
 function legacyOverlapDropRefusal(points: number): string {
   const label = `${points.toLocaleString()} point${points === 1 ? '' : 's'}`;
@@ -443,6 +453,15 @@ export function convertCloud(
     const declaredGps = cloud.metadata?.gpsTimeType;
     const gpsStandardFromSource =
       declaredGps === undefined ? undefined : declaredGps === 'adjusted-standard';
+    // Both writers clamp a return number or number of returns of 0 up to 1,
+    // the lowest value LAS allows. That rewrites a stored value, so say so.
+    const zeroReturns = countZeroReturns(g);
+    if (zeroReturns > 0) {
+      record({
+        id: 'return-zero-raised', kind: 'clipped', level: 'warn', points: zeroReturns, acknowledged: false,
+        message: `${zeroReturns.toLocaleString('en-US')} point${zeroReturns === 1 ? '' : 's'} ${zeroReturns === 1 ? 'has' : 'have'} return number or number of returns 0, which LAS does not allow; written as 1.`,
+      });
+    }
     if (opts.format === 'las14') {
       const semantics = planClassSemantics({
         sourcePdrf: cloud.metadata?.pointFormat,

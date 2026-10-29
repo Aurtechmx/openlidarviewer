@@ -57,6 +57,7 @@ has not been done. v0.7.0 is the current published release.
 ### Fixed
 
 - A Created layers choice restored from a session is now saved again before its overlay is regenerated. Saving and reopening the session no longer loses it, and the recovery copy keeps it too. Closing the scan clears choices that were never applied.
+- A LAS export says when it writes a return number or number of returns of 0 as 1. LAS starts both at 1 and the writers raise a 0 to 1; that change was not reported before. It now appears in the export log and as a conversion event in the file's own text record.
 - A saved session keeps the name of the catalogue behind a catalogue-asserted CRS when it is opened again. Reading the session used to drop it, so the restored record no longer said whose statement the frame rested on.
 - Dataset Intelligence gives no density tier on a Web Mercator or geocentric frame, or on a frame with no local vertical, as the Scan Report gives no pts/m² there. It used to tier those scans as if their grid units were ground metres.
 - The stockpile volume breakdown caps its confidence by how much of the footprint the scan covers, as the volume record already did. Dense, even sampling over part of a footprint no longer reads high confidence.
