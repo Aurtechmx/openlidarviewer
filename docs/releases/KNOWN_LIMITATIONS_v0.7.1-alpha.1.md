@@ -433,7 +433,7 @@ wiring moved to the mapper module, the Planetary Computer CRS record moved to
 its own module, the view cube's wiring was condensed, the epoch comparison
 sequence moved to its own module (twelve lines) and the Clip page's
 construction moved to its own module (seven lines), and
-`src/render/Viewer.ts` is 5,932, 291 lines below its v0.6.9 count of 6,223. Five getters collapsed to make room for a memory
+`src/render/Viewer.ts` is 5,925, 298 lines below its v0.6.9 count of 6,223. Five getters collapsed to make room for a memory
 accessor and a size-mode call, and the streamed draw cull then paid for its own
 wiring by moving the pass onto the streaming renderer and collapsing two more
 expressions. Making the loop request-driven then took another thirty-one out:
