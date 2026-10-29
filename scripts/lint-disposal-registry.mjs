@@ -26,14 +26,27 @@ import { readFileSync } from 'node:fs';
 import { resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const DOC = 'docs/disposal-contracts.md';
+/**
+ * The registry read. Defaults to this repository's document. `--doc <file>`
+ * points it at a copy so tests can inject rows without editing the real one.
+ */
+function docPath() {
+  const i = process.argv.indexOf('--doc');
+  if (i === -1) return resolve(dirname(fileURLToPath(import.meta.url)), '..', DOC);
+  const file = process.argv[i + 1];
+  if (!file) {
+    console.error('lint:disposal-registry: --doc needs a file');
+    process.exit(2);
+  }
+  return resolve(file);
+}
 
 const PLACEHOLDER = /^(tbd|todo|\?+|none|n\/a|unknown|-{1,2})$/i;
 /** A registry with no rows would pass every check below without reading one. */
 const MIN_ROWS = 10;
 
-const text = readFileSync(resolve(ROOT, DOC), 'utf8');
+const text = readFileSync(docPath(), 'utf8');
 const lines = text.split('\n');
 
 const rows = [];
