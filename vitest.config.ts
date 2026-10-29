@@ -75,7 +75,7 @@ export default defineConfig({
     // Removes the transform directory vitest writes under the OS temp dir for
     // the forks pool and does not remove itself (one per run, tens of MB each).
     // See the file for why it is needed.
-    globalSetup: ['tests/vitestGlobalSetup.ts'],
+    globalSetup: ['tests/vitestGlobalSetup.ts', 'tests/treeUnchangedSetup.ts'],
     // Cap parallelism so a WASM/LAZ decoder or a heavy DTM build isn't starved
     // of CPU under full-bucket parallel load on a busy CI runner — the root cause
     // of the loadLas / terrain-density timeout flakes. We take 75 % of cores but
