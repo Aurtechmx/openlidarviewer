@@ -10,29 +10,43 @@
 
 import { describe, it, expect } from 'vitest';
 import { spawnSync } from 'node:child_process';
-import { writeFileSync, rmSync, mkdirSync } from 'node:fs';
-import { resolve, dirname } from 'node:path';
+import { writeFileSync, rmSync, mkdirSync, mkdtempSync, readFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join, resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
-const SCRATCH = 'docs/_standards_lint_probe.md';
+const LINT = resolve(ROOT, 'scripts/lint-standards-truth.mjs');
 
-const run = (): { status: number | null; out: string } => {
-  const p = spawnSync('node', ['scripts/lint-standards-truth.mjs'], { cwd: ROOT, encoding: 'utf8' });
+/** Run the lint over the repository, or over a fixture tree with `--root`. */
+const run = (root?: string): { status: number | null; out: string } => {
+  const p = spawnSync('node', root ? [LINT, '--root', root] : [LINT], { cwd: ROOT, encoding: 'utf8' });
   return { status: p.status, out: p.stdout + p.stderr };
 };
 
-/** Run the lint with one line written into a scratch document under docs/. */
-function withLine(line: string): { status: number | null; out: string } {
-  const abs = resolve(ROOT, SCRATCH);
-  mkdirSync(dirname(abs), { recursive: true });
+/**
+ * Build a private fixture tree, run `body` against it, then delete it. Faults
+ * are injected here, never into the repository, so a concurrent run or another
+ * lint cannot read them and a killed run leaves nothing in the working tree.
+ */
+function withFixture<T>(files: Record<string, string>, body: (root: string) => T): T {
+  const root = mkdtempSync(join(tmpdir(), 'olv-standards-truth-'));
   try {
-    writeFileSync(abs, `# probe\n\n${line}\n`);
-    return run();
+    writeFileSync(join(root, 'package.json'), readFileSync(resolve(ROOT, 'package.json')));
+    mkdirSync(join(root, 'docs'), { recursive: true });
+    for (const [rel, text] of Object.entries(files)) {
+      mkdirSync(dirname(join(root, rel)), { recursive: true });
+      writeFileSync(join(root, rel), text);
+    }
+    return body(root);
   } finally {
-    rmSync(abs, { force: true });
+    rmSync(root, { recursive: true, force: true });
   }
 }
+
+/** Run the lint over a fixture tree holding one probe document under docs/. */
+const withLine = (line: string) =>
+  withFixture({ 'docs/_standards_lint_probe.md': `# probe\n\n${line}\n` }, (root) => run(root));
 
 describe('lint:standards-truth', () => {
   it('passes on the committed tree', () => {
@@ -63,7 +77,9 @@ describe('lint:standards-truth', () => {
     expect(withLine(line).status).toBe(0);
   });
 
-  it('leaves no probe document behind', () => {
+  it('writes its probe documents outside the repository', () => {
+    const st = spawnSync('git', ['status', '--porcelain', '--', 'docs', 'src'], { cwd: ROOT, encoding: 'utf8' });
+    expect(st.stdout).not.toContain('_standards_lint_probe');
     expect(run().status).toBe(0);
   });
 });
@@ -75,25 +91,26 @@ describe('which directories the lint actually reads', () => {
   // reading files reports the same clean line as one that read them all.
 
   it('reads a document under docs/release', () => {
-    const abs = resolve(ROOT, 'docs/release/_standards_lint_probe.md');
-    mkdirSync(dirname(abs), { recursive: true });
-    try {
-      writeFileSync(abs, '# probe\n\nPDFR 6 class 12 means Overlap.\n');
-      const r = run();
-      expect(r.status).toBe(0); // the line above is deliberately misspelled
-      writeFileSync(abs, '# probe\n\nPDRF 6 class 12 means Overlap.\n');
-      const caught = run();
-      expect(caught.status).toBe(1);
-      expect(caught.out).toContain('docs/release/_standards_lint_probe.md');
-    } finally {
-      rmSync(abs, { force: true });
-    }
+    const rel = 'docs/release/_standards_lint_probe.md';
+    // The first line is deliberately misspelled, so it must pass.
+    expect(withFixture({ [rel]: '# probe\n\nPDFR 6 class 12 means Overlap.\n' }, run).status).toBe(0);
+    const caught = withFixture({ [rel]: '# probe\n\nPDRF 6 class 12 means Overlap.\n' }, run);
+    expect(caught.status).toBe(1);
+    expect(caught.out).toContain(rel);
   });
 
   it('still skips the packaged output at the repository root', () => {
     // `release/` at the root holds build artifacts; `docs/release` does not.
-    const r = run();
-    expect(r.status).toBe(0);
+    // The fixture puts a refused line in both: only the docs one is reported.
+    const bad = '# probe\n\nPDRF 6 class 12 means Overlap.\n';
+    const r = withFixture(
+      { 'release/openlidarviewer-probe/docs/x.md': bad, 'docs/release/x.md': bad },
+      run,
+    );
+    expect(r.status).toBe(1);
+    expect(r.out).toContain('docs/release/x.md');
     expect(r.out).not.toContain('release/openlidarviewer-');
+    // And the real repository, with whatever packaged output it holds, is clean.
+    expect(run().status).toBe(0);
   });
 });
