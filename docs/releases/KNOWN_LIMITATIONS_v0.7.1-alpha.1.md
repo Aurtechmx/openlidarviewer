@@ -433,7 +433,7 @@ wiring moved to the mapper module, the Planetary Computer CRS record moved to
 its own module, the view cube's wiring was condensed, the epoch comparison
 sequence moved to its own module (twelve lines) and the Clip page's
 construction moved to its own module (seven lines), and
-`src/render/Viewer.ts` is 5,932, 291 lines below its v0.6.9 count of 6,223. Five getters collapsed to make room for a memory
+`src/render/Viewer.ts` is 5,925, 298 lines below its v0.6.9 count of 6,223. Five getters collapsed to make room for a memory
 accessor and a size-mode call, and the streamed draw cull then paid for its own
 wiring by moving the pass onto the streaming renderer and collapsing two more
 expressions. Making the loop request-driven then took another thirty-one out:
@@ -447,7 +447,7 @@ measurement controller, which took twenty-eight more. The draw precision bound's
 fails the build when either passes its recorded baseline, so a raise is a hand
 edit to `docs/validation/monolith-size-baseline.json` and always shows in the
 diff.
-Fan-out is 95 for the shell, 73 for the renderer, across 1187 modules with no
+Fan-out is 95 for the shell, 73 for the renderer, across 1188 modules with no
 dependency cycles. Fan-out counts the distinct modules a file imports with a
 value import, source files and external packages alike; type-only and dynamic
 imports are not counted. The shell and the renderer figures are held
@@ -720,8 +720,12 @@ project position; a scan whose position cannot be read is refused. Streamed
 USGS EPT datasets are in Web Mercator, so this is what lets them be
 analysed. A geocentric code outside the built-in
 list is recognised only from its WKT or GeoTIFF model type. A WKT
-engineering CRS (ENGCRS, LOCAL_CS) is not yet classified as local and keeps
-its current handling. Reproject refuses a geocentric source or target, because
+engineering CRS (ENGCRS, LOCAL_CS), at the root or as the horizontal part of a
+compound CRS, is a local frame. Two layers naming the same local frame are not
+combined, because a shared name does not show a shared origin; to combine
+them, set the same CRS on each layer. WKT with no horizontal or local CRS that
+can be read (empty, malformed, or vertical only) is treated as no declared CRS.
+A streamed layer is matched against the active scan's resolved CRS. Reproject refuses a geocentric source or target, because
 it maps only horizontal X and Y.
 
 A geographic (degree) scan beyond ±89° latitude is refused by terrain analysis

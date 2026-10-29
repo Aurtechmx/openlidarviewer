@@ -19,7 +19,10 @@ import type { PointCloud } from '../model/PointCloud';
 import type { ExportCloudCrs } from '../render/exportAdapter';
 import type { ResolvedCrs } from '../geo/CoordinateTypes';
 import { crsIsKnown } from './kmlActions';
-import { linearUnitLabel } from '../io/crs';
+import { linearUnitLabel, type CrsInfo } from '../io/crs';
+import { datasetIdentity, type CrsService } from '../geo/CrsService';
+import { crsSourceForKind } from './crsCoordinator';
+import type { StreamingSourceKind } from '../render/streaming/StreamingSource';
 
 export interface ExportCrsResolverDeps {
   /** The active scan's resolved CRS (override applied), or null. */
@@ -67,4 +70,30 @@ export function makeExportCrsResolver(
     resolvedExportCrs(
       cloud === deps.activeCloud() ? deps.current() : deps.resolveForCloud(cloud),
     );
+}
+
+/** The streaming-source fields the resolver reads. */
+export interface StreamingCrsSource {
+  readonly name: string;
+  readonly kind: StreamingSourceKind;
+  crs(): CrsInfo | null | undefined;
+}
+
+/**
+ * The open stream's resolved CRS: its own header CRS with its own override, if
+ * any. Never the active scan's, which may be a static layer in another frame.
+ * A stream declaring no CRS and carrying no override resolves as unknown.
+ */
+export function makeStreamingCrsResolver(
+  stream: () => StreamingCrsSource | null,
+  crs: Pick<CrsService, 'resolveFor'>,
+): () => ExportCloudCrs {
+  return () => {
+    const s = stream();
+    if (!s) return resolvedExportCrs(null);
+    return resolvedExportCrs(crs.resolveFor({
+      name: s.name, detected: s.crs() ?? undefined, source: crsSourceForKind(s.kind),
+      identity: datasetIdentity(s as Parameters<typeof datasetIdentity>[0]),
+    }));
+  };
 }

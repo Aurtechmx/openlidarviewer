@@ -26,7 +26,7 @@ import type { StreamingSourceKind } from '../render/streaming/StreamingSource';
  * its own: whatever it reports was read from the source file's LAS VLRs during
  * the out-of-core build, so it is recorded as that, not as a manifest CRS.
  */
-function crsSourceForKind(kind: StreamingSourceKind): CrsSource {
+export function crsSourceForKind(kind: StreamingSourceKind): CrsSource {
   switch (kind) {
     case 'ept':
       return 'ept-srs';

@@ -212,7 +212,7 @@ import { TouchTracker } from './touchTracker';
 import type { GestureDelta } from './touchGesture';
 import { TouchTapGate } from './touchTapGate';
 import { CameraPoseWatch, DampingSettleGate, FrameDemand, VisibleHeartbeat } from './frameDemand';
-import { resolveStreamingCompatibility } from './streamingCompatibility';
+import { resolveStreamingCompatibilityFromCrs, resolvedOrDeclared } from './streamingCompatibility';
 import { InspectTool } from './InspectTool';
 import { AnnotationController } from './annotate/AnnotationController';
 import { annotationGeorefFor } from './annotate/pickGeoref';
@@ -1766,19 +1766,12 @@ export class Viewer {
   private _streamingCompatibility(): LayerCompatibility | null {
     const stream = this._streaming?.cloud;
     if (!stream) return null;
-    const scrs = stream.crs?.() ?? null;
-    const statics = integrableClouds(this._clouds.values()).map(({ cloud }) => ({
-      epsg: cloud.metadata?.crs?.epsg,
-      crsName: cloud.metadata?.crs?.name,
-      verticalDatum: cloud.metadata?.crs?.verticalDatum,
-      verticalEpsg: cloud.metadata?.crs?.verticalEpsg,
-    }));
-    return resolveStreamingCompatibility(statics, {
-      epsg: scrs?.epsg,
-      crsName: scrs?.name,
-      verticalDatum: scrs?.verticalDatum,
-      verticalEpsg: scrs?.verticalEpsg,
-    });
+    // Resolved CRS (override applied) through the shared adapter; the active-scan
+    // accessor resolves the stream on its own header CRS, as for streaming export.
+    return resolveStreamingCompatibilityFromCrs(
+      integrableClouds(this._clouds.values()).map(({ cloud }) => resolvedOrDeclared(this._exportCrsResolver?.(cloud).resolved, cloud.metadata?.crs)),
+      resolvedOrDeclared(this._resolvedActiveCrs?.().resolved, stream.crs?.(), 'copc-meta'),
+    );
   }
 
   /**

@@ -231,7 +231,7 @@ export function compatibilityNote(c: LayerCompatibility): string {
     case 'horizontal-only':
       return 'Shares the horizontal CRS; heights are on a different or undeclared vertical reference, so this layer is placed in X/Y only and is excluded from combined height, volume, surface and change results.';
     case 'unknown':
-      return 'No declared CRS — compatibility with the project frame cannot be established, so this layer keeps its own frame and is excluded from combined results.';
+      return 'No declared CRS, or a local frame whose origin cannot be confirmed. This layer keeps its own frame and is excluded from combined results. To combine it, set the same CRS on each layer in the CRS panel.';
     case 'incompatible':
       return 'A different coordinate reference system — kept in its own frame and excluded from combined results.';
   }
