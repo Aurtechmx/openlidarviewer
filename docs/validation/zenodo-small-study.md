@@ -61,7 +61,7 @@ is not part of `vitest run`.
 | reference | laspy + lazrs reads the original; no OLV code |
 | serial | `loadLazFromFile` with pooling refused: whole-file laz-perf decode, the loader's origin choice and cloud construction |
 | fullfile | `loadLas` on the whole buffer, pooling refused with `?decodePool=off` because Node has no `Worker`. This is serial coverage, not pooled |
-| pooled | the same loader in headless Chromium with the default policy; the file has over a million points, so the LAZ chunks are decoded by a pool of `lazChunkWorker` workers. The run fails unless the loader reports the pooled path. The page calls the loader directly; the app calls it from its parse worker |
+| pooled | the same loader in headless Chromium with the default policy; the file has over a million points, so the LAZ chunks are decoded by a pool of `lazChunkWorker` workers. The run fails unless the loader reports the pooled path. The page calls the loader directly; the app calls it from its parse worker for a non-COPC LAZ, and streams this file as COPC instead |
 | copc | `StreamingPointCloud.open` (which opens `CopcSource`) over an `ArrayBufferRangeSource`, the full hierarchy walk, then every data node read by range and decoded once with `decompressChunk` and `decodeRecords`, the functions the COPC worker runs, with the stream's own decode metadata |
 | copc-reversed | the same over a local `File` range source with the nodes decoded in reverse order, to show the file-level colour decision does not depend on which node arrives first |
 | app | the app from the dev server in headless Chromium: open through the file input, orbit and zoom, read the Coordinate system section and Export readiness, choose EPSG:5514, read both again without reopening |
@@ -215,8 +215,15 @@ the workbook and the CSV does not show that OLV found the spheres in any scan.
 - The pooled run calls the loader from a page, not from the app's parse
   worker. The app journey covers open, navigation and CRS assignment; clip,
   measure, export from the UI and reopen were not driven. Firefox and WebKit
-  were not run. The app's Scan scope row read "Resident preview" on this file
-  and was not investigated.
+  were not run.
+- Opened in the app, iPhone.laz is detected as COPC and streamed
+  (`src/app/openScan.ts`, `detectCopc` before any LAZ loader), so the app
+  itself uses the COPC path, not the serial or pooled LAZ loaders. Its Export
+  readiness Scan scope row therefore reads "Resident preview": the streaming
+  card records `resident-only` coverage at attach time
+  (`src/app/inspectorCardRefreshers.ts`), because residency moves with the
+  view and the budget. That label is accurate for a stream; it does not say
+  whether all 130 nodes happened to be resident.
 - Physical accuracy of any kind, sphere fitting, and the TLS, ZEB and LA03
   files.
 - Normals: OLV does not read LAS extra-bytes dimensions.
