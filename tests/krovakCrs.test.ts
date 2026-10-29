@@ -1,9 +1,10 @@
 /**
  * krovakCrs.test.ts — EPSG:5514 (S-JTSK / Krovák East-North) ingest + CRS foundation.
  *
- * The scanner-comparison scans (Zenodo 10.5281/zenodo.15421291) are georeferenced
- * to EPSG:5514, a non-UTM projected CRS OLV did not previously resolve. This pins
- * two things:
+ * The scanner-comparison record (Zenodo 10.5281/zenodo.15421291) states its data
+ * are in EPSG:5514, a non-UTM projected CRS OLV did not previously resolve. The
+ * statement is the publisher's: iPhone.laz itself carries an empty WKT record
+ * and opens with no CRS (see crs.test.ts). This pins two things:
  *
  *  1. The registry resolves 5514 as a projected, metre-based European entry.
  *  2. The Krovák proj4 definition reprojects 5514 → WGS84 in agreement with an
@@ -23,7 +24,7 @@ import proj4 from 'proj4';
 import { epsgToProj4 } from '../src/convert/epsg';
 import { getCrsEntry } from '../src/geo/CrsRegistry';
 
-/** Surveyed reference points in EPSG:5514 (from the dataset GroundTruth), with the
+/** Published reference points in EPSG:5514 (from the dataset GroundTruth), with the
  *  WGS84 lon/lat computed by authoritative PROJ (pyproj Transformer 5514→4326). */
 const ORACLE = [
   { name: 'Koule01', e: -744290.00006112, n: -1036243.5094764, lon: 14.38782292, lat: 50.14594182 },
