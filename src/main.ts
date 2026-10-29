@@ -104,7 +104,7 @@ import {
   siteKmlStatus,
   type KmlActionDeps,
 } from './app/kmlActions';
-import { makeExportCrsResolver, resolvedExportCrs } from './app/exportCrsResolver';
+import { makeExportCrsResolver, makeStreamingCrsResolver, resolvedExportCrs } from './app/exportCrsResolver';
 import { createInspectorVisualCoordinator } from './app/inspectorVisualCoordinator';
 import type { MeasurementExportActionDeps } from './app/measurementExportActions';
 import { exportImageAction, runPointExport } from './app/exportImageAction';
@@ -509,7 +509,7 @@ const viewerLoaded: Promise<Viewer> = viewerStarted.then(async () => {
       crsService.resolveFor({ name: cloud.name, detected: cloud.metadata?.crs ?? undefined, source: 'las-vlr', identity: datasetIdentity(cloud) }),
     activeCloud: () => (scans.activeId ? viewer!.getCloud(scans.activeId) ?? null : null),
   }));
-  viewer.setResolvedActiveCrs(() => resolvedExportCrs(crsService.current())); // STREAMING export CRS
+  viewer.setResolvedActiveCrs(makeStreamingCrsResolver(() => viewer!.streamingCloud, crsService)); // the stream's own CRS
   return viewer;
 });
 

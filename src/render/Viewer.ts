@@ -1767,7 +1767,7 @@ export class Viewer {
     const stream = this._streaming?.cloud;
     if (!stream) return null;
     // Resolved CRS (override applied) through the shared adapter; the active-scan
-    // accessor is the stream's, as for streaming export.
+    // accessor resolves the stream on its own header CRS, as for streaming export.
     return resolveStreamingCompatibilityFromCrs(
       integrableClouds(this._clouds.values()).map(({ cloud }) => resolvedOrDeclared(this._exportCrsResolver?.(cloud).resolved, cloud.metadata?.crs)),
       resolvedOrDeclared(this._resolvedActiveCrs?.().resolved, stream.crs?.(), 'copc-meta'),
