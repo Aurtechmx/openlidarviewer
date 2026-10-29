@@ -147,7 +147,7 @@ Negative controls, run on the real file:
 | cancelled node read | `RangeReadError` with code `aborted` |
 | node range past the end of the file | `LoadError` naming the node and the file size |
 | negative range offset | `RangeReadError` with code `out-of-range` |
-| half of a node's compressed bytes passed straight to the decoder | the decoder returns all 92,519 points of that node without an error. The production read path refuses a short or out-of-file node range before decoding, but the decoder cannot detect a short buffer on its own. Reported, not fixed |
+| half of a node's compressed bytes passed straight to the decoder | `LoadError` (malformed-file): the chunk is shorter than the size the hierarchy declares. laz-perf's `ChunkDecoder` takes a pointer and no length; given half of a 458,467-byte node it returned all 92,519 points with no error, and from point 404 on its output depended on the WASM heap bytes after the input. Since the decoder cannot detect this, `decompressChunk` now checks the chunk against the declared node size |
 | pool workers after a pooled load | all 4 chunk workers closed within 2 s |
 
 ## CRS provenance
@@ -202,6 +202,10 @@ the workbook and the CSV does not show that OLV found the spheres in any scan.
   Unknown (`src/main.ts`, `buildCurrentStoryInputs`). They now read the
   resolved CRS. Test: `tests/exportHealthGeoref.test.ts`; the app journey
   above shows it on the real file.
+- A COPC node chunk shorter than its declared size decoded into a full set
+  of points built partly from unrelated WASM memory
+  (`src/io/copc/copcChunkDecompress.ts`). It is now refused before decoding.
+  Test: `tests/copcTruncatedChunk.test.ts`.
 - An export with an assigned CRS did not record the assignment, so the
   written WKT read like the source's own declaration
   (`src/convert/convertCloud.ts`). Test: `tests/convertAssignRecord.test.ts`.

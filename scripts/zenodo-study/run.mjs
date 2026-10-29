@@ -353,9 +353,9 @@ if (existsSync(join(work, 'negative-controls.json'))) {
   check('negative:truncated-node-bytes', t.threw ? 'passed' : 'failed', {
     summary: t.threw
       ? `${t.name}: ${t.message}`
-      : `decompressChunk + decodeRecords on half of node ${n.node}'s ${n.chunkBytes} bytes returned ${t.result.decodedPoints} of ${t.result.nodePoints} points, ${t.result.outsideHeaderBounds} outside the header bounds, and no error. The production read path refuses a short node range before decoding (CopcSource.readNodeChunk, boundedRead); the decoder itself cannot tell. Reported, not fixed`,
+      : `decompressChunk + decodeRecords on half of node ${n.node}'s ${n.chunkBytes} bytes returned ${t.result.decodedPoints} of ${t.result.nodePoints} points, ${t.result.outsideHeaderBounds} outside the header bounds, and no error. The production read path refuses a short node range before decoding (CopcSource.readNodeChunk, boundedRead); the decoder itself cannot tell`,
     ...t,
-  }, false);
+  });
 }
 
 // Exports, as the independent reader sees them.

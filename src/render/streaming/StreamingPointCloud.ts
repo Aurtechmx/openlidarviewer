@@ -227,6 +227,7 @@ export class StreamingPointCloud implements StreamingSource {
       pointDataRecordFormat: header.pointDataRecordFormat,
       pointRecordLength: header.pointRecordLength,
       pointCount: record.pointCount,
+      compressedBytes: record.byteSize,
       scale: header.scale,
       offset: header.offset,
       renderOrigin: this.renderOrigin,
