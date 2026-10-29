@@ -456,6 +456,29 @@ describe('save → fresh page → import → save → import', () => {
   });
 });
 
+describe('notes in a session saved with two scans open', () => {
+  const note = (id: string, owner?: string): Annotation => ({
+    id, title: id, type: 'note', createdAt: 0, updatedAt: 0, localPosition: { x: 1, y: 2, z: 3 },
+    ...(owner ? { owner: { layerId: owner, frame: 'project' as const } } : {}),
+  });
+
+  it('keep the scan they were placed on, and a note with no recorded scan is not given to the selected one', async () => {
+    const p = new Page([A, B]);
+    p.annotations = [note('nA', p.ids[0]!), note('nB', p.ids[1]!), note('nUnowned')];
+    const saved = p.save();
+    for (const order of [[A, B], [B, A]] as const) {
+      const q = new Page(order);
+      expect(await q.import(saved)).toBe(true);
+      const byId = new Map(q.annotations.map((a) => [a.id, a]));
+      expect(byId.get('nA')!.owner?.layerId).toBe(q.ids[order.indexOf(A)]);
+      expect(byId.get('nB')!.owner?.layerId).toBe(q.ids[order.indexOf(B)]);
+      expect(byId.get('nUnowned')!.owner).toBeUndefined();
+      const again = q.save();
+      expect(again.annotations.find((a) => a.id === 'nUnowned')!.owner).toBeUndefined();
+    }
+  });
+});
+
 describe('density reload hands the layer identity and its work to the replacement', () => {
   const facts = { fileName: 'same.las', sourcePoints: 10000, width: 10, depth: 10, height: 10, origin: [500000, 4000000, 0] as const, epsg: 32613 };
   const make = (): PointCloud => new PointCloud({ positions: new Float32Array([0, 0, 0, 10, 10, 10]), origin: [500000, 4000000, 0], sourceFormat: 'las', name: 'same.las' });

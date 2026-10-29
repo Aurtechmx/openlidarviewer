@@ -99,6 +99,7 @@ export class AnnotationController {
    * set, so a controller with no app wiring behaves exactly as before.
    */
   private _ownerProvider: (() => WorkOwnership | undefined) | null = null;
+  private _layerOf: ((layer: unknown) => string | null) | null = null;
   /** Past annotation-list snapshots (most recent last) — drives undo. */
   private _undoStack: Annotation[][] = [];
   /** Snapshots undone but available to redo — cleared by any fresh edit. */
@@ -254,6 +255,7 @@ export class AnnotationController {
       showCamera: cameraState !== undefined,
       measurements: this._measurements(),
       onSave: (fields) => {
+        const picked = georef?.pickedCloud !== undefined && this._layerOf ? this._layerOf(georef.pickedCloud) : null;
         const created = this.add({
           title: fields.title,
           note: fields.note,
@@ -270,7 +272,7 @@ export class AnnotationController {
           ...(fields.linkedMeasurementId
             ? { linkedMeasurementId: fields.linkedMeasurementId }
             : {}),
-        });
+        }, picked ? { layerId: picked, frame: 'project' } : undefined);
         // An annotation can be born as an issue. `add` has already banked the
         // undo snapshot, so the workflow folds into that one step: undoing the
         // creation undoes the triage with it.
@@ -305,6 +307,15 @@ export class AnnotationController {
    */
   setOwnerProvider(provider: (() => WorkOwnership | undefined) | null): void {
     this._ownerProvider = provider;
+  }
+
+  /**
+   * Resolve a picked cloud to its stable layer id, so a new annotation is owned
+   * by the layer it was placed on rather than the active one. Null when the
+   * id is not recorded (a single open layer).
+   */
+  setLayerResolver(resolve: ((layer: unknown) => string | null) | null): void {
+    this._layerOf = resolve;
   }
 
   /** Give every annotation without an owner this one (its layer is being retired). */
@@ -528,14 +539,18 @@ export class AnnotationController {
     return this._annotations.find((a) => a.id === id);
   }
 
-  /** Create and commit an annotation; it becomes the selection. */
-  add(input: NewAnnotation): Annotation {
+  /**
+   * Create and commit an annotation; it becomes the selection. `pickedOwner` is
+   * the layer the point was picked on, when known; otherwise the owner provider
+   * (the active layer) is consulted.
+   */
+  add(input: NewAnnotation, pickedOwner?: WorkOwnership): Annotation {
     this._snapshot();
     const a = createAnnotation(input);
-    // Record which layer this annotation belongs to, by stable id, in that
-    // layer's source-local frame. Undefined for a single-layer scene, so the
-    // pre-identity byte shape is preserved exactly (see LayerIdentityService).
-    const owner = this._ownerProvider ? this._ownerProvider() : undefined;
+    // Record which layer this annotation belongs to, by stable id. Undefined
+    // for a single-layer scene, so the pre-identity byte shape is preserved
+    // exactly (see LayerIdentityService).
+    const owner = pickedOwner ?? (this._ownerProvider ? this._ownerProvider() : undefined);
     if (owner) a.owner = owner;
     this._annotations.push(a);
     this._selectedId = a.id;

@@ -621,7 +621,11 @@ export async function importSession(
     const measureOwners = new Map<string, WorkOwnership>();
     for (const m of ownership.measurements) if (m.owner) measureOwners.set(m.id, m.owner);
     const annotationOwners = new Map<string, WorkOwnership>();
-    for (const a of ownership.annotations) if (a.owner) annotationOwners.set(a.id, a.owner);
+    // With several scans, the active one is no evidence of where a note with no
+    // recorded owner was placed, so such a note stays unowned.
+    const severalScans = viewer.clouds().length > 1 || (session.projectFrame?.layers.length ?? 0) > 1;
+    const guessed = new Set(severalScans ? ownership.inferredAnnotationIds : []);
+    for (const a of ownership.annotations) if (a.owner && !guessed.has(a.id)) annotationOwners.set(a.id, a.owner);
     // Declared owners that name an open layer are restated the way this scene
     // holds work on that layer, so the next save writes a file the next import
     // reads back in the same place. Only after the ids were mapped: an owner
