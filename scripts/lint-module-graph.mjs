@@ -79,7 +79,16 @@ import { createHash } from 'node:crypto';
 import { isCliEntry } from './lib/isCliEntry.mjs';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
-const BASELINE = resolve(ROOT, 'docs/validation/module-graph-baseline.json');
+/**
+ * The committed baseline. `--baseline <file>` reads (and with --update writes)
+ * a copy instead, so tests can edit a baseline without touching the real one.
+ */
+const BASELINE = (() => {
+  const i = process.argv.indexOf('--baseline');
+  return i !== -1 && process.argv[i + 1]
+    ? resolve(process.argv[i + 1])
+    : resolve(ROOT, 'docs/validation/module-graph-baseline.json');
+})();
 const SRC = resolve(ROOT, 'src');
 
 /**

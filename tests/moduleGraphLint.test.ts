@@ -17,26 +17,34 @@
 
 import { describe, it, expect } from 'vitest';
 import { spawnSync } from 'node:child_process';
-import { readFileSync, writeFileSync } from 'node:fs';
-import { resolve, dirname } from 'node:path';
+import { readFileSync, writeFileSync, mkdtempSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join, resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const BASELINE = resolve(ROOT, 'docs/validation/module-graph-baseline.json');
 
-const runLint = () =>
-  spawnSync('node', ['scripts/lint-module-graph.mjs'], { cwd: ROOT, encoding: 'utf8' });
+const runLint = (baseline?: string, ...extra: string[]) =>
+  spawnSync('node', ['scripts/lint-module-graph.mjs', ...extra, ...(baseline ? ['--baseline', baseline] : [])], {
+    cwd: ROOT,
+    encoding: 'utf8',
+  });
 
-/** Run `edit` against a copy of the baseline, then put the real one back. */
-function withBaseline(edit: (doc: any) => void, body: (r: ReturnType<typeof runLint>) => void) {
-  const original = readFileSync(BASELINE, 'utf8');
+/**
+ * Run `edit` against a private copy of the baseline and lint against the copy.
+ * The committed baseline is never written.
+ */
+function withBaseline(edit: (doc: any) => void, body: (r: ReturnType<typeof runLint>, copy: string) => void) {
+  const dir = mkdtempSync(join(tmpdir(), 'olv-module-graph-'));
   try {
-    const doc = JSON.parse(original);
+    const doc = JSON.parse(readFileSync(BASELINE, 'utf8'));
     edit(doc);
-    writeFileSync(BASELINE, `${JSON.stringify(doc, null, 2)}\n`);
-    body(runLint());
+    const copy = join(dir, 'module-graph-baseline.json');
+    writeFileSync(copy, `${JSON.stringify(doc, null, 2)}\n`);
+    body(runLint(copy), copy);
   } finally {
-    writeFileSync(BASELINE, original);
+    rmSync(dir, { recursive: true, force: true });
   }
 }
 
@@ -74,7 +82,7 @@ describe('lint:module-graph', () => {
         expect(r.stderr).toContain(`new: ${dropped}`);
       },
     );
-    // The baseline is restored, so a follow-up run is green again.
+    // The committed baseline was never touched, so a run against it is green.
     expect(runLint().status).toBe(0);
   });
 
@@ -83,13 +91,15 @@ describe('lint:module-graph', () => {
       (doc) => {
         doc.fanOut['src/main.ts'].runtime -= 1;
       },
-      () => {
-        const before = readFileSync(BASELINE, 'utf8');
-        const r = spawnSync('node', ['scripts/lint-module-graph.mjs', '--update'], { cwd: ROOT, encoding: 'utf8' });
+      (_r, copy) => {
+        const before = readFileSync(copy, 'utf8');
+        const committed = readFileSync(BASELINE, 'utf8');
+        const r = runLint(copy, '--update');
         expect(r.status).not.toBe(0);
         expect(r.stderr).toContain('lint:module-graph --update REFUSED');
         expect(r.stderr).toContain('src/main.ts');
-        expect(readFileSync(BASELINE, 'utf8')).toBe(before);
+        expect(readFileSync(copy, 'utf8')).toBe(before);
+        expect(readFileSync(BASELINE, 'utf8')).toBe(committed);
       },
     );
   });
