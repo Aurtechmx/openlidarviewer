@@ -19,7 +19,7 @@ import { isCliEntry } from '../lib/isCliEntry.mjs';
 
 export async function runUi({ repo, input, headed = false }) {
   const require = createRequire(join(repo, 'package.json'));
-  const { chromium } = require('playwright');
+  const { chromium } = require('@playwright/test');
   const { child, url } = await startVite(repo);
   const browser = await chromium.launch({ headless: !headed });
   const t = {};

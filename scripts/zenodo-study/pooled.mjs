@@ -58,7 +58,7 @@ export function startVite(repo) {
  */
 export async function runPooled({ repo, input, outDir, headed = false }) {
   const require = createRequire(join(repo, 'package.json'));
-  const { chromium } = require('playwright');
+  const { chromium } = require('@playwright/test');
   const bytes = readFileSync(input);
   const { child, url } = await startVite(repo);
   const browser = await chromium.launch({ headless: !headed });
