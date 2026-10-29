@@ -6,6 +6,10 @@
  */
 import { spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
+import { binaryOnPath } from '../../scripts/lib/binaryOnPath.mjs';
+
+/** git resolved to an absolute path once, as in tests/helpers/repoFiles.ts. */
+const GIT: string | null = binaryOnPath('git');
 
 export interface TreeSnapshot {
   status: string;
@@ -14,7 +18,9 @@ export interface TreeSnapshot {
 
 /** The tree's fingerprint, or null when `root` is not inside a git checkout. */
 export function snapshotTree(root: string): TreeSnapshot | null {
-  const git = (...args: string[]) => spawnSync('git', args, { cwd: root, encoding: 'utf8', maxBuffer: 256 << 20 });
+  if (!GIT) return null;
+  const gitPath = GIT;
+  const git = (...args: string[]) => spawnSync(gitPath, args, { cwd: root, encoding: 'utf8', maxBuffer: 256 << 20 });
   const status = git('status', '--porcelain', '--untracked-files=all');
   if (status.status !== 0) return null;
   const diff = git('diff', 'HEAD', '--binary');
