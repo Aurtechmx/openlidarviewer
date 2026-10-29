@@ -14,6 +14,7 @@ import { classifyLayerCompatibility, type CompatibilityInput } from '../src/mode
 import { resolveStreamingCompatibilityFromCrs } from '../src/render/streamingCompatibility';
 import { resolvedExportCrs } from '../src/app/exportCrsResolver';
 import { CrsService, type CrsOverridePort } from '../src/geo/CrsService';
+import { detectCrsMismatch, horizontalKey as panelKey, type LayerInfo } from '../src/model/layerModel';
 import type { CrsOverride } from '../src/geo/CrsOverrideStore';
 
 type Tm = { fe?: number; fn?: number; cm?: number; lat0?: number; k?: number; unit?: [string, number]; a?: number; method?: string; datum?: string };
@@ -154,5 +155,35 @@ describe('the generic Local coordinates choice declares no shared frame', () => 
   it('two declared local frames with the same name stay unknown', () => {
     const lc = 'LOCAL_CS["Plant grid",LOCAL_DATUM["x",0],UNIT["metre",1],AXIS["X",EAST],AXIS["Y",NORTH]]';
     expect([...pair(lc, lc).values()]).toEqual(['unknown', 'unknown']);
+  });
+});
+
+describe('the layer panel summary follows the same rule', () => {
+  const info = (id: string, wkt: string): LayerInfo => ({
+    id, name: id, pointCount: 1, visible: true, locked: false, ...compatibilityFrameOf(resolved(wkt)),
+  });
+
+  it('keys a CRS with no EPSG code on its name and definition', () => {
+    expect(panelKey(info('a', projcs({ fe: 500000 })))).not.toBe(panelKey(info('b', projcs({ fe: 596000 }))));
+    expect(panelKey(info('a', projcs()))).toBe(panelKey(info('b', projcs())));
+  });
+
+  it('reports comparable definitions that differ as a mismatch', () => {
+    const m = detectCrsMismatch([info('a', compd({ fe: 500000 })), info('b', compd({ fe: 596000 }))]);
+    expect(m.hasMismatch).toBe(true);
+    expect(m.mismatched).toHaveLength(1);
+  });
+
+  it('reports the same definition as no mismatch', () => {
+    const m = detectCrsMismatch([info('a', compd()), info('b', compd())]);
+    expect(m.hasMismatch).toBe(false);
+    expect(m.summary).toBe('');
+  });
+
+  it('reports definitions that cannot be compared as unverified, not as a mismatch', () => {
+    const missing = compd().replace(',PARAMETER["false_northing",0]', '');
+    const m = detectCrsMismatch([info('a', compd()), info('b', missing)]);
+    expect(m.hasMismatch).toBe(false);
+    expect(m.summary).toMatch(/alignment is unverified/);
   });
 });
