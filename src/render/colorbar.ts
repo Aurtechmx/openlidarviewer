@@ -95,8 +95,15 @@ export function niceTicks(min: number, max: number, target = 5): number[] {
   else niceNorm = 10;
   const step = niceNorm * mag;
   const first = Math.ceil(lo / step) * step;
+  // A range only a few float64 steps wide (heights differing by rounding
+  // dust) gives a step too small to move `v`, and `v += step` would loop
+  // forever. Fall back to the two bounds instead.
+  if (!Number.isFinite(step) || step <= 0 || !Number.isFinite(first) || first + step === first) {
+    return [lo, hi];
+  }
   const ticks: number[] = [];
-  for (let v = first; v <= hi + step * 1e-6; v += step) {
+  // Iteration cap: `target` is ~5, so 64 bounds the loop on any float input.
+  for (let v = first; v <= hi + step * 1e-6 && ticks.length < 64; v += step) {
     // Snap tiny FP dust to 0 and round to the step's precision.
     ticks.push(Math.abs(v) < step * 1e-6 ? 0 : v);
   }

@@ -106,6 +106,7 @@ has not been done. v0.7.0 is the current published release.
 - A box drawn with Draw clipping box is recorded as a clip region. It reads "21.0 m × 23.0 m · clip region: full scan height" with no height or volume, the CSV evidence cell and report finding say why, and the GeoJSON carries `volume_withheld`. It becomes a clip at the scan's full height also from the Measurements row and after a session reload. A box drawn with the Box tool keeps its height and volume.
 - A page opened from the Tools or Data tab now shows a "← Back to Tools" (or Data) button under its title on a desktop, as Analyse pages already did. The only way back used to be the small crumb in the top bar. The button goes to the same place as the crumb and Escape; the crumb's Back shows while the left panel is collapsed.
 - A chain total of box volumes added a clip region's full-scan-height volume. A clip region now adds nothing: a chain that mixes it with drawn boxes totals the drawn boxes and says clip regions were left out, and a chain of clip regions only reads "Volume withheld" with the reason.
+- Opening a scan with no colour whose heights differ only by rounding (for example 1500 and 1500.0000000000002) froze the tab and then crashed it while drawing the elevation legend. The legend now shows the two end values for a range that narrow, and snapshots and figures with a legend do the same.
 
 ### Validation
 
