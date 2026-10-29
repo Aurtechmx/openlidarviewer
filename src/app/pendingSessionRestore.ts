@@ -10,6 +10,7 @@
  */
 
 import type { HeldSessionWork } from '../io/sessionFrame';
+import { overlayRegistry } from './overlayRegistry';
 
 let pending: File | null = null;
 
@@ -44,10 +45,15 @@ export function takePendingSessionRestore(): File | null {
   return file;
 }
 
-/** Forget the waiting session and any held work: the scene was reset or closed. */
+/**
+ * Forget the waiting session, any held work and any Created layers
+ * preference not yet applied: the scene was reset or closed, so they belonged
+ * to a scan that is gone.
+ */
 export function clearPendingSessionRestore(): void {
   pending = null;
   held = null;
+  overlayRegistry.restore(null);
 }
 
 /**

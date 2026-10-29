@@ -13,9 +13,33 @@
  *
  * Remembered preferences: a restored session hands over the visibility the
  * user left for each overlay id. The first time that overlay becomes available
- * again, the preference is applied once and then dropped. Three-free and tiny,
- * so it can sit in the startup shell.
+ * again, the preference is applied once and then dropped; until then it is
+ * written back by `snapshot()`, so a save before regeneration keeps it.
+ * Closing the scan forgets pending preferences (see pendingSessionRestore).
+ * Three-free and tiny, so it can sit in the startup shell.
  */
+
+/** Most entries kept from a saved map; the app has three overlays. */
+const MAX_OVERLAY_PREFS = 32;
+
+/**
+ * Validate a saved `overlayVisibility` map: lower-case ids of letters, digits
+ * and dashes, boolean values, at most 32 entries. Anything else is dropped.
+ * Returns null when nothing valid remains. Used by the session reader and
+ * writer and by `restore`, so sessions and recovery share one rule.
+ */
+export function sanitizeOverlayPrefs(raw: unknown): Record<string, boolean> | null {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null;
+  const out: Record<string, boolean> = {};
+  let n = 0;
+  for (const [id, v] of Object.entries(raw as Record<string, unknown>)) {
+    if (n >= MAX_OVERLAY_PREFS) break;
+    if (typeof v !== 'boolean' || !/^[a-z0-9-]{1,64}$/.test(id)) continue;
+    Object.defineProperty(out, id, { value: v, enumerable: true, writable: true, configurable: true });
+    n += 1;
+  }
+  return n > 0 ? out : null;
+}
 
 export interface OverlayEntry {
   readonly id: string;
@@ -36,10 +60,10 @@ export interface OverlayRegistry {
   changed(): void;
   /** Listen for `changed()`. Returns an unsubscribe function. */
   onChange(fn: () => void): () => void;
-  /** Visibility of every available overlay, for the saved session. */
+  /** Visibility of every available overlay, plus preferences still pending, for the saved session. */
   snapshot(): Record<string, boolean>;
-  /** Preferences from a restored session, applied when each overlay next appears. */
-  restore(prefs: Record<string, boolean> | undefined | null): void;
+  /** Preferences from a restored session, applied when each overlay next appears. Replaces any pending ones. */
+  restore(prefs: unknown): void;
 }
 
 export function createOverlayRegistry(): OverlayRegistry {
@@ -84,15 +108,13 @@ export function createOverlayRegistry(): OverlayRegistry {
       return () => { listeners.delete(fn); };
     },
     snapshot() {
-      const out: Record<string, boolean> = {};
+      // Pending first; an available overlay's owner state wins over it.
+      const out: Record<string, boolean> = Object.fromEntries(pending);
       for (const e of reg.available()) out[e.id] = e.get();
-      return out;
+      return sanitizeOverlayPrefs(out) ?? {};
     },
     restore(prefs) {
-      pending = new Map();
-      if (prefs && typeof prefs === 'object') {
-        for (const [id, v] of Object.entries(prefs)) if (typeof v === 'boolean') pending.set(id, v);
-      }
+      pending = new Map(Object.entries(sanitizeOverlayPrefs(prefs) ?? {}));
       reg.changed();
     },
   };
