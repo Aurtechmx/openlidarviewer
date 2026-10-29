@@ -77,6 +77,7 @@ The whole collection lives in [validation/](validation/), and these are the entr
 | [validation/METHOD_VERSIONS.md](validation/METHOD_VERSIONS.md) | Version history for each method, so an old figure stays attributable. |
 | [validation/THREATS_TO_VALIDITY.md](validation/THREATS_TO_VALIDITY.md) | Where the validation could be wrong, stated before anyone else states it. |
 | [validation/cross-implementation.md](validation/cross-implementation.md) | Agreement against independent implementations such as PDAL and GDAL. |
+| [validation/zenodo-small-study.md](validation/zenodo-small-study.md) | One public phone scan opened through every LAZ and COPC path and compared with an independent reader. |
 | [validation/cross-platform-reproducibility.md](validation/cross-platform-reproducibility.md) | Whether the same input gives the same number on a different machine. |
 | [validation/claim-register.yaml](validation/claim-register.yaml) | The machine-readable register that the prose gates check against. |
 | [validation/defect-records.md](validation/defect-records.md) | Defects found by validation, kept rather than quietly fixed. |

@@ -17,6 +17,8 @@ node_modules
 
 # ── Test / tooling output ────────────────────────────────────────────────────
 test-results
+# Results and venv of `npm run validate:zenodo-small`
+/validation-results
 playwright-report
 playwright/.cache
 # Vite / Vitest transient config transpiles (e.g. vitest.config.ts.timestamp-*.mjs)

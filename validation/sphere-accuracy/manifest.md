@@ -6,17 +6,20 @@ network, per instrument.
 ## Source data
 
 - **Dataset:** "LiDAR Scanners Comparison – Point Clouds", Zenodo DOI [10.5281/zenodo.15421291](https://doi.org/10.5281/zenodo.15421291). A Czech forest DBH plot in EPSG:5514 (S-JTSK / Krovák East-North).
-- **Reference network:** `spheres-epsg5514.csv` — 12 surveyed "Koule" reference spheres plus one control point ("Auto"), extracted from the dataset's `GroundTruth.xlsx` (`ReferencePoints` sheet). Coordinates are the surveyed EPSG:5514 easting/northing/height, in metres. These are the ground truth; the raw point clouds are NOT committed (4.5 GB TLS).
+- **Reference list:** `spheres-epsg5514.csv`: the 13 entries of the `ReferencePoints` sheet of the dataset's `GroundTruth.xlsx`, 12 "Koule" spheres plus the control point "Auto", as published EPSG:5514 easting, northing and height in metres, rounded to 6 decimals (largest difference from the workbook text 5.0e-7 m, checked by `npm run validate:zenodo-small`). The other sheet, `TreesPoints` (236 trees), is not used. The published decimals are not a statement of survey accuracy. The raw point clouds are not committed.
 
 All distances are computed in **native EPSG:5514 metres** (Krovák is conformal at ~unit scale here), so no datum transform enters the measurement.
 
-## Layer A — engine correctness (DONE, gated)
+## Layer A: arithmetic and coordinate handling (gated)
 
-`tests/sphereAccuracyLayerA.test.ts` reproduces the surveyed inter-sphere distance
-network through OLV's own measurement path (`geometry.distance` + the unit engine),
-in an origin-subtracted Float32 local frame that mirrors the renderer. This confirms
-OLV measures the large-magnitude negative Krovák coordinates without precision loss,
-matching the surveyed network to sub-millimetre. Reproducible, no cloud processing.
+`tests/sphereAccuracyLayerA.test.ts` computes all 78 inter-point distances of the
+published list through OLV's own measurement path (`geometry.distance` plus the
+unit engine) on positions recentred and narrowed to Float32, under the centroid
+and the origins the LAS and COPC loaders pick for iPhone.laz, and compares them
+with Float64 distances of the same coordinates; they agree to sub-millimetre.
+This checks arithmetic and coordinate preservation at large negative Krovák
+magnitudes. Both sides start from the same published numbers, so it says nothing
+about the survey, about any scan, or about locating a sphere.
 
 ## Layer B — instrument fidelity (feasibility characterised; blocked on detection method)
 
@@ -46,4 +49,4 @@ is characterised but not graded — no E-level claim is made from a confounded f
 ## Source integrity
 
 - `spheres-epsg5514.csv` md5: `a32ec806f135ebf205af8fd28f3b0414` (12 Koule spheres + 1 control point, extracted from the dataset GroundTruth).
-- The raw point clouds and GroundTruth workbook are the Zenodo deposit (DOI above); their integrity is the deposit's own md5 manifest, not reproduced here.
+- The raw point clouds and the workbook are registered with size and SHA-256 as OLV-DS-052 to OLV-DS-056 in `validation/datasets/dataset-register.yaml`; `npm run validate:zenodo-small` checks iPhone.laz and GroundTruth.xlsx against those hashes before use (see `docs/validation/zenodo-small-study.md`).

@@ -10,6 +10,10 @@ Small fixtures live under `tests/` and are used only by the automated test suite
 
 The viewer can stream public open-data point clouds (for example COPC and EPT sources) that the user chooses. These datasets are hosted by their respective providers and are not redistributed by this repository. A catalog of known public sources, with links, is maintained in `docs/public-lidar-catalog.md`, and provider attributions are listed in `public/credits.html` and `docs/credits.md`. Availability, licensing, and terms of each dataset are governed by its provider; consult the provider before reuse.
 
+## External-data cache for real-file studies
+
+Some studies run on public files that are registered in `validation/datasets/dataset-register.yaml` with their source URL, licence, size and SHA-256 but are not committed. They are read from a local cache laid out as `<root>/zenodo/<record>/<file>`, where `<root>` is given by `--data`, else `$OLV_EXTERNAL_DATA`, else `../SCANS` beside the repository. `node scripts/acquire-dataset.mjs <datasetId>` fetches a registered file and checks its hash. `npm run validate:zenodo-small` (see `docs/validation/zenodo-small-study.md`) uses two files of Zenodo record 15421291 this way, checks their hashes before use, and fails when either is missing or differs.
+
 ## Reproducing analysis outputs
 
 The committed benchmark and calibration outputs under `benchmarks/out/` are regenerated deterministically from fixed-seed inputs by `npm run repro` (see `docs/benchmarks.md`). No external data download is required to reproduce them.
