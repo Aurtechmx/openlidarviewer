@@ -57,6 +57,7 @@ has not been done. v0.7.0 is the current published release.
 
 ### Fixed
 
+- A WKT2 bound CRS (`BOUNDCRS`) takes its horizontal unit from its source CRS, the CRS the coordinates are in. The unit was read from the target CRS, so a US survey foot or international foot grid was treated as metres and every distance, area and volume came out about 3.28 times too large.
 - A Created layers choice restored from a session is now saved again before its overlay is regenerated. Saving and reopening the session no longer loses it, and the recovery copy keeps it too. Closing the scan clears choices that were never applied.
 - A COPC node whose compressed bytes are shorter than the size its hierarchy declares is refused as malformed. The LAZ decoder has no length check of its own and used to return a full set of points, partly decoded from memory past the end of the data.
 - A chunked LAZ file is held to the same rule: a chunk whose bytes differ from the size in the file's chunk table, shorter or longer, is refused as malformed. A COPC node longer than its declared size is refused too.

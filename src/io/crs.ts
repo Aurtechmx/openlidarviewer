@@ -596,7 +596,11 @@ export function crsFromWkt(wkt: string): CrsInfo {
   while (end > 0 && wkt.charCodeAt(end - 1) === 0) end -= 1;
   const text = wkt.slice(0, end).trim();
 
-  const root = parseWkt(text);
+  // A BOUNDCRS (WKT2) is analysed as its SOURCECRS, the CRS the coordinates
+  // are in. Its TARGETCRS and transformation carry their own units (the
+  // target ellipsoid's metre), which must never be read as the data's unit.
+  const parsed = parseWkt(text);
+  const root = parsed ? sourceOfBoundCrs(parsed) : null;
   const nodes = root ? collectWktNodes(root) : [];
 
   // For a compound CRS (COMPD_CS / COMPOUNDCRS) the horizontal CRS and its
@@ -715,6 +719,28 @@ export function crsFromWkt(wkt: string): CrsInfo {
     ...(!localRoot && !horizCrsNode ? { horizontalUnresolved: true as const } : {}),
     ...(verticalNode && verticalAxisIsDown(verticalNode) ? { verticalAxisDown: true } : {}),
   };
+}
+
+/**
+ * The tree with every BOUNDCRS replaced by the CRS inside its SOURCECRS, so
+ * nothing from a TARGETCRS or a transformation reaches the analysis. A BOUNDCRS
+ * with no source CRS is kept with no children, so it resolves to nothing rather
+ * than to its target.
+ */
+function sourceOfBoundCrs(node: WktNode): WktNode {
+  if (node.keyword === 'BOUNDCRS') {
+    const source = wktChildNodes(node).find((n) => n.keyword === 'SOURCECRS');
+    const inner = source ? wktChildNodes(source)[0] : undefined;
+    return inner ? sourceOfBoundCrs(inner) : { keyword: node.keyword, start: node.start, children: [] };
+  }
+  let changed = false;
+  const children = node.children.map((c) => {
+    if (c.type !== 'node') return c;
+    const next = sourceOfBoundCrs(c.node);
+    if (next !== c.node) changed = true;
+    return next === c.node ? c : { ...c, node: next };
+  });
+  return changed ? { ...node, children } : node;
 }
 
 /** Extract the vertical-CRS name + best-effort EPSG + declared unit from a VERT_CS node. */
@@ -896,12 +922,11 @@ function firstNumericArg(node: WktNode): number | undefined {
 }
 
 /**
- * The LAST linear `UNIT` clause among `candidates` (document order), returning
- * its name + scale. Only bare `UNIT` nodes count — WKT2's `LENGTHUNIT` /
- * `ANGLEUNIT` are intentionally NOT read here, matching the prior parser's
- * `\bUNIT\[` scan (which a `LENGTHUNIT` substring never satisfied). A node
- * qualifies only when it has a quoted name and a numeric scale, exactly the
- * `UNIT["name",<number>` shape the old regex required.
+ * The LAST linear unit clause among `candidates` (document order), returning
+ * its name + scale. WKT1 `UNIT` and WKT2 `LENGTHUNIT` are read; `ANGLEUNIT` is
+ * not. A node qualifies only when it has a quoted name and a numeric scale.
+ * The caller passes the horizontal slice of a tree whose BOUNDCRS wrappers were
+ * already reduced to their source CRS, so a target CRS's unit is never seen.
  */
 function lastLinearUnit(candidates: readonly WktNode[]): { name: string; scale: number } | undefined {
   let result: { name: string; scale: number } | undefined;
