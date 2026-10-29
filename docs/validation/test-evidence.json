@@ -5,9 +5,11 @@
   "releaseChannel": "development",
   "releaseAuthoritative": false,
   "tag": null,
-  "commit": "3d0a8cedd63907d9724157d38b5167ff1fb6877c",
+  "commit": "7fd0d6460b3c95b249c5d76f19603b37c0ada26d",
+  "source": "git",
+  "identityFrom": "git",
   "repository": null,
-  "generatedAt": "2026-10-26T05:50:07.508Z",
+  "generatedAt": "2026-10-29T08:30:48.925Z",
   "nodeVersion": "v22.23.4",
   "npmVersion": "10.9.9",
   "platform": "darwin-arm64",
@@ -17,7 +19,7 @@
   "workflowSha": null,
   "gateExit": 0,
   "gateLog": "release/gate.log",
-  "gateLogSha256": "0a3e81dd76d50e0c4c8b916dc44572086642166eddf10e0e98b6f3086deb5f2e",
+  "gateLogSha256": "297c31be15268c3fd6e9ffd2e707da3051cc3e0c4ca992e4eec2c60b6b329496",
   "stages": {
     "mutation": "not-executed"
   },
@@ -52,40 +54,40 @@
   },
   "buckets": {
     "unit": {
-      "passed": 15726,
-      "skipped": 58,
+      "passed": 16172,
+      "skipped": 59,
       "runs": 3
     },
     "export": {
-      "passed": 1715,
+      "passed": 1740,
       "skipped": 0,
       "runs": 1
     },
     "terrain": {
-      "passed": 4130,
+      "passed": 4210,
       "skipped": 12,
       "runs": 2
     },
     "ui": {
-      "passed": 1310,
+      "passed": 1323,
       "skipped": 0,
       "runs": 1
     },
     "slow": {
-      "passed": 1528,
+      "passed": 1598,
       "skipped": 32,
       "runs": 2
     }
   },
   "total": {
-    "passed": 24409,
-    "skipped": 102
+    "passed": 25043,
+    "skipped": 103
   },
   "bundle": {
-    "liveEntryKiB": 423,
+    "liveEntryKiB": 430,
     "ceilingKiB": 795
   },
-  "packageLockSha256": "355d630d55ad1ee9bd58b5d482db3a80366ce5bda613822c84a6c2988445cdda",
+  "packageLockSha256": "b888a36900ac3e321c2bc569ce335c81ce36c9f134fa2ca67ee1a1fce2351dab",
   "sbom": {
     "sha256": "0dce3877292be0201b6bae08f203f66d600b3ddfe19bb2044ddd0fb9ae95c3a8",
     "rootName": "openlidarviewer",
