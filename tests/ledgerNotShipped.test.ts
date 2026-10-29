@@ -42,8 +42,18 @@ describe.skipIf(!CHECKOUT)('the source archive (needs a git checkout; skipped in
   it('git archive HEAD lists neither document', () => {
     // Limited to docs/releases so the listing stays small; the pathspec does not
     // change which export-ignore rules apply.
-    const tar = execFileSync('git', ['archive', '--format=tar', 'HEAD', 'docs/releases'], { cwd: ROOT, maxBuffer: 1 << 28 });
-    const listing = execFileSync('tar', ['-t'], { input: tar, encoding: 'utf8', maxBuffer: 1 << 24 }).split('\n');
+    // The archive goes to this test's own file and tar reads it from there.
+    // Piping it to `tar -t` on stdin failed with EPIPE under parallel load when
+    // tar closed its input before the write finished.
+    const dir = mkdtempSync(join(tmpdir(), 'olv-ledger-archive-'));
+    let listing: string[];
+    try {
+      const file = join(dir, 'docs-releases.tar');
+      execFileSync('git', ['archive', '--format=tar', '-o', file, 'HEAD', 'docs/releases'], { cwd: ROOT });
+      listing = execFileSync('tar', ['-tf', file], { encoding: 'utf8', maxBuffer: 1 << 24 }).split('\n');
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
     expect(listing.filter((p) => /V070_/.test(p))).toEqual([]);
     // The listing is not simply empty: the shipped release documents are there.
     expect(listing).toContain('docs/releases/KNOWN_LIMITATIONS_v0.7.0.md');
