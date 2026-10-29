@@ -56,6 +56,7 @@ has not been done. v0.7.0 is the current published release.
 
 ### Fixed
 
+- A Created layers choice restored from a session is now saved again before its overlay is regenerated. Saving and reopening the session no longer loses it, and the recovery copy keeps it too. Closing the scan clears choices that were never applied.
 - Dataset Intelligence gives no density tier on a Web Mercator or geocentric frame, or on a frame with no local vertical, as the Scan Report gives no pts/m² there. It used to tier those scans as if their grid units were ground metres.
 - The stockpile volume breakdown caps its confidence by how much of the footprint the scan covers, as the volume record already did. Dense, even sampling over part of a footprint no longer reads high confidence.
 - A scan that replaces the open one, such as a streamed scan opened over static layers or a static scan opened over a stream, starts with the clip box off and the elevation and intensity filters cleared. It used to keep the previous scan's clip box, and a stream opened over another stream kept the old filter range. A scan added beside open layers keeps both.

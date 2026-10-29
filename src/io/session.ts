@@ -53,6 +53,7 @@ import { parseWorkOwnership, serializeWorkOwnership } from '../model/workOwnersh
 import type { WorkOwnership } from '../model/workOwnership';
 import { parseSourceReduction, parseWithheldReadCounts } from './withheldCountsJson';
 import { parseWorkplaneSettings, type WorkplaneSettings } from '../model/workplaneSettings';
+import { sanitizeOverlayPrefs } from '../app/overlayRegistry';
 
 /**
  * Current session-file schema version (v8). The history, oldest first: v3 added
@@ -118,15 +119,7 @@ export const SESSION_VERSION = 8;
 
 /** Keep only `id: boolean` entries with a short plain id; null when none survive. */
 export function sanitizeOverlayVisibility(raw: unknown): Record<string, boolean> | null {
-  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null;
-  const out: Record<string, boolean> = {};
-  let n = 0;
-  for (const [id, v] of Object.entries(raw as Record<string, unknown>)) {
-    if (typeof v !== 'boolean' || !/^[a-z0-9-]{1,64}$/.test(id) || n >= 32) continue;
-    out[id] = v;
-    n += 1;
-  }
-  return n > 0 ? out : null;
+  return sanitizeOverlayPrefs(raw);
 }
 
 /** Schema versions `parseSession` can read. */
