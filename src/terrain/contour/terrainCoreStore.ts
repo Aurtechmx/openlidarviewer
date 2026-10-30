@@ -101,7 +101,7 @@ export function createTerrainCoreStore(root: OpfsDirHandle | null, options: Terr
   const budget = options.budgetBytes ?? TERRAIN_CORE_STORE_BUDGET_BYTES;
   const minMs = options.persistMinMs ?? TERRAIN_CORE_PERSIST_MIN_MS;
   const now = options.now ?? (() => Date.now());
-  const freeBytes = options.freeBytes ?? (async () => null);
+  const freeBytes = options.freeBytes ?? (() => Promise.resolve(null));
   const parts = (positions: Float32Array, params: TerrainCoreParams) =>
     persistentCoreKeyParts(positions, params, options.generation);
   // One write at a time; the index is a single file and two writers would tear it.

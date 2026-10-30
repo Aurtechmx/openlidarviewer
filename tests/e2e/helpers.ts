@@ -722,7 +722,7 @@ export async function placeTestDistance(page: Page): Promise<void> {
  * raster pixels. Each node is tagged, so a re-render (which replaces the
  * nodes) shows as a missing tag even when the text matches.
  */
-export async function terrainResultDigest(page: Page, tag: string): Promise<{ digest: string; tagged: number; count: number }> {
+export function terrainResultDigest(page: Page, tag: string): Promise<{ digest: string; tagged: number; count: number }> {
   return page.evaluate(async (t) => {
     const nodes = [
       ...document.querySelectorAll('.olv-analyse-readiness .olv-analyse-ready, .olv-fit-row, .olv-analyse-score, .olv-analyse-validation, .olv-analyse-contour-launcher > *'),

@@ -177,7 +177,7 @@
     },
     {
       "file": "src/io/loadE57.ts",
-      "symbol": "loadE57",
+      "symbol": "loadE57Sync",
       "frame": "source-local",
       "reads": 1,
       "why": "Loader boundary: the sanitised buffer is handed to the PointCloud constructor, which fixes it as source-local against the origin passed beside it."
@@ -212,7 +212,7 @@
     },
     {
       "file": "src/io/loadPcd.ts",
-      "symbol": "loadPcd",
+      "symbol": "loadPcdSync",
       "frame": "source-local",
       "reads": 1,
       "why": "Loader boundary: the sanitised buffer is handed to the PointCloud constructor, which fixes it as source-local against the origin passed beside it."
@@ -226,28 +226,28 @@
     },
     {
       "file": "src/io/loadPnts.ts",
-      "symbol": "loadPnts",
+      "symbol": "loadPntsSync",
       "frame": "render-local",
       "reads": 2,
       "why": "A 3D Tiles tile's own array, already through RTC_CENTER and the tile transform, then recentred on the chosen origin before it becomes a PointCloud. It is the decoder's buffer, not the model's."
     },
     {
       "file": "src/io/loadPts.ts",
-      "symbol": "loadPts",
+      "symbol": "loadPtsSync",
       "frame": "source-local",
       "reads": 1,
       "why": "Loader boundary: the sanitised buffer is handed to the PointCloud constructor, which fixes it as source-local against the origin passed beside it."
     },
     {
       "file": "src/io/loadPtx.ts",
-      "symbol": "loadPtx",
+      "symbol": "loadPtxSync",
       "frame": "source-local",
       "reads": 1,
       "why": "Loader boundary: the sanitised buffer is handed to the PointCloud constructor, which fixes it as source-local against the origin passed beside it."
     },
     {
       "file": "src/io/loadXyz.ts",
-      "symbol": "loadXyz",
+      "symbol": "loadXyzSync",
       "frame": "source-local",
       "reads": 1,
       "why": "Loader boundary: the sanitised buffer is handed to the PointCloud constructor, which fixes it as source-local against the origin passed beside it."
@@ -268,7 +268,7 @@
     },
     {
       "file": "src/io/tiles3d/pntsDecode.ts",
-      "symbol": "PntsChunkDecoder.decode",
+      "symbol": "PntsChunkDecoder._decodeSync",
       "frame": "source-local",
       "reads": 1,
       "why": "The array a .pnts body carries, in the tile's own local space before RTC_CENTER. The decoder reads it once, hoisted out of the per-point loop, then applies RTC_CENTER, the tile's cumulative transform and the render origin in float64 to reach render-local. No accessor applies: this buffer belongs to a decoded tile, not to a PointCloud."

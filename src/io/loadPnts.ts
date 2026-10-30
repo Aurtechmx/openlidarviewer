@@ -44,7 +44,11 @@ import { authoredNormals } from './authoredNormals';
  * @param buffer Raw tile bytes.
  * @param name   Display name (defaults to `"cloud.pnts"`).
  */
-export async function loadPnts(buffer: ArrayBuffer, name = 'cloud.pnts'): Promise<PointCloud> {
+export function loadPnts(buffer: ArrayBuffer, name = 'cloud.pnts'): Promise<PointCloud> {
+  return new Promise((resolve) => resolve(loadPntsSync(buffer, name)));
+}
+
+function loadPntsSync(buffer: ArrayBuffer, name: string): PointCloud {
   const tile = parsePnts(buffer);
 
   // Stage in float64 and apply RTC_CENTER here, so the recentring below sees

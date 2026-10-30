@@ -545,7 +545,11 @@ function assertPcdSizesPlausible(buffer: ArrayBuffer, facts: PcdHeaderFacts | nu
   }
 }
 
-export async function loadPcd(buffer: ArrayBuffer, name = 'cloud.pcd'): Promise<PointCloud> {
+export function loadPcd(buffer: ArrayBuffer, name = 'cloud.pcd'): Promise<PointCloud> {
+  return new Promise((resolve) => resolve(loadPcdSync(buffer, name)));
+}
+
+function loadPcdSync(buffer: ArrayBuffer, name: string): PointCloud {
   let points;
   // PCDLoader.parse computes a bounding sphere internally; on a file whose x/y/z
   // carry a non-finite value, three's BufferGeometry logs "computeBoundingSphere():

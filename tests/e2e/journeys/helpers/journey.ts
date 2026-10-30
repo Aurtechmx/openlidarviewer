@@ -134,7 +134,7 @@ export function startJourney(page: Page, info: TestInfo, journeyId: string, extr
   return {
     unexpected,
     capture,
-    async step<T>(name: string, body: () => Promise<T>): Promise<T> {
+    step<T>(name: string, body: () => Promise<T>): Promise<T> {
       return test.step(name, async () => {
         let result: T;
         try {
@@ -278,7 +278,7 @@ export async function buildOverlappingTiles(): Promise<Array<{ name: string; byt
 
 export interface Pose { position: number[]; target: number[] }
 
-export async function cameraPose(page: Page): Promise<Pose> {
+export function cameraPose(page: Page): Promise<Pose> {
   return page.evaluate(() => {
     const api = (window as unknown as { __OLV_TEST_API__?: { getCameraPose?: () => Pose } }).__OLV_TEST_API__;
     const p = api?.getCameraPose?.();
@@ -317,7 +317,7 @@ export async function probePointUnder(page: Page, px: number, py: number): Promi
 }
 
 /** Page positions of every point of layer 0 that projects, through the test seam. */
-export async function projectAllPoints(page: Page, count: number): Promise<Array<{ x: number; y: number }>> {
+export function projectAllPoints(page: Page, count: number): Promise<Array<{ x: number; y: number }>> {
   return page.evaluate((n) => {
     const api = (window as unknown as { __OLV_TEST_API__: {
       layerProjectPoints: (i: number) => Array<{ project: [number, number, number] }>;

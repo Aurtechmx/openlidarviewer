@@ -43,7 +43,7 @@ export function lasBytes(n: number, width = 200): ArrayBuffer {
 }
 
 export function spyFile(name: string, size: number): File {
-  return { name, size, arrayBuffer: vi.fn(async () => new ArrayBuffer(size)) } as unknown as File;
+  return { name, size, arrayBuffer: vi.fn(() => Promise.resolve(new ArrayBuffer(size))) } as unknown as File;
 }
 
 export function counting(inner: RangeSource): RangeSource {
@@ -228,8 +228,8 @@ export function makeEnv(
   return {
     capable: () => true,
     openRange: () => range,
-    getOpfsRoot: async () => opfs.root,
-    readStorage: async () => reading,
+    getOpfsRoot: () => Promise.resolve(opfs.root),
+    readStorage: () => Promise.resolve(reading),
     async runIndex(req) {
       return buildLocalOocStore(range, opfs.root, req.storeName, {
         kind: req.kind,

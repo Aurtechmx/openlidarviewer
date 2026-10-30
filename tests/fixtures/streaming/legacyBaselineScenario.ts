@@ -351,10 +351,11 @@ async function openEptScenario(): Promise<StreamingSource> {
 function memorySpill(): SpillStore {
   const parts = new Map<string, Uint8Array[]>();
   return {
-    async append(key, bytes) {
+    append(key, bytes) {
       (parts.get(key) ?? parts.set(key, []).get(key)!).push(bytes.slice());
+      return Promise.resolve();
     },
-    async read(key) {
+    read(key) {
       const arr = parts.get(key) ?? [];
       const out = new Uint8Array(arr.reduce((n, b) => n + b.byteLength, 0));
       let o = 0;
@@ -362,10 +363,10 @@ function memorySpill(): SpillStore {
         out.set(b, o);
         o += b.byteLength;
       }
-      return out;
+      return Promise.resolve(out);
     },
-    async keys() {
-      return [...parts.keys()];
+    keys() {
+      return Promise.resolve([...parts.keys()]);
     },
   };
 }

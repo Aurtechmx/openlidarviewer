@@ -36,7 +36,7 @@ export async function watch(page: Page): Promise<void> {
   });
 }
 
-export async function stopWatching(page: Page): Promise<{ gap: number; waits: string[] }> {
+export function stopWatching(page: Page): Promise<{ gap: number; waits: string[] }> {
   return page.evaluate(() => {
     const w = window as unknown as { __gap: number; __waits: string[]; __beat: number };
     clearInterval(w.__beat);

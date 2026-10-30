@@ -31,11 +31,19 @@ function tokenize(line: string): string[] {
  * @param name       Display name (defaults to `"cloud.xyz"`).
  * @param onProgress Optional staged-progress callback for the chunked decode.
  */
-export async function loadXyz(
+export function loadXyz(
   buffer: ArrayBuffer,
   name = 'cloud.xyz',
   onProgress?: (u: ProgressUpdate) => void,
 ): Promise<PointCloud> {
+  return new Promise((resolve) => resolve(loadXyzSync(buffer, name, onProgress)));
+}
+
+function loadXyzSync(
+  buffer: ArrayBuffer,
+  name: string,
+  onProgress?: (u: ProgressUpdate) => void,
+): PointCloud {
   const xs: number[] = [];
   const ys: number[] = [];
   const zs: number[] = [];

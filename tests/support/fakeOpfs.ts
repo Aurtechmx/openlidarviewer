@@ -82,6 +82,11 @@ function domError(name: string, message: string): Error {
   return Object.assign(new Error(message), { name });
 }
 
+/** Runs `body` now and settles with its result; a throw becomes a rejection. */
+function settle<T>(body: () => T): Promise<T> {
+  return new Promise((resolve) => resolve(body()));
+}
+
 export interface FakeOpfs {
   /** The root directory handle, to hand to the code under test. */
   readonly root: OpfsDirHandle;
@@ -113,12 +118,12 @@ export function fakeOpfs(options: FakeOpfsOptions = {}): FakeOpfs {
   function makeFileView(data: Uint8Array): import('../../src/io/heavy/opfsSpillStore').OpfsFile {
     return {
       size: data.length,
-      async arrayBuffer() {
+      arrayBuffer() {
         stats.arrayBufferReads.push(data.length);
-        return data.slice().buffer;
+        return Promise.resolve(data.slice().buffer);
       },
-      async text() {
-        return new TextDecoder().decode(data);
+      text() {
+        return Promise.resolve(new TextDecoder().decode(data));
       },
       slice(start, end) {
         return makeFileView(data.subarray(start, end));
@@ -161,43 +166,50 @@ export function fakeOpfs(options: FakeOpfsOptions = {}): FakeOpfs {
     };
 
     const handle: OpfsFileHandle = {
-      async getFile() {
-        return makeFileView(file().data);
+      getFile() {
+        return settle(() => makeFileView(file().data));
       },
-      async createWritable(opts) {
-        const f = file();
-        if (f.locked) throw domError('NoModificationAllowedError', name);
-        stats.writableOpens++;
-        let buf: Uint8Array;
-        if (opts?.keepExistingData) {
-          // THE DEFECT, modelled. The spec starts the swap file as a copy of
-          // the existing file, so an append pays for the whole tile.
-          chargeQuota(f.data.length);
-          buf = f.data.slice();
-          stats.bytesCopied += buf.length;
-        } else {
-          buf = new Uint8Array(0);
-        }
-        let pos = 0;
-        return {
-          async seek(offset) {
-            pos = offset;
-          },
-          async write(bytes) {
-            chargeQuota(bytes.length);
-            stats.bytesWritten += bytes.length;
-            buf = writeAt(buf, bytes, pos);
-            pos += bytes.length;
-          },
-          async close() {
-            file().data = buf;
-          },
-        };
+      createWritable(opts) {
+        return settle(() => {
+          const f = file();
+          if (f.locked) throw domError('NoModificationAllowedError', name);
+          stats.writableOpens++;
+          let buf: Uint8Array;
+          if (opts?.keepExistingData) {
+            // THE DEFECT, modelled. The spec starts the swap file as a copy of
+            // the existing file, so an append pays for the whole tile.
+            chargeQuota(f.data.length);
+            buf = f.data.slice();
+            stats.bytesCopied += buf.length;
+          } else {
+            buf = new Uint8Array(0);
+          }
+          let pos = 0;
+          return {
+            seek(offset) {
+              pos = offset;
+              return Promise.resolve();
+            },
+            write(bytes) {
+              return settle(() => {
+                chargeQuota(bytes.length);
+                stats.bytesWritten += bytes.length;
+                buf = writeAt(buf, bytes, pos);
+                pos += bytes.length;
+              });
+            },
+            close() {
+              return settle(() => {
+                file().data = buf;
+              });
+            },
+          };
+        });
       },
     };
 
     if (options.syncAccess || options.syncAccessFails !== undefined) {
-      handle.createSyncAccessHandle = async (): Promise<OpfsSyncAccessHandle> => {
+      handle.createSyncAccessHandle = (): Promise<OpfsSyncAccessHandle> => settle(() => {
         if (options.syncAccessFails === 'refused') {
           // What the main thread does in a browser that ships the method there.
           throw domError('InvalidStateError', 'sync access handles are worker-only');
@@ -237,11 +249,11 @@ export function fakeOpfs(options: FakeOpfsOptions = {}): FakeOpfs {
             openSyncHandles--;
           },
         };
-      };
+      });
     }
 
     if (options.fileMove) {
-      handle.move = async (destination, newName) => {
+      handle.move = (destination, newName) => settle(() => {
         const f = file();
         if (f.locked) throw domError('NoModificationAllowedError', name);
         const target = dirNodeOf(destination);
@@ -249,7 +261,7 @@ export function fakeOpfs(options: FakeOpfsOptions = {}): FakeOpfs {
         stats.movedNames.push(name);
         parent.entries.delete(name);
         target.entries.set(newName ?? name, f);
-      };
+      });
     }
     return handle;
   }
@@ -265,37 +277,54 @@ export function fakeOpfs(options: FakeOpfsOptions = {}): FakeOpfs {
 
   function makeDirHandle(node: FakeDir): OpfsDirHandle {
     const handle: OpfsDirHandle = {
-      async getFileHandle(name, opts) {
-        const entry = node.entries.get(name);
-        if (entry === undefined) {
-          if (opts?.create !== true) throw domError('NotFoundError', name);
-          node.entries.set(name, { kind: 'file', data: new Uint8Array(0), locked: false, pending: 0 });
-        } else if (entry.kind !== 'file') {
-          throw domError('TypeMismatchError', name);
-        }
-        return makeFileHandle(node, name);
+      getFileHandle(name, opts) {
+        return settle(() => {
+          const entry = node.entries.get(name);
+          if (entry === undefined) {
+            if (opts?.create !== true) throw domError('NotFoundError', name);
+            node.entries.set(name, { kind: 'file', data: new Uint8Array(0), locked: false, pending: 0 });
+          } else if (entry.kind !== 'file') {
+            throw domError('TypeMismatchError', name);
+          }
+          return makeFileHandle(node, name);
+        });
       },
-      async getDirectoryHandle(name, opts) {
-        const entry = node.entries.get(name);
-        if (entry === undefined) {
-          if (opts?.create !== true) throw domError('NotFoundError', name);
-          const created: FakeDir = { kind: 'dir', entries: new Map() };
-          node.entries.set(name, created);
-          return makeDirHandle(created);
-        }
-        if (entry.kind !== 'dir') throw domError('TypeMismatchError', name);
-        return makeDirHandle(entry);
+      getDirectoryHandle(name, opts) {
+        return settle(() => {
+          const entry = node.entries.get(name);
+          if (entry === undefined) {
+            if (opts?.create !== true) throw domError('NotFoundError', name);
+            const created: FakeDir = { kind: 'dir', entries: new Map() };
+            node.entries.set(name, created);
+            return makeDirHandle(created);
+          }
+          if (entry.kind !== 'dir') throw domError('TypeMismatchError', name);
+          return makeDirHandle(entry);
+        });
       },
-      async removeEntry(name, opts) {
-        const entry = node.entries.get(name);
-        if (entry === undefined) throw domError('NotFoundError', name);
-        if (entry.kind === 'dir' && entry.entries.size > 0 && opts?.recursive !== true) {
-          throw domError('InvalidModificationError', name);
-        }
-        node.entries.delete(name);
+      removeEntry(name, opts) {
+        return settle(() => {
+          const entry = node.entries.get(name);
+          if (entry === undefined) throw domError('NotFoundError', name);
+          if (entry.kind === 'dir' && entry.entries.size > 0 && opts?.recursive !== true) {
+            throw domError('InvalidModificationError', name);
+          }
+          node.entries.delete(name);
+        });
       },
-      async *keys() {
-        for (const key of [...node.entries.keys()]) yield key;
+      keys() {
+        // Snapshotted on the first `next()`, as a generator body would be.
+        let names: Iterator<string> | undefined;
+        const iterator: AsyncIterableIterator<string> = {
+          next() {
+            names ??= [...node.entries.keys()][Symbol.iterator]();
+            return Promise.resolve(names.next());
+          },
+          [Symbol.asyncIterator]() {
+            return iterator;
+          },
+        };
+        return iterator;
       },
     };
     nodeOfHandle.set(handle, node);
