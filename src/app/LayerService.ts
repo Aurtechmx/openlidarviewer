@@ -24,6 +24,7 @@ import {
   alignsHorizontally,
   alignsVertically,
   horizontalKey as compatibilityKey,
+  compareHorizontalKeys,
   verticalReferenceKey,
   type CompatibilityInput,
   type LayerCompatibility,
@@ -210,8 +211,8 @@ function classifyKeepingPrior(
       continue;
     }
     const key = compatibilityKey(l);
-    if (key === null) out.set(l.id, 'unknown');
-    else if (key !== referenceKey) out.set(l.id, 'incompatible');
+    const comparison = key === null ? 'unproven' : compareHorizontalKeys(key, referenceKey);
+    if (comparison !== 'same') out.set(l.id, comparison === 'different' ? 'incompatible' : 'unknown');
     else {
       const vertical = verticalReferenceKey(l);
       out.set(
@@ -354,7 +355,7 @@ export function createLayerService(deps: LayerServiceDeps): LayerService {
     // aligns in X/Y, where the agreement is real, and keeps its own Z — the
     // doubt now gates the product instead of only annotating it.
     const inputs = infos.map((i) => ({
-      id: i.id, epsg: i.epsg, crsName: i.crsName, localFrameName: i.localFrameName,
+      id: i.id, epsg: i.epsg, crsName: i.crsName, localFrameName: i.localFrameName, crsDefinition: i.crsDefinition,
       verticalDatum: i.verticalDatum, verticalEpsg: i.verticalEpsg,
     }));
     // A placement is sticky while its layer stays open. A layer judged against

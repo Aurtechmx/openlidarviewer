@@ -39,6 +39,11 @@ export interface CompatibilityInput {
   readonly crsName?: string;
   /** Declared name of a local / engineering CRS, when the source carries one. */
   readonly localFrameName?: string;
+  /**
+   * The normalised definition of a CRS that has no EPSG code (see
+   * `crsDefinitionKey`). A name alone does not identify such a CRS.
+   */
+  readonly crsDefinition?: string;
   /** Vertical datum identifier as declared, or null when undeclared. */
   readonly verticalDatum?: string | null;
   /** Vertical CRS EPSG code, when the source declared one. Authoritative. */
@@ -87,15 +92,67 @@ export function verticalReferenceKey(l: CompatibilityInput): string | null {
 /**
  * A stable key for the horizontal frame, or null when nothing was declared.
  *
- * The EPSG code is authoritative; a display name is a fallback that only ever
- * matches another identical name. Two layers with no declaration share a
- * `null` key, which is deliberately NOT a match — see the classifier.
+ * The EPSG code is authoritative. Without one, a CRS is keyed on its name AND
+ * its normalised definition, so two custom projections that share a generic
+ * name but differ in a parameter are different frames. A name with no
+ * definition to compare gets a `name?:` key: a different name still proves a
+ * different frame, the same name proves nothing. Two layers with no
+ * declaration share a `null` key, which is deliberately NOT a match — see the
+ * classifier.
  */
 export function horizontalKey(l: CompatibilityInput): string | null {
   if (l.epsg !== undefined && Number.isFinite(l.epsg)) return `epsg:${l.epsg}`;
   if (l.localFrameName?.trim()) return localFrameKey(l.localFrameName);
   const name = l.crsName?.trim();
-  return name ? `name:${name.toLowerCase()}` : null;
+  if (!name) return null;
+  const definition = l.crsDefinition?.trim();
+  return definition ? `name:${name.toLowerCase()}|${definition}` : `name?:${name.toLowerCase()}`;
+}
+
+/** Whether a shared horizontal key proves nothing about a shared frame. */
+export function sharedKeyIsUnproven(key: string): boolean {
+  return key.startsWith('local:') || key.startsWith('name?:');
+}
+
+/** What two horizontal frames have shown about each other. */
+export type FrameComparison = 'same' | 'different' | 'unproven';
+
+/**
+ * Compare two normalised CRS definitions (see `crsDefinitionKey`). They differ
+ * only when both are present, laid out alike (same clauses, same parameter
+ * names) and carry different values. A missing definition, a WKT1 beside a
+ * WKT2 spelling, or a definition missing a parameter cannot be compared.
+ */
+export function compareCrsDefinitions(a: string | undefined, b: string | undefined): FrameComparison {
+  if (!a || !b) return 'unproven';
+  if (a === b) return 'same';
+  const layout = (d: string): string => (d.includes('#') ? d.slice(0, d.indexOf('#')) : d);
+  return layout(a) === layout(b) ? 'different' : 'unproven';
+}
+
+/** The name and definition inside a name-based key, or null for any other key. */
+function nameKeyParts(key: string): { name: string; definition?: string } | null {
+  if (key.startsWith('name?:')) return { name: key.slice('name?:'.length) };
+  if (!key.startsWith('name:')) return null;
+  const body = key.slice('name:'.length);
+  const bar = body.lastIndexOf('|');
+  return bar < 0 ? { name: body } : { name: body.slice(0, bar), definition: body.slice(bar + 1) };
+}
+
+/**
+ * Compare two horizontal keys from {@link horizontalKey}. Equal keys are the
+ * same frame unless the key proves nothing (a local-frame name, a bare CRS
+ * name). Two keys with the same CRS name are different frames only when their
+ * definitions can be compared and differ; otherwise the pair is unproven.
+ */
+export function compareHorizontalKeys(a: string, b: string): FrameComparison {
+  if (a === b) return sharedKeyIsUnproven(a) ? 'unproven' : 'same';
+  const pa = nameKeyParts(a);
+  const pb = nameKeyParts(b);
+  if (pa && pb && pa.name === pb.name) {
+    return compareCrsDefinitions(pa.definition, pb.definition) === 'different' ? 'different' : 'unproven';
+  }
+  return 'different';
 }
 
 /**
@@ -174,13 +231,12 @@ export function classifyLayerCompatibility(
       out.set(l.id, 'unknown');
       continue;
     }
-    if (key !== referenceKey) {
-      out.set(l.id, 'incompatible');
-      continue;
-    }
-    // A shared local-frame name does not prove a shared origin or axes.
-    if (key.startsWith('local:')) {
-      out.set(l.id, 'unknown');
+    // A shared local-frame name does not prove a shared origin or axes, and a
+    // shared CRS name whose definitions cannot be compared does not prove a
+    // shared CRS, nor a different one.
+    const comparison = compareHorizontalKeys(key, referenceKey);
+    if (comparison !== 'same') {
+      out.set(l.id, comparison === 'different' ? 'incompatible' : 'unknown');
       continue;
     }
     const vertical = verticalReferenceKey(l);

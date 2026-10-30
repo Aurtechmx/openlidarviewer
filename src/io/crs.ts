@@ -596,7 +596,11 @@ export function crsFromWkt(wkt: string): CrsInfo {
   while (end > 0 && wkt.charCodeAt(end - 1) === 0) end -= 1;
   const text = wkt.slice(0, end).trim();
 
-  const root = parseWkt(text);
+  // A BOUNDCRS (WKT2) is analysed as its SOURCECRS, the CRS the coordinates
+  // are in. Its TARGETCRS and transformation carry their own units (the
+  // target ellipsoid's metre), which must never be read as the data's unit.
+  const parsed = parseWkt(text);
+  const root = parsed ? sourceOfBoundCrs(parsed) : null;
   const nodes = root ? collectWktNodes(root) : [];
 
   // For a compound CRS (COMPD_CS / COMPOUNDCRS) the horizontal CRS and its
@@ -715,6 +719,81 @@ export function crsFromWkt(wkt: string): CrsInfo {
     ...(!localRoot && !horizCrsNode ? { horizontalUnresolved: true as const } : {}),
     ...(verticalNode && verticalAxisIsDown(verticalNode) ? { verticalAxisDown: true } : {}),
   };
+}
+
+/** Clauses that describe a CRS (codes, usage, remarks) without defining it. */
+const NON_DEFINING_WKT_KEYWORDS: ReadonlySet<string> = new Set([
+  'AUTHORITY', 'ID', 'USAGE', 'SCOPE', 'AREA', 'BBOX', 'VERTICALEXTENT', 'TEMPORALEXTENT', 'REMARK', 'CITATION', 'URI',
+]);
+
+/**
+ * A comparable form of the horizontal CRS a WKT defines: its projection method,
+ * parameters, datum, ellipsoid, prime meridian, units and axes, with spacing,
+ * case, punctuation and number spelling normalised, and authority codes, usage
+ * and remarks left out. Two CRSs that share a name but differ in any defining
+ * value get different results. The result is `<layout>#<values>`: the layout
+ * (keywords and parameter names) says whether two definitions can be compared
+ * at all. A BOUNDCRS is read as its source CRS. Undefined when the WKT has no
+ * horizontal component to compare.
+ */
+export function crsDefinitionKey(wkt: string | undefined): string | undefined {
+  if (!wkt) return undefined;
+  const parsed = parseWkt(wkt.replace(/\0+$/, '').trim());
+  if (!parsed) return undefined;
+  const root = sourceOfBoundCrs(parsed);
+  const horizontal = isCompoundKeyword(root.keyword)
+    ? wktChildNodes(root).find((n) => isHorizontalCrsKeyword(n.keyword) || isLocalCrsKeyword(n.keyword))
+    : isHorizontalCrsKeyword(root.keyword) || isLocalCrsKeyword(root.keyword) ? root : undefined;
+  if (!horizontal || horizontal.children.length === 0) return undefined;
+  const text = (s: string): string => s.toLowerCase().replace(/[^a-z0-9]+/g, '');
+  const canon = (n: WktNode): string => {
+    const parts: string[] = [];
+    for (const c of n.children) {
+      if (c.type === 'node') {
+        if (!NON_DEFINING_WKT_KEYWORDS.has(c.node.keyword)) parts.push(canon(c.node));
+      } else if (c.type === 'number') {
+        parts.push(String(Number(c.value.toPrecision(12))));
+      } else {
+        parts.push(text(c.value));
+      }
+    }
+    return `${n.keyword}[${parts.join(',')}]`;
+  };
+  // The layout alone: clause keywords and parameter names, no values. Two
+  // definitions are comparable only when their layouts agree; a WKT1 and a
+  // WKT2 spelling of one CRS, or one missing a parameter, are not.
+  const layout = (n: WktNode): string => {
+    const parts: string[] = [];
+    const name = n.keyword === 'PARAMETER' ? wktNodeName(n) : undefined;
+    if (name !== undefined) parts.push(text(name));
+    for (const c of n.children) {
+      if (c.type === 'node' && !NON_DEFINING_WKT_KEYWORDS.has(c.node.keyword)) parts.push(layout(c.node));
+    }
+    return `${n.keyword}[${parts.join(',')}]`;
+  };
+  return `${layout(horizontal)}#${canon(horizontal)}`;
+}
+
+/**
+ * The tree with every BOUNDCRS replaced by the CRS inside its SOURCECRS, so
+ * nothing from a TARGETCRS or a transformation reaches the analysis. A BOUNDCRS
+ * with no source CRS is kept with no children, so it resolves to nothing rather
+ * than to its target.
+ */
+function sourceOfBoundCrs(node: WktNode): WktNode {
+  if (node.keyword === 'BOUNDCRS') {
+    const source = wktChildNodes(node).find((n) => n.keyword === 'SOURCECRS');
+    const inner = source ? wktChildNodes(source)[0] : undefined;
+    return inner ? sourceOfBoundCrs(inner) : { keyword: node.keyword, start: node.start, children: [] };
+  }
+  let changed = false;
+  const children = node.children.map((c) => {
+    if (c.type !== 'node') return c;
+    const next = sourceOfBoundCrs(c.node);
+    if (next !== c.node) changed = true;
+    return next === c.node ? c : { ...c, node: next };
+  });
+  return changed ? { ...node, children } : node;
 }
 
 /** Extract the vertical-CRS name + best-effort EPSG + declared unit from a VERT_CS node. */
@@ -896,12 +975,11 @@ function firstNumericArg(node: WktNode): number | undefined {
 }
 
 /**
- * The LAST linear `UNIT` clause among `candidates` (document order), returning
- * its name + scale. Only bare `UNIT` nodes count — WKT2's `LENGTHUNIT` /
- * `ANGLEUNIT` are intentionally NOT read here, matching the prior parser's
- * `\bUNIT\[` scan (which a `LENGTHUNIT` substring never satisfied). A node
- * qualifies only when it has a quoted name and a numeric scale, exactly the
- * `UNIT["name",<number>` shape the old regex required.
+ * The LAST linear unit clause among `candidates` (document order), returning
+ * its name + scale. WKT1 `UNIT` and WKT2 `LENGTHUNIT` are read; `ANGLEUNIT` is
+ * not. A node qualifies only when it has a quoted name and a numeric scale.
+ * The caller passes the horizontal slice of a tree whose BOUNDCRS wrappers were
+ * already reduced to their source CRS, so a target CRS's unit is never seen.
  */
 function lastLinearUnit(candidates: readonly WktNode[]): { name: string; scale: number } | undefined {
   let result: { name: string; scale: number } | undefined;
