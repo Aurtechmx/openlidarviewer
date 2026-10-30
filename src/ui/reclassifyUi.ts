@@ -118,7 +118,7 @@ export function createReclassifyUi(opts: ReclassifyUiOptions): ReclassifyUi {
     ? mkBtn('Auto-classify scan', 'reclass-auto', 'olv-reclass-auto')
     : null;
   // Why the last Auto-classify did not run, shown under the button.
-  const autoNote = el('div', { className: 'olv-reclass-note' });
+  const autoNote = el('div', { className: 'olv-reclass-autonote' });
   autoNote.classList.add('olv-hidden');
   autoNote.setAttribute('data-testid', 'reclass-auto-note');
   if (autoBtn) {
