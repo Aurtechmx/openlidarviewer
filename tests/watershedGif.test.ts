@@ -213,6 +213,15 @@ describe('helpers', () => {
     expect(revealThresholds(90, 3)).toEqual([0, 30, 60, 90]);
   });
 
+  it('tick walk ends on a non-finite or vanishingly small max', () => {
+    expect(niceTicks(Infinity)).toEqual([0]);
+    expect(niceTicks(Number.NaN)).toEqual([0]);
+    expect(niceTicks(5e-324)).toEqual([0, 5e-324]);
+    const tiny = niceTicks(1e-310);
+    expect(tiny.length).toBeGreaterThan(0);
+    expect(tiny.length).toBeLessThanOrEqual(64);
+  }, 2000);
+
   it('round ticks and scale-bar lengths', () => {
     expect(niceTicks(437)).toEqual([0, 100, 200, 300, 400]);
     expect(niceTicks(12)).toEqual([0, 2.5, 5, 7.5, 10]);

@@ -60,8 +60,8 @@ export class StreamingPointCloud implements StreamingSource {
 
   /** The display name — the file name. */
   readonly name: string;
-  /** File-level RGB bit-depth, captured from the first decoded RGB chunk; see
-   *  {@link noteDecodedRgbDepth}. Undefined until the first colour chunk lands. */
+  /** File-level RGB bit-depth: `false` once a decoded chunk proved 16-bit
+   *  colour (see {@link noteDecodedRgbDepth}), otherwise undefined. */
   private _rgbEightBit: boolean | undefined;
 
   private constructor(
@@ -231,21 +231,23 @@ export class StreamingPointCloud implements StreamingSource {
       scale: header.scale,
       offset: header.offset,
       renderOrigin: this.renderOrigin,
-      // File-level RGB bit-depth, captured from the first decoded RGB chunk
-      // (noteDecodedRgbDepth) so every later node narrows colour identically.
+      // File-level RGB bit-depth: 16-bit once any chunk proved it
+      // (noteDecodedRgbDepth), else undefined so the chunk decides.
       rgbEightBit: this._rgbEightBit,
     };
   }
 
   /**
-   * Capture the RGB bit-depth from the first decoded RGB chunk. Once set it is
-   * sticky, so a later all-dark chunk (whose own max would read as 8-bit) can't
-   * flip the cloud's colour depth mid-stream.
+   * Record the RGB bit-depth a decoded chunk showed. Only 16-bit is pinned: a
+   * chunk with a channel above 255 proves the file stores 16-bit colour, and
+   * every later chunk then narrows by the high byte. A chunk whose channels all
+   * fit in 8 bits proves nothing (a dark 16-bit chunk looks the same), so it
+   * leaves the decision open and each chunk decides from its own values. The
+   * result no longer depends on which chunk happens to finish decoding first;
+   * the scheduler re-decodes chunks narrowed as 8-bit before the proof arrived.
    */
   noteDecodedRgbDepth(eightBit: boolean | undefined): void {
-    if (this._rgbEightBit === undefined && eightBit !== undefined) {
-      this._rgbEightBit = eightBit;
-    }
+    if (eightBit === false) this._rgbEightBit = false;
   }
 
   /**

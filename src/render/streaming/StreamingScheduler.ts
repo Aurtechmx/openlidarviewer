@@ -597,6 +597,10 @@ export class StreamingScheduler {
    * non-resident id.
    */
   private readonly _inFlightGraceAt = new Map<string, number>();
+  /** Nodes whose colour was narrowed as 8-bit before any chunk proved the
+   *  file 16-bit; re-decoded once one does (see `_settleRgbDepth`). */
+  private readonly _rgbEightBitIds = new Set<string>();
+  private _rgbSixteenBit = false;
   private readonly _evictDeferMs: number;
   private readonly _memoryPressureRatio: number;
   /** Resolved thresholds handed to the pure eviction policy each pressure run. */
@@ -1777,6 +1781,35 @@ export class StreamingScheduler {
     }
   }
 
+  /**
+   * Make RGB bit depth independent of decode order. A chunk whose channels all
+   * fit in 8 bits is narrowed as 8-bit until some chunk shows a value above
+   * 255; from then on the file is 16-bit, and the earlier 8-bit nodes are
+   * dropped so they re-decode (from the chunk cache) with the 16-bit rule.
+   * A late 8-bit result is fixed in place: every value was <= 255, so its
+   * high byte is 0.
+   */
+  private _settleRgbDepth(id: string, decoded: DecodedChunk): void {
+    if (decoded.rgbEightBit === true) {
+      if (!this._rgbSixteenBit) {
+        this._rgbEightBitIds.add(id);
+        return;
+      }
+      decoded.rgb?.fill(0);
+      decoded.rgbEightBit = false;
+    } else if (decoded.rgbEightBit === false && !this._rgbSixteenBit) {
+      this._rgbSixteenBit = true;
+      const store = this._cloud.octree.store;
+      for (const staleId of this._rgbEightBitIds) {
+        const node = store.get(staleId);
+        if (node?.state === 'resident') this._callbacks.onNodeEvicted(node);
+        if (node?.state === 'resident' || node?.state === 'decoded') store.setState(node, 'unloaded');
+        this._deferredEvictAt.delete(staleId);
+      }
+      this._rgbEightBitIds.clear();
+    }
+  }
+
   /** Read and decode one node's chunk, then hand the result to the renderer. */
   private _startDecode(node: StreamingNode): void {
     const id = node.record.id;
@@ -1803,9 +1836,10 @@ export class StreamingScheduler {
         if (controller.signal.aborted) {
           store.setState(node, 'unloaded');
         } else {
-          // Capture the file-level RGB bit-depth from the first colour chunk so
-          // every later node narrows colour the same way (see decodeMeta).
+          // Pin 16-bit colour once a chunk proves it, so every later node
+          // narrows the same way (see decodeMeta and _settleRgbDepth).
           this._cloud.noteDecodedRgbDepth?.(decoded.rgbEightBit);
+          this._settleRgbDepth(id, decoded);
           // A clean decode clears any prior failure history so a node that
           // recovered (transient read error, then success) isn't held back by
           // a stale backoff on a later re-decode.

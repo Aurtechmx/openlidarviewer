@@ -295,12 +295,13 @@ export interface StreamingSource {
    */
   decodeMeta(record: StreamingNodeRecord): NodeDecodeMetadata;
   /**
-   * Record the RGB bit-depth decision the first decoded chunk made, so the
-   * source can hand it back through {@link ChunkDecodeMetadata.rgbEightBit} and
-   * every later node narrows colour the same way. Both COPC and EPT implement
-   * it — 16-bit RGB carries the 8-bit-in-low-byte ambiguity in both formats
-   * (EPT's schema types the width, not the writer's use of it). Optional so a
-   * future source without the ambiguity can omit it.
+   * Record the RGB bit-depth a decoded chunk showed. `false` (a channel above
+   * 255, so the file stores 16-bit colour) is pinned and handed back through
+   * {@link ChunkDecodeMetadata.rgbEightBit} so every later node narrows by the
+   * high byte; `true` proves nothing and leaves the decision open. Both COPC
+   * and EPT implement it — 16-bit RGB carries the 8-bit-in-low-byte ambiguity
+   * in both formats (EPT's schema types the width, not the writer's use of
+   * it). Optional so a future source without the ambiguity can omit it.
    */
   noteDecodedRgbDepth?(eightBit: boolean | undefined): void;
   /**

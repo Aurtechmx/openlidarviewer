@@ -409,12 +409,15 @@ export function watershedLayout(
 
 /** Round tick values from 0 to `max`, about `n` of them, always including 0. */
 export function niceTicks(max: number, n = 5): number[] {
-  if (!(max > 0)) return [0];
+  if (!(max > 0) || !Number.isFinite(max)) return [0];
   const raw = max / n;
   const mag = 10 ** Math.floor(Math.log10(raw));
   const step = [1, 2, 2.5, 5, 10].map((k) => k * mag).find((v) => v >= raw) ?? 10 * mag;
+  // A denormal-tiny max underflows the step to 0, and `v += 0` would loop
+  // forever. Fall back to the two ends instead.
+  if (!Number.isFinite(step) || step <= 0 || max + step === max) return [0, max];
   const out: number[] = [];
-  for (let v = 0; v <= max + 1e-9; v += step) out.push(Number(v.toPrecision(12)));
+  for (let v = 0; v <= max + 1e-9 && out.length < 64; v += step) out.push(Number(v.toPrecision(12)));
   return out;
 }
 

@@ -363,7 +363,7 @@ test('EptStreamingPointCloud.decodeBinary recovers points within the cube', asyn
   expect(decoded.positions).toHaveLength(300);
 });
 
-test('EptStreamingPointCloud pins the RGB bit-depth from the first decoded tile', async () => {
+test('EptStreamingPointCloud pins 16-bit RGB once a tile proves it, never 8-bit', async () => {
   const meta = loadFixtureMetadata();
   const transport = fixtureTransport();
   const cloud = await EptStreamingPointCloud.open(
@@ -375,7 +375,10 @@ test('EptStreamingPointCloud pins the RGB bit-depth from the first decoded tile'
   const root = cloud.octree.nodes()[0];
   // No decision yet — decodeMeta carries undefined.
   expect(cloud.decodeMeta(root.record).rgbEightBit).toBeUndefined();
-  // First RGB tile decides "true 16-bit" (false) → pinned into decodeMeta.
+  // An all-8-bit tile proves nothing (a dark 16-bit tile looks the same).
+  cloud.noteDecodedRgbDepth(true);
+  expect(cloud.decodeMeta(root.record).rgbEightBit).toBeUndefined();
+  // A tile with a channel above 255 proves 16-bit (false) → pinned.
   cloud.noteDecodedRgbDepth(false);
   expect(cloud.decodeMeta(root.record).rgbEightBit).toBe(false);
   // Sticky: a later all-dark tile reporting 8-bit can't flip the dataset.
