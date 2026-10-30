@@ -38,6 +38,8 @@ export interface AnnotationGeoref {
   layerId: string;
   /** Human-readable CRS label (e.g. `EPSG:25830`), when the cloud declares one. */
   crs?: string;
+  /** The picked cloud object, so the owner can be resolved from it. Not stored. */
+  pickedCloud?: unknown;
 }
 
 /**
@@ -88,5 +90,5 @@ export function annotationGeorefFor(
     resolvedCrsLabel !== undefined
       ? (resolvedCrsLabel ?? undefined)
       : crsLabelFor(pick.cloud.metadata?.crs);
-  return georefFromPick(pick.cloud, pick.index, label);
+  return { ...georefFromPick(pick.cloud, pick.index, label), pickedCloud: pick.cloud };
 }

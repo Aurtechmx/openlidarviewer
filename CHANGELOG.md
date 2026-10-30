@@ -119,6 +119,9 @@ has not been done. v0.7.0 is the current published release.
 - The live DTM's median gridding on measured cells agreed with R terra and SciPy on eight seeded point clouds (18498 and 18655 cells, within the 1e-6 m tolerance registered before the references were generated; occupancy masks match). The DTM claim now names this scope. Interpolated (filled) cells are not covered. The evidence resolver maps the live DTM's measured cells to that parameter set (E4) and leaves filled cells not covered, and the terrain report, the DEM package evidence contract and the export provenance name measured cells.
 - `npm run validate:zenodo-small` now fails a comparison when the reference has an attribute that OLV reads for that format but OLV's output lacks it, including the comparisons of OLV's LAS exports. Attributes a path does not read, such as the scan angle and flag fields on the COPC streaming path, are still reported as not compared.
 - `npm run lint:position-access` fails with a message naming the missing file when its baseline or frames file is absent, instead of writing new ones. It writes them only with `--update`. `--baseline` and `--frames` point it at other copies of those files.
+- With two scans open, a note is owned by the scan it was placed on, not the selected scan. Notes placed while only one scan was open belong to that scan once a second static scan is opened. Reopening a session saved with several scans no longer gives notes that record no scan to the selected one; they stay without an owner.
+- Opening a second scan no longer empties the saved-view list while the views are still stored.
+- Cancelling a scan open while the replace question is settling stops the open. Before, the open scan and its work were replaced anyway.
 
 ### Security
 

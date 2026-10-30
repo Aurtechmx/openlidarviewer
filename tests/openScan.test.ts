@@ -156,7 +156,7 @@ function makeDeps(over: { loading?: boolean; graphicsFail?: boolean } = {}) {
     crsCoordinator: {} as unknown as OpenScanDeps['crsCoordinator'],
     dock: {} as unknown as OpenScanDeps['dock'],
     navBar: {} as unknown as OpenScanDeps['navBar'],
-    bookmarks: { clear: vi.fn() },
+    bookmarks: { clear: vi.fn(), names: () => [] },
     layerService: { refreshCrsFlags: vi.fn() },
     setLayerVisible: vi.fn(),
     rememberSourceFile: vi.fn(),

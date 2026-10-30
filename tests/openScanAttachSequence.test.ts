@@ -144,7 +144,7 @@ function harness(opts: HarnessOptions = {}) {
     addCloud: calls.addCloud,
     clouds: () => [cloud],
     measure: { setLayerResolver: () => {}, claimUnowned: () => {}, getMeasurements: () => [], removeMeasurement: () => null },
-    annotate: { reset: calls.annotateClear, resetHistory: () => {}, getAnnotations: () => [], remove: () => {}, claimUnowned: () => {} },
+    annotate: { reset: calls.annotateClear, resetHistory: () => {}, getAnnotations: () => [], remove: () => {}, claimUnowned: () => {}, setLayerResolver: () => {} },
     setCoverageGrid: () => {},
     setMode: () => {},
     frameAll: calls.frameAll,
@@ -243,7 +243,7 @@ function harness(opts: HarnessOptions = {}) {
       flashTouchHint: vi.fn(),
       flashFirstUseHint: vi.fn(),
     } as unknown as OpenScanDeps['navBar'],
-    bookmarks: { clear: calls.bookmarksClear },
+    bookmarks: { clear: calls.bookmarksClear, names: () => [] },
     layerService: { refreshCrsFlags: vi.fn() },
     setLayerVisible: vi.fn(),
     rememberSourceFile: vi.fn(),
@@ -916,7 +916,7 @@ describe('a static open over a stream with static layers open', () => {
     h.calls.addCloud.mockImplementation(() => { h.trace.push('addCloud'); added.push('cloud-1'); return 'cloud-1'; });
     viewer.clouds = () => [...statics, ...added];
     viewer.measure = { setLayerResolver: () => {}, clear: vi.fn(() => { measurements.length = 0; }), getMeasurements: () => measurements, removeMeasurement: drop(measurements), claimUnowned: claim(measurements) };
-    viewer.annotate = { reset: h.calls.annotateClear, resetHistory: vi.fn(), getAnnotations: () => annotations, remove: drop(annotations), claimUnowned: claim(annotations) };
+    viewer.annotate = { reset: h.calls.annotateClear, resetHistory: vi.fn(), getAnnotations: () => annotations, remove: drop(annotations), claimUnowned: claim(annotations), setLayerResolver: () => {} };
     viewer.reconfigureForClouds = vi.fn();
     // The scope is read while the question is open, before anything is removed.
     const scoped: DiscardableWork[] = [];
@@ -964,5 +964,78 @@ describe('a static open over a stream with static layers open', () => {
     expect(h.calls.annotateClear).toHaveBeenCalled();
     expect(h.calls.bookmarksClear).toHaveBeenCalled();
     expect(t.deps.retireSceneState).toHaveBeenCalledTimes(1);
+  });
+});
+
+// Opening a second static scan beside the first: the notes placed while the
+// first was the only scan belong to it, the saved-view list keeps what is
+// stored, and a new note records the scan it is placed on.
+describe('a second static scan opened beside the first', () => {
+  function secondScan(h: ReturnType<typeof harness>, saved: string[]) {
+    const annotations: Array<{ id: string; owner?: { layerId: string; frame: 'project' } }> = [{ id: 'n-first' }];
+    const viewer = h.deps.getViewer() as unknown as Record<string, unknown>;
+    const added: string[] = [];
+    h.calls.addCloud.mockImplementation(() => { h.trace.push('addCloud'); added.push('cloud-1'); return 'cloud-1'; });
+    viewer.clouds = () => ['cloud-0', ...added];
+    const setAnnotationResolver = vi.fn();
+    viewer.annotate = {
+      reset: h.calls.annotateClear, resetHistory: vi.fn(), getAnnotations: () => annotations, remove: vi.fn(),
+      claimUnowned: vi.fn((layerId: string) => { for (const a of annotations) if (!a.owner) a.owner = { layerId, frame: 'project' }; }),
+      setLayerResolver: setAnnotationResolver,
+    };
+    const deps: OpenScanDeps = {
+      ...h.deps,
+      bookmarks: { clear: h.calls.bookmarksClear, names: () => [...saved] },
+      layerIdentity: { ...h.deps.layerIdentity, stableIdFor: (id: string) => `stable-${id}` },
+    };
+    return { deps, annotations, setAnnotationResolver };
+  }
+
+  it('gives the notes placed on the first scan to that scan', async () => {
+    const h = harness();
+    const t = secondScan(h, []);
+    await openScan(fakeFile('second.las'), t.deps);
+    expect(t.annotations[0]!.owner).toEqual({ layerId: 'stable-cloud-0', frame: 'project' });
+  });
+
+  it('records the scan each new note is placed on', async () => {
+    const h = harness();
+    const t = secondScan(h, []);
+    await openScan(fakeFile('second.las'), t.deps);
+    expect(t.setAnnotationResolver).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps the stored saved views in the list', async () => {
+    const h = harness();
+    const t = secondScan(h, ['View 1', 'View 2']);
+    await openScan(fakeFile('second.las'), t.deps);
+    const setViews = (h.deps.inspector as unknown as { setViews: ReturnType<typeof vi.fn> }).setViews;
+    expect(h.calls.bookmarksClear).not.toHaveBeenCalled();
+    expect(setViews).toHaveBeenLastCalledWith(['View 1', 'View 2']);
+  });
+});
+
+// A Cancel clicked while the replace question is still settling (the guard
+// awaits a recovery snapshot or a session save after Replace is chosen) must
+// stop the open: no cloud added, the stream and its work kept.
+describe('a cancel while the replace question is pending', () => {
+  it('stops the open without replacing the scene', async () => {
+    const h = harness();
+    const viewer = h.deps.getViewer() as unknown as Record<string, unknown>;
+    viewer.hasStreamingCloud = true;
+    viewer.clouds = () => [];
+    viewer.reconfigureForClouds = vi.fn();
+    const clear = vi.fn();
+    viewer.measure = { setLayerResolver: () => {}, clear, getMeasurements: () => [{ id: 'm1' }], removeMeasurement: () => null, claimUnowned: () => {} };
+    const replaceGuard = vi.fn(async () => { h.fireCancel(); return 'replace' as const; });
+    const deps: OpenScanDeps = { ...h.deps, replaceGuard, retireSceneState: vi.fn() };
+    await openScan(fakeFile('new.las'), deps);
+    expect(replaceGuard).toHaveBeenCalledTimes(1);
+    expect(h.calls.addCloud).not.toHaveBeenCalled();
+    expect(h.calls.closeStreaming).not.toHaveBeenCalled();
+    expect(clear).not.toHaveBeenCalled();
+    expect(h.calls.annotateClear).not.toHaveBeenCalled();
+    expect(h.calls.bookmarksClear).not.toHaveBeenCalled();
+    expect(deps.retireSceneState).not.toHaveBeenCalled();
   });
 });

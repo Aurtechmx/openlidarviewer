@@ -186,7 +186,7 @@ export interface OpenScanDeps {
   /** The navigation bar. */
   navBar: NavBar;
   /** Saved-view store — cleared only on a fresh project. */
-  bookmarks: Pick<ViewBookmarksService, 'clear'>;
+  bookmarks: Pick<ViewBookmarksService, 'clear' | 'names'>;
   /** CRS-mismatch flag refresh across layers. */
   layerService: Pick<LayerService, 'refreshCrsFlags'>;
   /** Record the per-layer visibility intent for a freshly attached cloud. */
@@ -637,7 +637,9 @@ export async function attachStaticCloud(
     return (await deps.replaceGuard?.({ kind: 'scan', name: result.cloud.name, ...(scope ? { scope } : {}) })) ?? 'none';
   };
   const replaced: ReplaceOutcome = !viewer.hasStreamingCloud ? 'none' : source.replaced ?? (await ask());
-  if (replaced === 'cancel') throw new LoadCancelledError();
+  // A Cancel clicked while the question settled (a snapshot or a session save
+  // runs after Replace is chosen) stops the open before the scene changes.
+  if (replaced === 'cancel' || source.signal.aborted) throw new LoadCancelledError();
   const recommended = recommendColorMode(result.cloud); // coloured once, in this mode (see below)
   const id = viewer.addCloud(result.cloud, recommended.mode);
   source.preview?.dispose();
@@ -681,9 +683,11 @@ export async function attachStaticCloud(
   // it now, before the active layer changes, so their export does not borrow
   // this one's frame.
   const soleId = prior.length === 1 ? deps.layerIdentity.stableIdFor(prior[0]!) : null;
-  if (soleId) viewer.measure.claimUnowned(soleId);
-  // Each picked point records the layer it landed on, once two layers are open.
-  viewer.measure.setLayerResolver((c) => viewer.clouds().length > 1 ? deps.layerIdentity.stableIdFor(viewer.clouds().find((i) => viewer.getCloud(i) === c) ?? '') : null);
+  if (soleId) { viewer.measure.claimUnowned(soleId); viewer.annotate.claimUnowned(soleId); }
+  // Each picked point, and each note, records the layer it landed on, once two layers are open.
+  const layerOf = (c: unknown): string | null => viewer.clouds().length > 1 ? deps.layerIdentity.stableIdFor(viewer.clouds().find((i) => viewer.getCloud(i) === c) ?? '') : null;
+  viewer.measure.setLayerResolver(layerOf);
+  viewer.annotate.setLayerResolver(layerOf);
   // A freshly opened scan has no terrain analysis yet — drop any prior grid so
   // the Coverage colour chip starts disabled until this scan is analysed.
   viewer.setCoverageGrid(null);
@@ -837,7 +841,9 @@ export async function attachStaticCloud(
     else setTimeout(fillReport, 200);
   }
   try {
-    deps.inspector.setViews([]);
+    // The list shows what is stored: an additive open keeps the saved views,
+    // and a fresh project cleared them above.
+    deps.inspector.setViews(deps.bookmarks.names());
   } catch (err) {
     if (deps.debug) console.warn('[inspector] setViews threw', err);
   }
