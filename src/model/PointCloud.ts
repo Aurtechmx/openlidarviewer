@@ -9,6 +9,20 @@ import type { AcquisitionStationSet } from './AcquisitionStations';
 export type ClassState = 'source' | 'cleared' | 'derived';
 /** How a cloud's held points were reduced from its decoded records. */
 export type PointReduction = 'voxel-centroids';
+/**
+ * Per-class counts of the decoded records, taken before the voxel pass reduced
+ * them to the held points (see `model/classShareBasis.ts`).
+ */
+export interface ClassSample {
+  /** Per-code counts over the decoded records. */
+  readonly counts: ReadonlyMap<number, number>;
+  /** Records counted. */
+  readonly total: number;
+  /** The decode stride those records were read at; 1 = every record. */
+  readonly stride: number;
+  /** Per-code counts of the held points when the histogram was taken. */
+  readonly heldAtLoad: ReadonlyMap<number, number>;
+}
 /** {@link ClassState}, or 'none' when the cloud carries no classification. */
 export type ClassificationState = ClassState | 'none';
 
@@ -355,6 +369,8 @@ export interface PointCloudOptions {
    * for original records, a stride of them included.
    */
   pointReduction?: PointReduction;
+  /** Class counts of the decoded records before the voxel pass; see {@link ClassSample}. */
+  classSample?: ClassSample;
   /** Provenance metadata read from the file header, when available. */
   metadata?: CloudMetadata;
 }
@@ -430,6 +446,12 @@ export class PointCloud {
   readonly decodedPointCount?: number;
   readonly loadStride?: number;
   readonly pointReduction?: PointReduction;
+  /**
+   * Class counts of the decoded records before the voxel pass, set by the
+   * loader when it reduced them. Shares use it while the classes are still the
+   * source's (`model/classShareBasis.ts`).
+   */
+  classSample?: ClassSample;
   /**
    * For a streaming resident snapshot: the SOURCE's declared total, distinct
    * from `declaredPointCount` (which stays equal to the held count so the
@@ -524,6 +546,7 @@ export class PointCloud {
     this.decodedPointCount = options.decodedPointCount;
     this.loadStride = options.loadStride;
     this.pointReduction = options.pointReduction;
+    this.classSample = options.classSample;
     this.sourceDeclaredPointCount = options.sourceDeclaredPointCount;
     this.metadata = options.metadata;
   }

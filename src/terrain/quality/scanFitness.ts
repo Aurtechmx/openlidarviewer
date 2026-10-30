@@ -92,6 +92,11 @@ export interface FitnessInputs {
   // Classification: fraction unclassified (null = no classification at all) and
   // whether a ground class is present.
   readonly unclassifiedFraction: number | null;
+  /**
+   * What `unclassifiedFraction` is a share of, in plain words (e.g. "an even
+   * sample of 8,786,971 points"), when it is not every point of the file.
+   */
+  readonly unclassifiedBasis?: string | null;
   readonly hasGroundClass: boolean;
   // Integrity / provenance
   readonly coverageMode: string; // 'full' | 'resident-only' | 'sampled' | …
@@ -102,6 +107,12 @@ export interface FitnessInputs {
    * density.
    */
   readonly densityReferenceFloor?: string | null;
+  /**
+   * True when the ground density is from a sample of the points (the same test
+   * that withholds the density reference, `densityReferenceFloorFor`). The row
+   * then states the figure with that basis and makes no QL comparison.
+   */
+  readonly densityOnSample?: boolean;
   /**
    * What the grade actually ran on. `coverageMode` stays the surface-coverage
    * verdict (it feeds the assessment's Preview cap and must not move); this is
@@ -289,6 +300,7 @@ function densityDimension(
   median: number | null | undefined,
   unitKnown: boolean,
   meanCounts: number | null | undefined,
+  onSample = false,
 ): FitnessDimension {
   if (d == null) return { key: 'density', label: 'Ground detail', tone: 'review', summary: 'Ground density unknown.' };
   // Fail closed on an unverified scale: a pts/m² figure derived off an inert
@@ -312,7 +324,10 @@ function densityDimension(
   let summary: string;
   // The QL figures count aggregate pulses, so the comparison is indicative only.
   const indicative = ' (indicative only: QL figures are an aggregate pulse-density reference, not a ground-point count).';
-  if (d >= QL1_DENSITY) summary = `${v} ground pts/m², above the ${QL1_DENSITY} pts/m² QL1 figure${indicative}`;
+  // On a sample the figure describes the points read, not the file, so it is
+  // stated with that basis and set against no QL figure (as the map sheet does).
+  if (onSample) summary = `${v} ground pts/m² from a sample of the points; not compared with QL figures on a sample.`;
+  else if (d >= QL1_DENSITY) summary = `${v} ground pts/m², above the ${QL1_DENSITY} pts/m² QL1 figure${indicative}`;
   else if (tone === 'ready') summary = `${v} ground pts/m², above the ${QL2_DENSITY} pts/m² QL2 figure${indicative}`;
   else if (tone === 'okay') summary = `${v} ground pts/m², below the ${QL2_DENSITY} pts/m² QL2 figure${indicative}`;
   else summary = `${v} ground pts/m², sparse ground, below the ${QL2_DENSITY} pts/m² QL2 figure${indicative}`;
@@ -382,7 +397,7 @@ function accuracyDimension(rmse: number | null, unit: string, unitToMetres: numb
   return { key: 'accuracy', label: 'Vertical accuracy', tone, summary };
 }
 
-function classificationDimension(unclassified: number | null, hasGround: boolean): FitnessDimension {
+function classificationDimension(unclassified: number | null, hasGround: boolean, basis?: string | null): FitnessDimension {
   if (unclassified == null || !hasGround) {
     return {
       key: 'classification',
@@ -396,10 +411,11 @@ function classificationDimension(unclassified: number | null, hasGround: boolean
   else if (unclassified < 0.5) tone = 'okay';
   else tone = 'review';
   const u = pct(unclassified);
+  const of = basis ? ` (of ${basis})` : '';
   let summary: string;
-  if (tone === 'ready') summary = `Classified ground present; ${u}% unclassified.`;
-  else if (tone === 'okay') summary = `Partly classified — ${u}% of points are unclassified.`;
-  else summary = `${u}% unclassified — classification is incomplete.`;
+  if (tone === 'ready') summary = `Classified ground present; ${u}% unclassified${of}.`;
+  else if (tone === 'okay') summary = `Partly classified — ${u}% of points are unclassified${of}.`;
+  else summary = `${u}% unclassified${of} — classification is incomplete.`;
   return { key: 'classification', label: 'Classification', tone, summary };
 }
 
@@ -462,11 +478,11 @@ export function buildScanFitness(inp: FitnessInputs): ScanFitness {
   const dimensions: FitnessDimension[] = [
     georefDimension(inp),
     coverageDimension(inp.measuredFraction),
-    densityDimension(inp.groundDensityPerM2, inp.medianGroundDensityPerM2, unitKnown, inp.meanCountsPerMeasuredCell),
+    densityDimension(inp.groundDensityPerM2, inp.medianGroundDensityPerM2, unitKnown, inp.meanCountsPerMeasuredCell, inp.densityOnSample),
     inp.verticalScaleResolved === false
       ? VERTICAL_UNRESOLVED_DIMENSION
       : accuracyDimension(inp.verticalRmse, unit, unitToMetres, unitKnown),
-    classificationDimension(inp.unclassifiedFraction, inp.hasGroundClass),
+    classificationDimension(inp.unclassifiedFraction, inp.hasGroundClass, inp.unclassifiedBasis),
     integrityDimension(inp),
   ];
   const overallTone = dimensions.reduce<FitnessTone>((t, d) => worst(t, d.tone), 'ready');

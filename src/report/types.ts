@@ -37,6 +37,7 @@ export type ReportSectionId =
   | 'provenance-compact'     // v0.5.5 — capture type + confidence + disclaimer only
   | 'source-metadata'        // v0.5.4 — the file's own declared metadata, verbatim
   | 'source-quality'         // v0.6.8 — Scan QA: georef verdict, classification provenance, caveats
+  | 'terrain-summary'        // the session's terrain analysis figures, when one ran
   | 'visuals'
   | 'annotations'
   | 'measurements'
@@ -270,6 +271,17 @@ export interface ReportInputs {
    * which is the defect the retired `scan-acceptance` template carried.
    */
   readonly scanQuality?: ReportScanQuality;
+  /**
+   * The terrain analysis figures, when a terrain analysis ran on this scan.
+   * Rendered by the `terrain-summary` section; omitted when absent.
+   */
+  readonly terrainSummary?: ReportTerrainSummary;
+}
+
+/** The `terrain-summary` section: one note line and its label/value rows. */
+export interface ReportTerrainSummary {
+  readonly note: string;
+  readonly rows: readonly ReportDatasetRow[];
 }
 
 /**

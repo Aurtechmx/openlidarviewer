@@ -61,9 +61,10 @@ export interface ReclassifyUiOptions {
   /**
    * Run the whole-scan heuristic classifier (ground / vegetation / building).
    * Drives the primary "Auto-classify" button; the host owns the derive so the
-   * panel stays a dumb view. Absent ⇒ the button is not shown.
+   * panel stays a dumb view. Absent ⇒ the button is not shown. A run that is
+   * refused resolves with the reason, which shows beside the button.
    */
-  readonly onAutoClassify?: () => Promise<void> | void;
+  readonly onAutoClassify?: () => Promise<string | void> | void;
 }
 
 export interface ReclassifyUi {
@@ -116,6 +117,10 @@ export function createReclassifyUi(opts: ReclassifyUiOptions): ReclassifyUi {
   const autoBtn = opts.onAutoClassify
     ? mkBtn('Auto-classify scan', 'reclass-auto', 'olv-reclass-auto')
     : null;
+  // Why the last Auto-classify did not run, shown under the button.
+  const autoNote = el('div', { className: 'olv-reclass-hint' });
+  autoNote.classList.add('olv-hidden');
+  autoNote.setAttribute('data-testid', 'reclass-auto-note');
   if (autoBtn) {
     autoBtn.title =
       `Derive ground / vegetation / building for the whole scan (heuristic, not survey-grade). It ${AUTO_CLASSIFY_LIMITS}`;
@@ -128,7 +133,13 @@ export function createReclassifyUi(opts: ReclassifyUiOptions): ReclassifyUi {
       autoBtn.disabled = true;
       autoBtn.classList.add('olv-reclass-auto-loading');
       autoBtn.textContent = 'Classifying…';
-      void Promise.resolve(opts.onAutoClassify?.()).finally(() => {
+      autoNote.classList.add('olv-hidden');
+      void Promise.resolve(opts.onAutoClassify?.()).then((refused) => {
+        // A refusal is also announced by the toast; this keeps it in view
+        // where the user clicked until the next run.
+        autoNote.textContent = refused || '';
+        autoNote.classList.toggle('olv-hidden', !refused);
+      }).finally(() => {
         autoBtn.disabled = false;
         autoBtn.classList.remove('olv-reclass-auto-loading');
         autoBtn.textContent = autoLabel;
@@ -253,6 +264,7 @@ export function createReclassifyUi(opts: ReclassifyUiOptions): ReclassifyUi {
     el('div', { className: 'olv-reclass-head', text: 'Edit classes' }),
     // Primary: derive the whole scan, or clear it. Manual class + lasso follow.
     el('div', { className: 'olv-reclass-actions olv-reclass-whole' }, [...(autoBtn ? [autoBtn] : []), clearBtn]),
+    ...(autoBtn ? [autoNote] : []),
     note,
     ...(autoBtn ? [limits] : []),
     select,

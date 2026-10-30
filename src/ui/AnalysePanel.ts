@@ -135,7 +135,7 @@ import {
   annotationsOptionState,
 } from '../render/measure/mapSheetExportOptions';
 import { TERRAIN_METRIC_VERSION } from '../terrain/datasetIntelligence';
-import { terrainAssessment, type SupportingMetric } from '../terrain/contour/terrainAssessment';
+import { scopeForSampledBasis, terrainAssessment, type SupportingMetric } from '../terrain/contour/terrainAssessment';
 import { recommendedWorkflows } from '../terrain/contour/recommendedWorkflow';
 import { terrainProducts } from '../terrain/contour/terrainProducts';
 import type { FitnessTier, StoryProduct } from '../intelligence/scanStory';
@@ -178,6 +178,7 @@ import {
 } from './scanTypeControl';
 import { buildScanFitness, fitnessVerticalRmse, type FitnessInputs } from '../terrain/quality/scanFitness';
 import { fitnessIcon, fitnessToneGlyph } from './fitnessIcons';
+import { cloudClassShareBasis, unclassifiedShare } from '../model/classShareBasis';
 
 /** Callbacks the host (main.ts) provides. */
 /** What the last terrain run says about itself, beside Process Studio's readiness. */
@@ -1739,7 +1740,8 @@ export class AnalysePanel {
     // terrain products and the "Why?" causes all stay always-visible above this;
     // only the full numeric breakdown is tiered behind one keyboard-accessible
     // disclosure, with the headline numbers promoted into the primary row.
-    this._assessmentRow.append(this._renderAssessMetrics(a.supportingMetrics));
+    // A display sample is not a full read, whatever the grid's extent says.
+    this._assessmentRow.append(this._renderAssessMetrics(scopeForSampledBasis(a.supportingMetrics, this._contourFrame?.analysedBasis?.coverage === 'sampled')));
 
     // Derived complexity metrics (v0.5.4) — one compact line under the
     // assessment: VRM median [IQR] with its window, TPI dominant class with
@@ -2051,6 +2053,7 @@ export class AnalysePanel {
     products: StoryProduct[];
     crsKnown: boolean;
     datumKnown: boolean;
+    dataAreaM2?: number;
   } | null {
     if (!this._result) return null;
     const a = terrainAssessment(this._result);
@@ -2075,6 +2078,11 @@ export class AnalysePanel {
       products,
       crsKnown: !!this._result.quality.crsKnown,
       datumKnown: !!this._result.quality.datumKnown,
+      // The area the data covers: the grid's covered cells times the cell area,
+      // stated only on a projected frame whose unit resolved (degree cells are not square).
+      ...((m) => (m?.resolvedUnitToMetres != null && !m.isGeographic && this._result.horizontalScaleResolved
+        ? { dataAreaM2: this._result.cellMetrics.footprintCellCount * (this._result.dtm.cellSizeM * m.resolvedUnitToMetres) ** 2 }
+        : {}))(this._cb.getMapContext?.()),
     };
   }
 
@@ -3337,7 +3345,11 @@ export class AnalysePanel {
     // excluded by class) is the size of that sample.
     const strided = r.warnings.some((w) => w.includes('uniform-stride assumption'));
     const scanId = this._cb.getActiveScanId?.() ?? null;
-    const residentPointCount = scanId ? (this._cb.getFeatureCloud?.(scanId)?.pointCount ?? null) : null;
+    const featureCloud = scanId ? this._cb.getFeatureCloud?.(scanId) ?? null : null;
+    const residentPointCount = featureCloud?.pointCount ?? null;
+    // On a reduced load the share comes from the decoded records' classes while
+    // they are unedited, and names its basis (classShareBasis.ts).
+    const shares = featureCloud && r.unclassifiedFraction != null ? cloudClassShareBasis(featureCloud) : null;
     // Mean analysed returns per MEASURED cell, from the grid's own per-cell
     // counts (unscaled). Gates the median/mean regularity readout.
     let countSum = 0;
@@ -3366,10 +3378,12 @@ export class AnalysePanel {
       // attribute. A raw airborne tile carries a code on every point and is
       // still almost entirely code 1; reporting 0 there stamped a green
       // "0% unclassified" on a scan that was 95% unclassified.
-      unclassifiedFraction: r.unclassifiedFraction,
+      unclassifiedFraction: shares?.fromSample ? unclassifiedShare(shares) : r.unclassifiedFraction,
+      unclassifiedBasis: shares?.phrase ?? null,
       hasGroundClass: hasClass,
       coverageMode: r.dtm.coverageMode,
       densityReferenceFloor: densityFloor,
+      densityOnSample: isSampledBasis(this._contourFrame?.analysedBasis) || r.dtm.coverageMode === 'sampled',
       // The result does not carry the strided sample size itself, so the row
       // states the ground returns the DTM analysed and the resident count.
       gradedBasis: {

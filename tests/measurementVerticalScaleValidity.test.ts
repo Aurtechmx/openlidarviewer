@@ -113,7 +113,7 @@ function csvRows(text: string): Map<string, Record<string, string>> {
 
 const METRIC_COLUMNS = ['length_m', 'horizontal_m', 'vertical_m', 'rise_m', 'run_m', 'grade_pct', 'angle_deg', 'area_m2', 'horizontal_area_m2', 'perimeter_m', 'width_m', 'depth_m', 'height_m', 'volume_m3', 'cut_m3', 'fill_m3', 'net_m3'];
 /** The purely horizontal figures each kind keeps when only the vertical scale is invalid. */
-const HORIZONTAL_KEPT: Record<string, readonly string[]> = { h: ['horizontal_m'], r: ['horizontal_m'], s: ['run_m'], a: ['horizontal_area_m2'], b: ['width_m', 'depth_m'], v: ['area_m2'], d: [], p: [], g: [] };
+const HORIZONTAL_KEPT: Record<string, readonly string[]> = { h: ['horizontal_m'], r: ['horizontal_m'], s: ['run_m'], a: ['horizontal_area_m2'], b: ['width_m', 'depth_m'], v: ['area_m2'], d: ['horizontal_m', 'run_m'], p: [], g: [] };
 
 describe('an unreadable vertical unit withholds every figure that reads Z', () => {
   const scans = [{ id: 'a', stable: 'layer-a', file: 'invalid.las', crs: INVALID }];

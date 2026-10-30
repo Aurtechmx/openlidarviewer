@@ -210,6 +210,8 @@ function cloudPayload(cloud: PointCloud): { payload: Record<string, unknown>; tr
     decodedPointCount: cloud.decodedPointCount,
     loadStride: cloud.loadStride,
     pointReduction: cloud.pointReduction,
+    // Plain maps and numbers, so it clones structurally like `metadata`.
+    classSample: cloud.classSample,
     metadata: cloud.metadata,
     // Plain data (no typed arrays — see AcquisitionStations.ts), so it clones
     // structurally like `metadata` rather than needing a transfer entry.

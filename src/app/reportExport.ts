@@ -44,15 +44,18 @@ import { captureProvenance, isNonTerrainVerdict } from '../diagnostics/capturePr
 import { triggerDownload } from '../io/download';
 
 import type { MetadataInputs, ReportProvenanceFingerprint } from '../report';
+import type { TerrainSummaryFacts } from '../report/ReportMetadataSection';
+import type { AnalyseContoursResult } from '../terrain/contour/analyseContours';
 import type { ScanQualityFacts } from '../report/ReportScanQuality';
 import type { ResolvedCrs } from '../geo/CoordinateTypes';
-import type { PointCloud } from '../model/PointCloud';
+import type { ClassSample, PointCloud } from '../model/PointCloud';
 import type { Viewer } from '../render/Viewer';
 import type { DropZone } from '../ui/DropZone';
 import type { ScanService } from './ScanService';
 import type { loadReportEngine } from '../lazyChunks';
 import { streamingFormatToken } from '../render/streaming/StreamingSource';
 import { classificationCoverage } from '../render/class/classificationCoverage';
+import { cloudClassShareBasis, unclassifiedShare } from '../model/classShareBasis';
 import { truncationNote, truncationOf, truncationText } from '../io/truncation';
 import { measurementsOwnedByActive, type OwnershipView } from './measurementOwnership';
 import { withholdUnresolvedUp } from './layerUpFrames';
@@ -280,6 +283,34 @@ export interface ReportExportDeps {
    * measurement that records no scan is the active scan's.
    */
   readonly measurementOwnership?: () => OwnershipView;
+  /**
+   * The current terrain analysis result, or null when none is on screen or it
+   * is stale. Its figures fill the Technical Report's Terrain analysis section.
+   */
+  readonly terrainResult?: () => AnalyseContoursResult | null;
+}
+
+/**
+ * The Terrain analysis section's facts from a result: the hold-out RMSEz (null
+ * when the vertical scale did not resolve), the relief of the ground cells in
+ * metres, the measured share of covered cells, and the points read.
+ */
+export function terrainSummaryFacts(
+  r: AnalyseContoursResult,
+  cloud: { readonly pointCount: number; readonly declaredPointCount?: number } | null,
+): TerrainSummaryFacts {
+  const t = r.cellStatusTally;
+  const covered = t.measured + t.interpolated + t.lowConfidence + t.edgeRisk;
+  // The range is over the DTM cells, in the source vertical unit.
+  const toM = r.verticalScaleResolved ? r.dtm.verticalUnitToMetres ?? null : null;
+  return {
+    rmseZM: r.accuracyStandards.rmseZM,
+    reliefM: toM != null && r.elevationRangeM > 0 ? r.elevationRangeM * toM : null,
+    measuredOfCovered: covered > 0 ? t.measured / covered : null,
+    analysedPointCount: r.dtm.analyzedPointCount,
+    ...(cloud ? { loadedPointCount: cloud.pointCount } : {}),
+    ...(cloud?.declaredPointCount !== undefined ? { declaredPointCount: cloud.declaredPointCount } : {}),
+  };
 }
 
 /**
@@ -334,18 +365,23 @@ export function exportGeoContext(deps: ReportExportDeps): GeoExportContext {
  * is counted on the held points, which are a display sample when the loader
  * strided the file — the flag says so.
  */
-function classificationShare(cloud: {
+export function classificationShare(cloud: {
   readonly classification?: ArrayLike<number> | null;
+  readonly classSample?: ClassSample;
   readonly pointCount: number;
   readonly declaredPointCount?: number;
   readonly classificationIsDerived?: boolean;
   readonly classificationProvenance?: string;
   readonly derivedMethod?: string;
-}): Pick<MetadataInputs, 'unclassifiedFraction' | 'unclassifiedOfDisplaySample' | 'classificationDerived' | 'classificationCleared' | 'classificationMethod'> {
+}): Pick<MetadataInputs, 'unclassifiedFraction' | 'unclassifiedOfDisplaySample' | 'unclassifiedBasis' | 'classificationDerived' | 'classificationCleared' | 'classificationMethod'> {
   if (!cloud.classification || !(cloud.pointCount > 0)) return {};
   const { unclassified } = classificationCoverage(cloud.classification, cloud.pointCount);
+  // On a reduced load the share is stated from the decoded records' classes
+  // while they are unedited (classShareBasis.ts), and names that basis.
+  const basis = cloudClassShareBasis(cloud);
   return {
-    unclassifiedFraction: unclassified / cloud.pointCount,
+    unclassifiedFraction: basis?.fromSample ? unclassifiedShare(basis) : unclassified / cloud.pointCount,
+    ...(basis?.fromSample && basis.phrase ? { unclassifiedBasis: basis.phrase } : {}),
     unclassifiedOfDisplaySample:
       cloud.declaredPointCount !== undefined && cloud.declaredPointCount > cloud.pointCount,
     ...(cloud.classificationIsDerived ? { classificationDerived: true, classificationMethod: cloud.derivedMethod } : {}),
@@ -483,6 +519,8 @@ export async function generateReportPdf(templateId: string, deps: ReportExportDe
       ...(trunc ? { coverageNote: truncationText(trunc), declaredPointCount: trunc.declared } : {}),
       // The report states the file's total, but analysed figures read what is held.
       ...(!trunc ? { pointBasis: fileN > staticCloud.pointCount ? pointBasisLine(false, staticCloud.pointCount, fileN) : pointBasisLine(true, fileN, null) } : {}),
+      // The elevation range is read off the held points, a sample of the file.
+      ...(!trunc && elevationRange && fileN > staticCloud.pointCount ? { elevationBasis: 'display sample' } : {}),
     };
     exportFileStem = deps.baseName(staticCloud.name);
   } else {
@@ -553,8 +591,11 @@ export async function generateReportPdf(templateId: string, deps: ReportExportDe
     viewer.measure.getMeasurements(),
     deps.measurementOwnership ? deps.measurementOwnership() : { layers: [], activeViewerId: deps.scans.activeId ?? null },
   ), (m) => viewer.measure.unitFrameOf?.(m).upRefusal);
+  // The Technical Report's terrain section, from the analysis on screen (static scans only).
+  const terrain = staticCloud ? deps.terrainResult?.() ?? null : null;
   const captured = {
     scanQualityFacts,
+    ...(terrain && staticCloud ? { terrainSummaryFacts: terrainSummaryFacts(terrain, staticCloud) } : {}),
     subtitle: metadata.fileName,
     visuals: [],          // user-pre-rendered Studio exports
     annotations: viewer.annotate.getAnnotations().map((a) => structuredClone(a)),

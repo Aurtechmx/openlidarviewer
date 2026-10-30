@@ -57,6 +57,7 @@ import {
 } from '../render/colorModes';
 import { CLEARED_CLASS_NOTE } from '../export/clearedClassNote';
 import { classificationLabel } from '../render/pointInfo';
+import { classShareBasis, type ClassSample } from '../model/classShareBasis';
 
 /** Shown under class 1 when it holds more than half the counted points. */
 export const UNCLASSIFIED_MAJORITY_HINT =
@@ -75,6 +76,8 @@ export interface ClassCountSample {
   readonly loaded: number;
   /** The source header's own total, when the format declares one. */
   readonly declared?: number;
+  /** Class counts of the decoded records before the voxel pass, for shares. */
+  readonly shares?: ClassSample;
 }
 
 /** Fired after the user toggles the colourblind-safe class palette. */
@@ -120,6 +123,8 @@ export class ClassLegendPanel {
   /** "Counts cover the loaded display sample" caption (hidden unless sampled). */
   private readonly _sampleNote: HTMLElement;
   private _sampled = false;
+  /** Pre-reduction class counts; shares use them while the counts are unedited. */
+  private _shareSample: ClassSample | undefined;
 
   /** Caption for a classification run that produced nothing (hidden when empty). */
   private readonly _unavailableNote: HTMLElement;
@@ -450,6 +455,7 @@ export class ClassLegendPanel {
       Number.isFinite(declared) &&
       declared > sample.loaded;
     this._sampled = sampled;
+    this._shareSample = sample?.shares;
     this._sampleNote.classList.toggle('olv-hidden', !sampled);
   }
 
@@ -516,14 +522,21 @@ export class ClassLegendPanel {
    */
   classSummary(): { code: number; name: string; share: number; color: [number, number, number] }[] {
     const codes = this._presentCodes();
-    let total = 0;
-    for (const c of codes) total += this._counts.get(c) ?? 0;
+    // Shares come from the pre-reduction counts while the classes are unedited,
+    // else from the loaded points (classShareBasis.ts); the rows stay the loaded codes.
+    const basis = classShareBasis(this._counts, this._sampled, this._shareSample);
     return codes.map((code) => ({
       code,
       name: classificationLabel(code, this._pointFormat),
-      share: total > 0 ? ((this._counts.get(code) ?? 0) / total) * 100 : 0,
+      share: basis.total > 0 ? ((basis.counts.get(code) ?? 0) / basis.total) * 100 : 0,
       color: classColor(code) as [number, number, number],
     }));
+  }
+
+  /** What the shares in {@link classSummary} are of, as a caption; null when the whole file is loaded. */
+  shareNote(): string | null {
+    const phrase = classShareBasis(this._counts, this._sampled, this._shareSample).phrase;
+    return phrase ? `Shares of ${phrase}.` : null;
   }
 
   /** Present class codes (count > 0), ascending. */

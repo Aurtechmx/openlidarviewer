@@ -66,8 +66,10 @@ describe('measurementsToCsv — formula-injection neutralisation', () => {
 });
 
 describe('measurementMetrics', () => {
-  it('distance → length in metres', () => {
-    expect(measurementMetrics(DISTANCE, UP, 1)).toEqual({ length_m: 5 });
+  it('distance → length in metres, with its run, rise and grade', () => {
+    expect(measurementMetrics(DISTANCE, UP, 1)).toEqual({
+      length_m: 5, horizontal_m: 5, vertical_m: 0, run_m: 5, rise_m: 0, grade_pct: 0,
+    });
   });
 
   it('area → planar area + perimeter', () => {

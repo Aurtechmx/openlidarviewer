@@ -297,7 +297,7 @@ export class FlowResultGrid {
     return this._cursor;
   }
 
-  /** Load a freshly-routed field and redraw from (0, 0). Clears any path/catchment mask. */
+  /** Load a freshly-routed field and redraw from (0, 0) with an empty readout. Clears any path/catchment mask. */
   load(grid: FlowGrid, routed: D8Result, accumulation: AccumulationResult, areaM2: Float64Array | null): void {
     this._grid = grid;
     this._routed = routed;
@@ -315,7 +315,9 @@ export class FlowResultGrid {
     this._loadParticles();
     this._cursor = clampCell(grid.cols, grid.rows, 0, 0);
     this._redraw();
-    this._updateStatus(false);
+    // Nothing is picked yet: the readout stays empty rather than describing a
+    // cell the user did not choose. The lab's hint says how to pick one.
+    this._status.textContent = '';
   }
 
   /**

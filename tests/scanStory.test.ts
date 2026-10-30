@@ -42,7 +42,7 @@ const GOOD: ScanStoryInputs = {
 describe('buildScanStory — headline', () => {
   it('formats capture type, area (km²), and count (M)', () => {
     const s = buildScanStory(GOOD);
-    expect(s.headline).toBe('Aerial / airborne ALS — 1.00 km², 15.7M points');
+    expect(s.headline).toBe('Aerial / airborne ALS — 1.00 km² bounding box, 15.7M points');
   });
 
   it('falls back to "Point cloud" and an honest count with no metadata', () => {

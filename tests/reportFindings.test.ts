@@ -117,8 +117,9 @@ describe('buildInspectionSummary — honesty invariants', () => {
       expect(v?.value).toBe('—');
       expect(v?.tier).toBe('unknown');
       expect(v?.detail).toBe(
-        'Not evaluated in this report. A hold-out RMSEz appears in the Terrain report when ' +
-          'terrain analysis has run; neither replaces independent ground-control checkpoints.',
+        'Not evaluated against independent ground control in this report. When a terrain analysis ' +
+          'has run, the Technical Report states its internal hold-out RMSEz under Terrain analysis; ' +
+          'it does not replace independent ground-control checkpoints.',
       );
       expect(v?.detail).not.toMatch(/1\.96/);
     }

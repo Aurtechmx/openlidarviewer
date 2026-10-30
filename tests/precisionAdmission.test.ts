@@ -17,6 +17,9 @@ import { MeasureController } from '../src/render/measure/MeasureController';
 import type { Measurement, Vec3 } from '../src/render/measure/types';
 import { installFakeDom } from './support/measurePanelDom';
 
+/** A distance along X held below the step withholds its length, run and grade together. */
+const DISTANCE_HELD_KEYS = ['length_m', 'horizontal_m', 'run_m', 'grade_pct'];
+
 beforeAll(() => installFakeDom({ ns: true }));
 
 const UP: Vec3 = [0, 0, 1];
@@ -34,7 +37,7 @@ describe('every rounding phase on a coarse axis is withheld', () => {
     for (const x0 of origins) {
       for (const d of separations) {
         const dist = m('distance', [held([x0, 0, 0]), held([x0 + d, 0, 0])]);
-        expect(unresolvedMetricKeys(dist, UP, 1, 1, stepsOf(dist)), `x0=${x0} d=${d}`).toEqual(['length_m']);
+        expect(unresolvedMetricKeys(dist, UP, 1, 1, stepsOf(dist)), `x0=${x0} d=${d}`).toEqual(DISTANCE_HELD_KEYS);
         expect(measurementMetrics(dist, UP, 1, 1, 3, stepsOf(dist)).length_m).toBeUndefined();
       }
     }
@@ -60,7 +63,7 @@ describe('every rounding phase on a coarse axis is withheld', () => {
     // 200 km in US survey feet is held at a coarser step in metres.
     const ft = 1200 / 3937;
     const dist = m('distance', [held([200_000 / ft, 0, 0]), held([200_000 / ft + 3, 0, 0])]);
-    expect(unresolvedMetricKeys(dist, UP, ft, ft, stepsOf(dist))).toEqual(['length_m']);
+    expect(unresolvedMetricKeys(dist, UP, ft, ft, stepsOf(dist))).toEqual(DISTANCE_HELD_KEYS);
   });
 });
 

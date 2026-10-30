@@ -10,7 +10,7 @@
  * (CRS only when known, etc.).
  */
 
-import type { ReportDatasetRow } from './types';
+import type { ReportDatasetRow, ReportTerrainSummary } from './types';
 import { HEIGHT_INCLUDES_NOISE_SUFFIX, HEIGHT_UNIT_GAP_SUFFIX, type HeightUnitGap } from '../geo/height';
 import { CLEARED_CLASS_NOTE } from '../export/clearedClassNote';
 import { sourceSha256Text, type ExportDigests } from '../science/exportDigestRecord';
@@ -40,6 +40,8 @@ export interface MetadataInputs {
    * Height's unit (metres, or source units when Height is). Absent: no rows.
    */
   readonly elevationRange?: { readonly min: number; readonly max: number };
+  /** What the elevation range is taken over when not every point, e.g. "display sample". */
+  readonly elevationBasis?: string;
   /** Source point density in pts/m² on the XY footprint. NaN when unknown. */
   readonly density: number;
   readonly hasRgb: boolean;
@@ -54,6 +56,11 @@ export interface MetadataInputs {
   readonly unclassifiedFraction?: number;
   /** `unclassifiedFraction` was counted on the display sample, not the file. */
   readonly unclassifiedOfDisplaySample?: boolean;
+  /**
+   * What `unclassifiedFraction` is a share of, in plain words (e.g. "an even
+   * sample of 8,786,971 points"). Wins over `unclassifiedOfDisplaySample`.
+   */
+  readonly unclassifiedBasis?: string;
   /** The classification was derived in the viewer (heuristic), not supplied. */
   readonly classificationDerived?: boolean;
   /** The source classes were cleared in the viewer. */
@@ -162,6 +169,8 @@ export function extentRows(inputs: {
   readonly includesNoise?: boolean;
   /** Source-frame Min/Max elevation in Height's unit; rows follow Height when set. */
   readonly elevation?: { readonly min: number; readonly max: number };
+  /** Named in the elevation labels when the range is not over every point. */
+  readonly elevationBasis?: string;
 }): Array<{ label: string; value: string }> {
   const noise = inputs.includesNoise ? HEIGHT_INCLUDES_NOISE_SUFFIX : '';
   // Elevations are absolute values, so they keep centimetres whatever unit the
@@ -169,9 +178,10 @@ export function extentRows(inputs: {
   const elevationRows = (unit: (v: number) => string): Array<{ label: string; value: string }> => {
     const e = inputs.elevation;
     if (!e || !Number.isFinite(e.min) || !Number.isFinite(e.max)) return [];
+    const basis = inputs.elevationBasis ? ` (${inputs.elevationBasis})` : '';
     return [
-      { label: 'Min elevation', value: unit(e.min) + noise },
-      { label: 'Max elevation', value: unit(e.max) + noise },
+      { label: `Min elevation${basis}`, value: unit(e.min) + noise },
+      { label: `Max elevation${basis}`, value: unit(e.max) + noise },
     ];
   };
   if (!inputs.unitKnown) {
@@ -260,7 +270,9 @@ function classificationValue(inputs: MetadataInputs): string {
     if (u <= 0) {
       parts.push('every point carries a class');
     } else {
-      const scope = inputs.unclassifiedOfDisplaySample ? ', of display sample' : '';
+      const scope = inputs.unclassifiedBasis
+        ? `, of ${inputs.unclassifiedBasis}`
+        : inputs.unclassifiedOfDisplaySample ? ', of display sample' : '';
       parts.push(`${(u * 100).toFixed(1)} % ASPRS code 0/1 (unclassified${scope})`);
     }
   }
@@ -355,6 +367,7 @@ export function buildDatasetSummary(inputs: MetadataInputs): readonly ReportData
       ...(inputs.heightIncludesNoise ? { includesNoise: true } : {}),
       ...(inputs.heightUnitGap ? { heightUnit: inputs.heightUnitGap } : {}),
       ...(inputs.elevationRange ? { elevation: inputs.elevationRange } : {}),
+      ...(inputs.elevationBasis ? { elevationBasis: inputs.elevationBasis } : {}),
     }),
   );
   if (inputs.upAxisRefusal) {
@@ -386,4 +399,54 @@ export function buildDatasetSummary(inputs: MetadataInputs): readonly ReportData
     );
   }
   return rows;
+}
+
+/** The terrain figures the Technical Report states, read off the analysis. */
+export interface TerrainSummaryFacts {
+  /** Hold-out RMSEz in metres; null when the vertical scale did not resolve. */
+  readonly rmseZM: number | null;
+  /** Highest minus lowest ground cell, metres; null when not in metres. */
+  readonly reliefM: number | null;
+  /** Measured cells over covered cells, 0 to 1; null when nothing is covered. */
+  readonly measuredOfCovered: number | null;
+  /** Points the terrain analysis read. */
+  readonly analysedPointCount: number;
+  /** Points loaded for the scan, and the total the file declares. */
+  readonly loadedPointCount?: number;
+  readonly declaredPointCount?: number;
+}
+
+/**
+ * The Technical Report's Terrain analysis section. Plain labels: the RMSEz is
+ * an internal hold-out on the analysed ground points, not a checkpoint test,
+ * and the basis says which points were read.
+ */
+export function buildTerrainSummary(f: TerrainSummaryFacts): ReportTerrainSummary {
+  const fmt = (n: number): string => n.toLocaleString('en-US');
+  const loaded = f.loadedPointCount;
+  const declared = f.declaredPointCount;
+  const sample = loaded !== undefined && declared !== undefined && declared > loaded
+    ? `, from the loaded display sample (${fmt(loaded)} of ${fmt(declared)} points)`
+    : '';
+  const rows: ReportDatasetRow[] = [
+    {
+      label: 'RMSEz (internal hold-out)',
+      value: f.rmseZM != null && Number.isFinite(f.rmseZM) ? `${f.rmseZM.toFixed(2)} m` : 'not stated: vertical unit not resolved',
+    },
+    {
+      label: 'Bare-earth relief',
+      value: f.reliefM != null && Number.isFinite(f.reliefM) ? `${f.reliefM.toFixed(2)} m` : 'not stated: vertical unit not resolved',
+    },
+    {
+      label: 'Measured ground cells',
+      value: f.measuredOfCovered != null ? `${Math.round(f.measuredOfCovered * 100)} % of covered cells` : 'none',
+    },
+    { label: 'Basis', value: `${fmt(f.analysedPointCount)} points analysed${sample}` },
+  ];
+  return {
+    note:
+      'From the terrain analysis run in this session. RMSEz is an internal hold-out on the analysed ground '
+      + 'points, not a check against independent ground control. Relief is the highest minus the lowest ground cell.',
+    rows,
+  };
 }

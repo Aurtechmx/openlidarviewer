@@ -68,7 +68,7 @@ export interface WorkspaceShellDeps {
     focusSource(): boolean;
     onSourceChange(fn: () => void): () => void;
   };
-  classLegend: Panel & { presentCodes(): number[]; isSampled(): boolean; classSummary(): { code: number; name: string; share: number; color: readonly [number, number, number] }[]; getVisibility?(): { hiddenCodes(): number[] } };
+  classLegend: Panel & { presentCodes(): number[]; isSampled(): boolean; shareNote?(): string | null; classSummary(): { code: number; name: string; share: number; color: readonly [number, number, number] }[]; getVisibility?(): { hiddenCodes(): number[] } };
   annotation: HTMLElement;
   toolLauncher: HTMLElement;
   clip: HTMLElement;
@@ -278,6 +278,7 @@ export function mountWorkspaceShell(d: WorkspaceShellDeps): WorkspaceShell {
     hasScan: d.hasScan,
     classRows: () => d.classLegend.classSummary(),
     classesSampled: () => d.classLegend.isSampled(),
+    classShareNote: d.classLegend.shareNote ? () => d.classLegend.shareNote?.() ?? null : undefined,
     storage: storage(),
     sourceSummary: () => d.inspector.sourceSummary(),
     inspectorCollapsed: rightCollapsed,

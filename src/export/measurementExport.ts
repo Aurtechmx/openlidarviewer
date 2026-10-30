@@ -240,9 +240,18 @@ export function measurementMetrics(
   const mp = pts.map((p) => toMetricFrame(p, up, L, Vv));
 
   switch (m.kind) {
-    case 'distance':
+    case 'distance': {
       set('length_m', distance(mp[0], mp[1]));
+      // The run, rise and grade the panel shows beside the length, under both
+      // column names a reader may look for (profile and slope use one each).
+      const p = profileMetrics(mp[0], mp[1], up);
+      set('horizontal_m', p.lengthHorizontal);
+      set('vertical_m', p.verticalDrop);
+      set('run_m', p.lengthHorizontal);
+      set('rise_m', p.verticalDrop);
+      set('grade_pct', p.gradePercent);
       break;
+    }
     case 'polyline':
       set('length_m', polylineLength(mp).total);
       break;
@@ -419,6 +428,7 @@ const PURE_VERTICAL_KEYS: ReadonlySet<string> = new Set(['vertical_m', 'rise_m',
  * plane and is not listed.
  */
 const PURE_HORIZONTAL_KEYS: Readonly<Partial<Record<Measurement['kind'], ReadonlySet<string>>>> = {
+  distance: new Set(['horizontal_m', 'run_m']),
   height: new Set(['horizontal_m']),
   profile: new Set(['horizontal_m']),
   slope: new Set(['run_m']),

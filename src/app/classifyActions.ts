@@ -111,7 +111,7 @@ function activeLoadedCloud(d: ClassifyActionsDeps, label: string): { id: string;
  * rebuilds the legend, and reports the result with the honest "derived, not
  * survey-grade" caveat.
  */
-export async function runDeriveClassification(d: ClassifyActionsDeps): Promise<void> {
+export async function runDeriveClassification(d: ClassifyActionsDeps): Promise<string | void> {
   if (classifyRunning) return;
   const target = activeLoadedCloud(d, 'Classify');
   if (!target) return;
@@ -129,8 +129,9 @@ export async function runDeriveClassification(d: ClassifyActionsDeps): Promise<v
     ? 0
     : classificationCoverage(cloud.classification, cloud.pointCount).producer;
   if (producerLive > 0) {
-    d.toast('Classify · this scan carries producer classes, so they stay as they are. Press Clear classes first to replace them.');
-    return;
+    const refused = 'Classify · this scan carries producer classes, so they stay as they are. Press Clear classes first to replace them.';
+    d.toast(refused);
+    return refused; // also shown beside the button that ran it
   }
   // RGB (when present) sharpens vegetation on photogrammetry, where geometry
   // alone is noisy — a green, locally-smooth canopy isn't mistaken for a roof.

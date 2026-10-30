@@ -5,6 +5,7 @@ import type { LoaderFn } from './loaderRegistry';
 import { isRegisteredFormat } from './formatInfo';
 import { downsampleToBudget } from '../process/voxelDownsample';
 import { LoadError } from './loadErrors';
+import { classSampleOf } from '../model/classShareBasis';
 import type { LoadPlan, E57DecodePlan } from './loadPlan';
 import type { ProgressUpdate } from './loadProgress';
 import type { LoadTelemetry } from './loadTelemetry';
@@ -163,6 +164,17 @@ export async function parseFile(
   return parseBuffer(buffer, format, name, budget, plan, onProgress, e57Plan, pointSemantics);
 }
 
+/**
+ * Keep the decoded records' class counts on the reduced cloud. The voxel pass
+ * collapses dense classes more than sparse ones, so shares are stated from
+ * these counts while the classes are still the source's.
+ */
+function withClassSample(decoded: PointCloud, reduced: PointCloud): PointCloud {
+  const sample = classSampleOf(decoded, reduced);
+  if (sample) reduced.classSample = sample;
+  return reduced;
+}
+
 /** The plan's budget step after a LAS/LAZ decode: voxel-reduce, or stride then reduce. */
 function budgetedLas(
   cloud: PointCloud,
@@ -174,7 +186,7 @@ function budgetedLas(
     // Decoded in full, then voxel-reduced to the plan's budget.
     const originalPointCount = cloud.pointCount;
     onProgress?.({ stage: 'optimizing' });
-    const reduced = downsampleToBudget(cloud, plan.budget);
+    const reduced = withClassSample(cloud, downsampleToBudget(cloud, plan.budget));
     return { cloud: reduced, originalPointCount, downsampled: reduced !== cloud };
   }
   if (plan.mode === 'stride') {
@@ -183,7 +195,7 @@ function budgetedLas(
     // result has no scan-line aliasing and no flight-strip density blocks.
     // The "total" the Detail slider shows is the true source count.
     onProgress?.({ stage: 'optimizing' });
-    const reduced = downsampleToBudget(cloud, plan.budget);
+    const reduced = withClassSample(cloud, downsampleToBudget(cloud, plan.budget));
     return { cloud: reduced, originalPointCount: plan.sourceCount, downsampled: true };
   }
   return { cloud, originalPointCount: cloud.pointCount, downsampled: false };

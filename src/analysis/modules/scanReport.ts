@@ -13,6 +13,7 @@ import { drawPrecisionRows } from '../drawPrecisionRows';
 import { drawPrecisionUnitOf, evaluateDrawPrecision, tileFromLocalFloat32 } from '../../science/drawPrecision';
 import { BOUNDING_BOX_ESTIMATE, SCAN_DENSITY_METHOD_TAG } from '../streamingExtentRows';
 import { storageHistoryRow } from '../storageHistoryRow';
+import { cloudClassShareBasis } from '../../model/classShareBasis';
 
 /** ", N flagged invalid and masked" when the file flags points whose `bit` attribute is not a measurement. */
 function maskedNote(cloud: PointCloud, bit: number): string {
@@ -434,15 +435,27 @@ export const scanReport: AnalysisModule = {
         if (code !== 0) nonZero++;
         if (code === 1) codeOne++;
       }
-      const pct = (k: number): string => ((k / n) * 100).toFixed(1);
+      // The unfiltered report on a reduced load states its shares from the
+      // decoded records' classes while they are unedited; the held centroids
+      // over-count sparse classes (classShareBasis.ts). The basis is named.
+      let denom = n;
+      let basisNote = strided ? ' of display sample' : '';
+      const basis = strided ? cloudClassShareBasis(cloud) : null;
+      if (basis?.fromSample) {
+        denom = basis.total;
+        nonZero = basis.total - (basis.counts.get(0) ?? 0);
+        codeOne = basis.counts.get(1) ?? 0;
+        basisNote = `, of ${basis.phrase}`;
+      }
+      const pct = (k: number): string => ((k / denom) * 100).toFixed(1);
       if (!anyAssigned) {
         classValue = n > 0
-          ? `Present, unclassified (${pct(nonZero)} % coverage)` + (strided ? ' of display sample' : '')
+          ? `Present, unclassified (${pct(nonZero)} % coverage)` + basisNote
           : 'Present, unclassified';
       } else if (n > 0) {
         classValue =
           `Yes — codes on ${pct(nonZero)} %, ${pct(codeOne)} % unclassified (code 1)`
-          + (strided ? ' of display sample' : '');
+          + basisNote;
       } else {
         classValue = 'Yes';
       }
