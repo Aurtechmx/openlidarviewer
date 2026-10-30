@@ -69,12 +69,32 @@ describe('canonical record comparison', () => {
     expect(compareCanonical(a, b).coordinateMismatches).toBeGreaterThan(0);
   });
 
-  it('compares only fields both sides decoded, and names the rest', () => {
+  it('fails when the reference has a field the compared side lacks', () => {
+    const olv = canonicalFromGlobal(cloud(PTS, [0, 1, 1, 2]), Q);
+    const ref = canonicalFromGlobal(cloud(PTS, [0, 1, 1, 2], new Array(12).fill(9)), Q);
+    const r = compareCanonical(olv, ref);
+    expect(r.multisetEqual).toBe(false);
+    expect(r.mismatchedRecords).toBe(0);
+    expect(r.missingFields).toEqual(['red8', 'green8', 'blue8']);
+    expect(r.notDecodedFields).toEqual([]);
+  });
+
+  it('reports a field listed as not decoded on the path without failing', () => {
+    const olv = canonicalFromGlobal(cloud(PTS, [0, 1, 1, 2]), Q);
+    const ref = canonicalFromGlobal(cloud(PTS, [0, 1, 1, 2], new Array(12).fill(9)), Q);
+    const r = compareCanonical(olv, ref, { notDecoded: ['red8', 'green8', 'blue8'] });
+    expect(r.multisetEqual).toBe(true);
+    expect(r.missingFields).toEqual([]);
+    expect(r.notDecodedFields).toEqual(['red8', 'green8', 'blue8']);
+  });
+
+  it('names fields only the compared side has and does not fail on them', () => {
     const a = canonicalFromGlobal(cloud(PTS, [0, 1, 1, 2], new Array(12).fill(9)), Q);
     const b = canonicalFromGlobal(cloud(PTS, [0, 1, 1, 2]), Q);
     const r = compareCanonical(a, b);
     expect(r.multisetEqual).toBe(true);
     expect(r.notCompared.onlyA).toEqual(['red8', 'green8', 'blue8']);
+    expect(r.missingFields).toEqual([]);
   });
 
   it('reports the float32 recentring residual within the float32 half-step bound', () => {

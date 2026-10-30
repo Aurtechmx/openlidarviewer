@@ -282,21 +282,31 @@ function representationCheck(name, c, pathMeta) {
   });
 }
 
-function compareCheck(id, a, b, expectFields = null) {
-  const r = compareCanonical(a, b);
+/**
+ * Fields an OLV path does not read. The COPC streaming decode runs without
+ * point semantics, so these are absent there; every other path reads all
+ * canonical fields.
+ */
+const COPC_NOT_DECODED = ['userData', 'scanAngleRaw', 'scannerChannel', 'scanDirection', 'edgeOfFlightLine'];
+const NOT_DECODED = { copc: COPC_NOT_DECODED, 'copc-reversed': COPC_NOT_DECODED };
+
+/**
+ * Compare `a` against the reference-side `b`. A field `b` has that `a` lacks
+ * fails the check unless it is in `notDecoded`; those are reported as an
+ * optional unsupported line.
+ */
+function compareCheck(id, a, b, notDecoded = []) {
+  const r = compareCanonical(a, b, { notDecoded });
   const ok = r.multisetEqual && r.countA === H.pointCount && r.countB === H.pointCount;
   check(id, ok ? 'passed' : 'failed', {
-    summary: `${r.countA} vs ${r.countB} records, ${r.mismatchedRecords} mismatched, ${r.coordinateMismatches} coordinate mismatches, duplicates ${r.duplicateRecordsA}/${r.duplicateRecordsB}; fields compared ${r.comparedFields.length}${r.notCompared.onlyA.length + r.notCompared.onlyB.length ? `, not compared: ${[...r.notCompared.onlyA, ...r.notCompared.onlyB].join(', ')}` : ''}`,
+    summary: `${r.countA} vs ${r.countB} records, ${r.mismatchedRecords} mismatched, ${r.coordinateMismatches} coordinate mismatches, duplicates ${r.duplicateRecordsA}/${r.duplicateRecordsB}; fields compared ${r.comparedFields.length}${r.missingFields.length ? `, missing: ${r.missingFields.join(', ')}` : ''}${r.notCompared.onlyA.length + r.notDecodedFields.length ? `, not compared: ${[...r.notCompared.onlyA, ...r.notDecodedFields].join(', ')}` : ''}`,
     ...r,
   });
-  if (expectFields) {
-    const missing = expectFields.filter((f) => !r.comparedFields.includes(f));
-    if (missing.length) check(`${id}:fields`, 'unsupported', { summary: `not decoded on this path: ${missing.join(', ')}` }, false);
-  }
+  if (r.missingFields.length) check(`${id}:fields`, 'failed', { summary: `missing from this output although the path reads them: ${r.missingFields.join(', ')}` });
+  if (r.notDecodedFields.length) check(`${id}:fields`, 'unsupported', { summary: `not decoded on this path: ${r.notDecodedFields.join(', ')}` }, false);
   return r;
 }
 
-const allFields = refC.fields;
 for (const name of ['serial', 'fullfile', 'copc', 'copc-reversed', 'pooled']) {
   if (!existsSync(join(work, `${name}.json`))) {
     check(`olv:${name}`, name === 'pooled' && !pooledOk ? 'failed' : 'failed', { summary: 'no output from this path' });
@@ -310,7 +320,7 @@ for (const name of ['serial', 'fullfile', 'copc', 'copc-reversed', 'pooled']) {
     integerBounds: m.integerBounds,
   });
   representationCheck(`olv:${name}`, c, m);
-  compareCheck(`olv:${name}:vs-reference`, c, refC, allFields);
+  compareCheck(`olv:${name}:vs-reference`, c, refC, NOT_DECODED[name]);
   if (name === 'copc' || name === 'copc-reversed') {
     const h = m.hierarchy;
     const ok = h.isComplete && h.pageErrors === 0 && h.octreeErrors.length === 0 && h.distinctPageEntries === h.pageEntries
@@ -328,7 +338,7 @@ for (const name of ['serial', 'fullfile', 'copc', 'copc-reversed', 'pooled']) {
   }
 }
 if (existsSync(join(work, 'serial.json')) && existsSync(join(work, 'pooled.json'))) compareCheck('olv:pooled:vs-serial', loadCanonical('pooled'), loadCanonical('serial'));
-if (existsSync(join(work, 'serial.json')) && existsSync(join(work, 'copc.json'))) compareCheck('olv:copc:vs-serial', loadCanonical('copc'), loadCanonical('serial'));
+if (existsSync(join(work, 'serial.json')) && existsSync(join(work, 'copc.json'))) compareCheck('olv:copc:vs-serial', loadCanonical('copc'), loadCanonical('serial'), NOT_DECODED.copc);
 if (existsSync(join(work, 'serial.json')) && existsSync(join(work, 'fullfile.json'))) compareCheck('olv:fullfile:vs-serial', loadCanonical('fullfile'), loadCanonical('serial'));
 if (existsSync(join(work, 'copc.json')) && existsSync(join(work, 'copc-reversed.json'))) {
   const a = readJson(join(work, 'copc.json'));

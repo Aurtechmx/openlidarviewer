@@ -67,7 +67,8 @@ export function isLabelCoordDrawable(x: number, y: number): boolean {
 
 function cellIndex(v: number, size: number): number {
   const c = Math.floor(v / size);
-  return c < -MAX_CELL ? -MAX_CELL : c > MAX_CELL ? MAX_CELL : c === c ? c : 0;
+  if (Number.isNaN(c)) return 0;
+  return c < -MAX_CELL ? -MAX_CELL : c > MAX_CELL ? MAX_CELL : c;
 }
 
 /** A placed label, as the collision test sees it. */

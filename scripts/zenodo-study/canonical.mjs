@@ -210,20 +210,30 @@ function fieldEqual(ra, ia, rb, ib, f) {
 }
 
 /**
- * Compare two canonical sets over the fields both decoded.
+ * Compare a canonical set `a` against a reference set `b` over the fields both
+ * decoded.
  *
- * `multisetEqual` is the verdict: same count and, after sorting, every record
- * identical. `mismatchedRecords` counts sorted positions that differ, and
- * `fieldMismatches` breaks that down by field at those positions. Coordinates
- * are also compared on their own (sorted by X, Y, Z only) so a coordinate
- * difference can be told apart from an attribute difference.
+ * `multisetEqual` is the verdict: same count, every field of `b` present in
+ * `a`, and, after sorting, every record identical. A field `b` has and `a`
+ * lacks is listed in `missingFields` and fails the comparison, unless it is in
+ * `opts.notDecoded` (fields the path producing `a` does not read), in which
+ * case it is listed in `notDecodedFields` instead. `mismatchedRecords` counts
+ * sorted positions that differ, and `fieldMismatches` breaks that down by
+ * field at those positions. Coordinates are also compared on their own (sorted
+ * by X, Y, Z only) so a coordinate difference can be told apart from an
+ * attribute difference.
+ *
+ * @param {object} [opts] `{ notDecoded?: string[] }`
  */
-export function compareCanonical(a, b) {
+export function compareCanonical(a, b, opts = {}) {
+  const notDecoded = opts.notDecoded ?? [];
   const compared = a.fields.filter((f) => b.fields.includes(f));
   const notCompared = {
     onlyA: a.fields.filter((f) => !b.fields.includes(f)),
     onlyB: b.fields.filter((f) => !a.fields.includes(f)),
   };
+  const missingFields = notCompared.onlyB.filter((f) => !notDecoded.includes(f));
+  const notDecodedFields = notCompared.onlyB.filter((f) => notDecoded.includes(f));
   const ra = masked(a.records, compared);
   const rb = masked(b.records, compared);
   const oa = sortedOrder(ra);
@@ -249,7 +259,9 @@ export function compareCanonical(a, b) {
     countB: b.count,
     comparedFields: compared,
     notCompared,
-    multisetEqual: a.count === b.count && mismatchedRecords === 0,
+    missingFields,
+    notDecodedFields,
+    multisetEqual: a.count === b.count && mismatchedRecords === 0 && missingFields.length === 0,
     mismatchedRecords,
     coordinateMismatches,
     fieldMismatches,
