@@ -94,7 +94,7 @@
   border-radius: 2px; padding: var(--space-sm) var(--space-md);
 }
 /* The limits line reads as the View rail's chip note (`.olv-chips-note`). */
-.olv-reclass-hint { margin-top: calc(-1 * var(--space-xs)); font-size: var(--text-2xs); line-height: 1.4; color: var(--text-faint); }
+.olv-reclass-hint, .olv-reclass-note { margin-top: calc(-1 * var(--space-xs)); font-size: var(--text-2xs); line-height: 1.4; color: var(--text-faint); }
 .olv-reclass-link {
   font: inherit; color: var(--accent); background: none; border: 0; padding: 0;
   cursor: pointer; text-decoration: underline;
