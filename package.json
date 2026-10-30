@@ -242,12 +242,15 @@
     },
     "qs": "^6.17.1",
     "vitepress": {
-      "vite": "6.4.4"
+      "vite": "6.4.5"
     },
     "texture-compressor": "file:vendor-stubs/texture-compressor",
     "@loaders.gl/las": {
       "laz-perf": "0.0.7"
     },
-    "rolldown": "1.2.3"
+    "rolldown": "1.2.3",
+    "mutation-server-protocol": {
+      "zod": "^4.6.6"
+    }
   }
 }

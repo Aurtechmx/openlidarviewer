@@ -104,12 +104,13 @@ zero.
 
 ## Resolved by override
 
-Five advisories that previously sat here are closed. `package.json` pins them
+Six advisories that previously sat here are closed. `package.json` pins them
 through `overrides` rather than waiting on the packages that depend on them:
 
 | Package | Was | Now | Advisory |
 |---|---|---|---|
-| vite (under vitepress) | 5.4.21 | 6.4.4 | dev-server path traversal, `server.fs.deny` bypass, launch-editor NTLM disclosure |
+| vite (under vitepress) | 5.4.21 | 6.4.5 | dev-server path traversal, `server.fs.deny` bypass (including with query strings), launch-editor NTLM disclosure |
+| zod (under mutation-server-protocol) | 4.4.3 | 4.6.7 | memory exhaustion validating oversized constrained collections |
 | esbuild (under vitepress) | 0.21.5 | 0.25.12 | dev-server permissive CORS |
 | qs (under typed-rest-client) | 6.15.1 | 6.16.0 | `qs.stringify` denial of service; array-limit bypass and `isBuffer` denial of service |
 | brace-expansion (under minimatch 3) | 1.1.15 | 1.1.21 | CVE-2026-13149, exponential-time expansion; GHSA-mh99-v99m-4gvg, unbounded expansion |
