@@ -21,6 +21,7 @@ import { classificationLabel } from '../render/pointInfo';
 import { reportClassifyFailure, type ClassifyNoticeSurface } from './classLegendRefresh';
 import { noteEdit } from '../ui/undoRouter';
 import type { Viewer } from '../render/Viewer';
+import type { ClassSample } from '../model/PointCloud';
 import type { CrsService } from '../geo/CrsService';
 import { AUTO_CLASSIFY_LIMITS, NEEDS_LOADED_SCAN } from '../render/class/classLayer';
 
@@ -32,7 +33,7 @@ export interface ClassifyActionsDeps {
   readonly crsService: Pick<CrsService, 'crsRevision' | 'context'>;
   toast(message: string): void;
   readonly legend: ClassifyNoticeSurface & {
-    setClasses(counts: Map<number, number>, sample?: { loaded: number; declared?: number }, pointFormat?: number): void;
+    setClasses(counts: Map<number, number>, sample?: { loaded: number; declared?: number; shares?: ClassSample }, pointFormat?: number): void;
     setDerivedProvenance(on: boolean, info?: { confidencePct?: number | null; warnings?: readonly string[] }): void;
   };
   /** Record the latest derive's 0..1 confidence for the Dataset Story. */
@@ -80,7 +81,9 @@ async function performClassificationDerive(
   d.viewer.applyDerivedClassification(activeId, result.codes, result.classifier.method);
   noteEdit('classification');
   d.setDerivedConfidence(Number.isFinite(result.confidence) ? result.confidence : null);
-  d.legend.setClasses(countClasses(result.codes), { loaded: cloud.pointCount, declared: cloud.declaredPointCount }, cloud.metadata?.pointFormat);
+  // The pre-reduction class counts stay with the legend: they do not describe
+  // derived codes, but Restore brings the source codes back and with them that basis.
+  d.legend.setClasses(countClasses(result.codes), { loaded: cloud.pointCount, declared: cloud.declaredPointCount, shares: cloud.classSample }, cloud.metadata?.pointFormat);
   // Surface the run's honest confidence + caveats in the legend caption, not
   // just a flat "derived" tag — so the user sees WHEN to trust it.
   const confPct = Number.isFinite(result.confidence) ? Math.round(result.confidence * 100) : null;

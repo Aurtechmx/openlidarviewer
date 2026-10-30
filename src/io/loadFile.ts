@@ -524,7 +524,7 @@ function buildSourceMetadata(file: File, preflight: FilePreflight): SourceMetada
     meta.warning =
       `Large ${formatInfo(format).label} (${formatByteSize(file.size)}) — read as a sample of one ` +
       `record in ${plan.stride} (${formatPointCount(Math.ceil(plan.sourceCount / plan.stride))} of ` +
-      `${formatPointCount(plan.sourceCount)} points). Counts and densities describe the sample. ` +
+      `${formatPointCount(plan.sourceCount)} points). Counts describe the sample. ` +
       `Convert to COPC/EPT (PDAL or untwine) to stream all of it.`;
   } else if (preflight.largeStaticLas) {
     meta.warning =

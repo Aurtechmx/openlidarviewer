@@ -1558,7 +1558,9 @@ export class AnalysePanel {
   setContourFrame(ctx: LaunchFrameContext | null): void {
     const token = ++this._contourToken; // any new call supersedes a pending mount
     this._contourFrame = ctx;
-    if (this._result) { this._renderFitness(); this._renderValidation(); }
+    // The assessment's Scan scope reads the frame's coverage, and the frame
+    // usually lands after the result, so it is redrawn with the other rows.
+    if (this._result) { this._renderFitness(); this._renderAssessment(); this._renderValidation(); }
     this._contourLauncher.replaceChildren();
     // Always re-hide first: opening the deliverable is an explicit user action,
     // and a fresh frame must not leak the previous scan's open panel.

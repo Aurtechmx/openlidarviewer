@@ -29,6 +29,9 @@ describe('large LAS/LAZ opened as a display sample', () => {
     expect(meta.warning).toMatch(/sample of one record in \d+/);
     expect(meta.warning).toMatch(/of 210\.9M points/);
     expect(meta.warning).toMatch(/COPC\/EPT/);
+    // Densities on the report use the declared count, so only counts are said to describe the sample.
+    expect(meta.warning).toContain('Counts describe the sample.');
+    expect(meta.warning).not.toMatch(/densities/i);
   });
 
   it('keeps the whole-file caution for a resident read', async () => {
