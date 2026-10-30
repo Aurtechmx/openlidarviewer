@@ -136,7 +136,7 @@ export async function panelFor(
     getCloud: () => display,
     hasFullSource: () => false,
     isReduced: () => false,
-    getFullCloud: async () => null,
+    getFullCloud: () => Promise.resolve(null),
     ...extra,
   });
   return panel.element as unknown as FakeEl;

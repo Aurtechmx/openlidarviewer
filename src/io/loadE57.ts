@@ -327,11 +327,19 @@ function planFromDeclaration(
  * source count travel with the cloud, so the Health Check, the export scope
  * note and the density disclosures all describe what was actually read.
  */
-export async function loadE57(
+export function loadE57(
   buffer: ArrayBuffer,
   name = 'cloud.e57',
   options?: LoadE57Options,
 ): Promise<PointCloud> {
+  return new Promise((resolve) => resolve(loadE57Sync(buffer, name, options)));
+}
+
+function loadE57Sync(
+  buffer: ArrayBuffer,
+  name: string,
+  options?: LoadE57Options,
+): PointCloud {
   // A field's LOCAL name, after any extension `prefix:` (so `nor:normalX` →
   // `normalX`). Used both to resolve namespaced normals and to decide which
   // columns are worth decoding at all.

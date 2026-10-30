@@ -77,10 +77,10 @@ test.describe('OOC reopen cost (real OPFS)', () => {
       const mem = () => {
         const p = new Map<string, Uint8Array[]>();
         return {
-          async append(k: string, b: Uint8Array) { const a = p.get(k) ?? []; a.push(b.slice()); p.set(k, a); },
-          async read(k: string) { const a = p.get(k) ?? []; const t = a.reduce((s, b) => s + b.byteLength, 0); const o = new Uint8Array(t); let q = 0; for (const b of a) { o.set(b, q); q += b.byteLength; } return o; },
-          async keys() { return [...p.keys()]; },
-          async clear() { p.clear(); },
+          append(k: string, b: Uint8Array) { const a = p.get(k) ?? []; a.push(b.slice()); p.set(k, a); return Promise.resolve(); },
+          read(k: string) { const a = p.get(k) ?? []; const t = a.reduce((s, b) => s + b.byteLength, 0); const o = new Uint8Array(t); let q = 0; for (const b of a) { o.set(b, q); q += b.byteLength; } return Promise.resolve(o); },
+          keys() { return Promise.resolve([...p.keys()]); },
+          clear() { p.clear(); return Promise.resolve(); },
         };
       };
 

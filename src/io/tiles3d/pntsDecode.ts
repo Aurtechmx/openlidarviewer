@@ -340,7 +340,11 @@ export class PntsChunkDecoder implements ChunkDecoder {
     return tilesetNormalsNotice(this._normals);
   }
 
-  async decode(chunk: ArrayBuffer, meta: unknown): Promise<DecodedChunk> {
+  decode(chunk: ArrayBuffer, meta: unknown): Promise<DecodedChunk> {
+    return new Promise((resolve) => resolve(this._decodeSync(chunk, meta)));
+  }
+
+  private _decodeSync(chunk: ArrayBuffer, meta: unknown): DecodedChunk {
     if (!isPntsMetadata(meta)) {
       throw new Error('PntsChunkDecoder was handed metadata for another format.');
     }

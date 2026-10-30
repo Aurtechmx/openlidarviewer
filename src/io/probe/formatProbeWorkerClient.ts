@@ -169,7 +169,7 @@ export async function resolveUnknownFormat(
 export async function resolveUnknownBuffer(buffer: ArrayBuffer, name: string): Promise<ResolvedFormat> {
   const size = buffer.byteLength;
   const whole = new Uint8Array(buffer);
-  const read = async (n: number): Promise<Uint8Array> => whole.subarray(0, Math.min(n, size, MAX_PROBE_BYTES));
+  const read = (n: number): Promise<Uint8Array> => Promise.resolve(whole.subarray(0, Math.min(n, size, MAX_PROBE_BYTES)));
   const head = whole.subarray(0, Math.min(size, PROBE_WINDOWS[0]));
   const work = probeProgressively(read, size, name, head).then(({ decision, sample, bound }) =>
     replyFor(decision, sample, { size, name }, bound),

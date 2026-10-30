@@ -720,7 +720,7 @@ function drawLabelValueRow(
 // Sections
 // ─────────────────────────────────────────────────────────────────────────────
 
-async function renderCover(
+function renderCover(
   cursor: PageCursor,
   inputs: ReportInputs,
   doc: PDFDocument,
@@ -730,7 +730,7 @@ async function renderCover(
   bold: PDFFont,
   logo: PDFImage | undefined,
   organisation: string | undefined,
-): Promise<PageCursor> {
+): PageCursor {
   const ctx: PageContext = { doc, accent, theme, organisation };
   // Template design DNA — drives the small uppercase tag chip rendered
   // above the title so each of the six templates produces a visually
@@ -974,7 +974,7 @@ function drawDensityBar(
  * what it does NOT establish, so a reviewer gets the verdict in a couple of
  * seconds instead of reading the whole metadata table.
  */
-async function renderInspectionSummary(
+function renderInspectionSummary(
   cursor: PageCursor,
   inputs: ReportInputs,
   doc: PDFDocument,
@@ -983,7 +983,7 @@ async function renderInspectionSummary(
   body: PDFFont,
   bold: PDFFont,
   organisation: string | undefined,
-): Promise<PageCursor> {
+): PageCursor {
   const ctx: PageContext = { doc, accent, theme, organisation };
   const summary = inputs.summary;
   if (!summary) return cursor;
@@ -1023,7 +1023,7 @@ async function renderInspectionSummary(
   return { page: cursor.page, y: cursor.y - 12 };
 }
 
-async function renderDatasetSummary(
+function renderDatasetSummary(
   cursor: PageCursor,
   inputs: ReportInputs,
   doc: PDFDocument,
@@ -1032,7 +1032,7 @@ async function renderDatasetSummary(
   body: PDFFont,
   bold: PDFFont,
   organisation: string | undefined,
-): Promise<PageCursor> {
+): PageCursor {
   const ctx: PageContext = { doc, accent, theme, organisation };
   cursor = ensureSpace(cursor, 60 + inputs.datasetRows.length * 14, doc, accent, theme, organisation);
   cursor = drawSectionHeader(cursor, 'Dataset summary', accent, bold);
@@ -1065,7 +1065,7 @@ async function renderDatasetSummary(
  * Skipped silently when `inputs.provenance` is omitted — templates
  * that don't include the `provenance` section don't pay for it.
  */
-async function renderProvenance(
+function renderProvenance(
   cursor: PageCursor,
   inputs: ReportInputs,
   doc: PDFDocument,
@@ -1075,7 +1075,7 @@ async function renderProvenance(
   bold: PDFFont,
   organisation: string | undefined,
   opts?: { readonly compact?: boolean },
-): Promise<PageCursor> {
+): PageCursor {
   const ctx: PageContext = { doc, accent, theme, organisation };
   cursor = ensureSpace(cursor, 60, doc, accent, theme, organisation);
   cursor = drawSectionHeader(cursor, 'Provenance', accent, bold);
@@ -1153,7 +1153,7 @@ async function renderProvenance(
  * OMITTED ENTIRELY when the file declares nothing — an empty shell would
  * imply the viewer looked for metadata and vouches for its absence.
  */
-async function renderSourceMetadata(
+function renderSourceMetadata(
   cursor: PageCursor,
   inputs: ReportInputs,
   doc: PDFDocument,
@@ -1162,7 +1162,7 @@ async function renderSourceMetadata(
   body: PDFFont,
   bold: PDFFont,
   organisation: string | undefined,
-): Promise<PageCursor> {
+): PageCursor {
   const ctx: PageContext = { doc, accent, theme, organisation };
   const sm = inputs.sourceMetadata;
   if (!sm || (sm.standard.length === 0 && sm.extensions.length === 0)) return cursor;
@@ -1228,7 +1228,7 @@ async function renderSourceMetadata(
   return { page: cursor.page, y: cursor.y - 14 };
 }
 
-async function renderScanQuality(
+function renderScanQuality(
   cursor: PageCursor,
   inputs: ReportInputs,
   doc: PDFDocument,
@@ -1237,7 +1237,7 @@ async function renderScanQuality(
   body: PDFFont,
   bold: PDFFont,
   organisation: string | undefined,
-): Promise<PageCursor> {
+): PageCursor {
   const ctx: PageContext = { doc, accent, theme, organisation };
   const q = inputs.scanQuality;
   if (!q) return cursor;
@@ -1339,7 +1339,7 @@ async function renderVisuals(
   return cursor;
 }
 
-async function renderAnnotations(
+function renderAnnotations(
   cursor: PageCursor,
   inputs: ReportInputs,
   doc: PDFDocument,
@@ -1348,7 +1348,7 @@ async function renderAnnotations(
   body: PDFFont,
   bold: PDFFont,
   organisation: string | undefined,
-): Promise<PageCursor> {
+): PageCursor {
   const ctx: PageContext = { doc, accent, theme, organisation };
   // Keep-with-next (see renderMeasurements).
   const aPlaceholder =
@@ -1405,7 +1405,7 @@ async function renderAnnotations(
   return cursor;
 }
 
-async function renderMeasurements(
+function renderMeasurements(
   cursor: PageCursor,
   inputs: ReportInputs,
   doc: PDFDocument,
@@ -1414,7 +1414,7 @@ async function renderMeasurements(
   body: PDFFont,
   bold: PDFFont,
   organisation: string | undefined,
-): Promise<PageCursor> {
+): PageCursor {
   const ctx: PageContext = { doc, accent, theme, organisation };
   // Keep-with-next: an empty section is a heading + a short placeholder —
   // reserve exactly that, so the block stays with its predecessor whenever
@@ -1555,7 +1555,7 @@ export function sanitiseForPdf(input: string): string {
 // returns behind real cloud-sampled checks (density / void map / NPS /
 // RMSE, Lohani & Ghosh 2017) once the analysis seam lands.
 
-async function renderTechnicalNotes(
+function renderTechnicalNotes(
   cursor: PageCursor,
   inputs: ReportInputs,
   doc: PDFDocument,
@@ -1564,7 +1564,7 @@ async function renderTechnicalNotes(
   body: PDFFont,
   bold: PDFFont,
   organisation: string | undefined,
-): Promise<PageCursor> {
+): PageCursor {
   const ctx: PageContext = { doc, accent, theme, organisation };
   // Keep-with-next (see renderMeasurements): the empty block reserves
   // exactly heading + placeholder, and a short notes body reserves its
@@ -1607,7 +1607,7 @@ async function embedVisual(doc: PDFDocument, asset: ReportVisualAsset): Promise<
   }
 }
 
-async function embedDataUrl(doc: PDFDocument, dataUrl: string): Promise<PDFImage> {
+function embedDataUrl(doc: PDFDocument, dataUrl: string): Promise<PDFImage> {
   const match = /^data:image\/(png|jpeg|jpg);base64,(.+)$/i.exec(dataUrl);
   if (!match) throw new Error('Branding logo: only PNG / JPEG data URLs are supported.');
   const isPng = match[1].toLowerCase() === 'png';

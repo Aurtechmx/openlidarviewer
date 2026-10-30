@@ -130,7 +130,11 @@ class LineIndex {
  * @param buffer Raw file bytes.
  * @param name   Display name (defaults to `"cloud.ptx"`).
  */
-export async function loadPtx(buffer: ArrayBuffer, name = 'cloud.ptx'): Promise<PointCloud> {
+export function loadPtx(buffer: ArrayBuffer, name = 'cloud.ptx'): Promise<PointCloud> {
+  return new Promise((resolve) => resolve(loadPtxSync(buffer, name)));
+}
+
+function loadPtxSync(buffer: ArrayBuffer, name: string): PointCloud {
   const lines = new LineIndex(new TextDecoder().decode(buffer));
 
   const xs: number[] = [];
