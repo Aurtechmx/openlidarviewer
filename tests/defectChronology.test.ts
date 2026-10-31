@@ -270,7 +270,9 @@ describe('defect chronology', () => {
     const original = readFileSync(resolve(ROOT, 'validation/defects/chronology.csv'), 'utf8');
     writeFileSync(resolve(views, 'chronology.md'), readFileSync(resolve(ROOT, 'validation/defects/chronology.md'), 'utf8'));
     writeFileSync(resolve(views, 'chronology.csv'), original);
-    expect(run(VERIFIER, ['--views', views]).status).toBe(0);
+    // Only the view check is asserted on the clean copy: in a tree without
+    // git history (git archive) the commit checks fail on their own.
+    expect(run(VERIFIER, ['--views', views]).stderr).not.toContain('E_VIEW_DRIFT');
     writeFileSync(resolve(views, 'chronology.csv'), `${original}OLV-DEF-999,unknown\n`);
     const result = run(VERIFIER, ['--views', views]);
     expect(result.status).toBe(1);
