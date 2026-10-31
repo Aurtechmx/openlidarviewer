@@ -27,6 +27,7 @@ import { toggleTool } from './toggleTool';
 import { worldCoordLabels } from '../render/pointInfo';
 import type { WorkflowController } from '../ui/WorkflowController';
 import type { Viewer } from '../render/Viewer';
+import type { WorkspaceRouter } from './workspace/workspaceRouter';
 
 export interface ClipMountDeps extends Omit<ClipFlowShell, 'clipPanel' | 'viewer' | 'toggleMeasure'> {
   /** The deferred Viewer; null (or a placeholder) until it has loaded. */
@@ -59,6 +60,16 @@ export function clipCountFor(v: Viewer | null, activeId: string | null): ClipKep
     sourceTotal: declared !== undefined && Number.isFinite(declared) && declared > sum.total ? declared : null,
     name: cloud?.name ?? null,
   };
+}
+
+/**
+ * A scan opened with no clip held: a Clip page still open from the last scan
+ * (the page is remembered across scans and reloads) goes back to the Tools
+ * home, so the new scan does not open with its box drawn.
+ */
+export function leaveClipPage(router: Pick<WorkspaceRouter, 'route' | 'navigate'> | null | undefined): void {
+  const r = router?.route();
+  if (r?.mode === 'work' && r.page === 'clip') router?.navigate({ mode: 'work', page: null });
 }
 
 export function mountClip(d: ClipMountDeps): ClipMount {

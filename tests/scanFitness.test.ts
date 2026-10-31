@@ -171,6 +171,18 @@ describe('buildScanFitness — verdict is willing to be negative', () => {
   });
 });
 
+describe('buildScanFitness — classification limiter wording', () => {
+  it('names unclassified points, not missing ground, when ground classes are present', () => {
+    const f = buildScanFitness(base({ unclassifiedFraction: 0.508 }));
+    expect(f.verdict).toMatch(/most points are unclassified \(51%\)/);
+    expect(f.verdict).not.toMatch(/classified to ground/);
+  });
+  it('says points are not classified to ground when there is no ground class', () => {
+    const f = buildScanFitness(base({ unclassifiedFraction: null, hasGroundClass: false }));
+    expect(f.verdict).toMatch(/points aren’t classified to ground/);
+  });
+});
+
 describe('buildScanFitness — tier badge is earned, never overclaimed', () => {
   it('no badge when density is below floor even if a QL is supplied', () => {
     expect(buildScanFitness(base({ groundDensityPerM2: 0.9 })).tierBadge).toBeNull();

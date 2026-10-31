@@ -5,10 +5,13 @@
  *
  *   node scripts/verify-defect-chronology.mjs
  *   node scripts/verify-defect-chronology.mjs --chronology <path-to-json>
+ *   node scripts/verify-defect-chronology.mjs --views <dir>
  *
  * The `--chronology` form exists so the tests can feed deliberately corrupt
  * records through the real checks. Without it the checks run against the
- * generated files and the CSV/Markdown views are compared too.
+ * generated files and the CSV/Markdown views are compared too. `--views`
+ * compares chronology.csv and chronology.md from <dir> instead of the
+ * committed views, so a test can corrupt a copy of a view.
  *
  * This verifier does NOT re-derive the chronology. It imports the model
  * builder and renderers from the generator and reuses them, because two
@@ -20,10 +23,10 @@
  * Exit 0 when every check passes, 1 when any fails, 2 on a read or parse error.
  */
 import './lib/confineGit.mjs';
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
-import { resolve } from 'node:path';
+import { join, resolve } from 'node:path';
 import { requireBinaryOnPath } from './lib/binaryOnPath.mjs';
 
 // Spawned programs are resolved to an absolute path by reading PATH, so the
@@ -52,7 +55,14 @@ const REGISTRY = resolve(ROOT, 'validation/defects/defect-registry.json');
 const args = process.argv.slice(2);
 const flagIndex = args.indexOf('--chronology');
 const jsonPath = flagIndex === -1 ? OUT_JSON : resolve(args[flagIndex + 1] ?? '');
-const checkViews = flagIndex === -1;
+const viewsIndex = args.indexOf('--views');
+const viewsArg = viewsIndex === -1 ? null : args[viewsIndex + 1];
+const viewsDir = viewsArg == null ? null : resolve(viewsArg);
+if (viewsIndex !== -1 && (viewsDir === null || !existsSync(viewsDir))) {
+  console.error('usage: verify-defect-chronology.mjs [--chronology <file>] [--views <dir>]');
+  process.exit(2);
+}
+const checkViews = flagIndex === -1 || viewsDir !== null;
 
 let model;
 let registry;
@@ -241,8 +251,8 @@ for (const r of records) {
 // --- 6. the three views must be one model ----------------------------------
 if (checkViews) {
   const views = [
-    [OUT_CSV, renderCsv(model)],
-    [OUT_MD, renderMarkdown(model)],
+    [viewsDir ? join(viewsDir, 'chronology.csv') : OUT_CSV, renderCsv(model)],
+    [viewsDir ? join(viewsDir, 'chronology.md') : OUT_MD, renderMarkdown(model)],
   ];
   for (const [path, expected] of views) {
     let actual = null;

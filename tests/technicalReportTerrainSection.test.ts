@@ -14,6 +14,7 @@ import { generateReport, composeReportInputs, getReportTemplate } from '../src/r
 import type { ReportInputs, ReportTemplateId } from '../src/report';
 import { buildTerrainSummary, extentRows } from '../src/report/ReportMetadataSection';
 import { terrainSummaryFacts } from '../src/app/reportExport';
+import { analysedBasisLine } from '../src/terrain/export/analysedBasis';
 import { computeTerrainCore, contoursFromCore } from '../src/terrain/contour/analyseContours';
 import { defaultContourShapeStyle } from '../src/terrain/contour/contourShapeStyle';
 import type { TerrainPoint } from '../src/terrain/TerrainContracts';
@@ -64,6 +65,22 @@ describe('Technical Report terrain section', () => {
     expect(v('Measured ground cells')).toBe('87 % of covered cells');
     expect(v('Basis')).toBe('300,000 points analysed, from the loaded display sample (2,271,607 of 210,887,303 points)');
     expect(s.note).toMatch(/not a check against independent ground control/);
+  });
+
+  it('states the map sheet basis and names the ground points the surface rests on', () => {
+    // The map sheet printed "283,951 of 210,887,303 points" while this section
+    // printed "183,368 points analysed": the class 2 points the surface rests
+    // on, under a label that read as every point the run read.
+    const basis = {
+      analysedPointCount: 283_951, declaredPointCount: 210_887_303, coverage: 'sampled' as const, loadStride: null, residentPointCount: 2_271_607,
+    };
+    const s = buildTerrainSummary({ ...FACTS, analysedPointCount: 183_368, analysedBasisLine: analysedBasisLine(basis) });
+    const v = (label: string): string | undefined => s.rows.find((r) => r.label === label)?.value;
+    expect(v('Basis')).toBe(
+      '283,951 of 210,887,303 points (analysed subsample of the display sample, 2,271,607 loaded); whole-dataset support not claimed',
+    );
+    expect(v('Surface points')).toBe('183,368 ground points');
+    expect(s.rows.map((r) => r.value).join(' ')).not.toMatch(/183,368 points analysed/);
   });
 
   it('renders in the PDF when an analysis ran, and is absent otherwise', async () => {

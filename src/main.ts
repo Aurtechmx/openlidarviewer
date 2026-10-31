@@ -62,7 +62,7 @@ import { noteEdit, withSuppressed } from './ui/undoRouter';
 // The Measurements panel is lazy-mounted on the first scan load (never in the
 // empty-state shell); its whole mount lifecycle lives in `measurePanelMount.ts`,
 // which pulls the panel class through `loadMeasurePanel()` inside `ensure()`.
-import { createMeasurePanelMount, createAnalyseProfileVisibility, mountClip } from './app/measurePanelMount';
+import { createMeasurePanelMount, createAnalyseProfileVisibility, mountClip, leaveClipPage } from './app/measurePanelMount';
 import { createProcessStudioFromShell } from './app/processStudioMount';
 import { readTerrainComputePath } from './app/terrainComputePath';
 import { lazyCoordinateHud } from './app/coordinateHudLazy';
@@ -2570,7 +2570,7 @@ function revealAnalysePanel(name: string, settled = true): void {
   // and fitToScan() applies with the panel's own (disabled) flag, which would
   // replace the restored clip with "disabled, full-bounds", destroying it.
   clipPanel.setVisible(true);
-  if (!viewer.getClip()) clipPanel.fitToScan();
+  if (!viewer.getClip()) { clipPanel.fitToScan(); leaveClipPage(workspaceShell?.router); } // a fresh scan: and off a Clip page left open
   // Fresh scan → clear any prior override + verdict so the open-time route is
   // authoritative and streaming re-routes can fire again. The manual "Treat as"
   // override is per-session-per-scan: a new scan returns to auto-detection,
@@ -3589,7 +3589,7 @@ const reportExportDeps: ReportExportDeps = {
   baseName, loadReportEngine,
   dropZone, debug,
   // A fresh terrain result fills the Technical Report's Terrain analysis section.
-  terrainResult: () => analysePanel?.currentResultForProvenance() ?? null,
+  terrainResult: () => analysePanel?.currentResultForProvenance() ?? null, terrainAnalysedBasis: () => analysePanel?.currentAnalysedBasis() ?? null,
 };
 
 /**

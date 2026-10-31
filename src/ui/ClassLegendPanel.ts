@@ -128,6 +128,12 @@ export class ClassLegendPanel {
   /** Pre-reduction class counts; shares use them while the counts are unedited. */
   private _shareSample: ClassSample | undefined;
   private _heldDigest: number | undefined;
+  /**
+   * Whether the held codes are still the source file's. Derived or cleared
+   * codes never take the load's histogram, even when they match the loaded
+   * codes, which is the rule the Scan Report reads (cloudClassShareBasis).
+   */
+  private _sourceCodes = true;
 
   /** Caption for a classification run that produced nothing (hidden when empty). */
   private readonly _unavailableNote: HTMLElement;
@@ -388,6 +394,7 @@ export class ClassLegendPanel {
     info?: { confidencePct?: number | null; warnings?: readonly string[] },
   ): void {
     this._derived = on;
+    this._sourceCodes = !on;
     // A classification landed, so any standing "unavailable" caption from an
     // earlier refused run no longer describes this scan.
     if (on) this.setUnavailableNotice(null);
@@ -412,6 +419,7 @@ export class ClassLegendPanel {
    */
   syncProvenance(state: string): void {
     if (state !== 'derived' || !this._derived) this.setDerivedProvenance(state === 'derived');
+    this._sourceCodes = state === 'source';
     if (state === 'cleared') {
       this._provenance.textContent = `Classification: ${CLEARED_CLASS_NOTE}.`;
       this._provenance.classList.remove('olv-hidden');
@@ -529,7 +537,7 @@ export class ClassLegendPanel {
     const codes = this._presentCodes();
     // Shares come from the pre-reduction counts while the classes are unedited,
     // else from the loaded points (classShareBasis.ts); the rows stay the loaded codes.
-    const basis = classShareBasis(this._counts, this._sampled, this._shareSample, this._heldDigest);
+    const basis = classShareBasis(this._counts, this._sampled, this._shareBasisSample(), this._heldDigest);
     return codes.map((code) => ({
       code,
       name: classificationLabel(code, this._pointFormat),
@@ -540,8 +548,13 @@ export class ClassLegendPanel {
 
   /** What the shares in {@link classSummary} are of, as a caption; null when the whole file is loaded. */
   shareNote(): string | null {
-    const phrase = classShareBasis(this._counts, this._sampled, this._shareSample, this._heldDigest).phrase;
+    const phrase = classShareBasis(this._counts, this._sampled, this._shareBasisSample(), this._heldDigest).phrase;
     return phrase ? `Shares of ${phrase}.` : null;
+  }
+
+  /** The load's histogram while the held codes are the source's, else none. */
+  private _shareBasisSample(): ClassSample | undefined {
+    return this._sourceCodes ? this._shareSample : undefined;
   }
 
   /** Present class codes (count > 0), ascending. */
