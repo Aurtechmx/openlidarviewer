@@ -76,12 +76,16 @@ async function twoFingerGesture(
 }
 
 /**
- * Dispatch a synthesized single-finger tap at a canvas-local pixel position:
- * one pointerdown immediately followed by a pointerup, no move between them.
+ * Dispatch two synthesized single-finger taps at a canvas-local pixel position,
+ * each one pointerdown immediately followed by a pointerup, `gapMs` apart.
+ *
+ * Both taps go out in one page call so the gap is the page's own timer. Two
+ * separate calls put two protocol round trips between the taps, and on a busy
+ * runner that pushed them past the 300 ms double-tap window.
  */
-async function singleTap(page: Page, x: number, y: number): Promise<void> {
+async function doubleTap(page: Page, x: number, y: number, gapMs: number): Promise<void> {
   await page.evaluate(
-    ([x, y]) => {
+    async ([x, y, gapMs]) => {
       const canvas = document.querySelector('.olv-canvas') as HTMLElement | null;
       if (!canvas) throw new Error('no canvas');
       const rect = canvas.getBoundingClientRect();
@@ -102,8 +106,11 @@ async function singleTap(page: Page, x: number, y: number): Promise<void> {
       };
       fire('pointerdown');
       fire('pointerup');
+      await new Promise((resolve) => setTimeout(resolve, gapMs));
+      fire('pointerdown');
+      fire('pointerup');
     },
-    [x, y] as const,
+    [x, y, gapMs] as const,
   );
 }
 
@@ -200,9 +207,7 @@ test.describe('mobile touch model — twist + pinch + pan decomposition', { tag:
     const centre = await framedScanCentre(page);
     const cx = centre.x - canvasBox.x;
     const cy = centre.y - canvasBox.y;
-    await singleTap(page, cx, cy);
-    await page.waitForTimeout(80);
-    await singleTap(page, cx, cy);
+    await doubleTap(page, cx, cy, 80);
     await page.waitForTimeout(600);
 
     const after = await readPose(page);
