@@ -22,6 +22,11 @@ export interface ClassSample {
   readonly stride: number;
   /** Per-code counts of the held points when the histogram was taken. */
   readonly heldAtLoad: ReadonlyMap<number, number>;
+  /**
+   * {@link classDigest} of the held codes when the histogram was taken. An
+   * edit that keeps every count (two classes swapped) still changes it.
+   */
+  readonly heldDigest?: number;
 }
 /** {@link ClassState}, or 'none' when the cloud carries no classification. */
 export type ClassificationState = ClassState | 'none';

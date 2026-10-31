@@ -261,7 +261,12 @@ const exportNames = ['keep', 'catalogue', 'user', 'assign'];
 const exportsRead = {};
 for (const n of exportNames) {
   const las = join(work, `export-${n}.las`);
-  if (!existsSync(las)) continue;
+  // Every export is expected; a missing one fails here rather than silently
+  // dropping all of its later checks from the verdict.
+  if (!existsSync(las)) {
+    check(`export:${n}:present`, 'failed', { summary: 'no export file was written' });
+    continue;
+  }
   const r = run(python, ['-I', join(HERE, 'reference.py'), 'las', las, work, `export-${n}`]);
   if (r.code === 0) exportsRead[n] = true;
   else check(`export:${n}:independent-read`, 'failed', { summary: 'laspy could not read the OLV export', log: r.out.slice(-2000) });

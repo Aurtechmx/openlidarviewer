@@ -44,6 +44,9 @@ import type { ResolvedCrs } from '../geo/CoordinateTypes';
 import { countClasses } from '../render/class/classHistogram';
 import { toClassBuffer } from '../render/class/classBuffer';
 import { SyncFallbackRefusedError } from '../workers/syncFallbackRefusedError';
+import { classDigest } from '../model/classShareBasis';
+
+export { classDigest };
 
 /** Per-class point counts for any classification source, narrowed to bytes. */
 export function classCountsOf(classification: ArrayLike<number>): Map<number, number> {
@@ -52,7 +55,7 @@ export function classCountsOf(classification: ArrayLike<number>): Map<number, nu
 
 /** The Classes panel surface this needs: replace counts, keep the filter. */
 export interface ClassCountSink {
-  replaceCounts(counts: Map<number, number>): void;
+  replaceCounts(counts: Map<number, number>, heldDigest?: number): void;
   /** Re-state where the codes came from (source / cleared / derived). */
   syncProvenance?(state: string): void;
 }
@@ -107,7 +110,7 @@ export function noteClassificationEdited(deps: ClassEditNotifyDeps): void {
   deps.clearTerrainCache();
   deps.noteStale(CLASS_EDIT_STALE_NOTICE);
   const cls = deps.classification;
-  if (cls && cls.length > 0) deps.legend.replaceCounts(classCountsOf(cls));
+  if (cls && cls.length > 0) deps.legend.replaceCounts(classCountsOf(cls), classDigest(cls));
   if (deps.provenance) deps.legend.syncProvenance?.(deps.provenance);
 }
 

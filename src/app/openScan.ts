@@ -688,6 +688,7 @@ export async function attachStaticCloud(
   const layerOf = (c: unknown): string | null => viewer.clouds().length > 1 ? deps.layerIdentity.stableIdFor(viewer.clouds().find((i) => viewer.getCloud(i) === c) ?? '') : null;
   viewer.measure.setLayerResolver(layerOf);
   viewer.annotate.setLayerResolver(layerOf);
+  viewer.annotate.setLayerPresence((c) => viewer.clouds().some((i) => viewer.getCloud(i) === c));
   // A freshly opened scan has no terrain analysis yet — drop any prior grid so
   // the Coverage colour chip starts disabled until this scan is analysed.
   viewer.setCoverageGrid(null);

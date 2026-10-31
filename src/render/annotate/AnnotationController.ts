@@ -100,6 +100,7 @@ export class AnnotationController {
    */
   private _ownerProvider: (() => WorkOwnership | undefined) | null = null;
   private _layerOf: ((layer: unknown) => string | null) | null = null;
+  private _isLoaded: ((layer: unknown) => boolean) | null = null;
   /** Past annotation-list snapshots (most recent last) — drives undo. */
   private _undoStack: Annotation[][] = [];
   /** Snapshots undone but available to redo — cleared by any fresh edit. */
@@ -255,6 +256,10 @@ export class AnnotationController {
       showCamera: cameraState !== undefined,
       measurements: this._measurements(),
       onSave: (fields) => {
+        if (georef?.pickedCloud !== undefined && this._isLoaded && !this._isLoaded(georef.pickedCloud)) {
+          this._setHint('The scan this point was picked on was closed, so the annotation was not saved');
+          return;
+        }
         const picked = georef?.pickedCloud !== undefined && this._layerOf ? this._layerOf(georef.pickedCloud) : null;
         const created = this.add({
           title: fields.title,
@@ -316,6 +321,14 @@ export class AnnotationController {
    */
   setLayerResolver(resolve: ((layer: unknown) => string | null) | null): void {
     this._layerOf = resolve;
+  }
+
+  /**
+   * Report whether a picked cloud is still open. A note whose scan was closed
+   * while its editor was open is not saved, so it never lands on another scan.
+   */
+  setLayerPresence(isLoaded: ((layer: unknown) => boolean) | null): void {
+    this._isLoaded = isLoaded;
   }
 
   /** Give every annotation without an owner this one (its layer is being retired). */
