@@ -78,7 +78,7 @@ import type { AnalysePanel } from './ui/AnalysePanel';
 import { ClassLegendPanel } from './ui/ClassLegendPanel';
 import type { ReclassifyUi } from './ui/reclassifyUi';
 import { countClasses } from './render/class/classHistogram';
-import { activeScanHasClassEdits, afterClassEdit, classCountsOf, editedStaticLayerNames, layerRemovalClassEditsLine, noteClassificationEdited, staticClassEditWork, wireFrameChange } from './app/classLegendRefresh';
+import { activeScanHasClassEdits, afterClassEdit, classCountsOf, classDigest, editedStaticLayerNames, layerRemovalClassEditsLine, noteClassificationEdited, staticClassEditWork, wireFrameChange } from './app/classLegendRefresh';
 import type { ClassifyActionsDeps } from './app/classifyActions';
 import { buildExportHealth, densityStoryFields, footprintAreaM2, type ScanStoryInputs } from './intelligence/scanStory';
 import { fullScope, scopeFrom, scopeStamp, type ClassScope } from './render/class/classScope';
@@ -2603,7 +2603,7 @@ function revealAnalysePanel(name: string, settled = true): void {
  */
 function refreshClassLegend(classification?: ArrayLike<number>, sample?: Parameters<ClassLegendPanel['setClasses']>[1]): void {
   if (classification && classification.length > 0) {
-    classLegendPanel.setClasses(classCountsOf(classification), sample);
+    classLegendPanel.setClasses(classCountsOf(classification), sample && { ...sample, heldDigest: classDigest(classification) });
   } else {
     classLegendPanel.setClasses(new Map(), sample);
   }

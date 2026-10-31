@@ -13,6 +13,7 @@ import { describe, it, expect, beforeAll } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { PointCloud } from '../src/model/PointCloud';
 import {
+  classDigest,
   classSampleOf,
   cloudClassShareBasis,
   heldClassCounts,
@@ -98,6 +99,7 @@ describe('class shares on a voxel-reduced display sample', () => {
     const panel = new ClassLegendPanel();
     panel.setClasses(heldClassCounts(cloud.classification!), {
       loaded: cloud.pointCount, declared: cloud.declaredPointCount, shares: cloud.classSample,
+      heldDigest: classDigest(cloud.classification!),
     });
     const s = panel.classSummary();
     expect(s.find((r) => r.code === 1)?.share).toBeCloseTo(60, 6);

@@ -78,6 +78,8 @@ export interface ClassCountSample {
   readonly declared?: number;
   /** Class counts of the decoded records before the voxel pass, for shares. */
   readonly shares?: ClassSample;
+  /** classDigest of the held codes the counts were taken from. */
+  readonly heldDigest?: number;
 }
 
 /** Fired after the user toggles the colourblind-safe class palette. */
@@ -125,6 +127,7 @@ export class ClassLegendPanel {
   private _sampled = false;
   /** Pre-reduction class counts; shares use them while the counts are unedited. */
   private _shareSample: ClassSample | undefined;
+  private _heldDigest: number | undefined;
 
   /** Caption for a classification run that produced nothing (hidden when empty). */
   private readonly _unavailableNote: HTMLElement;
@@ -456,6 +459,7 @@ export class ClassLegendPanel {
       declared > sample.loaded;
     this._sampled = sampled;
     this._shareSample = sample?.shares;
+    this._heldDigest = sample?.heldDigest;
     this._sampleNote.classList.toggle('olv-hidden', !sampled);
   }
 
@@ -493,8 +497,9 @@ export class ClassLegendPanel {
    * classes instead of adding new ones. Does NOT emit `onChange`: visibility
    * is untouched.
    */
-  replaceCounts(counts: Map<number, number>): void {
+  replaceCounts(counts: Map<number, number>, heldDigest?: number): void {
     this._counts = new Map(counts);
+    this._heldDigest = heldDigest;
     if (this._presentCodes().length > 0) this._hasChannel = true;
     this._render();
   }
@@ -524,7 +529,7 @@ export class ClassLegendPanel {
     const codes = this._presentCodes();
     // Shares come from the pre-reduction counts while the classes are unedited,
     // else from the loaded points (classShareBasis.ts); the rows stay the loaded codes.
-    const basis = classShareBasis(this._counts, this._sampled, this._shareSample);
+    const basis = classShareBasis(this._counts, this._sampled, this._shareSample, this._heldDigest);
     return codes.map((code) => ({
       code,
       name: classificationLabel(code, this._pointFormat),
@@ -535,7 +540,7 @@ export class ClassLegendPanel {
 
   /** What the shares in {@link classSummary} are of, as a caption; null when the whole file is loaded. */
   shareNote(): string | null {
-    const phrase = classShareBasis(this._counts, this._sampled, this._shareSample).phrase;
+    const phrase = classShareBasis(this._counts, this._sampled, this._shareSample, this._heldDigest).phrase;
     return phrase ? `Shares of ${phrase}.` : null;
   }
 

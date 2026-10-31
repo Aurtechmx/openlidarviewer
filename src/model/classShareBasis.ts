@@ -15,8 +15,10 @@
  * classes (clear, auto-classify, lasso, swap), it no longer describes the
  * codes on screen, and there is no honest way to carry the edit back onto
  * records that are not held. So the histogram is used only while the held
- * codes are still the ones the load produced: the provenance is 'source' and
- * the held per-class counts equal the counts taken at load. Restore earlier
+ * codes are still the ones the load produced: the provenance is 'source', and
+ * the held per-class counts and the digest of the held codes equal the ones
+ * taken at load. The digest catches an edit that keeps every count, such as
+ * two classes swapped. Restore earlier
  * classes puts those codes back, and the histogram applies again. Otherwise
  * the shares are counted on the held points and say so.
  *
@@ -58,6 +60,16 @@ export function heldClassCounts(classification: ArrayLike<number>): Map<number, 
   return out;
 }
 
+/** FNV-1a over a classification buffer, so two buffers with equal counts can still be told apart. */
+export function classDigest(classification: ArrayLike<number>): number {
+  let h = 0x811c9dc5;
+  for (let i = 0; i < classification.length; i++) {
+    h ^= classification[i] & 0xff;
+    h = Math.imul(h, 0x01000193);
+  }
+  return h >>> 0;
+}
+
 /**
  * The histogram of `source` (the decoded records) to keep on `reduced` (its
  * voxel-reduced cloud), or undefined when there is nothing to count or no
@@ -71,6 +83,7 @@ export function classSampleOf(source: PointCloud, reduced: PointCloud): ClassSam
     total: source.pointCount,
     stride: Math.max(1, Math.floor(source.loadStride ?? 1)),
     heldAtLoad: heldClassCounts(reduced.classification),
+    heldDigest: classDigest(reduced.classification),
   };
 }
 
@@ -94,15 +107,19 @@ export function classSamplePhrase(sample: ClassSample): string {
 
 /**
  * The share basis from the held per-class counts. `sample` is used only while
- * `held` still equals the counts taken at load (see the module comment);
- * `sampled` says whether the held points are a sample of the file.
+ * `held` still equals the counts taken at load and `heldDigest` (the
+ * {@link classDigest} of the held codes) equals the one taken at load (see the
+ * module comment); `sampled` says whether the held points are a sample of the
+ * file.
  */
 export function classShareBasis(
   held: ReadonlyMap<number, number>,
   sampled: boolean,
   sample?: ClassSample | null,
+  heldDigest?: number,
 ): ClassShareBasis {
-  if (sample && sample.total > 0 && sameCounts(held, sample.heldAtLoad)) {
+  const sameCodes = sample?.heldDigest === undefined || sample.heldDigest === heldDigest;
+  if (sample && sample.total > 0 && sameCounts(held, sample.heldAtLoad) && sameCodes) {
     return { counts: sample.counts, total: sample.total, phrase: classSamplePhrase(sample), fromSample: true };
   }
   let total = 0;
@@ -125,7 +142,7 @@ export function cloudClassShareBasis(cloud: {
   const sample = cloud.classificationProvenance === undefined || cloud.classificationProvenance === 'source'
     ? cloud.classSample
     : undefined;
-  return classShareBasis(heldClassCounts(cls), sampled, sample);
+  return classShareBasis(heldClassCounts(cls), sampled, sample, sample ? classDigest(cls) : undefined);
 }
 
 /** Share of codes 0 and 1 (Created, Unclassified) in a basis, 0 to 1. */
