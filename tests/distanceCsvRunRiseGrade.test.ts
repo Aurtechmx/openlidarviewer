@@ -1,10 +1,10 @@
 /**
  * distanceCsvRunRiseGrade.test.ts
  *
- * The Measure panel shows a Distance's run, rise and grade beside its length.
- * The CSV left horizontal_m, vertical_m, rise_m, run_m and grade_pct empty for
- * the same measurement; they now carry the figures the panel shows, and a
- * formula-looking cell stays neutralised.
+ * The Measure panel shows a Distance's run, rise, grade and grade angle beside
+ * its length. The CSV left horizontal_m, vertical_m, rise_m, run_m, grade_pct
+ * and angle_deg empty for the same measurement; they now carry the figures the
+ * panel shows, and a formula-looking cell stays neutralised.
  */
 
 import { describe, it, expect } from 'vitest';
@@ -30,6 +30,12 @@ describe('distance figures in the measurement exports', () => {
     expect(m.vertical_m).toBe(5);
     expect(m.rise_m).toBe(5);
     expect(m.grade_pct).toBe(10);
+    expect(m.angle_deg).toBeCloseTo((Math.atan2(5, 50) * 180) / Math.PI, 3);
+  });
+
+  it('signs the grade angle with the rise', () => {
+    const down: Measurement = { ...D, points: [[30, 40, 5], [0, 0, 0]] };
+    expect(measurementMetrics(down, UP, 1).angle_deg).toBeCloseTo((Math.atan2(-5, 50) * 180) / Math.PI, 3);
   });
 
   it('fills the CSV columns and keeps the formula guard', () => {
@@ -42,6 +48,7 @@ describe('distance figures in the measurement exports', () => {
     expect(at('vertical_m')).toBe('5');
     expect(at('rise_m')).toBe('5');
     expect(at('grade_pct')).toBe('10');
+    expect(Number(at('angle_deg'))).toBeCloseTo(5.711, 3);
     expect(row).not.toMatch(/(^|,)=cmd/);
   });
 });

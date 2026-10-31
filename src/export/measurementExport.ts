@@ -242,14 +242,16 @@ export function measurementMetrics(
   switch (m.kind) {
     case 'distance': {
       set('length_m', distance(mp[0], mp[1]));
-      // The run, rise and grade the panel shows beside the length, under both
-      // column names a reader may look for (profile and slope use one each).
+      // The run, rise, grade and grade angle the panel shows beside the
+      // length, under both column names a reader may look for (profile and
+      // slope use one each).
       const p = profileMetrics(mp[0], mp[1], up);
       set('horizontal_m', p.lengthHorizontal);
       set('vertical_m', p.verticalDrop);
       set('run_m', p.lengthHorizontal);
       set('rise_m', p.verticalDrop);
       set('grade_pct', p.gradePercent);
+      set('angle_deg', p.gradeAngleDeg);
       break;
     }
     case 'polyline':
