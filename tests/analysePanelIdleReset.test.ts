@@ -36,10 +36,11 @@ async function freshPanel() {
 }
 
 describe('the Analyse panel returns to rest when its result is cleared', () => {
-  it('starts with the prompt that tells the user what to load', async () => {
+  it('starts with the prompt that points at Run terrain analysis', async () => {
     const { status } = await freshPanel();
     expect(status).toBeDefined();
-    expect(status.ownText).toMatch(/Load a LAS, LAZ, COPC, or EPT dataset/);
+    expect(status.ownText).toMatch(/^No terrain result yet\. Run terrain analysis/);
+    expect(status.ownText).not.toMatch(/Load a|analyze/);
   });
 
   it('puts the prompt back after a busy run is cleared', async () => {
@@ -50,7 +51,8 @@ describe('the Analyse panel returns to rest when its result is cleared', () => {
     panel.update(null);
     // The pre-fix panel showed the status again without rewriting it, so this
     // read "Analysing…" on a panel with no scan.
-    expect(status.ownText).toMatch(/Load a LAS, LAZ, COPC, or EPT dataset/);
+    expect(status.ownText).toMatch(/^No terrain result yet\. Run terrain analysis/);
+    expect(status.ownText).not.toMatch(/Load a|analyze/);
     expect(status.ownText).not.toContain('Analysing');
   });
 

@@ -352,12 +352,13 @@ function section(text: string): HTMLElement {
 /** Prompt shown in a raster tile's sample readout before the user clicks. */
 
 /**
- * The panel's resting status line: what it says with no scan and no result.
- * Named once because `update(null)` has to put it BACK. Without that, the
+ * The panel's resting status line: what it says with no result. The panel
+ * only shows with a scan open, so the line points at the Run button rather
+ * than asking for a file. Named once because `update(null)` has to put it BACK. Without that, the
  * status kept whatever the last run wrote, so closing a scan left the panel
  * reading "Analysing…" over an empty state.
  */
-const IDLE_STATUS = 'Load a LAS, LAZ, COPC, or EPT dataset to analyze terrain readiness.';
+const IDLE_STATUS = 'No terrain result yet. Run terrain analysis to check whether this scan can support a terrain surface.';
 
 /** Resting tooltip for the Intelligence Report button; swapped for the reason when disabled. */
 const REPORT_BUTTON_TITLE =

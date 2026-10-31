@@ -126,6 +126,7 @@ has not been done. v0.7.0 is the current published release.
 - The Technical Report's terrain Basis row now states the same analysed basis as the contour map sheet. On a scan with source ground classes it printed the class 2 points the surface rests on as the points analysed; that count now has its own Surface points row.
 - The measurement CSV now fills angle_deg for a Distance with the grade angle the Measure panel shows.
 - A scan opened while Tools → Clip box was still open from the last scan, or from before a reload, opened on that page with the clip box drawn. A new scan now opens on the Tools home.
+- The Terrain page asked for a LAS, LAZ, COPC or EPT file to be loaded while a scan was open and no terrain result existed yet. It now says there is no terrain result yet and points at Run terrain analysis.
 - After Auto-classify returned the same codes the scan loaded with, the Classes list kept the shares of the even sample while the Scan Report counted the loaded points. Derived and cleared classes now always take their shares from the loaded points, in both places.
 
 ### Validation
