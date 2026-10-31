@@ -409,8 +409,16 @@ export interface TerrainSummaryFacts {
   readonly reliefM: number | null;
   /** Measured cells over covered cells, 0 to 1; null when nothing is covered. */
   readonly measuredOfCovered: number | null;
-  /** Points the terrain analysis read. */
+  /**
+   * Points the ground surface rests on. On a scan with source ground classes
+   * this is the class 2 points among those read, not every point read.
+   */
   readonly analysedPointCount: number;
+  /**
+   * The analysed-basis sentence the map sheet and DEM package print, when the
+   * run recorded one. The Basis row states it so the exports agree.
+   */
+  readonly analysedBasisLine?: string;
   /** Points loaded for the scan, and the total the file declares. */
   readonly loadedPointCount?: number;
   readonly declaredPointCount?: number;
@@ -441,7 +449,12 @@ export function buildTerrainSummary(f: TerrainSummaryFacts): ReportTerrainSummar
       label: 'Measured ground cells',
       value: f.measuredOfCovered != null ? `${Math.round(f.measuredOfCovered * 100)} % of covered cells` : 'none',
     },
-    { label: 'Basis', value: `${fmt(f.analysedPointCount)} points analysed${sample}` },
+    ...(f.analysedBasisLine
+      ? [
+        { label: 'Basis', value: `${f.analysedBasisLine.charAt(0).toUpperCase()}${f.analysedBasisLine.slice(1)}` },
+        { label: 'Surface points', value: `${fmt(f.analysedPointCount)} ground points` },
+      ]
+      : [{ label: 'Basis', value: `${fmt(f.analysedPointCount)} points analysed${sample}` }]),
   ];
   return {
     note:

@@ -60,6 +60,7 @@ import { truncationNote, truncationOf, truncationText } from '../io/truncation';
 import { measurementsOwnedByActive, type OwnershipView } from './measurementOwnership';
 import { withholdUnresolvedUp } from './layerUpFrames';
 import { measurementRowText } from './measureResultModel';
+import { analysedBasisLine, type AnalysedBasis } from '../terrain/export/analysedBasis';
 
 /** Re-exported so the shell wires report and KML ownership from one import. */
 export { ownershipViewOf, handOverLayerWork } from './measurementOwnership';
@@ -288,6 +289,8 @@ export interface ReportExportDeps {
    * is stale. Its figures fill the Technical Report's Terrain analysis section.
    */
   readonly terrainResult?: () => AnalyseContoursResult | null;
+  /** The analysed basis of that result, so the report states the map sheet's basis. */
+  readonly terrainAnalysedBasis?: () => AnalysedBasis | null;
 }
 
 /**
@@ -298,6 +301,7 @@ export interface ReportExportDeps {
 export function terrainSummaryFacts(
   r: AnalyseContoursResult,
   cloud: { readonly pointCount: number; readonly declaredPointCount?: number } | null,
+  basis?: AnalysedBasis | null,
 ): TerrainSummaryFacts {
   const t = r.cellStatusTally;
   const covered = t.measured + t.interpolated + t.lowConfidence + t.edgeRisk;
@@ -308,6 +312,7 @@ export function terrainSummaryFacts(
     reliefM: toM != null && r.elevationRangeM > 0 ? r.elevationRangeM * toM : null,
     measuredOfCovered: covered > 0 ? t.measured / covered : null,
     analysedPointCount: r.dtm.analyzedPointCount,
+    ...(basis ? { analysedBasisLine: analysedBasisLine(basis) } : {}),
     ...(cloud ? { loadedPointCount: cloud.pointCount } : {}),
     ...(cloud?.declaredPointCount !== undefined ? { declaredPointCount: cloud.declaredPointCount } : {}),
   };
@@ -595,7 +600,7 @@ export async function generateReportPdf(templateId: string, deps: ReportExportDe
   const terrain = staticCloud ? deps.terrainResult?.() ?? null : null;
   const captured = {
     scanQualityFacts,
-    ...(terrain && staticCloud ? { terrainSummaryFacts: terrainSummaryFacts(terrain, staticCloud) } : {}),
+    ...(terrain && staticCloud ? { terrainSummaryFacts: terrainSummaryFacts(terrain, staticCloud, deps.terrainAnalysedBasis?.()) } : {}),
     subtitle: metadata.fileName,
     visuals: [],          // user-pre-rendered Studio exports
     annotations: viewer.annotate.getAnnotations().map((a) => structuredClone(a)),

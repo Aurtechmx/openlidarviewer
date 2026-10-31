@@ -156,7 +156,7 @@ import type {
   ContourExportPermit,
 } from '../export/contourExportPermit';
 import { permitStamp } from '../export/permitStamp';
-import { DENSITY_REF_SAMPLE_NOTE, densityReferenceFloorFor, isSampledBasis } from '../terrain/export/analysedBasis';
+import { DENSITY_REF_SAMPLE_NOTE, densityReferenceFloorFor, isSampledBasis, type AnalysedBasis } from '../terrain/export/analysedBasis';
 import {
   analysisFreshnessBreach,
   FRESHNESS_REFUSALS,
@@ -1216,6 +1216,11 @@ export class AnalysePanel {
 
   currentResultForProvenance(): AnalyseContoursResult | null {
     return this._freshnessBreach() === null ? this._result : null;
+  }
+
+  /** The analysed basis of the fresh result, the one the map sheet and DEM package state. */
+  currentAnalysedBasis(): AnalysedBasis | null {
+    return this.currentResultForProvenance() ? this._contourFrame?.analysedBasis ?? null : null;
   }
 
   /**
