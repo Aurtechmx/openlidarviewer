@@ -118,6 +118,9 @@ has not been done. v0.7.0 is the current published release.
 - The measurement CSV left horizontal_m, vertical_m, rise_m, run_m and grade_pct empty for a Distance, although the Measure panel shows its run, rise and grade. Those columns are now filled, and withheld with the length when the points are closer than the scan's position step.
 - A contour map sheet exported from Export › Contours read "Deliverable - Custom" after another purpose was chosen in Contour Studio. It now carries the purpose chosen in the Studio.
 - When Auto-classify scan refuses because the scan carries producer classes, the reason now shows under the button as well as in the toast.
+- A note whose scan was closed while its editor was open is no longer saved on Save. Before, it was given to the selected scan while keeping the closed scan's name and position, or saved with no scan when one scan was left.
+- After an edit that keeps every class count, such as two classes swapped, class shares on a display sample are counted on the loaded points. Before, the Classes list, the Scan Report and the report PDF kept the shares of the file sample taken at load.
+- Comparing a coordinate system with no EPSG code read trailing NUL characters with a pattern that slowed with the square of their number, so an EPT `srs.wkt` padded with NULs could hold the page for minutes. The comparison now trims them in one pass, as reading the coordinate system already did.
 - The Technical Report has a Terrain analysis section when a terrain analysis has run: the internal hold-out RMSEz, the bare-earth relief, the share of measured ground cells and the points analysed. On a display sample its Min and Max elevation rows say "(display sample)".
 
 ### Validation
@@ -135,6 +138,8 @@ has not been done. v0.7.0 is the current published release.
 - With two scans open, a note is owned by the scan it was placed on, not the selected scan. Notes placed while only one scan was open belong to that scan once a second static scan is opened. Reopening a session saved with several scans no longer gives notes that record no scan to the selected one; they stay without an owner.
 - Opening a second scan no longer empties the saved-view list while the views are still stored.
 - Cancelling a scan open while the replace question is settling stops the open. Before, the open scan and its work were replaced anyway.
+- `npm run validate:zenodo-small` fails when one of its OLV exports was not written. Before, the run skipped every check for that export and still reported passed.
+- The unreachable-module lint tests edit a temporary copy of `docs/validation/unreachable-modules.json`, through a new `--register <file>` option, instead of rewriting the committed file while other tests read it.
 
 ### Security
 
