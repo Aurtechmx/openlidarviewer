@@ -264,15 +264,16 @@ describe('defect chronology', () => {
   it('rejects a CSV or Markdown view that drifted from the JSON', () => {
     // The three files are rendered from one model, so a hand-edited view is
     // the only way they can disagree. It still has to be caught.
-    const csvPath = resolve(ROOT, 'validation/defects/chronology.csv');
-    const original = readFileSync(csvPath, 'utf8');
-    try {
-      writeFileSync(csvPath, `${original}OLV-DEF-999,unknown\n`);
-      const result = run(VERIFIER);
-      expect(result.status).toBe(1);
-      expect(result.stderr).toContain('E_VIEW_DRIFT');
-    } finally {
-      writeFileSync(csvPath, original);
-    }
+    // The drifted view is a copy in the scratch directory, read through
+    // --views, so a gate running beside this test never sees a corrupt file.
+    const views = mkdtempSync(resolve(scratch, 'views-'));
+    const original = readFileSync(resolve(ROOT, 'validation/defects/chronology.csv'), 'utf8');
+    writeFileSync(resolve(views, 'chronology.md'), readFileSync(resolve(ROOT, 'validation/defects/chronology.md'), 'utf8'));
+    writeFileSync(resolve(views, 'chronology.csv'), original);
+    expect(run(VERIFIER, ['--views', views]).status).toBe(0);
+    writeFileSync(resolve(views, 'chronology.csv'), `${original}OLV-DEF-999,unknown\n`);
+    const result = run(VERIFIER, ['--views', views]);
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain('E_VIEW_DRIFT');
   });
 });
