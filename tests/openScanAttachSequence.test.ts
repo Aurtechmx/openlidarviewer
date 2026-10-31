@@ -144,7 +144,7 @@ function harness(opts: HarnessOptions = {}) {
     addCloud: calls.addCloud,
     clouds: () => [cloud],
     measure: { setLayerResolver: () => {}, claimUnowned: () => {}, getMeasurements: () => [], removeMeasurement: () => null },
-    annotate: { reset: calls.annotateClear, resetHistory: () => {}, getAnnotations: () => [], remove: () => {}, claimUnowned: () => {}, setLayerResolver: () => {} },
+    annotate: { reset: calls.annotateClear, resetHistory: () => {}, getAnnotations: () => [], remove: () => {}, claimUnowned: () => {}, setLayerResolver: () => {}, setLayerPresence: () => {} },
     setCoverageGrid: () => {},
     setMode: () => {},
     frameAll: calls.frameAll,
@@ -916,7 +916,7 @@ describe('a static open over a stream with static layers open', () => {
     h.calls.addCloud.mockImplementation(() => { h.trace.push('addCloud'); added.push('cloud-1'); return 'cloud-1'; });
     viewer.clouds = () => [...statics, ...added];
     viewer.measure = { setLayerResolver: () => {}, clear: vi.fn(() => { measurements.length = 0; }), getMeasurements: () => measurements, removeMeasurement: drop(measurements), claimUnowned: claim(measurements) };
-    viewer.annotate = { reset: h.calls.annotateClear, resetHistory: vi.fn(), getAnnotations: () => annotations, remove: drop(annotations), claimUnowned: claim(annotations), setLayerResolver: () => {} };
+    viewer.annotate = { reset: h.calls.annotateClear, resetHistory: vi.fn(), getAnnotations: () => annotations, remove: drop(annotations), claimUnowned: claim(annotations), setLayerResolver: () => {}, setLayerPresence: () => {} };
     viewer.reconfigureForClouds = vi.fn();
     // The scope is read while the question is open, before anything is removed.
     const scoped: DiscardableWork[] = [];
@@ -981,7 +981,7 @@ describe('a second static scan opened beside the first', () => {
     viewer.annotate = {
       reset: h.calls.annotateClear, resetHistory: vi.fn(), getAnnotations: () => annotations, remove: vi.fn(),
       claimUnowned: vi.fn((layerId: string) => { for (const a of annotations) if (!a.owner) a.owner = { layerId, frame: 'project' }; }),
-      setLayerResolver: setAnnotationResolver,
+      setLayerResolver: setAnnotationResolver, setLayerPresence: vi.fn(),
     };
     const deps: OpenScanDeps = {
       ...h.deps,
