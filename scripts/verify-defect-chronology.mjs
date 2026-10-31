@@ -23,7 +23,7 @@
  * Exit 0 when every check passes, 1 when any fails, 2 on a read or parse error.
  */
 import './lib/confineGit.mjs';
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { join, resolve } from 'node:path';
@@ -56,7 +56,12 @@ const args = process.argv.slice(2);
 const flagIndex = args.indexOf('--chronology');
 const jsonPath = flagIndex === -1 ? OUT_JSON : resolve(args[flagIndex + 1] ?? '');
 const viewsIndex = args.indexOf('--views');
-const viewsDir = viewsIndex === -1 ? null : resolve(args[viewsIndex + 1] ?? '');
+const viewsArg = viewsIndex === -1 ? null : args[viewsIndex + 1];
+const viewsDir = viewsArg == null ? null : resolve(viewsArg);
+if (viewsIndex !== -1 && (viewsDir === null || !existsSync(viewsDir))) {
+  console.error('usage: verify-defect-chronology.mjs [--chronology <file>] [--views <dir>]');
+  process.exit(2);
+}
 const checkViews = flagIndex === -1 || viewsDir !== null;
 
 let model;

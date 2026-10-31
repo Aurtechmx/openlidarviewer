@@ -354,9 +354,9 @@ function section(text: string): HTMLElement {
 /**
  * The panel's resting status line: what it says with no result. The panel
  * only shows with a scan open, so the line points at the Run button rather
- * than asking for a file. Named once because `update(null)` has to put it BACK. Without that, the
- * status kept whatever the last run wrote, so closing a scan left the panel
- * reading "Analysing…" over an empty state.
+ * than asking for a file. Named once because `update(null)` has to put it
+ * BACK. Without that, the status kept whatever the last run wrote, so closing
+ * a scan left the panel reading "Analysing…" over an empty state.
  */
 const IDLE_STATUS = 'No terrain result yet. Run terrain analysis to check whether this scan can support a terrain surface.';
 
