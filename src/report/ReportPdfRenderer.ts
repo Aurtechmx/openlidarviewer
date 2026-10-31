@@ -343,6 +343,8 @@ async function renderSection(
       return renderSourceMetadata(cursor, inputs, doc, accent, theme, body, bold, organisation);
     case 'source-quality':
       return renderScanQuality(cursor, inputs, doc, accent, theme, body, bold, organisation);
+    case 'terrain-summary':
+      return renderTerrainSummary(cursor, inputs, doc, accent, theme, body, bold, organisation);
     case 'visuals':
       return renderVisuals(cursor, inputs, doc, accent, theme, body, bold, organisation);
     case 'annotations':
@@ -1037,6 +1039,35 @@ function renderDatasetSummary(
   cursor = ensureSpace(cursor, 60 + inputs.datasetRows.length * 14, doc, accent, theme, organisation);
   cursor = drawSectionHeader(cursor, 'Dataset summary', accent, bold);
   for (const row of inputs.datasetRows) {
+    cursor = ensureSpace(cursor, 16, doc, accent, theme, organisation);
+    cursor = drawLabelValueRow(cursor, row.label, row.value, body, bold, ctx);
+  }
+  return { page: cursor.page, y: cursor.y - 14 };
+}
+
+/**
+ * Terrain analysis — the session's terrain figures, laid out as the dataset
+ * summary is, under one note that names their basis. Omitted when no terrain
+ * analysis ran.
+ */
+async function renderTerrainSummary(
+  cursor: PageCursor,
+  inputs: ReportInputs,
+  doc: PDFDocument,
+  accent: ParsedColor,
+  theme: ReportThemePalette,
+  body: PDFFont,
+  bold: PDFFont,
+  organisation: string | undefined,
+): Promise<PageCursor> {
+  const t = inputs.terrainSummary;
+  if (!t || t.rows.length === 0) return cursor;
+  const ctx: PageContext = { doc, accent, theme, organisation };
+  cursor = ensureSpace(cursor, sectionKeepTogetherSpace(t.note, body) + t.rows.length * 14, doc, accent, theme, organisation);
+  cursor = drawSectionHeader(cursor, 'Terrain analysis', accent, bold);
+  cursor = drawBodyLine(cursor, t.note, body, ctx);
+  cursor = { page: cursor.page, y: cursor.y - 4 };
+  for (const row of t.rows) {
     cursor = ensureSpace(cursor, 16, doc, accent, theme, organisation);
     cursor = drawLabelValueRow(cursor, row.label, row.value, body, bold, ctx);
   }

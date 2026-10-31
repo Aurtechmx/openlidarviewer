@@ -728,7 +728,12 @@ export function unresolvedMetricKeys(
   const out = new Set<string>();
   switch (m.kind) {
     case 'distance':
-      if (p.length >= 2 && sep(0, 1, all) > B) out.add('length_m');
+      if (p.length >= 2) {
+        if (sep(0, 1, all) > B) out.add('length_m');
+        // Run, rise and grade, as for a profile: a grade needs both.
+        if (sep(0, 1, hz) > B) out.add('horizontal_m').add('run_m').add('grade_pct');
+        if (verticalOver) out.add('vertical_m').add('rise_m').add('grade_pct');
+      }
       break;
     case 'polyline': {
       let e = 0;

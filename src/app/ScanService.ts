@@ -12,7 +12,7 @@
  */
 
 import type { Viewer } from '../render/Viewer';
-import type { PointCloud } from '../model/PointCloud';
+import type { ClassSample, PointCloud } from '../model/PointCloud';
 import type { AppContext } from './appContext';
 
 export interface ScanServiceDeps {
@@ -155,7 +155,7 @@ export interface ActiveLayerSurfaceDeps<Cloud> {
    * all visible, as the open does: the filter was a selection over another
    * layer's classes.
    */
-  refreshClassLegend(classification: ArrayLike<number> | undefined, sample: { readonly loaded: number; readonly declared?: number }): void;
+  refreshClassLegend(classification: ArrayLike<number> | undefined, sample: { readonly loaded: number; readonly declared?: number; readonly shares?: ClassSample }): void;
   /** Re-sync the colour chips to the layer's available modes and its live mode. */
   syncColorMode(): void;
   /** The point-count detail: shown against the file's decoded total. */
@@ -170,6 +170,7 @@ export interface ActiveLayerCloud {
   readonly declaredPointCount?: number;
   readonly decodedPointCount?: number;
   readonly classification?: ArrayLike<number>;
+  readonly classSample?: ClassSample;
 }
 
 /** A static layer became the active scan: describe it everywhere the open would. */
@@ -181,7 +182,7 @@ export function refreshActiveLayerSurfaces<Cloud extends ActiveLayerCloud>(
   deps.refreshCrs(cloud);
   deps.refreshProvenance(cloud, layerId);
   deps.refreshDatasetIntelligence(cloud);
-  deps.refreshClassLegend(cloud.classification, { loaded: cloud.pointCount, declared: cloud.declaredPointCount });
+  deps.refreshClassLegend(cloud.classification, { loaded: cloud.pointCount, declared: cloud.declaredPointCount, shares: cloud.classSample });
   deps.syncColorMode();
   deps.setDetail(cloud.pointCount, cloud.decodedPointCount ?? cloud.pointCount);
   deps.setReport(cloud);

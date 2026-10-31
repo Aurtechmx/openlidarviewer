@@ -162,6 +162,22 @@ function describeCoverage(mode: string): { value: string; rating: SupportingMetr
   return { value: 'unknown', rating: 'unknown' };
 }
 
+/**
+ * The supporting metrics with "Scan scope" restated for a display sample. The
+ * grid reports 'full' whenever it spans the extent, but a load that held only
+ * a sample of the file did not read every point; `sampled` is that fact, from
+ * the analysed basis (`isSampledBasis`). A full read returns `metrics` as is.
+ */
+export function scopeForSampledBasis(
+  metrics: ReadonlyArray<SupportingMetric>,
+  sampled: boolean,
+): ReadonlyArray<SupportingMetric> {
+  if (!sampled) return metrics;
+  return metrics.map((m) =>
+    m.label === 'Scan scope' && m.value === 'full' ? { label: m.label, value: 'display sample', rating: 'fair' } : m,
+  );
+}
+
 /** Band a metric where a HIGHER value is better into good/fair/poor. NaN → 'poor'. */
 export function bandHigh(v: number, goodMin: number, fairMin: number): SupportingMetric['rating'] {
   if (v >= goodMin) return 'good';

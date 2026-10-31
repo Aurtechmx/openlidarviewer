@@ -24,7 +24,7 @@ import {
   renderContourStudioWorkspace,
   type ContourStudioExportProduct,
 } from './contourStudioWorkspace';
-import { createContourStudioController } from '../terrain/contourStudio/contourStudioController';
+import { createContourStudioController, type ContourStudioController } from '../terrain/contourStudio/contourStudioController';
 import { buildContourReviewSummary } from '../terrain/contourStudio/contourReviewSummary';
 import { baseContourStudioState } from '../terrain/contourStudio/contourStudioState';
 import {
@@ -68,6 +68,12 @@ export interface MountContourStudioOptions {
 const WORKSPACE_HOST_CLASS = 'olv-cs-host';
 
 /**
+ * The Studio mounted for each result, so an export run from outside the Studio
+ * (the Export mode's map sheet) carries the purpose the user chose in it.
+ */
+const mountedStudios = new WeakMap<AnalyseContoursResult, ContourStudioController>();
+
+/**
  * The per-frame gate facts for the §19 export permit: the launch status plus
  * the CRS unit facts and the artifact claims of this result. The host adds only
  * the analytical/cartographic flag from the intent when it mints the permit.
@@ -93,9 +99,9 @@ function frameFactsFor(
 }
 
 /**
- * What a Studio export sends when the Studio has not been opened: the intent of
- * the Studio's starting state (the 'custom' purpose, which a fresh Studio
- * exports until a purpose is picked) and the gate facts the mounted Studio
+ * What a Studio export sends from outside the Studio: the intent of the Studio
+ * mounted for this result, so the purpose the user picked there, or of the
+ * starting state (the 'custom' purpose) when none is, and the gate facts the mounted Studio
  * would hand over for this result and frame. The Export mode's map sheet runs
  * through the same adapter with these, so its permit, purpose and provenance
  * are the ones a Studio export of the same scan carries.
@@ -106,7 +112,7 @@ export function defaultContourExport(
 ): { readonly intent: ContourExportIntent; readonly frame: ContourExportFrameFacts } {
   const state = contourStudioLaunchStateFromResult(result, ctx);
   return {
-    intent: contourExportIntentFromState(baseContourStudioState()),
+    intent: contourExportIntentFromState(mountedStudios.get(result)?.getState() ?? baseContourStudioState()),
     frame: frameFactsFor(result, ctx, state),
   };
 }
@@ -117,7 +123,7 @@ export function defaultContourExport(
  * single workspace host inside the deliverable container, so repeated analyses
  * never stack duplicate studios.
  */
-export function mountContourStudio(opts: MountContourStudioOptions): void {
+export function mountContourStudio(opts: MountContourStudioOptions): ContourStudioController {
   const state = contourStudioLaunchStateFromResult(opts.result, opts.ctx);
 
   // Launcher card.
@@ -135,6 +141,7 @@ export function mountContourStudio(opts: MountContourStudioOptions): void {
   }
   host.replaceChildren();
   const controller = createContourStudioController();
+  mountedStudios.set(opts.result, controller);
   // Review summary (PR5): recommendations surfaced from the analysis result.
   // The contour interval gate reports intervals in the surface's SOURCE vertical
   // units (feet for foot data), so we must carry the REAL scale + label from the
@@ -175,4 +182,5 @@ export function mountContourStudio(opts: MountContourStudioOptions): void {
         : undefined,
     }),
   );
+  return controller;
 }

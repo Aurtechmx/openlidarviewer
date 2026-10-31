@@ -22,6 +22,9 @@ import { float32Spacing } from '../src/geo/inMemoryPrecision';
 import type { Measurement, Vec3 } from '../src/render/measure/types';
 import { IDENTITY_LONLAT } from './helpers/geoJsonLonLat';
 
+/** A distance along X held below the step withholds its length, run and grade together. */
+const DISTANCE_HELD_KEYS = ['length_m', 'horizontal_m', 'run_m', 'grade_pct'];
+
 const UP: Vec3 = [0, 0, 1];
 const FAR = 200_000; // metres from the layer origin: a 15.625 mm step
 const NEAR = 1000; // a 0.06 mm step
@@ -54,7 +57,7 @@ describe('unresolvedMetricKeys', () => {
 
   it('withholds a separation on the coarse axis whatever its size, and keeps one on a fine axis', () => {
     const collapsed = m('distance', [[FAR, 0, 0], [FAR, 0, 0]]);
-    expect(unresolvedMetricKeys(collapsed, UP, 1, 1, steps(collapsed.points))).toEqual(['length_m']);
+    expect(unresolvedMetricKeys(collapsed, UP, 1, 1, steps(collapsed.points))).toEqual(DISTANCE_HELD_KEYS);
     expect(measurementMetrics(collapsed, UP, 1, 1, 3, steps(collapsed.points)).length_m).toBeUndefined();
     // Held 15.6 mm apart along X, a 3 m run there can be off by more than 1 cm.
     const alongX = m('distance', [[FAR, 0, 0], [FAR + 3, 0, 0]]);
@@ -87,7 +90,7 @@ describe('unresolvedMetricKeys', () => {
     const d = m('distance', [[far, 0, 0], [far, 0, 0]]);
     const s = linearSteps(steps(d.points), UP, ftUS);
     expect(s.horizontal).toBeCloseTo(float32Spacing(far) * ftUS, 9);
-    expect(unresolvedMetricKeys(d, UP, ftUS, ftUS, steps(d.points))).toEqual(['length_m']);
+    expect(unresolvedMetricKeys(d, UP, ftUS, ftUS, steps(d.points))).toEqual(DISTANCE_HELD_KEYS);
   });
 
   it('states the step and the way out', () => {
@@ -116,7 +119,7 @@ describe('the step follows the layer a measurement was taken on', () => {
       { stableId: 'unplaced', projectOffset: null },
       { stableId: 'placed', projectOffset: [FAR, 0, 0] },
     ]);
-    expect(unresolvedMetricKeys(spanning, UP, 1, 1, r(spanning))).toEqual(['length_m']);
+    expect(unresolvedMetricKeys(spanning, UP, 1, 1, r(spanning))).toEqual(DISTANCE_HELD_KEYS);
   });
 });
 
@@ -126,7 +129,7 @@ describe('every surface withholds the same figure', () => {
   const stepsOf = (x: Measurement) => positionSteps(x.points, null);
 
   it('the note names the key, the step and the remedy', () => {
-    expect(unresolvedNote(collapsed, UP, 1, 1, stepsOf(collapsed))).toMatch(/^length_m not resolved: positions on this scan are held about 15\.63 mm apart/);
+    expect(unresolvedNote(collapsed, UP, 1, 1, stepsOf(collapsed))).toMatch(/^length_m, horizontal_m, run_m, grade_pct not resolved: positions on this scan are held about 15\.63 mm apart/);
     expect(unresolvedNote(steady, UP, 1, 1, stepsOf(steady))).toBeUndefined();
   });
 
@@ -150,7 +153,7 @@ describe('every surface withholds the same figure', () => {
 
   it('PDF rows: the headline is the reason', () => {
     const rows = buildMeasurementRows([collapsed, steady], 'metric', 1, UP, 1, true, false, false, false, stepsOf);
-    expect(rows[0].value).toMatch(/^length_m not resolved/);
+    expect(rows[0].value).toMatch(/^length_m, horizontal_m, run_m, grade_pct not resolved/);
     expect(rows[1].value).toMatch(/3(\.0+)? m/);
   });
 

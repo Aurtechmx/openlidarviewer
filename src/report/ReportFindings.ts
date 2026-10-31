@@ -294,8 +294,9 @@ export function buildInspectionSummary(
     label: 'Vertical accuracy',
     value: '—',
     detail:
-      'Not evaluated in this report. A hold-out RMSEz appears in the Terrain report when ' +
-      'terrain analysis has run; neither replaces independent ground-control checkpoints.',
+      'Not evaluated against independent ground control in this report. When a terrain analysis ' +
+      'has run, the Technical Report states its internal hold-out RMSEz under Terrain analysis; ' +
+      'it does not replace independent ground-control checkpoints.',
     tier: 'unknown',
   });
 

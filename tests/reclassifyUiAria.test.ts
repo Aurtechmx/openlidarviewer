@@ -92,7 +92,7 @@ beforeAll(() => {
   g.HTMLAnchorElement ??= class {};
 });
 
-async function makeUi() {
+async function makeUi(onAutoClassify?: () => Promise<string | void>) {
   const { createReclassifyUi } = await import('../src/ui/reclassifyUi');
   const canvas = new FakeEl('canvas');
   const stage = new FakeEl('div');
@@ -101,10 +101,11 @@ async function makeUi() {
     canvas: canvas as unknown as HTMLCanvasElement,
     getViewer: () => null,
     getActiveId: () => null,
+    ...(onAutoClassify ? { onAutoClassify } : {}),
   });
   const root = ui.element as unknown as FakeEl;
   const armBtn = root.byTestId('reclass-arm')!;
-  return { ui, armBtn };
+  return { ui, armBtn, root };
 }
 
 describe('reclassifyUi — lasso-arm toggle exposes aria-pressed (ANALYSIS-F6)', () => {
@@ -142,5 +143,28 @@ describe('reclassifyUi — lasso-arm toggle exposes aria-pressed (ANALYSIS-F6)',
     const { ui, armBtn } = await makeUi();
     expect(ui.disarm()).toBe(false);
     expect(armBtn.attrs['aria-pressed']).toBe('false');
+  });
+});
+
+// "Auto-classify scan" on a scan with producer classes refuses; the reason
+// shows as a note beside the button, and the next click clears it.
+const settle = (): Promise<void> => new Promise((r) => setTimeout(r, 0));
+
+describe('auto-classify refusal shown beside the button', () => {
+  it('shows the reason after a refused run and clears it on the next click', async () => {
+    const reason = 'Classify · this scan carries producer classes, so they stay as they are. Press Clear classes first to replace them.';
+    let refuse = true;
+    const { root } = await makeUi(async () => (refuse ? reason : undefined));
+    const auto = root.byTestId('reclass-auto')!;
+    const note = () => root.byTestId('reclass-auto-note')!;
+    expect(note().classList.contains('olv-hidden')).toBe(true);
+    auto.click();
+    await settle();
+    expect(note().textContent).toBe(reason);
+    expect(note().classList.contains('olv-hidden')).toBe(false);
+    refuse = false;
+    auto.click();
+    await settle();
+    expect(note().classList.contains('olv-hidden')).toBe(true);
   });
 });

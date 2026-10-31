@@ -27,7 +27,9 @@ import type {
 import { scanQualityFromFacts, type ScanQualityFacts } from './ReportScanQuality';
 import {
   buildDatasetSummary,
+  buildTerrainSummary,
   type MetadataInputs,
+  type TerrainSummaryFacts,
 } from './ReportMetadataSection';
 import { buildAnnotationRows } from './ReportAnnotationSection';
 import { buildMeasurementRows } from './ReportMeasurementSection';
@@ -126,6 +128,8 @@ export interface ComposeReportInputs {
    * nor the builder. Omitted → the section is omitted entirely.
    */
   readonly scanQualityFacts?: ScanQualityFacts;
+  /** The terrain analysis figures for the `terrain-summary` section; omitted when absent. */
+  readonly terrainSummaryFacts?: TerrainSummaryFacts;
   /**
    * Annotation ordering — `'type'` groups issues together at the top,
    * `'createdAt'` (the default) reads chronologically. Mirrors the live
@@ -173,6 +177,7 @@ export function composeReportInputs(input: ComposeReportInputs): ReportInputs {
     provenance: input.provenance,
     sourceMetadata: input.sourceMetadata,
     scanQuality: input.scanQualityFacts ? scanQualityFromFacts(input.scanQualityFacts) : undefined,
+    ...(input.terrainSummaryFacts ? { terrainSummary: buildTerrainSummary(input.terrainSummaryFacts) } : {}),
     // Synthesised once here so every template that includes the
     // `inspection-summary` section renders the same findings. Pure of the
     // renderer; the QL-tier gating lives in buildInspectionSummary.

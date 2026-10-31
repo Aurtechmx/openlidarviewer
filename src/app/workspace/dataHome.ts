@@ -18,6 +18,8 @@ export interface DataHomeDeps {
   classRows(): { code: number; name: string; share: number; color: readonly [number, number, number] }[];
   /** True when the shares describe the loaded display sample, not the whole file. */
   classesSampled?(): boolean;
+  /** The caption naming what the shares are of; null hides it. Wins over `classesSampled`. */
+  classShareNote?(): string | null;
   /** Where the collapse choice is kept per viewer; absent or throwing is fine. */
   storage?: Pick<Storage, 'getItem' | 'setItem'> | null;
   sourceSummary(): string;
@@ -56,6 +58,7 @@ function row(label: string, onClick: () => void): { root: HTMLButtonElement; val
 }
 
 const COLLAPSE_KEY = 'olv.dataHome.classesCollapsed';
+const SAMPLE_SHARE_NOTE = 'Shares of the loaded display sample.';
 
 export function formatShare(share: number): string {
   if (!(share > 0)) return '0%';
@@ -83,7 +86,7 @@ export function createDataHome(d: DataHomeDeps): DataHome {
   list.id = 'olv-data-class-list';
   list.setAttribute('aria-label', 'Classes');
   list.tabIndex = 0; // a capped list scrolls, so the keyboard must reach it
-  const basis = el('p', { className: 'olv-data-class-basis', text: 'Shares of the loaded display sample.' });
+  const basis = el('p', { className: 'olv-data-class-basis', text: SAMPLE_SHARE_NOTE });
   toggle.setAttribute('aria-controls', list.id);
   const openPage = el('button', { className: 'olv-data-class-open', type: 'button', text: 'Open Classes →' });
   openPage.addEventListener('click', () => d.openClasses());
@@ -125,7 +128,9 @@ export function createDataHome(d: DataHomeDeps): DataHome {
     classes.value.textContent = n > 0 ? `${n} detected` : 'None detected';
     toggleValue.textContent = `${n} detected`;
     toggle.setAttribute('aria-label', `Classes, ${n} detected`);
-    basis.hidden = !d.classesSampled?.();
+    const note = d.classShareNote ? d.classShareNote() : d.classesSampled?.() ? SAMPLE_SHARE_NOTE : null;
+    basis.textContent = note ?? '';
+    basis.hidden = !note;
     applyCollapsed();
     list.replaceChildren(...rows.map((r) => {
       const sw = el('span', { className: 'olv-data-class-swatch' });

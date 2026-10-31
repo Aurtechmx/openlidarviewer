@@ -21,6 +21,7 @@ import { classificationLabel } from '../render/pointInfo';
 import { reportClassifyFailure, type ClassifyNoticeSurface } from './classLegendRefresh';
 import { noteEdit } from '../ui/undoRouter';
 import type { Viewer } from '../render/Viewer';
+import type { ClassSample } from '../model/PointCloud';
 import type { CrsService } from '../geo/CrsService';
 import { AUTO_CLASSIFY_LIMITS, NEEDS_LOADED_SCAN } from '../render/class/classLayer';
 
@@ -32,7 +33,7 @@ export interface ClassifyActionsDeps {
   readonly crsService: Pick<CrsService, 'crsRevision' | 'context'>;
   toast(message: string): void;
   readonly legend: ClassifyNoticeSurface & {
-    setClasses(counts: Map<number, number>, sample?: { loaded: number; declared?: number }, pointFormat?: number): void;
+    setClasses(counts: Map<number, number>, sample?: { loaded: number; declared?: number; shares?: ClassSample }, pointFormat?: number): void;
     setDerivedProvenance(on: boolean, info?: { confidencePct?: number | null; warnings?: readonly string[] }): void;
   };
   /** Record the latest derive's 0..1 confidence for the Dataset Story. */
@@ -80,7 +81,9 @@ async function performClassificationDerive(
   d.viewer.applyDerivedClassification(activeId, result.codes, result.classifier.method);
   noteEdit('classification');
   d.setDerivedConfidence(Number.isFinite(result.confidence) ? result.confidence : null);
-  d.legend.setClasses(countClasses(result.codes), { loaded: cloud.pointCount, declared: cloud.declaredPointCount }, cloud.metadata?.pointFormat);
+  // The pre-reduction class counts stay with the legend: they do not describe
+  // derived codes, but Restore brings the source codes back and with them that basis.
+  d.legend.setClasses(countClasses(result.codes), { loaded: cloud.pointCount, declared: cloud.declaredPointCount, shares: cloud.classSample }, cloud.metadata?.pointFormat);
   // Surface the run's honest confidence + caveats in the legend caption, not
   // just a flat "derived" tag — so the user sees WHEN to trust it.
   const confPct = Number.isFinite(result.confidence) ? Math.round(result.confidence * 100) : null;
@@ -111,7 +114,7 @@ function activeLoadedCloud(d: ClassifyActionsDeps, label: string): { id: string;
  * rebuilds the legend, and reports the result with the honest "derived, not
  * survey-grade" caveat.
  */
-export async function runDeriveClassification(d: ClassifyActionsDeps): Promise<void> {
+export async function runDeriveClassification(d: ClassifyActionsDeps): Promise<string | void> {
   if (classifyRunning) return;
   const target = activeLoadedCloud(d, 'Classify');
   if (!target) return;
@@ -129,8 +132,9 @@ export async function runDeriveClassification(d: ClassifyActionsDeps): Promise<v
     ? 0
     : classificationCoverage(cloud.classification, cloud.pointCount).producer;
   if (producerLive > 0) {
-    d.toast('Classify · this scan carries producer classes, so they stay as they are. Press Clear classes first to replace them.');
-    return;
+    const refused = 'Classify · this scan carries producer classes, so they stay as they are. Press Clear classes first to replace them.';
+    d.toast(refused);
+    return refused; // also shown beside the button that ran it
   }
   // RGB (when present) sharpens vegetation on photogrammetry, where geometry
   // alone is noisy — a green, locally-smooth canopy isn't mistaken for a roof.

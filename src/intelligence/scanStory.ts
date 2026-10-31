@@ -48,8 +48,14 @@ export interface ScanStoryInputs {
   readonly captureLabel?: string;
   /** Source point count (the whole cloud, not the resident subset). */
   readonly pointCount?: number;
-  /** Footprint area in m² (NaN/absent ⇒ omitted from the headline). */
+  /** Bounding-box area in m² (NaN/absent ⇒ omitted from the headline). */
   readonly areaM2?: number;
+  /**
+   * Area the data covers in m², from the terrain grid (covered cells × cell
+   * area). Absent when no analysis has run; the headline then states the
+   * bounding box alone.
+   */
+  readonly dataAreaM2?: number;
   /** Surface-quality verdict from terrainAssessment. */
   readonly surfaceTier?: FitnessTier;
   /** The terrain/inspection product grades (the bestFor / caution / not split). */
@@ -169,6 +175,7 @@ function primaryLimiter(i: ScanStoryInputs): string {
   if (i.surfaceTier === 'Blocked') return 'Surface quality — no usable bare-earth model';
   if (i.coverageMode === 'resident-only') return 'Partial coverage: the analysis is a streaming preview';
   if (i.coverageMode === 'sampled') return 'Sampled analysis: figures describe a sample of the points';
+  if (i.coverageMode === 'display-sample') return 'Display sample: figures describe a sample of the file';
   if (i.groundVisibility === 'poor' || i.groundVisibility === 'fair') {
     return 'Ground visibility — bare earth is partly obscured';
   }
@@ -187,6 +194,7 @@ function nextStep(i: ScanStoryInputs): string {
   if (i.surfaceTier === 'Blocked') return 'Re-capture or densify — the current surface has too little bare earth.';
   if (i.coverageMode === 'resident-only') return 'Let the full cloud stream in, then re-run the analysis for a settled grade.';
   if (i.coverageMode === 'sampled') return 'Run terrain on a smaller tile so every point is read.';
+  if (i.coverageMode === 'display-sample') return 'Convert to COPC/EPT, or open a smaller tile, so every point is read.';
   if (i.groundVisibility === 'poor' || i.groundVisibility === 'fair') {
     return 'Capture more exposed ground, or validate the surface against control points.';
   }
@@ -217,8 +225,14 @@ export function densityStoryFields(
 }
 
 export function buildScanStory(i: ScanStoryInputs): ScanStory {
-  const area = formatArea(i.areaM2);
+  // The bounding box is not the area the data covers (a diagonal strip fills a
+  // fraction of its box), so it is named; the grid's covered area leads when known.
+  const box = formatArea(i.areaM2);
+  const data = formatArea(i.dataAreaM2);
   const captureLabel = i.captureLabel ?? 'Point cloud';
+  const area = data
+    ? `${data} data area${box ? ` (${box} bounding box)` : ''}`
+    : box ? `${box} bounding box` : null;
   const headline = area
     ? `${captureLabel} — ${area}, ${formatCount(i.pointCount)}`
     : `${captureLabel} — ${formatCount(i.pointCount)}`;

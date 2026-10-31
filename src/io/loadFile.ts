@@ -518,6 +518,14 @@ function buildSourceMetadata(file: File, preflight: FilePreflight): SourceMetada
     meta.warning =
       `Large ${formatInfo(format).label} (${formatByteSize(file.size)}) — decodes fully in ` +
       `memory, so loading may spike RAM.`;
+  } else if (preflight.largeStaticLas && plan?.rangedRead && plan.mode === 'stride' && plan.stride > 1) {
+    // A display sample: read by ranges and strided, never held whole, so the
+    // whole-file caution below would describe a read that does not happen.
+    meta.warning =
+      `Large ${formatInfo(format).label} (${formatByteSize(file.size)}) — read as a sample of one ` +
+      `record in ${plan.stride} (${formatPointCount(Math.ceil(plan.sourceCount / plan.stride))} of ` +
+      `${formatPointCount(plan.sourceCount)} points). Counts describe the sample. ` +
+      `Convert to COPC/EPT (PDAL or untwine) to stream all of it.`;
   } else if (preflight.largeStaticLas) {
     meta.warning =
       `Large ${formatInfo(format).label} (${formatByteSize(file.size)}) — read fully into ` +

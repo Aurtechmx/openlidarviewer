@@ -65,6 +65,8 @@ const technicalReport: ReportTemplate = {
     'cover',
     'inspection-summary',
     'dataset-summary',
+    // The session's terrain analysis figures; omitted when none ran.
+    'terrain-summary',
     // Full provenance: capture type + signals + literature-cited bounds.
     'provenance',
     // The file's own declared metadata (verbatim, "declared, not verified")

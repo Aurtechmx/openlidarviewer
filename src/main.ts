@@ -1290,7 +1290,7 @@ const classifyDeps = (): ClassifyActionsDeps => ({
   setDerivedConfidence: (c) => { lastDerivedConfidence = c; },
   afterDerive: () => { processStudio.refresh(); void showReclassifyUi(); }, // new classes change what's producible
 });
-const runDeriveClassification = async (): Promise<void> => (await loadClassifyActions()).runDeriveClassification(classifyDeps());
+const runDeriveClassification = async (): Promise<void> => { await (await loadClassifyActions()).runDeriveClassification(classifyDeps()); };
 const runFillUnclassified = async (): Promise<void> => (await loadClassifyActions()).runFillUnclassified(classifyDeps());
 
 /**
@@ -1353,7 +1353,7 @@ function buildCurrentStoryInputs(): ScanStoryInputs {
     pointCount,
     areaM2,
     surfaceTier: facts?.surfaceTier,
-    products: facts?.products,
+    products: facts?.products, dataAreaM2: facts?.dataAreaM2,
     ...densityStoryFields(di?.density),
     groundVisibility: di?.groundVisibility.bucket,
     coverageMode: di?.coverage.bucket,
@@ -1835,7 +1835,7 @@ const mountReclassifyUi = retryableOnce(async () => {
     getViewer: () => viewer,
     getActiveId: () => scans.activeId,
     onToast: showLassoToast,
-    onAutoClassify: () => runDeriveClassification(),
+    onAutoClassify: async () => (await loadClassifyActions()).runDeriveClassification(classifyDeps()), // a refusal shows beside the button
     onReclassified: (cls) => afterClassEdit(classLegendPanel, cls),
   });
   classLegendPanel.element.append(ui.element); // rides with the legend onto the Classes page
@@ -2206,7 +2206,7 @@ void viewerLoaded.then((v) => {
     refreshClassLegend();
     syncColorModeForActive();
   }
-  reclassifyUi?.refresh(); processStudio.refresh(); exportPanel.refresh(); };
+  reclassifyUi?.refresh(); processStudio.refresh(); exportPanel.refresh(); if (id === scans.activeId) refreshScopedReport(); }; // the Scan Report's class line follows the edit
 });
 
 // Per-cloud source files + reduced flags, so the Export panel can re-decode a
@@ -2601,7 +2601,7 @@ function revealAnalysePanel(name: string, settled = true): void {
  * the legend's fresh state is all-visible, so the GPU mask is applied as a
  * no-op identity mask to keep the unfiltered experience unchanged. v0.4.1.
  */
-function refreshClassLegend(classification?: ArrayLike<number>, sample?: { readonly loaded: number; readonly declared?: number }): void {
+function refreshClassLegend(classification?: ArrayLike<number>, sample?: Parameters<ClassLegendPanel['setClasses']>[1]): void {
   if (classification && classification.length > 0) {
     classLegendPanel.setClasses(classCountsOf(classification), sample);
   } else {
@@ -3586,10 +3586,10 @@ const reportExportDeps: ReportExportDeps = {
   scans, measurementOwnership: () => ownershipViewOf(viewer, runtime.layerIdentity.stableIdFor, scans.activeId),
   crsCurrent: () => crsService.current(),
   classScopeStamp: currentClassScopeStamp,
-  baseName,
-  loadReportEngine,
-  dropZone,
-  debug,
+  baseName, loadReportEngine,
+  dropZone, debug,
+  // A fresh terrain result fills the Technical Report's Terrain analysis section.
+  terrainResult: () => analysePanel?.currentResultForProvenance() ?? null,
 };
 
 /**

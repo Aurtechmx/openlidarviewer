@@ -189,7 +189,8 @@ export class TerrainAccessResultGrid {
     this._routeOrder = null;
     this._cursor = clampCell(grid.cols, grid.rows, 0, 0);
     this._redraw();
-    this._updateStatus();
+    // Nothing is picked yet: no readout for a cell the user did not choose.
+    this._status.textContent = '';
   }
 
   setStart(cell: GridCell | null): void {
