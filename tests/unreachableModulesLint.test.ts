@@ -20,8 +20,9 @@
 
 import { describe, it, expect } from 'vitest';
 import { spawnSync } from 'node:child_process';
-import { readFileSync, writeFileSync } from 'node:fs';
-import { resolve, dirname } from 'node:path';
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join, resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
@@ -33,19 +34,24 @@ const runLint = (...args: string[]) =>
     encoding: 'utf8',
   });
 
-/** Run `edit` against a copy of the register, then put the real one back. */
+/**
+ * Run `edit` against a temporary copy of the register and lint with that copy.
+ * The committed register is only read, so tests running in parallel that read
+ * it never see an edited or half-written file.
+ */
 function withRegister(
   edit: (doc: any) => void,
   body: (r: ReturnType<typeof runLint>) => void,
 ): void {
-  const original = readFileSync(REGISTER, 'utf8');
+  const dir = mkdtempSync(join(tmpdir(), 'olv-unreachable-'));
   try {
-    const doc = JSON.parse(original);
+    const doc = JSON.parse(readFileSync(REGISTER, 'utf8'));
     edit(doc);
-    writeFileSync(REGISTER, `${JSON.stringify(doc, null, 2)}\n`);
-    body(runLint());
+    const copy = join(dir, 'unreachable-modules.json');
+    writeFileSync(copy, `${JSON.stringify(doc, null, 2)}\n`);
+    body(runLint('--register', copy));
   } finally {
-    writeFileSync(REGISTER, original);
+    rmSync(dir, { recursive: true, force: true });
   }
 }
 

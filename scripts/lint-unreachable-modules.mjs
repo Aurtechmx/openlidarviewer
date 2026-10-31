@@ -77,7 +77,21 @@ import { fileURLToPath } from 'node:url';
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const SRC = resolve(ROOT, 'src');
 const HTML = resolve(ROOT, 'index.html');
-const REGISTRY = resolve(ROOT, 'docs/validation/unreachable-modules.json');
+/**
+ * The committed register. `--register <file>` reads a copy instead, so tests
+ * can edit a register without touching the real one.
+ */
+const REGISTRY = (() => {
+  const i = process.argv.indexOf('--register');
+  if (i === -1) return resolve(ROOT, 'docs/validation/unreachable-modules.json');
+  const file = process.argv[i + 1];
+  if (!file || file.startsWith('--')) {
+    console.error('lint:unreachable-modules: --register needs a file');
+    console.error('usage: node scripts/lint-unreachable-modules.mjs [--list] [--register <file>]');
+    process.exit(2);
+  }
+  return resolve(file);
+})();
 
 /**
  * The registry is a COMMITTED file keyed by repository-relative path, so the
