@@ -502,7 +502,11 @@ export function buildScanFitness(inp: FitnessInputs): ScanFitness {
     accuracy: unitKnown
       ? 'vertical accuracy isn’t validated'
       : 'coordinate units are unverified, so accuracy can’t be stated',
-    classification: 'points aren’t classified to ground',
+    // Ground classes present but most points unclassified is a different
+    // limit from no ground class at all, so the phrase follows the dimension.
+    classification: inp.hasGroundClass && inp.unclassifiedFraction != null
+      ? `most points are unclassified (${pct(inp.unclassifiedFraction)}%)`
+      : 'points aren’t classified to ground',
     integrity: 'only part of the cloud was analysed',
   };
   // The verdict's LEAD WORD mirrors the authoritative fitness tier (the gate's

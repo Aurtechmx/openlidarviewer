@@ -122,6 +122,10 @@ has not been done. v0.7.0 is the current published release.
 - After an edit that keeps every class count, such as two classes swapped, class shares on a display sample are counted on the loaded points. Before, the Classes list, the Scan Report and the report PDF kept the shares of the file sample taken at load.
 - Comparing a coordinate system with no EPSG code read trailing NUL characters with a pattern that slowed with the square of their number, so an EPT `srs.wkt` padded with NULs could hold the page for minutes. The comparison now trims them in one pass, as reading the coordinate system already did.
 - The Technical Report has a Terrain analysis section when a terrain analysis has run: the internal hold-out RMSEz, the bare-earth relief, the share of measured ground cells and the points analysed. On a display sample its Min and Max elevation rows say "(display sample)".
+- The terrain verdict said "points aren’t classified to ground" on a scan with ground classes where most points were unclassified. It now says that most points are unclassified, with the share.
+- The Technical Report's terrain Basis row now states the same analysed basis as the contour map sheet. On a scan with source ground classes it printed the class 2 points the surface rests on as the points analysed; that count now has its own Surface points row.
+- The measurement CSV now fills angle_deg for a Distance with the grade angle the Measure panel shows.
+- After Auto-classify returned the same codes the scan loaded with, the Classes list kept the shares of the even sample while the Scan Report counted the loaded points. Derived and cleared classes now always take their shares from the loaded points, in both places.
 
 ### Validation
 
@@ -140,6 +144,7 @@ has not been done. v0.7.0 is the current published release.
 - Cancelling a scan open while the replace question is settling stops the open. Before, the open scan and its work were replaced anyway.
 - `npm run validate:zenodo-small` fails when one of its OLV exports was not written. Before, the run skipped every check for that export and still reported passed.
 - The unreachable-module lint tests edit a temporary copy of `docs/validation/unreachable-modules.json`, through a new `--register <file>` option, instead of rewriting the committed file while other tests read it.
+- The `lint:evidence` and defect chronology tests corrupt temporary copies of the release documents and the chronology CSV, through new `--doc-root <dir>` and `--views <dir>` options, instead of rewriting the committed files while other checks read them.
 
 ### Security
 

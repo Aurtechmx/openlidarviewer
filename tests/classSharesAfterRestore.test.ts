@@ -58,11 +58,58 @@ describe('Classes legend shares after Restore', () => {
     });
     expect(legend.shareNote()).toBe('Shares of the loaded display sample.');
 
-    // Restore: the class-edit hook recounts the legend from the source codes.
+    // Restore: the class-edit hook recounts the legend from the source codes
+    // and brings its provenance back to the source.
     held.classification!.set(source);
     legend.replaceCounts(heldClassCounts(held.classification!), classDigest(held.classification!));
+    legend.syncProvenance('source');
     expect(legend.shareNote()).toBe('Shares of an even sample of 1,000 points.');
     expect(legend.classSummary().find((r) => r.code === 1)?.share).toBeCloseTo(60, 6);
+  });
+
+  it('states shares on the loaded points when Auto-classify reproduces the loaded codes', async () => {
+    // The voxel pass keeps half the decoded ground records, so the even sample
+    // is 50 % ground and the held points are all ground. A classifier that
+    // returns the held codes unchanged left the counts and the digest equal to
+    // the load's, so the legend kept the sample (50 %) while the Scan Report,
+    // which reads the derived provenance, counted the held points (100 %).
+    const decoded = cloudOf((i) => (i < 500 ? 2 : 1), 1000, { loadStride: 24, declaredPointCount: 24_000 });
+    const held = cloudOf(() => 2, 100, { loadStride: 24, declaredPointCount: 24_000 });
+    held.classSample = classSampleOf(decoded, held);
+    const legend = new ClassLegendPanel();
+    legend.setClasses(heldClassCounts(held.classification!), { loaded: 100, declared: 24_000, shares: held.classSample, heldDigest: classDigest(held.classification!) });
+    expect(legend.classSummary().find((r) => r.code === 2)?.share).toBeCloseTo(50, 6);
+
+    // Clear first: Auto-classify refuses producer classes.
+    const source = held.classification!.slice();
+    held.setClassificationState('cleared', undefined, source);
+    held.classification!.fill(1);
+    legend.replaceCounts(heldClassCounts(held.classification!), classDigest(held.classification!));
+    legend.syncProvenance('cleared');
+    derive.mockResolvedValue({ codes: source.slice(), confidence: 0.5, warnings: [], classifier: { method: 'm@1' } });
+    const { runDeriveClassification } = await import('../src/app/classifyActions');
+    await runDeriveClassification({
+      viewer: {
+        getCloud: () => held,
+        classificationEpoch: () => 0,
+        applyDerivedClassification: (_id: string, codes: Uint8Array, method: string) => { held.attachDerivedClassification(codes, method); return true; },
+      } as never,
+      activeId: () => 'a',
+      crsService: { crsRevision: () => 1, context: () => ({}) as never },
+      toast: () => {},
+      legend,
+      setDerivedConfidence: () => {},
+      afterDerive: () => {},
+    });
+    const report = cloudClassShareBasis(held)!;
+    expect(report.fromSample).toBe(false);
+    expect(legend.shareNote()).toBe('Shares of the loaded display sample.');
+    expect(legend.classSummary().find((r) => r.code === 2)?.share).toBeCloseTo(100, 6);
+
+    // Restore puts the source provenance back, and the sample applies again.
+    legend.replaceCounts(heldClassCounts(held.classification!), classDigest(held.classification!));
+    legend.syncProvenance('source');
+    expect(legend.shareNote()).toBe('Shares of an even sample of 1,000 points.');
   });
 
   it('leaves the even-sample basis after two classes are swapped', () => {

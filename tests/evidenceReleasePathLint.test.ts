@@ -6,14 +6,19 @@
  * the v0.6.4 cycle. lint-evidence still built root paths, so a wrong test count
  * inside a real release document was invisible: the path did not exist, the
  * loop's `existsSync → continue` skipped it, and the guard fell back to a
- * different file. This writes a false bucket total into the real release
- * document and requires the lint to refuse it, so the path can never silently
- * drift back to the root.
+ * different file. This writes a false bucket total into the release document
+ * and requires the lint to refuse it, so the path can never silently drift
+ * back to the root.
+ *
+ * The fault goes into a copy of the release documents, laid out at the same
+ * repo-relative paths and handed to the lint with --doc-root, so a gate
+ * running beside this test never reads a corrupted document.
  */
 
 import { describe, it, expect } from 'vitest';
 import { spawnSync } from 'node:child_process';
-import { readFileSync, writeFileSync } from 'node:fs';
+import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 // @ts-expect-error — plain .mjs helper, no types
@@ -23,8 +28,21 @@ const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const VERSION = JSON.parse(readFileSync(resolve(ROOT, 'package.json'), 'utf8')).version as string;
 const evidence = JSON.parse(readFileSync(resolve(ROOT, 'docs/validation/test-evidence.json'), 'utf8'));
 
-const runLint = () =>
-  spawnSync('node', ['scripts/lint-evidence.mjs'], { cwd: ROOT, encoding: 'utf8' });
+const runLint = (docRoot: string) =>
+  spawnSync('node', ['scripts/lint-evidence.mjs', '--doc-root', docRoot], { cwd: ROOT, encoding: 'utf8' });
+
+/** Copy the release documents the lint reads into a fresh directory at the same relative paths. */
+function copyReleaseDocs(): string {
+  const dir = mkdtempSync(resolve(tmpdir(), 'olv-release-docs-'));
+  const docs = releaseDocsFor(VERSION) as Record<string, string>;
+  for (const rel of [...Object.values(docs), `READINESS_REPORT_v${VERSION}.md`, 'ARTIFACT_EVALUATION.md']) {
+    const src = resolve(ROOT, rel);
+    if (!existsSync(src)) continue;
+    mkdirSync(dirname(resolve(dir, rel)), { recursive: true });
+    cpSync(src, resolve(dir, rel));
+  }
+  return dir;
+}
 
 describe('lint:evidence release-doc path', () => {
   it('names the release document only while a false bucket total is in it', () => {
@@ -36,28 +54,29 @@ describe('lint:evidence release-doc path', () => {
     // unrelated reason, and this test runs inside the gate that regeneration
     // waits on.
     const doc = releaseDocsFor(VERSION).validationReport as string;
-    const abs = resolve(ROOT, doc);
-    const original = readFileSync(abs, 'utf8');
+    const committed = readFileSync(resolve(ROOT, doc), 'utf8');
     // A bucket count that cannot be the real one (real unit passed is thousands).
     const bucket = Object.keys(evidence.buckets)[0];
-
-    const before = runLint();
-    expect(before.stderr + before.stdout).not.toContain(doc);
-
-    let during;
+    const dir = copyReleaseDocs();
     try {
-      writeFileSync(abs, `${original}\n${bucket} 1 passed\n`);
-      during = runLint();
-    } finally {
-      writeFileSync(abs, original);
-    }
-    expect(during.status).not.toBe(0);
-    expect(during.stderr + during.stdout).toContain(doc);
+      const before = runLint(dir);
+      expect(before.stderr + before.stdout).not.toContain(doc);
 
-    // Removing the fault removes the complaint, and the verdict returns to
-    // whatever the tree's own state was.
-    const after = runLint();
-    expect(after.stderr + after.stdout).not.toContain(doc);
-    expect(after.status).toBe(before.status);
+      writeFileSync(resolve(dir, doc), `${committed}\n${bucket} 1 passed\n`);
+      const during = runLint(dir);
+      expect(during.status).not.toBe(0);
+      expect(during.stderr + during.stdout).toContain(doc);
+
+      // Removing the fault removes the complaint, and the verdict returns to
+      // whatever the tree's own state was.
+      writeFileSync(resolve(dir, doc), committed);
+      const after = runLint(dir);
+      expect(after.stderr + after.stdout).not.toContain(doc);
+      expect(after.status).toBe(before.status);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+    // The committed document is never written.
+    expect(readFileSync(resolve(ROOT, doc), 'utf8')).toBe(committed);
   });
 });

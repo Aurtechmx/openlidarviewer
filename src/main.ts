@@ -3589,7 +3589,7 @@ const reportExportDeps: ReportExportDeps = {
   baseName, loadReportEngine,
   dropZone, debug,
   // A fresh terrain result fills the Technical Report's Terrain analysis section.
-  terrainResult: () => analysePanel?.currentResultForProvenance() ?? null,
+  terrainResult: () => analysePanel?.currentResultForProvenance() ?? null, terrainAnalysedBasis: () => analysePanel?.currentAnalysedBasis() ?? null,
 };
 
 /**

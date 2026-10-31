@@ -66,9 +66,9 @@ describe('measurementsToCsv — formula-injection neutralisation', () => {
 });
 
 describe('measurementMetrics', () => {
-  it('distance → length in metres, with its run, rise and grade', () => {
+  it('distance → length in metres, with its run, rise, grade and grade angle', () => {
     expect(measurementMetrics(DISTANCE, UP, 1)).toEqual({
-      length_m: 5, horizontal_m: 5, vertical_m: 0, run_m: 5, rise_m: 0, grade_pct: 0,
+      length_m: 5, horizontal_m: 5, vertical_m: 0, run_m: 5, rise_m: 0, grade_pct: 0, angle_deg: 0,
     });
   });
 
