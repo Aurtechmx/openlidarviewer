@@ -37,6 +37,22 @@ const readBytes = (p) => {
     return null;
   }
 };
+/**
+ * Where the release documents are read from: the repository, or with
+ * `--doc-root <dir>` a copy laid out the same way. Its tests corrupt a copy
+ * through this, so the committed documents are only ever read.
+ */
+const DOC_ROOT = (() => {
+  const i = process.argv.indexOf('--doc-root');
+  if (i === -1) return ROOT;
+  const dir = process.argv[i + 1];
+  if (!dir || !existsSync(dir)) {
+    console.error('usage: lint-evidence.mjs [--doc-root <dir>]');
+    process.exit(2);
+  }
+  return resolve(dir);
+})();
+const readDoc = (p) => readFileSync(resolve(DOC_ROOT, p), 'utf8');
 const problems = [];
 const notes = [];
 
@@ -194,7 +210,7 @@ const DOCS = [
   releaseDocs.releaseNotes,
   'ARTIFACT_EVALUATION.md',
 ];
-if (DOCS.every((d) => !existsSync(resolve(ROOT, d)))) {
+if (DOCS.every((d) => !existsSync(resolve(DOC_ROOT, d)))) {
   problems.push(
     `no release evidence documents exist for v${VERSION} — the figure guard would pass vacuously. Expected at least one of: ${DOCS.join(', ')}.`,
   );
@@ -203,8 +219,8 @@ if (DOCS.every((d) => !existsSync(resolve(ROOT, d)))) {
 const parseCount = (s) => Number(s.replace(/,/g, ''));
 
 for (const doc of DOCS) {
-  if (!existsSync(resolve(ROOT, doc))) continue;
-  const text = read(doc);
+  if (!existsSync(resolve(DOC_ROOT, doc))) continue;
+  const text = readDoc(doc);
 
   for (const [bucket, counts] of Object.entries(evidence.buckets)) {
     // "Unit 2,927" / "unit 2,927 passed" / "· export 598 ·"
@@ -259,8 +275,8 @@ for (const doc of DOCS) {
 if (evidence.bundle?.liveEntryKiB) {
   const actual = evidence.bundle.liveEntryKiB;
   for (const doc of DOCS) {
-    if (!existsSync(resolve(ROOT, doc))) continue;
-    for (const line of read(doc).split('\n')) {
+    if (!existsSync(resolve(DOC_ROOT, doc))) continue;
+    for (const line of readDoc(doc).split('\n')) {
       // Historical notes about a PREVIOUS release legitimately quote its size.
       if (/alpha\.1|grew from|cutting the live entry|from 792/i.test(line)) continue;
       for (const m of line.matchAll(/(\d{3,4})\s*KiB/g)) {
