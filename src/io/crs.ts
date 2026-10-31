@@ -575,6 +575,17 @@ export function bufferRangeReader(buffer: ArrayBuffer): ByteRangeReader {
 // ─────────────────────────────────────────────────────────────────────────────
 
 /**
+ * Trim wrapper whitespace and trailing NUL terminators. A scan from the end,
+ * not /\0+$/, which retries from every NUL of a run that is not at the end
+ * and so takes time in the square of the run.
+ */
+function trimWkt(wkt: string): string {
+  let end = wkt.length;
+  while (end > 0 && wkt.charCodeAt(end - 1) === 0) end -= 1;
+  return wkt.slice(0, end).trim();
+}
+
+/**
  * WKT → {@link CrsInfo}. Tokenises the WKT into a `KEYWORD["name", child, …]`
  * AST (see {@link parseWkt}) and reads every field by STRUCTURE: the CRS name,
  * horizontal EPSG (`AUTHORITY["EPSG",…]` / `ID["EPSG",…]` on the CRS node
@@ -590,11 +601,7 @@ export function bufferRangeReader(buffer: ArrayBuffer): ByteRangeReader {
  * the horizontal slice of a compound CRS decides name / EPSG / unit.
  */
 export function crsFromWkt(wkt: string): CrsInfo {
-  // Trim wrapper whitespace + null terminators. A scan from the end, not
-  // /\0+$/, which retries from every NUL of a run that is not at the end.
-  let end = wkt.length;
-  while (end > 0 && wkt.charCodeAt(end - 1) === 0) end -= 1;
-  const text = wkt.slice(0, end).trim();
+  const text = trimWkt(wkt);
 
   // A BOUNDCRS (WKT2) is analysed as its SOURCECRS, the CRS the coordinates
   // are in. Its TARGETCRS and transformation carry their own units (the
@@ -738,7 +745,7 @@ const NON_DEFINING_WKT_KEYWORDS: ReadonlySet<string> = new Set([
  */
 export function crsDefinitionKey(wkt: string | undefined): string | undefined {
   if (!wkt) return undefined;
-  const parsed = parseWkt(wkt.replace(/\0+$/, '').trim());
+  const parsed = parseWkt(trimWkt(wkt));
   if (!parsed) return undefined;
   const root = sourceOfBoundCrs(parsed);
   const horizontal = isCompoundKeyword(root.keyword)

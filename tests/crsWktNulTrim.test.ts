@@ -1,13 +1,13 @@
 /**
  * crsWktNulTrim.test.ts
  *
- * crsFromWkt strips trailing NUL terminators before parsing. The text can come
+ * crsFromWkt and crsDefinitionKey strip trailing NUL terminators before parsing. The text can come
  * from a remote ept.json (srs.wkt), so a long run of NULs must be handled in
  * linear time, including a run followed by another character, where an
  * anchored regex retries from every NUL.
  */
 import { describe, it, expect } from 'vitest';
-import { crsFromWkt } from '../src/io/crs';
+import { crsFromWkt, crsDefinitionKey } from '../src/io/crs';
 
 const WKT =
   'PROJCS["NAD83 / UTM zone 18N",GEOGCS["NAD83",DATUM["North_American_Datum_1983",' +
@@ -55,4 +55,25 @@ describe('crsFromWkt trailing NULs', () => {
   it('a string of only NULs parses like an empty one', () => {
     expect(crsFromWkt('\0'.repeat(NUL_RUN))).toEqual(crsFromWkt(''));
   });
+});
+
+// The CRS comparison key reads the same text when two layers or an export are
+// checked against each other, so it must trim in linear time as well.
+describe('crsDefinitionKey trailing NULs', () => {
+  // No AUTHORITY clause: the key is built from the definition, not an EPSG code.
+  const CUSTOM = WKT.replace(',AUTHORITY["EPSG","26918"]', '');
+
+  it('keys a NUL-terminated WKT the same as the plain text', () => {
+    const plain = crsDefinitionKey(CUSTOM);
+    expect(plain).toBeTruthy();
+    expect(crsDefinitionKey(`${CUSTOM}\0\0`)).toBe(plain);
+  });
+
+  for (const tail of ['', 'x']) {
+    it(`handles ${NUL_RUN} NULs followed by ${JSON.stringify(tail)} quickly`, () => {
+      const t0 = performance.now();
+      crsDefinitionKey(CUSTOM + '\0'.repeat(NUL_RUN) + tail);
+      expect(performance.now() - t0).toBeLessThan(LIMIT_MS);
+    });
+  }
 });
