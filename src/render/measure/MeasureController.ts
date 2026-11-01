@@ -13,6 +13,7 @@
  */
 
 import { areaRingVerdictCached } from './areaValidity';
+import { listenToDragPointer } from './dragPointer';
 import type * as THREE from 'three/webgpu';
 import { el, politeStatus } from '../../ui/dom';
 import { installNativeTitleStrip, setStrippableTitle } from './nativeTitleStrip';
@@ -488,8 +489,12 @@ export class MeasureController {
   // `x`/`y` are where the press began; `moved` turns true past the drag slop,
   // and only then does the press edit the vertex. A press released inside the
   // slop is a click on the vertex, which places a point there.
-  /** `start` is every point of the dragged measurement as it was, for an Esc during the drag. */
-  private _drag: { id: string; vi: number; x: number; y: number; moved: boolean; start: Vec3[] } | null = null;
+  /** `start` and `layers` are the dragged measurement's points and pick layers as they were, for a cancelled drag. */
+  private _drag: { id: string; vi: number; x: number; y: number; moved: boolean; start: Vec3[]; layers: string[] | undefined } | null = null;
+  /** Detaches the drag's window listeners (see `listenToDragPointer`). */
+  private _detachDrag: (() => void) | null = null;
+  /** Set while the tool is paused for navigation (hold Space): handles take no presses. */
+  private _navPaused = false;
   /** Where the last canvas press began, so a click that ended a drag places nothing. */
   private _press: { x: number; y: number; slop: number } | null = null;
   /** Bumped by every whole-list replace, so an Undo never restores into another list. */
@@ -500,8 +505,6 @@ export class MeasureController {
   private _dragNdcX = 0;
   private _dragNdcY = 0;
   private _dragDirty = false;
-  private readonly _onDragMove: (e: PointerEvent) => void;
-  private readonly _onDragUp: (e: PointerEvent) => void;
 
   /** Completed measurements. */
   private _measurements: Measurement[] = [];
@@ -773,8 +776,6 @@ export class MeasureController {
     this._renderKindButtons();
 
     // Handle dragging: a pointerdown on a vertex handle starts an edit drag.
-    this._onDragMove = (e) => this._handleDragMove(e);
-    this._onDragUp = (e) => this._endDrag(e);
     this._draw.element.addEventListener('pointerdown', (e) => this._handlePointerDown(e));
   }
 
@@ -1632,7 +1633,7 @@ export class MeasureController {
     this._snap.setWarming(on);
     this._draft = null;
     this._cursor = null;
-    if (!on) this._endDrag();
+    if (!on) this.cancelDrag(); // a drag the tool change interrupted goes back, as Esc would
     this.hint.classList.toggle('olv-hidden', !on);
     this._syncPhoneHint();
     this._updateHint();
@@ -1978,7 +1979,7 @@ export class MeasureController {
   /** Free DOM references. */
   dispose(): void {
     if (this._noticeTimer !== undefined) clearTimeout(this._noticeTimer);
-    this._endDrag();
+    this.cancelDrag();
     this._draw.dispose();
     this.hint.remove();
     this._phoneHintEl.remove();
@@ -2193,9 +2194,19 @@ export class MeasureController {
     try { return fn(); } finally { if (--this._holds === 0 && this._owed) { this._owed = false; this._onChange?.(); } }
   }
 
+  /**
+   * Pause or resume the tool for navigation. While paused the handles let
+   * presses through to the camera, and a press cannot start a vertex edit.
+   */
+  setNavigationPaused(paused: boolean): void {
+    if (paused) this.cancelDrag(); // the pointer goes to the camera, so a drag it began ends unedited
+    this._navPaused = paused;
+    this._draw.element.classList.toggle('olv-nav-paused', paused);
+  }
+
   /** A pointerdown on a vertex handle begins an edit drag. */
   private _handlePointerDown(e: PointerEvent): void {
-    if (!this._active) return;
+    if (!this._active || this._navPaused || this._drag) return;
     const target = e.target as SVGElement | null;
     const mid = target?.dataset.mid ?? null;
     const viAttr = target?.dataset.vi ?? null;
@@ -2204,28 +2215,19 @@ export class MeasureController {
     if (!m) return;
     e.preventDefault();
     const start = m.points.map((p): Vec3 => [p[0], p[1], p[2]]);
-    this._drag = { id: mid, vi: Number(viAttr), x: e.clientX, y: e.clientY, moved: false, start };
+    this._drag = { id: mid, vi: Number(viAttr), x: e.clientX, y: e.clientY, moved: false, start, layers: m.pickLayers?.slice() };
     this._dragRect = this._draw.element.getBoundingClientRect();
     this._cursor = null;
-    window.addEventListener('pointermove', this._onDragMove);
-    window.addEventListener('pointerup', this._onDragUp);
-    window.addEventListener('keydown', this._onDragKey, true);
+    // Only this pointer moves or ends the drag; its cancel, a focus loss or Esc puts the vertex back.
+    this._detachDrag = listenToDragPointer(e.pointerId, { move: (ev) => this._handleDragMove(ev), up: (ev) => this._endDrag(ev), cancel: () => this.cancelDrag() });
   }
-
-  /** Esc while a handle is dragged: the vertex goes back where the drag began, and the key goes no further. */
-  private readonly _onDragKey = (e: KeyboardEvent): void => {
-    if (e.key !== 'Escape') return;
-    e.preventDefault();
-    e.stopImmediatePropagation();
-    this.cancelDrag();
-  };
 
   /** End a handle drag with the measurement as it was before it. True when a drag was open. */
   cancelDrag(): boolean {
     const drag = this._drag;
     if (!drag) return false;
     const m = this._measurements.find((x) => x.id === drag.id);
-    if (m && drag.moved) drag.start.forEach((p, i) => { m.points[i] = [p[0], p[1], p[2]]; });
+    if (m && drag.moved) { drag.start.forEach((p, i) => { m.points[i] = [p[0], p[1], p[2]]; }); m.pickLayers = drag.layers?.slice(); } // a scan the drag passed over is not one the points came from
     this._endDrag();
     return true;
   }
@@ -2288,9 +2290,8 @@ export class MeasureController {
     this._drag = null;
     this._dragRect = null;
     this._dragDirty = false;
-    window.removeEventListener('pointermove', this._onDragMove);
-    window.removeEventListener('pointerup', this._onDragUp);
-    window.removeEventListener('keydown', this._onDragKey, true);
+    this._detachDrag?.();
+    this._detachDrag = null;
     // Released without moving: a click on the vertex, not an edit.
     if (!drag.moved) {
       if (e) this._placeOnVertex(draggedId, drag.vi, e.clientX, e.clientY);

@@ -4550,6 +4550,8 @@ body:has(.olv-colorbar.olv-colorbar-floating) .olv-project-card {
    the only cue that a vertex can be dragged. */
 .olv-m-handle:hover { fill: var(--ui-accent-a0p28); stroke: var(--accent); stroke-width: 1; }
 .olv-m-handle:active { cursor: grabbing; }
+/* Paused for navigation (hold Space): a press on a handle moves the camera. */
+.olv-nav-paused .olv-m-handle { pointer-events: none; }
 
 /* ── Annotation markers ──────────────────────────────────────────────────── */
 .olv-anno-svg {

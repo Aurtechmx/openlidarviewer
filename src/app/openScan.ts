@@ -229,6 +229,7 @@ export interface OpenScanDeps {
   refreshClassLegend: (
     classification?: ArrayLike<number>,
     sample?: { readonly loaded: number; readonly declared?: number; readonly shares?: ClassSample },
+    provenance?: string,
   ) => void;
   /** `?debug=1` — console diagnostics + overlay telemetry. */
   readonly debug: boolean;
@@ -928,7 +929,7 @@ export async function attachStaticCloud(
       declared: result.cloud.declaredPointCount,
       // Shares are stated from the decoded records' classes, not the voxel centroids.
       shares: result.cloud.classSample,
-    });
+    }, result.cloud.classificationProvenance);
   } catch (err) {
     if (deps.debug) console.warn('[class-legend] refresh threw', err);
   }

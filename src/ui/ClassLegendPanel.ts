@@ -129,6 +129,12 @@ export class ClassLegendPanel {
   private _shareSample: ClassSample | undefined;
   private _heldDigest: number | undefined;
   /**
+   * The derive run's full caption (support and top warning), by the digest of
+   * the codes it described, so a scan that becomes active again shows the
+   * caption its run wrote rather than the plain one.
+   */
+  private readonly _derivedCaptions = new Map<number, string>();
+  /**
    * Whether the held codes are still the source file's. Derived or cleared
    * codes never take the load's histogram, even when they match the loaded
    * codes, which is the rule the Scan Report reads (cloudClassShareBasis).
@@ -407,6 +413,7 @@ export class ClassLegendPanel {
       if (info.warnings && info.warnings.length > 0) {
         text += ` ⚠ ${info.warnings[0]}`;
       }
+      if (this._heldDigest !== undefined) this._derivedCaptions.set(this._heldDigest, text);
     }
     this._provenance.textContent = text;
   }
@@ -418,7 +425,11 @@ export class ClassLegendPanel {
    * source classes were cleared, hidden for the source's own classes.
    */
   syncProvenance(state: string): void {
-    if (state !== 'derived' || !this._derived) this.setDerivedProvenance(state === 'derived');
+    if (state !== 'derived' || !this._derived) {
+      this.setDerivedProvenance(state === 'derived');
+      const caption = state === 'derived' && this._heldDigest !== undefined ? this._derivedCaptions.get(this._heldDigest) : undefined;
+      if (caption) this._provenance.textContent = caption;
+    }
     this._sourceCodes = state === 'source';
     if (state === 'cleared') {
       this._provenance.textContent = `Classification: ${CLEARED_CLASS_NOTE}.`;

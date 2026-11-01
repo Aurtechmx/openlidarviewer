@@ -210,7 +210,7 @@ import { getEdlPreset, type EdlPresetId } from './edlPresets';
 import type { Vec3, VolumeRecord } from './measure/types';
 import { TouchTracker } from './touchTracker';
 import type { GestureDelta } from './touchGesture';
-import { TouchTapGate } from './touchTapGate';
+import { TouchTapGate, doubleClickAction } from './touchTapGate';
 import { CameraPoseWatch, DampingSettleGate, FrameDemand, VisibleHeartbeat } from './frameDemand';
 import { resolveStreamingCompatibilityFromCrs, resolvedOrDeclared } from './streamingCompatibility';
 import { InspectTool } from './InspectTool';
@@ -3900,7 +3900,7 @@ export class Viewer {
   setToolPaused(paused: boolean): void {
     if (!this.toolActive || this._toolPaused === paused) return;
     this._toolPaused = paused;
-    this._nav.setInputEnabled(paused);
+    this._nav.setInputEnabled(paused); this._measure.setNavigationPaused(paused);
     // Inspect owns its own cursor; measure / annotate use the crosshair.
     if (paused) this._canvas.style.cursor = 'grab';
     else if (this._toolMode === 'inspect') this._canvas.style.cursor = '';
@@ -3909,7 +3909,7 @@ export class Viewer {
 
   private _setToolMode(mode: ToolMode): void {
     if (mode === this._toolMode) return;
-    this._toolPaused = false;
+    this._toolPaused = false; this._measure.setNavigationPaused(false);
     this._toolMode = mode;
     this._measure.setActive(mode === 'measure');
     this._inspect.setActive(mode === 'inspect');
@@ -5546,11 +5546,11 @@ export class Viewer {
     // commit on their last click, so a double-click there is a
     // no-op anyway. Releasing this branch lets the focus-on-point
     // behaviour win when no tool is active.
-    if (this._toolMode === 'measure') {
-      this._measure.finishCurrent();
-      return;
-    }
-    if (this._toolMode !== 'none') return; // other tools handle their own dbl
+    // Paused for navigation (hold Space), a double-click belongs to the camera,
+    // as a click does: it focuses like the no-tool case and leaves the draft open.
+    const action = doubleClickAction(this._toolMode, this._toolPaused);
+    if (action === 'finish') this._measure.finishCurrent();
+    if (action !== 'focus') return;
     const ndcX = (e.offsetX / this._canvas.clientWidth) * 2 - 1;
     const ndcY = -(e.offsetY / this._canvas.clientHeight) * 2 + 1;
     const point = this.pickPoint(ndcX, ndcY);

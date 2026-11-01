@@ -78,7 +78,7 @@ import type { AnalysePanel } from './ui/AnalysePanel';
 import { ClassLegendPanel } from './ui/ClassLegendPanel';
 import type { ReclassifyUi } from './ui/reclassifyUi';
 import { countClasses } from './render/class/classHistogram';
-import { activeScanHasClassEdits, afterClassEdit, classCountsOf, classDigest, editedStaticLayerNames, layerRemovalClassEditsLine, noteClassificationEdited, staticClassEditWork, wireFrameChange } from './app/classLegendRefresh';
+import { activeScanHasClassEdits, afterClassEdit, seedClassLegend, editedStaticLayerNames, layerRemovalClassEditsLine, noteClassificationEdited, staticClassEditWork, wireFrameChange } from './app/classLegendRefresh';
 import type { ClassifyActionsDeps } from './app/classifyActions';
 import { buildExportHealth, densityStoryFields, footprintAreaM2, type ScanStoryInputs } from './intelligence/scanStory';
 import { fullScope, scopeFrom, scopeStamp, type ClassScope } from './render/class/classScope';
@@ -1802,6 +1802,7 @@ function hydrateAnalysePanel(): void {
   terrainRunner.refreshDatasetStory(analysePanel);
   analysePanel.setVisible(analyseDesiredVisible); if (analyseExpanded) analysePanel.expand();
   analysePanel.setConfidenceColorActive(currentColorMode === 'confidence');
+  analysePanel.setClipScopeNote(clipPanel.enabled);
 }
 
 // Classification legend — one row per ASPRS class present in the scan, with a
@@ -2437,6 +2438,7 @@ exportPanel.setCrsKnown(crsIsKnown(crsService.current()));
 const { clipPanel, clipFlow } = mountClip({ overlay: stage.overlay, viewer: () => viewer, ready: () => viewerReady, toast: showLassoToast, workflow: workflowController,
   activeId: () => scans.activeId, activeLayerId: () => (scans.activeId ? runtime.layerIdentity.stableIdFor(scans.activeId) : null), revealScene: () => workspaceShell?.revealScene(),
   openPage: (p, o) => workspaceShell?.openToolPage(p, o), measurePanel: () => measureMount.panel, crs: crsService });
+clipPanel.subscribe(() => analysePanel?.setClipScopeNote(clipPanel.enabled)); // every on/off change, restore and scan close: the Terrain page says a run does not use the clip
 
 // The Tools tab held only the Clip box until a tool had been used, so it could
 // not say what the tab was for. This card (lazy chunk) lists the tools from the
@@ -2601,12 +2603,8 @@ function revealAnalysePanel(name: string, settled = true): void {
  * the legend's fresh state is all-visible, so the GPU mask is applied as a
  * no-op identity mask to keep the unfiltered experience unchanged. v0.4.1.
  */
-function refreshClassLegend(classification?: ArrayLike<number>, sample?: Parameters<ClassLegendPanel['setClasses']>[1]): void {
-  if (classification && classification.length > 0) {
-    classLegendPanel.setClasses(classCountsOf(classification), sample && { ...sample, heldDigest: classDigest(classification) });
-  } else {
-    classLegendPanel.setClasses(new Map(), sample);
-  }
+function refreshClassLegend(classification?: ArrayLike<number>, sample?: Parameters<ClassLegendPanel['setClasses']>[1], provenance?: string): void {
+  seedClassLegend(classLegendPanel, classification, sample, provenance); // the layer's own provenance, before Process Studio reads it below
   // Apply the (all-visible) mask so a previously-filtered scan can't leak its
   // hidden classes onto the freshly loaded one. No-op for the common case.
   viewer.applyClassVisibility(classLegendPanel.getVisibility());

@@ -6,13 +6,16 @@
 //  - The report running in the removed layer's class filter: the legend is
 //    reseeded before the report reads its scope.
 //  - The shell's activateLayer bypassing the shared refresh.
+//  - A switch back to a layer with derived classes reseeding the legend as
+//    the source's, so its shares fell back to the load sample while the Scan
+//    Report, which reads the cloud's provenance, still counted the held codes.
 
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, it, expect, vi } from 'vitest';
 import { refreshActiveLayerSurfaces, refreshStreamSurfaces, type ActiveLayerSurfaceDeps, type StreamSurfaceDeps } from '../src/app/ScanService';
 
-type Cloud = { pointCount: number; declaredPointCount?: number; decodedPointCount?: number; classification?: Uint8Array };
+type Cloud = { pointCount: number; declaredPointCount?: number; decodedPointCount?: number; classification?: Uint8Array; classificationProvenance?: string };
 
 function deps() {
   const order: string[] = [];
@@ -33,12 +36,12 @@ describe('refreshActiveLayerSurfaces', () => {
   it('describes the promoted layer on every per-scan surface', () => {
     const { d } = deps();
     const cls = new Uint8Array([2, 2, 6]);
-    const cloud: Cloud = { pointCount: 3, declaredPointCount: 10, decodedPointCount: 8, classification: cls };
+    const cloud: Cloud = { pointCount: 3, declaredPointCount: 10, decodedPointCount: 8, classification: cls, classificationProvenance: 'derived' };
     refreshActiveLayerSurfaces(d, cloud, 'cloud-2');
     expect(d.refreshCrs).toHaveBeenCalledWith(cloud);
     expect(d.refreshProvenance).toHaveBeenCalledWith(cloud, 'cloud-2');
     expect(d.refreshDatasetIntelligence).toHaveBeenCalledWith(cloud);
-    expect(d.refreshClassLegend).toHaveBeenCalledWith(cls, { loaded: 3, declared: 10 });
+    expect(d.refreshClassLegend).toHaveBeenCalledWith(cls, { loaded: 3, declared: 10 }, 'derived');
     expect(d.syncColorMode).toHaveBeenCalledTimes(1);
     expect(d.setDetail).toHaveBeenCalledWith(3, 8);
     expect(d.setReport).toHaveBeenCalledWith(cloud);
@@ -55,7 +58,7 @@ describe('refreshActiveLayerSurfaces', () => {
     const { d } = deps();
     refreshActiveLayerSurfaces(d, { pointCount: 5 }, 'c');
     expect(d.setDetail).toHaveBeenCalledWith(5, 5);
-    expect(d.refreshClassLegend).toHaveBeenCalledWith(undefined, { loaded: 5, declared: undefined });
+    expect(d.refreshClassLegend).toHaveBeenCalledWith(undefined, { loaded: 5, declared: undefined }, undefined);
   });
 
   it('is what the shell runs when a layer becomes active', () => {
@@ -64,6 +67,16 @@ describe('refreshActiveLayerSurfaces', () => {
     expect(start).toBeGreaterThan(-1);
     const body = main.slice(start, main.indexOf('\nfunction ', start + 1));
     expect(body).toContain('refreshActiveLayerSurfaces(');
+  });
+
+  it('restores the layer provenance on the legend before Process Studio reads it', () => {
+    const main = readFileSync(join(import.meta.dirname, '..', 'src', 'main.ts'), 'utf8');
+    const start = main.indexOf('function refreshClassLegend(');
+    expect(start).toBeGreaterThan(-1);
+    const body = main.slice(start, main.indexOf('\n}\n', start));
+    const sync = body.indexOf('seedClassLegend(classLegendPanel, classification, sample, provenance)');
+    expect(sync).toBeGreaterThan(-1);
+    expect(sync).toBeLessThan(body.indexOf('processStudio.refresh()'));
   });
 });
 
