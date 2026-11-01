@@ -1801,7 +1801,7 @@ function hydrateAnalysePanel(): void {
   if (analyseScanTypeArgs) analysePanel.setScanType(...analyseScanTypeArgs);
   terrainRunner.refreshDatasetStory(analysePanel);
   analysePanel.setVisible(analyseDesiredVisible); if (analyseExpanded) analysePanel.expand();
-  analysePanel.setConfidenceColorActive(currentColorMode === 'confidence');
+  analysePanel.setConfidenceColorActive(currentColorMode === 'confidence'); if (viewerReady) analysePanel.setClipScopeNote(viewer.getClip()?.enabled === true);
 }
 
 // Classification legend — one row per ASPRS class present in the scan, with a
@@ -2434,7 +2434,7 @@ exportPanel.setCrsKnown(crsIsKnown(crsService.current()));
 // Clip box: an axis-aligned box the viewer renders through (a GPU per-point keep test in the
 // size graph) and draws in the scene, with an exact CPU kept-count; the panel, the Box → clip flow
 // and their viewer wiring are built in clipMount.ts over the pure `clipBox` core.
-const { clipPanel, clipFlow } = mountClip({ overlay: stage.overlay, viewer: () => viewer, ready: () => viewerReady, toast: showLassoToast, workflow: workflowController,
+const { clipPanel, clipFlow } = mountClip({ onClipChange: (on) => analysePanel?.setClipScopeNote(on), overlay: stage.overlay, viewer: () => viewer, ready: () => viewerReady, toast: showLassoToast, workflow: workflowController,
   activeId: () => scans.activeId, activeLayerId: () => (scans.activeId ? runtime.layerIdentity.stableIdFor(scans.activeId) : null), revealScene: () => workspaceShell?.revealScene(),
   openPage: (p, o) => workspaceShell?.openToolPage(p, o), measurePanel: () => measureMount.panel, crs: crsService });
 
@@ -3326,7 +3326,7 @@ const viewStateCoordinator = createViewStateCoordinator({
   getViewer: () => viewer,
   inspector,
   classLegend: classLegendPanel,
-  clipPanel,
+  clipPanel, onClipRestored: (on) => analysePanel?.setClipScopeNote(on), // the Terrain page says a run does not use the clip
   bookmarks,
   hasScan,
   getActiveScanId: () => scans.activeId,

@@ -360,6 +360,14 @@ function section(text: string): HTMLElement {
  */
 const IDLE_STATUS = 'No terrain result yet. Run terrain analysis to check whether this scan can support a terrain surface.';
 
+/**
+ * Shown while a clip box is active. The clip limits what is drawn, picked and
+ * exported as points, but the terrain gather reads every loaded point of the
+ * visible scans, so a run and its products cover the whole scan.
+ */
+export const CLIP_SCOPE_NOTE =
+  'A clip box is active. Terrain analysis does not use it: it reads every loaded point of the visible scans, so results and terrain exports cover the whole scan.';
+
 /** Resting tooltip for the Intelligence Report button; swapped for the reason when disabled. */
 const REPORT_BUTTON_TITLE =
   'Download a one-page terrain intelligence report: assessment, coverage, accuracy, recommended workflows and which products you can take away';
@@ -508,6 +516,9 @@ export class AnalysePanel {
    * same everywhere.
    */
   private readonly _staleNotice: HTMLElement;
+  /** {@link CLIP_SCOPE_NOTE}, under the Run button while a clip box is active. */
+  private readonly _clipScopeNote: HTMLElement;
+  private _clipScopeShown = false;
   /** The run/re-run button. */
   private readonly _runBtn: HTMLButtonElement;
   /** Everything that only makes sense once an analysis result exists. */
@@ -701,6 +712,7 @@ export class AnalysePanel {
     // role/aria props, so the attributes are set directly.
     this._status.setAttribute('role', 'status');
     this._status.setAttribute('aria-live', 'polite');
+    this._clipScopeNote = el('p', { className: 'olv-caveat olv-analyse-clip-scope olv-hidden', text: CLIP_SCOPE_NOTE });
     this._assessmentRow = el('div', { className: 'olv-analyse-assessment' });
     this._scoreRow = el('div', { className: 'olv-analyse-score' });
     this._surfaceRow = el('div', { className: 'olv-analyse-surface' });
@@ -833,6 +845,7 @@ export class AnalysePanel {
       subtitle,
       this._datasetStoryHost,
       this._runBtn,
+      this._clipScopeNote,
       this._status,
       this._parts.range,
       this._parts.features,
@@ -1060,6 +1073,18 @@ export class AnalysePanel {
     } else {
       for (const host of [this._status, this._readinessRow]) clearBusyScan(host);
     }
+  }
+
+  /** Show {@link CLIP_SCOPE_NOTE} while a clip box is active; a no-op when unchanged. */
+  setClipScopeNote(clipActive: boolean): void {
+    if (this._clipScopeShown === clipActive) return;
+    this._clipScopeShown = clipActive;
+    this._clipScopeNote.classList.toggle('olv-hidden', !clipActive);
+  }
+
+  /** Whether the clip-scope note is showing. */
+  clipScopeNoteShown(): boolean {
+    return this._clipScopeShown;
   }
 
   /**

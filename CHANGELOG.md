@@ -131,6 +131,7 @@ has not been done. v0.7.0 is the current published release.
 - Switching to another scan and back reset the Classes list of a scan with derived or cleared classes to the source's: it dropped the Derived caption and took its shares from the load sample, while the Scan Report still counted the loaded points, and Process Studio read the derived ground as the producer's. The list now takes the scan's own classification state on every switch and on open.
 - A double-click while a measurement was paused with Space finished the measurement. It now focuses the camera, as a double-click with no tool does, and the measurement stays open. While paused, a press on a vertex handle moves the camera instead of editing the vertex.
 - Dragging a measurement vertex followed any pointer, so a second finger could end the drag. A cancelled touch or a window losing focus left the drag open, and turning the tool off mid-drag kept the half-dragged vertex. Only the pointer that began a drag now moves or ends it, and a cancel, a focus loss or a tool change puts the vertex back.
+- With a clip box active, terrain analysis read every loaded point while drawing, picking and point export kept only the clipped points, and nothing said so. The Terrain page now states this for as long as a clip is active.
 
 ### Validation
 

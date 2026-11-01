@@ -105,6 +105,8 @@ export interface ViewStateCoordinatorDeps {
   inspector: ViewStateInspector;
   classLegend: ViewStateClassLegend;
   clipPanel: ViewStateClipPanel;
+  /** Told whether the restored clip is active, as the clip panel's apply tells the shell. */
+  onClipRestored?: (active: boolean) => void;
   /** The saved-view list service; only the read/append operations are used. */
   bookmarks: Pick<ViewBookmarksService, 'add' | 'get' | 'names'>;
   /** Whether a scan is on stage — the same predicate that gates the tool shortcuts. */
@@ -253,6 +255,7 @@ export function createViewStateCoordinator(
         // the viewer already holds it, and firing through the panel while its
         // own enabled flag was still false used to clear the restored clip.
         deps.clipPanel.setState(clip);
+        deps.onClipRestored?.(clip.enabled);
       },
       camera: (camera) => {
         // Fly the live camera to the saved viewpoint — the orchestrator applies
