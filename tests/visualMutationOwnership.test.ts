@@ -41,6 +41,9 @@ const RESERVED = new Set(['constructor', 'if', 'for', 'while', 'switch', 'catch'
 function bodyOf(name: string): string {
   const at = source.search(new RegExp(`\\n  (?:private )?(?:async )?${name}\\s*\\(`));
   expect(at, `${name} is not a method on Viewer`).toBeGreaterThan(-1);
+  // A one-line method ends on its own line; reading on to the next `  }` would take in the method after it.
+  const firstLine = source.slice(at, source.indexOf('\n', at + 1));
+  if (/\{.*\}\s*$/.test(firstLine) && !firstLine.trimEnd().endsWith('{')) return firstLine;
   return source.slice(at, source.indexOf('\n  }\n', at));
 }
 

@@ -17,6 +17,15 @@ import { DoubleTapDetector } from './doubleTapDetector';
 export const TOUCH_SLOP_PX = 10;
 const DRAG_SLOP_SQ = TOUCH_SLOP_PX * TOUCH_SLOP_PX;
 
+/**
+ * Radius of the invisible circle that takes a press on a measurement vertex
+ * (CSS px). 12 is a 24 px target for a mouse; where the primary pointer is a
+ * finger it is 22, a 44 px target, so a vertex can be dragged without zooming in.
+ */
+export function handleHitRadius(coarsePointer: boolean): number {
+  return coarsePointer ? 22 : 12;
+}
+
 export interface TapPoint {
   readonly x: number;
   readonly y: number;

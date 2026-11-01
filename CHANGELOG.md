@@ -132,6 +132,8 @@ has not been done. v0.7.0 is the current published release.
 - A double-click while a measurement was paused with Space finished the measurement. While any tool is paused with Space, a double-click now focuses the camera, as it does with no tool, and the measurement stays open. While paused, a press on a vertex handle moves the camera instead of editing the vertex.
 - Dragging a measurement vertex followed any pointer, so a second finger could end the drag. A cancelled touch or a window losing focus left the drag open, and turning the tool off mid-drag kept the half-dragged vertex. Only the pointer that began a drag now moves or ends it, and a cancel, a focus loss, a mouse button released outside the page, holding Space or a tool change puts the vertex back, along with the scans the measurement records it was picked on.
 - With a clip box active, terrain analysis read the loaded points inside and outside the box while drawing, picking and point export kept only the clipped points, and nothing said so. The Terrain page now states this for as long as a clip is active.
+- When the clip box, the class filter or the elevation or intensity filter hid every loaded point of the visible scans, the view went blank and nothing said why. A card now names what is on and offers Turn off clip or Reset filters, whichever applies, until something is drawn again.
+- On a touch screen the area that takes a press on a measurement vertex was 24 px across, about half a fingertip. It is now 44 px where the main pointer is a finger, and stays 24 px for a mouse.
 
 ### Validation
 

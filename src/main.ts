@@ -2437,7 +2437,7 @@ exportPanel.setCrsKnown(crsIsKnown(crsService.current()));
 // and their viewer wiring are built in clipMount.ts over the pure `clipBox` core.
 const { clipPanel, clipFlow } = mountClip({ overlay: stage.overlay, viewer: () => viewer, ready: () => viewerReady, toast: showLassoToast, workflow: workflowController,
   activeId: () => scans.activeId, activeLayerId: () => (scans.activeId ? runtime.layerIdentity.stableIdFor(scans.activeId) : null), revealScene: () => workspaceShell?.revealScene(),
-  openPage: (p, o) => workspaceShell?.openToolPage(p, o), measurePanel: () => measureMount.panel, crs: crsService });
+  openPage: (p, o) => workspaceShell?.openToolPage(p, o), measurePanel: () => measureMount.panel, crs: crsService, emptyView: { classes: { isFiltered: () => classLegendPanel.getVisibility().isFiltered(), showAll: () => classLegendPanel.applyFilter([]) }, ranges: { elevation: () => activeElevFilter !== null, intensity: () => activeIntenFilter !== null, clear: () => { inspector.restoreElevationFilter(null); inspector.restoreIntensityFilter(null); } } } });
 clipPanel.subscribe(() => analysePanel?.setClipScopeNote(clipPanel.enabled)); // every on/off change, restore and scan close: the Terrain page says a run does not use the clip
 
 // The Tools tab held only the Clip box until a tool had been used, so it could

@@ -62,7 +62,7 @@ import { imageExportModeAvailability, type ExportModeAvailability } from './expo
 import { buildColorLegend, type ColorLegend } from './colorLegend';
 import { resolveSceneOrigin } from '../io/coordinateBridge';
 import type { ClassVisibility } from './class/classVisibility';
-import { buildPointFilterAccept, elevWindowFieldsFor } from './pointFilterAccept';
+import { ShownPointsMemo, buildPointFilterAccept, elevWindowFieldsFor } from './pointFilterAccept';
 import { PHI_CONJUGATE } from './streaming/fadeDither';
 import type { PointFilterWindow } from './pointFilterAccept';
 import { elevationFilterUniform, type UpAxis } from './elevationFilterUniform';
@@ -2227,6 +2227,15 @@ export class Viewer {
     });
   }
 
+  private readonly _shownMemo = new ShownPointsMemo();
+  /** Whether a visible static layer draws any loaded point through the clip and the class, elevation and intensity filters (the pick's own test, remembered until one of them changes); null with no visible static layer or with a stream open, whose nodes are not counted. */
+  anyPointShown(): boolean | null {
+    const on = [...this._clouds].filter(([, e]) => e.mesh.visible);
+    if (this._streaming || on.length === 0) return null;
+    return this._shownMemo.shown([this._clip, this._classFiltered && Array.from(this._classMaskUniform.array as ArrayLike<number>), this._elevFilterWorld, this._elevGpu.isActive(), this._intenFilterEnabled.value, this._intenFilterMin.value, this._intenFilterMax.value],
+      on.map(([k, e]) => ({ key: [k, e.cloud.pointCount, this.classificationEpoch(k), e.placement ?? null], count: Math.trunc(e.cloud.pointCount), accept: () => this._pickAccept(e.cloud.positions, e.cloud.classification, e.cloud.intensity, this._currentFilterWindow(this._elevLayerOf(e.cloud)), accumulatorOffset(e.placement)) })));
+  }
+
   /** Exclude (or re-include) a cloud from picking / measuring / inspecting. */
   setCloudLocked(id: string, locked: boolean): void {
     const entry = this._clouds.get(id);
@@ -2234,9 +2243,7 @@ export class Viewer {
   }
 
   /** Whether a cloud is currently locked out of picking. */
-  isCloudLocked(id: string): boolean {
-    return this._clouds.get(id)?.locked === true;
-  }
+  isCloudLocked(id: string): boolean { return this._clouds.get(id)?.locked === true; }
 
   // ─────────────────────────────────────────────────────────────────────────
   // Colour mode & point size
@@ -2282,9 +2289,7 @@ export class Viewer {
    * True once a DTM-confidence grid exists, so the Coverage / Confidence
    * colour modes are meaningful.
    */
-  hasCoverageGrid(): boolean {
-    return this._coverageGrid != null;
-  }
+  hasCoverageGrid(): boolean { return this._coverageGrid != null; }
 
   /**
    * Cheap per-CELL summary of the confidence grid (fraction of covered cells
@@ -2745,9 +2750,7 @@ export class Viewer {
   }
 
   /** The cloud's classification edit epoch (0 = never edited). */
-  classificationEpoch(id: string): number {
-    return this._classEpochs.current(id);
-  }
+  classificationEpoch(id: string): number { return this._classEpochs.current(id); }
 
   /** Whether a result stamped at `epoch` was invalidated by a later edit. */
   isClassificationStale(id: string, epoch: number): boolean {
@@ -2918,14 +2921,10 @@ export class Viewer {
 
   classFilterDrawnCount(id: string): number { const a = this._clouds.get(id)?.mesh.geometry.getAttribute('aClass')?.array, m = this._classMaskUniform.array as number[]; return a ? Array.from(a).filter((c) => m[Math.round(c)] !== 0).length : -1; }
   /** Whether the cloud has a classification edit that can be undone. */
-  canUndoClassification(id: string): boolean {
-    return this._classHistory.get(id)?.canUndo ?? false;
-  }
+  canUndoClassification(id: string): boolean { return this._classHistory.get(id)?.canUndo ?? false; }
 
   /** Whether the cloud has an undone classification edit that can be redone. */
-  canRedoClassification(id: string): boolean {
-    return this._classHistory.get(id)?.canRedo ?? false;
-  }
+  canRedoClassification(id: string): boolean { return this._classHistory.get(id)?.canRedo ?? false; }
 
   /**
    * Attach a DERIVED (heuristic) classification to a cloud that had none and

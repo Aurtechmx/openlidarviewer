@@ -15,8 +15,10 @@
 .olv-m-label-primary { font-size: var(--text-md); }
 .olv-m-handle { pointer-events: all; fill: transparent; cursor: grab; }
 /* The handle is invisible until the pointer is over it; the cursor alone was
-   the only cue that a vertex can be dragged. */
-.olv-m-handle:hover { fill: var(--ui-accent-a0p28); stroke: var(--accent); stroke-width: 1; }
+   the only cue that a vertex can be dragged. Only where the pointer can hover:
+   after a tap a touch screen keeps :hover, which would leave the larger touch
+   target drawn over the vertex. */
+@media (hover: hover) { .olv-m-handle:hover { fill: var(--ui-accent-a0p28); stroke: var(--accent); stroke-width: 1; } }
 .olv-m-handle:active { cursor: grabbing; }
 /* Paused for navigation (hold Space): a press on a handle moves the camera. */
 .olv-nav-paused .olv-m-handle { pointer-events: none; }
@@ -423,7 +425,7 @@
   body:has(.olv-measure-bar:not(.olv-hidden)) .olv-flow-lane { left: 88px; }
 }
 .olv-flow-lane > * { pointer-events: auto; max-width: 100%; box-sizing: border-box; }
-.olv-result-card, .olv-clip-indicator {
+.olv-result-card, .olv-clip-indicator, .olv-empty-view {
   background: var(--panel); border: 0.5px solid var(--hairline); border-radius: var(--radius-lg);
   -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px);
   box-shadow: var(--shadow-floating); color: var(--text); font-size: var(--text-sm);
@@ -456,6 +458,9 @@
   font-size: var(--text-xs);
 }
 .olv-clip-ind-text { white-space: nowrap; }
+/* Nothing drawn: what is on, and the fixes that apply. */
+.olv-empty-view { display: flex; flex-direction: column; gap: var(--space-sm); padding: var(--space-lg) var(--space-xl); max-width: 360px; }
+.olv-empty-view-text { margin: 0; line-height: 1.4; }
 .olv-clip-ind-clear {
   font: inherit; font-size: var(--text-xs); cursor: pointer; color: var(--text-dim);
   padding: var(--space-xs) var(--space-lg); border-radius: var(--radius-pill);
