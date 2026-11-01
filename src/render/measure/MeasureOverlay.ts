@@ -16,6 +16,7 @@ import type { Vec3 } from '../navMath';
 import { isLabelCoordDrawable, layoutLabels, MAX_DRAWN_LABELS, selectLabelsToDraw } from './labelLayout';
 import type { LabelBox } from './labelLayout';
 import { standaloneSvg, viewBoxSize } from '../snapshotSvg';
+import { handleHitRadius } from '../touchTapGate';
 
 const SVG_NS = 'http://www.w3.org/2000/svg';
 
@@ -128,6 +129,8 @@ export class MeasureOverlay {
   private readonly _ndc = new THREE.Vector3();
   private readonly _cameraSpace = new THREE.Vector3();
   private readonly _world = new THREE.Vector3();
+  /** Whether the primary pointer is a finger; read at each draw, so a tablet docked to a mouse follows. */
+  private readonly _coarse = typeof matchMedia === 'function' ? matchMedia('(pointer: coarse)') : null;
 
   constructor() {
     this.element = document.createElementNS(SVG_NS, 'svg');
@@ -215,7 +218,7 @@ export class MeasureOverlay {
       } else dotClass = 'olv-measure-dot';
       kids.push(svg('circle', { cx: p.x, cy: p.y, r: dotRadius, class: dotClass }));
       if (vx.handle) {
-        const hit = svg('circle', { cx: p.x, cy: p.y, r: 12, class: 'olv-m-handle' });
+        const hit = svg('circle', { cx: p.x, cy: p.y, r: handleHitRadius(this._coarse?.matches === true), class: 'olv-m-handle' });
         hit.dataset.mid = vx.handle.mid;
         hit.dataset.vi = String(vx.handle.vi);
         kids.push(hit);
