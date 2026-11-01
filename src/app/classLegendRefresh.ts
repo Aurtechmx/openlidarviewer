@@ -44,7 +44,8 @@ import type { ResolvedCrs } from '../geo/CoordinateTypes';
 import { countClasses } from '../render/class/classHistogram';
 import { toClassBuffer } from '../render/class/classBuffer';
 import { SyncFallbackRefusedError } from '../workers/syncFallbackRefusedError';
-import { classDigest, type ClassSample } from '../model/classShareBasis';
+import { classDigest } from '../model/classShareBasis';
+import type { ClassCountSample } from '../ui/ClassLegendPanel';
 
 export { classDigest };
 
@@ -55,7 +56,7 @@ export function classCountsOf(classification: ArrayLike<number>): Map<number, nu
 
 /** The legend calls a layer's classes take on open and on becoming the active scan. */
 export interface ClassLegendSeed {
-  setClasses(counts: Map<number, number>, sample?: { readonly loaded: number; readonly declared?: number; readonly shares?: ClassSample; readonly heldDigest?: number }): void;
+  setClasses(counts: Map<number, number>, sample?: ClassCountSample): void;
   syncProvenance(state: string): void;
 }
 
@@ -68,7 +69,7 @@ export interface ClassLegendSeed {
 export function seedClassLegend(
   legend: ClassLegendSeed,
   classification: ArrayLike<number> | undefined,
-  sample: { readonly loaded: number; readonly declared?: number; readonly shares?: ClassSample } | undefined,
+  sample: Omit<ClassCountSample, 'heldDigest'> | undefined,
   provenance?: string,
 ): void {
   if (!classification || classification.length === 0) {
@@ -92,6 +93,8 @@ export interface ClassEditNotifyDeps {
   readonly classification: ArrayLike<number> | null | undefined;
   /** The edited cloud's classification provenance, when known. */
   readonly provenance?: string;
+  /** Whether the edited cloud is the active scan, the one the legend describes. */
+  readonly active: boolean;
   readonly legend: ClassCountSink;
   /** Drop the cached terrain core and abort any in-flight compute. */
   readonly clearTerrainCache: () => void;
@@ -128,13 +131,14 @@ export const CLASS_EDIT_STALE_NOTICE =
 
 /**
  * Settle every surface a class edit invalidated. Always drops the terrain cache
- * and stamps the stale caveat; recounts the legend when the cloud still carries
- * a classification buffer (an unknown id or a class-less cloud leaves the panel
- * alone rather than blanking it).
+ * and stamps the stale caveat; recounts the legend when the edited cloud is the
+ * active scan and still carries a classification buffer (an unknown id, another
+ * scan or a class-less cloud leaves the panel alone rather than blanking it).
  */
 export function noteClassificationEdited(deps: ClassEditNotifyDeps): void {
   deps.clearTerrainCache();
   deps.noteStale(CLASS_EDIT_STALE_NOTICE);
+  if (!deps.active) return; // the legend describes the active scan, not the edited one
   const cls = deps.classification;
   if (cls && cls.length > 0) deps.legend.replaceCounts(classCountsOf(cls), classDigest(cls));
   if (deps.provenance) deps.legend.syncProvenance?.(deps.provenance);

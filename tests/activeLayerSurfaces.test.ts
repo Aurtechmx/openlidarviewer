@@ -41,7 +41,7 @@ describe('refreshActiveLayerSurfaces', () => {
     expect(d.refreshCrs).toHaveBeenCalledWith(cloud);
     expect(d.refreshProvenance).toHaveBeenCalledWith(cloud, 'cloud-2');
     expect(d.refreshDatasetIntelligence).toHaveBeenCalledWith(cloud);
-    expect(d.refreshClassLegend).toHaveBeenCalledWith(cls, { loaded: 3, declared: 10 }, 'derived');
+    expect(d.refreshClassLegend).toHaveBeenCalledWith(cls, { loaded: 3, declared: 10, scan: 'cloud-2' }, 'derived');
     expect(d.syncColorMode).toHaveBeenCalledTimes(1);
     expect(d.setDetail).toHaveBeenCalledWith(3, 8);
     expect(d.setReport).toHaveBeenCalledWith(cloud);
@@ -58,7 +58,7 @@ describe('refreshActiveLayerSurfaces', () => {
     const { d } = deps();
     refreshActiveLayerSurfaces(d, { pointCount: 5 }, 'c');
     expect(d.setDetail).toHaveBeenCalledWith(5, 5);
-    expect(d.refreshClassLegend).toHaveBeenCalledWith(undefined, { loaded: 5, declared: undefined }, undefined);
+    expect(d.refreshClassLegend).toHaveBeenCalledWith(undefined, { loaded: 5, declared: undefined, scan: 'c' }, undefined);
   });
 
   it('is what the shell runs when a layer becomes active', () => {

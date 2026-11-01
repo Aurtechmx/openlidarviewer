@@ -2286,6 +2286,8 @@ export class MeasureController {
   private _endDrag(e?: PointerEvent): void {
     const drag = this._drag;
     if (!drag) return;
+    // A release can land before the frame that re-picks the last move: apply that move, then the release point if it hits (a cancel passes no event).
+    if (e && drag.moved) { this._applyDrag(); this._handleDragMove(e); this._applyDrag(); }
     const draggedId = drag.id;
     this._drag = null;
     this._dragRect = null;

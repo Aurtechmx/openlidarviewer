@@ -363,11 +363,12 @@ const IDLE_STATUS = 'No terrain result yet. Run terrain analysis to check whethe
 /**
  * Shown while a clip box is active. The clip limits what is drawn, picked and
  * exported as points, but the terrain gather reads the visible scans' loaded
- * points inside and outside the box (sampled on a large scan, as without a
- * clip), so a run and its products cover the whole scan.
+ * points inside and outside the box. Those are not always the whole file: a
+ * reduced load, a stream's resident nodes and the gather's own point cap all
+ * leave points out, as they do without a clip.
  */
 export const CLIP_SCOPE_NOTE =
-  'A clip box is active. Terrain analysis does not use it: it reads the loaded points of the visible scans inside and outside the box, so results and terrain exports cover the whole scan.';
+  'A clip box is active. Terrain analysis does not use it: it reads the loaded points of the visible scans inside and outside the box. Results and terrain exports are not limited to the box, and on a large or streaming scan they cover a sample of the file.';
 
 /** Resting tooltip for the Intelligence Report button; swapped for the reason when disabled. */
 const REPORT_BUTTON_TITLE =

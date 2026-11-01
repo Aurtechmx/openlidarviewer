@@ -73,6 +73,7 @@ describe('revealing the class a lasso reclassify wrote into', () => {
     const { panel } = panelWithFilter();
     noteClassificationEdited({
       classification: Uint8Array.from([1, 6, 6, 2]),
+      active: true,
       legend: panel,
       clearTerrainCache: () => {},
       noteStale: () => {},

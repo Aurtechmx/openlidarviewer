@@ -6,6 +6,9 @@
  * and the Scan Report both read 100 % ground. Switching to another scan and
  * back reseeded the legend as the source's: it read 50 % off the load sample
  * and dropped the Derived caption, while the report still read 100 %.
+ *
+ * The derive caption was also kept by the codes alone, so a second scan with
+ * the same derived codes showed the first scan's support and warning.
  */
 import { describe, it, expect, beforeAll } from 'vitest';
 import { PointCloud } from '../src/model/PointCloud';
@@ -25,8 +28,19 @@ function cloudOf(codes: (i: number) => number, n: number): PointCloud {
 }
 
 /** The shell's refreshClassLegend seed for a layer, as the active-layer refresh calls it. */
-function reseed(legend: ClassLegendPanel, cloud: PointCloud): void {
-  seedClassLegend(legend, cloud.classification, { loaded: cloud.pointCount, declared: cloud.declaredPointCount, shares: cloud.classSample }, cloud.classificationProvenance);
+function reseed(legend: ClassLegendPanel, cloud: PointCloud, scan?: string): void {
+  seedClassLegend(legend, cloud.classification, { loaded: cloud.pointCount, declared: cloud.declaredPointCount, shares: cloud.classSample, scan }, cloud.classificationProvenance);
+}
+
+const captionOf = (legend: ClassLegendPanel) => (legend as unknown as { _provenance: { textContent: string } })._provenance.textContent;
+
+/** A layer whose source classes were replaced by derived codes equal to them. */
+function derivedLayer(): PointCloud {
+  const c = cloudOf(() => 2, 100);
+  const source = c.classification!.slice();
+  c.setClassificationState('cleared', undefined, source);
+  c.attachDerivedClassification(source.slice(), 'm@1');
+  return c;
 }
 
 const groundShare = (legend: ClassLegendPanel) => legend.classSummary().find((r) => r.code === 2)?.share;
@@ -82,12 +96,27 @@ describe('class provenance after switching scans', () => {
     const legend = new ClassLegendPanel();
     reseed(legend, a);
     legend.setDerivedProvenance(true, { confidencePct: 62, warnings: ['Sparse ground'] });
-    const caption = (legend as unknown as { _provenance: { textContent: string } })._provenance.textContent;
+    const caption = captionOf(legend);
     expect(caption).toContain('Support 0.62');
     expect(caption).toContain('Sparse ground');
     reseed(legend, cloudOf((i) => (i % 2 ? 2 : 6), 100));
     reseed(legend, a);
-    expect((legend as unknown as { _provenance: { textContent: string } })._provenance.textContent).toBe(caption);
+    expect(captionOf(legend)).toBe(caption);
+  });
+
+  it('does not give a scan another scan\'s caption when their derived codes match', () => {
+    const a = derivedLayer();
+    const b = derivedLayer();
+    const legend = new ClassLegendPanel();
+    reseed(legend, a, 'a');
+    legend.setDerivedProvenance(true, { confidencePct: 62, warnings: ['Sparse ground'] });
+    const captionA = captionOf(legend);
+    reseed(legend, b, 'b');
+    expect(legend.classificationIsDerived()).toBe(true);
+    expect(captionOf(legend)).not.toContain('Support 0.62');
+    expect(captionOf(legend)).not.toContain('Sparse ground');
+    reseed(legend, a, 'a');
+    expect(captionOf(legend)).toBe(captionA);
   });
 
   it('returns a source layer to the even-sample basis', () => {

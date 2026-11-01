@@ -80,6 +80,8 @@ export interface ClassCountSample {
   readonly shares?: ClassSample;
   /** classDigest of the held codes the counts were taken from. */
   readonly heldDigest?: number;
+  /** The scan the codes belong to, so a derive caption stays with its own scan. */
+  readonly scan?: string;
 }
 
 /** Fired after the user toggles the colourblind-safe class palette. */
@@ -128,12 +130,15 @@ export class ClassLegendPanel {
   /** Pre-reduction class counts; shares use them while the counts are unedited. */
   private _shareSample: ClassSample | undefined;
   private _heldDigest: number | undefined;
+  private _scan: string | undefined;
   /**
-   * The derive run's full caption (support and top warning), by the digest of
-   * the codes it described, so a scan that becomes active again shows the
-   * caption its run wrote rather than the plain one.
+   * The derive run's full caption (support and top warning), by scan and the
+   * digest of the codes it described, so a scan that becomes active again
+   * shows the caption its run wrote rather than the plain one. The scan is
+   * part of the key because two scans can hold identical codes, and one run's
+   * support figure says nothing about the other scan.
    */
-  private readonly _derivedCaptions = new Map<number, string>();
+  private readonly _derivedCaptions = new Map<string, string>();
   /**
    * Whether the held codes are still the source file's. Derived or cleared
    * codes never take the load's histogram, even when they match the loaded
@@ -413,7 +418,8 @@ export class ClassLegendPanel {
       if (info.warnings && info.warnings.length > 0) {
         text += ` ⚠ ${info.warnings[0]}`;
       }
-      if (this._heldDigest !== undefined) this._derivedCaptions.set(this._heldDigest, text);
+      const key = this._captionKey();
+      if (key !== undefined) this._derivedCaptions.set(key, text);
     }
     this._provenance.textContent = text;
   }
@@ -427,7 +433,8 @@ export class ClassLegendPanel {
   syncProvenance(state: string): void {
     if (state !== 'derived' || !this._derived) {
       this.setDerivedProvenance(state === 'derived');
-      const caption = state === 'derived' && this._heldDigest !== undefined ? this._derivedCaptions.get(this._heldDigest) : undefined;
+      const key = this._captionKey();
+      const caption = state === 'derived' && key !== undefined ? this._derivedCaptions.get(key) : undefined;
       if (caption) this._provenance.textContent = caption;
     }
     this._sourceCodes = state === 'source';
@@ -479,7 +486,13 @@ export class ClassLegendPanel {
     this._sampled = sampled;
     this._shareSample = sample?.shares;
     this._heldDigest = sample?.heldDigest;
+    this._scan = sample?.scan;
     this._sampleNote.classList.toggle('olv-hidden', !sampled);
+  }
+
+  /** The derive-caption key for the held codes, or undefined when they are unknown. */
+  private _captionKey(): string | undefined {
+    return this._heldDigest === undefined ? undefined : `${this._scan ?? ''}\u0000${this._heldDigest}`;
   }
 
   /** Whether the counts describe a display sample, not the whole file. */
