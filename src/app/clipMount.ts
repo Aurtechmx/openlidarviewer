@@ -13,7 +13,9 @@
  *     removed, shown, hidden or placed, another layer made active, or the
  *     active layer reloaded at another density. These are read from the
  *     viewer after each drawn frame (every such change redraws), so no load,
- *     layer or placement path has to remember to call in.
+ *     layer or placement path has to remember to call in;
+ *   - the Empty view card in the same lane, for when the clip and the
+ *     filters leave nothing drawn (`emptyViewMount.ts`).
  *
  * Everything is reached through accessors, so the deferred Viewer is read at
  * call time and nothing here runs before a scan exists.
@@ -24,6 +26,7 @@ import { createClipFlowFromShell, type ClipFlow, type ClipFlowShell } from './cl
 import { sumClipCounts } from '../render/clip/clipBox';
 import { fitMergedBounds } from '../render/clip/fitBoundsInProject';
 import { toggleTool } from './toggleTool';
+import { mountEmptyView, type EmptyViewDeps } from './emptyViewMount';
 import { worldCoordLabels } from '../render/pointInfo';
 import type { WorkflowController } from '../ui/WorkflowController';
 import type { Viewer } from '../render/Viewer';
@@ -36,6 +39,8 @@ export interface ClipMountDeps extends Omit<ClipFlowShell, 'clipPanel' | 'viewer
   readonly activeId: () => string | null;
   /** The workflow recorder every tool toggle reports to. */
   readonly workflow: Pick<WorkflowController, 'capture'>;
+  /** The class and range filters the Empty view card names and resets. */
+  readonly emptyView: EmptyViewDeps;
 }
 
 export interface ClipMount {
@@ -75,11 +80,14 @@ export function leaveClipPage(router: Pick<WorkspaceRouter, 'route' | 'navigate'
 export function mountClip(d: ClipMountDeps): ClipMount {
   // The placeholder before the Viewer loads is a null cast, so read it as nullable.
   const live = (): Viewer | null => d.viewer() ?? null;
+  // Before the panel: its constructor applies, so `watch` may run from inside it.
+  const emptyView = mountEmptyView({ ...d.emptyView, clip: { get enabled() { return clipPanel.enabled; }, clear: () => clipPanel.clear() } });
   let watching: (() => void) | null = null;
   let key = '';
   /** Once the viewer is up, recount when the data under the clip changes. */
   const watch = (v: Viewer): void => {
     if (watching) return;
+    emptyView.watch(v);
     key = clipDataKey(v, d.activeId());
     watching = v.onDrawnFrame(() => {
       const next = clipDataKey(v, d.activeId());
@@ -122,5 +130,6 @@ export function mountClip(d: ClipMountDeps): ClipMount {
     },
   });
   flow = clipFlow;
+  clipFlow.lane.append(emptyView.notice.element);
   return { clipPanel, clipFlow };
 }

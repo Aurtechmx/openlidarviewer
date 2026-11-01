@@ -105,3 +105,36 @@ export function elevWindowFieldsFor(
   const w = elevWindowFor(world, originAlongAxis, axis);
   return { elevAxisIdx: w.axisIsZ === 1 ? 2 : 1, elevMin: w.min, elevMax: w.max };
 }
+
+/** Whether any of `count` points passes `accept`; with no predicate, whether there is a point. Stops at the first hit. */
+export function anyAccepted(count: number, accept: ((index: number) => boolean) | undefined): boolean {
+  if (!accept) return count > 0;
+  for (let i = 0; i < count; i++) if (accept(i)) return true;
+  return false;
+}
+
+/** One layer for {@link ShownPointsMemo}: what its answer depends on, its point count, and its predicate, built only when asked. */
+export interface ShownLayer {
+  readonly key: unknown;
+  readonly count: number;
+  readonly accept: () => ((index: number) => boolean) | undefined;
+}
+
+/**
+ * Whether any point of the given layers is drawn, remembered against the state
+ * it was worked out for. With every point hidden the answer walks every point,
+ * so a caller that asks once a frame only pays that when the state changes.
+ */
+export class ShownPointsMemo {
+  private _key: string | null = null;
+  private _shown = false;
+
+  shown(state: unknown, layers: readonly ShownLayer[]): boolean {
+    const key = JSON.stringify([state, layers.map((l) => l.key)]);
+    if (key !== this._key) {
+      this._key = key;
+      this._shown = layers.some((l) => anyAccepted(l.count, l.accept()));
+    }
+    return this._shown;
+  }
+}

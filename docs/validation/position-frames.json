@@ -550,6 +550,13 @@
     },
     {
       "file": "src/render/Viewer.ts",
+      "symbol": "Viewer.anyPointShown",
+      "frame": "source-local",
+      "reads": 1,
+      "why": "The pick's own test over the raw buffer: the filters read it in the layer source frame, and the clip adds the layer's offset into the project frame per point, as Viewer._pickDetailed does."
+    },
+    {
+      "file": "src/render/Viewer.ts",
       "symbol": "Viewer.computeLassoVolume",
       "frame": "render-local",
       "reads": 1,
