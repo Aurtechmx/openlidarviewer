@@ -87,3 +87,17 @@ export class TouchTapGate {
     this._seqHadTwo = false;
   }
 }
+
+/** What a canvas double-click does: finish a measurement, focus the camera, or nothing. */
+export type DoubleClickAction = 'finish' | 'focus' | 'none';
+
+/**
+ * Measuring, a double-click finishes the open polygon kinds. Paused for
+ * navigation (hold Space), it belongs to the camera, as a single click does: it
+ * focuses on the point under the cursor and leaves the draft open. With no tool
+ * (`mode` 'none') it focuses; the other tools handle their own double-clicks.
+ */
+export function doubleClickAction(mode: string, paused: boolean): DoubleClickAction {
+  if (mode === 'none' || paused) return 'focus';
+  return mode === 'measure' ? 'finish' : 'none';
+}

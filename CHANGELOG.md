@@ -129,6 +129,8 @@ has not been done. v0.7.0 is the current published release.
 - The Terrain page asked for a LAS, LAZ, COPC or EPT file to be loaded while a scan was open and no terrain result existed yet. It now says there is no terrain result yet and points at Run terrain analysis.
 - After Auto-classify returned the same codes the scan loaded with, the Classes list kept the shares of the even sample while the Scan Report counted the loaded points. Derived and cleared classes now always take their shares from the loaded points, in both places.
 - Switching to another scan and back reset the Classes list of a scan with derived or cleared classes to the source's: it dropped the Derived caption and took its shares from the load sample, while the Scan Report still counted the loaded points, and Process Studio read the derived ground as the producer's. The list now takes the scan's own classification state on every switch and on open.
+- A double-click while a measurement was paused with Space finished the measurement. It now focuses the camera, as a double-click with no tool does, and the measurement stays open. While paused, a press on a vertex handle moves the camera instead of editing the vertex.
+- Dragging a measurement vertex followed any pointer, so a second finger could end the drag. A cancelled touch or a window losing focus left the drag open, and turning the tool off mid-drag kept the half-dragged vertex. Only the pointer that began a drag now moves or ends it, and a cancel, a focus loss or a tool change puts the vertex back.
 
 ### Validation
 

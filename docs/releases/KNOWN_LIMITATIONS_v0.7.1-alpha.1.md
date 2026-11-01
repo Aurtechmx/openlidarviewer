@@ -447,7 +447,7 @@ measurement controller, which took twenty-eight more. The draw precision bound's
 fails the build when either passes its recorded baseline, so a raise is a hand
 edit to `docs/validation/monolith-size-baseline.json` and always shows in the
 diff.
-Fan-out is 95 for the shell, 73 for the renderer, across 1189 modules with no
+Fan-out is 95 for the shell, 73 for the renderer, across 1190 modules with no
 dependency cycles. Fan-out counts the distinct modules a file imports with a
 value import, source files and external packages alike; type-only and dynamic
 imports are not counted. The shell and the renderer figures are held
