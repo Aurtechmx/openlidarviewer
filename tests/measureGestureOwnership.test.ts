@@ -114,6 +114,38 @@ describe('a vertex drag', () => {
     expect(open()).toBe(0);
   });
 
+  it('puts back the scans the measurement records it was picked on', async () => {
+    const { measure, points } = await dragging();
+    const m = measure.getMeasurements()[0]!;
+    measure.cancelDrag();
+    m.pickLayers = ['a'];
+    press(measure, 7);
+    moveVertex(points);
+    m.pickLayers.push('b');
+    fire('blur');
+    expect(m.pickLayers).toEqual(['a']);
+    expect(open()).toBe(0);
+  });
+
+  it('puts the vertex back when Space pauses the tool mid-drag', async () => {
+    const { measure, points } = await dragging();
+    moveVertex(points);
+    measure.setNavigationPaused(true);
+    expect(measure.dragging).toBe(false);
+    expect(points()[1]).toEqual([4, 0, 0]);
+    expect(open()).toBe(0);
+    measure.setNavigationPaused(false);
+  });
+
+  it('puts the vertex back when a mouse moves with no button held: the release was outside the page', async () => {
+    const { measure, points } = await dragging();
+    moveVertex(points);
+    fire('pointermove', { clientX: 70, clientY: 70, pointerType: 'mouse', pointerId: 7, buttons: 0 });
+    expect(measure.dragging).toBe(false);
+    expect(points()[1]).toEqual([4, 0, 0]);
+    expect(open()).toBe(0);
+  });
+
   it('cannot start while the tool is paused for navigation', async () => {
     const { measure } = await dragging();
     measure.cancelDrag();

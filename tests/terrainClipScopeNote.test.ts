@@ -39,13 +39,9 @@ describe('the Terrain page with a clip box active', () => {
     expect(body).not.toMatch(/_clip\b|clipKeepsPoint/);
   });
 
-  it('is told by both paths that set a clip: the clip panel and a session restore', () => {
+  it('follows the clip panel, which reports every on/off change, restore and scan close', () => {
     const main = readFileSync(join(import.meta.dirname, '..', 'src', 'main.ts'), 'utf8');
-    expect(main).toContain('mountClip({ onClipChange: (on) => analysePanel?.setClipScopeNote(on),');
-    expect(main).toContain('onClipRestored: (on) => analysePanel?.setClipScopeNote(on)');
-    const mount = readFileSync(join(import.meta.dirname, '..', 'src', 'app', 'clipMount.ts'), 'utf8');
-    expect(mount).toMatch(/v\.setClip\(clip\);\s+d\.onClipChange\?\.\(clip\?\.enabled === true\);/);
-    const restore = readFileSync(join(import.meta.dirname, '..', 'src', 'app', 'viewStateCoordinator.ts'), 'utf8');
-    expect(restore).toContain('deps.onClipRestored?.(clip.enabled);');
+    expect(main).toMatch(/clipPanel\.subscribe\(\s*\(\)\s*=>\s*analysePanel\?\.setClipScopeNote\(clipPanel\.enabled\)\s*\)/);
+    expect(main).toMatch(/analysePanel\.setClipScopeNote\(clipPanel\.enabled\)/);
   });
 });

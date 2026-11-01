@@ -74,7 +74,7 @@ describe('refreshActiveLayerSurfaces', () => {
     const start = main.indexOf('function refreshClassLegend(');
     expect(start).toBeGreaterThan(-1);
     const body = main.slice(start, main.indexOf('\n}\n', start));
-    const sync = body.indexOf('classLegendPanel.syncProvenance(provenance)');
+    const sync = body.indexOf('seedClassLegend(classLegendPanel, classification, sample, provenance)');
     expect(sync).toBeGreaterThan(-1);
     expect(sync).toBeLessThan(body.indexOf('processStudio.refresh()'));
   });

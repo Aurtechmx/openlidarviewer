@@ -489,8 +489,8 @@ export class MeasureController {
   // `x`/`y` are where the press began; `moved` turns true past the drag slop,
   // and only then does the press edit the vertex. A press released inside the
   // slop is a click on the vertex, which places a point there.
-  /** `start` is every point of the dragged measurement as it was, for an Esc during the drag. */
-  private _drag: { id: string; vi: number; x: number; y: number; moved: boolean; start: Vec3[] } | null = null;
+  /** `start` and `layers` are the dragged measurement's points and pick layers as they were, for a cancelled drag. */
+  private _drag: { id: string; vi: number; x: number; y: number; moved: boolean; start: Vec3[]; layers: string[] | undefined } | null = null;
   /** Detaches the drag's window listeners (see `listenToDragPointer`). */
   private _detachDrag: (() => void) | null = null;
   /** Set while the tool is paused for navigation (hold Space): handles take no presses. */
@@ -2199,6 +2199,7 @@ export class MeasureController {
    * presses through to the camera, and a press cannot start a vertex edit.
    */
   setNavigationPaused(paused: boolean): void {
+    if (paused) this.cancelDrag(); // the pointer goes to the camera, so a drag it began ends unedited
     this._navPaused = paused;
     this._draw.element.classList.toggle('olv-nav-paused', paused);
   }
@@ -2214,7 +2215,7 @@ export class MeasureController {
     if (!m) return;
     e.preventDefault();
     const start = m.points.map((p): Vec3 => [p[0], p[1], p[2]]);
-    this._drag = { id: mid, vi: Number(viAttr), x: e.clientX, y: e.clientY, moved: false, start };
+    this._drag = { id: mid, vi: Number(viAttr), x: e.clientX, y: e.clientY, moved: false, start, layers: m.pickLayers?.slice() };
     this._dragRect = this._draw.element.getBoundingClientRect();
     this._cursor = null;
     // Only this pointer moves or ends the drag; its cancel, a focus loss or Esc puts the vertex back.
@@ -2226,7 +2227,7 @@ export class MeasureController {
     const drag = this._drag;
     if (!drag) return false;
     const m = this._measurements.find((x) => x.id === drag.id);
-    if (m && drag.moved) drag.start.forEach((p, i) => { m.points[i] = [p[0], p[1], p[2]]; });
+    if (m && drag.moved) { drag.start.forEach((p, i) => { m.points[i] = [p[0], p[1], p[2]]; }); m.pickLayers = drag.layers?.slice(); } // a scan the drag passed over is not one the points came from
     this._endDrag();
     return true;
   }

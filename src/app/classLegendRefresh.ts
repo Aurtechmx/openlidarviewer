@@ -44,13 +44,39 @@ import type { ResolvedCrs } from '../geo/CoordinateTypes';
 import { countClasses } from '../render/class/classHistogram';
 import { toClassBuffer } from '../render/class/classBuffer';
 import { SyncFallbackRefusedError } from '../workers/syncFallbackRefusedError';
-import { classDigest } from '../model/classShareBasis';
+import { classDigest, type ClassSample } from '../model/classShareBasis';
 
 export { classDigest };
 
 /** Per-class point counts for any classification source, narrowed to bytes. */
 export function classCountsOf(classification: ArrayLike<number>): Map<number, number> {
   return countClasses(toClassBuffer(classification));
+}
+
+/** The legend calls a layer's classes take on open and on becoming the active scan. */
+export interface ClassLegendSeed {
+  setClasses(counts: Map<number, number>, sample?: { readonly loaded: number; readonly declared?: number; readonly shares?: ClassSample; readonly heldDigest?: number }): void;
+  syncProvenance(state: string): void;
+}
+
+/**
+ * Seed the legend with a layer's classes, then restore the layer's own
+ * classification state. `setClasses` resets the legend to the source's, so a
+ * scan with derived or cleared classes would otherwise lose its caption and
+ * take its shares from the load sample when it becomes active again.
+ */
+export function seedClassLegend(
+  legend: ClassLegendSeed,
+  classification: ArrayLike<number> | undefined,
+  sample: { readonly loaded: number; readonly declared?: number; readonly shares?: ClassSample } | undefined,
+  provenance?: string,
+): void {
+  if (!classification || classification.length === 0) {
+    legend.setClasses(new Map(), sample);
+    return;
+  }
+  legend.setClasses(classCountsOf(classification), sample && { ...sample, heldDigest: classDigest(classification) });
+  if (provenance && provenance !== 'none') legend.syncProvenance(provenance);
 }
 
 /** The Classes panel surface this needs: replace counts, keep the filter. */

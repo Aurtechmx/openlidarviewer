@@ -36,8 +36,6 @@ export interface ClipMountDeps extends Omit<ClipFlowShell, 'clipPanel' | 'viewer
   readonly activeId: () => string | null;
   /** The workflow recorder every tool toggle reports to. */
   readonly workflow: Pick<WorkflowController, 'capture'>;
-  /** Told whether a clip is active after every apply, for surfaces that state what the clip does not cover. */
-  readonly onClipChange?: (active: boolean) => void;
 }
 
 export interface ClipMount {
@@ -98,7 +96,6 @@ export function mountClip(d: ClipMountDeps): ClipMount {
       if (!v) return;
       watch(v);
       v.setClip(clip);
-      d.onClipChange?.(clip?.enabled === true);
     },
     onOutline: (box, active) => live()?.setClipOutline(box, active),
     fitBounds: () => fitMergedBounds(live()?.mergedVisibleBounds(true) ?? null),

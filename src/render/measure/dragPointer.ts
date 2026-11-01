@@ -5,8 +5,9 @@
  * releases are ignored, so a second finger can neither take the drag over nor
  * end it. The drag is cancelled, never committed, when its own pointer is
  * cancelled (a palm, a scroll, the OS), when the window loses focus (the
- * release may never arrive), or on Escape, which goes no further. The returned
- * function detaches every listener.
+ * release may never arrive), on Escape, which goes no further, or when a mouse
+ * move arrives with no button held: the release happened where the page could
+ * not see it. The returned function detaches every listener.
  */
 export interface DragPointerHandlers {
   move(e: PointerEvent): void;
@@ -16,7 +17,11 @@ export interface DragPointerHandlers {
 
 export function listenToDragPointer(pointerId: number, h: DragPointerHandlers): () => void {
   const own = (e: PointerEvent): boolean => e.pointerId === pointerId;
-  const move = (e: PointerEvent): void => { if (own(e)) h.move(e); };
+  const move = (e: PointerEvent): void => {
+    if (!own(e)) return;
+    if (e.pointerType === 'mouse' && e.buttons === 0) h.cancel();
+    else h.move(e);
+  };
   const up = (e: PointerEvent): void => { if (own(e)) h.up(e); };
   const cancel = (e: PointerEvent): void => { if (own(e)) h.cancel(); };
   const blur = (): void => h.cancel();

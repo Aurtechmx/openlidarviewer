@@ -10,6 +10,7 @@
  * or null. Pure aside from the caller-supplied timestamp — tests in Node.
  */
 
+import type { ToolMode } from './Viewer';
 import { DoubleTapDetector } from './doubleTapDetector';
 
 /** Beyond this a touch is a drag, not a tap (CSS px). */
@@ -97,7 +98,7 @@ export type DoubleClickAction = 'finish' | 'focus' | 'none';
  * focuses on the point under the cursor and leaves the draft open. With no tool
  * (`mode` 'none') it focuses; the other tools handle their own double-clicks.
  */
-export function doubleClickAction(mode: string, paused: boolean): DoubleClickAction {
+export function doubleClickAction(mode: ToolMode, paused: boolean): DoubleClickAction {
   if (mode === 'none' || paused) return 'focus';
   return mode === 'measure' ? 'finish' : 'none';
 }
