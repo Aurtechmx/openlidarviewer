@@ -81,7 +81,9 @@ async function twoFingerGesture(
  *
  * Both taps go out in one page call so the gap is the page's own timer. Two
  * separate calls put two protocol round trips between the taps, and on a busy
- * runner that pushed them past the 300 ms double-tap window.
+ * runner that pushed them past the 300 ms double-tap window. The gap is held
+ * on the page's clock rather than a timer: a frame or other long task queued
+ * behind the first tap delayed an 80 ms timeout to 368 ms on a CI runner.
  */
 async function doubleTap(page: Page, x: number, y: number, gapMs: number): Promise<void> {
   await page.evaluate(
@@ -106,7 +108,8 @@ async function doubleTap(page: Page, x: number, y: number, gapMs: number): Promi
       };
       fire('pointerdown');
       fire('pointerup');
-      await new Promise((resolve) => setTimeout(resolve, gapMs));
+      const until = performance.now() + gapMs;
+      while (performance.now() < until) { /* hold the gap; no task can run between the taps */ }
       fire('pointerdown');
       fire('pointerup');
     },
