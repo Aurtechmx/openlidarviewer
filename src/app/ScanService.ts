@@ -153,9 +153,10 @@ export interface ActiveLayerSurfaceDeps<Cloud> {
   /**
    * Seed the class legend from the layer's classes. Resets the class filter to
    * all visible, as the open does: the filter was a selection over another
-   * layer's classes.
+   * layer's classes. `provenance` is the layer's own classification state, so
+   * derived or cleared codes keep their caption and share basis after a switch.
    */
-  refreshClassLegend(classification: ArrayLike<number> | undefined, sample: { readonly loaded: number; readonly declared?: number; readonly shares?: ClassSample }): void;
+  refreshClassLegend(classification: ArrayLike<number> | undefined, sample: { readonly loaded: number; readonly declared?: number; readonly shares?: ClassSample }, provenance?: string): void;
   /** Re-sync the colour chips to the layer's available modes and its live mode. */
   syncColorMode(): void;
   /** The point-count detail: shown against the file's decoded total. */
@@ -171,6 +172,8 @@ export interface ActiveLayerCloud {
   readonly decodedPointCount?: number;
   readonly classification?: ArrayLike<number>;
   readonly classSample?: ClassSample;
+  /** Where the live classes came from: source, cleared, derived or none. */
+  readonly classificationProvenance?: string;
 }
 
 /** A static layer became the active scan: describe it everywhere the open would. */
@@ -182,7 +185,7 @@ export function refreshActiveLayerSurfaces<Cloud extends ActiveLayerCloud>(
   deps.refreshCrs(cloud);
   deps.refreshProvenance(cloud, layerId);
   deps.refreshDatasetIntelligence(cloud);
-  deps.refreshClassLegend(cloud.classification, { loaded: cloud.pointCount, declared: cloud.declaredPointCount, shares: cloud.classSample });
+  deps.refreshClassLegend(cloud.classification, { loaded: cloud.pointCount, declared: cloud.declaredPointCount, shares: cloud.classSample }, cloud.classificationProvenance);
   deps.syncColorMode();
   deps.setDetail(cloud.pointCount, cloud.decodedPointCount ?? cloud.pointCount);
   deps.setReport(cloud);

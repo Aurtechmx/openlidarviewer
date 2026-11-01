@@ -2601,9 +2601,9 @@ function revealAnalysePanel(name: string, settled = true): void {
  * the legend's fresh state is all-visible, so the GPU mask is applied as a
  * no-op identity mask to keep the unfiltered experience unchanged. v0.4.1.
  */
-function refreshClassLegend(classification?: ArrayLike<number>, sample?: Parameters<ClassLegendPanel['setClasses']>[1]): void {
+function refreshClassLegend(classification?: ArrayLike<number>, sample?: Parameters<ClassLegendPanel['setClasses']>[1], provenance?: string): void {
   if (classification && classification.length > 0) {
-    classLegendPanel.setClasses(classCountsOf(classification), sample && { ...sample, heldDigest: classDigest(classification) });
+    classLegendPanel.setClasses(classCountsOf(classification), sample && { ...sample, heldDigest: classDigest(classification) }); if (provenance && provenance !== 'none') classLegendPanel.syncProvenance(provenance); // the layer's own provenance, before Process Studio reads it below
   } else {
     classLegendPanel.setClasses(new Map(), sample);
   }
