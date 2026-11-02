@@ -142,11 +142,16 @@
 .olv-layer { display: flex; align-items: center; gap: var(--space-md); }
 .olv-layer input { accent-color: var(--accent); }
 .olv-layer-name {
-  /* min-width:0 lets ellipsis engage so long layer names truncate
-   * instead of overflowing the Inspector panel. */
-  flex: 1; min-width: 0; font-size: var(--text-xs); font-variant-numeric: tabular-nums; color: var(--text-dim);
+  /* A floor rather than min-width:0, so a long CRS badge beside it (which
+   * truncates itself) cannot squeeze the name, and the button it is, to
+   * nothing. Past the floor the name truncates with an ellipsis. */
+  flex: 1; min-width: 5rem; font-size: var(--text-xs); font-variant-numeric: tabular-nums; color: var(--text-dim);
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  /* A button that makes the layer the active scan, styled as the name it shows. */
+  background: none; border: none; padding: 0; font-family: inherit; text-align: start; cursor: pointer;
 }
+.olv-layer-name:hover { color: var(--text); }
+.olv-layer.is-active-layer .olv-layer-name { color: var(--text); font-weight: 600; }
 .olv-layer-count { font-size: var(--text-xs); font-variant-numeric: tabular-nums; color: var(--text-faint); }
 /* Per-layer CRS badge: short, faint, truncates; turns warning-coloured when the
  * layer's coordinate system doesn't match the others. */

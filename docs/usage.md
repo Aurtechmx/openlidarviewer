@@ -15,7 +15,7 @@ A "Project ready" card then summarises the file: its format, point count, boundi
 
 Supported imports are `LAS`, `LAZ`, `E57`, `PLY`, `OBJ`, `GLB`, `GLTF`, `XYZ`, `CSV`, `ASC`, `TXT`, `PCD`, `PTS`, `PTX`, and 3D Tiles (a single `.pnts` tile or a whole tileset). Large hierarchical-streaming formats, `COPC` (`.copc.laz`) and `EPT` (Entwine Point Tile, via an `ept.json` URL), open progressively through their octree hierarchies; see [`streaming.md`](streaming.md). Nothing is uploaded. The file is read and rendered entirely in your browser.
 
-Dropping a second file opens it as an additional layer alongside the first; the Layers list in the Data tab lists every open scan, each with a visibility toggle and a remove control.
+Dropping a second file opens it as an additional layer alongside the first; the Layers list in the Data tab lists every open scan, each with a visibility toggle and a remove control. The newest scan is the active one, which the Classes list, the scan report and exports describe; press another layer's name to make it active. The active scan's name is shown in bold.
 
 ## Closing a scan
 

@@ -37,6 +37,8 @@ export function mountEmptyView(d: EmptyViewDeps & { readonly clip: { readonly en
       d.classes.showAll();
       d.ranges.clear();
     },
+    // The points are back, so the scan view is where the keyboard goes next.
+    returnFocus: () => document.querySelector<HTMLElement>('.olv-canvas')?.focus({ preventScroll: true }),
   });
   let watching = false;
   return {
