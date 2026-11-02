@@ -43,12 +43,13 @@ import { increment as recordUsage } from '../diagnostics/usageCounters';
 
 import type { LoadResult, LoadCallbacks, LoadOptions } from '../io/loadFile';
 import type { ColorMode } from '../render/colorModes';
-import type { ClassSample, PointCloud } from '../model/PointCloud';
+import type { PointCloud } from '../model/PointCloud';
 import type { ShareState } from '../io/shareState';
 import type { ClassScope } from '../render/class/classScope';
 import type { AnalysisRow } from '../analysis/ModuleApi';
 import type { Viewer } from '../render/Viewer';
 import type { Inspector } from '../ui/Inspector';
+import type { ClassCountSample } from '../ui/ClassLegendPanel';
 import type { ExportPanel } from '../ui/ExportPanel';
 import type { ToolDock } from '../ui/toolDock';
 import type { NavBar } from '../ui/NavBar';
@@ -228,7 +229,7 @@ export interface OpenScanDeps {
   /** Repopulate the classification legend from the cloud's per-point class buffer. */
   refreshClassLegend: (
     classification?: ArrayLike<number>,
-    sample?: { readonly loaded: number; readonly declared?: number; readonly shares?: ClassSample },
+    sample?: ClassCountSample,
     provenance?: string,
   ) => void;
   /** `?debug=1` — console diagnostics + overlay telemetry. */
@@ -929,6 +930,7 @@ export async function attachStaticCloud(
       declared: result.cloud.declaredPointCount,
       // Shares are stated from the decoded records' classes, not the voxel centroids.
       shares: result.cloud.classSample,
+      scan: id,
     }, result.cloud.classificationProvenance);
   } catch (err) {
     if (deps.debug) console.warn('[class-legend] refresh threw', err);

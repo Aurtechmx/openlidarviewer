@@ -2198,7 +2198,7 @@ const terrainRunner = createTerrainAnalysisRunner({
 // recounts. An undo of a first attach also returns the legend to empty.
 void viewerLoaded.then((v) => {
   v.onClassificationEdited = (id) => { noteClassificationEdited({
-    classification: v.getCloud(id)?.classification, provenance: v.getCloud(id)?.classificationProvenance,
+    classification: v.getCloud(id)?.classification, provenance: v.getCloud(id)?.classificationProvenance, active: id === scans.activeId,
     legend: classLegendPanel,
     clearTerrainCache: () => terrainRunner.abortAndClearCache(),
     noteStale: (m) => analysePanel?.setStaleNotice(m),

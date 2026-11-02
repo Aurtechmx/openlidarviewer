@@ -134,6 +134,10 @@ has not been done. v0.7.0 is the current published release.
 - With a clip box active, terrain analysis read the loaded points inside and outside the box while drawing, picking and point export kept only the clipped points, and nothing said so. The Terrain page now states this for as long as a clip is active.
 - When the clip box, the class filter or the elevation or intensity filter hid every loaded point of the visible scans, the view went blank and nothing said why. A card now names what is on and offers Turn off clip or Reset filters, whichever applies, until something is drawn again.
 - On a touch screen the area that takes a press on a measurement vertex was 24 px across, about half a fingertip. It is now 44 px where the main pointer is a finger, and stays 24 px for a mouse.
+- A measurement vertex released before the next drawn frame stayed at the last frame's position. The release now places the vertex where the pointer was let go.
+- Two scans with identical derived classes shared one Auto-classify caption, so switching scans could show the other scan's support and warning. Each scan now keeps its own caption.
+- An undo or edit of another scan's classes recounted the Classes list with that scan's codes while a different scan was active. The list now recounts only for the active scan.
+- The Terrain page's clip note said terrain results cover the whole scan. They cover the loaded points of the visible scans, which on a large or streaming scan is a sample of the file, and the note now says so.
 
 ### Validation
 

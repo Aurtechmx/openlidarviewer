@@ -22,6 +22,9 @@ describe('the Terrain page with a clip box active', () => {
     const panel = new AnalysePanel({});
     const note = (panel.element as unknown as FakeEl).findByClass('olv-analyse-clip-scope')[0]!;
     expect(note.textContent).toBe(CLIP_SCOPE_NOTE);
+    // The gather reads loaded points, which a reduced load, a stream or the
+    // gather's cap can make a sample; the note must not promise the whole file.
+    expect(CLIP_SCOPE_NOTE).not.toMatch(/whole scan|whole file|every point/);
     expect(panel.clipScopeNoteShown()).toBe(false);
     panel.setClipScopeNote(true);
     expect(panel.clipScopeNoteShown()).toBe(true);

@@ -10,7 +10,7 @@
  */
 import { describe, it, expect, beforeAll } from 'vitest';
 import type { Measurement, Vec3 } from '../src/render/measure/types';
-import type { MeasureController as MC } from '../src/render/measure/MeasureController';
+import type { MeasureController as MC, PickedPoint } from '../src/render/measure/MeasureController';
 import { doubleClickAction } from '../src/render/touchTapGate';
 import { installFakeDom } from './support/measurePanelDom';
 
@@ -81,6 +81,26 @@ describe('a vertex drag', () => {
     fire('pointerup', { clientX: 60, clientY: 60, pointerId: 7 });
     expect(measure.dragging).toBe(false);
     expect(points()[1]).toEqual([9, 9, 9]);
+    expect(open()).toBe(0);
+  });
+
+  it('places the vertex where the pointer was released, before a frame re-picks the last move', async () => {
+    const { measure, points } = await dragging();
+    measure.setPicker((x, y) => ({ point: [x, y, 1], layer: 'a' }) as PickedPoint);
+    fire('pointermove', { clientX: 60, clientY: 60, pointerType: 'touch', pointerId: 7 });
+    fire('pointerup', { clientX: 75, clientY: 25, pointerId: 7 });
+    expect(measure.dragging).toBe(false);
+    expect(points()[1]).toEqual([0.5, 0.5, 1]);
+    expect(open()).toBe(0);
+  });
+
+  it('keeps the last move when the release lands where nothing is picked', async () => {
+    const { measure, points } = await dragging();
+    measure.setPicker((x, y) => (x > 0.6 ? null : { point: [x, y, 1], layer: 'a' }) as PickedPoint | null);
+    fire('pointermove', { clientX: 60, clientY: 60, pointerType: 'touch', pointerId: 7 });
+    fire('pointerup', { clientX: 90, clientY: 60, pointerId: 7 });
+    expect(points()[1][0]).toBeCloseTo(0.2, 6);
+    expect(points()[1][1]).toBeCloseTo(-0.2, 6);
     expect(open()).toBe(0);
   });
 

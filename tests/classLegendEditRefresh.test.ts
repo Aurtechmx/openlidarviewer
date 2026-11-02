@@ -83,6 +83,7 @@ describe('Classes legend after an in-place class edit', () => {
     // Four points, two of which the user just moved to Ground.
     noteClassificationEdited({
       classification: Uint8Array.from([1, 2, 2, 7]),
+      active: true,
       legend: panel,
       clearTerrainCache: () => void cleared++,
       noteStale: (m: string) => void (stale = m),
@@ -92,5 +93,22 @@ describe('Classes legend after an in-place class edit', () => {
     const text = rowText(panel);
     expect(text).toContain('2'); // the Ground row now holds two points
     expect(text).not.toContain('18,034');
+  });
+
+  it('leaves the legend on the active scan when another scan\'s classes are edited', () => {
+    const panel = new ClassLegendPanel();
+    panel.setClasses(BEFORE, { loaded: 18_888, declared: 373_332 });
+    let cleared = 0;
+    noteClassificationEdited({
+      classification: Uint8Array.from([2, 2, 2, 2]),
+      provenance: 'derived',
+      active: false,
+      legend: panel,
+      clearTerrainCache: () => void cleared++,
+      noteStale: () => {},
+    });
+    expect(cleared).toBe(1);
+    expect(rowText(panel)).toContain('18,034');
+    expect(panel.classificationIsDerived()).toBe(false);
   });
 });
