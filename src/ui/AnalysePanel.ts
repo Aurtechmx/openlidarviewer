@@ -499,6 +499,8 @@ export class AnalysePanel {
    * it would be stamped with come from two different scans.
    */
   private _resultScanId: string | null = null;
+  /** The result's scan name, captured with it, so selecting another scan cannot relabel it. */
+  private _resultName: string | null = null;
   /** State the on-screen result was computed under; gates every export. */
   private _resultStamp: AnalysisFreshnessStamp | null = null;
   /** Told after every `update`, for readers that list results (the Results shelf). */
@@ -1149,7 +1151,7 @@ export class AnalysePanel {
       result: this._result,
       scanId: this._resultScanId,
       fresh: this._freshnessBreach() === null,
-      filename: this._cb.getExportBasename?.() ?? null,
+      filename: this._resultName,
       sceneUpAxis: this._cb.getMapContext?.()?.sceneUpAxis ?? null,
     };
   }
@@ -1296,7 +1298,7 @@ export class AnalysePanel {
       crsName: ctx.resolvedCrsLabel ?? null,
       resolvedUnitToMetres: ctx.resolvedUnitToMetres ?? null,
       layerId: scanId,
-      filename: this._cb.getExportBasename?.() ?? null,
+      filename: this._resultName,
       sceneUpAxis: ctx.sceneUpAxis ?? null,
       overlayHost: this._cb.getDerivedLayerHost?.() ?? null,
       sourceInterpretation: sourceInterpretationOf(this._contourFrame?.analysedBasis?.interpretationLevel, this._contourFrame?.analysedBasis?.coverage),
@@ -1362,7 +1364,7 @@ export class AnalysePanel {
       wkt: ctx.wkt ?? null,
       crsName: ctx.resolvedCrsLabel ?? null,
       layerId: scanId,
-      filename: this._cb.getExportBasename?.() ?? null,
+      filename: this._resultName,
       sceneUpAxis: ctx.sceneUpAxis ?? null,
       overlayHost: this._cb.getDerivedLayerHost?.() ?? null,
       sourceInterpretation: sourceInterpretationOf(this._contourFrame?.analysedBasis?.interpretationLevel, this._contourFrame?.analysedBasis?.coverage),
@@ -1390,6 +1392,7 @@ export class AnalysePanel {
     // result while its own dataset guard still holds, so the active id here IS
     // the id the analysis ran against.
     this._resultScanId = result ? computed?.targetId ?? this._cb.getActiveScanId?.() ?? null : null;
+    this._resultName = result ? this._cb.getExportBasename?.() ?? null : null;
     // Mint the freshness stamp with the result. Scan identity alone let an
     // edited classification or a changed CRS through behind a caveat.
     this._resultStamp = result

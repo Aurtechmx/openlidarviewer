@@ -26,6 +26,8 @@ import { upVectorOf } from '../geo/frame/layerUpFrame';
 import { cloudUpAxisMoved, setCloudUpResolver } from '../render/layerUpRegistry';
 import { bindMeasureUnitFrames, chainUnitFrame, type LayerUnitSource, type MeasureUnitFrames } from './measureLayerUnits';
 import { buildMeasureConfidenceContext } from './measureConfidenceContext';
+import { profileExportContext, type ProfileExportContext } from './profileExportSource';
+import { datasetIdentity } from '../geo/CrsService';
 import { buildResultModel } from './measureResultModel';
 import { copyToClipboard } from '../ui/clipboard';
 import { loadMeasurePanel, loadProfileWorkbenchRuntime } from '../lazyChunks';
@@ -126,6 +128,22 @@ export interface MeasurePanelMount {
 export function createMeasurePanelMount(deps: MeasurePanelMountDeps): MeasurePanelMount {
   // The step each measurement's positions are held at on its own layer(s), bound with the unit frames.
   let chainSteps: ((m: Measurement) => AxisSteps | null) | null = null;
+  // The open layers, bound with the unit frames, so a profile export names the scan it was measured on.
+  let layerSource: Omit<LayerUnitSource, 'crs' | 'realignUp'> | null = null;
+  /** The scan(s) one profile records it was picked on, in their own CRS; the active scan when only one is open. */
+  const profileSource = (id: string): ProfileExportContext => {
+    const v = deps.getViewer();
+    const src = layerSource;
+    return profileExportContext(v.measure.getMeasurements().find((m) => m.id === id), {
+      activeId: () => src?.activeId() ?? null,
+      clouds: () => src?.clouds() ?? [],
+      cloud: (vid) => src?.cloud(vid),
+      stableIdFor: (vid) => src?.stableIdFor(vid) ?? null,
+      activeCrs: () => deps.crsService.current() ?? null,
+      crsOf: (c) => deps.crsService.resolveFor({ name: c.name, detected: c.metadata?.crs ?? undefined, source: 'las-vlr', identity: datasetIdentity(c) }),
+      activeName: () => deps.getScanBaseName?.() ?? null,
+    });
+  };
   let panel: MeasurePanel | null = null;
   // One launcher for the whole mount, so a second Expand replaces the dock the
   // first one left rather than stacking on it. Memoised rather than built here:
@@ -199,7 +217,12 @@ export function createMeasurePanelMount(deps: MeasurePanelMountDeps): MeasurePan
       launcher = createProfileWorkbenchRuntime({
         stage: workbenchStage,
         scene: workbenchScene(),
-        ...(deps.getScanBaseName ? { scanBaseName: deps.getScanBaseName } : {}),
+        // The PNG names the scan the profile was measured on; one that cannot be settled is not written.
+        scanBaseName: (id) => {
+          const src = profileSource(id);
+          if (src.refused) throw new Error(src.refused);
+          return src.scanName;
+        },
         markerHost: () => deps.getViewer().derivedLayerHost(),
         // The pose pair, not a focus call: the workbench composes the move so
         // the arithmetic stays testable, and so the only way here is the
@@ -326,24 +349,12 @@ export function createMeasurePanelMount(deps: MeasurePanelMountDeps): MeasurePan
       // system to the panel so the profile chart's axis labels (chainage,
       // elevation) read in the user's preferred units.
       getUnitSystem: () => viewer.measure.unitSystem,
-      // v0.4.5 (B4) — CRS provenance for the profile PDF header, resolved at
-      // export time so a late confirmation/override lands on the sheet. Local
-      // and unknown frames return nulls and the PDF keeps its honest
-      // "— (not georeferenced)" fallback.
-      getProfileExportContext: () => {
-        const cur = deps.crsService.current();
-        const scanName = deps.getScanBaseName?.() ?? null;
-        if (!cur || (cur.kind !== 'projected' && cur.kind !== 'geographic')) {
-          return { crs: null, verticalDatum: null, scanName };
-        }
-        return {
-          scanName,
-          // "EPSG:NNNN — name" when the code is known; the resolved name alone
-          // otherwise (it already falls back to the WKT name / EPSG label).
-          crs: cur.epsg != null ? `EPSG:${cur.epsg} — ${cur.name}` : cur.name,
-          verticalDatum: cur.verticalDatum ?? null,
-        };
-      },
+      // CRS provenance and the project name for the profile PDF, CSV and
+      // image, resolved at export time from the scan the profile was measured
+      // on, so a late confirmation or override lands on the sheet and another
+      // scan's selection does not relabel it. Local and unknown frames return
+      // nulls and the PDF keeps its "— (not georeferenced)" fallback.
+      getProfileExportContext: profileSource,
       // B7/B8 (v0.4.5) — the panel's sampler controls re-sample through the
       // controller, which clamps the values, converts the metre corridor back to
       // render units, and emits a change so the panel re-renders with the values
@@ -458,6 +469,7 @@ export function createMeasurePanelMount(deps: MeasurePanelMountDeps): MeasurePan
       desiredVisible = false;
     },
     bindUnitFrames: (src) => {
+      layerSource = src;
       const v = deps.getViewer();
       chainSteps = (m) => positionStepsResolver(src.clouds().map((id) => ({ stableId: src.stableIdFor(id), projectOffset: v.layerProjectOffset(id) })))(m);
       // Navigation up reads the same per-layer frame as the owner frames, and

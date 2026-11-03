@@ -314,14 +314,45 @@ export function externalGltfUris(document: unknown): string[] {
   return out;
 }
 
+const MALFORMED_DATA_URI_MESSAGE = 'This glTF embeds a buffer whose data: URI cannot be read. Re-export the model, or save it as GLB.';
+
 /**
- * The only requests the glTF parser may make: decoding a `data:` URI held in
- * the file. Anything else is refused, so a reference the checks above did not
- * catch still cannot reach the network.
+ * The bytes of a `data:` URI, decoded here rather than by `fetch`: the
+ * deployment's connection policy allows only same-origin and HTTPS requests,
+ * so a fetched `data:` URI failed there and a self-contained glTF opened no
+ * points. The URI is already in the file, so its size is bounded by the file's.
+ */
+export function decodeDataUri(uri: string): Uint8Array<ArrayBuffer> {
+  const v = uri.trim();
+  const comma = v.indexOf(',');
+  if (!/^data:/i.test(v) || comma < 0) throw new Error(MALFORMED_DATA_URI_MESSAGE);
+  const meta = v.slice(5, comma);
+  const body = v.slice(comma + 1);
+  try {
+    if (/;base64$/i.test(meta)) {
+      const bin = atob(body.replace(/\s+/g, ''));
+      const out = new Uint8Array(bin.length);
+      for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
+      return out;
+    }
+    return new Uint8Array(new TextEncoder().encode(decodeURIComponent(body)));
+  } catch {
+    throw new Error(MALFORMED_DATA_URI_MESSAGE);
+  }
+}
+
+/**
+ * The only requests the glTF parser may make: a `data:` URI held in the file,
+ * decoded in memory. Anything else is refused, so a reference the checks above
+ * did not catch still cannot reach the network.
  */
 function dataUriOnlyFetch(url: string): Promise<Response> {
-  if (/^data:/i.test(url.trim())) return fetch(url);
-  return Promise.reject(new Error(EXTERNAL_GLTF_MESSAGE));
+  if (!/^data:/i.test(url.trim())) return Promise.reject(new Error(EXTERNAL_GLTF_MESSAGE));
+  try {
+    return Promise.resolve(new Response(decodeDataUri(url)));
+  } catch (err) {
+    return Promise.reject(err);
+  }
 }
 
 /** True when the bytes start with the GLB magic `glTF`. */

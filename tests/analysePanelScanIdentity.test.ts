@@ -103,6 +103,17 @@ describe('AnalysePanel — a result belongs to the scan it was computed on', () 
     expect(internals._resultScanId).toBe('scan-a');
   });
 
+  it('keeps the name the result was computed on after another scan becomes active', async () => {
+    // The Results shelf titled a retained terrain result with whichever scan
+    // was selected, while its source line still named the scan it came from.
+    const { panel, openScanB } = await panelWithResultForScanA();
+    openScanB();
+    const ref = panel.resultRef()!;
+    expect(ref.filename).toBe('scan-a');
+    expect(ref.scanId).toBe('scan-a');
+    expect(ref.fresh).toBe(false);
+  });
+
   it('clears the stamp when the result is cleared', async () => {
     const { panel, internals } = await panelWithResultForScanA();
     panel.update(null);

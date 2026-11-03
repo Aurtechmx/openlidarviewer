@@ -48,6 +48,30 @@ describe('a local glTF never makes the browser fetch a URI it names', () => {
     const cloud = await loadGltf(embeddedTriangle(), 'gltf');
     expect(cloud.pointCount).toBe(3);
   });
+
+  it('decodes a data: buffer without fetch, which a same-origin connection policy refuses', async () => {
+    // The deployment allows connections to 'self' and https: only, so a fetched
+    // data: URI failed there and a self-contained model opened no points.
+    const fetchSpy = vi.fn(async () => { throw new TypeError('Refused to connect: Content Security Policy'); });
+    vi.stubGlobal('fetch', fetchSpy);
+    const cloud = await loadGltf(embeddedTriangle(), 'gltf');
+    expect(cloud.pointCount).toBe(3);
+    expect(Array.from(cloud.positions.slice(0, 3))).toEqual([0, 0, 0]);
+    expect(fetchSpy).not.toHaveBeenCalled();
+  });
+
+  it('refuses a data: buffer that cannot be decoded, with a reason', async () => {
+    await expect(loadGltf(gltfWithBufferUri('data:application/octet-stream;base64,@@not base64@@'), 'gltf')).rejects.toThrow(/data: URI cannot be read/);
+  });
+});
+
+describe('decodeDataUri', () => {
+  it('reads base64 and percent-encoded bodies, and refuses a URI with no data', async () => {
+    const { decodeDataUri } = await import('../src/io/loadGltf');
+    expect(Array.from(decodeDataUri('data:application/octet-stream;base64,AQID'))).toEqual([1, 2, 3]);
+    expect(new TextDecoder().decode(decodeDataUri('data:,a%20b'))).toBe('a b');
+    expect(() => decodeDataUri('data:application/octet-stream;base64')).toThrow(/cannot be read/);
+  });
 });
 
 describe('the glTF JSON is decoded and parsed once before loaders.gl sees the file', () => {
