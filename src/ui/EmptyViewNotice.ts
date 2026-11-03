@@ -23,6 +23,8 @@ export interface EmptyViewCauses {
 export interface EmptyViewActions {
   turnOffClip(): void;
   resetFilters(): void;
+  /** Where keyboard focus goes when the card hides while it holds focus. */
+  returnFocus?(): void;
 }
 
 /** The card's sentence, or null when nothing on could explain an empty view. */
@@ -44,8 +46,10 @@ export class EmptyViewNotice {
   private readonly _text: HTMLElement;
   private readonly _clipBtn: HTMLButtonElement;
   private readonly _filtersBtn: HTMLButtonElement;
+  private readonly _returnFocus: (() => void) | undefined;
 
   constructor(actions: EmptyViewActions) {
+    this._returnFocus = actions.returnFocus;
     this._text = el('p', { className: 'olv-empty-view-text' });
     this._clipBtn = el('button', {
       className: 'olv-result-btn', type: 'button', text: 'Turn off clip',
@@ -67,7 +71,11 @@ export class EmptyViewNotice {
   /** Show the card for these causes, or hide it with null. Cheap and idempotent. */
   sync(causes: EmptyViewCauses | null): void {
     const text = causes ? emptyViewText(causes) : null;
+    // A recovery button hides the card under the keyboard; hand focus on
+    // rather than drop it to the page. Focus held elsewhere stays put.
+    const held = text === null && this.shown && this.element.contains(document.activeElement);
     this.element.classList.toggle('olv-hidden', text === null);
+    if (held) this._returnFocus?.();
     if (text === null || !causes) return;
     if (this._text.textContent !== text) this._text.textContent = text;
     this._clipBtn.classList.toggle('olv-hidden', !causes.clip);

@@ -125,6 +125,8 @@ export interface InspectorCallbacks {
   removalClassEditsLine?: (id: string) => string | null;
   /** Isolate a layer (show only it); calling again on the active layer clears isolate. */
   onToggleSolo?: (id: string) => void;
+  /** Make a layer the active scan: the one the class list, scan report and exports describe. */
+  onActivate?: (id: string) => void;
   /** Lock a layer out of picking / measuring (it stays drawn). */
   onToggleLock?: (id: string, locked: boolean) => void;
   /** Compare the two loaded layers' elevations (two-epoch change detection). */
@@ -714,6 +716,8 @@ export class Inspector {
   /** The latest setReport() argument, rows or a pending computation. */
   private _reportSource: unknown = null;
   private readonly _layerRows = new Map<string, HTMLElement>();
+  /** The active scan's id, marked on its row (see `setActiveLayer`). */
+  private _activeLayer: string | null = null;
   /** A streaming scan is open, so removing the last static layer does not close the scan. */
   private _streaming = false;
   /** Per-layer facts the group panel reads: display name and stable identity. */
@@ -1596,9 +1600,13 @@ export class Inspector {
       title: crsLabel ? `Coordinate system: ${crsLabel}` : 'No coordinate system declared',
     });
 
+    const pick = el('button', { className: 'olv-layer-name', type: 'button', text: name, title: `Make ${name} the active scan` });
+    pick.setAttribute('aria-pressed', 'false');
+    pick.addEventListener('click', () => this._cb.onActivate?.(id));
+
     const row = el('div', { className: 'olv-layer' }, [
       el('label', { className: 'olv-check-hit' }, [visible]),
-      el('span', { className: 'olv-layer-name', text: name }),
+      pick,
       el('span', { className: 'olv-layer-count', text: formatCount(pointCount) }),
       crs,
       solo,
@@ -1606,6 +1614,7 @@ export class Inspector {
       remove,
     ]);
     this._layerRows.set(id, row);
+    this._markActiveLayer(id);
     this._layerFacts.set(id, { name, stableId: stableId ?? null });
     this._notifySource();
     this._layerVisibleBoxes.set(id, visible);
@@ -2028,6 +2037,23 @@ export class Inspector {
     const facts = this._layerFacts.get(to);
     if (facts) facts.stableId = stableId;
     this._groups?.handOverLayer(from, to);
+  }
+
+  /**
+   * Mark which row is the active scan. A row added later (the open path sets
+   * the active scan before the row exists) takes its state from `addCloud`.
+   */
+  setActiveLayer(id: string | null): void {
+    this._activeLayer = id;
+    for (const rowId of this._layerRows.keys()) this._markActiveLayer(rowId);
+  }
+
+  private _markActiveLayer(id: string): void {
+    const row = this._layerRows.get(id);
+    if (!row) return;
+    const on = id === this._activeLayer;
+    row.classList.toggle('is-active-layer', on);
+    row.querySelector('.olv-layer-name')?.setAttribute('aria-pressed', String(on));
   }
 
   /** Remove a cloud's layer row. */

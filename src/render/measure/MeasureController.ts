@@ -2268,7 +2268,7 @@ export class MeasureController {
       // (dimensions, volume, surface area) recomputes from the edited box on
       // the next model build.
       const next = resizeBoxByCorner(
-        boxFromCorners(m.points[0], m.points[1]),
+        boxFromCorners(drag.start[0], drag.start[1]), // the box as the drag found it: a crossed anchor has re-normalised the live one
         drag.vi as BoxCornerIndex,
         [point[0], point[1], point[2]],
         this.upFor(m),

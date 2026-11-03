@@ -11,7 +11,9 @@
  *  - the viewer re-walking every point each frame instead of only when the
  *    clip, a filter or the layers change;
  *  - the check drifting from the pick's own test, so the card and what a
- *    click can reach disagree.
+ *    click can reach disagree;
+ *  - Reset filters hiding the card under the keyboard and dropping focus to
+ *    the page.
  */
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -70,6 +72,25 @@ describe('EmptyViewNotice', () => {
     filters.click();
     expect(actions.turnOffClip).toHaveBeenCalledTimes(1);
     expect(actions.resetFilters).toHaveBeenCalledTimes(1);
+  });
+
+  it('hands keyboard focus on when a recovery button hides it, and leaves focus held elsewhere', async () => {
+    const { EmptyViewNotice } = await import('../src/ui/EmptyViewNotice');
+    const returnFocus = vi.fn();
+    const n = new EmptyViewNotice({ turnOffClip: vi.fn(), resetFilters: vi.fn(), returnFocus });
+    const filters = (n.element as unknown as FakeEl).querySelectorAll('button').find((b) => b.textContent === 'Reset filters')!;
+    const doc = globalThis.document as unknown as { activeElement: unknown };
+    n.sync({ ...none, classes: true });
+    doc.activeElement = new FakeEl('input'); // focus elsewhere: the card hiding is no reason to move it
+    n.sync(null);
+    expect(returnFocus).not.toHaveBeenCalled();
+    n.sync({ ...none, classes: true });
+    doc.activeElement = filters;
+    n.sync(null);
+    expect(returnFocus).toHaveBeenCalledTimes(1);
+    n.sync(null); // already hidden
+    expect(returnFocus).toHaveBeenCalledTimes(1);
+    doc.activeElement = undefined;
   });
 });
 

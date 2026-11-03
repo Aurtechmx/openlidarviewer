@@ -1041,7 +1041,7 @@ const inspector = new Inspector({
   },
   onToggleVisible: (id, visible) => layerService.setVisible(id, visible),
   onRemove: (id) => removeCloud(id), removalClassEditsLine: (id) => layerRemovalClassEditsLine(id, viewer),
-  onToggleSolo: (id) => layerService.toggleSolo(id),
+  onToggleSolo: (id) => layerService.toggleSolo(id), onActivate: activateLayer,
   onToggleLock: (id, locked) => viewer.setCloudLocked(id, locked),
   onCompareLayers: compareLoadedLayers,
   onExportDifference: () => inspector.compareDifference.download(downloadText),
@@ -1572,7 +1572,7 @@ const measureMount = createMeasurePanelMount({
   crsService,
   getExportPanel: () => exportPanel,
   exportSession, handleFile, toast: showLassoToast,
-  recordUsage, getScanBaseName: () => baseName(scans.activeCloud()?.name ?? lastCloudName),
+  recordUsage, getScanBaseName: () => activeScanName(),
   workbenchStage: stage,
   onWorkbenchClose: () => analyseProfileVisibility.restore(),
   onUseAsClip: (id) => clipFlow.isolate(id),
@@ -1594,7 +1594,7 @@ const refreshMeasurePanel = (): void => { measureMount.refresh(); refreshToolLau
 // verdicts (measureLayerUnits). Deferred behind viewerLoaded: `viewer` is null
 // until the lazy chunk resolves, and subscribe fires synchronously.
 void viewerLoaded.then(() => {
-  const measureUnits = measureMount.bindUnitFrames({ activeId: () => scans.activeId, clouds: () => viewer.clouds(), cloud: (id) => viewer.getCloud(id), stableIdFor: runtime.layerIdentity.stableIdFor, onUpAxisMoved: () => reexpressElevationFilter({ active: () => activeElevFilter, extent: () => viewer.elevationExtent(), seedExtent: (e) => inspector.setElevationExtent(e), apply: (r) => viewer.setElevationFilter(r), notify: (m) => appToast().show(m) }) }); scans.onActiveChange(() => viewer.alignUpToLayer(scans.activeId)); // navigation up follows the active layer
+  const measureUnits = measureMount.bindUnitFrames({ activeId: () => scans.activeId, clouds: () => viewer.clouds(), cloud: (id) => viewer.getCloud(id), stableIdFor: runtime.layerIdentity.stableIdFor, onUpAxisMoved: () => reexpressElevationFilter({ active: () => activeElevFilter, extent: () => viewer.elevationExtent(), seedExtent: (e) => inspector.setElevationExtent(e), apply: (r) => viewer.setElevationFilter(r), notify: (m) => appToast().show(m) }) }); scans.onActiveChange(() => { viewer.alignUpToLayer(scans.activeId); inspector.setActiveLayer(scans.activeId); }); // navigation up and the marked layer row follow the active layer
   crsService.subscribe(() => {
     // One context for the active scan: measure scale, trust grade, geographic
     // refusal and the colorbar unit all read it.
@@ -1625,7 +1625,7 @@ const annotationPanel = new AnnotationPanel({
 // quality, contour readiness) and contour export. v0.4.0. The heavy
 // pipeline is dynamic-imported on demand so it stays out of the initial
 // bundle; the panel only runs when the user clicks "Run terrain analysis".
-let lastCloudName = 'contours';
+let lastCloudName = 'contours'; const activeScanName = (): string => baseName(scans.activeCloud()?.name ?? lastCloudName); // exports name the active scan, not the last one opened
 // The terrain-analysis orchestration (the async run path, the A-1
 // stale-result token guard, the fingerprint cache, and the worker offload)
 // lives in `src/app/terrainAnalysisRunner.ts`. The runner owns its own run
@@ -1665,7 +1665,7 @@ function newAnalysePanel(
     // Same cached-core rebuild, generalised with the contour shape-style picker so
     // an export reflects the user's chosen interval AND line shape.
     buildResultForExport: (opts) => terrainRunner.buildResultForExport(opts),
-    getExportBasename: () => lastCloudName, getAnnotations: () => viewer.annotate.getAnnotations(), getActiveScanId: () => scans.activeExportTargetId(), getFeatureCloud: (id) => viewer.getCloud(id) ?? null, activeClassificationEpoch: () => { const id = scans.activeId; return id ? viewer.classificationEpoch(id) : 0; }, crsRevision: () => crsService.crsRevision(), getDerivedLayerHost: () => viewer.derivedLayerHost(),
+    getExportBasename: activeScanName, getAnnotations: () => viewer.annotate.getAnnotations(), getActiveScanId: () => scans.activeExportTargetId(), getFeatureCloud: (id) => viewer.getCloud(id) ?? null, activeClassificationEpoch: () => { const id = scans.activeId; return id ? viewer.classificationEpoch(id) : 0; }, crsRevision: () => crsService.crsRevision(), getDerivedLayerHost: () => viewer.derivedLayerHost(),
     // Terrain Intelligence Report (v0.4.5): hand the report the Inspector
     // card's CURRENT Dataset Intelligence summary so the PDF's bucket labels
     // are the card's own strings (null when the card is empty — the report
@@ -1747,7 +1747,7 @@ function newAnalysePanel(
         worldOrigin: placedOrigin
           ? { x: placedOrigin[0], y: placedOrigin[1], z: placedOrigin[2] }
           : null,
-        title: `${lastCloudName} — Contours`,
+        title: `${activeScanName()} — Contours`,
         sheet: 'letter',
         isGeographic: ctx.isGeographic, sceneUpAxis: upAxis, layerUpFrame: cloud ? layerUpFrameOf(crsService, cloud, true) : null,
         crs: cur, wkt: cur?.wkt ?? null, // ACTIVE resolved CRS (override applied); Local → no WKT, never the rejected declared one (1A)
@@ -2487,7 +2487,7 @@ const routeCoordinator = createScanRouteCoordinator({
   frame: {
     ...routeUnitFrame(() => crsService.context()),
     exportTargetId: () => scans.activeExportTargetId(), crsRevision: () => crsService.crsRevision(),
-    basename: () => lastCloudName, truncation: () => scans.activeCloud()?.metadata?.truncation ?? null,
+    basename: activeScanName, truncation: () => scans.activeCloud()?.metadata?.truncation ?? null,
   },
   verdict: {
     get: () => captureProvenance.verdict(),
