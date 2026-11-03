@@ -142,6 +142,10 @@ has not been done. v0.7.0 is the current published release.
 - After a scan was removed, the contour map sheet's title, notes and file name, the Terrain Intelligence report's scan name and other terrain exports still named the last scan opened. They now name the active scan.
 - Dragging a box measurement's corner past the opposite corner moved that corner too: each step resized the box as the last step had left it, so the box shrank to the last step and followed the pointer, and a release could save a box of zero size. Every step now resizes from the box as the drag began, with the opposite corner fixed.
 - Reset filters or Turn off clip on the empty-view card dropped keyboard focus to the page when the card closed. Focus now moves to the scan view.
+- With two scans open, a profile's PDF, station CSV and workbench image took the selected scan's name and CRS, so selecting the other scan relabelled a profile measured on the first. They now name the scan the profile was measured on, in its own CRS, and are withheld with a reason when that cannot be settled.
+- A glTF or GLB whose buffer is embedded as a data: URI opened no points on a deployment that serves the supplied headers, which allow connections only to the site and to HTTPS. The buffer is now decoded in memory; a malformed one is refused with a reason, and external references stay refused.
+- The Results shelf titled a kept terrain result with the selected scan's name rather than the scan it was computed on. It now keeps the name the result was computed on.
+- On a phone, the layer name that makes a scan active was 17 px tall. It is now a 44 px target, and the CRS badge beside it narrows first so the row fits at 320 px.
 
 ### Validation
 

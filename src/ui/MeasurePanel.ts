@@ -274,11 +274,13 @@ export interface MeasurePanelCallbacks {
    * the scan is local/unknown) the PDF keeps its honest
    * "— (not georeferenced)" fallback.
    */
-  getProfileExportContext?: () => {
+  getProfileExportContext?: (id: string) => {
     crs: string | null;
     verticalDatum: string | null;
-    /** The active scan's base name; names the exported files and the sheet's project. */
+    /** The base name of the scan the profile was measured on; names the exported files and the sheet's project. */
     scanName?: string | null;
+    /** The source cannot be settled: the export is withheld with this sentence. */
+    refused?: string;
   };
   /**
    * Re-sample one profile with user-set sampler parameters (B7/B8, v0.4.5):
@@ -817,7 +819,8 @@ export class MeasurePanel {
     // The frame the section was measured in, captured with it. Both were read
     // after the chunk await, so a scan swap while pdf-lib loaded labelled this
     // profile's geometry with the next scan's CRS and unit system.
-    const context = this._cb.getProfileExportContext ? this._cb.getProfileExportContext() : null;
+    const context = this._cb.getProfileExportContext ? this._cb.getProfileExportContext(s.id) : null;
+    if (context?.refused) throw new Error(context.refused);
     const unitSystem = this._displayUnits(s);
     const { buildProfilePdf } = await loadProfilePdf();
     // Assembled in ONE place, shared with the docked workbench's own export
@@ -854,7 +857,7 @@ export class MeasurePanel {
    * confirmation or a user override reaches the headings on the next update.
    */
   private _verticalReference(s: MeasurementSummary): VerticalReference {
-    const ctx = this._cb.getProfileExportContext ? this._cb.getProfileExportContext() : null;
+    const ctx = this._cb.getProfileExportContext ? this._cb.getProfileExportContext(s.id) : null;
     return resolveProfileVerticalReference({
       datumKnown: s.profileDatumKnown,
       provenance: s.profileProvenance,
@@ -877,7 +880,7 @@ export class MeasurePanel {
 
   /** Disable a profile CSV button, with the reason as its tooltip, when the export is refused. */
   private _applyCsvRefusal(button: HTMLButtonElement, s: MeasurementSummary): void {
-    const refusal = profileCsvRefusal(s, this._geographicCrs, this._verticalRefused);
+    const refusal = profileCsvRefusal(s, this._geographicCrs, this._verticalRefused) ?? this._cb.getProfileExportContext?.(s.id).refused;
     if (!refusal) return;
     button.disabled = true;
     button.title = refusal;
@@ -886,6 +889,8 @@ export class MeasurePanel {
   private _exportProfileCsv(s: MeasurementSummary): void {
     if (!s.profileChart || s.profileChart.length < 2) return;
     if (profileCsvRefusal(s, this._geographicCrs, this._verticalRefused)) return;
+    const source = this._cb.getProfileExportContext?.(s.id);
+    if (source?.refused) return;
     const system = this._displayUnits(s);
     const csv = buildProfileCsv(
       s.profileChart,
@@ -894,7 +899,7 @@ export class MeasurePanel {
       s.profileCoverageNote,
       s.profileWithheld?.reduction ?? s.profileProvenance?.reduction,
     );
-    const scanName = this._cb.getProfileExportContext?.().scanName;
+    const scanName = source?.scanName;
     triggerDownload(
       new Blob([csv], { type: 'text/csv' }),
       profileExportFileName(scanName, s.name, 'csv') ?? `${safeFileName(s.name)}-profile.csv`,

@@ -87,8 +87,8 @@ export interface ProfileWorkbenchRuntimeDeps {
    * comes to state neither. Absent means the dock renders no export control.
    */
   exportPdf?: (id: string) => Promise<void>;
-  /** The active scan's base name, for the PNG's file name; null or absent when unknown. */
-  scanBaseName?: () => string | null;
+  /** The base name of the scan a profile was measured on, for the PNG's file name; null or absent when unknown. */
+  scanBaseName?: (id: string) => string | null;
   /**
    * Told about a rejected panel chunk, or a fill that threw. Defaults to a
    * console record: the user already has the focus view, so nothing about the
@@ -192,7 +192,7 @@ export function createProfileWorkbenchRuntime(
       await exportProfileSectionImagePng(current.plot, {
         name: request.name,
         generatedAt: sectionImageStamp(),
-        fileName: profileExportFileName(deps.scanBaseName?.(), request.name, 'png') ?? undefined,
+        fileName: profileExportFileName(deps.scanBaseName?.(request.id), request.name, 'png') ?? undefined,
       });
     },
     onRawScope: (scope): void => setRawFilter?.(rawFilterRequestForScope(scope)),

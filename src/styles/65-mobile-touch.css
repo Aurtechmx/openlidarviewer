@@ -459,6 +459,11 @@
     display: inline-flex; align-items: center; justify-content: center;
     min-width: 44px; min-height: 44px;
   }
+  /* The name makes the layer the active scan: the row's 44px height, and a
+     smaller floor so the three 44px buttons beside it still fit at 320px. */
+  .olv-layer-name { min-height: 44px; min-width: 3rem; }
+  /* The CRS badge gives way first; it truncates and its title holds the full name. */
+  .olv-layer-crs { max-width: 3.5rem; }
 
   /* ── Visuals Studio + Inspector sections — phone tuning ─────────────
      The chip rails, white-balance sliders and section summaries inherit
