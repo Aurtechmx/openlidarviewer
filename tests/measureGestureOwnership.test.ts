@@ -12,43 +12,17 @@ import { describe, it, expect, beforeAll } from 'vitest';
 import type { Measurement, Vec3 } from '../src/render/measure/types';
 import type { MeasureController as MC, PickedPoint } from '../src/render/measure/MeasureController';
 import { doubleClickAction } from '../src/render/touchTapGate';
-import { installFakeDom } from './support/measurePanelDom';
+import { controllerWith, fire, installDragWindow, openListeners as open, pressHandle } from './support/measureDrag';
 
-const listeners = new Map<string, Set<(e: unknown) => void>>();
-const fire = (type: string, e: unknown = {}) => { for (const fn of [...(listeners.get(type) ?? [])]) fn(e); };
-const open = () => [...listeners.values()].reduce((n, set) => n + set.size, 0);
-
-beforeAll(() => {
-  installFakeDom({ ns: true });
-  const g = globalThis as unknown as Record<string, unknown>;
-  g.window = {
-    addEventListener: (t: string, fn: (e: unknown) => void) => { (listeners.get(t) ?? listeners.set(t, new Set()).get(t)!).add(fn); },
-    removeEventListener: (t: string, fn: (e: unknown) => void) => { listeners.get(t)?.delete(fn); },
-    setTimeout: (fn: () => void, ms: number) => setTimeout(fn, ms),
-    clearTimeout: (h: ReturnType<typeof setTimeout>) => clearTimeout(h),
-  };
-});
+beforeAll(installDragWindow);
 
 async function dragging(): Promise<{ measure: MC; points: () => Vec3[] }> {
-  const { MeasureController } = await import('../src/render/measure/MeasureController');
-  const measure = new MeasureController({ onExit: () => {} } as unknown as ConstructorParameters<typeof MeasureController>[0]);
-  measure.setContext({ worldUp: [0, 0, 1], origin: null });
-  measure.setCrsKnown(true);
-  measure.setUnitToMetres(1);
-  (measure.overlay as unknown as { getBoundingClientRect: () => DOMRect }).getBoundingClientRect = () =>
-    ({ left: 0, top: 0, width: 100, height: 100 }) as DOMRect;
-  const line = { id: 'd', kind: 'distance', name: 'd', closed: false, points: [[0, 0, 0], [4, 0, 0]] as Vec3[] } as Measurement;
-  measure.loadMeasurements([line]);
-  measure.setActive(true);
+  const measure = await controllerWith({ id: 'd', kind: 'distance', name: 'd', closed: false, points: [[0, 0, 0], [4, 0, 0]] } as Measurement);
   press(measure, 7);
   return { measure, points: () => measure.getMeasurements()[0]!.points };
 }
 
-function press(measure: MC, pointerId: number): void {
-  (measure as unknown as { _handlePointerDown(e: unknown): void })._handlePointerDown({
-    target: { dataset: { mid: 'd', vi: '1' } }, preventDefault: () => {}, clientX: 10, clientY: 10, pointerId,
-  });
-}
+const press = (measure: MC, pointerId: number): void => pressHandle(measure, 'd', 1, pointerId);
 
 /** Move the drag pointer past the slop and stand in for the re-pick that moved the vertex. */
 function moveVertex(points: () => Vec3[]): void {
