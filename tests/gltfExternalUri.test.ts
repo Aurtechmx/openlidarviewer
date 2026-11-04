@@ -136,11 +136,11 @@ describe('glTF 1.0 and unreadable GLB headers cannot reach the network', () => {
     expect(fetchSpy).not.toHaveBeenCalled();
   });
 
-  it('refuses a GLB whose JSON chunk cannot be read, even under a .gltf name', async () => {
+  it('refuses a glTF 1.0 GLB by its header version, even under a .gltf name', async () => {
     const fetchSpy = vi.fn(async () => new Response(new ArrayBuffer(1)));
     vi.stubGlobal('fetch', fetchSpy);
-    await expect(loadGltf(glbV1(), 'glb')).rejects.toThrow(/JSON chunk/);
-    await expect(loadGltf(glbV1(), 'gltf')).rejects.toThrow(/JSON chunk/);
+    await expect(loadGltf(glbV1(), 'glb')).rejects.toThrow(/version 2\.0/);
+    await expect(loadGltf(glbV1(), 'gltf')).rejects.toThrow(/version 2\.0/);
     expect(fetchSpy).not.toHaveBeenCalled();
   });
 });

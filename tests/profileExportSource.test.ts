@@ -123,8 +123,33 @@ describe('the source a profile export names', () => {
 
   it('opens the raw workbench only in a contributing scan’s frame and preserves the saved profile otherwise', () => {
     expect(profileWorkbenchSource(onLas, scene('v1')).refused).toBeUndefined();
-    expect(profileWorkbenchSource(onLas, scene('v2')).refused).toMatch(/Select.*terrain-access-utm.*in Data/);
+    expect(profileWorkbenchSource(onLas, scene('v2')).refused).toMatch(/^Not opened: select.*terrain-access-utm.*in Data, then reopen the Profile Workbench/);
+    // The dock's PNG reads the same section, but it is a file that was withheld.
+    expect(profileWorkbenchSource(onLas, scene('v2'), 'export').refused).toMatch(/^Not exported: select.*in Data, then export again/);
+    expect(profileWorkbenchSource({}, scene('v2'), 'export').refused).toMatch(/^Not exported:/);
+    // An open dock whose source stops settling is closed, not withheld.
+    expect(profileWorkbenchSource(onLas, scene('v2'), 'closed').refused).toMatch(/^Profile Workbench closed: select.*in Data, then reopen it\./);
+    const none = { ...scene('v1'), clouds: () => [] as string[] };
+    expect(profileWorkbenchSource(onLas, none, 'closed').refused).toMatch(/^Profile Workbench closed: a scan .* is not open\. Reopen every contributing scan, then reopen it\./);
+    expect(profileExportContext({}, none).refused).toMatch(/^Not exported: no source scan is open\. Reopen the scan this profile was measured on, then export again\.$/);
     expect(profileExportContext(onLas, scene('v2')).refused).toBeUndefined();
+  });
+
+  it('tells the workbench what to do, not what to export, when the source is unsettled', () => {
+    const noOwner = {} as Parameters<typeof profileWorkbenchSource>[0];
+    const r = profileWorkbenchSource(noOwner, scene('v1'));
+    expect(r.refused).toMatch(/^Not opened:/);
+    expect(r.refused).toMatch(/reopen the Profile Workbench/);
+    expect(r.refused).not.toMatch(/export/);
+    expect(profileExportContext(noOwner, scene('v1')).refused).toMatch(/^Not exported:.*export again\.$/);
+  });
+
+  it('names a next step for tiles whose heights carry no vertical reference', () => {
+    const noVertical = { kind: 'projected', epsg: 32613, name: 'WGS 84 / UTM zone 13N' } as unknown as ResolvedCrs;
+    const d = scene('v1', { activeCrs: () => noVertical, crsOf: () => noVertical, stableIdFor: (id) => (id === 'v1' ? 'las' : 'ply') });
+    const r = profileExportContext({ pickLayers: ['las', 'ply'] }, d);
+    expect(r.refused).toMatch(/vertical/);
+    expect(r.refused).toMatch(/Measure the profile on one scan/);
   });
 
   it('resolves a non-active scan in its own CRS, not the active one', () => {
