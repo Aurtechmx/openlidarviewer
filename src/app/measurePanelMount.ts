@@ -131,12 +131,12 @@ export function createMeasurePanelMount(deps: MeasurePanelMountDeps): MeasurePan
   // The open layers, bound with the unit frames, so a profile export names the scan it was measured on.
   let layerSource: Omit<LayerUnitSource, 'crs' | 'realignUp'> | null = null;
   /** The scan(s) one profile records it was picked on, in their own CRS; the active scan when only one is open. */
+  /** The source of one profile's export, or of its raw section with `purpose` naming what the dock is doing. */
   const profileSource = (id: string, rawSection = false, purpose: ProfileSourcePurpose = 'workbench'): ProfileExportContext => {
     const v = deps.getViewer();
     const src = layerSource;
-    const resolve = (m: Parameters<typeof profileExportContext>[0], d: ProfileSourceDeps): ProfileExportContext =>
-      rawSection ? profileWorkbenchSource(m, d, purpose) : profileExportContext(m, d);
-    return resolve(v.measure.getMeasurements().find((m) => m.id === id), {
+    const m = v.measure.getMeasurements().find((x) => x.id === id);
+    const d: ProfileSourceDeps = {
       activeId: () => src?.activeId() ?? null,
       clouds: () => src?.clouds() ?? [],
       hasStreamingCloud: () => v.hasStreamingCloud,
@@ -145,7 +145,8 @@ export function createMeasurePanelMount(deps: MeasurePanelMountDeps): MeasurePan
       activeCrs: () => deps.crsService.current() ?? null,
       crsOf: (c) => deps.crsService.resolveFor({ name: c.name, detected: c.metadata?.crs ?? undefined, source: 'las-vlr', identity: datasetIdentity(c) }),
       activeName: () => deps.getScanBaseName?.() ?? null,
-    });
+    };
+    return rawSection ? profileWorkbenchSource(m, d, purpose) : profileExportContext(m, d);
   };
   let panel: MeasurePanel | null = null;
   // One launcher for the whole mount, so a second Expand replaces the dock the
@@ -258,7 +259,7 @@ export function createMeasurePanelMount(deps: MeasurePanelMountDeps): MeasurePan
         if (refusal) { deps.toast?.(refusal); return false; }
         const opened = await live.open({ id: summary.id, kind: summary.kind, name: summary.name });
         if (opened) {
-          const changed = profileSource(summary.id, true).refused;
+          const changed = profileSource(summary.id, true, 'closed').refused;
           if (changed) { closeWorkbench(); deps.toast?.(changed); return false; }
           dockedId = summary.id;
         }
@@ -404,7 +405,7 @@ export function createMeasurePanelMount(deps: MeasurePanelMountDeps): MeasurePan
       // cannot overwrite a name someone is still typing into the dock.
       if (dockedId !== null) {
         const docked = measurements.find((m) => m.id === dockedId);
-        const refusal = profileSource(dockedId, true).refused;
+        const refusal = profileSource(dockedId, true, 'closed').refused;
         if (refusal) { closeWorkbench(); deps.toast?.(refusal); }
         else if (docked) launcher?.handle?.setTitle?.(docked.name);
       }

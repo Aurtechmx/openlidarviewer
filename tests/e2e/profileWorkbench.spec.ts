@@ -234,7 +234,7 @@ test.describe('profile workbench', () => {
     await showWorkspaceMode(page, 'data');
     await page.locator('.olv-layer-name', { hasText: 'tiny' }).click();
     await expect(page.locator('.olv-workbench')).toHaveCount(0);
-    await expect(reason).toContainText("Not opened: select the profile's source");
+    await expect(reason).toContainText("Profile Workbench closed: select the profile's source");
   });
 });
 
@@ -256,9 +256,8 @@ test.describe('a profile whose scan is removed', () => {
   }
 
   test('loses its exports when the scan is removed while another is active', async ({ page }) => {
-    // The refusal checks run only when the measure panel refreshes, so removing
-    // a scan that was not active left a profile's CSV and PDF buttons enabled
-    // with no source behind them.
+    // The measure panel refreshes as the scan goes, whichever scan was active,
+    // so the profile's CSV and PDF buttons are disabled with the reason at once.
     await placeProfile(page);
     await addSecondScan(page);
     await openToolPage(page, 'Measure');

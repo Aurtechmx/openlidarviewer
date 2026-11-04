@@ -301,6 +301,12 @@ describe('loadGltf — the admission check walks the chunks the parser reads', (
     await expect(loadGltf(file, 'glb')).rejects.toMatchObject({ name: 'LoadError', category: 'malformed-file' });
   });
 
+  test('a .glb that is neither a GLB nor JSON text is refused by its first bytes', async () => {
+    const junk = new Uint8Array(1 << 20);
+    for (let i = 0; i < junk.length; i++) junk[i] = (i * 7919) & 0xff;
+    await expect(loadGltf(junk.buffer, 'glb')).rejects.toMatchObject({ category: 'malformed-file', message: expect.stringMatching(/JSON chunk/) });
+  });
+
   test('a JSON glTF saved under a .glb name is read as text', async () => {
     const tri = new Uint8Array(new Float32Array([0, 0, 0, 1, 0, 0, 0, 1, 0]).buffer);
     const uri = 'data:application/octet-stream;base64,' + Buffer.from(tri).toString('base64');

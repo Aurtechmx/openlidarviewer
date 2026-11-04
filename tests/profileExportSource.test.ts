@@ -127,6 +127,11 @@ describe('the source a profile export names', () => {
     // The dock's PNG reads the same section, but it is a file that was withheld.
     expect(profileWorkbenchSource(onLas, scene('v2'), 'export').refused).toMatch(/^Not exported: select.*in Data, then export again/);
     expect(profileWorkbenchSource({}, scene('v2'), 'export').refused).toMatch(/^Not exported:/);
+    // An open dock whose source stops settling is closed, not withheld.
+    expect(profileWorkbenchSource(onLas, scene('v2'), 'closed').refused).toMatch(/^Profile Workbench closed: select.*in Data, then reopen it\./);
+    const none = { ...scene('v1'), clouds: () => [] as string[] };
+    expect(profileWorkbenchSource(onLas, none, 'closed').refused).toMatch(/^Profile Workbench closed: a scan .* is not open\. Reopen every contributing scan, then reopen it\./);
+    expect(profileExportContext({}, none).refused).toMatch(/^Not exported: no source scan is open\. Reopen the scan this profile was measured on, then export again\.$/);
     expect(profileExportContext(onLas, scene('v2')).refused).toBeUndefined();
   });
 

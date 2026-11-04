@@ -44,9 +44,11 @@ export interface ProfileSourceDeps {
   readonly activeName: () => string | null;
 }
 
-/** What the caller wanted the source for; the refusal names that, and the step that retries it. */
-export type ProfileSourcePurpose = 'export' | 'workbench';
-type Purpose = ProfileSourcePurpose;
+/**
+ * What the caller wanted the source for; the refusal names that and the step
+ * that retries it. 'closed' is an open dock whose source stopped settling.
+ */
+export type ProfileSourcePurpose = 'export' | 'workbench' | 'closed';
 
 /** The file name without its extension. */
 function baseName(name: string): string {
@@ -64,21 +66,26 @@ function contextOf(cur: ResolvedCrs | null, scanName: string | null): ProfileExp
   return { crs, verticalDatum: crs ? cur?.verticalDatum ?? null : null, scanName };
 }
 
-/** A withheld source. `again` in the text is replaced by the step that retries the caller's action. */
-function refuse(purpose: Purpose, text: string): ProfileExportContext {
-  const again = purpose === 'export' ? 'export again' : 'reopen the Profile Workbench';
-  const head = purpose === 'export' ? 'Not exported' : 'Not opened';
-  return { crs: null, verticalDatum: null, scanName: null, refused: `${head}: ${text.replace('{again}', again)}` };
+const REFUSAL_HEAD: Readonly<Record<ProfileSourcePurpose, string>> = {
+  export: 'Not exported', workbench: 'Not opened', closed: 'Profile Workbench closed',
+};
+const REFUSAL_STEP: Readonly<Record<ProfileSourcePurpose, string>> = {
+  export: 'export again', workbench: 'reopen the Profile Workbench', closed: 'reopen it',
+};
+
+/** A withheld source. `{again}` in the text is replaced by the step that retries the caller's action. */
+function refuse(purpose: ProfileSourcePurpose, text: string): ProfileExportContext {
+  return { crs: null, verticalDatum: null, scanName: null, refused: `${REFUSAL_HEAD[purpose]}: ${text.replace('{again}', REFUSAL_STEP[purpose])}` };
 }
 
-function sourceOf(m: OwnedItem | undefined, d: ProfileSourceDeps, purpose: Purpose): ProfileExportContext {
+function sourceOf(m: OwnedItem | undefined, d: ProfileSourceDeps, purpose: ProfileSourcePurpose): ProfileExportContext {
   if (!m) return refuse(purpose, 'this profile is no longer available.');
   const open = d.clouds();
   const ids = ownerIdsOf(m);
   if (ids.length === 0) {
     const stream = d.hasStreamingCloud?.() === true;
     if ((open.length === 1 && !stream && open[0] === d.activeId()) || (open.length === 0 && stream)) return contextOf(d.activeCrs(), d.activeName());
-    if (open.length === 0) return refuse(purpose, 'no source scan is open. Reopen the scan this profile was measured on.');
+    if (open.length === 0) return refuse(purpose, 'no source scan is open. Reopen the scan this profile was measured on, then {again}.');
     return refuse(purpose, 'this profile has no record of the scan it was measured on, so its name and coordinate system cannot be settled while several scans are open. Close every scan but the one it was measured on, then {again}.');
   }
   const active = d.activeId();
@@ -125,10 +132,10 @@ export function profileExportContext(m: OwnedItem | undefined, d: ProfileSourceD
 
 /**
  * The raw section walks the active scene's up, scale and height datum. The
- * dock's PNG export passes 'export': it reads the same section, but what was
- * withheld is a file, not the dock.
+ * dock's PNG export passes 'export' (what was withheld is a file), and the
+ * check on an open dock passes 'closed' (the dock is closed, not withheld).
  */
-export function profileWorkbenchSource(m: OwnedItem | undefined, d: ProfileSourceDeps, purpose: Purpose = 'workbench'): ProfileExportContext {
+export function profileWorkbenchSource(m: OwnedItem | undefined, d: ProfileSourceDeps, purpose: ProfileSourcePurpose = 'workbench'): ProfileExportContext {
   const source = sourceOf(m, d, purpose);
   if (source.refused || !m) return source;
   const ids = ownerIdsOf(m);

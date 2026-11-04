@@ -275,9 +275,11 @@ const GLB_CHUNK_BIN = 0x004e4942;
 const GLB_CHUNK_JSON_LEGACY = 0;
 const GLB_CHUNK_BIN_LEGACY = 1;
 
-function badGlb(detail: string): never {
-  throw new LoadError('malformed-file', detail, detail);
+/** A malformed file, with `message` as both the reason shown and the report line. */
+function malformed(message: string): never {
+  throw new LoadError('malformed-file', message, message);
 }
+
 
 const NO_JSON_CHUNK_MESSAGE = 'This GLB has no readable JSON chunk.';
 
@@ -298,7 +300,7 @@ interface GlbChunks {
  * how a declaration the file cannot back got through.
  */
 function glbChunks(file: ArrayBuffer): GlbChunks {
-  if (file.byteLength < 20) badGlb(NO_JSON_CHUNK_MESSAGE);
+  if (file.byteLength < 20) malformed(NO_JSON_CHUNK_MESSAGE);
   const view = new DataView(file);
   // A glTF 1.0 GLB lays its content out differently; the viewer reads only 2.0.
   if (view.getUint32(4, true) !== 2) {
@@ -306,8 +308,8 @@ function glbChunks(file: ArrayBuffer): GlbChunks {
   }
   const total = view.getUint32(8, true);
   // The parser asserts room for one chunk header after the file header.
-  if (total <= 20) badGlb(NO_JSON_CHUNK_MESSAGE);
-  if (total > file.byteLength) badGlb('This GLB declares more bytes than the file holds.');
+  if (total <= 20) malformed(NO_JSON_CHUNK_MESSAGE);
+  if (total > file.byteLength) malformed('This GLB declares more bytes than the file holds.');
   let offset = 12;
   let json: Uint8Array | undefined;
   let jsonChunks = 0;
@@ -319,7 +321,7 @@ function glbChunks(file: ArrayBuffer): GlbChunks {
     offset += 8;
     const known = type === GLB_CHUNK_JSON || type === GLB_CHUNK_JSON_LEGACY || type === GLB_CHUNK_BIN || type === GLB_CHUNK_BIN_LEGACY;
     // An unknown chunk is skipped without being read, however long it claims to be.
-    if (known && offset + length > file.byteLength) badGlb('A GLB chunk extends beyond the file.');
+    if (known && offset + length > file.byteLength) malformed('A GLB chunk extends beyond the file.');
     if (type === GLB_CHUNK_JSON || type === GLB_CHUNK_JSON_LEGACY) {
       jsonChunks++;
       json = new Uint8Array(file, offset, length);
@@ -329,9 +331,20 @@ function glbChunks(file: ArrayBuffer): GlbChunks {
     }
     offset += 4 * Math.ceil(length / 4);
   }
-  if (!json || jsonChunks !== 1) badGlb(json ? 'This GLB has more than one JSON chunk.' : NO_JSON_CHUNK_MESSAGE);
-  if (binChunks > 1) badGlb('This GLB has more than one binary chunk.');
+  if (!json || jsonChunks !== 1) malformed(json ? 'This GLB has more than one JSON chunk.' : NO_JSON_CHUNK_MESSAGE);
+  if (binChunks > 1) malformed('This GLB has more than one binary chunk.');
   return { json, binLength };
+}
+
+/** True when the first non-blank byte (after an optional BOM) opens a JSON object. */
+function looksLikeJsonObject(bytes: Uint8Array): boolean {
+  let i = bytes.length >= 3 && bytes[0] === 0xef && bytes[1] === 0xbb && bytes[2] === 0xbf ? 3 : 0;
+  for (const end = Math.min(bytes.length, i + 64); i < end; i++) {
+    const b = bytes[i];
+    if (b === 0x20 || b === 0x09 || b === 0x0a || b === 0x0d) continue;
+    return b === 0x7b;
+  }
+  return false;
 }
 
 /** The parsed glTF JSON, or null when the bytes are not JSON. */
@@ -467,8 +480,7 @@ interface StorageView {
 }
 
 function badStorage(detail: string): never {
-  const message = `This glTF has invalid buffer data. ${detail}`;
-  throw new LoadError('malformed-file', message, message);
+  return malformed(`This glTF has invalid buffer data. ${detail}`);
 }
 
 function whole(value: unknown): value is number {
@@ -643,10 +655,11 @@ export async function loadGltf(
   // A file is a GLB by its magic, not its name: the parser reads a JSON glTF
   // saved under .glb as text, and so does this.
   const glb = hasGlbMagic(buffer) ? glbChunks(buffer) : null;
+  // A .glb that is neither a GLB nor JSON text is refused before the whole
+  // file is decoded as text.
+  if (!glb && sourceFormat === 'glb' && !looksLikeJsonObject(new Uint8Array(buffer))) malformed(NO_JSON_CHUNK_MESSAGE);
   const document = parseGltfJson(glb ? glb.json : new Uint8Array(buffer));
-  if (document === null && (glb || sourceFormat === 'glb')) {
-    throw new LoadError('malformed-file', NO_JSON_CHUNK_MESSAGE);
-  }
+  if (document === null && (glb || sourceFormat === 'glb')) malformed(NO_JSON_CHUNK_MESSAGE);
   const version = (document as { asset?: { version?: unknown } } | null)?.asset?.version;
   if (document !== null && !(typeof version === 'string' && /^2\./.test(version))) {
     throw new LoadError('unsupported-format', UNSUPPORTED_GLTF_VERSION_MESSAGE, UNSUPPORTED_GLTF_VERSION_MESSAGE);
