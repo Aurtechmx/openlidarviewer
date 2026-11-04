@@ -282,6 +282,8 @@ export interface MeasurePanelCallbacks {
     /** The source cannot be settled: the export is withheld with this sentence. */
     refused?: string;
   };
+  /** Ground and elevation permissions from the profile's own measurement frame. */
+  getProfileExportFrame?: (id: string) => { readonly geographic: boolean; readonly verticalRefused: boolean } | null;
   /**
    * Re-sample one profile with user-set sampler parameters (B7/B8, v0.4.5):
    * corridor half-width in METRES, elevation percentile, sample count. Null
@@ -814,7 +816,7 @@ export class MeasurePanel {
     // The sheet prints grades and chainages, which a geographic frame refuses,
     // exactly as the profile CSV is refused. The docked workbench comes through
     // here too, so the refusal covers both controls.
-    const refusal = profileCsvRefusal(s, this._geographicCrs, this._verticalRefused);
+    const refusal = this._profileFrameRefusal(s);
     if (refusal) throw new Error(refusal);
     // The frame the section was measured in, captured with it. Both were read
     // after the chunk await, so a scan swap while pdf-lib loaded labelled this
@@ -878,9 +880,14 @@ export class MeasurePanel {
     return this._cb.getUnitSystem ? this._cb.getUnitSystem() : 'metric';
   }
 
+  private _profileFrameRefusal(s: MeasurementSummary): string | null {
+    const frame = this._cb.getProfileExportFrame?.(s.id);
+    return profileCsvRefusal(s, frame?.geographic ?? this._geographicCrs, frame?.verticalRefused ?? this._verticalRefused);
+  }
+
   /** Disable a profile CSV button, with the reason as its tooltip, when the export is refused. */
   private _applyCsvRefusal(button: HTMLButtonElement, s: MeasurementSummary): void {
-    const refusal = profileCsvRefusal(s, this._geographicCrs, this._verticalRefused) ?? this._cb.getProfileExportContext?.(s.id).refused;
+    const refusal = this._profileFrameRefusal(s) ?? this._cb.getProfileExportContext?.(s.id).refused;
     if (!refusal) return;
     button.disabled = true;
     button.title = refusal;
@@ -888,7 +895,7 @@ export class MeasurePanel {
 
   private _exportProfileCsv(s: MeasurementSummary): void {
     if (!s.profileChart || s.profileChart.length < 2) return;
-    if (profileCsvRefusal(s, this._geographicCrs, this._verticalRefused)) return;
+    if (this._profileFrameRefusal(s)) return;
     const source = this._cb.getProfileExportContext?.(s.id);
     if (source?.refused) return;
     const system = this._displayUnits(s);

@@ -51,13 +51,14 @@ function summary(over: Partial<MeasurementSummary> = {}): MeasurementSummary {
   return { id: 'p1', kind: 'profile', name: 'Section A', value: '0.01°', profileChart: CHART, profileDatumKnown: true, ...over } as MeasurementSummary;
 }
 
-function panel(): MeasurePanel {
+function panel(getProfileExportFrame?: (id: string) => { geographic: boolean; verticalRefused: boolean }): MeasurePanel {
   return new MeasurePanel({
     onDelete: () => {},
     onRename: () => {},
     onExport: () => {},
     onImport: () => {},
     getUnitSystem: () => 'metric',
+    getProfileExportFrame,
     getProfileExportContext: () => ({ crs: 'EPSG:4326', verticalDatum: null }),
   });
 }
@@ -94,6 +95,18 @@ describe('MeasurePanel profile CSV buttons on a geographic CRS', () => {
     const buttons = csvButtons(container);
     expect(buttons.length).toBeGreaterThan(0);
     for (const b of buttons) expect(b.disabled).toBe(true);
+  });
+
+  it('uses the measured scan for both export permissions when a different scan is selected', () => {
+    for (const geographic of [false, true]) {
+      const p = panel(() => ({ geographic, verticalRefused: false }));
+      p.setGeographicNotice(!geographic);
+      p.update([summary()]);
+      const exports = (p.element as unknown as FakeEl).querySelectorAll('button').filter((b) =>
+        /station data as CSV|as PDF/.test(b.getAttribute('aria-label') ?? ''));
+      expect(exports.length).toBeGreaterThanOrEqual(2);
+      for (const action of exports) expect(action.disabled).toBe(geographic);
+    }
   });
 
   it('leaves the buttons enabled on a projected CRS', () => {

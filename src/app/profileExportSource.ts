@@ -9,11 +9,12 @@
  * was picked on, in their own CRS, and is withheld when that cannot be
  * settled.
  *
- * With one scan open (or none recorded as static layers) the active scan is
- * the only candidate, as for the other measurement exports.
+ * A legacy profile with no recorded scan may use the sole open candidate.
  */
 
 import type { ResolvedCrs } from '../geo/CoordinateTypes';
+import { compatibilityFrameOf } from '../model/compatibilityFrame';
+import { compareHorizontalKeys, horizontalKey, verticalReferenceKey } from '../model/layerCompatibility';
 import type { PointCloud } from '../model/PointCloud';
 import { ownerIdsOf, type OwnedItem } from './measurementOwnership';
 
@@ -32,6 +33,7 @@ export interface ProfileSourceDeps {
   readonly activeId: () => string | null;
   /** Viewer ids of the open static layers. */
   readonly clouds: () => readonly string[];
+  readonly hasStreamingCloud?: () => boolean;
   readonly cloud: (viewerId: string) => PointCloud | undefined;
   readonly stableIdFor: (viewerId: string) => string | null;
   /** The active scan's resolved CRS, override included. */
@@ -60,25 +62,57 @@ function contextOf(cur: ResolvedCrs | null, scanName: string | null): ProfileExp
 
 /** The source of one profile's export. `m` is the profile, or undefined when it is gone. */
 export function profileExportContext(m: OwnedItem | undefined, d: ProfileSourceDeps): ProfileExportContext {
+  if (!m) return { crs: null, verticalDatum: null, scanName: null, refused: 'Not exported: this profile is no longer available.' };
   const open = d.clouds();
-  if (open.length < 2) return contextOf(d.activeCrs(), d.activeName());
-  const ids = m ? ownerIdsOf(m) : [];
+  const ids = ownerIdsOf(m);
   if (ids.length === 0) {
+    const stream = d.hasStreamingCloud?.() === true;
+    if ((open.length === 1 && !stream && open[0] === d.activeId()) || (open.length === 0 && stream)) return contextOf(d.activeCrs(), d.activeName());
+    if (open.length === 0) return { crs: null, verticalDatum: null, scanName: null, refused: 'Not exported: no source scan is open. Reopen the scan this profile was measured on.' };
     return { crs: null, verticalDatum: null, scanName: null, refused: 'Not exported: this profile has no record of the scan it was measured on, so its name and coordinate system cannot be settled while several scans are open. Close every scan but the one it was measured on, then export again.' };
   }
-  const owners = open.filter((id) => { const s = d.stableIdFor(id); return s !== null && ids.includes(s); });
-  if (owners.length === 0) {
-    return { crs: null, verticalDatum: null, scanName: null, refused: 'Not exported: the scan this profile was measured on is not open, so its name and coordinate system cannot be settled. Reopen it, then export again.' };
-  }
   const active = d.activeId();
-  const sources = owners.map((id) => {
-    const c = d.cloud(id);
-    return { name: c ? baseName(c.name) : id, cur: id === active ? d.activeCrs() : c ? d.crsOf(c) : null };
-  });
-  const labels = new Set(sources.map((s) => crsLabel(s.cur) ?? 'no CRS'));
-  if (labels.size > 1) {
-    const list = sources.map((s) => `${s.name} (${crsLabel(s.cur) ?? 'no CRS'})`).join(' and ');
-    return { crs: null, verticalDatum: null, scanName: null, refused: `Not exported: this profile was measured on ${list}, which use different coordinate systems.` };
+  const sources: Array<{ name: string; cur: ResolvedCrs | null }> = [];
+  for (const owner of new Set(ids)) {
+    const matches = open.filter((id) => d.stableIdFor(id) === owner);
+    if (matches.length > 1) {
+      return { crs: null, verticalDatum: null, scanName: null, refused: 'Not exported: more than one open scan matches a recorded source of this profile. Close the duplicate scan, then export again.' };
+    }
+    const id = matches[0];
+    const cloud = id !== undefined ? d.cloud(id) : undefined;
+    if (!cloud) {
+      return { crs: null, verticalDatum: null, scanName: null, refused: 'Not exported: a scan this profile was measured on is not open. Reopen every contributing scan, then export again.' };
+    }
+    sources.push({ name: baseName(cloud.name), cur: id === active ? d.activeCrs() : d.crsOf(cloud) });
   }
-  return contextOf(sources[0]!.cur, sources.map((s) => s.name).join('-'));
+  const frames = sources.map((s, i) => ({ ...compatibilityFrameOf(s.cur), id: String(i) }));
+  const firstKey = horizontalKey(frames[0]!);
+  if (frames.length > 1 && frames.some((frame) => {
+    const key = horizontalKey(frame);
+    return !key || !firstKey || compareHorizontalKeys(firstKey, key) !== 'same';
+  })) {
+    const list = sources.map((s) => `${s.name} (${crsLabel(s.cur) ?? 'no CRS'})`).join(' and ');
+    return { crs: null, verticalDatum: null, scanName: null, refused: `Not exported: this profile was measured on ${list}, whose horizontal coordinate systems cannot be verified as the same.` };
+  }
+  const first = sources[0]!.cur;
+  const firstVertical = verticalReferenceKey(frames[0]!);
+  if (sources.length > 1 && sources.some(({ cur }, i) => !firstVertical || verticalReferenceKey(frames[i]!) !== firstVertical ||
+    (cur?.verticalUnitToMetres ?? cur?.linearUnitToMetres) !== (first?.verticalUnitToMetres ?? first?.linearUnitToMetres) ||
+    (cur?.verticalAxisDown === true) !== (first?.verticalAxisDown === true))) {
+    return { crs: null, verticalDatum: null, scanName: null, refused: 'Not exported: the contributing scans do not share a vertical reference, unit and axis direction. Their heights cannot be combined in one profile.' };
+  }
+  return contextOf(first, sources.map((s) => s.name).join('-'));
+}
+
+/** The raw section walks the active scene's up, scale and height datum. */
+export function profileWorkbenchSource(m: OwnedItem | undefined, d: ProfileSourceDeps): ProfileExportContext {
+  const source = profileExportContext(m, d);
+  if (source.refused || !m) return source;
+  const ids = ownerIdsOf(m);
+  const active = d.activeId();
+  const activeOwner = active === null ? null : d.stableIdFor(active);
+  if (ids.length && (activeOwner === null || !ids.includes(activeOwner))) {
+    return { ...source, refused: `Select the profile's source (${source.scanName}) in Data, then reopen the Profile Workbench. The saved profile is available in Measure.` };
+  }
+  return source;
 }

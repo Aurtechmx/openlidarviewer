@@ -139,6 +139,7 @@ function rig(chunkCount = 2): Rig {
     { id: 'p1', kind: 'profile', name: 'Section A', points: [[0, 0, 0], [70, 0, 0]] },
   ];
   const viewer = {
+    hasStreamingCloud: true,
     measure: {
       datumResolved: false,
       worldUp: [0, 0, 1],
@@ -146,6 +147,7 @@ function rig(chunkCount = 2): Rig {
       verticalUnitToMetres: 1,
       unitSystem: 'metric',
       getMeasurements: () => measurements,
+      unitFrameOf: () => ({ geographic: false, verticalRefused: false }),
       getSummaries: () => [profileSummary()],
       removeMeasurement: (id: string) => void removed.push(id),
       renameMeasurement: () => {},
