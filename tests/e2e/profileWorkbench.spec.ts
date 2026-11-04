@@ -234,7 +234,7 @@ test.describe('profile workbench', () => {
     await showWorkspaceMode(page, 'data');
     await page.locator('.olv-layer-name', { hasText: 'tiny' }).click();
     await expect(page.locator('.olv-workbench')).toHaveCount(0);
-    await expect(reason).toContainText("Select the profile's source");
+    await expect(reason).toContainText("Not opened: select the profile's source");
   });
 });
 

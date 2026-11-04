@@ -45,7 +45,8 @@ export interface ProfileSourceDeps {
 }
 
 /** What the caller wanted the source for; the refusal names that, and the step that retries it. */
-type Purpose = 'export' | 'workbench';
+export type ProfileSourcePurpose = 'export' | 'workbench';
+type Purpose = ProfileSourcePurpose;
 
 /** The file name without its extension. */
 function baseName(name: string): string {
@@ -122,15 +123,19 @@ export function profileExportContext(m: OwnedItem | undefined, d: ProfileSourceD
   return sourceOf(m, d, 'export');
 }
 
-/** The raw section walks the active scene's up, scale and height datum. */
-export function profileWorkbenchSource(m: OwnedItem | undefined, d: ProfileSourceDeps): ProfileExportContext {
-  const source = sourceOf(m, d, 'workbench');
+/**
+ * The raw section walks the active scene's up, scale and height datum. The
+ * dock's PNG export passes 'export': it reads the same section, but what was
+ * withheld is a file, not the dock.
+ */
+export function profileWorkbenchSource(m: OwnedItem | undefined, d: ProfileSourceDeps, purpose: Purpose = 'workbench'): ProfileExportContext {
+  const source = sourceOf(m, d, purpose);
   if (source.refused || !m) return source;
   const ids = ownerIdsOf(m);
   const active = d.activeId();
   const activeOwner = active === null ? null : d.stableIdFor(active);
   if (ids.length && (activeOwner === null || !ids.includes(activeOwner))) {
-    return { ...source, refused: `Select the profile's source (${source.scanName}) in Data, then reopen the Profile Workbench. The saved profile is available in Measure.` };
+    return refuse(purpose, `select the profile's source (${source.scanName}) in Data, then {again}. The saved profile is available in Measure.`);
   }
   return source;
 }

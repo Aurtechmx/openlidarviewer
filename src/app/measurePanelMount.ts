@@ -26,7 +26,7 @@ import { upVectorOf } from '../geo/frame/layerUpFrame';
 import { cloudUpAxisMoved, setCloudUpResolver } from '../render/layerUpRegistry';
 import { bindMeasureUnitFrames, chainUnitFrame, type LayerUnitSource, type MeasureUnitFrames } from './measureLayerUnits';
 import { buildMeasureConfidenceContext } from './measureConfidenceContext';
-import { profileExportContext, profileWorkbenchSource, type ProfileExportContext } from './profileExportSource';
+import { profileExportContext, profileWorkbenchSource, type ProfileExportContext, type ProfileSourceDeps, type ProfileSourcePurpose } from './profileExportSource';
 import { datasetIdentity } from '../geo/CrsService';
 import { buildResultModel } from './measureResultModel';
 import { copyToClipboard } from '../ui/clipboard';
@@ -131,10 +131,11 @@ export function createMeasurePanelMount(deps: MeasurePanelMountDeps): MeasurePan
   // The open layers, bound with the unit frames, so a profile export names the scan it was measured on.
   let layerSource: Omit<LayerUnitSource, 'crs' | 'realignUp'> | null = null;
   /** The scan(s) one profile records it was picked on, in their own CRS; the active scan when only one is open. */
-  const profileSource = (id: string, rawSection = false): ProfileExportContext => {
+  const profileSource = (id: string, rawSection = false, purpose: ProfileSourcePurpose = 'workbench'): ProfileExportContext => {
     const v = deps.getViewer();
     const src = layerSource;
-    const resolve = rawSection ? profileWorkbenchSource : profileExportContext;
+    const resolve = (m: Parameters<typeof profileExportContext>[0], d: ProfileSourceDeps): ProfileExportContext =>
+      rawSection ? profileWorkbenchSource(m, d, purpose) : profileExportContext(m, d);
     return resolve(v.measure.getMeasurements().find((m) => m.id === id), {
       activeId: () => src?.activeId() ?? null,
       clouds: () => src?.clouds() ?? [],
@@ -221,7 +222,7 @@ export function createMeasurePanelMount(deps: MeasurePanelMountDeps): MeasurePan
         scene: workbenchScene(),
         // The PNG names the scan the profile was measured on; one that cannot be settled is not written.
         scanBaseName: (id) => {
-          const src = profileSource(id, true);
+          const src = profileSource(id, true, 'export');
           if (src.refused) throw new Error(src.refused);
           return src.scanName;
         },

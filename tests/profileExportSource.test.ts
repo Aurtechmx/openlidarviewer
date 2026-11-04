@@ -123,7 +123,10 @@ describe('the source a profile export names', () => {
 
   it('opens the raw workbench only in a contributing scan’s frame and preserves the saved profile otherwise', () => {
     expect(profileWorkbenchSource(onLas, scene('v1')).refused).toBeUndefined();
-    expect(profileWorkbenchSource(onLas, scene('v2')).refused).toMatch(/Select.*terrain-access-utm.*in Data/);
+    expect(profileWorkbenchSource(onLas, scene('v2')).refused).toMatch(/^Not opened: select.*terrain-access-utm.*in Data, then reopen the Profile Workbench/);
+    // The dock's PNG reads the same section, but it is a file that was withheld.
+    expect(profileWorkbenchSource(onLas, scene('v2'), 'export').refused).toMatch(/^Not exported: select.*in Data, then export again/);
+    expect(profileWorkbenchSource({}, scene('v2'), 'export').refused).toMatch(/^Not exported:/);
     expect(profileExportContext(onLas, scene('v2')).refused).toBeUndefined();
   });
 
