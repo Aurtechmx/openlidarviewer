@@ -393,7 +393,7 @@ const UNSUPPORTED_GLTF_VERSION_MESSAGE =
 
 const DRACO_EXTENSION = 'KHR_draco_mesh_compression';
 
-const MESHOPT_EXTENSIONS: readonly string[] = ['EXT_meshopt_compression', 'KHR_meshopt_compression'];
+const MESHOPT_EXTENSIONS: ReadonlySet<unknown> = new Set(['EXT_meshopt_compression', 'KHR_meshopt_compression']);
 
 const MESHOPT_MESSAGE =
   'This glTF requires meshopt compression, which this viewer does not decode, so its points cannot be read. ' +
@@ -486,7 +486,7 @@ function assertGltfJsonAdmissible(document: unknown, maxVertices: number, binLen
       throw new LoadError('unsupported-format', DRACO_MESSAGE, DRACO_MESSAGE);
     }
   }
-  if (Array.isArray(doc.extensionsRequired) && doc.extensionsRequired.some((x) => MESHOPT_EXTENSIONS.includes(x))) {
+  if (Array.isArray(doc.extensionsRequired) && doc.extensionsRequired.some((x) => MESHOPT_EXTENSIONS.has(x))) {
     throw new LoadError('unsupported-format', MESHOPT_MESSAGE, MESHOPT_MESSAGE);
   }
 
