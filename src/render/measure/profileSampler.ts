@@ -181,7 +181,8 @@ export interface SampleProfileInput {
    * the corridor is a capsule: a rectangle between the endpoints closed by a
    * half-disc of radius `bandWidth` at each end. Points past an end are held
    * to their distance from that endpoint, not to their perpendicular offset.
-   * The default `null` means "auto" — use 5 % of the horizontal line length.
+   * The default `null` means "auto": 5 % of the horizontal line length, which
+   * `profileSampleParams` caps at 5 m on a scan with a metre scale.
    */
   bandWidth?: number | null;
   /**
@@ -359,6 +360,39 @@ export const AUTO_CORRIDOR_FRACTION = 0.05;
  */
 export function autoCorridorWidth(a: Vec3, b: Vec3, up: Vec3): number {
   return buildProfileFrame(a, b, up).horizontalLength * AUTO_CORRIDOR_FRACTION;
+}
+
+/**
+ * The largest half-width the automatic corridor takes for a new profile, in
+ * metres. 5 % of a long line reaches across the terrain beside it: on a 740 m
+ * transect of a real survey the 37 m corridor read up to 1.0 m RMS from a 1 m
+ * ground line, against 0.10 to 0.19 m at 5 m. A wider corridor stays one
+ * explicit choice away. The bare 5 % rule above stays for a caller with no
+ * frame; every path that samples a measurement settles through
+ * `profileSampleParams`.
+ */
+export const AUTO_CORRIDOR_MAX_HALF_WIDTH_M = 5;
+
+/**
+ * What a profile is sampled with: the requested parameters, normalised, with an
+ * automatic corridor settled here so the cap applies in the layer's own unit and
+ * the width the series used is the width recorded with it.
+ */
+export function profileSampleParams(
+  params: Parameters<typeof normaliseResampleParams>[0] | null | undefined,
+  a: Vec3,
+  b: Vec3,
+  up: Vec3,
+  frame: { readonly unitToMetres: number; readonly crsKnown: boolean; readonly geographic: boolean },
+): ReturnType<typeof normaliseResampleParams> {
+  const opts = normaliseResampleParams(params ?? {}, frame.unitToMetres);
+  if (opts.corridorWidth !== null) return opts;
+  const auto = autoCorridorWidth(a, b, up);
+  // A cap in metres means nothing without a metre scale: a scan with no CRS may
+  // be in millimetres, so it keeps the share of its length.
+  const f = frame.unitToMetres;
+  const capped = frame.crsKnown && !frame.geographic && Number.isFinite(f) && f > 0;
+  return { ...opts, corridorWidth: capped ? Math.min(auto, AUTO_CORRIDOR_MAX_HALF_WIDTH_M / f) : auto };
 }
 
 

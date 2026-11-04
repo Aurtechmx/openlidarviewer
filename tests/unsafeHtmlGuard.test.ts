@@ -73,7 +73,9 @@ const FORBIDDEN_IDENTIFIERS =
  * - src/ui/ThemeToggle.ts — `ICON_SVG[name]`: a module-level
  *   `Readonly<Record<ThemeName, string>>` of literal SVG bodies, keyed
  *   by the closed `ThemeName` union.
- * - src/ui/MeasurePanel.ts — `svg + overlay`: profile-chart markup
+ * - src/ui/MeasurePanel.ts — `drawn.svg + drawn.overlay` and
+ *   `redrawn.svg + redrawn.overlay` (the first draw and the redraw at the
+ *   chart's real size): profile-chart markup
  *   composed in `renderProfileChart()` purely from numeric samples
  *   (`toFixed`/`Math.round` output), nice-number ticks and fixed unit
  *   strings — the "chart paths the renderer composed itself from
@@ -92,7 +94,8 @@ const ALLOWLIST: readonly string[] = [
   // literal SVG string in the same house style as the MODES icons.
   'src/ui/NavBar.ts::olv-mode-pan-icon',
   'src/ui/ThemeToggle.ts::ICON_SVG[name]',
-  'src/ui/MeasurePanel.ts::svg + overlay',
+  'src/ui/MeasurePanel.ts::drawn.svg + drawn.overlay',
+  'src/ui/MeasurePanel.ts::redrawn.svg + redrawn.overlay',
   // The chart's expand-to-focus button: `ICON_EXPAND`, a module-level literal
   // SVG string from `dockIcons.svg()`, same house style as the dock. There were
   // two entries here while a labelled duplicate sat in the chip strip below the

@@ -95,7 +95,7 @@ import { createScanRouteCoordinator, routeUnitFrame, type SpaceExportContext } f
 import { TERRAIN_METRIC_VERSION } from './terrain/datasetIntelligence';
 import { ExportPanel, exportClassFacts, exportLayerHooks } from './ui/ExportPanel';
 import { lonLatMapContext } from './export/lonLatMapper';
-import { runFindingsExport, writeScanScopedExport, spaceContextStillCurrent, SPACE_CONTEXT_MOVED, SESSION_EXPORT_SCAN_CHANGED_REFUSAL, sessionSavedNotice } from './export/exportScanIdentity';
+import { runFindingsExport, writeScanScopedExport, spaceContextStillCurrent, SPACE_CONTEXT_MOVED, SESSION_EXPORT_SCAN_CHANGED_REFUSAL, sessionSavedNotice, sessionSavedWorkFromText } from './export/exportScanIdentity';
 import {
   crsIsKnown, georefKnown,
   exportScanFootprintKml,
@@ -2437,7 +2437,7 @@ exportPanel.setCrsKnown(crsIsKnown(crsService.current()));
 // and their viewer wiring are built in clipMount.ts over the pure `clipBox` core.
 const { clipPanel, clipFlow } = mountClip({ overlay: stage.overlay, viewer: () => viewer, ready: () => viewerReady, toast: showLassoToast, workflow: workflowController,
   activeId: () => scans.activeId, activeLayerId: () => (scans.activeId ? runtime.layerIdentity.stableIdFor(scans.activeId) : null), revealScene: () => workspaceShell?.revealScene(),
-  openPage: (p, o) => workspaceShell?.openToolPage(p, o), measurePanel: () => measureMount.panel, crs: crsService, emptyView: { classes: { isFiltered: () => classLegendPanel.getVisibility().isFiltered(), showAll: () => classLegendPanel.applyFilter([]) }, ranges: { elevation: () => activeElevFilter !== null, intensity: () => activeIntenFilter !== null, clear: () => { inspector.restoreElevationFilter(null); inspector.restoreIntensityFilter(null); } } } });
+  openPage: (p, o) => workspaceShell?.openToolPage(p, o), measurePanel: () => measureMount.panel, deleteMeasurement: (id) => measureMount.deleteMeasurement(id), crs: crsService, emptyView: { classes: { isFiltered: () => classLegendPanel.getVisibility().isFiltered(), showAll: () => classLegendPanel.applyFilter([]) }, ranges: { elevation: () => activeElevFilter !== null, intensity: () => activeIntenFilter !== null, clear: () => { inspector.restoreElevationFilter(null); inspector.restoreIntensityFilter(null); } } } });
 clipPanel.subscribe(() => analysePanel?.setClipScopeNote(clipPanel.enabled)); // every on/off change, restore and scan close: the Terrain page says a run does not use the clip
 
 // The Tools tab held only the Clip box until a tool had been used, so it could
@@ -3403,14 +3403,14 @@ function applyShareState(state: ShareState, cloud: PointCloud): void {
  * only while the requested scan stays active (else refuses, never splices).
  */
 async function exportSession(): Promise<boolean> {
-  return writeScanScopedExport({
+  const withheld: string[] = []; let written: ReturnType<typeof sessionSavedWorkFromText> | null = null; return writeScanScopedExport({ // work left out of the file is said on the saved notice: a second toast would replace it
     requestedScanId: scans.activeExportTargetId(), // streaming leaves activeId null
     activeScanId: () => scans.activeExportTargetId(),
     refuse: () => showLassoToast(SESSION_EXPORT_SCAN_CHANGED_REFUSAL),
     // Both lazy imports resolve before any state is read; their exports spread into one deps object.
     load: async () => ({ ...(await loadSession()), ...(await loadExportProvenance()), ...(await loadSessionSnapshot()) }),
-    write: (json) => { downloadText(`${baseName(viewer.streamingCloud?.name ?? scans.activeCloud()?.name ?? 'openlidarviewer')}.olvsession`, json); showLassoToast(sessionSavedNotice(discardableWork(), editedStaticLayerNames(viewer).length > 0)); },
-    serialize: (m) => m.serializeActiveSession(m, { ...sessionSnapshotDeps, onWithheld: showLassoToast }),
+    write: (json) => { downloadText(`${baseName(viewer.streamingCloud?.name ?? scans.activeCloud()?.name ?? 'openlidarviewer')}.olvsession`, json); showLassoToast(sessionSavedNotice(written ?? sessionSavedWorkFromText(json), editedStaticLayerNames(viewer).length > 0, withheld.join(' '))); },
+    serialize: (m) => m.serializeActiveSession(m, { ...sessionSnapshotDeps, onWithheld: (sentence) => { withheld.push(sentence); }, onWritten: (w) => { written = w; } }),
   });
 }
 

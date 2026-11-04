@@ -64,7 +64,7 @@ async function make(opts: { ms?: BoxMeasurementLike[]; ctx?: typeof one; measure
     stopMeasureTool: () => { log.stops++; state.on = false; },
     setBoxKind: () => log.kinds.push('box'),
     openDetails: (id) => log.details.push(id),
-    deleteMeasurement: (id) => log.deleted.push(id),
+    deleteMeasurement: (id) => { log.deleted.push(id); return true; },
     copy: async (t) => { log.copies.push(t); return true; },
   });
   const card = flow.card.element as unknown as FakeEl;

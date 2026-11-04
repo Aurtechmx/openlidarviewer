@@ -14,6 +14,7 @@ import { triggerDownload } from '../io/download';
 // Guarded localStorage access — bare getItem/setItem throws in sandboxed
 // iframes (the embed path) and some privacy modes; see safeStorage.ts.
 import { storageGet, storageSet } from './safeStorage';
+import { PROFILE_CHART_ASSUMED_BOX, profileVexChipLabel, readProfileVex, PROFILE_VEX_KEY, PROFILE_VEX_OPTIONS, type ProfileVex } from './profileChartStretch';
 // Static import of the loader thunk — the dynamic import() itself lives in
 // lazyChunks.ts (excluded from the live source-transform) so its literal is
 // never scrambled. Importing the thunk pulls nothing heavy into the shell.
@@ -143,8 +144,7 @@ export const PROFILE_CHART_MAX_HEIGHT_PX = 640;
  * One key, all profiles — civil/survey users want consistent reading
  * scale, not per-profile memory.
  */
-export const PROFILE_VEX_OPTIONS = [1, 2, 5, 10] as const;
-const PROFILE_VEX_KEY = 'olv:measure:profile:vex:v1';
+export { PROFILE_VEX_OPTIONS, type ProfileVex } from './profileChartStretch';
 
 /**
  * Disclosure state for the two collapsible profile sections, remembered so the
@@ -885,6 +885,14 @@ export class MeasurePanel {
     return profileCsvRefusal(s, frame?.geographic ?? this._geographicCrs, frame?.verticalRefused ?? this._verticalRefused);
   }
 
+
+  private _profileScaleKnown(s: MeasurementSummary): boolean {
+    const frame = this._cb.getProfileExportFrame?.(s.id);
+    const geographic = frame?.geographic ?? this._geographicCrs;
+    const verticalRefused = frame?.verticalRefused ?? this._verticalRefused;
+    return this._displayUnits(s) !== 'unverified' && !geographic && !verticalRefused;
+  }
+
   /** Disable a profile CSV button, with the reason as its tooltip, when the export is refused. */
   private _applyCsvRefusal(button: HTMLButtonElement, s: MeasurementSummary): void {
     const refusal = this._profileFrameRefusal(s) ?? this._cb.getProfileExportContext?.(s.id).refused;
@@ -956,16 +964,28 @@ export class MeasurePanel {
     const system = this._displayUnits(s);
     const datumKnown = s.profileDatumKnown !== false;
     const reference = this._verticalReference(s);
-    const storedVex = Number(storageGet(PROFILE_VEX_KEY));
-    const vex = PROFILE_VEX_OPTIONS.includes(storedVex as 1 | 2 | 5 | 10) ? storedVex : 1;
+    const scaleKnown = this._profileScaleKnown(s);
+    const vex = scaleKnown ? readProfileVex() : 0;
 
     openResultFocus({
       title: s.name,
       triggerEl: trigger,
       render: (container) => {
         // Chart — the SAME renderer, given the surface's larger reading height.
-        const chart = renderProfileChart(samples, vex, system);
+        const chart = renderProfileChart(samples, vex, system, undefined, scaleKnown);
         chart.classList.add('olv-rf-chart');
+        // The focus chart is modal-wide: draw it again at its real box so the
+        // stated stretch holds here too.
+        // The observer lives as long as the chart it watches; the dialog drops both.
+        try {
+          const ro = new ResizeObserver(() => {
+            (chart as ProfileChartEl)._olvRelayout?.();
+            (chart as ProfileChartEl)._olvRefitXLabels?.();
+          });
+          ro.observe(chart);
+        } catch {
+          // No observer: the first draw's assumed box stands.
+        }
 
         // Stats — the same summary rows, as a clean multi-column grid.
         const stats = el('dl', {
@@ -1003,7 +1023,7 @@ export class MeasurePanel {
         container.append(chart, stats, stations);
 
         // Streaming-resident caveat — the same honest coverage line as the dock.
-        if (s.profileChartResidentOnly) {
+      if (s.profileChartResidentOnly) {
           container.append(
             el('div', {
               className: 'olv-mp-chart-caveat',
@@ -1164,7 +1184,7 @@ export class MeasurePanel {
     const resetBtn = el('button', {
       className: 'olv-mp-sampler-reset',
       text: 'Reset',
-      title: 'Back to the defaults — auto corridor (5% of length), p25, 64 samples',
+      title: 'Back to the defaults: auto corridor (5% of length, at most 5 m on a scan with a metre scale), p25, 64 samples',
       ariaLabel: `Reset sampling parameters for ${s.name}`,
     });
     resetBtn.addEventListener('click', () => {
@@ -1503,14 +1523,10 @@ export class MeasurePanel {
     // beneath the headline row. The chart is a single inline SVG, no
     // external libraries — keeps the Measurements panel a leaf module.
     if (s.kind === 'profile' && s.profileChart && s.profileChart.length >= 2) {
-      // v0.3.10 Profile-as-Deliverable — VEX is persisted globally
-      // across all profile rows; one key, all profiles. Clamp to a
-      // member of the canonical 1/2/5/10 set so a hand-edited
-      // localStorage value can't blow up the chart.
-      const storedVex = Number(storageGet(PROFILE_VEX_KEY));
-      const vex = PROFILE_VEX_OPTIONS.includes(storedVex as 1 | 2 | 5 | 10)
-        ? storedVex
-        : 1;
+      // The stretch is one setting for every profile row; a stored value
+      // outside the option set falls back to true scale.
+      const scaleKnown = this._profileScaleKnown(s);
+      const vex = scaleKnown ? readProfileVex() : 0;
       const system = this._displayUnits(s);
       // Hover coupling: a chart tick or table row highlights the scene dot at
       // the nearest chainage. Built once and shared by the chart and the table
@@ -1522,7 +1538,7 @@ export class MeasurePanel {
         onStationHover && stationChainages.length > 0
           ? { stationChainages, notify: (i) => onStationHover(s.id, i) }
           : undefined;
-      const chart = renderProfileChart(s.profileChart, vex, system, stationCoupling);
+      const chart = renderProfileChart(s.profileChart, vex, system, stationCoupling, scaleKnown);
       // The chart is where the eye lands, so it carries the primary "expand"
       // affordance: click (or Enter / Space) anywhere on it to open the whole
       // result in the shared focus surface. An always-visible corner badge marks
@@ -1596,37 +1612,41 @@ export class MeasurePanel {
       // chip writes the new VEX to localStorage and triggers a
       // re-render of the whole measurements list, so every profile
       // row picks up the new scale consistently.
-      // B3 honesty (v0.4.5): the chips used to read "1:1 / 2:1 / …" but the
-      // chart is NOT a true-ratio drawing — `preserveAspectRatio="none"`
-      // stretches X and Y independently with the dragged panel size, so
-      // "1:1" never meant 1:1. The control now says what it actually does:
-      // "Fit" fills the height with the elevation band, and N× stretches
-      // that fitted scale (clipping what leaves the band). True stated 1:N
-      // scales live on the PDF export, which computes real paper ratios.
+      // A stated stretch is true: the chart is drawn again at its real pixel
+      // box on mount and on every resize, so 1:1 and N× hold whatever the
+      // panel's size. Fit fills the height with the relief and states what
+      // that amounts to. The PDF computes its own paper ratios.
       const vexStrip = el('div', {
         className: 'olv-mp-vex-strip',
         title:
-          'Vertical stretch — multiplies the fitted elevation scale. ' +
-          'Not a true-ratio drawing (the chart stretches with the panel); ' +
-          'use Export PDF for stated 1:N scales.',
+          'Vertical stretch of the chart: 1:1 draws heights at the horizontal scale, ' +
+          'a multiple exaggerates them that many times, and Fit fills the height with the relief.',
         ariaLabel: 'Vertical stretch',
       });
       vexStrip.setAttribute('role', 'radiogroup');
       for (const v of PROFILE_VEX_OPTIONS) {
         const chip = el('button', {
           className: 'olv-mp-vex-chip' + (v === vex ? ' olv-mp-vex-chip-active' : ''),
-          text: v === 1 ? 'Fit' : `${v}×`,
+          text: profileVexChipLabel(v),
           title:
-            v === 1
-              ? 'Fit — the elevation band fills the chart height'
-              : `${v}× vertical stretch of the fitted scale (relief outside the band is clipped)`,
+            v === 0
+              ? 'Fit: the relief fills the chart height'
+              : v === 1
+                ? '1:1: heights at the same scale as distances; a steeper line is drawn at the stretch that fits it'
+                : `${v}× vertical exaggeration (relief outside the band is clipped)`,
           ariaLabel:
-            v === 1
-              ? 'Fit the elevation band to the chart height'
-              : `Set vertical stretch to ${v} times the fitted scale`,
+            v === 0
+              ? 'Fit the relief to the chart height'
+              : v === 1
+                ? 'Draw heights at the same scale as distances'
+                : `Exaggerate heights ${v} times`,
         });
         chip.setAttribute('role', 'radio');
         chip.setAttribute('aria-checked', v === vex ? 'true' : 'false');
+        if (v !== 0 && !scaleKnown) {
+          chip.disabled = true;
+          chip.title = 'A stated ratio needs distance and height in one known unit. This chart fits the relief.';
+        }
         chip.addEventListener('click', () => {
           chip.blur();
           if (v === vex) return;
@@ -1673,6 +1693,7 @@ export class MeasurePanel {
             // the actual width first becomes readable, and again on every
             // resize. The height-persist path below stays behind `primed` so a
             // re-render never writes the default height back to storage.
+            (chart as ProfileChartEl)._olvRelayout?.();
             (chart as ProfileChartEl)._olvRefitXLabels?.();
             if (!primed) {
               primed = true;
@@ -2132,13 +2153,16 @@ function applyAxisPositions(root: Element): void {
 /** A profile chart element carrying its post-mount x-label re-fit. */
 interface ProfileChartEl extends HTMLElement {
   _olvRefitXLabels?: () => void;
+  /** Redraw at the chart's real pixel box, so a stated vertical stretch is true. */
+  _olvRelayout?: () => void;
 }
 
 function renderProfileChart(
   samples: readonly { distance: number; height: number }[],
-  vex: number,
+  vex: ProfileVex,
   system: DisplayUnits,
   coupling?: StationHoverCoupling,
+  scaleKnown = true,
 ): HTMLElement {
   // viewBox proportioned to the (taller-than-wide) chart box so that
   // `preserveAspectRatio="none"` barely distorts the text — the prior
@@ -2177,12 +2201,7 @@ function renderProfileChart(
   }
 
   const xSpan = Math.max(xMax - xMin, 1e-9);
-  // VEX multiplier: visually scale the elevation axis by the
-  // requested factor. The mapped Y still fills the same pixel band
-  // (the renderer doesn't actually grow the viewBox — instead it
-  // shrinks the apparent ySpan, which has the same visual effect of
-  // exaggerating the curve in the available height).
-  const ySpan = Math.max((yMax - yMin) / Math.max(0.0001, vex), 1e-9);
+  const dataSpan = Math.max(yMax - yMin, 1e-9);
 
   // Drawable plot area.
   const plotLeft = PAD_X;
@@ -2191,6 +2210,31 @@ function renderProfileChart(
   const plotBottom = H - PAD_BOTTOM;
   const plotW = plotRight - plotLeft;
   const plotH = plotBottom - plotTop;
+
+  const formatChainage = (m: number): string => {
+    if (system === 'imperial') {
+      const ft = m * FT_PER_M;
+      return ft >= 5280 ? `${(ft / 5280).toFixed(1)} mi` : `${Math.round(ft)} ft`;
+    }
+    if (system === 'unverified') return `${Math.round(m)}`;
+    return m >= 1000 ? `${(m / 1000).toFixed(2)} km` : `${Math.round(m)} m`;
+  };
+
+  /**
+   * Everything the pixel box decides. The SVG stretches to the box on each
+   * axis separately, so the plot's pixel aspect is the box's aspect scaled by
+   * the viewBox plot fractions. At a stated stretch the visible band is the
+   * chart's own height in distance units over the stretch; Fit shows the
+   * relief alone and reports the stretch that amounts to.
+   */
+  const layout = (px: { readonly width: number; readonly height: number }, measured: boolean) => {
+  const plotAspect = ((px.height * plotH) / H) / ((px.width * plotW) / W);
+  // At 1:1 the whole relief stays on the chart: a line steeper than the plot's
+  // own aspect is drawn at the stretch that fits it, and the badge says so.
+  // A stated exaggeration keeps its ratio and crops what leaves the band.
+  const statedSpan = vex > 0 ? Math.max((xSpan * plotAspect) / vex, 1e-9) : dataSpan;
+  const ySpan = vex === 1 ? Math.max(statedSpan, dataSpan * 1.05) : statedSpan;
+  const effectiveVex = (xSpan * plotAspect) / ySpan;
 
   // Walk samples and collect one point-run per contiguous hit run; a
   // NaN (no-coverage) bin breaks the run so a gap stays a discontinuity.
@@ -2260,14 +2304,6 @@ function renderProfileChart(
     return 1;
   })();
 
-  const formatChainage = (m: number): string => {
-    if (system === 'imperial') {
-      const ft = m * FT_PER_M;
-      return ft >= 5280 ? `${(ft / 5280).toFixed(1)} mi` : `${Math.round(ft)} ft`;
-    }
-    if (system === 'unverified') return `${Math.round(m)}`;
-    return m >= 1000 ? `${(m / 1000).toFixed(2)} km` : `${Math.round(m)} m`;
-  };
   // Imperial tick decimals (B9): rounding to whole feet collapsed adjacent
   // labels on sub-metre relief (a 0.2 m step is 0.66 ft — every tick read
   // the same number). Derive the decimal count from the tick STEP in feet,
@@ -2413,29 +2449,65 @@ function renderProfileChart(
         `<span class="olv-mp-axis olv-mp-axis-y" data-pos="top:${yPct(v).toFixed(2)}%">${elevTickLabel(v)}</span>`,
     )
     .join('');
-  // Honest badge (B3): "VEX 5:1" implied a true paper ratio the resizable,
-  // independently-stretched chart cannot promise. "5× fit" states what the
-  // mapping really is — five times the fitted elevation scale.
-  const vexLabel = vex === 1 ? 'Fit' : `${vex}× fit`;
+  // The badge states the stretch drawn: a ratio at a stated stretch, and at
+  // Fit the exaggeration the relief took to fill the height.
+  const stretch = `≈${effectiveVex >= 10 ? Math.round(effectiveVex) : Number(effectiveVex.toFixed(2))}× vertical`;
+  // A line with no relief to speak of has no stretch to state.
+  const flat = yMax - yMin < 1e-3;
+  // Until the real box is measured the ratio is drawn for the assumed one, and the badge says so.
+  const ratio = vex === 1 ? (ySpan > statedSpan ? stretch : '1:1') : `${vex}× vertical`;
+  const vexLabel = vex === 0 ? (scaleKnown && !flat ? `Fit · ${stretch}` : 'Fit') : measured ? ratio : `≈${ratio.replace(/^≈/, '')}`;
   const vexBadge = `<span class="olv-mp-axis olv-mp-vex-badge">${vexLabel}</span>`;
   const overlay = `<div class="olv-mp-chart-labels" aria-hidden="true">${yLabelHtml}${xLabelHtml}${vexBadge}</div>`;
+  return { svg, overlay, xCandidates, xLabelTop, hasHits: hitParts !== '', stationInterval, vexLabel };
+  };
 
+  let drawn = layout(PROFILE_CHART_ASSUMED_BOX, false);
   const trueSpan = yMax - yMin;
   // Δh through the shared formatter so it carries its unit in both unit
   // systems (B9 — this tooltip used to hardcode "m" in imperial mode).
-  const title =
+  const titleOf = (d: typeof drawn): string =>
     `${samples.length} samples · Δh ${formatLength(trueSpan, system)} · ` +
-    `station interval ${formatChainage(stationInterval)} · vertical ${vexLabel} · ` +
+    `station interval ${formatChainage(d.stationInterval)} · vertical ${d.vexLabel} · ` +
     `drag bottom-right to resize`;
-  const chartEl = el('div', { className: 'olv-mp-chart', unsafeHtml: svg + overlay, title });
-  applyAxisPositions(chartEl);
-  if (hitParts) {
-    // The zones live in the just-assigned innerHTML; bind each to its `data-si`.
+  const chartEl = el('div', { className: 'olv-mp-chart', unsafeHtml: drawn.svg + drawn.overlay, title: titleOf(drawn) });
+  const bindHits = (): void => {
+    if (!drawn.hasHits) return;
+    // The zones live in the just-assigned markup; bind each to its `data-si`.
     for (const hit of Array.from(chartEl.querySelectorAll('.olv-mp-chart-hit'))) {
       const si = Number(hit.getAttribute('data-si'));
       if (Number.isInteger(si) && si >= 0) bindStationHover(hit, si, coupling!);
     }
-  }
+  };
+  applyAxisPositions(chartEl);
+  bindHits();
+  // The first render assumed a box. Once the chart has a real one, and on
+  // every resize, the band is drawn again so the stated stretch holds.
+  let drawnBox: { width: number; height: number } | null = null;
+  let queued = false;
+  const redraw = (): void => {
+    queued = false;
+    // The svg's own box, not the chart's: the chart carries padding the plot does not fill.
+    const rect = chartEl.querySelector('svg')?.getBoundingClientRect?.();
+    const width = rect?.width ?? 0;
+    const height = rect?.height ?? 0;
+    if (!(width > 0 && height > 0) || (drawnBox && drawnBox.width === width && drawnBox.height === height)) return;
+    drawnBox = { width, height };
+    const redrawn = layout({ width, height }, true);
+    drawn = redrawn;
+    const fresh = el('div', { unsafeHtml: redrawn.svg + redrawn.overlay });
+    chartEl.replaceChildren(...Array.from(fresh.childNodes));
+    chartEl.title = titleOf(drawn);
+    applyAxisPositions(chartEl);
+    bindHits();
+  };
+  // One redraw per frame while the grip is dragged.
+  (chartEl as ProfileChartEl)._olvRelayout = (): void => {
+    if (queued) return;
+    if (typeof requestAnimationFrame !== 'function') { redraw(); return; }
+    queued = true;
+    requestAnimationFrame(redraw);
+  };
   // Re-fit the x labels once the chart has a real width, and again on every
   // resize. The overlay `.olv-mp-chart-labels` is the label coordinate box, so
   // its `clientWidth` is the width the box-fraction positions map onto. Floor
@@ -2448,7 +2520,7 @@ function renderProfileChart(
     const overlayEl = chartEl.querySelector('.olv-mp-chart-labels');
     if (!(overlayEl instanceof HTMLElement)) return;
     const containerPx = profileXLabelFitWidth(overlayEl.clientWidth);
-    const html = profileXLabelSpansHtml(xCandidates, containerPx, xLabelTop, AXIS_FONT_PX);
+    const html = profileXLabelSpansHtml(drawn.xCandidates, containerPx, drawn.xLabelTop, AXIS_FONT_PX);
     for (const old of Array.from(overlayEl.querySelectorAll('.olv-mp-axis-x'))) old.remove();
     overlayEl.insertAdjacentHTML('beforeend', html);
     applyAxisPositions(overlayEl);

@@ -168,8 +168,8 @@ describe('one lasso result on every surface', () => {
     expect(out.headline).toContain('(area-weighted grid)');
     expectParity(out.record, out.headline);
     // The band's volume is the same evaluation as the stored fill.
-    const band = /Stockpile: ([\d,]+) m³/.exec(out.suffix)?.[1];
-    expect(Number(band!.replaceAll(',', ''))).toBe(Math.round(out.record.fill!));
+    const band = /Stockpile: ([\d,.]+) m³/.exec(out.suffix)?.[1];
+    expect(Number(band!.replaceAll(',', '')) / out.record.fill!).toBeCloseTo(1, 4);
   });
 
   it('a preview grid', () => {

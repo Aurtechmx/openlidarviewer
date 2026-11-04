@@ -156,7 +156,8 @@ function rig(chunkCount = 2): Rig {
       getMeasurements: () => measurements,
       unitFrameOf: () => ({ geographic: false, verticalRefused: false }),
       getSummaries: () => [profileSummary()],
-      removeMeasurement: (id: string) => void removed.push(id),
+      removeMeasurement: (id: string) => { removed.push(id); return { measurement: { id, name: id }, index: 0, epoch: 0 }; },
+      profileCorridorOf: () => null,
       renameMeasurement: () => {},
       resampleProfile: () => {},
       setHoveredStation: () => false,
@@ -318,5 +319,13 @@ describe('the dock does not outlive what it is a section of', () => {
     r.mount.hide();
     expect(dockOf(r)).toBeNull();
     expect(r.stageEl.style.height).toBe('');
+  });
+});
+
+describe('the mount deletes a measurement itself', () => {
+  it('removes it from the controller before the panel chunk has landed, and says so', () => {
+    const r = rig();
+    expect(r.mount.deleteMeasurement('p1')).toBe(true);
+    expect(r.removed).toEqual(['p1']);
   });
 });

@@ -27,6 +27,7 @@
  */
 
 import { resolveVerticalEpsg } from './height';
+import { compareHorizontalKeys, horizontalKey } from '../model/layerCompatibility';
 import { localFrameKey } from './CoordinateTypes';
 import type { SpatialContext } from './SpatialContext';
 import { verticalMetresPerUnit } from './SpatialContext';
@@ -90,8 +91,9 @@ function horizontalIdentity(ctx: SpatialContext): string | undefined {
   // two frames; the same name is still unverified (see compareSpatialFrames).
   if (ctx.kind === 'local' && ctx.localFrameName) return localFrameKey(ctx.localFrameName);
   if (ctx.kind === 'unknown' || ctx.kind === 'local') return undefined;
-  const name = ctx.crsName.trim();
-  return name.length > 0 ? name : undefined;
+  // The layer check's own key: without a code the definition identifies the
+  // CRS, and a bare name is unproven.
+  return horizontalKey({ id: '', crsName: ctx.crsName, crsDefinition: ctx.crsDefinition }) ?? undefined;
 }
 
 /**
@@ -172,9 +174,12 @@ export function compareSpatialFrames(
   const idA = horizontalIdentity(a);
   const idB = horizontalIdentity(b);
   // Two local frames sharing a name are not shown to share an origin or axes.
-  const horizontalFrameUnverified =
-    idA === undefined || idB === undefined || (idA === idB && idA.startsWith('local:'));
-  let horizontalFrameConflict = !horizontalFrameUnverified && idA !== idB;
+  // The same rule the layer check applies: equal keys prove a shared frame
+  // unless the key proves nothing; two definitions under one name differ only
+  // when they can be compared and do; anything else is unverified.
+  const keyComparison = idA !== undefined && idB !== undefined ? compareHorizontalKeys(idA, idB) : 'unproven';
+  const horizontalFrameUnverified = keyComparison === 'unproven';
+  let horizontalFrameConflict = keyComparison === 'different';
   if (horizontalFrameConflict) {
     notes.push(
       `Horizontal CRS differs (${a.crsName} vs ${b.crsName}) — the two are not in the same frame.`,
@@ -189,8 +194,11 @@ export function compareSpatialFrames(
     );
   } else if (horizontalFrameUnverified) {
     notes.push(
-      'Horizontal CRS is unknown on at least one side — the two cannot be confirmed to ' +
-        'share a frame, so treat any horizontal comparison as unverified, not measured.',
+      idA !== undefined && idB !== undefined && !idA.startsWith('local:')
+        ? `Both sides name ${a.crsName}, but the name alone does not show they are one definition, ` +
+          'so treat any horizontal comparison as unverified, not measured.'
+        : 'Horizontal CRS is unknown on at least one side — the two cannot be confirmed to ' +
+          'share a frame, so treat any horizontal comparison as unverified, not measured.',
     );
   }
 

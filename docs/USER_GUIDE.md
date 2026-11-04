@@ -1,8 +1,8 @@
-# OpenLiDARViewer: User Guide
+# OpenLiDARViewer: User guide
 
 Open drone LiDAR, terrestrial laser scans and phone scans in a browser tab. Nothing to install. Local files are read and rendered on your own machine and are not uploaded.
 
-This guide walks through opening a scan and finding your way around it. Then measuring, terrain analysis, comparing two scans, and sharing what you found. It assumes no GIS background.
+This guide walks through opening a scan and finding your way around it, then measuring, terrain analysis, comparing two scans, and sharing what you found. It assumes no GIS background.
 
 ---
 
@@ -315,7 +315,7 @@ Your work saves to a single **`.olvsession`** file from the Measurements panel. 
 
 Use Save session in that panel, or Save session in the command palette, to write one; a toast says how many measurements, annotations and saved views it holds and reminds you that the scan is not in it. Use Open session to read one back, or just drag the session onto the window. The viewer restores everything, including the trust grade on each measurement. Because the scan does not travel inside the session, open it alongside the same scan file; if the scan is not loaded, the viewer tells you which file to drop. Work is matched to open scans by source content, not by file name. Work for a scan that is not open is kept: it is placed when you open that scan later in the same page, and the next save writes it back.
 
-A session is a shareable record of what you measured and how much to trust it, your evidence, that a colleague can reopen offline with nothing uploaded by either of you.
+A session is a record of what you measured and how much to trust it. A colleague can reopen it offline, with nothing uploaded by either of you.
 
 ---
 

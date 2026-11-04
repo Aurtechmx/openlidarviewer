@@ -2,7 +2,7 @@
 
 **This is a development cut on the way to v0.7.1.** It has no tag, no DOI
 and no publication date. It starts as a copy of the v0.7.0 document and
-carries the live figures of the tree; the published record of v0.7.0 is
+carries the figures of the current source; the published record of v0.7.0 is
 [REPRODUCIBILITY_v0.7.0.md](REPRODUCIBILITY_v0.7.0.md) and does not change.
 
 ## Baseline
@@ -15,7 +15,7 @@ The frozen validation snapshot under `validation/snapshot/` is the 0.6.2
 validation baseline, carried forward, so its `snapshot.json` names candidate
 version 0.6.2 and its copied `CITATION.cff` the 0.6.2 release date. 0.6.3
 through 0.7.0 added features and evidence but did not re-run the cross-platform
-portability workflow or a defect audit, so the snapshot's defect registry,
+portability workflow or a defect review, so the snapshot's defect registry,
 portability record and build identity are the 0.6.2 ones. Its checks still hold
 on its own bytes (`npm run validation:snapshot:verify`); it is a baseline this
 release inherits, not a 0.7.0 run.
@@ -29,7 +29,7 @@ reproduce the reported figures from a clean clone. The authoritative gate is
 
 ## Dependency set
 
-`docs/project/DEPENDENCIES.md` records the dependency audit and follows the
+`docs/project/DEPENDENCIES.md` records the dependency review and follows the
 lockfile. The runtime set moved in this release: three.js advanced to 0.186,
 and `@loaders.gl/core`, `gltf`, `obj`, `ply` and `las` moved together to 4.5.2,
 because every 4.5.2 package requires `@loaders.gl/core` ~4.5.0.

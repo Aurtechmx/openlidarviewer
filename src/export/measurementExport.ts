@@ -820,7 +820,14 @@ function volumeBaseLevel(m: Measurement, ctx: MeasurementExportContext): number 
   const up = ctx.up;
   const d = v.referenceZ - (p[0] * up[0] + p[1] * up[1] + p[2] * up[2]);
   const onPlane: Vec3 = [p[0] + d * up[0], p[1] + d * up[1], p[2] + d * up[2]];
-  return roundMeasured(ctx.toOutput(onPlane, m)[2]);
+  // The height is read along the frame's up as the output carries it: a Y-up
+  // layer keeps its height in Y unless the output rotates it, and a point one
+  // unit up the axis shows where the axis went.
+  const o = ctx.toOutput(onPlane, m);
+  const o1 = ctx.toOutput([onPlane[0] + up[0], onPlane[1] + up[1], onPlane[2] + up[2]], m);
+  const ax = [o1[0] - o[0], o1[1] - o[1], o1[2] - o[2]];
+  const len = Math.hypot(ax[0], ax[1], ax[2]) || 1;
+  return roundMeasured((o[0] * ax[0] + o[1] * ax[1] + o[2] * ax[2]) / len);
 }
 
 /** Rewrite every unit-bearing key of a metrics record. Unitless keys pass through. */

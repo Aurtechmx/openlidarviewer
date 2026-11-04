@@ -92,6 +92,8 @@ export interface MeasurePanelMountDeps {
 export interface MeasurePanelMount {
   /** The mounted panel, or null before the first scan load resolves it. */
   readonly panel: MeasurePanel | null;
+  /** Delete one measurement as its row's × does, with the same Undo offer. False when there is none. */
+  deleteMeasurement(id: string): boolean;
   /** Construct + mount the panel exactly once; idempotent and single-flight. */
   ensure(): Promise<MeasurePanel>;
   /** Refresh the panel's contents and visibility from live controller state. */
@@ -180,10 +182,11 @@ export function createMeasurePanelMount(deps: MeasurePanelMountDeps): MeasurePan
   function workbenchScene(): WorkbenchSectionScene {
     return {
       profile: (id) => {
-        const m = deps.getViewer().measure.getMeasurements().find((x) => x.id === id);
+        const measure = deps.getViewer().measure;
+        const m = measure.getMeasurements().find((x) => x.id === id);
         const a = m?.points[0];
         const b = m?.points[1];
-        return a && b ? { a, b, corridorWidth: m?.profileCorridorWidth ?? null } : null;
+        return m && a && b ? { a, b, corridorWidth: measure.profileCorridorOf(m) } : null;
       },
       // The generator, never the run-to-completion `section()`: the walk tests
       // every point of every eligible layer, and the presenter spreads it
@@ -276,10 +279,23 @@ export function createMeasurePanelMount(deps: MeasurePanelMountDeps): MeasurePan
     );
   }
 
+  /** The one delete path: the row's ×, the result card's Delete and any caller that has only the id. */
+  function deleteMeasurement(id: string): boolean {
+    // The dock plots THIS measurement's corridor, and a deleted measurement has none left to plot.
+    if (id === dockedId) closeWorkbench();
+    const removed = deps.getViewer().measure.removeMeasurement(id);
+    if (removed) offerUndo(removed);
+    return removed != null;
+  }
+
   function offerUndo(removed: RemovedMeasurement): void {
-    panel?.offerUndo(`Deleted ${removed.measurement.name}.`, () => {
+    // The result card can delete before the panel chunk has landed; the offer
+    // waits for the panel rather than being dropped.
+    const offer = (p: MeasurePanel): void => p.offerUndo(`Deleted ${removed.measurement.name}.`, () => {
       if (deps.getViewer().measure.restoreMeasurement(removed)) refresh();
     }, deps.toast, () => deps.getViewer().measure.drafting);
+    if (panel) offer(panel);
+    else void mount().then(offer, () => {}); // the panel alone, not the reveal `ensure()` performs
   }
 
   /** The Clear button's Undo: every measurement goes back in its old order, in one change. */
@@ -296,13 +312,7 @@ export function createMeasurePanelMount(deps: MeasurePanelMountDeps): MeasurePan
     const viewer = deps.getViewer();
     viewer.measure.onClearAll = offerUndoAll;
     return new Ctor({
-      onDelete: (id) => {
-        // The dock plots THIS measurement's corridor, and a deleted
-        // measurement has none left to plot.
-        if (id === dockedId) closeWorkbench();
-        const removed = viewer.measure.removeMeasurement(id);
-        if (removed) offerUndo(removed);
-      },
+      onDelete: (id) => { deleteMeasurement(id); },
       // The row's Copy writes exactly what the result card's Copy writes.
       onCopy: (id) => {
         const s = viewer.measure.getSummaries().find((x) => x.id === id);
@@ -460,6 +470,7 @@ export function createMeasurePanelMount(deps: MeasurePanelMountDeps): MeasurePan
     get panel() {
       return panel;
     },
+    deleteMeasurement,
     ensure,
     refresh,
     setMountElement(fn) {

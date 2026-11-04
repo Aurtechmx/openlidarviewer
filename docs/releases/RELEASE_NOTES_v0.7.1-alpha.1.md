@@ -6,8 +6,9 @@ packaged build has not been done. The published release is v0.7.0, and its
 record, [RELEASE_NOTES_v0.7.0.md](RELEASE_NOTES_v0.7.0.md), does not change.
 
 These notes list what changed since v0.7.0 (tag `v0.7.0`). Volumes and terrain
-outputs now state only the evidence that covers them, scenes clean up after
-close and replace, startup and large loads are faster, and the file loaders
+outputs now state only the evidence that covers them, figures on a sampled load
+say so, scenes clean up after close and replace, exports name the scan they
+were measured on, startup and large loads are faster, and the file loaders
 handle more malformed input. The license is AGPL-3.0-only; releases through
 v0.6.6 remain available under MIT.
 
@@ -23,6 +24,21 @@ v0.6.6 remain available under MIT.
 - A cancelled or failed COPC, EPT or out-of-core open returns the panels to their earlier state.
 - A stream opened beside a static scan in a different coordinate system shows a notice.
 
+## Figures on sampled loads
+
+- On a large LAS or LAZ opened as a display sample, the class shares, the terrain ground density, the scan scope and the primary limiter say they come from a sample. After a class edit the shares are counted on the loaded points. The pre-load message says the file is read as one record in N.
+- The Technical Report has a Terrain analysis section and states the same analysed basis as the map sheet. The terrain verdict names the unclassified share instead of saying the points are not classified to ground.
+- The Dataset Story names the bounding box as a bounding box, and the Scan Report's Classification line updates after every class edit.
+- The DTM evidence rule converts the run's cell size to metres before judging the studied range, so a scan in feet is read correctly, and a sampled run's ground density is stated without a QL grade. After a layer becomes active, the point-count detail shows the file's count.
+
+## Scans and layers
+
+- Pressing a layer's name makes it the active scan. A Created layers list on the Data tab shows or hides contours, drainage lines and the access map, and a session keeps those choices.
+- After a scan is removed, the contour map sheet, the Terrain Intelligence report and the other terrain exports name the active scan. A kept terrain result keeps the name of the scan it was computed on.
+- Each scan keeps its own Auto-classify caption and class counts while another scan is active. Notes stay with the scan they were placed on, and a note whose scan was closed is not saved.
+- When the clip box or a filter hides every point, a card names what is on and offers Turn off clip or Reset filters. The Terrain page says which points a terrain run reads.
+- A scan opens on the Tools home rather than on the last scan's Clip box page. Desktop tool pages have a Back button, and the clip box on a streamed scan fits the data extent.
+
 ## Measurement
 
 - When the grid volume is withheld, the cut-fill cross-check volume is withheld too, in the panel, the toast, the PDF and the CSV and GeoJSON exports.
@@ -33,6 +49,15 @@ v0.6.6 remain available under MIT.
 - The PDF profile summary labels its third figure as net rise over run, the summed rise over the summed run.
 - PDF measurement rows print the value the Measurements panel shows, in the same units and precision.
 - Scan Report density and spacing say "(bounding-box estimate)".
+- The lasso volume tool draws on the built app again. Its overlay set its size in a way the page's Content-Security-Policy blocks.
+- Volumes show five significant figures. A box with no height withholds its volume, a box drawn with Draw clipping box is a clip region with no volume, and chain totals leave clip regions out.
+- The measurement CSV fills the run, rise, grade and angle of a Distance.
+- A vertex released before the next frame lands where the pointer was let go, a drag follows one pointer and is cancelled cleanly, and dragging a box corner past the opposite corner no longer moves that corner. The vertex touch target is 44 px on a touch screen.
+- A double-click while a tool is paused with Space focuses the camera and keeps the measurement open.
+- The profile's compact chart draws heights at the same scale as distances by default and says so. The chips offer 5×, 10× and 20× exaggeration and Fit, and Fit states the exaggeration it took.
+- The automatic corridor of a new profile stops at a 5 m half-width instead of growing with the line. On transects of a real survey, a 37 m corridor read up to 1.0 m RMS from a narrow line of ground returns, against 0.10 to 0.19 m at 5 m. A paired test of a ground-first rule found no measured benefit, so the chart keeps the percentile over every accepted return.
+- The result card's Delete deletes through the measurement controller, so it works before the Measurements panel has loaded. The stockpile toast shows five significant figures, and a volume chain blames a clip region only when it holds nothing else.
+- A profile's PDF, station CSV and workbench image name the scan the profile was measured on, in that scan's coordinate system, and are withheld with the step to take when the source cannot be settled. The Profile Workbench opens only while a scan the profile was measured on is active.
 
 ## Terrain evidence
 
@@ -90,14 +115,19 @@ A pinned corpus of upstream test files from LASzip, laspy, libE57Format, PROJ an
 - An E57 file with images only says so, and a file with scans and images opens with a warning.
 - A COPC range request answered with 416 is reported as a changed or short object.
 - A COPC read cut short by a cancel or a dropped connection keeps its cancelled or connection-closed reason.
+- A glTF or GLB is checked against its own buffers before any point is read. Declared data the file does not hold is refused instead of read as zeros, and the check reads the same chunks the parser reads. Meshopt and Draco compression are refused with a reason. Embedded `data:` buffers are decoded in memory, so they open under the deployment's connection policy.
+- A COPC node or LAZ chunk whose bytes differ from the declared size is refused as malformed.
 
 ## Storage history
 
 The scan report has a "Storage history" row for LAS and LAZ files opened from disk. It tests whether the stored integer coordinates are compatible with an earlier storage grid from a fixed candidate set. It reports the grid, "none detected", or why the test did not run. A supported grid says nothing about how or by whom the file was produced. The capability is a preview, and its claim, STORAGE-HISTORY, is at E2.
 
-## Local coordinate systems
+## Coordinate systems
 
-A LAS file whose WKT is a named local or engineering CRS (`LOCAL_CS`, `ENGCRS`) keeps that name. Change detection refuses two local frames with different names, and the layers are not combined. Two layers that name the same local frame are reported as unverified.
+- A LAS file whose WKT is a named local or engineering CRS (`LOCAL_CS`, `ENGCRS`) keeps that name, inside a compound CRS too. Change detection refuses two local frames with different names, and the layers are not combined. Two layers that name the same local frame are reported as unverified.
+- A bound CRS takes its unit from its source CRS. Two custom coordinate systems with the same name are compared on their definition. Trailing NUL characters in a CRS text no longer slow the comparison.
+- A saved session keeps the catalogue name behind an asserted CRS, and an export with an assigned CRS records the assignment in the file.
+- `PROJECTEDCRS` and `GEOGRAPHICCRS` are read as WKT2 keywords. The change-detection frame check compares two same-name custom CRSs on their definition, as the layer check does. `base_level` in the measurement CSV and GeoJSON is read along the scan's up axis. The session-saved toast counts what the file holds and says what was left out.
 
 ## Evidence tooling
 

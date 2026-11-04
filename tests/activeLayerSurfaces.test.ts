@@ -43,8 +43,18 @@ describe('refreshActiveLayerSurfaces', () => {
     expect(d.refreshDatasetIntelligence).toHaveBeenCalledWith(cloud);
     expect(d.refreshClassLegend).toHaveBeenCalledWith(cls, { loaded: 3, declared: 10, scan: 'cloud-2' }, 'derived');
     expect(d.syncColorMode).toHaveBeenCalledTimes(1);
-    expect(d.setDetail).toHaveBeenCalledWith(3, 8);
+    // The denominator is the file's count, as the open showed it, not the records the decoder read.
+    expect(d.setDetail).toHaveBeenCalledWith(3, 10);
     expect(d.setReport).toHaveBeenCalledWith(cloud);
+  });
+
+  it('does not read a truncated file as a sample of its declared count', () => {
+    const { d } = deps();
+    refreshActiveLayerSurfaces(d, { pointCount: 6, declaredPointCount: 10, metadata: { truncation: { read: 6, declared: 10 } } } as Cloud, 'c');
+    expect(d.setDetail).toHaveBeenCalledWith(6, 6);
+    // Reduced for display as well: the total is what the decoder read, not the header.
+    refreshActiveLayerSurfaces(d, { pointCount: 2, declaredPointCount: 10, decodedPointCount: 6, metadata: { truncation: { read: 6, declared: 10 } } } as Cloud, 'c');
+    expect(d.setDetail).toHaveBeenCalledWith(2, 6);
   });
 
   it('seeds the legend before the report, which reads the legend for its class scope', () => {

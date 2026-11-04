@@ -61,6 +61,8 @@ export interface SessionSnapshotDeps {
   ownershipView?(): OwnershipView;
   /** Told when work was left out of the file, with the reason. */
   onWithheld?(message: string): void;
+  /** What the file holds, counted as it is written. */
+  onWritten?(work: { measurements: number; annotations: number; views: number }): void;
   readonly appVersion: string;
 }
 
@@ -185,6 +187,8 @@ export function serializeActiveSession(
       deps.onWithheld?.(`${n} restored item${n === 1 ? '' : 's'} waiting for ${n === 1 ? 'its scan' : 'their scans'} left out of the session: no open scan has a proven identity to record ${n === 1 ? 'it' : 'them'} against.`);
     }
   }
+  const views = deps.savedViews().map((v) => ({ name: v.name, camera: v.pose, ...(v.state ?? {}) }));
+  deps.onWritten?.({ measurements: measurements.length, annotations: annotations.length, views: views.length });
   return serializeSession({
     upAxis,
     ...(upFrame ? { upFrame } : {}),
@@ -199,7 +203,7 @@ export function serializeActiveSession(
     // v7 — a view with a captured bundle serialises it per-view; a camera-only
     // view (e.g. restored from a v6 file) spreads nothing and keeps its exact
     // v6 byte-shape.
-    views: deps.savedViews().map((v) => ({ name: v.name, camera: v.pose, ...(v.state ?? {}) })),
+    views,
     measurements,
     annotations,
     camera: viewState.camera,

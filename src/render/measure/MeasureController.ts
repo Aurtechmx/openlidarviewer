@@ -97,7 +97,7 @@ import {
   PROFILE_SAMPLER_DEFAULTS_KEY,
   decodeSamplerParams,
   encodeSamplerParams,
-  normaliseResampleParams,
+  profileSampleParams,
 } from './profileSampler';
 // Guarded localStorage access — the same seam every UI preference uses;
 // storage failures degrade to "the preference doesn't persist", never throw.
@@ -1313,7 +1313,7 @@ export class MeasureController {
     // through the same B2 factor the summary boundary applies forward — the
     // exact inverse, so what the user typed is what the sampler walks. The
     // normalisation is pure + tested in profileSampler.ts.
-    const opts = normaliseResampleParams(params, this.unitFrameOf(m).unitToMetres);
+    const opts = profileSampleParams(params, m.points[0], m.points[1], this.upFor(m), this.unitFrameOf(m));
     const sampler = this._profileSampler;
     try {
       const result = this._inFrameOf(m, () => sampler(m.points[0], m.points[1], opts));
@@ -1347,6 +1347,7 @@ export class MeasureController {
     if (changed) this._emitChange();
   }
 
+  profileCorridorOf(m: Measurement): number | null { return m.profileCorridorWidth ?? profileSampleParams(null, m.points[0], m.points[1], this.upFor(m), this.unitFrameOf(m)).corridorWidth; } // the recorded width, or the automatic corridor of a profile with none
   /** Re-sample one profile with the parameters it was last sampled with; true when it was. */
   private _resampleInPlace(m: Measurement): boolean {
     const sampler = this._profileSampler;
@@ -1355,8 +1356,7 @@ export class MeasureController {
     if (!m.profileChart && m.derivedWithheld === undefined) return false;
     try {
       const result = this._inFrameOf(m, () => sampler(m.points[0], m.points[1], {
-        corridorWidth: m.profileCorridorWidth ?? null,
-        groundPercentile: m.profileGroundPercentile ?? null,
+        corridorWidth: this.profileCorridorOf(m), groundPercentile: m.profileGroundPercentile ?? null,
         sampleCount: m.profileChart?.length ?? null,
       }));
       if (!result) return false;
@@ -2061,7 +2061,7 @@ export class MeasureController {
         // decodes to null and the standing defaults apply — exactly the
         // pre-preference behaviour.
         const stored = decodeSamplerParams(storageGet(PROFILE_SAMPLER_DEFAULTS_KEY));
-        const opts = stored ? normaliseResampleParams(stored, this.unitFrameOf(m).unitToMetres) : undefined;
+        const opts = profileSampleParams(stored, m.points[0], m.points[1], this.upFor(m), this.unitFrameOf(m));
         // In the owner's frame: the profile is cut along its layer's own up.
         const sampler = this._profileSampler;
         const result = this._inFrameOf(m, () => sampler(m.points[0], m.points[1], opts));

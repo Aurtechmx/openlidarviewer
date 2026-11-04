@@ -89,6 +89,8 @@ export interface DtmGrid {
   readonly cols: number;
   readonly rows: number;
   readonly cellSizeM: number;
+  /** Metres per grid unit, for judging `cellSizeM` in metres; null when no linear scale resolved. Absent on an older cached core. */
+  readonly cellUnitToMetres?: number | null;
   readonly originH1: number;
   readonly originH2: number;
   /** Horizontal CRS identifier (e.g. "EPSG:32610") or null when unknown. */

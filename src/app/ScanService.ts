@@ -170,6 +170,7 @@ export interface ActiveLayerSurfaceDeps<Cloud> {
 export interface ActiveLayerCloud {
   readonly pointCount: number;
   readonly declaredPointCount?: number;
+  readonly metadata?: { readonly truncation?: unknown };
   readonly decodedPointCount?: number;
   readonly classification?: ArrayLike<number>;
   readonly classSample?: ClassSample;
@@ -188,7 +189,8 @@ export function refreshActiveLayerSurfaces<Cloud extends ActiveLayerCloud>(
   deps.refreshDatasetIntelligence(cloud);
   deps.refreshClassLegend(cloud.classification, { loaded: cloud.pointCount, declared: cloud.declaredPointCount, shares: cloud.classSample, scan: layerId }, cloud.classificationProvenance);
   deps.syncColorMode();
-  deps.setDetail(cloud.pointCount, cloud.decodedPointCount ?? cloud.pointCount);
+  // The file's count, as the open showed it: the decoder may have read only a stride of the records. A truncated file holds no more than the decoder read.
+  deps.setDetail(cloud.pointCount, cloud.metadata?.truncation ? Math.max(cloud.pointCount, cloud.decodedPointCount ?? 0) : Math.max(cloud.declaredPointCount ?? 0, cloud.decodedPointCount ?? 0, cloud.pointCount));
   deps.setReport(cloud);
 }
 

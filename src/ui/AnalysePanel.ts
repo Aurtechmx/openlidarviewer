@@ -3452,7 +3452,7 @@ export class AnalysePanel {
       const ico = el('span', { className: 'olv-fit-ico' });
       ico.innerHTML = fitnessIcon(d.key);
       const tone = el('span', { className: 'olv-fit-tone' });
-      tone.innerHTML = fitnessToneGlyph(d.tone);
+      if (!d.ungraded) tone.innerHTML = fitnessToneGlyph(d.tone); // a figure stated without a grade carries no rating mark
       row.append(
         ico,
         el('span', { className: 'olv-fit-label', text: d.label }),

@@ -8,7 +8,7 @@ A browser-native LiDAR and point-cloud viewer for fast local inspection, 3D navi
 [![Clean clone](https://github.com/Aurtechmx/openlidarviewer/actions/workflows/clean-clone.yml/badge.svg)](https://github.com/Aurtechmx/openlidarviewer/actions/workflows/clean-clone.yml)
 [![Benchmark portability](https://github.com/Aurtechmx/openlidarviewer/actions/workflows/benchmark-portability.yml/badge.svg)](https://github.com/Aurtechmx/openlidarviewer/actions/workflows/benchmark-portability.yml)
 
-[![Security audit](https://github.com/Aurtechmx/openlidarviewer/actions/workflows/security.yml/badge.svg)](https://github.com/Aurtechmx/openlidarviewer/actions/workflows/security.yml)
+[![Security scan](https://github.com/Aurtechmx/openlidarviewer/actions/workflows/security.yml/badge.svg)](https://github.com/Aurtechmx/openlidarviewer/actions/workflows/security.yml)
 [![Coverage](https://img.shields.io/codecov/c/github/Aurtechmx/openlidarviewer?label=coverage&color=3fb950)](https://codecov.io/gh/Aurtechmx/openlidarviewer)
 [![Core mutation score](https://img.shields.io/endpoint?style=flat&label=core%20mutation%20score&url=https%3A%2F%2Fbadge-api.stryker-mutator.io%2Fgithub.com%2FAurtechmx%2Fopenlidarviewer%2Fmain)](https://dashboard.stryker-mutator.io/reports/github.com/Aurtechmx/openlidarviewer/main)
 [![Quality gate](https://sonarcloud.io/api/project_badges/measure?project=Aurtechmx_openlidarviewer&metric=alert_status)](https://sonarcloud.io/summary/new_code?id=Aurtechmx_openlidarviewer)
@@ -22,7 +22,7 @@ A browser-native LiDAR and point-cloud viewer for fast local inspection, 3D navi
 
 No install, no account, no upload. Open [app.openlidarviewer.org](https://app.openlidarviewer.org/), then drag a `.las`, `.laz`, or `.copc.laz` file onto the page, or enter a remote COPC, `ept.json` or `tileset.json` URL in the Open from URL field. You're navigating the cloud in your browser, and a local file never leaves your device.
 
-New here? The [User Guide](docs/USER_GUIDE.md) covers opening and measuring a scan. It also covers terrain analysis, comparing two scans and sharing your work. Full documentation, the format matrix, and the scientific validation record live at the [docs site](https://openlidarviewer.org/).
+If you are new, the [User guide](docs/USER_GUIDE.md) covers opening and measuring a scan. It also covers terrain analysis, comparing two scans and sharing your work. Full documentation, the format matrix, and the scientific validation record live at the [docs site](https://openlidarviewer.org/).
 
 ## Overview
 
@@ -192,7 +192,7 @@ See [`docs/terrain-intelligence.md`](docs/terrain-intelligence.md), [`docs/valid
 <summary><b>Multi-scan & embed</b></summary>
 
 - Open multiple scans as layers, or close the current scan from the tool dock to start fresh with another
-- An embed mode for `<iframe>` use (`?embed=1`), with a validated `postMessage` bridge for host-page control. On a host that cannot send headers, the viewer's own frame guard blocks cross-origin embedding unless the deployer listed the parent origin at build time; see the [embed reference](docs/usage.md#embed-reference)
+- An embed mode for `<iframe>` use (`?embed=1`), with a `postMessage` bridge that checks every message before acting on it. On a host that cannot send headers, the viewer's own frame guard blocks cross-origin embedding unless the deployer listed the parent origin at build time; see the [embed reference](docs/usage.md#embed-reference)
 - Developer diagnostics: a live performance overlay (`?debug=1`) and a structured benchmark mode (`?benchmark=1`)
 </details>
 
@@ -369,14 +369,14 @@ Which formats are supported?
 For static loads, LAS / LAZ, PLY, OBJ, PCD, PTX, PTS, XYZ / CSV, E57 and glTF / GLB; for streaming: COPC, EPT, a 3D Tiles PNTS tileset, and a very large uncompressed LAS or chunked LAZ indexed out of core. See [Formats & requirements](#formats--requirements).
 
 Is it survey-grade?
-No. Measurements and quality grades describe the data you loaded; they are not a survey-grade certification. Validate against ground control where accuracy matters.
+No. Measurements and quality grades describe the data you loaded; they are not a survey-grade certification. Check against ground control where accuracy matters.
 
 Does it need WebGPU?
 No. WebGPU is the primary path and it falls back to WebGL 2 automatically.
 
 ## Project & research
 
-OpenLiDARViewer started as an experiment: how far can modern browser technology go in making LiDAR and point-cloud data easy to reach? It explores browser-native rendering, lightweight WebGL/WebGPU pipelines, human-centered interaction with 3D data, game-inspired navigation for technical inspection, and local-first workflows. It does not try to replace full GIS or survey-grade processing. The goal is a quick way to open a point cloud, look around it and measure it, and then present what you found. See [`docs/research-notes.md`](docs/research-notes.md).
+OpenLiDARViewer started as an experiment in how far browser technology can go in making LiDAR and point-cloud data easy to reach. It explores browser-native rendering, lightweight WebGL/WebGPU pipelines, human-centered interaction with 3D data, game-inspired navigation for technical inspection, and local-first workflows. It does not try to replace full GIS or survey-grade processing. The goal is a quick way to open a point cloud, look around it and measure it, and then present what you found. See [`docs/research-notes.md`](docs/research-notes.md).
 
 The current release is **v0.7.1-alpha.1**, an alpha on the way to v0.7.1 with no tag and no DOI; the latest published release is v0.7.0 ([release notes](docs/releases/RELEASE_NOTES_v0.7.0.md), [validation report](docs/releases/VALIDATION_REPORT_v0.7.0.md), [known limitations](docs/releases/KNOWN_LIMITATIONS_v0.7.0.md)). The dated history is in [CHANGELOG.md](CHANGELOG.md), and per-release records live in [`docs/releases/`](docs/releases/).
 

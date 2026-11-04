@@ -1,7 +1,8 @@
 /**
- * The box headline, the stockpile ± figures and the change-detection volumes
- * read through the shared volume formatter (5 significant figures, at most
- * 4 decimals), like every other displayed volume.
+ * The box headline, the stockpile volume and the change-detection volumes read
+ * through the shared volume formatter (5 significant figures, at most 4
+ * decimals), like every other displayed volume. A stockpile's ± terms show two
+ * significant figures.
  */
 import { describe, it, expect } from 'vitest';
 import { formatBoxHeadline, formatVolumeNumber } from '../src/render/measure/format';
@@ -25,10 +26,10 @@ describe('volume displays at 5 significant figures', () => {
         baseUncertainty: 0, meanThickness: 1, thicknessStdDev: 0, samplingError: 0.42, basePlaneError: 98765.4 },
     } as unknown as StockpileVolumeResult;
     const v = presentStockpile(r);
-    expect(v.headline).toBe('499,910 m³ ± 123,460 m³ (model band)');
+    expect(v.headline).toBe('499,910 m³ ± 120,000 m³ (model band)');
     const row = (l: string) => v.rows.find((x) => x.label === l)!.value;
-    expect(row('Surface spread term')).toBe('± 0.4200 m³');
-    expect(row('Base-plane term')).toBe('± 98,765 m³');
+    expect(row('Surface spread term')).toBe('± 0.42 m³');
+    expect(row('Base-plane term')).toBe('± 99,000 m³');
   });
 
   it('change-detection volumes', () => {

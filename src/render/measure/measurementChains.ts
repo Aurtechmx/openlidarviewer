@@ -382,10 +382,19 @@ export function aggregate(
   }
   const contributingCount = values.length;
   const clipLeftOut = dimension === 'volume-fill' && measurements.some((m) => m.kind === 'box' && m.clipRegion === true);
-  if (clipLeftOut && contributingCount === 0 && operation !== 'count') {
-    return { value: Number.NaN, unit: '', contributingCount: 0, totalCount, operation, dimension, refusal: CHAIN_CLIP_REGION_WITHHELD };
-  }
+  // Only a chain of nothing but clip regions is withheld for that reason; a
+  // withheld polygon beside one keeps its own reason.
+  const onlyClipRegions = measurements.length > 0 && measurements.every((m) => m.kind === 'box' && m.clipRegion === true);
   const note = clipLeftOut ? CHAIN_CLIP_REGION_LEFT_OUT : undefined;
+  if (dimension === 'volume-fill' && contributingCount === 0 && operation !== 'count') {
+    const withheld = measurements.find((m) => m.kind === 'volume' && m.volume?.gridAuthority === 'withheld');
+    const refusal = onlyClipRegions
+      ? CHAIN_CLIP_REGION_WITHHELD
+      : withheld
+        ? `Volume withheld: ${withheld.volume?.gridAuthorityReason ?? 'no member has a measured volume'}.${note ? ` ${note}` : ''}`
+        : null;
+    if (refusal) return { value: Number.NaN, unit: '', contributingCount: 0, totalCount, operation, dimension, refusal };
+  }
   // A geographic frame has no confirmed linear scale either.
   const verified = (scale.unitsVerified ?? true) && scale.geographic !== true;
   const unit = (verified ? DIMENSION_UNIT : SOURCE_UNIT)[dimension] ?? '';
