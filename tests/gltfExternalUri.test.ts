@@ -66,6 +66,14 @@ describe('a local glTF never makes the browser fetch a URI it names', () => {
 });
 
 describe('decodeDataUri', () => {
+  it('reads escaped binary and escaped base64 as the same octets', async () => {
+    const { decodeDataUri } = await import('../src/io/loadGltf');
+    expect([...decodeDataUri('data:application/octet-stream,%FF%80%00')]).toEqual([255, 128, 0]);
+    expect([...decodeDataUri('data:application/octet-stream;base64,%2Fw%3D%3D')]).toEqual([255]);
+    expect([...decodeDataUri('data:application/octet-stream;base64,/w==#note')]).toEqual([255]);
+    expect(() => decodeDataUri('data:application/octet-stream,%G0')).toThrow(/cannot be read/);
+  });
+
   it('reads base64 and percent-encoded bodies, and refuses a URI with no data', async () => {
     const { decodeDataUri } = await import('../src/io/loadGltf');
     expect(Array.from(decodeDataUri('data:application/octet-stream;base64,AQID'))).toEqual([1, 2, 3]);

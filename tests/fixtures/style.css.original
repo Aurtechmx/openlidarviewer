@@ -1907,7 +1907,7 @@ button:disabled { cursor: not-allowed; }
   /* Never on the navigation row: NavBar publishes its clearance (0 when hidden). */
   bottom: max(calc(120px + env(safe-area-inset-bottom)), var(--olv-nav-clear, 0px));
   transform: translateX(-50%);
-  z-index: var(--z-modal);
+  z-index: var(--z-modal-top); /* a message stays readable over the dialog that opens with it */
   /* Subtract the horizontal display cut-outs too (landscape notch / rounded
      corners) so the toast never tucks under a sensor housing. env() is 0 on
      inset-free displays, so desktop width is unchanged. */

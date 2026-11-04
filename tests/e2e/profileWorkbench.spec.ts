@@ -1,5 +1,5 @@
 import { test, expect, type Page } from '@playwright/test';
-import { placeProfile } from './helpers';
+import { openToolPage, placeProfile, showWorkspaceMode } from './helpers';
 
 /**
  * Profile workbench acceptance flows.
@@ -191,5 +191,49 @@ test.describe('profile workbench', () => {
     await openWorkbench(page);
 
     expect(errors, `console errors: ${errors.join(' | ')}`).toEqual([]);
+  });
+
+  test('the section opens only while a scan it was measured on is active', async ({ page }) => {
+    // The section walks the active scan's up, scale and height datum, so another
+    // scan's frame would draw a different section under the same name.
+    await placeProfile(page);
+    await showWorkspaceMode(page, 'data');
+    const chooser = page.waitForEvent('filechooser');
+    await page.locator('.olv-add-dataset-row').click();
+    await (await chooser).setFiles('tests/fixtures/tiny.las');
+    await expect(page.locator('.olv-layer')).toHaveCount(2, { timeout: 60_000 });
+    const activeName = page.locator('.olv-layer.is-active-layer .olv-layer-name');
+    await expect(activeName).toContainText('tiny');
+
+    await openToolPage(page, 'Measure');
+    await page.locator('.olv-mp-chart-wrap').first().click();
+    // The stored chart opens in its place, and the reason stays readable over it.
+    const reason = page.locator('.olv-lasso-toast');
+    await expect(reason).toContainText('dense-grid');
+    await expect(page.locator('.olv-result-focus')).toBeVisible();
+    const onTop = await reason.evaluate((el) => {
+      // The toast ignores the pointer, so hit-testing it needs that lifted.
+      (el as HTMLElement).style.pointerEvents = 'auto';
+      const r = el.getBoundingClientRect();
+      const hit = el.contains(document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2));
+      (el as HTMLElement).style.pointerEvents = '';
+      return hit;
+    });
+    expect(onTop, 'the dialog does not cover the reason').toBe(true);
+    await expect(page.locator('.olv-workbench')).toHaveCount(0);
+    await page.locator('.olv-result-focus button', { hasText: 'Measure' }).first().click();
+    await expect(page.locator('.olv-result-focus')).toHaveCount(0);
+
+    await showWorkspaceMode(page, 'data');
+    await page.locator('.olv-layer-name', { hasText: 'dense-grid' }).click();
+    await expect(activeName).toContainText('dense-grid');
+    await openToolPage(page, 'Measure');
+    await openWorkbench(page);
+    await expect(page.locator('.olv-workbench-canvas')).toBeVisible();
+
+    await showWorkspaceMode(page, 'data');
+    await page.locator('.olv-layer-name', { hasText: 'tiny' }).click();
+    await expect(page.locator('.olv-workbench')).toHaveCount(0);
+    await expect(reason).toContainText("Select the profile's source");
   });
 });

@@ -26,7 +26,7 @@ import { upVectorOf } from '../geo/frame/layerUpFrame';
 import { cloudUpAxisMoved, setCloudUpResolver } from '../render/layerUpRegistry';
 import { bindMeasureUnitFrames, chainUnitFrame, type LayerUnitSource, type MeasureUnitFrames } from './measureLayerUnits';
 import { buildMeasureConfidenceContext } from './measureConfidenceContext';
-import { profileExportContext, type ProfileExportContext } from './profileExportSource';
+import { profileExportContext, profileWorkbenchSource, type ProfileExportContext } from './profileExportSource';
 import { datasetIdentity } from '../geo/CrsService';
 import { buildResultModel } from './measureResultModel';
 import { copyToClipboard } from '../ui/clipboard';
@@ -131,12 +131,14 @@ export function createMeasurePanelMount(deps: MeasurePanelMountDeps): MeasurePan
   // The open layers, bound with the unit frames, so a profile export names the scan it was measured on.
   let layerSource: Omit<LayerUnitSource, 'crs' | 'realignUp'> | null = null;
   /** The scan(s) one profile records it was picked on, in their own CRS; the active scan when only one is open. */
-  const profileSource = (id: string): ProfileExportContext => {
+  const profileSource = (id: string, rawSection = false): ProfileExportContext => {
     const v = deps.getViewer();
     const src = layerSource;
-    return profileExportContext(v.measure.getMeasurements().find((m) => m.id === id), {
+    const resolve = rawSection ? profileWorkbenchSource : profileExportContext;
+    return resolve(v.measure.getMeasurements().find((m) => m.id === id), {
       activeId: () => src?.activeId() ?? null,
       clouds: () => src?.clouds() ?? [],
+      hasStreamingCloud: () => v.hasStreamingCloud,
       cloud: (vid) => src?.cloud(vid),
       stableIdFor: (vid) => src?.stableIdFor(vid) ?? null,
       activeCrs: () => deps.crsService.current() ?? null,
@@ -219,7 +221,7 @@ export function createMeasurePanelMount(deps: MeasurePanelMountDeps): MeasurePan
         scene: workbenchScene(),
         // The PNG names the scan the profile was measured on; one that cannot be settled is not written.
         scanBaseName: (id) => {
-          const src = profileSource(id);
+          const src = profileSource(id, true);
           if (src.refused) throw new Error(src.refused);
           return src.scanName;
         },
@@ -251,8 +253,14 @@ export function createMeasurePanelMount(deps: MeasurePanelMountDeps): MeasurePan
     });
     return workbench.then(
       async (live) => {
+        const refusal = profileSource(summary.id, true).refused;
+        if (refusal) { deps.toast?.(refusal); return false; }
         const opened = await live.open({ id: summary.id, kind: summary.kind, name: summary.name });
-        if (opened) dockedId = summary.id;
+        if (opened) {
+          const changed = profileSource(summary.id, true).refused;
+          if (changed) { closeWorkbench(); deps.toast?.(changed); return false; }
+          dockedId = summary.id;
+        }
         return opened;
       },
       (error) => {
@@ -355,6 +363,10 @@ export function createMeasurePanelMount(deps: MeasurePanelMountDeps): MeasurePan
       // scan's selection does not relabel it. Local and unknown frames return
       // nulls and the PDF keeps its "— (not georeferenced)" fallback.
       getProfileExportContext: profileSource,
+      getProfileExportFrame: (id) => {
+        const measurement = viewer.measure.getMeasurements().find((m) => m.id === id);
+        return measurement ? viewer.measure.unitFrameOf(measurement) : null;
+      },
       // B7/B8 (v0.4.5) — the panel's sampler controls re-sample through the
       // controller, which clamps the values, converts the metre corridor back to
       // render units, and emits a change so the panel re-renders with the values
@@ -391,7 +403,9 @@ export function createMeasurePanelMount(deps: MeasurePanelMountDeps): MeasurePan
       // cannot overwrite a name someone is still typing into the dock.
       if (dockedId !== null) {
         const docked = measurements.find((m) => m.id === dockedId);
-        if (docked) launcher?.handle?.setTitle?.(docked.name);
+        const refusal = profileSource(dockedId, true).refused;
+        if (refusal) { closeWorkbench(); deps.toast?.(refusal); }
+        else if (docked) launcher?.handle?.setTitle?.(docked.name);
       }
     } else {
       // Panel not mounted yet (pre-first-scan, or the chunk is still loading) —

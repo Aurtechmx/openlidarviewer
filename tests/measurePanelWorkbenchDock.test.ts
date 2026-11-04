@@ -38,6 +38,9 @@ beforeEach(() => {
   const g = globalThis as unknown as Record<string, unknown>;
   g.requestAnimationFrame = (fn: () => void): number => frames.push(fn);
   g.window = {
+    // The stored chart's dialog, which opens in place of a refused dock, listens here.
+    addEventListener: () => {},
+    removeEventListener: () => {},
     innerWidth: 1440,
     innerHeight: 900,
     devicePixelRatio: 1,
@@ -101,6 +104,9 @@ interface Rig {
   readonly section: ReturnType<typeof vi.fn>;
   readonly sectionChunks: ReturnType<typeof vi.fn>;
   readonly removed: string[];
+  /** The profile the fake controller holds; its record of the scan it was picked on can change. */
+  readonly profile: { pickLayers?: string[] };
+  readonly toast: ReturnType<typeof vi.fn>;
   /** Chunks the fake seam has been asked for. */
   chunks(): number;
 }
@@ -135,10 +141,12 @@ function rig(chunkCount = 2): Rig {
   });
 
   const removed: string[] = [];
-  const measurements = [
+  const toast = vi.fn();
+  const measurements: { id: string; kind: string; name: string; points: number[][]; pickLayers?: string[] }[] = [
     { id: 'p1', kind: 'profile', name: 'Section A', points: [[0, 0, 0], [70, 0, 0]] },
   ];
   const viewer = {
+    hasStreamingCloud: true,
     measure: {
       datumResolved: false,
       worldUp: [0, 0, 1],
@@ -146,6 +154,7 @@ function rig(chunkCount = 2): Rig {
       verticalUnitToMetres: 1,
       unitSystem: 'metric',
       getMeasurements: () => measurements,
+      unitFrameOf: () => ({ geographic: false, verticalRefused: false }),
       getSummaries: () => [profileSummary()],
       removeMeasurement: (id: string) => void removed.push(id),
       renameMeasurement: () => {},
@@ -169,9 +178,10 @@ function rig(chunkCount = 2): Rig {
     handleFile: () => {},
     recordUsage: () => {},
     workbenchStage: { root: stageEl as unknown as HTMLElement },
+    toast,
   });
 
-  return { mount, appRoot, stageEl, section, sectionChunks, removed, chunks: () => pulled };
+  return { mount, appRoot, stageEl, section, sectionChunks, removed, profile: measurements[0]!, toast, chunks: () => pulled };
 }
 
 /**
@@ -221,6 +231,56 @@ describe('the mount hands the presenter the corridor generator', () => {
     while (frames.length > 0) frames.shift()!();
     expect(r.chunks()).toBe(2);
     expect(statusOf(r)).toBe('Showing 32 returns.');
+  });
+});
+
+describe('the dock opens only on a settled source', () => {
+  /** Press Expand, then wait for the stored chart's dialog, which opens in place of a refused dock. */
+  const pressExpandAndFallBack = async (r: Rig): Promise<void> => {
+    const body = new FakeEl('body');
+    (globalThis as unknown as { document: { body: FakeEl } }).document.body = body;
+    const expand = (r.mount.panel!.element as unknown as FakeEl).querySelector('button.olv-mp-chart-expand');
+    expand!.dispatchEvent({ type: 'click', stopPropagation: () => {} });
+    await settleUntil(() => body.querySelector('div.olv-result-focus') !== null);
+    expect(body.querySelector('div.olv-result-focus')).not.toBeNull();
+  };
+
+  it('says why and walks nothing when the source is not open', async () => {
+    const r = rig(1);
+    await r.mount.ensure();
+    r.profile.pickLayers = ['closed-scan'];
+    await pressExpandAndFallBack(r);
+
+    expect(r.toast.mock.calls[0]![0]).toMatch(/is not open/);
+    expect(dockOf(r)).toBeNull();
+    expect(r.sectionChunks).not.toHaveBeenCalled();
+  });
+
+  it('closes a dock whose source closed while it was opening', async () => {
+    const r = rig(1);
+    await r.mount.ensure();
+    const walk = r.sectionChunks.getMockImplementation() as (...args: unknown[]) => unknown;
+    r.sectionChunks.mockImplementationOnce((...args: unknown[]) => {
+      r.profile.pickLayers = ['closed-scan'];
+      return walk(...args);
+    });
+    await pressExpandAndFallBack(r);
+
+    expect(r.toast.mock.calls[0]![0]).toMatch(/is not open/);
+    expect(dockOf(r)).toBeNull();
+  });
+
+  it('closes an open dock when its source closes', async () => {
+    const r = rig(1);
+    await openDock(r);
+    while (frames.length > 0) frames.shift()!();
+
+    r.profile.pickLayers = ['closed-scan'];
+    r.mount.refresh();
+
+    expect(dockOf(r)).toBeNull();
+    expect(r.toast.mock.calls[0]![0]).toMatch(/is not open/);
+    expect(r.stageEl.style.height).toBe('');
   });
 });
 

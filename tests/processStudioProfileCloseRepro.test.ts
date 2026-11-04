@@ -167,11 +167,13 @@ function buildRig() {
     streamingCloud: null,
     clouds: () => ['scan1'],
     getCloud: (id: string) => (id === 'scan1' ? { name: 'scan1.laz', pointCount: 1_000_000, sourceFormat: 'laz', metadata: { crs: metreCrs } } : undefined),
+    hasStreamingCloud: true,
     measure: {
       get datumResolved() { return datumResolved; },
       setKind: () => {},
       worldUp: [0, 0, 1], unitToMetres: 1, verticalUnitToMetres: 1, unitSystem: 'metric',
       getMeasurements: () => measurements,
+      unitFrameOf: () => ({ geographic: false, verticalRefused: false }),
       getSummaries: () => [profileSummary()],
       removeMeasurement: () => {}, renameMeasurement: () => {}, resampleProfile: () => {}, setHoveredStation: () => false,
     },

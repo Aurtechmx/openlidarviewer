@@ -11,7 +11,7 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, it, expect } from 'vitest';
-import { profileExportContext, type ProfileSourceDeps } from '../src/app/profileExportSource';
+import { profileExportContext, profileWorkbenchSource, type ProfileSourceDeps } from '../src/app/profileExportSource';
 import type { ResolvedCrs } from '../src/geo/CoordinateTypes';
 import type { PointCloud } from '../src/model/PointCloud';
 
@@ -52,7 +52,13 @@ describe('the source a profile export names', () => {
 
   it('reads the active scan when it is the only one open', () => {
     const one = scene('v2', { clouds: () => ['v2'] });
-    expect(profileExportContext(undefined, one)).toEqual({ crs: null, verticalDatum: null, scanName: 'tiny' });
+    expect(profileExportContext({}, one)).toEqual({ crs: null, verticalDatum: null, scanName: 'tiny' });
+  });
+
+  it('withholds a deleted profile even when a single scan is open', () => {
+    const out = profileExportContext(undefined, scene('v2', { clouds: () => ['v2'] }));
+    expect(out.refused).toMatch(/no longer available/);
+    expect(out.scanName).toBeNull();
   });
 
   it('withholds a profile with no recorded scan while several are open', () => {
@@ -66,6 +72,28 @@ describe('the source a profile export names', () => {
     expect(r.refused).toMatch(/is not open/);
   });
 
+  it('withholds a recorded owner even when an unrelated scan is the sole survivor', () => {
+    const out = profileExportContext(onLas, scene('v2', { clouds: () => ['v2'] }));
+    expect(out.refused).toMatch(/is not open/);
+    expect(out.scanName).toBeNull();
+  });
+
+  it('requires every recorded contributor to resolve exactly once', () => {
+    const missing = profileExportContext({ pickLayers: ['las', 'gone'] }, scene('v1'));
+    const duplicate = profileExportContext(onLas, scene('v1', { stableIdFor: () => 'las' }));
+    expect(missing.refused).toMatch(/is not open/);
+    expect(duplicate.refused).toMatch(/more than one open scan/);
+    expect(missing.scanName).toBeNull();
+    expect(duplicate.scanName).toBeNull();
+  });
+
+  it('withholds profiles across distinct vertical references even when the horizontal CRS agrees', () => {
+    const view = scene('v1', { crsOf: () => ({ ...utm, verticalDatum: 'EGM96' }) });
+    const out = profileExportContext({ pickLayers: ['las', 'ply'] }, view);
+    expect(out.refused).toMatch(/vertical reference/);
+    expect(out.verticalDatum).toBeNull();
+  });
+
   it('withholds a profile picked across scans in different coordinate systems', () => {
     const r = profileExportContext({ pickLayers: ['las', 'ply'] }, scene('v1'));
     expect(r.refused).toMatch(/terrain-access-utm \(EPSG:32613 — WGS 84 \/ UTM zone 13N\) and tiny \(no CRS\)/);
@@ -74,6 +102,29 @@ describe('the source a profile export names', () => {
   it('names both scans when they share a coordinate system', () => {
     const shared = scene('v1', { crsOf: () => utm });
     expect(profileExportContext({ pickLayers: ['las', 'ply'] }, shared).scanName).toBe('terrain-access-utm-tiny');
+  });
+
+  it('requires a positive frame identity for every contributor, including name-only and custom WKT inputs', () => {
+    const a = { ...utm, epsg: undefined, name: 'Survey grid', wkt: 'PROJCS["Survey grid",PARAMETER["false_easting",100]]' };
+    const b = { ...a, wkt: 'PROJCS["Survey grid",PARAMETER["false_easting",200]]' };
+    for (const [left, right] of [[a, b], [{ ...a, wkt: undefined }, { ...a, wkt: undefined }], [local, local]]) {
+      const scope = scene('v1', { activeCrs: () => left as ResolvedCrs, crsOf: () => right as ResolvedCrs });
+      expect(profileExportContext({ pickLayers: ['las', 'ply'] }, scope).refused).toBeTruthy();
+    }
+  });
+
+  it('distinguishes an empty viewer, a lone stream and a mixed static/streamed scene for legacy work', () => {
+    const none = scene('v1', { clouds: () => [], activeId: () => null });
+    expect(profileExportContext({}, none).refused).toMatch(/no source scan is open/);
+    expect(profileExportContext({}, { ...none, hasStreamingCloud: () => true }).scanName).toBe('terrain-access-utm');
+    expect(profileExportContext(onLas, { ...none, hasStreamingCloud: () => true }).refused).toMatch(/is not open/);
+    expect(profileExportContext({}, scene('v1', { clouds: () => ['v1'], hasStreamingCloud: () => true })).refused).toBeTruthy();
+  });
+
+  it('opens the raw workbench only in a contributing scan’s frame and preserves the saved profile otherwise', () => {
+    expect(profileWorkbenchSource(onLas, scene('v1')).refused).toBeUndefined();
+    expect(profileWorkbenchSource(onLas, scene('v2')).refused).toMatch(/Select.*terrain-access-utm.*in Data/);
+    expect(profileExportContext(onLas, scene('v2')).refused).toBeUndefined();
   });
 
   it('resolves a non-active scan in its own CRS, not the active one', () => {

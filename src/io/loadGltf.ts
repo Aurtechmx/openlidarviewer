@@ -316,6 +316,13 @@ export function externalGltfUris(document: unknown): string[] {
 
 const MALFORMED_DATA_URI_MESSAGE = 'This glTF embeds a buffer whose data: URI cannot be read. Re-export the model, or save it as GLB.';
 
+function hexDigit(code: number): number {
+  if (code >= 48 && code <= 57) return code - 48;
+  if (code >= 65 && code <= 70) return code - 55;
+  if (code >= 97 && code <= 102) return code - 87;
+  return -1;
+}
+
 /**
  * The bytes of a `data:` URI, decoded here rather than by `fetch`: the
  * deployment's connection policy allows only same-origin and HTTPS requests,
@@ -323,19 +330,39 @@ const MALFORMED_DATA_URI_MESSAGE = 'This glTF embeds a buffer whose data: URI ca
  * points. The URI is already in the file, so its size is bounded by the file's.
  */
 export function decodeDataUri(uri: string): Uint8Array<ArrayBuffer> {
-  const v = uri.trim();
+  // A fragment identifies part of the resource and is not part of its bytes.
+  const trimmed = uri.trim();
+  const hash = trimmed.indexOf('#');
+  const v = hash === -1 ? trimmed : trimmed.slice(0, hash);
   const comma = v.indexOf(',');
   if (!/^data:/i.test(v) || comma < 0) throw new Error(MALFORMED_DATA_URI_MESSAGE);
   const meta = v.slice(5, comma);
   const body = v.slice(comma + 1);
   try {
     if (/;base64$/i.test(meta)) {
-      const bin = atob(body.replace(/\s+/g, ''));
+      // Percent escapes may also encode ordinary base64 characters, e.g. %2F.
+      const encoded = body.includes('%') ? decodeURIComponent(body) : body;
+      const bin = atob(encoded.replace(/\s+/g, ''));
       const out = new Uint8Array(bin.length);
       for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
       return out;
     }
-    return new Uint8Array(new TextEncoder().encode(decodeURIComponent(body)));
+    // A percent escape represents one octet, which may be invalid UTF-8.
+    // Encode literal text once, then compact escaped bytes in the same array.
+    const bytes = new TextEncoder().encode(body);
+    let written = 0;
+    for (let i = 0; i < bytes.length; i++) {
+      let value = bytes[i];
+      if (value === 0x25) {
+        if (i + 2 >= bytes.length) throw new Error(MALFORMED_DATA_URI_MESSAGE);
+        const high = hexDigit(bytes[++i]);
+        const low = hexDigit(bytes[++i]);
+        if (high < 0 || low < 0) throw new Error(MALFORMED_DATA_URI_MESSAGE);
+        value = high * 16 + low;
+      }
+      bytes[written++] = value;
+    }
+    return bytes.subarray(0, written);
   } catch {
     throw new Error(MALFORMED_DATA_URI_MESSAGE);
   }
@@ -366,40 +393,90 @@ const UNSUPPORTED_GLTF_VERSION_MESSAGE =
 
 const DRACO_EXTENSION = 'KHR_draco_mesh_compression';
 
+const MESHOPT_EXTENSIONS: ReadonlySet<unknown> = new Set(['EXT_meshopt_compression', 'KHR_meshopt_compression']);
+
+const MESHOPT_MESSAGE =
+  'This glTF requires meshopt compression, which this viewer does not decode, so its points cannot be read. ' +
+  'Re-export the model without meshopt compression, or as a PLY or OBJ file.';
+
 const DRACO_MESSAGE =
   'This glTF uses Draco mesh compression (KHR_draco_mesh_compression). The Draco decoder is not bundled ' +
   'with this viewer and no decoder is downloaded, so the mesh cannot be read. Re-export the model without ' +
   'Draco compression, or as a PLY or OBJ file.';
 
-/** Bytes per glTF accessor component type; unknown types are costed as 4. */
+/** Length of the GLB binary payload, verified against the actual file bounds. */
+function glbBinLength(file: ArrayBuffer): number | undefined {
+  if (file.byteLength < 28 || !hasGlbMagic(file)) return undefined;
+  const view = new DataView(file);
+  const header = 20 + view.getUint32(12, true);
+  if (header + 8 > file.byteLength || view.getUint32(header + 4, true) !== 0x004e4942) return undefined;
+  const length = view.getUint32(header, true);
+  return header + 8 + length <= file.byteLength ? length : undefined;
+}
+
 const GLTF_COMPONENT_BYTES: Readonly<Record<number, number>> = { 5120: 1, 5121: 1, 5122: 2, 5123: 2, 5125: 4, 5126: 4 };
-/** Components per glTF accessor type; unknown types are costed as 16. */
 const GLTF_TYPE_COMPONENTS: Readonly<Record<string, number>> = {
   SCALAR: 1, VEC2: 2, VEC3: 3, VEC4: 4, MAT2: 4, MAT3: 9, MAT4: 16,
 };
+
+interface StorageView {
+  buffer: number;
+  byteLength: number;
+  byteOffset?: number;
+  byteStride?: number;
+}
+
+function badStorage(detail: string): never {
+  const message = `This glTF has invalid buffer data. ${detail}`;
+  throw new LoadError('malformed-file', message, message);
+}
+
+function whole(value: unknown): value is number {
+  return typeof value === 'number' && Number.isSafeInteger(value) && value >= 0;
+}
+
+/** A final interleaved element needs its own bytes, not the next element's padding. */
+function assertStorageSpan(
+  views: StorageView[], index: unknown, offset: unknown, count: number,
+  elementStride: number, elementWidth: number, sparse = false,
+): void {
+  const view = whole(index) ? views[index] : undefined;
+  if (!view || !whole(offset)) badStorage('An accessor has an invalid buffer view or byte offset.');
+  const stride = view.byteStride ?? elementStride;
+  if ((sparse && view.byteStride != null) || stride < elementStride) {
+    badStorage('An accessor has an invalid byte stride.');
+  }
+  const available = view.byteLength - offset;
+  if (available < 0 || (count > 0 && count - 1 > Math.floor((available - elementWidth) / stride))) {
+    badStorage('An accessor extends beyond its buffer view.');
+  }
+}
 
 /**
  * Refuse a glTF whose JSON asks for work the file cannot back, BEFORE
  * loaders.gl parses it.
  *
- * The parser allocates a zero-filled typed array for an accessor that has no
- * `bufferView` (the spec's zero-initialised accessor) and for a sparse
- * accessor's base, sized from the declared `count`. A ~400-byte GLB declaring
- * 300 million VEC3 floats therefore reserved 3.6 GB before the vertex cap was
- * consulted. An accessor that does have a `bufferView` is a view into bytes
- * already in the file, so its count cannot allocate more than the file holds
- * and is left to the parser.
+ * The parser allocates a declared buffer that has no data, and a zero-filled
+ * typed array for an accessor with no `bufferView` and for a sparse accessor's
+ * base, sized from the declared `count`. A ~400-byte GLB declaring 300 million
+ * VEC3 floats therefore reserved 3.6 GB before the vertex cap was consulted.
+ * It also copies every accessor once, used or not, so many accessors over one
+ * view multiply the bytes in the file. A declared span the buffer does not
+ * hold reads as zeros or as the next view's bytes, which are points the file
+ * never gave, so it is refused rather than read.
  *
- * The zero-filled bytes of all such accessors together are held to
- * `maxVertices * 12` (the size of the POSITION array the vertex cap itself
- * permits), so no accessor and no sum of them can exceed what a conforming
- * open could emit. Draco-compressed meshes are refused here too: the decoder is
- * not bundled and loaders.gl would otherwise fetch it from a CDN.
+ * The bytes the buffers do not back are held to `maxVertices * 12` (the size of
+ * the POSITION array the vertex cap itself permits). Compression the viewer
+ * cannot decode is refused here too: the Draco decoder is not bundled and
+ * loaders.gl would otherwise fetch it from a CDN, and a meshopt buffer view
+ * would read as zeros.
  */
-function assertGltfJsonAdmissible(document: unknown, maxVertices: number): void {
+function assertGltfJsonAdmissible(document: unknown, maxVertices: number, binLength?: number): void {
   const doc = document as {
     extensionsUsed?: unknown;
     extensionsRequired?: unknown;
+    buffers?: { byteLength: number; uri?: string }[];
+    bufferViews?: StorageView[];
     accessors?: unknown;
   } | null;
   if (!doc || typeof doc !== 'object') return;
@@ -409,38 +486,84 @@ function assertGltfJsonAdmissible(document: unknown, maxVertices: number): void 
       throw new LoadError('unsupported-format', DRACO_MESSAGE, DRACO_MESSAGE);
     }
   }
+  if (Array.isArray(doc.extensionsRequired) && doc.extensionsRequired.some((x) => MESHOPT_EXTENSIONS.has(x))) {
+    throw new LoadError('unsupported-format', MESHOPT_MESSAGE, MESHOPT_MESSAGE);
+  }
 
+  const buffers = doc.buffers ?? [];
+  const views = doc.bufferViews ?? [];
+  if (!Array.isArray(buffers) || !Array.isArray(views)) badStorage('Invalid buffer table.');
+  for (const [i, buffer] of buffers.entries()) {
+    if (!whole(buffer?.byteLength)) badStorage('Invalid buffer length.');
+    if (buffer.uri == null) {
+      // Otherwise loaders.gl allocates this declared size even for a tiny JSON file.
+      if (buffer.byteLength > 0 && (i !== 0 || binLength === undefined || binLength < buffer.byteLength)) {
+        badStorage('A buffer has no matching binary chunk.');
+      }
+    } else if (typeof buffer.uri !== 'string' || !/^data:/i.test(buffer.uri.trim())) {
+      badStorage('A buffer has no embedded data.');
+    }
+  }
+  for (const view of views) {
+    const parent = whole(view?.buffer) ? buffers[view.buffer] : undefined;
+    const offset = view?.byteOffset ?? 0;
+    if (!parent || !whole(offset) || !whole(view.byteLength) || view.byteLength > parent.byteLength - offset) {
+      badStorage('A buffer view extends beyond its buffer.');
+    }
+    const stride = view.byteStride;
+    if (stride != null && (!whole(stride) || stride < 4 || stride > 252 || stride % 4)) {
+      badStorage('Invalid buffer view byte stride.');
+    }
+  }
   if (!Array.isArray(doc.accessors)) return;
   const budget = maxVertices * 12;
-  let synthesised = 0;
+  // postProcessGLTF copies each accessor once, even if unused. Reusing one
+  // accessor in several primitives or nodes does not create another parser copy.
+  const backingLeft = buffers.map(buffer => buffer.byteLength);
+  let extraBytes = 0;
   for (const raw of doc.accessors) {
     const acc = raw as {
-      count?: unknown;
-      bufferView?: unknown;
-      componentType?: unknown;
-      type?: unknown;
-      sparse?: { count?: unknown } | null;
-    } | null;
-    if (!acc || typeof acc !== 'object') continue;
-    const count = acc.count;
-    if (typeof count !== 'number' || !Number.isSafeInteger(count) || count < 0) {
-      throw new LoadError('malformed-file', 'glTF accessor declares a count that is not a non-negative whole number.');
+      count: number; bufferView?: number; byteOffset?: number; componentType: number; type: string;
+      sparse?: { count: number; indices: { bufferView: number; byteOffset?: number; componentType: number }; values: { bufferView: number; byteOffset?: number } };
+    };
+    if (!whole(acc?.count)) badStorage('An accessor declares an invalid count.');
+    const componentBytes = GLTF_COMPONENT_BYTES[acc.componentType];
+    const components = GLTF_TYPE_COMPONENTS[acc.type];
+    if (!whole(acc.componentType) || typeof acc.type !== 'string' || !whole(componentBytes) || !whole(components)) {
+      badStorage('An accessor declares an invalid component type.');
     }
-    const sparseCount = acc.sparse && typeof acc.sparse === 'object' ? acc.sparse.count : undefined;
-    if (sparseCount !== undefined && (typeof sparseCount !== 'number' || !Number.isSafeInteger(sparseCount) || sparseCount < 0)) {
-      throw new LoadError('malformed-file', 'glTF sparse accessor declares a count that is not a non-negative whole number.');
+    // Matrix columns align to four bytes. Trailing padding may be omitted after the final column.
+    const columns = acc.type.startsWith('MAT') ? Math.sqrt(components) : 1;
+    const columnBytes = componentBytes * (components / columns);
+    const columnStride = columns > 1 ? 4 * Math.ceil(columnBytes / 4) : columnBytes;
+    const stride = columns * columnStride;
+    const width = stride - columnStride + columnBytes;
+    let charged = acc.count * componentBytes * components;
+    if (acc.bufferView != null) {
+      assertStorageSpan(views, acc.bufferView, acc.byteOffset ?? 0, acc.count, stride, width);
+      if (acc.sparse == null) {
+        const bufferIndex = views[acc.bufferView].buffer;
+        const covered = Math.min(charged, backingLeft[bufferIndex]);
+        backingLeft[bufferIndex] -= covered;
+        charged -= covered;
+      }
     }
-    if (acc.bufferView !== undefined && sparseCount === undefined) continue;
-    const bytes =
-      count *
-      (GLTF_COMPONENT_BYTES[acc.componentType as number] ?? 4) *
-      (GLTF_TYPE_COMPONENTS[acc.type as string] ?? 16);
-    synthesised += bytes;
-    if (!Number.isFinite(synthesised) || synthesised > budget) {
-      throw new LoadError(
-        'memory-constraint',
-        `glTF asset declares accessors that would be zero-filled to more than ${budget} bytes without any data in the file; it is too large to open.`,
-      );
+    // Preserve the synthetic/sparse limit. Duplicate backed materializations
+    // above the physical buffer's size draw from that same allocation allowance.
+    extraBytes += charged;
+    if (extraBytes > budget) {
+      throw new LoadError('memory-constraint', `glTF accessor copies and zero-filled data exceed the ${budget}-byte extra allocation limit; this model is too large to open.`);
+    }
+    if (acc.sparse != null) {
+      const sparse = acc.sparse;
+      if (!whole(sparse?.count) || sparse.count > acc.count || !sparse.indices || !sparse.values) {
+        badStorage('Invalid sparse accessor.');
+      }
+      if (![5121, 5123, 5125].includes(sparse.indices.componentType)) badStorage('Invalid sparse index type.');
+      const indexBytes = GLTF_COMPONENT_BYTES[sparse.indices.componentType];
+      const { indices, values } = sparse;
+      assertStorageSpan(views, indices.bufferView, indices.byteOffset ?? 0, sparse.count, indexBytes, indexBytes, true);
+      assertStorageSpan(views, values.bufferView, values.byteOffset ?? 0, sparse.count, stride, width, true);
     }
   }
 }
@@ -478,8 +601,8 @@ export async function loadGltf(
   if (document !== null && !(typeof version === 'string' && /^2\./.test(version))) {
     throw new LoadError('unsupported-format', UNSUPPORTED_GLTF_VERSION_MESSAGE, UNSUPPORTED_GLTF_VERSION_MESSAGE);
   }
-  if (externalGltfUris(document).length > 0) throw new Error(EXTERNAL_GLTF_MESSAGE);
-  assertGltfJsonAdmissible(document, options.maxVertices ?? MAX_GLTF_VERTICES);
+  if (externalGltfUris(document).length > 0) throw new LoadError('unsupported-format', EXTERNAL_GLTF_MESSAGE, EXTERNAL_GLTF_MESSAGE);
+  assertGltfJsonAdmissible(document, options.maxVertices ?? MAX_GLTF_VERTICES, glbBinLength(buffer));
   const raw = await parse(buffer, GLTFLoader, {
     ...LOCAL_ONLY_LOADER_OPTIONS,
     fetch: dataUriOnlyFetch,
@@ -501,11 +624,21 @@ export async function loadGltf(
     // hands us one file, not the sibling. Surface a precise, actionable message
     // instead of loaders.gl's internal "'baseUrl' must be provided…" error.
     const msg = err instanceof Error ? err.message : String(err);
-    if (/baseUrl/i.test(msg)) {
-      throw new Error(EXTERNAL_GLTF_MESSAGE);
+    if (/baseUrl/i.test(msg) || msg.includes(EXTERNAL_GLTF_MESSAGE)) {
+      throw new LoadError('unsupported-format', EXTERNAL_GLTF_MESSAGE, EXTERNAL_GLTF_MESSAGE);
+    }
+    if (msg.includes(MALFORMED_DATA_URI_MESSAGE)) {
+      throw new LoadError('malformed-file', MALFORMED_DATA_URI_MESSAGE, MALFORMED_DATA_URI_MESSAGE);
     }
     throw err;
   });
+  // The declarations have passed inspection. Check the decoded octets before
+  // postProcessGLTF copies strided accessors and can silently fill missing bytes.
+  for (const [i, declared] of (raw.json.buffers ?? []).entries()) {
+    if (!raw.buffers[i] || raw.buffers[i].byteLength < declared.byteLength) {
+      badStorage('An embedded buffer is shorter than its declared length.');
+    }
+  }
   const gltf = postProcessGLTF(raw) as unknown as {
     /**
      * The DEFAULT scene, already dereferenced. glTF's top-level `scene` is an
