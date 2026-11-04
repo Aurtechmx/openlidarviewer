@@ -38,6 +38,9 @@ beforeEach(() => {
   const g = globalThis as unknown as Record<string, unknown>;
   g.requestAnimationFrame = (fn: () => void): number => frames.push(fn);
   g.window = {
+    // The stored chart's dialog, which opens in place of a refused dock, listens here.
+    addEventListener: () => {},
+    removeEventListener: () => {},
     innerWidth: 1440,
     innerHeight: 900,
     devicePixelRatio: 1,
@@ -232,17 +235,21 @@ describe('the mount hands the presenter the corridor generator', () => {
 });
 
 describe('the dock opens only on a settled source', () => {
-  const pressExpand = (r: Rig): void => {
+  /** Press Expand, then wait for the stored chart's dialog, which opens in place of a refused dock. */
+  const pressExpandAndFallBack = async (r: Rig): Promise<void> => {
+    const body = new FakeEl('body');
+    (globalThis as unknown as { document: { body: FakeEl } }).document.body = body;
     const expand = (r.mount.panel!.element as unknown as FakeEl).querySelector('button.olv-mp-chart-expand');
     expand!.dispatchEvent({ type: 'click', stopPropagation: () => {} });
+    await settleUntil(() => body.querySelector('div.olv-result-focus') !== null);
+    expect(body.querySelector('div.olv-result-focus')).not.toBeNull();
   };
 
   it('says why and walks nothing when the source is not open', async () => {
     const r = rig(1);
     await r.mount.ensure();
     r.profile.pickLayers = ['closed-scan'];
-    pressExpand(r);
-    await settleUntil(() => r.toast.mock.calls.length > 0);
+    await pressExpandAndFallBack(r);
 
     expect(r.toast.mock.calls[0]![0]).toMatch(/is not open/);
     expect(dockOf(r)).toBeNull();
@@ -257,8 +264,7 @@ describe('the dock opens only on a settled source', () => {
       r.profile.pickLayers = ['closed-scan'];
       return walk(...args);
     });
-    pressExpand(r);
-    await settleUntil(() => r.toast.mock.calls.length > 0);
+    await pressExpandAndFallBack(r);
 
     expect(r.toast.mock.calls[0]![0]).toMatch(/is not open/);
     expect(dockOf(r)).toBeNull();
