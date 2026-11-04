@@ -269,25 +269,69 @@ function stagePrimitive({ primitive, src, world, vertexCount }: PlacedPrimitive,
   out.at += vertexCount;
 }
 
+const GLB_CHUNK_JSON = 0x4e4f534a;
+const GLB_CHUNK_BIN = 0x004e4942;
+// Chunk types loaders.gl still reads as JSON and BIN for very old files.
+const GLB_CHUNK_JSON_LEGACY = 0;
+const GLB_CHUNK_BIN_LEGACY = 1;
+
+function badGlb(detail: string): never {
+  throw new LoadError('malformed-file', detail, detail);
+}
+
+interface GlbChunks {
+  /** The one JSON chunk's bytes. */
+  readonly json: Uint8Array;
+  /** Length of the binary chunk, when the file has one. */
+  readonly binLength?: number;
+}
+
 /**
- * The glTF JSON of a `.gltf` file or of a GLB's first (JSON) chunk, or null
- * when it cannot be read; loaders.gl then reports the malformed file itself.
+ * The chunks of a GLB, walked exactly as loaders.gl walks them: up to the
+ * header's byte length (not the file's), each chunk's length padded to four
+ * bytes, unknown chunk types skipped. The admission check below reads what
+ * this returns, so it judges the same document and the same binary data the
+ * parser will use. A file with two JSON chunks is refused outright: the
+ * parser keeps the last, and checking one document while parsing another is
+ * how a declaration the file cannot back got through.
  */
-function gltfJson(buffer: ArrayBuffer, sourceFormat: 'glb' | 'gltf'): unknown {
-  try {
-    const bytes = new Uint8Array(buffer);
-    let text: string;
-    if (sourceFormat === 'glb' || (bytes.length >= 4 && bytes[0] === 0x67 && bytes[1] === 0x6c && bytes[2] === 0x54 && bytes[3] === 0x46)) {
-      if (bytes.length < 20) return null;
-      const view = new DataView(buffer);
-      const chunkLength = view.getUint32(12, true);
-      const chunkType = view.getUint32(16, true);
-      if (chunkType !== 0x4e4f534a || 20 + chunkLength > bytes.length) return null; // 'JSON'
-      text = new TextDecoder().decode(bytes.subarray(20, 20 + chunkLength));
-    } else {
-      text = new TextDecoder().decode(bytes);
+function glbChunks(file: ArrayBuffer): GlbChunks {
+  if (file.byteLength < 20) badGlb('This GLB has no readable JSON chunk.');
+  const view = new DataView(file);
+  // A glTF 1.0 GLB lays its content out differently; the viewer reads only 2.0.
+  if (view.getUint32(4, true) !== 2) {
+    throw new LoadError('unsupported-format', UNSUPPORTED_GLTF_VERSION_MESSAGE, UNSUPPORTED_GLTF_VERSION_MESSAGE);
+  }
+  const total = view.getUint32(8, true);
+  if (total > file.byteLength) badGlb('This GLB declares more bytes than the file holds.');
+  let offset = 12;
+  let json: Uint8Array | undefined;
+  let jsonChunks = 0;
+  let binLength: number | undefined;
+  let binChunks = 0;
+  while (offset + 8 <= total) {
+    const length = view.getUint32(offset, true);
+    const type = view.getUint32(offset + 4, true);
+    offset += 8;
+    if (offset + length > file.byteLength) badGlb('A GLB chunk extends beyond the file.');
+    if (type === GLB_CHUNK_JSON || type === GLB_CHUNK_JSON_LEGACY) {
+      jsonChunks++;
+      json = new Uint8Array(file, offset, length);
+    } else if (type === GLB_CHUNK_BIN || type === GLB_CHUNK_BIN_LEGACY) {
+      binChunks++;
+      binLength = length;
     }
-    return JSON.parse(text);
+    offset += 4 * Math.ceil(length / 4);
+  }
+  if (!json || jsonChunks !== 1) badGlb(json ? 'This GLB has more than one JSON chunk.' : 'This GLB has no readable JSON chunk.');
+  if (binChunks > 1) badGlb('This GLB has more than one binary chunk.');
+  return binLength === undefined ? { json } : { json, binLength };
+}
+
+/** The parsed glTF JSON, or null when the bytes are not JSON. */
+function parseGltfJson(bytes: Uint8Array): unknown {
+  try {
+    return JSON.parse(new TextDecoder().decode(bytes));
   } catch {
     return null;
   }
@@ -393,7 +437,7 @@ const UNSUPPORTED_GLTF_VERSION_MESSAGE =
 
 const DRACO_EXTENSION = 'KHR_draco_mesh_compression';
 
-const MESHOPT_EXTENSIONS: ReadonlySet<unknown> = new Set(['EXT_meshopt_compression', 'KHR_meshopt_compression']);
+const MESHOPT_EXTENSIONS: ReadonlySet<string> = new Set(['EXT_meshopt_compression', 'KHR_meshopt_compression']);
 
 const MESHOPT_MESSAGE =
   'This glTF requires meshopt compression, which this viewer does not decode, so its points cannot be read. ' +
@@ -403,16 +447,6 @@ const DRACO_MESSAGE =
   'This glTF uses Draco mesh compression (KHR_draco_mesh_compression). The Draco decoder is not bundled ' +
   'with this viewer and no decoder is downloaded, so the mesh cannot be read. Re-export the model without ' +
   'Draco compression, or as a PLY or OBJ file.';
-
-/** Length of the GLB binary payload, verified against the actual file bounds. */
-function glbBinLength(file: ArrayBuffer): number | undefined {
-  if (file.byteLength < 28 || !hasGlbMagic(file)) return undefined;
-  const view = new DataView(file);
-  const header = 20 + view.getUint32(12, true);
-  if (header + 8 > file.byteLength || view.getUint32(header + 4, true) !== 0x004e4942) return undefined;
-  const length = view.getUint32(header, true);
-  return header + 8 + length <= file.byteLength ? length : undefined;
-}
 
 const GLTF_COMPONENT_BYTES: Readonly<Record<number, number>> = { 5120: 1, 5121: 1, 5122: 2, 5123: 2, 5125: 4, 5126: 4 };
 const GLTF_TYPE_COMPONENTS: Readonly<Record<string, number>> = {
@@ -442,8 +476,10 @@ function assertStorageSpan(
 ): void {
   const view = whole(index) ? views[index] : undefined;
   if (!view || !whole(offset)) badStorage('An accessor has an invalid buffer view or byte offset.');
-  const stride = view.byteStride ?? elementStride;
-  if ((sparse && view.byteStride != null) || stride < elementStride) {
+  // The parser treats a stride of 0 as none, and reads any other stride wide
+  // enough for the element from where it says, aligned or not.
+  const stride = view.byteStride || elementStride;
+  if ((sparse && view.byteStride) || stride < elementStride) {
     badStorage('An accessor has an invalid byte stride.');
   }
   const available = view.byteLength - offset;
@@ -475,7 +511,7 @@ function assertGltfJsonAdmissible(document: unknown, maxVertices: number, binLen
   const doc = document as {
     extensionsUsed?: unknown;
     extensionsRequired?: unknown;
-    buffers?: { byteLength: number; uri?: string }[];
+    buffers?: { byteLength: number; uri?: string; extensions?: Record<string, { fallback?: unknown } | undefined> }[];
     bufferViews?: StorageView[];
     accessors?: unknown;
   } | null;
@@ -486,7 +522,7 @@ function assertGltfJsonAdmissible(document: unknown, maxVertices: number, binLen
       throw new LoadError('unsupported-format', DRACO_MESSAGE, DRACO_MESSAGE);
     }
   }
-  if (Array.isArray(doc.extensionsRequired) && doc.extensionsRequired.some((x) => MESHOPT_EXTENSIONS.has(x))) {
+  if (Array.isArray(doc.extensionsRequired) && doc.extensionsRequired.some((x) => typeof x === 'string' && MESHOPT_EXTENSIONS.has(x))) {
     throw new LoadError('unsupported-format', MESHOPT_MESSAGE, MESHOPT_MESSAGE);
   }
 
@@ -495,6 +531,13 @@ function assertGltfJsonAdmissible(document: unknown, maxVertices: number, binLen
   if (!Array.isArray(buffers) || !Array.isArray(views)) badStorage('Invalid buffer table.');
   for (const [i, buffer] of buffers.entries()) {
     if (!whole(buffer?.byteLength)) badStorage('Invalid buffer length.');
+    // A meshopt fallback buffer holds no data of its own: its views are meant to
+    // be decoded from the compressed buffer, which this viewer does not do.
+    for (const name of MESHOPT_EXTENSIONS) {
+      if (buffer.extensions?.[name]?.fallback === true) {
+        throw new LoadError('unsupported-format', MESHOPT_MESSAGE, MESHOPT_MESSAGE);
+      }
+    }
     if (buffer.uri == null) {
       // Otherwise loaders.gl allocates this declared size even for a tiny JSON file.
       if (buffer.byteLength > 0 && (i !== 0 || binLength === undefined || binLength < buffer.byteLength)) {
@@ -510,10 +553,7 @@ function assertGltfJsonAdmissible(document: unknown, maxVertices: number, binLen
     if (!parent || !whole(offset) || !whole(view.byteLength) || view.byteLength > parent.byteLength - offset) {
       badStorage('A buffer view extends beyond its buffer.');
     }
-    const stride = view.byteStride;
-    if (stride != null && (!whole(stride) || stride < 4 || stride > 252 || stride % 4)) {
-      badStorage('Invalid buffer view byte stride.');
-    }
+    if (view.byteStride != null && !whole(view.byteStride)) badStorage('Invalid buffer view byte stride.');
   }
   if (!Array.isArray(doc.accessors)) return;
   const budget = maxVertices * 12;
@@ -593,8 +633,9 @@ export async function loadGltf(
   // textures (loaders.gl excludes an extension whose key maps to `false`).
   // Refuse before parsing: nothing outside the file is requested.
   // The JSON is decoded and parsed once; both checks read the same document.
-  const document = gltfJson(buffer, sourceFormat);
-  if (document === null && (sourceFormat === 'glb' || hasGlbMagic(buffer))) {
+  const glb = sourceFormat === 'glb' || hasGlbMagic(buffer) ? glbChunks(buffer) : null;
+  const document = parseGltfJson(glb ? glb.json : new Uint8Array(buffer));
+  if (document === null && glb) {
     throw new LoadError('malformed-file', 'This GLB has no readable JSON chunk.');
   }
   const version = (document as { asset?: { version?: unknown } } | null)?.asset?.version;
@@ -602,7 +643,7 @@ export async function loadGltf(
     throw new LoadError('unsupported-format', UNSUPPORTED_GLTF_VERSION_MESSAGE, UNSUPPORTED_GLTF_VERSION_MESSAGE);
   }
   if (externalGltfUris(document).length > 0) throw new LoadError('unsupported-format', EXTERNAL_GLTF_MESSAGE, EXTERNAL_GLTF_MESSAGE);
-  assertGltfJsonAdmissible(document, options.maxVertices ?? MAX_GLTF_VERTICES, glbBinLength(buffer));
+  assertGltfJsonAdmissible(document, options.maxVertices ?? MAX_GLTF_VERTICES, glb?.binLength);
   const raw = await parse(buffer, GLTFLoader, {
     ...LOCAL_ONLY_LOADER_OPTIONS,
     fetch: dataUriOnlyFetch,

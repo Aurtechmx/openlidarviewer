@@ -237,3 +237,56 @@ test.describe('profile workbench', () => {
     await expect(reason).toContainText("Select the profile's source");
   });
 });
+
+test.describe('a profile whose scan is removed', () => {
+  /** dense-grid holds the profile; tiny.las joins and becomes the active scan. */
+  async function addSecondScan(page: Page): Promise<void> {
+    await showWorkspaceMode(page, 'data');
+    const chooser = page.waitForEvent('filechooser');
+    await page.locator('.olv-add-dataset-row').click();
+    await (await chooser).setFiles('tests/fixtures/tiny.las');
+    await expect(page.locator('.olv-layer')).toHaveCount(2, { timeout: 60_000 });
+    await expect(page.locator('.olv-layer.is-active-layer .olv-layer-name')).toContainText('tiny');
+  }
+
+  async function removeScan(page: Page, name: string): Promise<void> {
+    await showWorkspaceMode(page, 'data');
+    await page.locator('.olv-layer', { hasText: name }).locator('.olv-layer-x').click();
+    await expect(page.locator('.olv-layer')).toHaveCount(1);
+  }
+
+  test('loses its exports when the scan is removed while another is active', async ({ page }) => {
+    // The refusal checks run only when the measure panel refreshes, so removing
+    // a scan that was not active left a profile's CSV and PDF buttons enabled
+    // with no source behind them.
+    await placeProfile(page);
+    await addSecondScan(page);
+    await openToolPage(page, 'Measure');
+    const csv = page.locator('.olv-mp-profile-pdf', { hasText: 'CSV' });
+    const pdf = page.locator('.olv-mp-profile-pdf', { hasText: 'Export PDF' });
+    await expect(csv).toBeVisible();
+    await expect(csv).not.toHaveAttribute('title', /is not open/);
+
+    await removeScan(page, 'dense-grid');
+    await expect(page.locator('.olv-layer.is-active-layer .olv-layer-name')).toContainText('tiny');
+    await openToolPage(page, 'Measure');
+    await expect(csv).toBeDisabled();
+    await expect(csv).toHaveAttribute('title', /is not open/);
+    await expect(pdf).toBeDisabled();
+  });
+
+  test('closes its dock when the scan it is a section of is removed', async ({ page }) => {
+    await placeProfile(page);
+    await addSecondScan(page);
+    await page.locator('.olv-layer-name', { hasText: 'dense-grid' }).click();
+    await expect(page.locator('.olv-layer.is-active-layer .olv-layer-name')).toContainText('dense-grid');
+    await openToolPage(page, 'Measure');
+    await openWorkbench(page);
+    await expect(page.locator('.olv-workbench-canvas')).toBeVisible();
+
+    await removeScan(page, 'dense-grid');
+    await expect(page.locator('.olv-layer.is-active-layer .olv-layer-name')).toContainText('tiny');
+    await expect(page.locator('.olv-workbench')).toHaveCount(0);
+    await expect(page.locator('.olv-lasso-toast')).toContainText('is not open');
+  });
+});

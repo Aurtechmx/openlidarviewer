@@ -211,15 +211,6 @@ describe('loadGltf — meshopt the viewer cannot decode', () => {
     });
     await expect(loadGltf(glb(json, new Uint8Array(12)), 'glb')).rejects.toMatchObject({ category: 'unsupported-format', message: expect.stringMatching(/meshopt/) });
   });
-
-  test('a fallback buffer with no data is refused rather than read as zeros', async () => {
-    const json = doc({ count: 3, bufferView: 0 }, {
-      extensionsUsed: ['EXT_meshopt_compression'],
-      buffers: [{ byteLength: 36 }, { byteLength: 36, extensions: { EXT_meshopt_compression: { fallback: true } } }],
-      bufferViews: [{ buffer: 1, byteLength: 36 }],
-    });
-    await expect(loadGltf(glb(json, new Uint8Array(36)), 'glb')).rejects.toMatchObject({ category: 'malformed-file' });
-  });
 });
 
 describe('loadGltf — bounded copies of backed accessors', () => {
@@ -243,5 +234,133 @@ describe('loadGltf — bounded copies of backed accessors', () => {
   test('refuses excess copies, including unused accessors, before the parser allocates them', async () => {
     await expect(interleaved(2, 2)).rejects.toMatchObject({ category: 'memory-constraint' });
     expect((await interleaved(2, 4)).pointCount).toBe(2);
+  });
+});
+
+/**
+ * Lay out GLB chunks exactly as given: the header length is `declared` when
+ * set (the parser stops there); each chunk is [length, type, bytes], with the
+ * length field as given and the bytes padded to four.
+ */
+function rawGlb(chunks: { type: number; bytes: Uint8Array }[], declared?: number): ArrayBuffer {
+  const sizes = chunks.map((c) => 8 + Math.ceil(c.bytes.length / 4) * 4);
+  const total = 12 + sizes.reduce((a, b) => a + b, 0);
+  const out = new ArrayBuffer(total);
+  const v = new DataView(out);
+  v.setUint32(0, 0x46546c67, true);
+  v.setUint32(4, 2, true);
+  v.setUint32(8, declared ?? total, true);
+  let o = 12;
+  chunks.forEach((c, i) => {
+    v.setUint32(o, c.bytes.length, true);
+    v.setUint32(o + 4, c.type, true);
+    new Uint8Array(out, o + 8, c.bytes.length).set(c.bytes);
+    o += sizes[i]!;
+  });
+  return out;
+}
+
+const JSON_CHUNK = 0x4e4f534a;
+const BIN_CHUNK = 0x004e4942;
+const jsonBytes = (json: object): Uint8Array => new TextEncoder().encode(JSON.stringify(json));
+/** JSON padded with spaces to a four-byte length, as exporters write it. */
+const paddedJson = (json: object): Uint8Array => {
+  const j = jsonBytes(json);
+  const out = new Uint8Array(Math.ceil(j.length / 4) * 4).fill(0x20);
+  out.set(j);
+  return out;
+};
+
+describe('loadGltf — the admission check walks the chunks the parser reads', () => {
+  const tri = new Uint8Array(new Float32Array([0, 0, 0, 1, 0, 0, 0, 1, 0]).buffer);
+  const backed = doc({ count: 3, bufferView: 0 }, {
+    buffers: [{ byteLength: 36 }], bufferViews: [{ buffer: 0, byteLength: 36 }],
+  });
+
+  test('a binary chunk past the header length is not a backing: the file is refused, not read as zeros', async () => {
+    const j = paddedJson(backed);
+    const headerEndsBeforeBin = 12 + 8 + j.length;
+    const file = rawGlb([{ type: JSON_CHUNK, bytes: j }, { type: BIN_CHUNK, bytes: tri }], headerEndsBeforeBin);
+    await expect(loadGltf(file, 'glb')).rejects.toMatchObject({ name: 'LoadError', category: 'malformed-file' });
+  });
+
+  test('a second JSON chunk is refused rather than checked on one document and parsed on another', async () => {
+    const zeroFilled = doc({ count: 3 });
+    const file = rawGlb([
+      { type: JSON_CHUNK, bytes: paddedJson(backed) },
+      { type: BIN_CHUNK, bytes: tri },
+      { type: JSON_CHUNK, bytes: paddedJson(zeroFilled) },
+    ]);
+    await expect(loadGltf(file, 'glb')).rejects.toMatchObject({ name: 'LoadError', category: 'malformed-file' });
+  });
+
+  test('an unpadded JSON length and an unknown chunk before the binary one still open', async () => {
+    // The length field says 37; the chunk occupies 40 bytes. The parser pads
+    // the length when it steps to the next chunk, so the file reads correctly.
+    const j = jsonBytes(backed);
+    expect(j.length % 4, 'the fixture must need padding').not.toBe(0);
+    const unpadded = rawGlb([{ type: JSON_CHUNK, bytes: j }, { type: BIN_CHUNK, bytes: tri }]);
+    expect([...(await loadGltf(unpadded, 'glb')).positions]).toEqual([...new Float32Array(tri.buffer)]);
+    const unknownFirst = rawGlb([
+      { type: JSON_CHUNK, bytes: paddedJson(backed) },
+      { type: 0x58595a00, bytes: new Uint8Array([1, 2, 3, 4, 5]) },
+      { type: BIN_CHUNK, bytes: tri },
+    ]);
+    expect([...(await loadGltf(unknownFirst, 'glb')).positions]).toEqual([...new Float32Array(tri.buffer)]);
+  });
+
+  test('a GLB whose header claims more bytes than the file holds is refused as malformed', async () => {
+    const file = rawGlb([{ type: JSON_CHUNK, bytes: paddedJson(backed) }, { type: BIN_CHUNK, bytes: tri }], 1 << 20);
+    await expect(loadGltf(file, 'glb')).rejects.toMatchObject({ name: 'LoadError', category: 'malformed-file' });
+  });
+});
+
+describe('loadGltf — byte strides the parser reads correctly keep opening', () => {
+  test('a byteStride of 0 reads as no interleaving', async () => {
+    const tri = new Uint8Array(new Float32Array([0, 0, 0, 1, 0, 0, 0, 1, 0]).buffer);
+    const json = doc({ count: 3, bufferView: 0 }, {
+      buffers: [{ byteLength: 36 }], bufferViews: [{ buffer: 0, byteLength: 36, byteStride: 0 }],
+    });
+    expect([...(await loadGltf(glb(json, tri), 'glb')).positions]).toEqual([0, 0, 0, 1, 0, 0, 0, 1, 0]);
+  });
+
+  test('a stride that is not a multiple of four reads each element where it is', async () => {
+    // Three 12-byte VEC3s at 14-byte intervals: 2 padding bytes after each.
+    const bytes = new Uint8Array(14 * 2 + 12);
+    const pts = [[0, 0, 0], [1, 0, 0], [0, 1, 0]];
+    pts.forEach((p, i) => bytes.set(new Uint8Array(new Float32Array(p).buffer), i * 14));
+    const json = doc({ count: 3, bufferView: 0 }, {
+      buffers: [{ byteLength: bytes.length }], bufferViews: [{ buffer: 0, byteLength: bytes.length, byteStride: 14 }],
+    });
+    expect([...(await loadGltf(glb(json, bytes), 'glb')).positions]).toEqual([0, 0, 0, 1, 0, 0, 0, 1, 0]);
+  });
+
+  test('a stride shorter than the element is still refused', async () => {
+    const json = doc({ count: 3, bufferView: 0 }, {
+      buffers: [{ byteLength: 36 }], bufferViews: [{ buffer: 0, byteLength: 36, byteStride: 8 }],
+    });
+    await expect(loadGltf(glb(json, new Uint8Array(36)), 'glb')).rejects.toMatchObject({ category: 'malformed-file' });
+  });
+});
+
+describe('loadGltf — a meshopt fallback buffer is named as meshopt', () => {
+  test('a fallback buffer flagged by the extension gets the meshopt message, not a corruption one', async () => {
+    const json = doc({ count: 3, bufferView: 0 }, {
+      extensionsUsed: ['EXT_meshopt_compression'],
+      buffers: [{ byteLength: 36 }, { byteLength: 36, extensions: { EXT_meshopt_compression: { fallback: true } } }],
+      bufferViews: [{ buffer: 1, byteLength: 36 }],
+    });
+    await expect(loadGltf(glb(json, new Uint8Array(36)), 'glb')).rejects.toMatchObject({
+      category: 'unsupported-format', message: expect.stringMatching(/meshopt/),
+    });
+  });
+
+  test('a fallback flagged as buffer 0 is refused rather than read from the binary chunk', async () => {
+    const json = doc({ count: 3, bufferView: 0 }, {
+      extensionsUsed: ['EXT_meshopt_compression'],
+      buffers: [{ byteLength: 36, extensions: { EXT_meshopt_compression: { fallback: true } } }],
+      bufferViews: [{ buffer: 0, byteLength: 36 }],
+    });
+    await expect(loadGltf(glb(json, new Uint8Array(36)), 'glb')).rejects.toMatchObject({ category: 'unsupported-format' });
   });
 });

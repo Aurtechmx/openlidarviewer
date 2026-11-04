@@ -44,6 +44,9 @@ export interface ProfileSourceDeps {
   readonly activeName: () => string | null;
 }
 
+/** What the caller wanted the source for; the refusal names that, and the step that retries it. */
+type Purpose = 'export' | 'workbench';
+
 /** The file name without its extension. */
 function baseName(name: string): string {
   const dot = name.lastIndexOf('.');
@@ -60,53 +63,68 @@ function contextOf(cur: ResolvedCrs | null, scanName: string | null): ProfileExp
   return { crs, verticalDatum: crs ? cur?.verticalDatum ?? null : null, scanName };
 }
 
-/** The source of one profile's export. `m` is the profile, or undefined when it is gone. */
-export function profileExportContext(m: OwnedItem | undefined, d: ProfileSourceDeps): ProfileExportContext {
-  if (!m) return { crs: null, verticalDatum: null, scanName: null, refused: 'Not exported: this profile is no longer available.' };
+/** A withheld source. `again` in the text is replaced by the step that retries the caller's action. */
+function refuse(purpose: Purpose, text: string): ProfileExportContext {
+  const again = purpose === 'export' ? 'export again' : 'reopen the Profile Workbench';
+  const head = purpose === 'export' ? 'Not exported' : 'Not opened';
+  return { crs: null, verticalDatum: null, scanName: null, refused: `${head}: ${text.replace('{again}', again)}` };
+}
+
+function sourceOf(m: OwnedItem | undefined, d: ProfileSourceDeps, purpose: Purpose): ProfileExportContext {
+  if (!m) return refuse(purpose, 'this profile is no longer available.');
   const open = d.clouds();
   const ids = ownerIdsOf(m);
   if (ids.length === 0) {
     const stream = d.hasStreamingCloud?.() === true;
     if ((open.length === 1 && !stream && open[0] === d.activeId()) || (open.length === 0 && stream)) return contextOf(d.activeCrs(), d.activeName());
-    if (open.length === 0) return { crs: null, verticalDatum: null, scanName: null, refused: 'Not exported: no source scan is open. Reopen the scan this profile was measured on.' };
-    return { crs: null, verticalDatum: null, scanName: null, refused: 'Not exported: this profile has no record of the scan it was measured on, so its name and coordinate system cannot be settled while several scans are open. Close every scan but the one it was measured on, then export again.' };
+    if (open.length === 0) return refuse(purpose, 'no source scan is open. Reopen the scan this profile was measured on.');
+    return refuse(purpose, 'this profile has no record of the scan it was measured on, so its name and coordinate system cannot be settled while several scans are open. Close every scan but the one it was measured on, then {again}.');
   }
   const active = d.activeId();
   const sources: Array<{ name: string; cur: ResolvedCrs | null }> = [];
   for (const owner of new Set(ids)) {
     const matches = open.filter((id) => d.stableIdFor(id) === owner);
     if (matches.length > 1) {
-      return { crs: null, verticalDatum: null, scanName: null, refused: 'Not exported: more than one open scan matches a recorded source of this profile. Close the duplicate scan, then export again.' };
+      return refuse(purpose, 'more than one open scan matches a recorded source of this profile. Close the duplicate scan, then {again}.');
     }
     const id = matches[0];
     const cloud = id !== undefined ? d.cloud(id) : undefined;
     if (!cloud) {
-      return { crs: null, verticalDatum: null, scanName: null, refused: 'Not exported: a scan this profile was measured on is not open. Reopen every contributing scan, then export again.' };
+      return refuse(purpose, 'a scan this profile was measured on is not open. Reopen every contributing scan, then {again}.');
     }
     sources.push({ name: baseName(cloud.name), cur: id === active ? d.activeCrs() : d.crsOf(cloud) });
   }
+  // One scan is its own frame: nothing to compare, and this runs per row on every panel render.
+  if (sources.length === 1) return contextOf(sources[0]!.cur, sources[0]!.name);
   const frames = sources.map((s, i) => ({ ...compatibilityFrameOf(s.cur), id: String(i) }));
   const firstKey = horizontalKey(frames[0]!);
-  if (frames.length > 1 && frames.some((frame) => {
+  if (frames.some((frame) => {
     const key = horizontalKey(frame);
     return !key || !firstKey || compareHorizontalKeys(firstKey, key) !== 'same';
   })) {
     const list = sources.map((s) => `${s.name} (${crsLabel(s.cur) ?? 'no CRS'})`).join(' and ');
-    return { crs: null, verticalDatum: null, scanName: null, refused: `Not exported: this profile was measured on ${list}, whose horizontal coordinate systems cannot be verified as the same.` };
+    return refuse(purpose, `this profile was measured on ${list}, whose horizontal coordinate systems cannot be verified as the same.`);
   }
   const first = sources[0]!.cur;
   const firstVertical = verticalReferenceKey(frames[0]!);
-  if (sources.length > 1 && sources.some(({ cur }, i) => !firstVertical || verticalReferenceKey(frames[i]!) !== firstVertical ||
+  if (sources.some(({ cur }, i) => !firstVertical || verticalReferenceKey(frames[i]!) !== firstVertical ||
     (cur?.verticalUnitToMetres ?? cur?.linearUnitToMetres) !== (first?.verticalUnitToMetres ?? first?.linearUnitToMetres) ||
     (cur?.verticalAxisDown === true) !== (first?.verticalAxisDown === true))) {
-    return { crs: null, verticalDatum: null, scanName: null, refused: 'Not exported: the contributing scans do not share a vertical reference, unit and axis direction. Their heights cannot be combined in one profile.' };
+    // The vertical reference is read from each file's coordinate system; it
+    // cannot be set here, so the step is a different pick or different files.
+    return refuse(purpose, 'the contributing scans do not share a vertical reference, unit and axis direction, so their heights cannot be combined in one profile. Measure the profile on one scan, or reopen the scans from files whose coordinate system names the same vertical datum, then {again}.');
   }
   return contextOf(first, sources.map((s) => s.name).join('-'));
 }
 
+/** The source of one profile's export. `m` is the profile, or undefined when it is gone. */
+export function profileExportContext(m: OwnedItem | undefined, d: ProfileSourceDeps): ProfileExportContext {
+  return sourceOf(m, d, 'export');
+}
+
 /** The raw section walks the active scene's up, scale and height datum. */
 export function profileWorkbenchSource(m: OwnedItem | undefined, d: ProfileSourceDeps): ProfileExportContext {
-  const source = profileExportContext(m, d);
+  const source = sourceOf(m, d, 'workbench');
   if (source.refused || !m) return source;
   const ids = ownerIdsOf(m);
   const active = d.activeId();
