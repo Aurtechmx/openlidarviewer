@@ -158,7 +158,7 @@ import type {
   ContourExportPermit,
 } from '../export/contourExportPermit';
 import { permitStamp } from '../export/permitStamp';
-import { DENSITY_REF_SAMPLE_NOTE, densityReferenceFloorFor, isSampledBasis, type AnalysedBasis } from '../terrain/export/analysedBasis';
+import { DENSITY_REF_SAMPLE_NOTE, densityReferenceFloorFor, isSampledBasis, readinessOnBasis, type AnalysedBasis } from '../terrain/export/analysedBasis';
 import {
   analysisFreshnessBreach,
   FRESHNESS_REFUSALS,
@@ -1732,10 +1732,11 @@ export class AnalysePanel {
     // a datum-less but clean scan reads "Surface quality: Good · Export
     // readiness: Preview — vertical datum unknown". Colour reuses the rating
     // tokens (good / moderate / blocked), never a new hardcoded colour.
+    const shown = readinessOnBasis(a.exportReadiness, a.exportReason, this._contourFrame?.analysedBasis, this._result?.dtm.coverageMode);
     let exportTier: 'good' | 'blocked' | 'preview';
-    if (a.exportReadiness === 'Ready') {
+    if (shown.tier === 'Ready') {
       exportTier = 'good';
-    } else if (a.exportReadiness === 'Blocked') {
+    } else if (shown.tier === 'Blocked') {
       exportTier = 'blocked';
     } else {
       exportTier = 'preview';
@@ -1743,11 +1744,11 @@ export class AnalysePanel {
     const exportLine = el('div', { className: `olv-analyse-assess-export is-${exportTier}` });
     exportLine.append(
       el('span', { className: 'olv-analyse-assess-export-label', text: 'Export readiness' }),
-      el('span', { className: 'olv-analyse-assess-export-verdict', text: a.exportReadiness }),
+      el('span', { className: 'olv-analyse-assess-export-verdict', text: shown.tier }),
     );
-    if (a.exportReason) {
+    if (shown.reason) {
       exportLine.append(
-        el('span', { className: 'olv-analyse-assess-export-reason', text: `— ${a.exportReason}` }),
+        el('span', { className: 'olv-analyse-assess-export-reason', text: `— ${shown.reason}` }),
       );
     }
     this._assessmentRow.append(exportLine);

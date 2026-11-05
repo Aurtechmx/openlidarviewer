@@ -448,3 +448,24 @@ test.describe('AnnotationPanel — keyboard focus previews the marker like hover
     await expect(marker).not.toHaveClass(/olv-anno-hover/);
   });
 });
+
+test('the editor keeps Save reachable on a phone', async ({ page }) => {
+  await page.setViewportSize({ width: 375, height: 812 });
+  await page.goto('/');
+  await dropDenseGridPly(page);
+  await expect(page.locator('.olv-empty')).toBeHidden({ timeout: 20_000 });
+  await page.getByRole('button', { name: 'Annotate', exact: false }).first().click();
+  const canvas = page.locator('canvas').first();
+  const editor = page.locator('.olv-anno-editor');
+  for (const y of [0.45, 0.35, 0.55, 0.3]) {
+    if (await editor.isVisible()) break;
+    const box = (await canvas.boundingBox())!;
+    await page.mouse.click(box.x + box.width / 2, box.y + box.height * y);
+    await page.waitForTimeout(500);
+  }
+  await expect(editor).toBeVisible();
+  await page.locator('.olv-anno-editor-title').fill('Phone note');
+  await editor.getByRole('button', { name: 'Save' }).click({ timeout: 5000 });
+  await expect(editor).toBeHidden();
+});
+

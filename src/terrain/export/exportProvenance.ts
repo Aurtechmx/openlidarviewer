@@ -77,7 +77,7 @@ export const SOFTWARE_NAME = 'OpenLiDARViewer';
  */
 import { NOT_SURVEY_GRADE_NOTE } from './exportNotes';
 import { verticalUnitLabel } from '../../units/units';
-import { analysedBasisLine, DENSITY_REF_SAMPLE_NOTE, densityReferenceFloorFor, isSampledBasis, type AnalysedBasis } from './analysedBasis';
+import { analysedBasisLine, DENSITY_REF_SAMPLE_NOTE, densityReferenceFloorFor, isSampledBasis, readinessOnBasis, type AnalysedBasis } from './analysedBasis';
 import type { TransformProvenance } from '../../convert/transformProvenance';
 import type { OrganizedRangeSet } from '../../model/OrganizedRange';
 import { sourceTopologyRecord } from '../../science/sourceTopology';
@@ -972,7 +972,7 @@ export function provenanceLines(p: ExportProvenance): string[] {
     kv('Surface quality', p.surfaceQuality),
     // The "Tier — reason" formatting is the readiness engine's, so this stamp
     // and the Terrain Intelligence Report row can never word the verdict apart.
-    kv('Export readiness', readinessLine(p.exportReadiness, p.exportReason)),
+    kv('Export readiness', ((r) => readinessLine(r.tier, r.reason))(readinessOnBasis(p.exportReadiness, p.exportReason, p.analysedBasis, p.coverageMode))),
     kv('Vertical RMSEz', p.accuracy ? fmtM(p.accuracy.rmseZM) : 'unknown'),
     // "-style (hold-out)": the stamp states the figures' true strength —
     // ASPRS 2014 FORMULAS on internally withheld points, not independent
