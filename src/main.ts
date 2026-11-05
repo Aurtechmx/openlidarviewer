@@ -1,11 +1,11 @@
-import { parseEmbedConfig } from './ui/embedConfig'; // First: it imports the frame guard, so a page framed by an untrusted site gets a notice and the app does not start.
+import { autoloadRefusal, parseEmbedConfig } from './ui/embedConfig'; // First: it imports the frame guard, so a page framed by an untrusted site gets a notice and the app does not start.
 import '@fontsource/jetbrains-mono/latin-400.css';
 import '@fontsource/jetbrains-mono/latin-500.css';
 import './styles';
 import type { Viewer } from './render/Viewer';
 import { floorPlanPositions } from './app/floorPlanPositions';
 import { isMobileDevice, isTouchFirstDevice } from './ui/isMobileDevice';
-import { Stage } from './ui/Stage';
+import { Stage, UrlFieldMessage } from './ui/Stage';
 import type { Sample } from './ui/Stage';
 import { DropZone } from './ui/DropZone';
 import { Inspector } from './ui/Inspector';
@@ -29,7 +29,7 @@ import {
 import type { ShortcutSheet } from './ui/ShortcutSheet';
 import type { TourHandle } from './ui/onboarding/bootTour';
 import { createTourLauncher } from './app/tourLauncher';
-import { findDuplicateIds, type Action } from './ui/actionRegistry';
+import { actionsForLayout, findDuplicateIds, type Action } from './ui/actionRegistry';
 import { runSceneTool, type SceneTool } from './app/toggleTool';
 import type { SessionIoDeps } from './app/sessionIo';
 import type { SessionSnapshotDeps } from './app/sessionSnapshot';
@@ -148,7 +148,7 @@ import { activeSpatialUpAxis, layerUpFrameOf, reexpressElevationFilter } from '.
 // saveCurrentView/applyView can run synchronously from a keystroke while the
 // ordering contract (camera LAST) stays unit-testable outside this bootstrap.
 import type { ViewStateBundle } from './io/viewState';
-import { createViewStateCoordinator } from './app/viewStateCoordinator';
+import { createViewStateCoordinator, saveViewWithNotice } from './app/viewStateCoordinator';
 import { loadPrefs, savePrefs } from './prefs';
 import { applyNavPrefsChange, navigationPrefs, restoreNavPrefs } from './render/navPrefsWiring';
 import { makeNavPaletteActions } from './app/navPaletteActions';
@@ -258,7 +258,7 @@ import { placedWorldOrigin } from './terrain/canonicalFrame';
 import { createAppRuntime } from './app/AppRuntime';
 import { createLayerService } from './app/LayerService';
 import { createViewBookmarks } from './app/viewBookmarks';
-import { createScanService, survivorAfterRemoval, refreshActiveLayerSurfaces, refreshStreamSurfaces } from './app/ScanService';
+import { carryClassFilter, createScanService, survivorAfterRemoval, refreshActiveLayerSurfaces, refreshStreamSurfaces } from './app/ScanService';
 import { createScanRouteService } from './app/ScanRouteService';
 import { createProjectFrameService, projectFrameInputFrom, sessionImportOrigins } from './app/projectFrame';
 
@@ -1082,7 +1082,7 @@ const inspector = new Inspector({
   },
   onNavigationPrefsChange: (prefs) => applyNavPrefsChange(prefs, viewer, persistPrefs),
   // Visuals Studio — Visuals Studio.
-  onRgbAppearancePreset: (id) => visuals.applyRgbAppearancePreset(id),
+  onRgbAppearancePreset: (id) => visuals.applyRgbAppearancePreset(id), anyScanHasRgb: () => viewerReady && viewer.clouds().some((id) => viewer.getCloud(id)?.colors != null),
   onEdlPreset: (id) => visuals.applyEdlPreset(id),
   onSkyPreset: (id) => visuals.applySky(id),
   onWhiteBalance: (temperature, tint) => visuals.setWhiteBalance(temperature, tint),
@@ -1391,7 +1391,7 @@ const ensureActionRegistry = retryableOnce((): Promise<Action[]> => loadActionRe
 });
     const dupes = findDuplicateIds(actions);
     if (dupes.length > 0) throw new Error(`Command palette: duplicate action ids: ${dupes.join(', ')}`);
-    return actions;
+    return actionsForLayout(actions, { bare: bareMode, measurements: embedConfig.forceMeasurements, annotations: embedConfig.forceAnnotations });
 }));
 
 // Cmd-K / Ctrl-K (palette, binding 300) and bare `?` (shortcut sheet, binding
@@ -1555,7 +1555,7 @@ const measureMount = createMeasurePanelMount({
   getViewer: () => viewer,
   crsService,
   getExportPanel: () => exportPanel,
-  exportSession: saveSessionFromUser, handleFile, toast: showLassoToast,
+  exportSession: saveSessionFromUser, handleFile, toast: showLassoToast, onRenamed: () => clipFlow.onMeasurementsChanged(),
   recordUsage, getScanBaseName: () => activeScanName(),
   workbenchStage: stage,
   onWorkbenchClose: () => analyseProfileVisibility.restore(),
@@ -2422,7 +2422,7 @@ exportPanel.setCrsKnown(crsIsKnown(crsService.current()));
 // and their viewer wiring are built in clipMount.ts over the pure `clipBox` core.
 const { clipPanel, clipFlow } = mountClip({ overlay: stage.overlay, viewer: () => viewer, ready: () => viewerReady, toast: showLassoToast, workflow: workflowController,
   activeId: () => scans.activeId, activeLayerId: () => (scans.activeId ? runtime.layerIdentity.stableIdFor(scans.activeId) : null), revealScene: () => workspaceShell?.revealScene(),
-  openPage: (p, o) => workspaceShell?.openToolPage(p, o), measurePanel: () => measureMount.panel, deleteMeasurement: (id) => measureMount.deleteMeasurement(id), crs: crsService, emptyView: { classes: { isFiltered: () => classLegendPanel.getVisibility().isFiltered(), showAll: () => classLegendPanel.applyFilter([]) }, ranges: { elevation: () => activeElevFilter !== null, intensity: () => activeIntenFilter !== null, clear: () => { inspector.restoreElevationFilter(null); inspector.restoreIntensityFilter(null); } } } });
+  openPage: (p, o) => workspaceShell?.openToolPage(p, o), measurePanel: () => measureMount.panel, deleteMeasurement: (id) => measureMount.deleteMeasurement(id), crs: crsService, emptyView: { classes: { isFiltered: () => classLegendPanel.getVisibility().isFiltered(), showAll: () => classLegendPanel.applyFilter([]) }, ranges: { elevation: () => activeElevFilter !== null, intensity: () => activeIntenFilter !== null, clear: () => { inspector.restoreElevationFilter(null); inspector.restoreIntensityFilter(null); } }, scans: { showAll: () => { for (const id of viewer.clouds()) layerService.setVisible(id, true); } } } });
 clipPanel.subscribe(() => analysePanel?.setClipScopeNote(clipPanel.enabled)); // every on/off change, restore and scan close: the Terrain page says a run does not use the clip
 
 // The Tools tab held only the Clip box until a tool had been used, so it could
@@ -2835,7 +2835,7 @@ void viewerLoaded.then(() => {
       onMeasure: () => { if (toolsReady()) runTool('measure'); },
       onInspect: () => { if (toolsReady()) runTool('inspect'); },
       onSaveView: () => {
-        if (toolsReady()) saveCurrentView();
+        if (!dialogOpen()) saveViewWithNotice({ hasScan: () => viewerReady && hasScan(), saveCurrentView, bookmarks, showLassoToast });
       },
       onDeleteSelection: () => {
         const id = viewer.annotate.selectedId;
@@ -2897,10 +2897,10 @@ if (embed) {
 }
 
 // `?autoload=sample:<id>` — open a built-in sample on startup (embed demos).
-if (embedConfig.autoloadSample) {
-  const sample = SAMPLES.find((s) => s.id === embedConfig.autoloadSample);
-  if (sample) void loadFromUrl(sample.url, sample.name);
-}
+const autoloadEntry = SAMPLES.find((s) => s.id === embedConfig.autoloadSample);
+if (autoloadEntry) void loadFromUrl(autoloadEntry.url, autoloadEntry.name);
+const autoloadRefused = autoloadEntry ? null : autoloadRefusal(window.location.search, SAMPLES.map((s) => s.id));
+if (autoloadRefused) dropZone.setError(autoloadRefused);
 
 // `?copc=<url>` deep link (COPC / EPT / 3D Tiles). The lazy gate validates it
 // and asks the user to confirm the host before any fetch; Cancel stays idle.
@@ -3685,7 +3685,7 @@ async function handleRemoteCopc(url: string, signal?: AbortSignal): Promise<void
       // Transactional: a failed open left the prior scene untouched, so keep it. With no stream
       // behind it only the panel comes down (a URL refused before the Viewer exists has none).
       if (viewer && !viewer.hasStreamingCloud) abandonStreamingOpen();
-      throw new Error(message, { cause: err }); // the Stage field shows it inline with Retry
+      throw new UrlFieldMessage(message, { cause: err }); // the Stage field shows it inline with Retry
     }
   } finally {
     unlinkAbort();
@@ -4075,7 +4075,7 @@ function compareLoadedLayers(): void {
 }
 
 
-function activateLayer(id: string): void { if (scans.activeId === id) { return; } scans.setActive(id); const c = scans.activeCloud(); if (c) refreshActiveLayerSurfaces({ refreshCrs: (cl) => crsCoordinator.refreshCrsForStaticCloud(cl), refreshProvenance: (cl, layerId) => inspectorCards.refreshProvenance(cl, layerId), refreshDatasetIntelligence: (cl) => inspectorCards.refreshDatasetIntelligenceFromStaticCloud(cl), refreshClassLegend, syncColorMode: syncColorModeForActive, setDetail: (shown, total) => inspector.setDetail(shown, total), setReport: (cl) => inspector.setReport(runModules(cl, currentClassScope(cl))) }, c, id); } // a static layer became the active scan: its CRS (so the measure units), cards, class legend, colour chips, point count and Scan Report
+function activateLayer(id: string): void { if (scans.activeId === id) { return; } scans.setActive(id); const c = scans.activeCloud(); if (c) carryClassFilter(classLegendPanel, () => refreshActiveLayerSurfaces({ refreshCrs: (cl) => crsCoordinator.refreshCrsForStaticCloud(cl), refreshProvenance: (cl, layerId) => inspectorCards.refreshProvenance(cl, layerId), refreshDatasetIntelligence: (cl) => inspectorCards.refreshDatasetIntelligenceFromStaticCloud(cl), refreshClassLegend, syncColorMode: syncColorModeForActive, setDetail: (shown, total) => inspector.setDetail(shown, total), setReport: (cl) => inspector.setReport(runModules(cl, currentClassScope(cl))) }, c, id), showLassoToast); } // a static layer became the active scan: its CRS (so the measure units), cards, class legend, colour chips, point count and Scan Report
 function removeCloud(id: string): void {
   const next = survivorAfterRemoval(viewer.clouds(), id, scans.activeId); viewer.removeCloud(id); // removing the active layer promotes a survivor
   inspector.removeCloud(id);

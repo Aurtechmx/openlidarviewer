@@ -46,6 +46,9 @@ export type RangeReadErrorCode =
   | 'out-of-range'
   | 'aborted'
   | 'transport'
+  // The host answered a probe with a client-error status (404, 403 and so on).
+  // It was reached, so this is not a CORS or network fault.
+  | 'http-status'
   | 'range-unsupported'
   | 'timeout'
   | 'content-mismatch'

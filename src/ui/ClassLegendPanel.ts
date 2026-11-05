@@ -21,6 +21,7 @@
  * `mount()/show()/hide()`.
  */
 
+import { createPressGuard, type PressGuard } from './pressGuard';
 import { el, iconButton } from './dom';
 import { announcePolite } from './politeAnnounce';
 import { ClassVisibility } from '../render/class/classVisibility';
@@ -111,6 +112,10 @@ export class ClassLegendPanel {
 
   /** The scrolling list of class rows. */
   private readonly _list: HTMLElement;
+  private readonly _listPress: PressGuard;
+  /** Each row's count text, for an update that keeps the rows. */
+  private readonly _countSpans = new Map<number, HTMLElement>();
+  private _renderedShape = '';
 
   /** The "Filtered — showing N of M classes" banner (hidden when unfiltered). */
   private readonly _banner: HTMLElement;
@@ -123,6 +128,7 @@ export class ClassLegendPanel {
 
   /** "Counts from unique decoded nodes" caption (hidden unless streaming). */
   private readonly _streamingNote: HTMLElement;
+  private readonly _streamingEditNote: HTMLElement;
 
   /** "Counts cover the loaded display sample" caption (hidden unless sampled). */
   private readonly _sampleNote: HTMLElement;
@@ -209,6 +215,11 @@ export class ClassLegendPanel {
       text: 'Counts from unique decoded nodes seen so far, not full-source totals.',
     });
     this._streamingNote.setAttribute('role', 'note');
+    this._streamingEditNote = el('div', {
+      className: 'olv-cl-streamnote olv-cl-editnote olv-hidden',
+      text: 'Edit classes needs a fully loaded scan, so it is not offered while streaming. To edit classes, open a LAS copy of the data.',
+    });
+    this._streamingEditNote.setAttribute('role', 'note');
 
     // Sampled caption — the loader strides a cloud too big to hold whole, so
     // the per-class counts describe the display sample, not the survey. Shown
@@ -237,6 +248,7 @@ export class ClassLegendPanel {
     this._banner = el('div', { className: 'olv-cl-banner olv-hidden' });
 
     this._list = el('div', { className: 'olv-cl-list' });
+    this._listPress = createPressGuard(this._list);
 
     this._showAllBtn = el('button', {
       className: 'olv-chip olv-cl-showall',
@@ -278,6 +290,7 @@ export class ClassLegendPanel {
       head,
       this._provenance,
       this._streamingNote,
+      this._streamingEditNote,
       this._sampleNote,
       this._unavailableNote,
       this._banner,
@@ -466,6 +479,7 @@ export class ClassLegendPanel {
 
   setStreamingMode(on: boolean): void {
     this._streamingNote.classList.toggle('olv-hidden', !on);
+    this._streamingEditNote.classList.toggle('olv-hidden', !on);
   }
 
   /**
@@ -513,7 +527,19 @@ export class ClassLegendPanel {
       this._counts.set(code, (this._counts.get(code) ?? 0) + n);
     }
     if (this._presentCodes().length > 0) this._hasChannel = true;
-    this._render();
+    // Same rows, new counts: the nodes survive, so a press and focus do too.
+    if (this._rowShape() === this._renderedShape) {
+      for (const [code, span] of this._countSpans) span.textContent = (this._counts.get(code) ?? 0).toLocaleString();
+      return;
+    }
+    this._listPress.run(() => this._render());
+  }
+
+  /** What decides which rows the list holds: the codes and the unclassified hint. */
+  private _rowShape(): string {
+    let total = 0;
+    for (const [, n] of this._counts) total += n;
+    return `${this._presentCodes().join(',')}|${(this._counts.get(1) ?? 0) * 2 > total}|${this._hasChannel}`;
   }
 
   /**
@@ -597,6 +623,9 @@ export class ClassLegendPanel {
 
   /** Rebuild the list, banner, and empty state from the current model. */
   private _render(): void {
+    this._listPress.cancel();
+    this._countSpans.clear();
+    this._renderedShape = this._rowShape();
     const codes = this._presentCodes();
 
     // Empty / disabled state — no classification channel on this cloud.
@@ -664,6 +693,7 @@ export class ClassLegendPanel {
       text: (this._counts.get(code) ?? 0).toLocaleString(),
       title: 'Loaded points (display sample)',
     });
+    this._countSpans.set(code, count);
 
     // Solo — isolate this one class. ClassVisibility.isolate hides every other
     // code, so any later-arriving class stays hidden until the user shows all.

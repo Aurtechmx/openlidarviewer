@@ -2270,6 +2270,8 @@ button:disabled { cursor: not-allowed; }
    tier uses. Above 1100px nothing here applies and the dock is unchanged. */
 @media (max-width: 1100px) and (min-width: 768px) {
   .olv-dock .olv-tool-more { display: inline-flex; justify-content: center; }
+  /* The unfolded row is wider than this tier: wrap it upward so ••• and Close stay on screen. */
+  .olv-dock.olv-dock-more-open { flex-wrap: wrap; max-width: calc(100vw - 32px); }
   .olv-dock .olv-tool-snapshot,
   .olv-dock .olv-tool-share,
   .olv-dock .olv-tool-probe { display: none; }
@@ -2944,7 +2946,8 @@ body:has(.olv-measure-bar:not(.olv-hidden)) .olv-toast.is-finishing { visibility
 body:has(.olv-left-panels.olv-rail-collapsed) .olv-navbar { --olv-nb-l: 0px; }
 body:has(.olv-right-rail.olv-right-collapsed) .olv-navbar { --olv-nb-r: 0px; }
 @media (min-width: 768px) and (max-width: 1180px) {
-  .olv-navbar { max-width: calc(100vw - var(--olv-nb-l) - var(--olv-nb-r) - 100px); }
+  /* Centre in the space the rails leave, so the bar never covers a rail's controls. */
+  .olv-navbar { left: calc(50% + (var(--olv-nb-l) - var(--olv-nb-r)) / 2); max-width: calc(100vw - var(--olv-nb-l) - var(--olv-nb-r) - 100px); }
   .olv-nav-row { flex-wrap: wrap; justify-content: center; }
   .olv-modes-segmented .olv-mode { padding: 0 var(--space-md); }
   .olv-modes-segmented .olv-mode-icon { display: none; }

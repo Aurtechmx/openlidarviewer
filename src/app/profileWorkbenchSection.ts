@@ -603,6 +603,12 @@ export async function exportProfileSectionImagePng(
  * reported nothing when the plot could not be drawn would leave the reader
  * with an empty panel and no reason for it.
  */
+/** The status of a section with no returns: scans left out are the cause when there are any. */
+export function emptySectionStatus(leftOut: number | undefined): string {
+  if (!leftOut) return 'No returns fell inside this corridor.';
+  return `No returns to show: ${leftOut} visible scan${leftOut === 1 ? ' was' : 's were'} left out, with no proven shared vertical datum. Hide all but one to section it.`;
+}
+
 export function prepareWorkbenchSection(options: ComposeSectionOptions): WorkbenchSectionPlot {
   const { section, canvas } = options;
   const unit = options.unitSuffix ?? null;
@@ -736,7 +742,7 @@ export function prepareWorkbenchSection(options: ComposeSectionOptions): Workben
 
   const status =
     section.points.count === 0
-      ? 'No returns fell inside this corridor.'
+      ? emptySectionStatus(section.leftOutScans)
       : indices.length < section.points.count
         ? `Showing ${formatCount(indices.length)} of ${formatCount(section.points.count)} returns.`
         : `Showing ${formatCount(section.points.count)} returns.`;
@@ -1072,6 +1078,15 @@ export function presentWorkbenchSection(
 
   function slice(): void {
     if (stopped) return;
+    try {
+      pump();
+    } catch (error) {
+      console.error('OpenLiDARViewer: the profile section could not be read.', error);
+      if (!stopped) handle.setStatus('The section could not be read. Close the workbench and open it again.');
+    }
+  }
+
+  function pump(): void {
     const start = now();
     for (;;) {
       if (select) {

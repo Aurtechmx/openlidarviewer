@@ -221,3 +221,21 @@ export function refreshStreamSurfaces<Stream>(deps: StreamSurfaceDeps<Stream>, s
   deps.reseedLegend(deps.streamClasses());
   deps.refreshReport();
 }
+
+/**
+ * The class mask is scene-wide, so choosing another active
+ * layer keeps the filter. The legend reseeds for the new layer and resets, then
+ * the hidden classes go back on. A layer with no classes cannot hold a filter,
+ * and the toast says it went.
+ */
+export function carryClassFilter(
+  legend: { getVisibility(): { hiddenCodes(): number[] }; hasClasses(): boolean; applyFilter(hidden: readonly number[]): void },
+  switchLayer: () => void,
+  toast: (message: string) => void,
+): void {
+  const hidden = legend.getVisibility().hiddenCodes();
+  switchLayer();
+  if (hidden.length === 0) return;
+  if (legend.hasClasses()) legend.applyFilter(hidden);
+  else toast('Class filter cleared: all classes are shown. Set it again in Classes.');
+}

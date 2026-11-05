@@ -118,6 +118,8 @@ export interface ProfileWorkbenchLauncherDeps {
   onRawScope?: (scope: ProfileRawScope) => void;
   /** Told about a rejected import, so a silent fallback still leaves a trace. */
   onLoadFailure?: (error: unknown) => void;
+  /** The window is too narrow to dock, so the caller falls back to the focus view. */
+  onCannotDock?: () => void;
   /** Told about a `present` that threw, for the same reason. */
   onPresentFailure?: (error: unknown) => void;
 }
@@ -163,7 +165,7 @@ export function createProfileWorkbenchLauncher(
     // Only a profile has a section. Any other kind keeps the focus view, which
     // is the surface built for a compact result.
     if (request.kind !== PROFILE_KIND) return false;
-    if (!deps.stage.canDock()) return false;
+    if (!deps.stage.canDock()) { deps.onCannotDock?.(); return false; }
     const host = deps.stage.host();
     if (!host) return false;
 
@@ -187,7 +189,9 @@ export function createProfileWorkbenchLauncher(
     const exportImage = deps.exportImage;
     const onToggleCorridor = deps.onToggleCorridor;
     const onRawScope = deps.onRawScope;
-    const mounted = module.mountProfileWorkbench(host, {
+    let mounted: ProfileWorkbenchHandle;
+    try {
+      mounted = module.mountProfileWorkbench(host, {
       title: request.name,
       scope: request.name,
       ...(rename ? { onRename: (name: string) => rename(request.id, name) } : {}),
@@ -204,7 +208,12 @@ export function createProfileWorkbenchLauncher(
         release = null;
         deps.stage.release();
       },
-    });
+      });
+    } catch (error) {
+      deps.onPresentFailure?.(error);
+      deps.stage.release();
+      return false;
+    }
     handle = mounted;
     try {
       release = deps.present?.(mounted, request) ?? null;

@@ -26,7 +26,7 @@ import { createClipFlowFromShell, type ClipFlow, type ClipFlowShell } from './cl
 import { sumClipCounts } from '../render/clip/clipBox';
 import { fitMergedBounds } from '../render/clip/fitBoundsInProject';
 import { toggleTool } from './toggleTool';
-import { mountEmptyView, type EmptyViewDeps } from './emptyViewMount';
+import { allScansHidden, mountEmptyView, type EmptyViewDeps } from './emptyViewMount';
 import { worldCoordLabels } from '../render/pointInfo';
 import type { WorkflowController } from '../ui/WorkflowController';
 import type { Viewer } from '../render/Viewer';
@@ -64,6 +64,7 @@ export function clipCountFor(v: Viewer | null, activeId: string | null): ClipKep
     ...sum,
     sourceTotal: declared !== undefined && Number.isFinite(declared) && declared > sum.total ? declared : null,
     name: cloud?.name ?? null,
+    scansHidden: allScansHidden(v),
   };
 }
 

@@ -221,6 +221,27 @@ describe('Inspector Basic / Advanced', () => {
     expect(store.get('openlidarviewer.prefs.v1') ?? '').not.toContain(DETAIL_MODE_PREF);
   });
 
+  it('Advanced RGB looks say why they do nothing when no open scan has colour', () => {
+    let another = false;
+    const ins = new Inspector({ ...fakeCallbacks(), anyScanHasRgb: () => another });
+    const rail = byClass(root(ins), 'olv-visuals-rgb-rail')!;
+    const note = byClass(root(ins), 'olv-visuals-rgb-note')!;
+    ins.setColorModes(['elevation'], 'elevation');
+    expect(rail.children.every((c) => (c as unknown as HTMLButtonElement).disabled)).toBe(true);
+    expect(note.classList.contains('olv-hidden')).toBe(false);
+    expect(note.textContent).toBe('This scan has no RGB colours. These looks apply to scans that have them.');
+    ins.syncVisuals({ rgbAppearancePresetId: rail.children[0]!.dataset.presetId } as never);
+    expect(rail.children[0]!.classList.contains('olv-chip-active')).toBe(false);
+    // Another open scan has colour: the looks still do something.
+    another = true;
+    ins.setColorModes(['elevation'], 'elevation');
+    expect(rail.children.some((c) => (c as unknown as HTMLButtonElement).disabled)).toBe(false);
+    expect(note.classList.contains('olv-hidden')).toBe(true);
+    another = false;
+    ins.setColorModes(['rgb', 'elevation'], 'rgb');
+    expect(rail.children.some((c) => (c as unknown as HTMLButtonElement).disabled)).toBe(false);
+  });
+
   it('Basic offers quick appearance shortcuts through the existing preset callbacks', () => {
     const onRgb = vi.fn();
     const onEdl = vi.fn();

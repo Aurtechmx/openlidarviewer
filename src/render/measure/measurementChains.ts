@@ -389,14 +389,15 @@ export function aggregate(
   const contributingCount = values.length;
   const clipLeftOut = dimension === 'volume-fill' && measurements.some((m) => m.kind === 'box' && m.clipRegion === true);
   const note = clipLeftOut ? CHAIN_CLIP_REGION_LEFT_OUT : undefined;
-  if (dimension === 'volume-fill' && contributingCount === 0 && operation !== 'count' && measurements.length > 0) {
+  const volumeDimension = dimension === 'volume-fill' || dimension === 'volume-cut' || dimension === 'volume-net';
+  if (volumeDimension && contributingCount === 0 && operation !== 'count' && measurements.length > 0) {
     // The first member with a reason of its own lends the chain that reason.
     // Only with none does a clip region take the blame.
     let reason: string | null = null;
     for (const m of measurements) {
       if (m.kind === 'volume' && m.derivedWithheld) reason = m.derivedWithheld;
       else if (m.kind === 'volume' && m.volume?.gridAuthority === 'withheld') reason = `Volume withheld: ${m.volume.gridAuthorityReason ?? 'no member has a measured volume'}.`;
-      else if (m.kind === 'box' && m.clipRegion !== true && m.points.length >= 2 && flatBox(m.points[0], m.points[1], worldUp)) reason = BOX_NO_HEIGHT_NOTE;
+      else if (dimension === 'volume-fill' && m.kind === 'box' && m.clipRegion !== true && m.points.length >= 2 && flatBox(m.points[0], m.points[1], worldUp)) reason = BOX_NO_HEIGHT_NOTE;
       if (reason !== null) break;
     }
     const refusal = reason
@@ -419,8 +420,9 @@ export function aggregate(
     };
   }
   if (contributingCount === 0) {
+    // Nothing was measured: no figure, never a zero that reads as a measurement.
     return {
-      value: operation === 'min' || operation === 'max' ? Number.NaN : 0,
+      value: Number.NaN,
       unit,
       contributingCount: 0,
       totalCount,

@@ -221,3 +221,23 @@ export function findDuplicateIds(actions: readonly Action[]): string[] {
   }
   return Array.from(dupes);
 }
+
+/**
+ * ?embed=1 and ?ui=minimal build no workspace, so the Tools
+ * and Analyse pages do not exist. Commands that need them leave the palette, as
+ * the "Go to" entries already do; a link can surface Measure or Annotate.
+ */
+const ANALYSE_PANEL_ACTIONS = new Set(['analyse.run', 'analyse.contours', 'analyse.flowPulse', 'analyse.terrainAccess', 'analyse.observatory']);
+
+export function actionsForLayout<A extends { readonly id: string }>(
+  actions: A[],
+  o: { readonly bare: boolean; readonly measurements: boolean; readonly annotations: boolean },
+): A[] {
+  if (!o.bare) return actions;
+  return actions.filter((a) => {
+    if (ANALYSE_PANEL_ACTIONS.has(a.id) || a.id === 'tool.inspect') return false;
+    if (a.id === 'tool.measure') return o.measurements;
+    if (a.id === 'tool.annotate') return o.annotations;
+    return true;
+  });
+}

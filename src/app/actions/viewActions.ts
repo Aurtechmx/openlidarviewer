@@ -12,6 +12,7 @@ import type { CompassController } from '../../ui/compassController';
 import type { ViewBookmarksService } from '../viewBookmarks';
 import { THEME_LABEL, THEME_ORDER, type ThemeName } from '../../ui/themes';
 import { keyDisplayFor } from '../../ui/keyBindings';
+import { saveViewWithNotice } from '../viewStateCoordinator';
 
 export interface ViewActionDeps {
   setTheme: (name: ThemeName) => void;
@@ -119,15 +120,7 @@ export function contributeViewActions(deps: ViewActionDeps): Action[] {
       keys: keyDisplayFor('save-view'),
       hint: 'Bookmark the camera plus clip box, colour mode, class filter, point filters, and render settings as a named, restorable state.',
       keywords: ['bookmark', 'viewpoint', 'saved view', 'figure', 'state', 'capture'],
-      run: () => {
-        if (!deps.hasScan()) {
-          deps.showLassoToast('Load a scan first — a view state captures the open scan.');
-          return;
-        }
-        deps.saveCurrentView();
-        const name = deps.bookmarks.get(deps.bookmarks.count() - 1)?.name ?? 'View';
-        deps.showLassoToast(`View state saved — “${name}” (rename it in the panel list).`);
-      },
+      run: () => saveViewWithNotice(deps),
     },
     {
       id: 'view.restore-state',

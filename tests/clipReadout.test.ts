@@ -224,3 +224,13 @@ describe('the Clip page count from the viewer', () => {
     expect(clipDataKey(viewer({ a: true, b: true }) as never, 'b')).not.toBe(k0);
   });
 });
+
+describe('clip readout with the scan hidden', () => {
+  it('says the scan is hidden and does not call the box whole-scan', async () => {
+    const { clipReadoutText } = await import('../src/ui/ClipPanel');
+    const text = clipReadoutText({ kept: 3600, total: 3600, scansHidden: true }, 'keep-inside');
+    expect(text).toMatch(/^This scan is hidden, so nothing is drawn\. Figures are for the hidden scan, which a point-cloud export writes\./);
+    expect(text).toContain('3,600 of 3,600 points kept.');
+    expect(text).not.toMatch(/covers/);
+  });
+});

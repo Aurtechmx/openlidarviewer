@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs';
+import { saveViewWithNotice } from '../src/app/viewStateCoordinator';
 /**
  * actionDefinitions.test.ts
  *
@@ -867,5 +869,24 @@ describe('buildActionRegistry — one name per action (CE-NAME-01)', () => {
     for (const a of titled) expect(a.title, a.id).toBe(ACTION_TITLES[a.id as keyof typeof ACTION_TITLES]);
     // A control-only descriptor never shadows a palette action.
     for (const d of SURFACE_DESCRIPTORS) expect(actions.some((a) => a.id === d.id), d.id).toBe(false);
+  });
+});
+
+describe('saveViewWithNotice: the V key and the palette say the same', () => {
+  it('refuses with no scan and names the saved view', () => {
+    const names: string[] = [];
+    const toast = vi.fn();
+    const deps = { hasScan: () => false, saveCurrentView: vi.fn(() => { names.push('View 1'); }), bookmarks: { count: () => names.length, get: (i: number) => ({ name: names[i]! }) }, showLassoToast: toast };
+    saveViewWithNotice(deps as never);
+    expect(deps.saveCurrentView).not.toHaveBeenCalled();
+    expect(toast).toHaveBeenLastCalledWith('Load a scan first — a view state captures the open scan.');
+    deps.hasScan = () => true;
+    saveViewWithNotice(deps as never);
+    expect(toast).toHaveBeenLastCalledWith('View state saved — “View 1” (rename it in the panel list).');
+  });
+
+  it('the key handler goes through it, keeping its open dialog guard', () => {
+    const src = readFileSync(new URL('../src/main.ts', import.meta.url), 'utf8');
+    expect(src).toMatch(/onSaveView: \(\) => \{\s*if \(!dialogOpen\(\)\) saveViewWithNotice\(/);
   });
 });

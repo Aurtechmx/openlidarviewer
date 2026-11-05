@@ -9,7 +9,7 @@
  *   ?ui=minimal        hide the dock and panels, keep the canvas and nav
  *   ?annotations=1     keep the annotations panel visible
  *   ?measurements=1    keep the measurements panel visible
- *   ?autoload=sample:<id>   autoload a built-in sample on startup
+ *   ?autoload=sample:<id>   autoload a built-in sample, if one has that id (none ships today)
  *   ?theme=dark        select a theme (only `dark` exists today)
  *
  * `?autoload` resolves `sample:` ids; the remote-URL load path uses the
@@ -72,4 +72,13 @@ export function parseEmbedConfig(search: string): EmbedConfig {
     // Only `dark` exists; an unrecognised value falls back to it.
     theme: 'dark',
   };
+}
+
+/** The reason a `?autoload` link opens nothing, or null when it names a sample that exists or no link was given. */
+export function autoloadRefusal(search: string, sampleIds: readonly string[]): string | null {
+  const params = new URLSearchParams(search);
+  if (!params.has('autoload')) return null;
+  const { autoloadSample } = parseEmbedConfig(search);
+  if (autoloadSample && sampleIds.includes(autoloadSample)) return null;
+  return 'This link names a sample that is not available. Open a scan or choose a sample.';
 }

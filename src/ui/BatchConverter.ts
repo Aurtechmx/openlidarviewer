@@ -111,6 +111,7 @@ export class BatchConverter {
   private _targetEpsg = '';
   private _sourceEpsg = '';
   private _busy = false;
+  private _closedDuringRun = false;
   private _produced: { filename: string; bytes: Uint8Array }[] = [];
   // Aborts the in-flight batch (worker decode + the between-files loop) when the
   // modal is dismissed, so closing mid-convert doesn't leave a decode running.
@@ -220,6 +221,7 @@ export class BatchConverter {
   close(): void {
     if (this.element.classList.contains('olv-bc-hidden')) return;
     // Cancel any batch still running so a dismissed modal doesn't keep decoding.
+    this._closedDuringRun = this._busy;
     this._abort?.abort();
     this.element.classList.add('olv-bc-hidden');
     // Release the converted output. A finished batch can hold hundreds of
@@ -462,6 +464,7 @@ export class BatchConverter {
   private async _convert(): Promise<void> {
     if (this._busy || !this._validate().ok) return;
     this._busy = true;
+    this._closedDuringRun = false;
     this._produced = [];
     this._results.replaceChildren();
     this._refresh();
@@ -481,6 +484,8 @@ export class BatchConverter {
     };
 
     this._abort = new AbortController();
+    const signal = this._abort.signal;
+    const queued = this._files.length;
     let results: BatchItemResult[] = [];
     try {
       results = await runBatch(
@@ -499,6 +504,14 @@ export class BatchConverter {
       this._abort = undefined;
     }
 
+    if (this._closedDuringRun) {
+      // close() released the output; a late finish must not fill it again.
+      this._closedDuringRun = false;
+      this._busy = false;
+      this._results.replaceChildren();
+      this._refresh();
+      return;
+    }
     this._produced = results.flatMap((r) => {
       const out: { filename: string; bytes: Uint8Array }[] = [];
       if (r.file) out.push({ filename: r.file.filename, bytes: r.file.bytes });
@@ -506,12 +519,14 @@ export class BatchConverter {
       return out;
     });
     this._busy = false;
-    this._renderResults(results);
+    const unconverted = queued - results.length;
+    this._renderResults(results, signal.aborted && unconverted > 0 ? `Stopped: ${unconverted} of ${queued} files not converted` : null);
     this._refresh();
   }
 
-  private _renderResults(results: BatchItemResult[]): void {
+  private _renderResults(results: BatchItemResult[], stopped: string | null = null): void {
     this._results.replaceChildren();
+    if (stopped) this._results.append(el('p', { className: 'olv-bc-stopped', text: stopped }));
     if (results.length === 0) return;
 
     const sum = summariseBatch(results);

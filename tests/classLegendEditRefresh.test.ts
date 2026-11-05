@@ -112,3 +112,55 @@ describe('Classes legend after an in-place class edit', () => {
     expect(panel.classificationIsDerived()).toBe(false);
   });
 });
+
+describe('Classes legend on a streaming scan', () => {
+  it('says why class editing is absent, only while streaming', () => {
+    const panel = new ClassLegendPanel();
+    const note = byClass(panel.element as unknown as FakeEl, 'olv-cl-editnote')!;
+    expect(note.classList.contains('olv-hidden')).toBe(true);
+    panel.setStreamingMode(true);
+    expect(note.classList.contains('olv-hidden')).toBe(false);
+    expect(note.textContent).toMatch(/needs a fully loaded scan/);
+    panel.setStreamingMode(false);
+    expect(note.classList.contains('olv-hidden')).toBe(true);
+  });
+});
+
+describe('Classes legend while nodes arrive', () => {
+  const pressable = (): { panel: ClassLegendPanel; list: FakeEl; flush: () => void; up: () => void } => {
+    const handlers = new Map<string, (e: unknown) => void>();
+    const timers: (() => void)[] = [];
+    const g = globalThis as unknown as { window: unknown };
+    g.window = {
+      addEventListener: (t: string, h: (e: unknown) => void) => handlers.set(t, h),
+      removeEventListener: (t: string) => handlers.delete(t),
+      setTimeout: (f: () => void) => { timers.push(f); return 1; },
+      clearTimeout: () => {},
+    };
+    const panel = new ClassLegendPanel();
+    panel.setClasses(new Map([[1, 10], [2, 20]]));
+    const list = byClass(panel.element as unknown as FakeEl, 'olv-cl-list')!;
+    return { panel, list, up: () => handlers.get('pointerup')?.({}), flush: () => { for (const t of timers.splice(0)) t(); } };
+  };
+
+  it('updates counts in the same rows, so a press and focus survive', () => {
+    const { panel, list } = pressable();
+    const row = list.children[0];
+    panel.mergeClasses(new Map([[1, 5]]));
+    expect(list.children[0]).toBe(row);
+    expect(rowText(panel)).toContain('15');
+  });
+
+  it('holds a new row back until a press in the list has ended', () => {
+    const { panel, list, up, flush } = pressable();
+    const row = list.children[0];
+    list.dispatchEvent({ type: 'pointerdown' });
+    panel.mergeClasses(new Map([[6, 3]]));
+    expect(list.children[0]).toBe(row);
+    expect(list.children).toHaveLength(2);
+    up();
+    expect(list.children[0]).toBe(row); // the click lands first
+    flush();
+    expect(list.children).toHaveLength(3);
+  });
+});

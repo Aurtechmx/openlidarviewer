@@ -163,9 +163,22 @@ describe('aggregate — sum', () => {
     expect(r.unit).toBe('m²');
   });
 
-  it('returns 0 when nothing contributes', () => {
+  it('gives no figure when nothing contributes, never a measured zero', () => {
     const ms = [distanceM([0, 0, 0], [1, 0, 0])];
-    expect(aggregate(ms, 'sum', 'angle').value).toBe(0);
+    expect(aggregate(ms, 'sum', 'angle').value).toBeNaN();
+    expect(aggregate(ms, 'mean', 'area').value).toBeNaN();
+    expect(aggregate(ms, 'sum', 'volume-cut').value).toBeNaN();
+    expect(aggregate(ms, 'sum', 'volume-net').value).toBeNaN();
+    expect(aggregate(ms, 'count', 'area').value).toBe(0);
+  });
+
+  it('gives a withheld polygon its reason on cut and net as well as fill', () => {
+    const withheld = { ...areaSquare(5), kind: 'volume', derivedWithheld: 'Volume withheld: too few points.' } as unknown as Parameters<typeof aggregate>[0][number];
+    for (const dim of ['volume-fill', 'volume-cut', 'volume-net'] as const) {
+      const r = aggregate([withheld], 'sum', dim);
+      expect(r.value).toBeNaN();
+      expect(r.refusal).toBe('Volume withheld: too few points.');
+    }
   });
 });
 

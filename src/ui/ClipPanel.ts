@@ -35,6 +35,8 @@ export interface ClipKeptCount {
   readonly total: number;
   /** The source file's declared point count when the active scan holds a display sample of it. */
   readonly sourceTotal?: number | null;
+  /** Every scan is hidden, so the figures describe points that are not drawn. */
+  readonly scansHidden?: boolean;
   /** Kept and total over every visible scan, when more than one is visible. */
   readonly visible?: { readonly kept: number; readonly total: number; readonly scans: number } | null;
   /** The active scan's name, shown when several scans are counted. */
@@ -762,6 +764,7 @@ export function clipReadoutText(c: ClipKeptCount | null, mode: ClipMode): string
   const kept = multi ? multi.kept : c.kept;
   const total = multi ? multi.total : c.total;
   const parts: string[] = [];
+  if (c.scansHidden) parts.push('This scan is hidden, so nothing is drawn. Figures are for the hidden scan, which a point-cloud export writes.');
   if (multi) {
     parts.push(`${count(kept)} of ${count(total)} ${sample ? 'shown ' : ''}points kept across ${multi.scans} visible scans.`);
     parts.push(`In the active scan${c.name ? ` (${c.name})` : ''}: ${count(c.kept)} of ${count(c.total)}; a point-cloud export writes these.`);
@@ -771,6 +774,7 @@ export function clipReadoutText(c: ClipKeptCount | null, mode: ClipMode): string
   if (sample && c.total > 0 && c.kept > 0) {
     parts.push(`A full-resolution export keeps about ${approx((c.kept / c.total) * sample)} of the file's ${approx(sample)} points.`);
   }
+  if (c.scansHidden) return parts.join(' ');
   const whole = multi ? 'every visible scan' : 'the whole scan';
   if (total > 0 && kept === total && mode === 'keep-inside') {
     parts.push(`The box covers ${whole}. Draw a clipping box, or edit the bounds under Advanced, to make it smaller.`);

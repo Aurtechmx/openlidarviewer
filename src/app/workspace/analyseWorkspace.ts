@@ -29,6 +29,7 @@
  * nothing until a row is opened.
  */
 
+import { createPressGuard } from '../../ui/pressGuard';
 import { el } from '../../ui/dom';
 import {
   analysisRows,
@@ -175,6 +176,7 @@ function statusLine(): { element: HTMLElement; set: (v: Pick<AnalysisRow, 'statu
 export function createAnalyseWorkspace(d: AnalyseWorkspaceDeps): AnalyseWorkspace {
   let router: WorkspaceRouter | null = null;
   const list = el('ul', { className: 'olv-ah-list' });
+  const listPress = createPressGuard(list);
   const home = el('section', { className: 'olv-analyse-home', ariaLabel: 'Analyses' }, [list]);
   // The Terrain page's next step once a run has produced a result: Make
   // contours (Contour Studio open), or the Contours page when they are blocked.
@@ -429,7 +431,7 @@ export function createAnalyseWorkspace(d: AnalyseWorkspaceDeps): AnalyseWorkspac
         child.dataset.analysis = 'contours';
         items.splice(1, 0, child);
       }
-      list.replaceChildren(...items);
+      listPress.run(() => list.replaceChildren(...items));
       // The Terrain page's next step: Make contours, which opens Contour
       // Studio; a blocked result keeps a quiet link to the page that says why.
       const made = inp.produced.has('contours');

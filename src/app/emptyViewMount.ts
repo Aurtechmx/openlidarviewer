@@ -16,12 +16,22 @@ export interface EmptyViewDeps {
   readonly classes: { isFiltered(): boolean; showAll(): void };
   /** The Inspector's elevation and intensity filters: whether each is on, and both Show all resets. */
   readonly ranges: { elevation(): boolean; intensity(): boolean; clear(): void };
+  /** Show every scan again, through the Data rows' own path. */
+  readonly scans?: { showAll(): void };
+}
+
+type HiddenScansView = Pick<Viewer, 'clouds' | 'isCloudVisible' | 'hasStreamingCloud'>;
+
+/** Static scans are open and none is visible. A stream counts as something drawn. */
+export function allScansHidden(v: HiddenScansView): boolean {
+  const ids = v.clouds();
+  return !v.hasStreamingCloud && ids.length > 0 && ids.every((id) => !v.isCloudVisible(id));
 }
 
 export interface EmptyViewMount {
   readonly notice: EmptyViewNotice;
   /** Start checking after each drawn frame; later calls do nothing. */
-  watch(v: Pick<Viewer, 'anyPointShown' | 'onDrawnFrame'>): void;
+  watch(v: Pick<Viewer, 'anyPointShown' | 'onDrawnFrame'> & Partial<HiddenScansView>): void;
 }
 
 export function mountEmptyView(d: EmptyViewDeps & { readonly clip: { readonly enabled: boolean; clear(): void } }): EmptyViewMount {
@@ -33,6 +43,7 @@ export function mountEmptyView(d: EmptyViewDeps & { readonly clip: { readonly en
   });
   const notice = new EmptyViewNotice({
     turnOffClip: () => d.clip.clear(),
+    showScans: () => d.scans?.showAll(),
     resetFilters: () => {
       d.classes.showAll();
       d.ranges.clear();
@@ -46,7 +57,7 @@ export function mountEmptyView(d: EmptyViewDeps & { readonly clip: { readonly en
     watch(v) {
       if (watching) return;
       watching = true;
-      const sync = (): void => notice.sync(v.anyPointShown() === false ? causes() : null);
+      const sync = (): void => notice.sync(v.clouds && allScansHidden(v as HiddenScansView) ? { ...causes(), scansHidden: true } : v.anyPointShown() === false ? causes() : null);
       v.onDrawnFrame(sync);
       sync();
     },

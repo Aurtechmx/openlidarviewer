@@ -392,6 +392,9 @@ export type TerrainProductOutcome = { readonly ok: true } | { readonly ok: false
 
 const NO_TERRAIN_RESULT = 'Run a terrain analysis first.';
 
+/** The map sheet's own code failed, which is not a choice the user still has to make. */
+const MAP_SHEET_LOAD_FAILED = 'The map sheet could not load, so nothing was exported. Reload the page and try again.';
+
 /** Shown when the map sheet cannot start from the Export mode. */
 const MAP_SHEET_OPEN_STUDIO =
   'Choose a purpose in Contour Studio on the Contours page, then export the PDF there.';
@@ -1231,7 +1234,7 @@ export class AnalysePanel {
       .catch((err: unknown): TerrainProductOutcome => {
         // eslint-disable-next-line no-console
         console.error('OpenLiDARViewer: map sheet export could not start.', err);
-        return { ok: false, reason: MAP_SHEET_OPEN_STUDIO };
+        return { ok: false, reason: MAP_SHEET_LOAD_FAILED };
       })
       .finally(() => { this._lanePdfPending = null; });
     this._lanePdfPending = run;
@@ -3220,7 +3223,7 @@ export class AnalysePanel {
         } catch (err) {
           // eslint-disable-next-line no-console
           console.error('OpenLiDARViewer: map sheet export failed.', err);
-          errLine.textContent = 'Export failed — see the console for details.';
+          errLine.textContent = 'The PDF could not be made, so nothing was saved. Reload the page and try again.';
           errLine.style.display = '';
           exportBtn.disabled = false;
           cancelBtn.disabled = false;

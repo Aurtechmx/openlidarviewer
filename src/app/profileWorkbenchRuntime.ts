@@ -95,6 +95,8 @@ export interface ProfileWorkbenchRuntimeDeps {
    * failure is otherwise visible in the app.
    */
   onLoadFailure?: (error: unknown) => void;
+  /** The window is too narrow to dock. */
+  onCannotDock?: () => void;
 }
 
 /**
@@ -211,6 +213,7 @@ export function createProfileWorkbenchRuntime(
         dispose();
       };
     },
+    ...(deps.onCannotDock ? { onCannotDock: deps.onCannotDock } : {}),
     onLoadFailure:
       deps.onLoadFailure ??
       ((error) => {

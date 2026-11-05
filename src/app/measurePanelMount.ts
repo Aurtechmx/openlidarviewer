@@ -85,6 +85,8 @@ export interface MeasurePanelMountDeps {
    * to restore the AnalysePanel visibility the profile open had hidden.
    */
   onWorkbenchClose?: () => void;
+  /** A measurement was renamed; the result card follows it. */
+  onRenamed?: () => void;
   /** "Use as clipping region" on a Box row; absent hides the action. */
   onUseAsClip?: (id: string) => void;
 }
@@ -212,6 +214,11 @@ export function createMeasurePanelMount(deps: MeasurePanelMountDeps): MeasurePan
    * the measurement being deleted or the scene being replaced, and a dock left
    * behind keeps both its plot and its `calc(100% - Npx)` claim on the stage.
    */
+  function workbenchFailed(error: unknown): void {
+    console.error('OpenLiDARViewer: the profile workbench failed to open.', error);
+    deps.toast?.('The Profile Workbench could not open, so this shows the focus view. Reload the page to try again.');
+  }
+
   function closeWorkbench(): void {
     dockedId = null;
     launcher?.close();
@@ -224,6 +231,8 @@ export function createMeasurePanelMount(deps: MeasurePanelMountDeps): MeasurePan
     workbench ??= loadProfileWorkbenchRuntime().then(({ createProfileWorkbenchRuntime }) => {
       launcher = createProfileWorkbenchRuntime({
         stage: workbenchStage,
+        onLoadFailure: workbenchFailed,
+        onCannotDock: () => deps.toast?.('The Profile Workbench needs a wider window, so this shows the focus view.'),
         scene: workbenchScene(),
         // The PNG names the scan the profile was measured on; one that cannot be settled is not written.
         scanBaseName: (id) => {
@@ -244,6 +253,7 @@ export function createMeasurePanelMount(deps: MeasurePanelMountDeps): MeasurePan
         // so a rename made in either surface is the one name both show.
         rename: (id, name) => {
           deps.getViewer().measure.renameMeasurement(id, name);
+          deps.onRenamed?.();
           refresh();
         },
         // The panel's own export, not a second one. It is the single place the
@@ -274,7 +284,7 @@ export function createMeasurePanelMount(deps: MeasurePanelMountDeps): MeasurePan
         // the next Expand gets a fresh attempt at the chunk.
         workbench = null;
         launcher = null;
-        console.error('OpenLiDARViewer: the profile workbench failed to load.', error);
+        workbenchFailed(error);
         return false;
       },
     );
@@ -317,6 +327,7 @@ export function createMeasurePanelMount(deps: MeasurePanelMountDeps): MeasurePan
   function construct(Ctor: MeasurePanelCtor): MeasurePanel {
     const viewer = deps.getViewer();
     viewer.measure.onClearAll = offerUndoAll;
+    viewer.measure.onNotice = (text) => deps.toast?.(text);
     return new Ctor({
       onDelete: (id) => { deleteMeasurement(id); },
       // The row's Copy writes exactly what the result card's Copy writes.
@@ -327,7 +338,8 @@ export function createMeasurePanelMount(deps: MeasurePanelMountDeps): MeasurePan
         if (model.copyText === null) { deps.toast?.('No value to copy for this measurement.'); return; }
         void copyToClipboard(model.copyText).then((ok) => deps.toast?.(ok ? 'Result copied.' : 'Could not copy the result.'));
       },
-      onRename: (id, name) => viewer.measure.renameMeasurement(id, name),
+      // No list refresh here: it would rebuild the row inside the field's blur and lose the next press.
+      onRename: (id, name) => { viewer.measure.renameMeasurement(id, name); deps.onRenamed?.(); },
       onExport: () => void deps.exportSession(),
       // Route through the single file router so the Import button, the Open
       // picker, and a drag-drop all open a session identically (and a scan

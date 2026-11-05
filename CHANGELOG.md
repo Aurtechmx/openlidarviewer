@@ -58,6 +58,23 @@ has not been done. v0.7.0 is the current published release.
 
 ### Fixed
 
+- Sum and Average on a chain with no contributing row show no figure instead of 0. Cut and Net give a withheld polygon's reason, as Fill does.
+- The Results shelf names the layer a measurement was picked on, and says when that layer is closed.
+- The class filter stays on when the active layer changes. A layer with no classes clears it with a message.
+- Opening by URL: a 404, 410, 401 or 403 says the file is missing or access was refused, without blaming CORS. The field shows the same reason as the toast, and every press now reaches the field's own validation.
+- Renaming a measurement updates the result card and the row's button labels. A blank name puts back the last one.
+- Finishing a draft with too few points keeps it and says how many are needed. Switching kind says a draft was discarded.
+- The units toggle explains why figures stay the same on a scan with unverified units.
+- With every scan hidden, the empty-view card and the clip readout say so, and the card offers Show scans.
+- The map sheet says when its PDF could not be made or its code could not load.
+- The source row names the active layer's format. Advanced RGB looks are disabled with a note when no open scan has colour. The Classes page says why class editing is absent while streaming.
+- Dropping a session shows an opening line. A link naming an unavailable sample says so.
+- Measure, Inspect, Annotate and the terrain commands leave the palette in the bare layouts unless a link surfaced them.
+- V confirms a saved view as the palette does.
+- A press on a class row or an Analyse home row survives a list refresh, and class counts update in the same rows.
+- Stopping a batch conversion says how many files were not converted, no longer counts the interrupted file as failed, and closing the dialog during a run keeps no output.
+- The dock's More row wraps between 768 and 1100 px and closes on Esc or a press outside. Opening the navigation More clears the first-use hint and lifts a toast above the menu. The navigation bar centres in the space the rails leave up to 1180 px.
+- Profile Workbench: a profile with no chart states the reason when scans have no proven shared vertical datum, the dock says when scans were left out, and a narrow window, a failed mount or a failed section read each give a message.
 - A press that asks for something in a hidden panel now brings the panel back for that press: Open details, Clip box, Go to entries, Analyse, the state strip and Inspector links. The saved collapse choice is not changed, and a reload or automatic routing leaves the panel hidden. Measure and Annotate keep the scene and say where their page is.
 - On a phone, Source and metadata and Layer Health switch to the sheet tab that holds them. The Inspect remedy in Process Studio opens the Layers list. The solo remedy is offered only with more than one layer showing and says what it did; its row can still read the same afterwards.
 - B or Toggle reference plane with no elevation says to set one and opens the section; with no scan it refuses.

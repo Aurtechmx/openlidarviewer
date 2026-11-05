@@ -330,7 +330,7 @@ describe('results shelf actions', () => {
     expect(live.ownText).toBe('Opening Profile 1 in the Profile Workbench.');
     ok = false;
     wb.fire('click');
-    expect(live.ownText).toBe('Profile 1 cannot open in the Profile Workbench now.');
+    expect(live.ownText).toBe('Profile 1 cannot open in the Profile Workbench: it has no chart. Its row on the Measure page says why.');
   });
 
   it('names another source and leaves the active layer alone', () => {
@@ -582,5 +582,39 @@ describe('Export terrain lane follows the active scan', () => {
     expect(seen.at(-1)).toBe('refused');
     scans.setActive('a');
     expect(seen.at(-1)).toBe('ready');
+  });
+
+  it('names the layer a measurement was picked on, not the layer active when it was drawn', () => {
+    const ms = [{ id: 'm1', name: 'Box', points: [], pickLayers: ['stable-a'], owner: { layerId: 'stable-b' } }];
+    let open = new Map([['stable-a', 'a'], ['stable-b', 'b']]);
+    const make = () => createResultsIndex([measurementSource(
+      () => ({ getMeasurements: () => ms }),
+      (stable) => open.get(stable) ?? null,
+      () => 'b',
+    )]);
+    let index = make();
+    index.refresh();
+    expect(index.entries()[0]!.sourceIdentity).toBe('a');
+    // Its pick layer closed: the identity no longer resolves, so the shelf says a closed layer.
+    open = new Map([['stable-b', 'b']]);
+    index = make();
+    index.refresh();
+    expect(index.entries()[0]!.sourceIdentity).toBe('stable-a');
+    // Only the draw-time active layer closed: the pick layer still stands.
+    open = new Map([['stable-a', 'a']]);
+    index = make();
+    index.refresh();
+    expect(index.entries()[0]!.sourceIdentity).toBe('a');
+  });
+
+  it('prefers the active layer among several open pick layers', () => {
+    const ms = [{ id: 'm1', name: 'Span', points: [], pickLayers: ['stable-a', 'stable-b'] }];
+    const index = createResultsIndex([measurementSource(
+      () => ({ getMeasurements: () => ms }),
+      (stable) => (stable === 'stable-a' ? 'a' : 'b'),
+      () => 'b',
+    )]);
+    index.refresh();
+    expect(index.entries()[0]!.sourceIdentity).toBe('b');
   });
 });

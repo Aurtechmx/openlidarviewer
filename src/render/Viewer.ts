@@ -179,7 +179,7 @@ import {
 } from './measure/profileSectionSeam';
 import { gatherVolumeBuffers, samplePolygonVolume, cloudReduction, CUT_FILL_VOLUME_METHOD, type VolumeResult } from './measure/polygonVolumeSample';
 import {
-  integrableClouds, integrableEntries, streamingMayCombine, producerClassifiesGround,
+  integrableClouds, sharedDatumRefusal, integrableEntries, streamingMayCombine, producerClassifiesGround,
   analysisClassification,
 } from './integrableClouds';
 import type { LayerCompatibility } from '../model/layerCompatibility';
@@ -1126,7 +1126,7 @@ export class Viewer {
       worldUp: (): Vec3 => this._measure.worldUp, // the scene's, or the measurement's own layer's while it samples
       streamingCoverage: () => this._streamingCoverage(),
     });
-    this._measure.setProfileSampler((a, b, opts) => this.profileSeam.sampleSeries(a, b, opts));
+    this._measure.setProfileSampler((a, b, opts) => this.profileSeam.sampleSeries(a, b, opts)); this._measure.profileChartRefusal = () => sharedDatumRefusal(this._clouds.values());
     // Volume sampler: visible, unlocked clouds plus resident streaming nodes,
     // with their flags and classes so Withheld and noise points stay out.
     // `up` is the measurement's own layer up, matching `autoReferenceZ` (v0.4.4 B1).

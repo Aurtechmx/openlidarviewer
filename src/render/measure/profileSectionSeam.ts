@@ -193,6 +193,8 @@ export interface ProfileSectionResult {
    * empty read.
    */
   readonly classificationOnEverySource: boolean;
+  /** Visible, unlocked scans the merge rule kept out of this section. */
+  readonly leftOutScans?: number;
   /** Null when the streaming source's node count is not known. */
   readonly streamingComplete: boolean | null;
   readonly sources: readonly ProfileSectionSourceRef[];
@@ -556,6 +558,7 @@ export function createProfileSectionSeam(deps: ProfileSectionSeamDeps): ProfileS
           : describeSectionScope(scope, complete),
       ...(reduction ? { reduction } : {}),
       classificationOnEverySource: sources.length > 0 && classifiedSources === sources.length,
+      leftOutScans: [...deps.layers()].filter((l) => l.mesh.visible && !l.locked).length - integrableClouds(deps.layers()).length,
       streamingComplete: complete,
       sources: refs,
       generation: token,

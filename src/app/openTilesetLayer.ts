@@ -30,6 +30,7 @@
  * transport and PNTS decoder are a chunk nothing in the startup shell needs.
  */
 
+import { UrlFieldMessage } from '../ui/urlFieldMessage';
 import { LoadCancelledError } from '../io/loadFile';
 import { describeLoadError } from '../io/loadErrors';
 import { expandImplicitTileset } from '../io/tiles3d/implicitExpand';
@@ -81,6 +82,15 @@ export class TilesetRefusal extends Error {
     super(message);
     this.name = 'TilesetRefusal';
   }
+}
+
+/** Plain text for a tileset the host answered with a client-error status, or null for any other failure. */
+export function tilesetStatusMessage(err: unknown): string | null {
+  const m = err instanceof Error ? /^3D Tiles .* fetch failed \((\d{3})\b/.exec(err.message) : null;
+  if (!m) return null;
+  if (m[1] === '404' || m[1] === '410') return 'No file found at this URL. Check the path and try again.';
+  if (m[1] === '401' || m[1] === '403') return 'The host refused access to this file. Check the link or its permissions.';
+  return null;
 }
 
 /** The name shown for the scan, taken from the document's own URL. */
@@ -446,14 +456,16 @@ export async function openRemoteTileset(
       // A deliberate refusal already says what is wrong and what would be lost.
       // Everything else goes through the classifier, where the category is the
       // useful thing to say.
-      const message = err instanceof TilesetRefusal ? err.message : describeLoadError(err);
+      const worded = err instanceof TilesetRefusal ? err.message : tilesetStatusMessage(err);
+      const message = worded ?? describeLoadError(err);
       deps.dropZone.setError(message);
       // Tidy up only when this open left nothing valid behind: a committed
       // candidate is the scene now, and a stream that was on screen before the
       // open survives a candidate that failed before the commit.
       if (shouldTidyFailedStreamingOpen(committed, hadStreamingScene)) deps.closeStreaming();
       // Rethrown so the Stage's URL field shows the message inline with Retry.
-      throw new Error(message, { cause: err });
+      // Worded text stands in the URL field; a classified failure still takes its CORS hint there.
+      throw worded ? new UrlFieldMessage(message, { cause: err }) : new Error(message, { cause: err });
     }
   } finally {
     unlinkAbort();

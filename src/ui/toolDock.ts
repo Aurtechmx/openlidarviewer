@@ -92,6 +92,7 @@ interface DockToolSpec {
  */
 export class ToolDock {
   readonly dock: HTMLElement;
+  private _stopMoreDismiss: (() => void) | null = null;
   readonly backend: HTMLElement;
   private readonly _backendText: HTMLElement;
   private readonly _share: HTMLButtonElement;
@@ -102,6 +103,24 @@ export class ToolDock {
   private readonly _titles = new Map<string, { enabled: string; disabled: string }>();
   /** Ids of the toggle tools (those carrying aria-pressed / an active state). */
   private readonly _toggles = new Set<string>();
+
+  /** While More is open, Esc or a press outside the dock closes it. Neither is consumed, so an open dialog still gets its Esc. */
+  private _closeMoreOnDismiss(more: HTMLElement): void {
+    const close = (): void => {
+      this.dock.classList.remove('olv-dock-more-open');
+      more.setAttribute('aria-expanded', 'false');
+      this._stopMoreDismiss?.();
+    };
+    const onKey = (e: KeyboardEvent): void => { if (e.key === 'Escape') close(); };
+    const onPress = (e: PointerEvent): void => { if (!this.dock.contains(e.target as Node)) close(); };
+    document.addEventListener('keydown', onKey);
+    document.addEventListener('pointerdown', onPress, true);
+    this._stopMoreDismiss = () => {
+      document.removeEventListener('keydown', onKey);
+      document.removeEventListener('pointerdown', onPress, true);
+      this._stopMoreDismiss = null;
+    };
+  }
 
   constructor(callbacks: ToolDockCallbacks) {
     // The dock is one ordered manifest. Each entry names a button, its tooltip
@@ -267,6 +286,7 @@ export class ToolDock {
             more.blur();
             const open = this.dock.classList.toggle('olv-dock-more-open');
             more.setAttribute('aria-expanded', open ? 'true' : 'false');
+            if (open) this._closeMoreOnDismiss(more); else this._stopMoreDismiss?.();
           });
           return more;
         },

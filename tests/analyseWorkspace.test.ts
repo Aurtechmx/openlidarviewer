@@ -76,6 +76,26 @@ async function make(produced: ProductId[] = [], run: { tier: 'Good' | 'Preview' 
 }
 
 describe('Analyse home', () => {
+  it('holds a list rebuild until a press that began in the list has ended', async () => {
+    const handlers = new Map<string, () => void>();
+    const timers: (() => void)[] = [];
+    const g = globalThis as unknown as { window: Record<string, unknown> };
+    const saved = g.window;
+    g.window = { ...saved, addEventListener: (t: string, h: () => void) => handlers.set(t, h), removeEventListener: (t: string) => handlers.delete(t), setTimeout: (f: () => void) => { timers.push(f); return 1; } };
+    try {
+      const t = await make();
+      const before = t.row('terrain');
+      const list = (t.aw.home as unknown as FakeEl).find((e) => e.classList.contains('olv-ah-list'))!;
+      list.fire('pointerdown');
+      t.aw.refresh();
+      expect(t.row('terrain')).toBe(before);
+      handlers.get('pointerup')!();
+      expect(t.row('terrain')).toBe(before);
+      for (const f of timers.splice(0)) f();
+      expect(t.row('terrain')).not.toBe(before);
+    } finally { g.window = saved; }
+  });
+
   it('lists one row per analysis with its status and reason, and no page is open', async () => {
     const t = await make();
     expect(t.router.route()).toEqual({ mode: 'analyse', page: null });

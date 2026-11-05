@@ -18,6 +18,7 @@ vi.mock('../src/io/download', async () =>
 vi.mock('../src/ui/Modal', async () =>
   (await import('./helpers/mapSheetDialogHarness')).modalModuleMock());
 
+import { readFileSync } from 'node:fs';
 import { FakeEl } from './helpers/analysePanelDom';
 import { fire, installDialogListeners, recorded as hoisted, slopePositions } from './helpers/mapSheetDialogHarness';
 
@@ -105,6 +106,19 @@ describe('exportProduct(contours) through the export adapter', () => {
     expect(dialog().errLine.textContent).toBe('');
     expect(hoisted.downloads).toHaveLength(1);
     expect(hoisted.downloads[0].blob.type).toBe('application/pdf');
+  });
+
+  it('says the PDF was not made, with a next step, when the dialog build throws', () => {
+    const src = readFileSync(new URL('../src/ui/AnalysePanel.ts', import.meta.url), 'utf8');
+    expect(src).toContain("errLine.textContent = 'The PDF could not be made, so nothing was saved. Reload the page and try again.';");
+    expect(src).not.toContain('see the console');
+  });
+
+  it('says the map sheet could not load when its code fails to load', async () => {
+    const p = await panel();
+    (p as unknown as { _handleContourStudioExport: () => Promise<never> })._handleContourStudioExport = () => Promise.reject(new Error('Failed to fetch dynamically imported module'));
+    const outcome = await p.exportProduct('contours', new FakeEl('button'));
+    expect(outcome).toEqual({ ok: false, reason: 'The map sheet could not load, so nothing was exported. Reload the page and try again.' });
   });
 
   it('returns the gate reason when the Studio launch state is unavailable', async () => {

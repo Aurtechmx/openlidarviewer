@@ -21,6 +21,7 @@
  */
 
 import type { WorkspaceMode } from '../../ui/workspace/DesktopWorkspace';
+import { ownerIdsOf, type OwnedItem } from '../measurementOwnership';
 
 export type ResultType =
   | 'measurement'
@@ -193,7 +194,27 @@ export interface MeasurementReader {
     readonly kind?: string;
     readonly points: readonly ResultAnchor[];
     readonly owner?: { readonly layerId?: string };
+    readonly pickLayers?: readonly string[];
   }[];
+}
+
+/**
+ * The layer a measurement was picked on, as the Measure panel reads it (pick
+ * record, else owner). A closed layer keeps its raw stable id, which resolves
+ * to no name, so the shelf says "a closed layer". Null when none is recorded.
+ */
+function measurementIdentity(
+  m: { readonly owner?: { readonly layerId?: string }; readonly pickLayers?: readonly string[] },
+  layerOf: (stableId: string) => string | null,
+  activeLayer: () => string | null,
+): string | null {
+  const ids = ownerIdsOf(m as OwnedItem);
+  if (ids.length === 0) return null;
+  const closed = ids.find((id) => layerOf(id) === null);
+  if (closed) return closed;
+  const open = ids.map((id) => layerOf(id)!);
+  const active = activeLayer();
+  return active && open.includes(active) ? active : open[0]!;
 }
 
 /**
@@ -214,12 +235,11 @@ export function measurementSource(
       const ms = read()?.getMeasurements() ?? [];
       seen.prune(new Set(ms.map((m) => m.id)));
       return ms.map((m) => {
-        const owner = m.owner?.layerId;
         return {
           id: `measurement:${m.id}`,
           type: 'measurement' as const,
           title: m.name,
-          sourceIdentity: owner ? layerOf(owner) ?? owner : seen.of(m.id),
+          sourceIdentity: measurementIdentity(m, layerOf, activeLayer) ?? seen.of(m.id),
           status: 'ready' as const,
           route: { mode: 'work' as const, page: 'measure' },
           anchor: centroid(m.points),

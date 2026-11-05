@@ -219,8 +219,7 @@ test('the start screen offers an open-from-URL field for remote COPC', async ({
   await expect(urlInput).toBeVisible();
   await expect(page.locator('.olv-url-btn')).toBeVisible();
 
-  // A non-http(s) URL — valid enough to pass the input's native check, but
-  // rejected by the remote-COPC guard with a clear message. Deterministic,
+  // A non-http(s) URL, rejected by the remote-COPC guard with a clear message. Deterministic,
   // no network request.
   await urlInput.fill('ftp://example.com/scan.copc.laz');
   await page.locator('.olv-url-btn').click();

@@ -1397,7 +1397,7 @@ export class MeasurePanel {
       title: 'Type to rename this measurement',
     });
     name.value = s.name;
-    name.addEventListener('change', () => this._cb.onRename(s.id, name.value));
+    let committed = s.name; // a rename does not rebuild the row, so s.name goes stale
 
     const value = el('span', { className: 'olv-mp-value', text: s.value });
 
@@ -1408,6 +1408,8 @@ export class MeasurePanel {
       ariaLabel: `Delete ${s.name}`,
     });
     del.addEventListener('click', () => this._cb.onDelete(s.id));
+    const named: [HTMLElement, string][] = [[del, 'Delete']]; // buttons whose label carries the name
+    name.addEventListener('change', () => { const next = name.value.trim(); name.value = next || committed; if (!next) return; committed = next; for (const [b, verb] of named) b.setAttribute('aria-label', `${verb} ${next}`); del.title = `Delete ${next}`; this._cb.onRename(s.id, next); });
 
     // Chain mode adds a leading checkbox so the user can mark which
     // measurements feed the aggregate. Owned by the panel — the
@@ -1416,7 +1418,7 @@ export class MeasurePanel {
     const onCopy = this._cb.onCopy;
     if (onCopy) {
       const copy = el('button', { className: 'olv-mp-profile-pdf olv-mp-copy', text: 'Copy', title: 'Copy this result, with its caveat, to the clipboard', ariaLabel: `Copy ${s.name}` });
-      copy.addEventListener('click', () => onCopy(s.id));
+      copy.addEventListener('click', () => onCopy(s.id)); named.push([copy, 'Copy']);
       children.splice(children.indexOf(del), 0, copy);
     }
     const onClip = this._cb.onUseAsClip;
@@ -1521,6 +1523,7 @@ export class MeasurePanel {
       }));
     }
 
+    if (s.profileChartWithheld) breakdownEls.push(el('div', { className: 'olv-mp-chart-caveat', text: s.profileChartWithheld }));
     // Profile-only: render a compact height-vs-distance chart strip
     // beneath the headline row. The chart is a single inline SVG, no
     // external libraries — keeps the Measurements panel a leaf module.

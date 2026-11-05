@@ -320,6 +320,7 @@ export interface MeasurementSummary {
    * analyst understands the line may refine as more nodes stream in.
    */
   profileChartResidentOnly?: boolean;
+  profileChartWithheld?: string; // why there is no chart, when known at draw time
   /**
    * Profile only — false when the scene could not assert a vertical datum
    * (clouds recentred on conflicting origins), so `profileChart` heights are
@@ -721,6 +722,7 @@ export class MeasureController {
     this._unitsBtn.addEventListener('click', () => {
       this._unitsBtn.blur();
       this.setUnitSystem(this._units === 'metric' ? 'imperial' : 'metric');
+      if (this._unitUnverified()) this.onNotice?.(`${this._units === 'metric' ? 'Metric' : 'Imperial'} saved. This scan's units are unverified, so its figures stay in source units until you set a CRS.`);
     });
     // Snap toggle — cycles Off → Point → Geometry. "Point" snaps a placed
     // vertex to the nearest real return; "Geometry" also snaps to existing
@@ -1142,6 +1144,7 @@ export class MeasureController {
         : undefined,
       profileDatumKnown: this._originUp !== null,
       profileChartResidentOnly: m.profileChartResidentOnly,
+      profileChartWithheld: m.profileChart ? undefined : this._chartWithheld.get(m.id),
       profileCorridorWidthM:
         m.profileCorridorWidth != null ? m.profileCorridorWidth * f : undefined,
       profileGroundPercentile: m.profileGroundPercentile,
@@ -1655,9 +1658,11 @@ export class MeasureController {
   setKind(kind: MeasurementKind): void {
     if (kind === this._kind) return;
     this._kind = kind;
+    const abandoned = this._draft && this._draft.points.length > 0 ? this._draft : null;
     this._draft = null; // switching kinds abandons an in-progress measurement
     this._renderKindButtons();
     this._updateHint();
+    if (abandoned) this._setHintText(`Previous ${abandoned.kind} draft with ${abandoned.points.length} point${abandoned.points.length === 1 ? '' : 's'} discarded. ${this._hintEl.textContent ?? ''}`);
     this._onKindChange?.(kind);
   }
 
@@ -1894,21 +1899,18 @@ export class MeasureController {
   /** Finish an in-progress polyline / area, committing it when it is valid. */
   finishCurrent(): void {
     if (!this._draft) return;
-    if (this._draft.points.length >= MIN_POINTS[this._draft.kind]) {
-      if (this._draft.kind === 'area') {
-        // A ring that establishes no area is not committed; the draft stays
-        // open so a vertex can be moved or removed.
-        const v = areaRingVerdictCached(this._draft.points);
-        if (!v.ok) {
-          this._setHintText(`${v.text} Undo a vertex or adjust it, then finish.`);
-          return;
-        }
-        this._draft.closed = true;
+    if (this._draft.points.length < MIN_POINTS[this._draft.kind]) { this._setHintText(`Needs at least ${MIN_POINTS[this._draft.kind]} points: ${this._draft.points.length} placed. Click more, or press Esc to cancel.`); return; }
+    if (this._draft.kind === 'area') {
+      // A ring that establishes no area is not committed; the draft stays
+      // open so a vertex can be moved or removed.
+      const v = areaRingVerdictCached(this._draft.points);
+      if (!v.ok) {
+        this._setHintText(`${v.text} Undo a vertex or adjust it, then finish.`);
+        return;
       }
-      this._commitDraft();
-    } else {
-      this._draft = null;
+      this._draft.closed = true;
     }
+    this._commitDraft();
     this._updateHint();
   }
 
@@ -1947,6 +1949,9 @@ export class MeasureController {
     this._updateHint();
   }
 
+  profileChartRefusal: (() => string | null) | null = null; // set by the viewer
+  private readonly _chartWithheld = new Map<string, string>();
+  onNotice: ((text: string) => void) | null = null; // set by the panel mount
   /** Called after Clear with every removed measurement, for an Undo. Set by the panel mount. */
   onClearAll: ((removed: RemovedMeasurement[]) => void) | null = null;
 
@@ -2048,24 +2053,19 @@ export class MeasureController {
       this._setHintText(`Angle not saved. ${ANGLE_UNDEFINED_READOUT}: a point coincides with the vertex. Pick a different point.`);
       return;
     }
-    // Profile-only: stamp a sampled height-vs-distance chart onto the
-    // measurement record. The sampler is allowed to fail (no cloud, empty
-    // resident set on a streaming scan still warming up); a null return
-    // leaves `profileChart` undefined and the panel falls back to the
-    // scalar metrics row.
+    // Profile-only: stamp a sampled chart onto the record. The sampler may fail
+    // (no cloud, streaming still warming up); null leaves the scalar metrics row.
     if (m.kind === 'profile' && this._profileSampler && m.points.length >= 2) {
       try {
-        // The user's persisted sampler preferences (B7/B8) apply to every
-        // new profile, normalised through the same metre→render-unit clamp
-        // the resample path uses. A missing / malformed / reset record
-        // decodes to null and the standing defaults apply — exactly the
-        // pre-preference behaviour.
+        // Persisted sampler preferences apply to every new profile, through the
+        // resample path's clamp. A missing or malformed record means the defaults.
         const stored = decodeSamplerParams(storageGet(PROFILE_SAMPLER_DEFAULTS_KEY));
         const opts = profileSampleParams(stored, m.points[0], m.points[1], this.upFor(m), this.unitFrameOf(m));
         // In the owner's frame: the profile is cut along its layer's own up.
         const sampler = this._profileSampler;
         const result = this._inFrameOf(m, () => sampler(m.points[0], m.points[1], opts));
         if (result) this._stampProfileSample(m, result);
+        else { const why = this.profileChartRefusal?.(); if (why) this._chartWithheld.set(m.id, why); }
       } catch {
         // Sampler errors must not poison the measurement; the scalar
         // metrics still display correctly without the chart.

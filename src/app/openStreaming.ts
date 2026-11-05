@@ -25,6 +25,7 @@
  * (see `docs/architecture/architecture-map.md`).
  */
 
+import { UrlFieldMessage } from '../ui/urlFieldMessage';
 import { LoadCancelledError } from '../io/loadFile';
 import { dropPendingSessionForStream } from './pendingSessionRestore';
 import type { ReplaceOutcome, ReplaceRequest } from './discardGuard';
@@ -1115,7 +1116,7 @@ export async function handleRemoteEpt(
       else message = describeLoadError(err);
       deps.dropZone.setError(message);
       // Rethrown so the Stage's URL field shows the message inline with Retry.
-      throw new Error(message, { cause: err });
+      throw new UrlFieldMessage(message, { cause: err });
     }
   } finally {
     unlinkAbort();
