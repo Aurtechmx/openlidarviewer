@@ -772,7 +772,7 @@ describe.runIf(WORKFLOW_RECORDER_ENABLED)('buildActionRegistry — workflow reco
     h.stopRecording.mockReturnValue(null);
     h.run('workflow.stop-save');
     expect(h.save).not.toHaveBeenCalled();
-    expect(h.toast).toHaveBeenCalledWith('Workflow · nothing recorded yet.');
+    expect(h.toast).toHaveBeenCalledWith('Workflow · nothing recorded yet. Camera presets, Frame all, tools and themes are recorded.');
   });
 
   it('opens the recorder settings panel once it has loaded', async () => {

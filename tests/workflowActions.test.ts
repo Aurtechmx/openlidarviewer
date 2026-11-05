@@ -87,7 +87,7 @@ describe('workflow.stop-save', () => {
   it('still says nothing was recorded when the recorder was idle', () => {
     const { run, messages } = actionsWith({ workflowController: { stopRecording: () => null } as never });
     run('workflow.stop-save');
-    expect(messages()).toEqual(['Workflow · nothing recorded yet.']);
+    expect(messages()).toEqual(['Workflow · nothing recorded yet. Camera presets, Frame all, tools and themes are recorded.']);
   });
 });
 

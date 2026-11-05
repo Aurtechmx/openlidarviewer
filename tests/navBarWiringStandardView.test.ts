@@ -26,14 +26,16 @@ function setup() {
   const orthoChip: boolean[] = [];
   const bar = { setPlanActive: (on: boolean) => planStates.push(on), setOrthographicActive: (on: boolean) => orthoChip.push(on) };
   const pending: (() => void)[] = [];
+  const captured: unknown[] = [];
   const wiring = createNavBarWiring({
     getViewer: () => viewer as unknown as Viewer,
     getNavBar: () => bar as unknown as NavBar,
     toast: () => {},
     defer: (fn) => { pending.push(fn); },
+    capture: (event) => { captured.push(event); },
   });
   const settle = (): void => { for (const fn of pending.splice(0)) fn(); };
-  return { wiring, viewer, calls, planStates, orthoChip, settle };
+  return { wiring, viewer, captured, calls, planStates, orthoChip, settle };
 }
 
 describe('standard view while Plan View is on', () => {
@@ -203,5 +205,37 @@ describe('palette and shortcut routes while Plan View is on', () => {
     wiring.frameAll();
     expect(calls).toEqual(['view:front', 'ortho:true', 'frameAll']);
     expect(planStates).toEqual([]);
+  });
+});
+
+describe('the workflow recording hears camera presses', () => {
+  it('records Frame all from the bar and from the R key', () => {
+    const { wiring, captured } = setup();
+    wiring.callbacks.onReset();
+    wiring.noteFrameAll();
+    expect(captured).toEqual([{ type: 'frame-all' }, { type: 'frame-all' }]);
+  });
+
+  it('records a preset from the bar', () => {
+    const { wiring, captured } = setup();
+    wiring.callbacks.onCameraPreset('top');
+    expect(captured).toEqual([{ type: 'camera-preset', name: 'top' }]);
+  });
+
+  it('records nothing when replay calls the shared route', () => {
+    const { wiring, captured } = setup();
+    wiring.frameAll();
+    wiring.applyCameraPreset('top');
+    expect(captured).toEqual([]);
+  });
+});
+
+describe('the canvas menu', () => {
+  it('records Frame all and the preset through the bar route', () => {
+    const { wiring, viewer, captured } = setup();
+    const menu = wiring.sceneMenuView(viewer as unknown as Viewer);
+    menu.frameAll();
+    menu.setCameraPreset('oblique');
+    expect(captured).toEqual([{ type: 'frame-all' }, { type: 'camera-preset', name: 'oblique' }]);
   });
 });

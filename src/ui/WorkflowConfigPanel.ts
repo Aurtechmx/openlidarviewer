@@ -66,7 +66,7 @@ export class WorkflowConfigPanel {
         titleEl,
         el('div', {
           className: 'olv-wfc-subtitle',
-          text: 'Records camera moves and tool actions — never scan data.',
+          text: 'Records camera presets, Frame all, tools and themes — never scan data. Orbiting and the six views are not recorded.',
         }),
       ]),
       dismiss,

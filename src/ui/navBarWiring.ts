@@ -18,6 +18,7 @@
  *   so an unused camera mode costs the startup shell nothing.
  */
 
+import type { SceneMenuView } from './contextMenu';
 import type { NavBar, NavBarCallbacks } from './NavBar';
 import type { CameraPresetName, StandardView } from '../render/camera/cameraPresets';
 import type { Viewer } from '../render/Viewer';
@@ -32,12 +33,16 @@ export interface NavBarWiringDeps {
   /** The bar these callbacks were handed to. Read at click time, never at build time. */
   readonly getNavBar: () => NavBar | null;
   readonly toast: (message: string) => void;
+  /** Adds a camera press to a workflow recording. Replay's routes do not call it. */
+  readonly capture?: (event: { type: 'frame-all' } | { type: 'camera-preset'; name: string }) => void;
   /** Passed through to the plan controller; the tests drive the wait by hand. */
   readonly defer?: (fn: () => void) => (() => void) | void;
 }
 
 export interface NavBarWiring {
   readonly callbacks: NavBarCallbacks;
+  /** The canvas menu's camera calls: Frame all and the preset take the bar's route, so a recording and Plan View hear them. */
+  readonly sceneMenuView: (v: Pick<Viewer, 'focusOnScreen' | 'setStandardView'>) => SceneMenuView;
   /**
    * Enter or leave plan mode. Exposed so the command palette reaches the same
    * toggle the chip does. Resolves once the press has been applied.
@@ -153,15 +158,21 @@ export function createNavBarWiring(deps: NavBarWiringDeps): NavBarWiring {
     noteFrameAll();
   };
 
+  const pressFrameAll = (): void => {
+    frameAll();
+    deps.capture?.({ type: 'frame-all' });
+  };
+
   const callbacks: NavBarCallbacks = {
     onMode: (mode) => {
       deps.getViewer()?.setMode(mode);
       plan?.noteManualNavigation();
     },
     onSpeed: (multiplier) => deps.getViewer()?.setNavSpeed(multiplier),
-    onReset: frameAll,
+    onReset: pressFrameAll,
     onCameraPreset: (name) => {
       if (!applyCameraPreset(name)) return;
+      deps.capture?.({ type: 'camera-preset', name });
       deps.toast(`Camera · ${titleCase(name)} view.`);
     },
     onStandardView: (view, orientation) => {
@@ -183,6 +194,12 @@ export function createNavBarWiring(deps: NavBarWiringDeps): NavBarWiring {
   // no claim to drop.
   return {
     callbacks,
+    sceneMenuView: (v) => ({
+      focusOnScreen: (x, y) => v.focusOnScreen(x, y),
+      setStandardView: (view) => v.setStandardView(view),
+      frameAll: () => callbacks.onReset(),
+      setCameraPreset: (preset) => callbacks.onCameraPreset(preset),
+    }),
     togglePlanView,
     resetPlanView: () => plan?.reset(),
     notePlanViewPreset: (name) => plan?.noteCameraPreset(name),
@@ -190,7 +207,10 @@ export function createNavBarWiring(deps: NavBarWiringDeps): NavBarWiring {
     setOrthographic,
     applyCameraPreset,
     frameAll,
-    noteFrameAll,
+    noteFrameAll: () => {
+      noteFrameAll();
+      deps.capture?.({ type: 'frame-all' });
+    },
     restoreCamera: (restore) => {
       restore();
       plan?.reset();

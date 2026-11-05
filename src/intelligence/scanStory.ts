@@ -326,8 +326,11 @@ export function buildExportHealth(i: ScanStoryInputs): ExportHealth {
   }
 
   // Terrain-product readiness — the surface verdict in export terms.
+  // A good surface on part of the scan is still not a whole-dataset product.
+  const partial = i.coverageMode === 'resident-only' || i.coverageMode === 'sampled' || i.coverageMode === 'display-sample';
+  const exportReady = i.surfaceTier === 'Good' && !partial;
   let tprTier: HealthTier;
-  if (i.surfaceTier === 'Good') {
+  if (exportReady) {
     tprTier = 'good';
   } else if (i.surfaceTier === 'Blocked') {
     tprTier = 'blocked';
@@ -337,7 +340,7 @@ export function buildExportHealth(i: ScanStoryInputs): ExportHealth {
     tprTier = 'caution';
   }
   let tprValue: string;
-  if (i.surfaceTier === 'Good') {
+  if (exportReady) {
     tprValue = 'Export-ready';
   } else if (i.surfaceTier === 'Blocked') {
     tprValue = 'Blocked';

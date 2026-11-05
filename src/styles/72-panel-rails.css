@@ -435,3 +435,14 @@
   border: 2px solid transparent;
   background-clip: padding-box;
 }
+
+/* The session recovery notice waits for an answer, so it sits beside the left
+   rail and leaves the rail's controls usable. Phones use the bottom sheet. */
+.olv-toast.olv-recovery-notice { left: 16px; max-width: min(360px, calc(100vw - 32px)); }
+@media (min-width: 768px) and (min-height: 501px) {
+  .olv-toast.olv-recovery-notice {
+    left: calc(16px + 14px + var(--olv-rail-width));
+    max-width: clamp(240px, calc(100vw - 46px - var(--olv-rail-width) - var(--olv-right-rail-width)), 360px);
+  }
+  body:has(.olv-left-panels.olv-rail-collapsed) .olv-toast.olv-recovery-notice { left: 16px; }
+}

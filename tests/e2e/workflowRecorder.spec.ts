@@ -1,6 +1,6 @@
 import { test, expect, type Page } from '@playwright/test';
 import { isBenignPageError } from './pageErrors';
-import { seedStaleReloadCooldown } from './helpers';
+import { dropTinyPly, seedStaleReloadCooldown } from './helpers';
 
 /**
  * v0.3.9 workflow recorder — Cmd-Shift-U / Ctrl-Shift-U
@@ -184,4 +184,15 @@ test.describe('workflow recorder: settings chunk failure', () => {
     await page.locator(TRY_AGAIN).click();
     await expect(page.locator('.olv-wfc-card')).toBeVisible({ timeout: 10_000 });
   });
+});
+
+test('a dock Frame all press counts as a recorded step', async ({ page }) => {
+  await page.goto('/');
+  await dropTinyPly(page);
+  await expect(page.locator('.olv-empty')).toBeHidden({ timeout: 20_000 });
+  await pressRecordToggle(page);
+  await page.locator('.olv-tool-frame').click();
+  const download = page.waitForEvent('download');
+  await pressRecordToggle(page);
+  expect((await download).suggestedFilename()).toMatch(/\.olvworkflow$/);
 });

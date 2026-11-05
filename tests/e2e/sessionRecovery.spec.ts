@@ -115,6 +115,17 @@ test('reload, reopen the same file, restore: measurement and camera come back', 
     .toBeLessThan(1e-3);
 });
 
+test('the recovery notice leaves the left rail usable', async ({ page }) => {
+  await journalWork(page);
+  await reloadSettled(page);
+  await openTiny(page);
+  const notice = page.locator('.olv-recovery-notice');
+  await expect(notice).toContainText('This file matches your unsaved work');
+  const rail = await page.locator('.olv-left-panels').boundingBox();
+  const box = await notice.boundingBox();
+  expect(box!.x).toBeGreaterThanOrEqual(rail!.x + rail!.width);
+});
+
 test('reopening a different file offers no restore', async ({ page }) => {
   await journalWork(page);
   await reloadSettled(page);
