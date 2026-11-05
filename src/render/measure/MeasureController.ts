@@ -123,7 +123,7 @@ const CLOSE_RADIUS_PX = 16;
 export interface RemovedMeasurement {
   readonly measurement: Measurement;
   readonly index: number;
-  readonly epoch: number;
+  readonly epoch: number; readonly chartWithheld?: string; // why a profile has no chart, for an Undo to bring back
 }
 
 /** Touch devices say "Tap" rather than "Click" in the instruction hint. */
@@ -1105,7 +1105,7 @@ export class MeasureController {
 
   /** Replace all measurements — used when importing a session. */
   loadMeasurements(measurements: Measurement[]): void {
-    this._epoch++;
+    this._epoch++; this._chartWithheld.clear();
     this._measurements = measurements;
     this._draft = null;
     this._endDrag();
@@ -1496,10 +1496,10 @@ export class MeasureController {
   removeMeasurement(id: string): RemovedMeasurement | null {
     const index = this._measurements.findIndex((m) => m.id === id);
     if (index < 0) return null;
-    const [measurement] = this._measurements.splice(index, 1);
+    const [measurement] = this._measurements.splice(index, 1); const chartWithheld = this._chartWithheld.get(id); this._chartWithheld.delete(id);
     this._updateHint();
     this._emitChange();
-    return { measurement, index, epoch: this._epoch };
+    return { measurement, index, epoch: this._epoch, chartWithheld };
   }
 
   /**
@@ -1509,7 +1509,7 @@ export class MeasureController {
    */
   restoreMeasurement(r: RemovedMeasurement): boolean {
     if (r.epoch !== this._epoch || this._measurements.some((m) => m.id === r.measurement.id)) return false;
-    this._measurements.splice(Math.min(r.index, this._measurements.length), 0, r.measurement);
+    this._measurements.splice(Math.min(r.index, this._measurements.length), 0, r.measurement); if (r.chartWithheld) this._chartWithheld.set(r.measurement.id, r.chartWithheld);
     this._updateHint();
     this._emitChange();
     return true;
@@ -1957,13 +1957,13 @@ export class MeasureController {
 
   /** Remove every measurement at once; {@link onClearAll} receives them for an Undo. */
   clear(): void {
-    const removed = this._measurements;
+    const removed = this._measurements; const withheld = new Map(this._chartWithheld); this._chartWithheld.clear();
     this._epoch++;
     this._measurements = [];
     this._draft = null;
     this._updateHint();
     this._emitChange();
-    if (removed.length > 0) this.onClearAll?.(removed.map((measurement, index) => ({ measurement, index, epoch: this._epoch })));
+    if (removed.length > 0) this.onClearAll?.(removed.map((measurement, index) => ({ measurement, index, epoch: this._epoch, chartWithheld: withheld.get(measurement.id) })));
   }
 
   /** Project all measurements and redraw. Called once per frame by the Viewer. */

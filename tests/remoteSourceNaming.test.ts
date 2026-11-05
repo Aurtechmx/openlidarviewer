@@ -81,6 +81,7 @@ describe('describeRemoteCopcError', () => {
   it('adds a CORS hint for a transport failure', () => {
     const e = new RangeReadError('transport', 'Could not reach the host.');
     expect(describeRemoteCopcError(e, URL_)).toContain('CORS');
+    expect(describeRemoteCopcError(e, URL_)).toContain('Try downloading the file and using Open scan');
   });
 
   it('adds a retry hint for a timeout', () => {

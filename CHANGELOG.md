@@ -4,6 +4,15 @@ The format is based on Keep a Changelog and the project follows Semantic Version
 
 ## [Unreleased]
 
+### Fixed
+
+- A new app version no longer reloads the page by itself while saved views or held session work are open. It asks first.
+- Offline, a part of the app that cannot load says so and offers no reload.
+- L, the camera view keys, Save session and the snapshot key say "Open a scan first" before the viewer has loaded, instead of doing nothing.
+- Starting a tool keeps the highlight of a finished lasso result.
+- A COPC URL that cannot be reached also suggests downloading the file and using Open scan.
+- Undo after deleting a profile brings back the reason it has no chart.
+
 ## [0.7.1-alpha.1] - 2026-10-25
 
 An alpha on the way to v0.7.1. It has no tag and no DOI, its test figures are

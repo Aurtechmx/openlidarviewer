@@ -128,15 +128,27 @@ describe('wiring read from the source', () => {
   const read = (p: string): string => readFileSync(resolve(__dirname, p), 'utf8');
   it('the shell wires the open-work check, the notice, the net, and the performance toast', () => {
     const main = read('../src/main.ts');
-    expect(main).toContain('hasOpenWork: () => loading || (viewerReady && hasScan())');
+    expect(main).toContain('hasOpenWork: () => loading || (viewerReady && hasScan()) || !!heldSessionWork() || viewBookmarks.savedViews.length > 0');
     expect(main).toContain('onStaleWithWork: makeStaleWithWorkHandler(chunkSurface)');
-    expect(main).toContain('installChunkFailureNet(window');
+    expect(main).toContain('onAmbiguous: makeAmbiguousChunkHandler(chunkSurface)');
+    expect(main).toContain('onOffline: (msg) => appToast().show(msg)');
+    expect(main).toContain('setChunkFailureSurface({ ...chunkSurface, reload: reloadNow })');
+    expect(main).toContain('installChunkFailureNet(window, chunkSurface.showToast)');
+    expect(main).toMatch(/const staleReloadNotice = consumeStaleReloadNotice\(\); if \(staleReloadNotice\) appToast\(\)\.show\(staleReloadNotice\)/);
     expect(main).toMatch(/mountQualityControl\(stage, \{\s*toast:/);
   });
   it('Save session from a press is guarded, and the guards keep the rejecting one', () => {
     const main = read('../src/main.ts');
     expect(main.match(/exportSession: saveSessionFromUser/g)).toHaveLength(2);
-    expect(main).toContain('saveSession: exportSession');
+    expect(main.match(/saveSession: exportSession/g)).toHaveLength(2);
+  });
+  it('the terrain run reports through terrainFailureStatus', () => {
+    expect(read('../src/app/terrainAnalysisRunner.ts')).toMatch(/analysePanel\.setStatus\([^\n]*terrainFailureStatus\(err, /);
+  });
+  it('tool shortcuts ask for a scan before the viewer loads, instead of throwing', () => {
+    const main = read('../src/main.ts');
+    expect(main).toMatch(/function hasScan\(\): boolean \{\s*return viewerReady && \(/);
+    expect(main).toContain('sessionSaveRefusal(viewerReady ?');
   });
   it('the header forwards the toast', () => {
     expect(read('../src/ui/headerControls.ts')).toContain('toast: deps.toast');

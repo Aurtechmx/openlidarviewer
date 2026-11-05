@@ -264,10 +264,15 @@ export function setChunkFailureSurface(next: ChunkFailureSurface | null, now?: (
   if (now) clock = now;
 }
 
-/** The action that asks, then reloads. Undefined until the surface is wired. */
+/** Whether the browser reports a connection. */
+export function browserOnline(): boolean {
+  return typeof navigator === 'undefined' || navigator.onLine !== false;
+}
+
+/** The action that asks, then reloads. Undefined until the surface is wired, and offline, where a reload lands on an error page. */
 export function chunkReloadAction(): { label: string; onClick: () => void } | undefined {
   const s = surface;
-  if (!s) return undefined;
+  if (!s || !browserOnline()) return undefined;
   return {
     label: RELOAD_ACTION_LABEL,
     onClick: () => { void s.confirmReload('Reload the page?', RELOAD_LOSS_MESSAGE).then((ok) => { if (ok) s.reload(); }); },
@@ -276,6 +281,7 @@ export function chunkReloadAction(): { label: string; onClick: () => void } | un
 
 /** A failed chunk, in words: what could not load, the next step, and what that step costs. */
 export function chunkFailureText(what: string): string {
+  if (!browserOnline()) return `${what} could not load. You are offline. Try again when back online.`;
   return `${what} could not load. Reload the page to try again. A reload closes open scans, so save your session first if you can.`;
 }
 
@@ -471,7 +477,7 @@ export function installStaleChunkRecovery(
   }
   const onUnrecoverable = opts.onUnrecoverable;
   const log = opts.log ?? ((reason: string) => console.warn('[staleChunkReload]', reason));
-  const isOnline = opts.isOnline ?? (() => typeof navigator === 'undefined' || navigator.onLine !== false);
+  const isOnline = opts.isOnline ?? browserOnline;
   const onOffline = opts.onOffline;
   const onAmbiguous = opts.onAmbiguous;
   let probe: ((url: string) => Promise<ChunkProbe>) | null;
@@ -484,6 +490,7 @@ export function installStaleChunkRecovery(
   const decisions = new Map<string, Promise<RecoveryOutcome>>();
   let offlineNoted = false;
   function noteOffline(): void {
+    markChunkFailureReported();
     if (offlineNoted) return;
     offlineNoted = true;
     onOffline?.(OFFLINE_CHUNK_MESSAGE);

@@ -70,7 +70,7 @@ export function describeRemoteCopcError(err: unknown, url: string): string {
       return `${err.message} Try hosting the file on an object store or a static host. Most support range requests by default.`;
     }
     if (err.code === 'transport') {
-      return `${err.message} The host also needs to allow cross-origin (CORS) requests from this site.`;
+      return `${err.message} The host also needs to allow cross-origin (CORS) requests from this site. Try downloading the file and using Open scan.`;
     }
     if (err.code === 'timeout') {
       return `${err.message} Try again in a moment, or pick a faster host.`;

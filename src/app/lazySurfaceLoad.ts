@@ -29,7 +29,7 @@
  * state, and could not reach a failed static dependency of the chunk.
  */
 
-import { chunkFailureText, chunkReloadAction, classifyLoadError, clearChunkFailure, countChunkFailure, markChunkFailureReported } from './staleChunkReload';
+import { browserOnline, chunkFailureText, chunkReloadAction, classifyLoadError, clearChunkFailure, countChunkFailure, markChunkFailureReported } from './staleChunkReload';
 
 /** A trigger element that can carry a visible pending cue while its chunk loads. */
 export interface LazyLoadTrigger {
@@ -139,6 +139,10 @@ function report(toast: LazyLoadToast, err: unknown, label: string, retry?: () =>
     return;
   }
   markChunkFailureReported();
+  if (!browserOnline()) {
+    toast.show(chunkFailureText(`The ${label}`), tryAgain);
+    return;
+  }
   if (countChunkFailure(label) < 2) {
     toast.show(retry ? `The ${label} could not load.` : `The ${label} could not load. Try again. If it keeps failing, reload the page.`, tryAgain);
     return;

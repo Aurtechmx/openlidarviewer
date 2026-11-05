@@ -111,10 +111,9 @@ export function createScanService(deps: ScanServiceDeps): ScanService {
     activeExportTargetId() {
       // Static id wins when a static scan is selected (unchanged identity); a
       // streaming scan leaves `activeId` null, so fall through to the streaming
-      // cloud's stable shell id. Same late-`getViewer()` assumption `activeCloud`
-      // relies on — only the export/terrain guards call this, well after the
-      // viewer is bound and a scan is open.
-      return scan.activeId ?? getViewer().streamingCloud?.id ?? null;
+      // cloud's stable shell id. Key presses reach this before the lazy viewer
+      // loads, when there is no target.
+      return scan.activeId ?? getViewer()?.streamingCloud?.id ?? null;
     },
   };
 }

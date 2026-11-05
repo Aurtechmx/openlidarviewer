@@ -273,17 +273,18 @@ export function armLasso(deps: LassoArmingDeps): void {
 /**
  * Disarm the lasso. Returns whether it was armed, so an Escape handler knows
  * it consumed the key. The button is synced either way. `clearHighlight`
- * drops the selected-point tint; `clearPending` drops the result waiting on
+ * drops the selected-point tint ('if-armed' keeps a committed result's tint
+ * when the tool was already off); `clearPending` drops the result waiting on
  * the toast's Save, which a scene retire must do whether or not the tool was
  * armed, because the result was measured on the scan that is going.
  */
-export function disarmLasso(deps: LassoArmingDeps, opts: { clearHighlight?: boolean; clearPending?: boolean } = {}): boolean {
+export function disarmLasso(deps: LassoArmingDeps, opts: { clearHighlight?: boolean | 'if-armed'; clearPending?: boolean } = {}): boolean {
   const wasArmed = deps.tool.enabled;
   if (wasArmed) {
     deps.tool.disable();
     deps.viewer()?.setLassoMode(false);
   }
-  if (opts.clearHighlight) deps.viewer()?.clearSelectionHighlight();
+  if (opts.clearHighlight === true || (opts.clearHighlight === 'if-armed' && wasArmed)) deps.viewer()?.clearSelectionHighlight();
   if (opts.clearPending) deps.clearPending();
   deps.syncButton();
   return wasArmed;

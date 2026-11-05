@@ -32,7 +32,7 @@ import { buildResultModel } from './measureResultModel';
 import { copyToClipboard } from '../ui/clipboard';
 import { loadMeasurePanel, loadProfileWorkbenchRuntime } from '../lazyChunks';
 import { retryableOnce, mountPanelOnce } from './lazySurfaceLoad';
-import { chunkReloadAction, markChunkFailureReported } from './staleChunkReload';
+import { browserOnline, chunkReloadAction, markChunkFailureReported } from './staleChunkReload';
 
 // Re-exported here so the shell reaches it through the cluster that owns the
 // profile-workbench close signal, without adding a main.ts fan-out edge.
@@ -475,7 +475,7 @@ export function createMeasurePanelMount(deps: MeasurePanelMountDeps): MeasurePan
       if (!mountFailureSaid) {
         mountFailureSaid = true;
         markChunkFailureReported();
-        deps.toast?.('The Measurements list could not load. Your measurements are kept. Reload the page to try again; a reload closes open scans, so save your session first if you can.', chunkReloadAction());
+        deps.toast?.(`The Measurements list could not load. Your measurements are kept. ${browserOnline() ? 'Reload the page to try again; a reload closes open scans, so save your session first if you can.' : 'You are offline. Try again when back online.'}`, chunkReloadAction());
       }
       throw err;
     }),

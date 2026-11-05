@@ -114,6 +114,32 @@ describe('the row of a profile with no chart', () => {
     measure.dispose();
   });
 
+  it('forgets the reason on delete, Clear and import, and an Undo brings it back', async () => {
+    const { MeasureController } = await import('../src/render/measure/MeasureController');
+    const measure = new MeasureController({ onExit: () => {} } as never);
+    measure.setProfileSampler(() => null);
+    measure.profileChartRefusal = () => 'No chart: reason.';
+    const inner = measure as unknown as { _draft: unknown; _newDraft(): { points: number[][] }; _chartWithheld: Map<string, string> };
+    measure.setActive(true);
+    measure.setKind('profile');
+    const draw = () => { const d = inner._newDraft(); d.points = [[0, 0, 0], [3, 0, 0]]; inner._draft = d; measure.finishCurrent(); };
+    draw();
+    const id = measure.getMeasurements()[0]!.id;
+    const removed = measure.removeMeasurement(id)!;
+    expect(inner._chartWithheld.size).toBe(0);
+    expect(measure.restoreMeasurement(removed)).toBe(true);
+    expect(measure.getSummaries()[0]!.profileChartWithheld).toBe('No chart: reason.');
+    let cleared: Parameters<NonNullable<typeof measure.onClearAll>>[0] = [];
+    measure.onClearAll = (r) => { cleared = r; };
+    measure.clear();
+    expect(inner._chartWithheld.size).toBe(0);
+    measure.restoreMeasurement(cleared[0]!);
+    expect(measure.getSummaries()[0]!.profileChartWithheld).toBe('No chart: reason.');
+    measure.loadMeasurements([]);
+    expect(inner._chartWithheld.size).toBe(0);
+    measure.dispose();
+  });
+
   it('the panel shows it', () => {
     expect(readFileSync(new URL('../src/ui/MeasurePanel.ts', import.meta.url), 'utf8')).toMatch(/if \(s\.profileChartWithheld\) breakdownEls\.push/);
   });

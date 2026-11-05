@@ -17,6 +17,7 @@ import {
   STALE_RELOAD_NOTICE_KEY,
   consumeStaleReloadNotice,
   type StorageLike,
+  chunkReloadAction,
 } from '../src/app/staleChunkReload';
 import { createLazySingleton, createLazySurfaceLoader, runWithRetry } from '../src/app/lazySurfaceLoad';
 import { describeRemoteCopcError } from '../src/app/remoteSourceNaming';
@@ -219,5 +220,48 @@ describe('individual wording', () => {
     settle(Promise.reject(new Error('other')));
     await flush();
     expect(showToast).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('a chunk failure while offline', () => {
+  const offline = () => vi.stubGlobal('navigator', { onLine: false });
+  afterEach(() => { vi.unstubAllGlobals(); resetChunkFailuresForTests(); });
+  const surface = (showToast = vi.fn()) => setChunkFailureSurface({ showToast, confirmReload: async () => false, reload: vi.fn() });
+
+  it('the offline note stops the net replacing it', () => {
+    offline();
+    const handlers: Array<(e: unknown) => void> = [];
+    const show = vi.fn();
+    installChunkFailureNet({ addEventListener: (_t, l) => { handlers.push(l); } }, show);
+    const onOffline = vi.fn();
+    const { importOrReload } = installStaleChunkRecovery({ onOffline, eventTarget: null, storage: null, probe: null, log: () => {} });
+    return importOrReload(() => Promise.reject(chunkErr())).catch(() => {}).then(() => {
+      expect(onOffline).toHaveBeenCalledTimes(1);
+      handlers[0]({ reason: chunkErr() });
+      expect(show).not.toHaveBeenCalled();
+    });
+  });
+
+  it('the net itself says offline, with no reload', () => {
+    offline();
+    surface();
+    const handlers: Array<(e: unknown) => void> = [];
+    const show = vi.fn();
+    installChunkFailureNet({ addEventListener: (_t, l) => { handlers.push(l); } }, show);
+    handlers[0]({ reason: chunkErr() });
+    expect(show).toHaveBeenCalledTimes(1);
+    expect(show.mock.calls[0][0]).toMatch(/offline/i);
+    expect(show.mock.calls[0][0]).not.toMatch(/reload/i);
+    expect(show.mock.calls[0][1]).toBeUndefined();
+  });
+
+  it('no surface offers a reload', () => {
+    offline();
+    const showToast = vi.fn();
+    surface(showToast);
+    expect(chunkReloadAction()).toBeUndefined();
+    expect(chunkFailureText('Plan view')).toBe('Plan view could not load. You are offline. Try again when back online.');
+    reportChunkFailure('This export');
+    expect(showToast.mock.calls[0][1]).toBeUndefined();
   });
 });

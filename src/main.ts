@@ -487,7 +487,7 @@ async function openBatchConverter(): Promise<void> {
 let viewer: Viewer = null as unknown as Viewer;
 // Recover from a stale lazy chunk after a deploy (staleChunkReload.ts): one guarded reload with nothing open; with a scan open the user is told and asked. The dialog's own chunk may be gone too, so the browser's confirm stands in, and a yes flushes the recovery journal first.
 const chunkSurface = { showToast: (m: string, a?: { label: string; onClick: () => void }) => appToast().show(m, a), confirmReload: async (title: string, message: string) => { const ok = await loadModal().then((m) => m.openConfirm({ title, message, confirmLabel: 'Reload page', cancelLabel: 'Keep working' })).catch(() => window.confirm(`${title}\n\n${message}`)); if (ok) await recovery?.snapshotNow().catch(() => false); return ok; } };
-const { importOrReload, reloadNow } = installStaleChunkRecovery({ onOffline: (msg) => appToast().show(msg), hasOpenWork: () => loading || (viewerReady && hasScan()), onStaleWithWork: makeStaleWithWorkHandler(chunkSurface), onAmbiguous: makeAmbiguousChunkHandler(chunkSurface) });
+const { importOrReload, reloadNow } = installStaleChunkRecovery({ onOffline: (msg) => appToast().show(msg), hasOpenWork: () => loading || (viewerReady && hasScan()) || !!heldSessionWork() || viewBookmarks.savedViews.length > 0, onStaleWithWork: makeStaleWithWorkHandler(chunkSurface), onAmbiguous: makeAmbiguousChunkHandler(chunkSurface) });
 setChunkFailureSurface({ ...chunkSurface, reload: reloadNow }); installChunkFailureNet(window, chunkSurface.showToast); const staleReloadNotice = consumeStaleReloadNotice(); if (staleReloadNotice) appToast().show(staleReloadNotice); // the net is the last resort for a load no caller reports
 let startViewer: () => void = () => {};
 const viewerStarted = new Promise<void>((resolve) => { startViewer = resolve; });
@@ -661,7 +661,7 @@ function syncLassoButton(): void {
 /** Every arm and disarm goes through these, so the overlay, the viewer mode and the button never disagree. */
 const lassoArming: LassoArmingDeps = { tool: lassoVolumeTool, viewer: () => viewer, syncButton: syncLassoButton, clearPending: () => { pendingLassoSave = null; } };
 void viewerLoaded.then((v) => {
-  v.onToolModeChange = (prev, next) => toolModeChanged(prev, next, { disarmVolume: () => { disarmLasso(lassoArming, { clearHighlight: true }); }, disarmReclassify: () => { reclassifyUi?.disarm(); } });
+  v.onToolModeChange = (prev, next) => toolModeChanged(prev, next, { disarmVolume: () => { disarmLasso(lassoArming, { clearHighlight: 'if-armed' }); }, disarmReclassify: () => { reclassifyUi?.disarm(); } });
   lassoButton = v.measure.addAuxKindButton(
     'Lasso volume',
     'Lasso Volume — draw a freeform shape on the canvas to measure volume of every 3D point inside.\n' +
@@ -3295,7 +3295,7 @@ function refreshAnnotationPanel(): void {
 
 /** Whether a scan is currently loaded — gates the tool keyboard shortcuts. */
 function hasScan(): boolean {
-  return viewer.clouds().length > 0 || viewer.hasStreamingCloud;
+  return viewerReady && (viewer.clouds().length > 0 || viewer.hasStreamingCloud);
 }
 
 /**
@@ -3389,7 +3389,7 @@ function applyShareState(state: ShareState, cloud: PointCloud): void {
  * only while the requested scan stays active (else refuses, never splices).
  */
 async function exportSession(): Promise<boolean> {
-  const refused = sessionSaveRefusal({ hasScan: !!scans.activeExportTargetId(), heldWork: !!heldSessionWork(), savedViews: viewBookmarks.savedViews.length }); if (refused) { showLassoToast(refused); return false; }
+  const refused = sessionSaveRefusal(viewerReady ? { hasScan: !!scans.activeExportTargetId(), heldWork: !!heldSessionWork(), savedViews: viewBookmarks.savedViews.length } : { hasScan: false, heldWork: false, savedViews: 0 }); if (refused) { showLassoToast(refused); return false; }
   const withheld: string[] = []; let written: ReturnType<typeof sessionSavedWorkFromText> | null = null; return writeScanScopedExport({ // work left out of the file is said on the saved notice: a second toast would replace it
     requestedScanId: scans.activeExportTargetId(), // streaming leaves activeId null
     activeScanId: () => scans.activeExportTargetId(),
