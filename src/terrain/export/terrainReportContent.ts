@@ -279,7 +279,7 @@ export function buildTerrainReportContent(
         label: 'Export readiness',
         // The readiness engine's own "Tier — reason" formatting — identical
         // to the Export readiness provenance line stamped on every artifact.
-        value: ((r) => readinessLine(r.tier, r.reason))(readinessOnBasis(assessment.exportReadiness, assessment.exportReason, provenance.analysedBasis, provenance.coverageMode)),
+        value: ((r) => readinessLine(r.tier, r.reason))(readinessOnBasis(assessment.exportReadiness, assessment.exportReason, provenance.analysedBasis, provenance.gridExtent)),
       },
       { label: 'Best for', value: assessment.bestFor },
     ],
@@ -411,7 +411,7 @@ export function buildTerrainReportContent(
         value: assessment.scoreKnown ? `${assessment.score}/100` : 'unknown',
       },
       { label: 'Reason', value: assessment.reason },
-      { label: 'Export readiness', value: readinessOnBasis(assessment.exportReadiness, assessment.exportReason, provenance.analysedBasis, provenance.coverageMode).tier },
+      { label: 'Export readiness', value: readinessOnBasis(assessment.exportReadiness, assessment.exportReason, provenance.analysedBasis, provenance.gridExtent).tier },
       ...(assessment.exportReason
         ? [{ label: 'Export note', value: assessment.exportReason }]
         : []),
