@@ -449,7 +449,7 @@ export function createWorkflowRecording(c: WorkflowController, toast: (message: 
       if (c.state !== 'recording') { start(); return; }
       const workflow = c.stopRecording();
       if (workflow) void saveWorkflowWithToast(c, workflow, toast);
-      else toast('Workflow · nothing recorded yet.');
+      else toast('Workflow · nothing recorded yet. Camera presets, Frame all, tools and themes are recorded.');
     },
   };
 }

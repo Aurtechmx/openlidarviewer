@@ -215,6 +215,14 @@ describe('buildExportHealth — rows', () => {
     expect(h.rows.some((r) => r.label === 'Volumetric point density')).toBe(false);
   });
 
+  it('a Good surface on part of the scan reads Preview only', () => {
+    for (const coverageMode of ['resident-only', 'sampled', 'display-sample'] as const) {
+      const row = buildExportHealth({ ...GOOD, coverageMode }).rows.find((r) => r.label === 'Terrain products');
+      expect(row?.value).toBe('Preview only');
+      expect(row?.tier).toBe('caution');
+    }
+  });
+
   it('Good terrain products read Export-ready; undefined reads Not analysed', () => {
     expect(buildExportHealth(GOOD).rows.find((r) => r.label === 'Terrain products')?.value).toBe(
       'Export-ready',

@@ -68,7 +68,7 @@ describe('badge Stop', () => {
     rec = createWorkflowRecording(c, toast);
     c.startRecording();
     stopButton().listeners.click();
-    expect(toast).toHaveBeenCalledWith('Workflow · nothing recorded yet.');
+    expect(toast).toHaveBeenCalledWith('Workflow · nothing recorded yet. Camera presets, Frame all, tools and themes are recorded.');
   });
 });
 

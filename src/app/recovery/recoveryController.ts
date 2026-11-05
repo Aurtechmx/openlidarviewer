@@ -152,7 +152,7 @@ export function startRecovery(deps: RecoveryDeps): RecoveryHandle {
     const el = document.createElement('div');
     el.className = 'olv-toast olv-recovery-notice';
     el.setAttribute('role', 'status');
-    Object.assign(el.style, { position: 'fixed', top: 'auto', bottom: 'calc(16px + var(--olv-seat, 0px))', left: '16px', transform: 'none', zIndex: '40', maxWidth: 'min(360px, calc(100vw - 32px))' });
+    Object.assign(el.style, { position: 'fixed', top: 'auto', bottom: 'calc(16px + var(--olv-seat, 0px))', transform: 'none', zIndex: '40' });
     const p = document.createElement('div');
     p.className = 'olv-toast-text';
     p.textContent = text;

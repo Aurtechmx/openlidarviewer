@@ -711,7 +711,14 @@ stage.canvas.addEventListener('contextmenu', (e) => {
   // to `undefined` throw here and reach the toast, instead of silently
   // succeeding with nothing to call.
   void createLazySurfaceLoader({ show: showLassoToast })(async () => (await loadContextMenu()).showSceneMenu, 'context menu').then((show) => {
-    show?.(e.clientX, e.clientY, v, ndcX, ndcY); // undefined: already reported; right-click again to retry.
+    // Frame all and the preset take the bar's route, so a recording and Plan View hear them.
+    const menuView = {
+      focusOnScreen: (x: number, y: number) => v.focusOnScreen(x, y),
+      setStandardView: (view: 'top' | 'front') => v.setStandardView(view),
+      frameAll: () => navWiring.callbacks.onReset(),
+      setCameraPreset: (preset: 'oblique') => navWiring.callbacks.onCameraPreset(preset),
+    };
+    show?.(e.clientX, e.clientY, menuView, ndcX, ndcY); // undefined: already reported; right-click again to retry.
   });
 });
 
@@ -1352,6 +1359,7 @@ const navWiring = createNavBarWiring({
   getViewer: () => viewer,
   getNavBar: () => navBar,
   toast: showLassoToast,
+  capture: (event) => workflowController.capture(event),
 });
 // The action registry is built on the first surface that needs it (palette,
 // sheet, a Dataset Story click) from the lazy `actionDefinitions` chunk; a
@@ -1459,7 +1467,7 @@ const keyBindingDeps: KeyBindingDeps = {
       else if (!hasScan()) showLassoToast('Open a scan first.');
       else { armLasso(lassoArming); showLassoToast('Lasso volume armed — draw a shape on the canvas.'); }
     },
-    setCameraPreset: (preset) => { if (hasScan()) return navWiring.applyCameraPreset(preset); showLassoToast('Open a scan first.'); return false; }, // tells Plan View too
+    setCameraPreset: (preset) => { if (hasScan()) { const fired = navWiring.applyCameraPreset(preset); if (fired) workflowController.capture({ type: 'camera-preset', name: preset }); return fired; } showLassoToast('Open a scan first.'); return false; }, // tells Plan View too
     toast: (message) => showLassoToast(message),
     openCommandPalette: openCommandPalette,
     toggleShortcutSheet: () => void ensureShortcutSheet((sheet) => sheet.toggle()).catch(() => {}), // already reported via the toast
@@ -1476,7 +1484,7 @@ stage.addTeardown(installKeyDispatch(buildViewerKeyBindings(keyBindingDeps), key
 const helpOverlay = createHelpOverlayLazy(stage.overlay, { getActions: () => ensureActionRegistry(), toast: { show: showLassoToast }, trigger: buttonLazyTrigger(() => dock.dock.querySelector<HTMLButtonElement>('.olv-tool-help')) }); // lazy chunk, see helpOverlayLazy.ts
 
 const dock = new ToolDock({
-  onFrameAll: () => navWiring.frameAll(),
+  onFrameAll: () => navWiring.callbacks.onReset(),
   onSnapshot: () => void saveSnapshot(),
   onShare: () => copyShareLink(),
   onMeasureToggle: () => { runTool('measure'); },

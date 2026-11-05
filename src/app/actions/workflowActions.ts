@@ -40,7 +40,7 @@ export function contributeWorkflowActions(deps: WorkflowActionDeps): Action[] {
       // makes the file format explicit, and the save toast confirms
       // both what was saved and what the recipient needs to use it.
       hint:
-        'Records camera moves and tool actions only — to replay later you ' +
+        'Records camera presets, Frame all, tools and themes only — to replay later you ' +
         '(or the recipient) need the same scan open.',
       keywords: ['record', 'macro', 'demo'],
       run: () => deps.startWorkflowRecording(),
@@ -50,7 +50,7 @@ export function contributeWorkflowActions(deps: WorkflowActionDeps): Action[] {
       title: 'Stop and save workflow (.olvworkflow)',
       section: 'Workflow',
       hint:
-        'Saves a replay of camera moves and tool actions — replay needs ' +
+        'Saves a replay of camera presets, Frame all, tools and themes — replay needs ' +
         'the same scan loaded on the other end.',
       keywords: ['export', 'finish', 'save'],
       run: () => {
@@ -63,7 +63,7 @@ export function contributeWorkflowActions(deps: WorkflowActionDeps): Action[] {
         // The same save the record shortcut uses: it reports saved or
         // cancelled once the picker or download has finished.
         if (workflow) void saveWorkflowWithToast(deps.workflowController, workflow, deps.showLassoToast);
-        else deps.showLassoToast('Workflow · nothing recorded yet.');
+        else deps.showLassoToast('Workflow · nothing recorded yet. Camera presets, Frame all, tools and themes are recorded.');
       },
     },
     {

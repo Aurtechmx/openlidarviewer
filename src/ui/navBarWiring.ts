@@ -32,6 +32,8 @@ export interface NavBarWiringDeps {
   /** The bar these callbacks were handed to. Read at click time, never at build time. */
   readonly getNavBar: () => NavBar | null;
   readonly toast: (message: string) => void;
+  /** Adds a camera press to a workflow recording. Replay's routes do not call it. */
+  readonly capture?: (event: { type: 'frame-all' } | { type: 'camera-preset'; name: string }) => void;
   /** Passed through to the plan controller; the tests drive the wait by hand. */
   readonly defer?: (fn: () => void) => (() => void) | void;
 }
@@ -153,15 +155,21 @@ export function createNavBarWiring(deps: NavBarWiringDeps): NavBarWiring {
     noteFrameAll();
   };
 
+  const pressFrameAll = (): void => {
+    frameAll();
+    deps.capture?.({ type: 'frame-all' });
+  };
+
   const callbacks: NavBarCallbacks = {
     onMode: (mode) => {
       deps.getViewer()?.setMode(mode);
       plan?.noteManualNavigation();
     },
     onSpeed: (multiplier) => deps.getViewer()?.setNavSpeed(multiplier),
-    onReset: frameAll,
+    onReset: pressFrameAll,
     onCameraPreset: (name) => {
       if (!applyCameraPreset(name)) return;
+      deps.capture?.({ type: 'camera-preset', name });
       deps.toast(`Camera · ${titleCase(name)} view.`);
     },
     onStandardView: (view, orientation) => {
@@ -190,7 +198,10 @@ export function createNavBarWiring(deps: NavBarWiringDeps): NavBarWiring {
     setOrthographic,
     applyCameraPreset,
     frameAll,
-    noteFrameAll,
+    noteFrameAll: () => {
+      noteFrameAll();
+      deps.capture?.({ type: 'frame-all' });
+    },
     restoreCamera: (restore) => {
       restore();
       plan?.reset();
