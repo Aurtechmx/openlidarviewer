@@ -229,3 +229,13 @@ describe('the workflow recording hears camera presses', () => {
     expect(captured).toEqual([]);
   });
 });
+
+describe('the canvas menu', () => {
+  it('records Frame all and the preset through the bar route', () => {
+    const { wiring, viewer, captured } = setup();
+    const menu = wiring.sceneMenuView(viewer as unknown as Viewer);
+    menu.frameAll();
+    menu.setCameraPreset('oblique');
+    expect(captured).toEqual([{ type: 'frame-all' }, { type: 'camera-preset', name: 'oblique' }]);
+  });
+});

@@ -18,6 +18,7 @@
  *   so an unused camera mode costs the startup shell nothing.
  */
 
+import type { SceneMenuView } from './contextMenu';
 import type { NavBar, NavBarCallbacks } from './NavBar';
 import type { CameraPresetName, StandardView } from '../render/camera/cameraPresets';
 import type { Viewer } from '../render/Viewer';
@@ -40,6 +41,8 @@ export interface NavBarWiringDeps {
 
 export interface NavBarWiring {
   readonly callbacks: NavBarCallbacks;
+  /** The canvas menu's camera calls: Frame all and the preset take the bar's route, so a recording and Plan View hear them. */
+  readonly sceneMenuView: (v: Pick<Viewer, 'focusOnScreen' | 'setStandardView'>) => SceneMenuView;
   /**
    * Enter or leave plan mode. Exposed so the command palette reaches the same
    * toggle the chip does. Resolves once the press has been applied.
@@ -191,6 +194,12 @@ export function createNavBarWiring(deps: NavBarWiringDeps): NavBarWiring {
   // no claim to drop.
   return {
     callbacks,
+    sceneMenuView: (v) => ({
+      focusOnScreen: (x, y) => v.focusOnScreen(x, y),
+      setStandardView: (view) => v.setStandardView(view),
+      frameAll: () => callbacks.onReset(),
+      setCameraPreset: (preset) => callbacks.onCameraPreset(preset),
+    }),
     togglePlanView,
     resetPlanView: () => plan?.reset(),
     notePlanViewPreset: (name) => plan?.noteCameraPreset(name),

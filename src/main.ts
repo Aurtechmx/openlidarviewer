@@ -711,14 +711,7 @@ stage.canvas.addEventListener('contextmenu', (e) => {
   // to `undefined` throw here and reach the toast, instead of silently
   // succeeding with nothing to call.
   void createLazySurfaceLoader({ show: showLassoToast })(async () => (await loadContextMenu()).showSceneMenu, 'context menu').then((show) => {
-    // Frame all and the preset take the bar's route, so a recording and Plan View hear them.
-    const menuView = {
-      focusOnScreen: (x: number, y: number) => v.focusOnScreen(x, y),
-      setStandardView: (view: 'top' | 'front') => v.setStandardView(view),
-      frameAll: () => navWiring.callbacks.onReset(),
-      setCameraPreset: (preset: 'oblique') => navWiring.callbacks.onCameraPreset(preset),
-    };
-    show?.(e.clientX, e.clientY, menuView, ndcX, ndcY); // undefined: already reported; right-click again to retry.
+    show?.(e.clientX, e.clientY, navWiring.sceneMenuView(v), ndcX, ndcY); // undefined: already reported; right-click again to retry.
   });
 });
 
