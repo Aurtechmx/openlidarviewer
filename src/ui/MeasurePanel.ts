@@ -2500,6 +2500,8 @@ function renderProfileChart(
     chartEl.title = titleOf(drawn);
     applyAxisPositions(chartEl);
     bindHits();
+    // The fresh overlay's x labels are fitted to the floor width; fit them to this box.
+    (chartEl as ProfileChartEl)._olvRefitXLabels?.();
   };
   // One redraw per frame while the grip is dragged.
   (chartEl as ProfileChartEl)._olvRelayout = (): void => {

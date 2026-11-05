@@ -244,10 +244,12 @@ class ProfileWorkbench {
     const title = options.title ?? 'Profile workbench';
     this._committedName = title;
 
-    this._state = restoreDockState(
-      host.storage ? host.storage.getItem(PROFILE_WORKBENCH_DOCK_KEY) : null,
-      this._limits(),
-    );
+    // Opening is a request to see the section, so a dock left collapsed (Escape
+    // collapses it too) comes back at its stored height, not as a header strip.
+    this._state = {
+      ...restoreDockState(host.storage ? host.storage.getItem(PROFILE_WORKBENCH_DOCK_KEY) : null, this._limits()),
+      collapsed: false,
+    };
 
     // The splitter is a real separator, so the height is reachable without a
     // pointer: the arrow keys move it through the same dock arithmetic a drag

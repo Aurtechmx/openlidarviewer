@@ -1,9 +1,11 @@
-# Profile ground-first rule: paired injection-recovery test (pre-registration)
+# Profile ground-first rule: paired injection-recovery test (protocol)
 
 Status: written on 2026-11-04, before the fixtures below were generated and
-before OpenLiDARViewer's sampler was run on them. The scenes, settings, measures
-and decision rule are fixed here. A result that goes against the rule in use is
-recorded as such.
+before OpenLiDARViewer's sampler was run on them, and committed in the same
+change as its result. Under `README.md` in this directory that is
+adopted-with-result, not a preregistration: no commit shows this protocol
+without its figures. The scenes, settings, measures and decision rule are
+fixed here. A result that goes against the rule in use is recorded as such.
 
 This is a synthetic check of one choice in the profile sampler. It moves no
 evidence level. MEAS-PROFILE stays where it is, and its OGR/R study still covers

@@ -177,6 +177,19 @@ test.describe('profile workbench', () => {
     await expect(page.locator('.olv-workbench-canvas')).toBeVisible();
   });
 
+  test('reopening after a collapse shows the section, not a header strip', async ({ page }) => {
+    await placeProfile(page);
+    await openWorkbench(page);
+    await page.locator('.olv-workbench-btn', { hasText: 'Collapse' }).click();
+    await expect(page.locator('.olv-workbench-collapsed')).toHaveCount(1);
+    await page.locator('.olv-workbench-btn', { hasText: 'Close Profile Workbench' }).click();
+    await expect(page.locator('.olv-workbench')).toHaveCount(0);
+
+    await openWorkbench(page);
+    await expect(page.locator('.olv-workbench-collapsed')).toHaveCount(0);
+    await expect(page.locator('.olv-workbench-canvas')).toBeVisible();
+  });
+
   test('no console error is raised across an open, collapse, close and reopen', async ({ page }) => {
     // A workbench that throws on teardown still passes every assertion above,
     // because the DOM it leaves behind is the DOM those assertions want.

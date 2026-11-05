@@ -110,12 +110,12 @@ describe('chains admit only what every member can give', () => {
     }
   });
 
-  it('sums boxes that are held finely, a genuine zero volume included', () => {
+  it('sums boxes that are held finely, leaving out the volume a box with no height withholds', () => {
     const area = aggregate([fineBox, flatBox], 'sum', 'area', UP, 1, 1, { positionSteps: stepsOf });
     expect(area.value).toBeCloseTo(12, 6);
     const vol = aggregate([fineBox, flatBox], 'sum', 'volume-fill', UP, 1, 1, { positionSteps: stepsOf });
     expect(vol.value).toBeCloseTo(24, 6);
-    expect(vol.contributingCount).toBe(2);
+    expect(vol.contributingCount).toBe(1);
   });
 });
 

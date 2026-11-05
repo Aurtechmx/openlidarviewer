@@ -44,10 +44,12 @@ import type { Measurement, MeasurementKind, UnitSystem } from './types';
 import { displayDecimals, formatArea, formatLength, formatVolume } from './format';
 import { GEOGRAPHIC_NOT_AVAILABLE, VERTICAL_NOT_AVAILABLE, VERTICAL_SCALE_NOT_AVAILABLE } from './types';
 import {
+  BOX_NO_HEIGHT_NOTE,
   angleAtVertex,
   boxFromCorners,
   boxMetrics,
   distance,
+  flatBox,
   polygonAreaPlanar,
   polylineLength,
   slopeBetween,
@@ -97,6 +99,7 @@ export interface ChainResult {
 export const CHAIN_CLIP_REGION_WITHHELD =
   "Volume withheld: a clip region spans the scan's full height, so it has no measured volume.";
 /** A chain that totals real boxes and leaves clip regions out. */
+export const CHAIN_NO_MEASURED_VOLUME = 'Volume withheld: no member has a measured volume.';
 export const CHAIN_CLIP_REGION_LEFT_OUT =
   "clip regions left out: they span the scan's full height, so they have no measured volume";
 
@@ -247,6 +250,9 @@ export function valueForDimension(
       if (m.kind === 'box' && p.length >= 2) {
         // A clip region spans the scan's full height: no measured volume.
         if (m.clipRegion === true) return null;
+        // A box with no height has its volume withheld in the panel; it
+        // contributes nothing here rather than 0.
+        if (flatBox(p[0], p[1], worldUp)) return null;
         // The box is built on metre-frame corners, so the up-aware answer the
         // area branch and the box readout use already carries fH²·fV.
         return boxMetrics(boxFromCorners(p[0], p[1]), worldUp).volume;
@@ -382,18 +388,21 @@ export function aggregate(
   }
   const contributingCount = values.length;
   const clipLeftOut = dimension === 'volume-fill' && measurements.some((m) => m.kind === 'box' && m.clipRegion === true);
-  // Only a chain of nothing but clip regions is withheld for that reason; a
-  // withheld polygon beside one keeps its own reason.
-  const onlyClipRegions = measurements.length > 0 && measurements.every((m) => m.kind === 'box' && m.clipRegion === true);
   const note = clipLeftOut ? CHAIN_CLIP_REGION_LEFT_OUT : undefined;
-  if (dimension === 'volume-fill' && contributingCount === 0 && operation !== 'count') {
-    const withheld = measurements.find((m) => m.kind === 'volume' && m.volume?.gridAuthority === 'withheld');
-    const refusal = onlyClipRegions
-      ? CHAIN_CLIP_REGION_WITHHELD
-      : withheld
-        ? `Volume withheld: ${withheld.volume?.gridAuthorityReason ?? 'no member has a measured volume'}.${note ? ` ${note}` : ''}`
-        : null;
-    if (refusal) return { value: Number.NaN, unit: '', contributingCount: 0, totalCount, operation, dimension, refusal };
+  if (dimension === 'volume-fill' && contributingCount === 0 && operation !== 'count' && measurements.length > 0) {
+    // The first member with a reason of its own lends the chain that reason.
+    // Only with none does a clip region take the blame.
+    let reason: string | null = null;
+    for (const m of measurements) {
+      if (m.kind === 'volume' && m.derivedWithheld) reason = m.derivedWithheld;
+      else if (m.kind === 'volume' && m.volume?.gridAuthority === 'withheld') reason = `Volume withheld: ${m.volume.gridAuthorityReason ?? 'no member has a measured volume'}.`;
+      else if (m.kind === 'box' && m.clipRegion !== true && m.points.length >= 2 && flatBox(m.points[0], m.points[1], worldUp)) reason = BOX_NO_HEIGHT_NOTE;
+      if (reason !== null) break;
+    }
+    const refusal = reason
+      ? `${reason}${note ? ` ${note[0]!.toUpperCase()}${note.slice(1)}.` : ''}`
+      : clipLeftOut ? CHAIN_CLIP_REGION_WITHHELD : CHAIN_NO_MEASURED_VOLUME;
+    return { value: Number.NaN, unit: '', contributingCount: 0, totalCount, operation, dimension, refusal };
   }
   // A geographic frame has no confirmed linear scale either.
   const verified = (scale.unitsVerified ?? true) && scale.geographic !== true;
