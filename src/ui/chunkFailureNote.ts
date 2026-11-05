@@ -20,7 +20,7 @@ export interface ChunkFailureNoteOpts {
 export function chunkFailureNote(opts: ChunkFailureNoteOpts): HTMLElement {
   const note = el('div', { className: 'olv-report-empty olv-chunk-failure' });
   const button = (text: string, onClick: () => void): void => {
-    const b = el('button', { className: 'olv-inline-retry', text }) as HTMLButtonElement;
+    const b = el('button', { className: 'olv-inline-retry', text, title: text === 'Try again' ? 'Try loading this part again.' : 'Reload the page to load this part again. Reloading closes open scans.' }) as HTMLButtonElement;
     b.type = 'button';
     b.addEventListener('click', onClick);
     note.append(b);

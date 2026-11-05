@@ -1255,7 +1255,7 @@ export class ExportPanel {
         const again = el('p', { className: 'olv-findings-load-failed olv-export-fullres-hint', text: `${chunkFailureText('Saved findings')} ` });
         const reload = chunkReloadAction();
         if (reload) {
-          const b = el('button', { className: 'olv-bc-pill olv-export-product-btn', text: reload.label }) as HTMLButtonElement;
+          const b = el('button', { className: 'olv-bc-pill olv-export-product-btn', text: reload.label, title: 'Reload the page to load this part again. Reloading closes open scans.' }) as HTMLButtonElement;
           b.type = 'button';
           b.addEventListener('click', reload.onClick);
           again.append(b);
