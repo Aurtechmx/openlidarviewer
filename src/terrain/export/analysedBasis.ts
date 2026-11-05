@@ -134,3 +134,17 @@ export const WITHHELD_RECOVERY_STATUS =
   'Points flagged Withheld were excluded from this surface. The display was reduced to fit the point budget, '
   + 'so the surface was rebuilt by re-decoding the source file at that budget and taking every Nth point. '
   + 'It is still a sample of the points, not every point.';
+
+/**
+ * Export readiness as a reader should see it. CRS, datum and surface can all pass
+ * on a sample, but that is not a whole-dataset deliverable, so Ready is not stated.
+ */
+export function readinessOnBasis<T extends string>(
+  tier: T,
+  reason: string,
+  basis: AnalysedBasis | null | undefined,
+  coverageMode: string | undefined,
+): { readonly tier: T | 'Preview'; readonly reason: string } {
+  if (tier !== 'Ready' || (coverageMode !== 'sampled' && !isSampledBasis(basis))) return { tier, reason };
+  return { tier: 'Preview', reason: 'Only a sample of the scan was analysed, so whole-dataset support is not claimed.' };
+}

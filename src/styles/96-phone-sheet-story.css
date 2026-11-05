@@ -512,3 +512,13 @@
 @media (pointer: coarse) {
   .olv-lab-fix, .olv-at-back, .olv-lab-method-summary, .olv-ta-advanced-summary { min-height: 44px; }
 }
+
+/* Phone: the annotation form is taller than the room above the sheet, so it sits
+   over the sheet and scrolls, which keeps Save reachable. */
+@media (max-width: 767px), (max-height: 500px) {
+  .olv-anno-editor {
+    position: fixed; left: 8px !important; right: 8px; top: 8px !important;
+    width: auto; max-height: calc(100dvh - 16px); overflow-y: auto;
+    z-index: calc(var(--z-backdrop) + 1);
+  }
+}

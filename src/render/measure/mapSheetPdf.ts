@@ -20,6 +20,7 @@
  * lazy chunk. The caller triggers the download.
  */
 
+import { readinessOnBasis } from '../../terrain/export/analysedBasis';
 import { INPUT_NOT_RECORDED_NOTE, sourceSha256Text } from '../../science/exportDigestRecord';
 import { crsOriginLine } from '../../science/crsOrigin';
 import { PDFDocument, StandardFonts, rgb, degrees, type PDFFont, type PDFPage } from 'pdf-lib';
@@ -1308,8 +1309,9 @@ function drawTitleBlock(
   // provenance verdict (Ready / Preview / Blocked) onto the note vocabulary.
   let readiness: SheetReadiness;
   if (prov) {
-    if (prov.exportReadiness === 'Ready') readiness = 'ready';
-    else if (prov.exportReadiness === 'Blocked') readiness = 'blocked';
+    const shown = readinessOnBasis(prov.exportReadiness, prov.exportReason, prov.analysedBasis, prov.coverageMode).tier;
+    if (shown === 'Ready') readiness = 'ready';
+    else if (shown === 'Blocked') readiness = 'blocked';
     else readiness = 'previewOnly';
   } else {
     readiness = input.readiness ?? 'previewOnly';
