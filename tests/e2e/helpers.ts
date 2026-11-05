@@ -41,15 +41,17 @@ export async function showWorkspaceMode(
   mode: 'data' | 'work' | 'analyse' | 'output',
 ): Promise<void> {
   const tab = page.locator(`.olv-ws-tab[data-mode="${mode}"]`);
-  if ((await tab.count()) === 0) return;
-  if (await tab.isVisible()) {
-    await tab.click();
-    return;
-  }
   // Phone layout: the desktop rail is hidden and its modes are the bottom
   // sheet's tabs, so the mode is reached through the sheet.
   const sheetTab = page.locator(`.olv-mobile-sheet .olv-msheet-tab[data-tab="${mode}"]`);
-  if (await sheetTab.isVisible()) await activate(sheetTab);
+  // Wait for one route to exist: an instant check can miss a shell still mounting.
+  await expect(tab.or(sheetTab).first()).toBeVisible({ timeout: 20_000 });
+  if (await tab.isVisible()) {
+    await tab.click();
+    await expect(tab).toHaveAttribute('aria-selected', 'true');
+    return;
+  }
+  await activate(sheetTab);
 }
 
 /**

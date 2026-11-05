@@ -132,6 +132,11 @@ test.describe('state strip', () => {
       if (name === 'stale') await page.setViewportSize({ width: 390, height: 844 });
       await expect(strip(page)).toBeVisible();
       await expectAllFacts(page);
+      // The viewport has just narrowed: judge the layout once the strip has settled.
+      await expect.poll(async () => {
+        const [a, d] = [await strip(page).boundingBox(), await page.locator('.olv-dock').boundingBox()];
+        return a && d ? a.y + a.height - d.y : Infinity;
+      }).toBeLessThanOrEqual(0.5);
       const s = await strip(page).boundingBox();
       const dock = await page.locator('.olv-dock').boundingBox();
       expect(s && dock).toBeTruthy();
