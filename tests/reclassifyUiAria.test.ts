@@ -195,3 +195,20 @@ async function makeUiForAutoFailure() {
   });
   return { root: ui.element as unknown as FakeEl };
 }
+
+describe('reclassify armed state stays visible and ends with its panel', () => {
+  it('shows the drawing instruction only while armed', async () => {
+    const { armBtn, root } = await makeUi();
+    const hint = root.byTestId('reclass-armed-hint')!;
+    expect(hint.classList.contains('olv-hidden')).toBe(true);
+    armBtn.click();
+    expect(hint.classList.contains('olv-hidden')).toBe(false);
+    expect(hint.textContent).toBe('Draw around points on the scan. Esc cancels.');
+  });
+  it('hiding the panel disarms the lasso', async () => {
+    const { ui, armBtn } = await makeUi();
+    armBtn.click();
+    ui.setVisible(false);
+    expect(armBtn.attrs['aria-pressed']).toBe('false');
+  });
+});

@@ -23,7 +23,7 @@ import { sourcePositions } from '../model/pointFrames';
 import { isSessionFile } from '../io/sessionFile';
 import { scanFactsFromStatic } from './sessionScanFacts';
 import { heldSessionWork, takePendingSessionRestore } from './pendingSessionRestore';
-export { clearPendingSessionRestore, heldSessionWork } from './pendingSessionRestore';
+export { clearPendingSessionRestore, heldSessionWork, sessionSaveRefusal, snapshotRefusal } from './pendingSessionRestore';
 import { rememberCloudFile } from '../io/sourceFiles';
 export { sourceDigestReady } from '../io/sourceFiles';
 import { detectCopc } from '../io/copc/copcDetect';

@@ -207,6 +207,11 @@ export function groupBySection(
  * list of duplicate ids; an empty array means the registry is clean.
  * Useful for a smoke test in main.ts after the registry is built.
  */
+/** The reason a row that needs a scan shows with none open. Read live: the registry is cached. */
+export function scanRequired(hasScan: (() => boolean) | undefined): string | undefined {
+  return hasScan?.() === false ? 'Open a scan first.' : undefined;
+}
+
 export function findDuplicateIds(actions: readonly Action[]): string[] {
   const seen = new Set<string>();
   const dupes = new Set<string>();

@@ -426,11 +426,11 @@ consecutive passes, counted by `scripts/ios-streak.mjs`.
 
 ## The two monoliths are still monoliths
 
-`src/main.ts` is 4,175 lines and `src/render/Viewer.ts` is 5,924, 299 lines below its v0.6.9 count of 6,223. Both fell as handlers moved into their own modules. A shrink-only lint
+`src/main.ts` is 4,161 lines and `src/render/Viewer.ts` is 5,924, 299 lines below its v0.6.9 count of 6,223. Both fell as handlers moved into their own modules. A shrink-only lint
 fails the build when either passes its recorded baseline, so a raise is a hand
 edit to `docs/validation/monolith-size-baseline.json` and always shows in the
 diff.
-Fan-out is 95 for the shell, 73 for the renderer, across 1195 modules with no
+Fan-out is 95 for the shell, 73 for the renderer, across 1196 modules with no
 dependency cycles. Fan-out counts the distinct modules a file imports with a
 value import, source files and external packages alike; type-only and dynamic
 imports are not counted. The shell and the renderer figures are held

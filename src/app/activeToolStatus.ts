@@ -43,14 +43,19 @@ const MEASURE_LABEL: Record<string, string> = {
   volume: 'Measuring volume',
 };
 
+export interface ArmedLasso { readonly key: string; readonly label: string; cancel(): void }
+
 export interface ActiveToolInputs {
   viewer: ActiveToolViewer | null;
   clipEnabled: boolean;
+  /** An armed lasso: its overlay owns the pointer, so it reads first. */
+  lasso?: ArmedLasso | null;
 }
 
 /** The pill's snapshot, read from the controllers. Pure. */
-export function readActiveTool({ viewer: v, clipEnabled }: ActiveToolInputs): ActiveToolSnapshot {
+export function readActiveTool({ viewer: v, clipEnabled, lasso }: ActiveToolInputs): ActiveToolSnapshot {
   const chips = clipEnabled ? ['Clip on'] : [];
+  if (lasso) return { mode: { key: lasso.key, label: lasso.label, cancel: () => lasso.cancel() }, chips };
   if (!v) return { mode: null, chips };
   if (v.measureMode) {
     const kind = v.measure.kind;
@@ -79,6 +84,7 @@ export function readActiveTool({ viewer: v, clipEnabled }: ActiveToolInputs): Ac
 export interface ActiveToolWiringDeps {
   viewer: () => ActiveToolViewer | null;
   clipEnabled: () => boolean;
+  lasso?: () => ArmedLasso | null;
   /** The stage overlay the pill floats in. */
   mount: HTMLElement;
   /** The tools' hint bars, observed for mode, kind and draft changes. */
@@ -137,7 +143,7 @@ export function wireActiveToolIndicator(d: ActiveToolWiringDeps): ActiveToolWiri
   };
   const refresh = (): void => {
     const was = !pill.hidden;
-    indicator.update(readActiveTool({ viewer: d.viewer(), clipEnabled: d.clipEnabled() }));
+    indicator.update(readActiveTool({ viewer: d.viewer(), clipEnabled: d.clipEnabled(), lasso: d.lasso?.() ?? null }));
     const shown = !pill.hidden;
     // A fresh entrance (however the pill was hidden) starts unsettled.
     if (shown && !was) settle(false);

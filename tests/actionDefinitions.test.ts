@@ -143,6 +143,7 @@ interface FakeViewer {
   setInspectMode: ReturnType<typeof vi.fn>;
   setAnnotateMode: ReturnType<typeof vi.fn>;
   clearSelectionHighlight: ReturnType<typeof vi.fn>;
+  setLassoMode: ReturnType<typeof vi.fn>;
 }
 
 function fakeViewer(): FakeViewer {
@@ -156,6 +157,7 @@ function fakeViewer(): FakeViewer {
     setInspectMode: vi.fn(),
     setAnnotateMode: vi.fn(),
     clearSelectionHighlight: vi.fn(),
+    setLassoMode: vi.fn(),
   };
 }
 
@@ -206,7 +208,7 @@ function harness(opts: { getViewer?: () => FakeViewer } = {}): Harness {
     stopRecording: vi.fn(() => null),
     save: vi.fn(() => Promise.resolve('saved.olvworkflow')),
     loadFromFile: vi.fn(),
-    replay: vi.fn(),
+    replay: vi.fn(() => true),
     lasso: { enabled: false, enable: vi.fn(), disable: vi.fn() },
     compassEnabled: false,
     compassSet: vi.fn(),

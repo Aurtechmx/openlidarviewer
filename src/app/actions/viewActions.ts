@@ -56,7 +56,11 @@ export function contributeViewActions(deps: ViewActionDeps): Action[] {
       section: 'View',
       hint: 'Show or hide the on-canvas view cube: turn to any face, edge or corner.',
       keywords: ['compass', 'viewcube', 'north', 'rose', 'orientation', 'heading', 'gizmo'],
-      run: () => deps.compass.setEnabled(!deps.compass.isEnabled()),
+      run: () => {
+        const on = !deps.compass.isEnabled();
+        deps.compass.setEnabled(on);
+        if (!deps.hasScan()) deps.showLassoToast(`Compass ${on ? 'on' : 'off'}. It shows when a scan is open.`);
+      },
     },
     {
       id: 'view.focus-mode',

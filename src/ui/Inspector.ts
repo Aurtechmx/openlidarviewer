@@ -1396,7 +1396,7 @@ export class Inspector {
 
     // A view setting, so it sits with Rendering. The settings panel loads with
     // the plane's chunk the first time the section opens or the plane turns on.
-    this.referencePlane = callbacks.referencePlane ? createReferencePlaneSection(callbacks.referencePlane) : null;
+    this.referencePlane = callbacks.referencePlane ? createReferencePlaneSection({ ...callbacks.referencePlane, reveal: () => { if (referencePlaneSection) this._revealSection(referencePlaneSection, null); } }) : null;
     const referencePlaneSection = this.referencePlane
       ? adv(this._persistSection('referencePlane', collapsibleSection('Reference plane', this.referencePlane.element)))
       : null;
@@ -1946,6 +1946,10 @@ export class Inspector {
     this._detailMode.setMode(mode);
   }
 
+  private _revealHost: ((target: HTMLElement) => void) | null = null;
+  /** Who makes a section reachable (mode, sheet tab, rail) before it is scrolled to. */
+  setRevealHost(fn: ((target: HTMLElement) => void) | null): void { this._revealHost = fn; }
+
   /** Bring the Layer Health card into view. False while it has no data yet. */
   focusLayerHealth(): boolean {
     return this._layerHealthSlot.childElementCount > 0 && this._revealSection(this._layerHealthSlot, null);
@@ -1994,7 +1998,7 @@ export class Inspector {
    * are shown — the destination of the `inspect-layer-crs` remediation.
    */
   focusLayers(): boolean {
-    return this._revealSection(this._layersSection, null);
+    return this._revealSection(this._layersSection, 'button, summary, input');
   }
 
   /**
@@ -2002,13 +2006,15 @@ export class Inspector {
    * disclosure, and focus a control inside it when one is named. Opening the
    * bottom sheet is unconditional: the class it adds is scoped to the phone
    * media query, so it is inert on desktop and necessary on a phone, where the
-   * section is otherwise behind a closed sheet.
+   * section is otherwise behind a closed sheet. The class alone does not pick
+   * the tab or the rail, so the shell's reveal host does that.
    */
   private _revealSection(target: HTMLElement | null, focusSelector: string | null): boolean {
     if (!target || target.classList.contains('olv-hidden')) return false;
     // A deep link into a section Basic hides reveals that section, not the mode.
     this._detailMode.reveal(target);
     this.openSheet();
+    this._revealHost?.(target);
     // Duck-typed rather than `instanceof HTMLDetailsElement`: this file is
     // built under recording-DOM stubs in the node test environment, where the
     // constructor does not exist.

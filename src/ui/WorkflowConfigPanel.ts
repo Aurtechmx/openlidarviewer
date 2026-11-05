@@ -49,7 +49,8 @@ export class WorkflowConfigPanel {
   /** Re-render hooks keyed by control, run when the config changes externally. */
   private readonly _syncers: Array<() => void> = [];
 
-  constructor() {
+  constructor(options: { chordConflict?: (e: KeyboardEvent) => string | null } = {}) {
+    this._chordConflict = options.chordConflict;
     const dismiss = el('button', {
       className: 'olv-wfc-close',
       text: '×',
@@ -130,6 +131,7 @@ export class WorkflowConfigPanel {
   open(): void {
     if (this._open) return;
     this._open = true;
+    this._checkStoredShortcut();
     this.element.classList.remove('olv-hidden');
     this._a11y = wireDialogA11y(this._card, {
       onEscape: () => {
@@ -272,8 +274,25 @@ export class WorkflowConfigPanel {
     };
     this._syncers.push(sync);
     sync();
-    const wrap = el('div', { className: 'olv-wfc-shortcut-wrap' }, [this._shortcutBtn, off]);
+    const wrap = el('div', { className: 'olv-wfc-shortcut-wrap' }, [this._shortcutBtn, off, this._shortcutNote]);
     return this._row('Start / stop key', wrap);
+  }
+
+  private readonly _chordConflict: ((e: KeyboardEvent) => string | null) | undefined;
+  private readonly _shortcutNote = (() => { const n = el('div', { className: 'olv-wfc-shortcut-note' }); n.classList.add('olv-hidden'); return n; })();
+
+  private _showShortcutNote(text: string | null): void {
+    this._shortcutNote.textContent = text ?? '';
+    this._shortcutNote.classList.toggle('olv-hidden', text === null);
+  }
+
+  /** A stored key that another command owns gets the same message when the panel opens. */
+  private _checkStoredShortcut(): void {
+    const chord = this._config.shortcut;
+    if (chord === '') { this._showShortcutNote(null); return; }
+    const t = chord.split('+');
+    const conflict = this._chordConflict?.({ key: t.at(-1), code: '', ctrlKey: t.includes('mod'), metaKey: false, altKey: t.includes('alt'), shiftKey: t.includes('shift') } as KeyboardEvent) ?? null;
+    this._showShortcutNote(conflict && `${formatShortcutLabel(chord, IS_MAC)} is taken: ${conflict} Choose another key.`);
   }
 
   private _beginShortcutCapture(): void {
@@ -302,6 +321,12 @@ export class WorkflowConfigPanel {
     if (chord === null) return; // wait for a real Cmd/Ctrl/Alt combination
     e.preventDefault();
     e.stopPropagation();
+    const conflict = this._chordConflict?.(e) ?? null;
+    if (conflict) {
+      this._showShortcutNote(`${formatShortcutLabel(chord, IS_MAC)} is taken: ${conflict} Choose another key.`);
+      return; // still capturing; the old key stays
+    }
+    this._showShortcutNote(null);
     this._capturingShortcut = false;
     window.removeEventListener('keydown', this._onShortcutKey, true);
     this._patch({ shortcut: chord });

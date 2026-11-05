@@ -45,6 +45,8 @@ import { createModeHome, type ModeHome } from './modeHome';
 import { sessionLog, SESSION_LOG_OPEN_EVENT } from '../sessionLog/sessionLog';
 import { installSessionLogRecorder } from '../sessionLog/sessionLogRecorder';
 import { mountSessionLogPage, openSessionLogDialog, type SessionLogPage } from '../sessionLog/sessionLogPage';
+import type { MobileTab } from '../../ui/MobileSheet';
+import { revealLeftRail, revealSection, toolPageReveal } from './railReveal';
 import { createFocusMode, FOCUS_MODE_TOGGLE_EVENT, type FocusMode } from './focusMode';
 import { dialogOpen } from '../../ui/Modal';
 import { el } from '../../ui/dom';
@@ -67,6 +69,7 @@ export interface WorkspaceShellDeps {
     focusLayerHealth(): boolean;
     focusSource(): boolean;
     onSourceChange(fn: () => void): () => void;
+    setRevealHost?(fn: ((target: HTMLElement) => void) | null): void;
   };
   classLegend: Panel & { presentCodes(): number[]; isSampled(): boolean; shareNote?(): string | null; classSummary(): { code: number; name: string; share: number; color: readonly [number, number, number] }[]; getVisibility?(): { hiddenCodes(): number[] } };
   annotation: HTMLElement;
@@ -90,6 +93,7 @@ export interface WorkspaceShellDeps {
   measurePanel: () => (Panel & { openInWorkbench?(id: string): boolean }) | null;
   setMeasureMountElement: (fn: (el: HTMLElement) => void) => void;
   hasScan: () => boolean;
+  toast?: (message: string) => void;
   onModeChange: () => void;
   /** Every route change, after it is applied (the Clip page draws its box while it is open). */
   onRoute?: (route: { readonly mode: WorkspaceMode; readonly page: string | null }) => void;
@@ -130,6 +134,8 @@ export interface WorkspaceShell {
   readonly focus: FocusMode;
   /** Mount what an Analyse page needs, then show it. */
   openAnalysePage(page: AnalysePage): void;
+  /** An explicit open outside the router: bring the left rail back for this press only. */
+  revealRail(): void;
   mountAnalysePanel(el: HTMLElement): void;
   mountObjectPanel(el: HTMLElement): void;
 }
@@ -224,7 +230,7 @@ export function mountWorkspaceShell(d: WorkspaceShellDeps): WorkspaceShell {
     if (key !== lastRoute && key === 'work/clip' && mobileApplied && mobileSheet?.getDetent() === 'full') mobileSheet.setDetent('half');
     lastRoute = key;
     d.onRoute?.(r);
-  });
+  }, () => revealRail());
   analyse.attach(router);
   d.addTeardown(() => router?.dispose());
   const live = router;
@@ -283,17 +289,14 @@ export function mountWorkspaceShell(d: WorkspaceShellDeps): WorkspaceShell {
     sourceSummary: () => d.inspector.sourceSummary(),
     inspectorCollapsed: rightCollapsed,
     openClasses: () => router?.navigate({ mode: 'data', page: 'classes' }, true),
-    openSource: () => { if (rightCollapsed()) expandRightRail(); d.inspector.focusSource(); },
-    openLayerHealth: () => { if (rightCollapsed()) expandRightRail(); d.inspector.focusLayerHealth(); },
+    openSource: () => { d.inspector.focusSource(); },
+    openLayerHealth: () => { if (!d.inspector.focusLayerHealth()) d.inspector.focusSource(); },
     // The empty state's own open control, so both paths share the approval gate.
     openFile: () => document.querySelector<HTMLButtonElement>('.olv-open-btn')?.click(),
   });
   refreshDataHome = dataHome.refresh;
   d.addTeardown(d.inspector.onSourceChange(dataHome.refresh));
   decorateViewRail(d.inspector.element, () => router?.navigate({ mode: 'analyse', page: null }, true));
-  // Asking for the View rail ends Focus mode first, so the rail opens from the
-  // state the user left, not from Focus mode's transient collapse.
-  const expandRightRail = (): void => { focus?.exit(); d.overlay.querySelector<HTMLButtonElement>('.olv-right-rail-tab')?.click(); };
   const workspacePanels = {
     dataLayers: dataEls.layers,
     dataHome: dataHome.element,
@@ -330,6 +333,7 @@ export function mountWorkspaceShell(d: WorkspaceShellDeps): WorkspaceShell {
     ariaControls: 'olv-left-panels',
   });
   d.addTeardown(leftRail);
+  const revealRail = (): void => revealLeftRail({ mobile: () => mobileApplied, focus: () => focus, left: leftRail });
   // One grabber collapses the whole right context rail (Streaming + Inspector),
   // under the Inspector's persisted collapse key.
   const rightRailToggle = wireRailToggle({
@@ -360,6 +364,12 @@ export function mountWorkspaceShell(d: WorkspaceShellDeps): WorkspaceShell {
     },
   });
   mobileSheet = sheet;
+  // Every Inspector deep link passes here, so its section is on screen before it is scrolled to.
+  d.inspector.setRevealHost?.((target) => revealSection({
+    mobile: () => mobileApplied, focus: () => focus, left: leftRail, right: rightRailToggle, rightRail: d.rightRail,
+    modeHost: (m) => workspace.mode(m), route: () => live.route(), navigate: (r) => live.navigate(r), selectTab: (tab) => sheet.setActive(tab as MobileTab),
+  }, target));
+  d.addTeardown(() => d.inspector.setRevealHost?.(null));
   d.overlay.append(sheet.element);
   const modes: readonly WorkspaceMode[] = ['data', 'work', 'analyse', 'output'];
   const wsBody = workspace.mode('data').parentElement as HTMLElement;
@@ -410,6 +420,7 @@ export function mountWorkspaceShell(d: WorkspaceShellDeps): WorkspaceShell {
       activeId: () => scans.activeId ?? null,
       openExport: (id, refusal) => {
         router?.navigate({ mode: 'output', page: null });
+        revealRail();
         exp.preselectFullResolution!(id, refusal);
       },
       reload: exp.reloadLayer ? (id, budget) => exp.reloadLayer!(id, budget) : undefined,
@@ -434,7 +445,6 @@ export function mountWorkspaceShell(d: WorkspaceShellDeps): WorkspaceShell {
       if (item === 'clip') { router?.navigate({ mode: 'work', page: 'clip' }, true); return; }
       router?.navigate({ mode: 'data', page: null }, item === 'dataset');
       if (item === 'dataset') return;
-      if (rightCollapsed()) expandRightRail();
       if (item === 'basis') d.inspector.focusLayerHealth() || d.inspector.focusSource();
       else d.inspector.focusSource();
     },
@@ -543,12 +553,17 @@ export function mountWorkspaceShell(d: WorkspaceShellDeps): WorkspaceShell {
       const page = id.slice(5) as ToolPage;
       const node = id.startsWith('tool.') ? pages[page]?.element() : null;
       const up = !!node && !node.classList.contains('olv-hidden') && node.style.display !== 'none';
-      if (up) live.navigate({ mode: 'work', page }, railIntent.startedInRail());
+      if (up) { live.navigate({ mode: 'work', page }, railIntent.startedInRail()); revealRail(); }
       return up;
     },
     openToolPage: (page, options) => {
       live.navigate({ mode: 'work', page }, railIntent.startedInRail());
-      if (!mobileApplied) return;
+      if (!mobileApplied) {
+        const act = toolPageReveal(page, options, leftRail.isCollapsed());
+        if (act === 'reveal') revealRail();
+        else if (act === 'note') d.toast?.(`${page === 'measure' ? 'Measure' : 'Annotate'} is on. Its page is in the hidden panel. Press Show panel to open it.`);
+        return;
+      }
       // Asked to read the page (a result card's Open details): bring it into
       // view at half height, with the scene still above it.
       if (options?.reveal) { sheet.revealResult('work', '.olv-ws-task-title'); return; }
@@ -561,6 +576,7 @@ export function mountWorkspaceShell(d: WorkspaceShellDeps): WorkspaceShell {
     applyMobileSheet,
     focus: focusMode,
     openAnalysePage: (page) => { void analyse.open(page); },
+    revealRail,
     mountAnalysePanel: (el) => {
       el.classList.remove('olv-collapsed'); // constructs collapsed; hides its action
       workspace.mountInMode('analyse', el);

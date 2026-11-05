@@ -240,13 +240,16 @@ export class ProcessStudioPanel {
    */
   private _remediations(pre: ToolPreflight): HTMLElement | null {
     if (pre.remediations.length === 0) return null;
-    const items = pre.remediations.map((r) => {
+    // Isolating one layer means nothing with one layer showing, so it is not listed as advice either.
+    const listed = pre.remediations.filter((r) => r.action !== 'solo-active-layer' || this._opts.canRemediate?.(r.action, pre.tool) === true);
+    if (listed.length === 0) return null;
+    const items = listed.map((r) => {
       if (this._opts.canRemediate?.(r.action, pre.tool) !== true) {
         return el('span', { className: 'olv-ps-advice', text: r.label });
       }
       const button = el('button', {
         className: 'olv-ps-remedy', text: r.label,
-        title: 'Fix what is blocking this step, then the step can run.',
+        title: 'Try this, then check this row again.',
       });
       button.type = 'button';
       button.addEventListener('click', () => {

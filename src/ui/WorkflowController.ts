@@ -124,10 +124,13 @@ export class WorkflowController {
   private _onStateChange: ((state: WorkflowControllerState) => void) | null = null;
 
   private readonly _toast: ((message: string) => void) | undefined;
+  /** The host's stop for the badge, so the recording is saved, not dropped. */
+  private readonly _onStopPressed: (() => void) | undefined;
 
   /** `toast` shows the one notice when a recording reaches the event limit. */
-  constructor(toast?: (message: string) => void) {
+  constructor(toast?: (message: string) => void, onStopPressed?: () => void) {
     this._toast = toast;
+    this._onStopPressed = onStopPressed;
     this._badgeLabel = el('span', { className: 'olv-workflow-badge-label' });
     this._badgeStop = el('button', {
       className: 'olv-workflow-badge-stop',
@@ -137,7 +140,7 @@ export class WorkflowController {
     this._badgeStop.addEventListener('click', () => {
       this._badgeStop.blur();
       if (this._countdownTimer !== null) this.cancelCountdown();
-      else if (this._state === 'recording') this.stopRecording();
+      else if (this._state === 'recording') { if (this._onStopPressed) this._onStopPressed(); else this.stopRecording(); }
       else if (this._state === 'playing') this.stopReplay();
     });
     this.badge = el('div', { className: 'olv-workflow-badge olv-hidden' }, [
@@ -197,6 +200,11 @@ export class WorkflowController {
     return false; // recording starts when the countdown elapses
   }
 
+  /** True while a start countdown is pending. */
+  get countingDown(): boolean {
+    return this._countdownTimer !== null;
+  }
+
   /** Cancel a pending record countdown. No-op when none is running. */
   cancelCountdown(): void {
     if (this._countdownTimer === null) return;
@@ -248,15 +256,16 @@ export class WorkflowController {
   /**
    * Begin replaying a workflow. The host supplies `dispatch`, which
    * routes each event back to the actual handler (camera preset,
-   * theme, tool toggle, frame all). No-op if already busy.
+   * theme, tool toggle, frame all). Returns false, doing nothing, when busy.
    */
-  replay(workflow: Workflow, dispatch: WorkflowDispatcher): void {
-    if (this._state !== 'idle') return;
+  replay(workflow: Workflow, dispatch: WorkflowDispatcher): boolean {
+    if (this._state !== 'idle' || this._countdownTimer !== null) return false;
     this._state = 'playing';
     this._replayWorkflow = workflow;
     this._replayDispatch = dispatch;
     this._onStateChange?.(this._state);
     this._scheduleReplayPass();
+    return true;
   }
 
   /** Schedule one pass of the retained replay workflow at the current speed. */
@@ -414,4 +423,33 @@ export async function saveWorkflowWithToast(
     return;
   }
   toast(name === null ? 'Workflow · save cancelled.' : 'Workflow saved. Replay needs the same scan open on the other end.');
+}
+
+/** Start and stop shared by the palette, the shortcut and the badge, so each saves and reports alike. */
+export const COUNTDOWN_CANCELLED = 'Workflow · recording cancelled before it started.';
+
+export interface WorkflowRecording {
+  start(): void;
+  /** Idle: start. Counting down: cancel. Recording: stop and save. */
+  toggle(): void;
+}
+
+export function createWorkflowRecording(c: WorkflowController, toast: (message: string) => void): WorkflowRecording {
+  const start = (): void => {
+    if (c.state === 'recording') { toast('Workflow · already recording. Press Stop on the badge to save it.'); return; }
+    if (c.state === 'playing') { toast('Workflow · a replay is running. Press Stop on the badge, then start recording.'); return; }
+    if (c.countingDown) { toast('Workflow · countdown already running. Press Stop on the badge to cancel it.'); return; }
+    if (c.requestStartRecording()) toast('Workflow · recording started. Use the badge to stop.');
+    else toast(`Workflow · recording starts in ${c.config.countdownSeconds}s…`);
+  };
+  return {
+    start,
+    toggle: () => {
+      if (c.countingDown) { c.cancelCountdown(); toast(COUNTDOWN_CANCELLED); return; }
+      if (c.state !== 'recording') { start(); return; }
+      const workflow = c.stopRecording();
+      if (workflow) void saveWorkflowWithToast(c, workflow, toast);
+      else toast('Workflow · nothing recorded yet.');
+    },
+  };
 }

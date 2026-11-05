@@ -4,7 +4,7 @@
  * The tool dock's actions: Measure, Inspect, Annotate, the two derived
  * classification runs, and the lasso volume with its selection basis.
  */
-import type { Action } from '../../ui/actionRegistry';
+import { scanRequired, type Action } from '../../ui/actionRegistry';
 import type { Viewer } from '../../render/Viewer';
 import type { WorkflowController } from '../../ui/WorkflowController';
 import type { LassoVolumeTool } from '../../ui/LassoVolumeTool';
@@ -26,6 +26,7 @@ export interface ToolActionDeps {
    * the Tools page identically.
    */
   runTool: (tool: SceneTool) => void;
+  hasScan?: () => boolean;
 }
 
 export function contributeToolActions(deps: ToolActionDeps): Action[] {
@@ -33,6 +34,7 @@ export function contributeToolActions(deps: ToolActionDeps): Action[] {
   actions.push(
     {
       id: 'tool.measure',
+      get unavailable() { return scanRequired(deps.hasScan); },
       keys: keyDisplayFor('tool-measure'),
       title: actionTitle('tool.measure'),
       section: 'Tools',
@@ -44,6 +46,7 @@ export function contributeToolActions(deps: ToolActionDeps): Action[] {
     },
     {
       id: 'tool.inspect',
+      get unavailable() { return scanRequired(deps.hasScan); },
       keys: keyDisplayFor('tool-inspect'),
       title: actionTitle('tool.inspect'),
       section: 'Tools',
@@ -55,6 +58,7 @@ export function contributeToolActions(deps: ToolActionDeps): Action[] {
     },
     {
       id: 'tool.annotate',
+      get unavailable() { return scanRequired(deps.hasScan); },
       keys: keyDisplayFor('tool-annotate'),
       title: actionTitle('tool.annotate'),
       section: 'Tools',
@@ -66,6 +70,7 @@ export function contributeToolActions(deps: ToolActionDeps): Action[] {
     },
     {
       id: 'tool.clip',
+      get unavailable() { return scanRequired(deps.hasScan); },
       title: actionTitle('tool.clip'),
       section: 'Tools',
       hint: 'Show only the points inside a box, or hide them.',
@@ -99,6 +104,7 @@ export function contributeToolActions(deps: ToolActionDeps): Action[] {
     },
     {
       id: 'tool.lasso-volume',
+      get unavailable() { return scanRequired(deps.hasScan); },
       title: 'Lasso volume',
       section: 'Tools',
       keys: keyDisplayFor('lasso-toggle'),
@@ -107,10 +113,12 @@ export function contributeToolActions(deps: ToolActionDeps): Action[] {
       run: () => {
         if (deps.lassoVolumeTool.enabled) {
           deps.lassoVolumeTool.disable();
+          deps.getViewer().setLassoMode(false);
           deps.getViewer().clearSelectionHighlight();
           deps.showLassoToast('Lasso off — back to navigation.');
         } else {
           deps.lassoVolumeTool.enable();
+          deps.getViewer().setLassoMode(true);
           deps.showLassoToast('Lasso armed — draw a shape on the canvas.');
         }
         deps.syncLassoButton();

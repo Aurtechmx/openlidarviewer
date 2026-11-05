@@ -7,7 +7,7 @@
  * Iso keeps no chip because bare I is the Inspect tool. Every entry sits in
  * the Camera section.
  */
-import type { Action } from '../../ui/actionRegistry';
+import { scanRequired, type Action } from '../../ui/actionRegistry';
 import type { Viewer } from '../../render/Viewer';
 import type { WorkflowController } from '../../ui/WorkflowController';
 import {
@@ -44,6 +44,7 @@ export interface PlanViewActions {
 }
 
 export interface CameraActionDeps {
+  hasScan?: () => boolean;
   getViewer: () => Viewer;
   planView: PlanViewActions;
   capture: WorkflowController['capture'];
@@ -58,6 +59,7 @@ export function contributeCameraActions(deps: CameraActionDeps): Action[] {
     actions.push({
       id: `camera.${name}`,
       title: cameraPresetTitle(label),
+      get unavailable() { return scanRequired(deps.hasScan); },
       section: 'Camera',
       // Iso's advertised 'I' chip is suppressed: bare 'I' is the Inspect
       // tool shortcut (see the keydown handler above), Iso is palette /
@@ -81,6 +83,7 @@ export function contributeCameraActions(deps: CameraActionDeps): Action[] {
   // planViewController.ts, which this only pokes.
   actions.push({
     id: 'camera.plan-view',
+    get unavailable() { return scanRequired(deps.hasScan); },
     title: actionTitle('camera.plan-view'),
     section: 'Camera',
     hint: 'Look straight down in parallel projection, with the hand tool on the drag.',
@@ -106,6 +109,7 @@ export function contributeCameraActions(deps: CameraActionDeps): Action[] {
     const label = STANDARD_VIEW_LABEL[view];
     actions.push({
       id: `camera.view-${view}`,
+      get unavailable() { return scanRequired(deps.hasScan); },
       title: standardViewTitle(label),
       section: 'Camera',
       hint: `Look straight along the ${label.toLowerCase()} axis.`,
@@ -138,6 +142,7 @@ export function contributeCameraActions(deps: CameraActionDeps): Action[] {
   // Reset / Frame All, exposed alongside the named presets.
   actions.push({
     id: 'camera.frame-all',
+    get unavailable() { return scanRequired(deps.hasScan); },
     title: actionTitle('camera.frame-all'),
     section: 'Camera',
     hint: 'Fit the camera to every visible cloud.',

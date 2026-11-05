@@ -59,6 +59,8 @@ export interface ReclassifyUiOptions {
    */
   readonly onReclassified?: (targetClass: number) => boolean;
   readonly onToast?: (msg: string) => void;
+  /** The lasso armed or disarmed. */
+  readonly onArmedChange?: () => void;
   /**
    * Run the whole-scan heuristic classifier (ground / vegetation / building).
    * Drives the primary "Auto-classify" button; the host owns the derive so the
@@ -75,6 +77,7 @@ export interface ReclassifyUi {
   refresh(): void;
   /** Disarm the lasso if it is armed. True when it had been armed. */
   disarm(): boolean;
+  armed(): boolean;
   dispose(): void;
 }
 
@@ -105,9 +108,14 @@ export function createReclassifyUi(opts: ReclassifyUiOptions): ReclassifyUi {
   const armBtn = mkBtn('Reclassify (lasso)', 'reclass-arm', 'olv-reclass-go');
   armBtn.title = 'Draw around points to give them the class chosen above. The source file is not changed.';
   armBtn.setAttribute('aria-pressed', 'false');
+  const armedHint = el('div', { className: 'olv-reclass-autonote', text: 'Draw around points on the scan. Esc cancels.' });
+  armedHint.classList.add('olv-hidden');
+  armedHint.setAttribute('data-testid', 'reclass-armed-hint');
   const setArmed = (armed: boolean): void => {
     armBtn.classList.toggle('olv-mkind-active', armed);
     armBtn.setAttribute('aria-pressed', armed ? 'true' : 'false');
+    armedHint.classList.toggle('olv-hidden', !armed);
+    opts.onArmedChange?.();
   };
   const undoBtn = mkBtn('Undo', 'reclass-undo');
   undoBtn.title = 'Take back the last class change.';
@@ -276,6 +284,7 @@ export function createReclassifyUi(opts: ReclassifyUiOptions): ReclassifyUi {
     select,
     el('div', { className: 'olv-reclass-actions' }, [
       armBtn,
+      armedHint,
       history,
     ]),
   ]);
@@ -289,7 +298,11 @@ export function createReclassifyUi(opts: ReclassifyUiOptions): ReclassifyUi {
       return true;
     },
     element,
-    setVisible: (visible: boolean) => element.classList.toggle('olv-hidden', !visible),
+    armed: () => tool.enabled,
+    setVisible: (visible: boolean) => {
+      element.classList.toggle('olv-hidden', !visible);
+      if (!visible && tool.enabled) { tool.disable(); setArmed(false); }
+    },
     refresh,
     dispose: () => {
       tool.disable();

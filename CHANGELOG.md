@@ -58,6 +58,12 @@ has not been done. v0.7.0 is the current published release.
 
 ### Fixed
 
+- A press that asks for something in a hidden panel now brings the panel back for that press: Open details, Clip box, Go to entries, Analyse, the state strip and Inspector links. The saved collapse choice is not changed, and a reload or automatic routing leaves the panel hidden. Measure and Annotate keep the scene and say where their page is.
+- On a phone, Source and metadata and Layer Health switch to the sheet tab that holds them. The Inspect remedy in Process Studio opens the Layers list. The solo remedy is offered only with more than one layer showing and says what it did; its row can still read the same afterwards.
+- B or Toggle reference plane with no elevation says to set one and opens the section; with no scan it refuses.
+- Starting Measure, Inspect, Annotate or Probe ends an armed lasso. An armed lasso or reclassify shows in the active-tool pill with Cancel. Reclassify ends when the Classes page is left and shows a drawing instruction while armed.
+- Stop on the workflow badge saves the recording the way the palette does; it used to discard it. Stop and save during the countdown cancels it. Start and Replay say why when the recorder is busy, and Replay refuses with no scan open unless the file only sets the theme. Recorder settings refuse a key another command owns.
+- With no scan open, palette tools, camera views, Frame all, terrain, contours, Dataset Story and Save a snapshot read "Open a scan first." T, O, P, M, I, A and L say the same. Export health check no longer reports Ready, and Save session refuses when it would hold nothing.
 - A code chunk that fails to load no longer reloads the page while a scan is open or loading. A toast says a new version is available and offers a reload, after a confirm that states what it discards. With nothing open the automatic reload stays, and the next start says why it happened.
 - Lazy load failures no longer show a module URL. The first failure offers Try again; a repeat offers the reload. Any load failure no caller reports now shows one toast.
 - Save session says when it did not save. Clear and Delete offer Undo when the Measurements panel failed to load. Compare elevation no longer stays on its working line. The status strip no longer counts a failed task as running.

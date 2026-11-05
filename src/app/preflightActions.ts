@@ -52,6 +52,8 @@ export interface PreflightActionHost {
   inspectLayerCrs?(): void;
   /** Isolate the active layer so one proven frame is in play. */
   soloActiveLayer?(): void;
+  /** False when isolating could change nothing: one layer showing. */
+  soloAvailable?(): boolean;
   /** Derive the classes a class-dependent product needs. */
   classifyScan?(): void;
   /** Arm a measurement so the user may proceed with the stated caveat. */
@@ -83,7 +85,7 @@ function handlerFor(
     case 'inspect-layer-crs':
       return host.inspectLayerCrs ? () => host.inspectLayerCrs?.() : null;
     case 'solo-active-layer':
-      return host.soloActiveLayer ? () => host.soloActiveLayer?.() : null;
+      return host.soloActiveLayer && host.soloAvailable?.() !== false ? () => host.soloActiveLayer?.() : null;
     case 'classify-scan':
       return host.classifyScan ? () => host.classifyScan?.() : null;
     case 'continue-exploratory':

@@ -92,7 +92,7 @@ describe('action contributors', () => {
 
   it('tool actions run the derived classification and toggle the lasso', async () => {
     const lasso = { enabled: false, enable: vi.fn(), disable: vi.fn(), selectionBasis: 'through-surfaces' };
-    const deps = { getViewer: () => ({ clearSelectionHighlight: vi.fn() }) as never, workflowController: {} as never, lassoVolumeTool: lasso as never, syncLassoButton: vi.fn(), runDeriveClassification: vi.fn(async () => undefined), runFillUnclassified: vi.fn(async () => undefined), showLassoToast: toast, runTool: vi.fn() };
+    const deps = { getViewer: () => ({ clearSelectionHighlight: vi.fn(), setLassoMode: vi.fn() }) as never, workflowController: {} as never, lassoVolumeTool: lasso as never, syncLassoButton: vi.fn(), runDeriveClassification: vi.fn(async () => undefined), runFillUnclassified: vi.fn(async () => undefined), showLassoToast: toast, runTool: vi.fn() };
     const actions = contributeToolActions(deps);
     actions.find((a) => a.id === 'tool.classify')!.run();
     expect(deps.runDeriveClassification).toHaveBeenCalled();

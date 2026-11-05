@@ -438,6 +438,7 @@ export interface ProcessStudioShell {
   resolveLayerCrs(name: string, detected: CrsInfo | null | undefined, identity?: DatasetIdentity): CrsInfo | ResolvedCrs | null;
   /** Isolate one layer (the `solo-active-layer` remediation). */
   soloLayer(id: string): void;
+  soloAvailable?(): boolean;
   /** Derive classes for the active scan (the `classify-scan` remediation). */
   classifyScan(): void;
   /** Reveal the coordinate-system control (the `set-coordinate-system` remediation). */
@@ -509,6 +510,7 @@ export function createProcessStudioFromShell(shell: ProcessStudioShell): Mounted
     actions: {
       openCoordinateSystem: () => shell.focusCrs(),
       inspectLayerCrs: () => shell.focusLayers(),
+      soloAvailable: () => shell.soloAvailable?.() ?? true,
       soloActiveLayer: () => {
         const id = shell.getActiveLayerId();
         if (id !== null) shell.soloLayer(id);

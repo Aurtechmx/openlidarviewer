@@ -4,7 +4,7 @@
  * Terrain analysis, Contour Studio, the Flow Pulse lab and the Dataset
  * Story. The analysis entry and the story inputs are the whole surface.
  */
-import type { Action } from '../../ui/actionRegistry';
+import { scanRequired, type Action } from '../../ui/actionRegistry';
 import { openTerrainAnalysis, type TerrainAnalysisEntryDeps } from '../openTerrainAnalysis';
 import { buildScanStory, type ScanStoryInputs } from '../../intelligence/scanStory';
 import { renderDatasetStoryCard } from '../../ui/scanStoryViews';
@@ -21,6 +21,7 @@ export interface AnalysisActionDeps {
   buildCurrentStoryInputs: () => ScanStoryInputs;
   /** Where a lab's chunk-load failure is reported, with a Try again that re-runs the whole attempt. */
   showLassoToast: LazyLoadToast;
+  hasScan?: () => boolean;
 }
 
 type LabPanel = Awaited<ReturnType<TerrainAnalysisEntryDeps['showPanel']>>;
@@ -55,6 +56,7 @@ export function contributeAnalysisActions(deps: AnalysisActionDeps): Action[] {
   actions.push(
     {
       id: 'analyse.run',
+      get unavailable() { return scanRequired(deps.hasScan); },
       title: 'Run terrain analysis',
       section: 'Analyse',
       hint: 'Classify ground, build the DTM, validate it, and check contour readiness.',
@@ -65,6 +67,7 @@ export function contributeAnalysisActions(deps: AnalysisActionDeps): Action[] {
     },
     {
       id: 'analyse.contours',
+      get unavailable() { return scanRequired(deps.hasScan); },
       title: 'Create contours',
       section: 'Analyse',
       hint: 'Open Contour Studio. Terrain analysis runs first when the scan has not been analysed yet.',
@@ -125,6 +128,7 @@ export function contributeAnalysisActions(deps: AnalysisActionDeps): Action[] {
     },
     {
       id: 'story.dataset',
+      get unavailable() { return scanRequired(deps.hasScan); },
       title: 'Dataset Story',
       section: 'Analyse',
       hint: 'What this scan is, how good it is, what it is best for, and the next step.',

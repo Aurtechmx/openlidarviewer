@@ -33,7 +33,7 @@ import { findDuplicateIds, type Action } from './ui/actionRegistry';
 import { runSceneTool, type SceneTool } from './app/toggleTool';
 import type { SessionIoDeps } from './app/sessionIo';
 import type { SessionSnapshotDeps } from './app/sessionSnapshot';
-import { openScan, clearPendingSessionRestore, heldSessionWork, sourceDigestReady, type OpenScanDeps } from './app/openScan';
+import { openScan, clearPendingSessionRestore, heldSessionWork, sessionSaveRefusal, snapshotRefusal, sourceDigestReady, type OpenScanDeps } from './app/openScan';
 import {
   openStreamingCopc as runOpenStreamingCopc,
   handleRemoteEpt as runHandleRemoteEpt,
@@ -47,13 +47,13 @@ import {
   type GeoExportContext,
   type ReportExportDeps,
 } from './app/reportExport';
-import { WorkflowController, WORKFLOW_RECORDER_ENABLED, saveWorkflowWithToast } from './ui/WorkflowController';
+import { WorkflowController, WORKFLOW_RECORDER_ENABLED, createWorkflowRecording } from './ui/WorkflowController';
 import type { WorkflowConfigPanel } from './ui/WorkflowConfigPanel';
 import { RecommendedViewChip } from './ui/RecommendedViewChip';
 import { recommendCameraPreset, flatnessFromBounds, describeProjectSize } from './render/camera/recommendView';
 import type { WorkflowEvent } from './render/workflow/workflowRecorder';
 import { matchesShortcut } from './render/workflow/workflowConfig';
-import { LassoVolumeTool, armLasso, disarmLasso, type LassoArmingDeps } from './ui/LassoVolumeTool';
+import { LassoVolumeTool, armLasso, disarmLasso, type LassoArmingDeps, disarmReclassifyOffPage, toolModeChanged } from './ui/LassoVolumeTool';
 import {
   downloadBytes as downloadFileBytes,
   downloadText,
@@ -118,6 +118,7 @@ import {
   installKeyDispatch, undoLastEdit, redoLastEdit, type EditHistoryDeps,
   type GlobalActionHandlers,
   type KeyBindingDeps,
+  workflowChordConflict,
 } from './ui/keyBindings';
 import { LoadCancelledError, LoadError, warmParseWorker } from './io/loadFile';
 import { LocalFileSource } from './io/LocalFileSource';
@@ -652,14 +653,15 @@ function saveLassoVolumeIfPending(): void {
 // immediately so re-orbiting after a measurement requires zero extra
 // clicks. Persistence into the Measurements list + PDF reports is the
 // next focused cut.
-let lassoButton: HTMLButtonElement | null = null;
+let lassoButton: HTMLButtonElement | null = null; let refreshActivePill = (): void => {};
 function syncLassoButton(): void {
   if (!lassoButton) return;
-  lassoButton.classList.toggle('olv-mkind-active', lassoVolumeTool.enabled);
+  lassoButton.classList.toggle('olv-mkind-active', lassoVolumeTool.enabled); refreshActivePill();
 }
 /** Every arm and disarm goes through these, so the overlay, the viewer mode and the button never disagree. */
 const lassoArming: LassoArmingDeps = { tool: lassoVolumeTool, viewer: () => viewer, syncButton: syncLassoButton, clearPending: () => { pendingLassoSave = null; } };
 void viewerLoaded.then((v) => {
+  v.onToolModeChange = (prev, next) => toolModeChanged(prev, next, { disarmVolume: () => { disarmLasso(lassoArming, { clearHighlight: true }); }, disarmReclassify: () => { reclassifyUi?.disarm(); } });
   lassoButton = v.measure.addAuxKindButton(
     'Lasso volume',
     'Lasso Volume — draw a freeform shape on the canvas to measure volume of every 3D point inside.\n' +
@@ -1114,7 +1116,7 @@ const inspector = new Inspector({
     canvas: stage.canvas,
     context: () => crsService.context(),
     sceneOrigin: () => sessionIoDeps.exportOrigin(), // placement-aware: a placed layer is local to the project origin
-    toast: showLassoToast,
+    toast: showLassoToast, hasScan: () => viewerReady && hasScan(),
     crs: crsService,
   },
 });
@@ -1157,7 +1159,7 @@ const crsCoordinator = createCrsCoordinator({
 // Gated on WORKFLOW_RECORDER_ENABLED (see WorkflowController.ts). The controller
 // is always constructed so the `capture()` calls below stay valid; the badge,
 // shortcut and palette entries come only when the flag is on.
-const workflowController = new WorkflowController(showLassoToast);
+const workflowController = new WorkflowController(showLassoToast, () => toggleWorkflowRecord());
 // The one scene-tool command every entry point runs (dock, key, palette, launcher).
 function runTool(tool: SceneTool): void {
   runSceneTool({ viewer: () => { clipFlow.dismissCard(); return viewer; }, workflow: workflowController, toggleClip: () => clipPanel.toggleEnabled(), openPage: (page) => workspaceShell?.openToolPage(page) }, tool);
@@ -1178,7 +1180,7 @@ let workflowConfigPanel: WorkflowConfigPanel | null = null;
 let pendingWorkflowConfig: Parameters<typeof workflowController.setConfig>[0] | undefined;
 // One load for every caller; the next call retries a failed one.
 const ensureWorkflowConfigPanel = retryableOnce(() => loadWorkflowConfigPanel().then(({ WorkflowConfigPanel }) => {
-  const panel = new WorkflowConfigPanel();
+  const panel = new WorkflowConfigPanel({ chordConflict: workflowChordConflict });
   stage.overlay.append(panel.element);
   panel.onChange((cfg) => {
     workflowController.setConfig(cfg);
@@ -1189,27 +1191,8 @@ const ensureWorkflowConfigPanel = retryableOnce(() => loadWorkflowConfigPanel().
   return panel;
 }));
 
-/** Start (with the configured countdown) the right toast. */
-function startWorkflowRecording(): void {
-  const startedNow = workflowController.requestStartRecording();
-  if (startedNow) {
-    showLassoToast('Workflow · recording started. Use the badge to stop.');
-  } else if (workflowController.config.countdownSeconds > 0) {
-    const secs = workflowController.config.countdownSeconds;
-    showLassoToast(`Workflow · recording starts in ${secs}s…`);
-  }
-}
-
-/** Toggle the recorder: idle → start, recording → stop + save. */
-function toggleWorkflowRecord(): void {
-  if (workflowController.state === 'recording') {
-    const workflow = workflowController.stopRecording();
-    if (workflow) void saveWorkflowWithToast(workflowController, workflow, showLassoToast);
-    else showLassoToast('Workflow · nothing recorded yet.');
-  } else {
-    startWorkflowRecording();
-  }
-}
+/** Start and stop, shared by the palette, the shortcut and the badge. */
+const { start: startWorkflowRecording, toggle: toggleWorkflowRecord } = createWorkflowRecording(workflowController, showLassoToast);
 
 // v0.3.9 — command palette (Cmd-K / Ctrl-K). The host owns the
 // registry so every action stays close to the handler that powers
@@ -1393,7 +1376,7 @@ const ensureActionRegistry = retryableOnce((): Promise<Action[]> => loadActionRe
   dispatchWorkflowEvent,
   ensureWorkflowConfigPanel,
   ensureShortcutSheet: () => ensureShortcutSheet((sheet) => sheet.open()), // wrapped so a "Try again" retry opens the sheet too
-  hasScan,
+  hasScan: () => viewerReady && hasScan(),
   saveSnapshot, copyShareLink, exportSession: saveSessionFromUser, handleFile, openScan: () => stage.promptAddDataset(), exportReport: () => exportReportPdf(null),
   terrainAnalysisEntry: {
     showAnalyseMode: () => showWorkspaceMode('analyse'), showPage: (page) => workspaceShell?.openAnalysePage(page),
@@ -1473,9 +1456,10 @@ const keyBindingDeps: KeyBindingDeps = {
     },
     toggleLasso: () => {
       if (disarmLasso(lassoArming)) showLassoToast('Lasso volume off.');
+      else if (!hasScan()) showLassoToast('Open a scan first.');
       else { armLasso(lassoArming); showLassoToast('Lasso volume armed — draw a shape on the canvas.'); }
     },
-    setCameraPreset: (preset) => navWiring.applyCameraPreset(preset), // tells Plan View too
+    setCameraPreset: (preset) => { if (hasScan()) return navWiring.applyCameraPreset(preset); showLassoToast('Open a scan first.'); return false; }, // tells Plan View too
     toast: (message) => showLassoToast(message),
     openCommandPalette: openCommandPalette,
     toggleShortcutSheet: () => void ensureShortcutSheet((sheet) => sheet.toggle()).catch(() => {}), // already reported via the toast
@@ -1821,7 +1805,7 @@ const processStudio = createProcessStudioFromShell({
   getViewer: () => viewer, getActiveCloud: () => scans.activeCloud(), getActiveLayerId: () => scans.activeExportTargetId(),
   crsService, classLegend: classLegendPanel,
   resolveLayerCrs: (name, detected, identity) => crsService.resolveFor({ name, detected: detected ?? undefined, source: 'las-vlr', identity }),
-  soloLayer: (id) => layerService.soloOnly(id), classifyScan: () => { void runDeriveClassification(); },
+  soloLayer: (id) => { layerService.soloOnly(id); showLassoToast('Only the active layer is showing. Turn the others back on in the Data tab.'); }, soloAvailable: () => layerService.buildLayerInfos().filter((i) => i.visible).length > 1, classifyScan: () => { void runDeriveClassification(); },
   focusCrs: () => { inspector.focusCrsOverride(); }, focusLayers: () => { inspector.focusLayers(); }, addDataset: () => { stage.promptAddDataset(); },
 });
 
@@ -1834,7 +1818,7 @@ const mountReclassifyUi = retryableOnce(async () => {
   const ui = createReclassifyUi({
     canvas: stage.canvas,
     getViewer: () => viewer,
-    getActiveId: () => scans.activeId,
+    getActiveId: () => scans.activeId, onArmedChange: () => refreshActivePill(),
     onToast: showLassoToast,
     onAutoClassify: async () => (await loadClassifyActions()).runDeriveClassification(classifyDeps()), // a refusal shows beside the button
     onReclassified: (cls) => afterClassEdit(classLegendPanel, cls),
@@ -2549,7 +2533,7 @@ let syncMobileSheet: (() => void) | null = null;
 // The desktop rail and its route (workspaceShell.ts), set once the lazy Viewer
 // resolves. Presentation only: it changes which panel shows, never a tool.
 let workspaceShell: WorkspaceShell | null = null;
-const showWorkspaceMode = (m: WorkspaceMode): void => workspaceShell?.showMode(m);
+const showWorkspaceMode = (m: WorkspaceMode): void => { workspaceShell?.showMode(m); workspaceShell?.revealRail(); };
 
 // Set once the desktop left-panel column (and mobile sheet) are built (full app
 // only). Lets the lazily-mounted Analyse panel insert itself into the DOM in its
@@ -2794,7 +2778,7 @@ void viewerLoaded.then(() => {
     stage.overlay.append(viewer.inspectElements.overlay);
     stage.overlay.append(viewer.inspectElements.hint);
     stage.overlay.append(viewer.annotateElements.overlay);
-    stage.overlay.append(viewer.annotateElements.hint); void loadActiveToolStatus().then((m) => stage.addTeardown(m.wireActiveToolIndicator({ viewer: () => viewer, clipEnabled: () => clipPanel.enabled, mount: stage.overlay, watch: [viewer.measureElements.hint, viewer.inspectElements.hint, viewer.annotateElements.hint] }).dispose)).catch((err: unknown) => { if (debug) console.warn('[activeToolStatus] chunk load failed', err); });
+    stage.overlay.append(viewer.annotateElements.hint); void loadActiveToolStatus().then((m) => { const pill = m.wireActiveToolIndicator({ viewer: () => viewer, clipEnabled: () => clipPanel.enabled, lasso: () => (lassoVolumeTool.enabled ? { key: 'lasso', label: 'Lasso volume: draw a shape', cancel: () => { disarmLasso(lassoArming, { clearHighlight: true }); } } : reclassifyUi?.armed() ? { key: 'reclassify', label: 'Reclassifying: draw around points', cancel: () => { reclassifyUi?.disarm(); } } : null), mount: stage.overlay, watch: [viewer.measureElements.hint, viewer.inspectElements.hint, viewer.annotateElements.hint] }); refreshActivePill = pill.refresh; stage.addTeardown(pill.dispose); }).catch((err: unknown) => { if (debug) console.warn('[activeToolStatus] chunk load failed', err); });
     // Right context rail — one coherent column: the Streaming card (only while a
     // COPC streams) above the Inspector, in normal vertical flow rather than a
     // fixed 50vh absolute split. The rail owns the collapse + wheel containment.
@@ -2824,8 +2808,8 @@ void viewerLoaded.then(() => {
         analysePanel: () => analysePanel, objectPanel: () => objectPanel,
         results: { viewer, identity: runtime.layerIdentity, scans, terrainRunner },
         measurePanel: () => measureMount.panel, setMeasureMountElement: (fn) => measureMount.setMountElement(fn),
-        hasScan, crsService,
-        onModeChange: refreshToolLauncher, onRoute: (r) => clipPanel.setPageOpen(r.mode === 'work' && r.page === 'clip'),
+        hasScan, crsService, toast: showLassoToast,
+        onModeChange: refreshToolLauncher, onRoute: (r) => { clipPanel.setPageOpen(r.mode === 'work' && r.page === 'clip'); disarmReclassifyOffPage(r, reclassifyUi, showLassoToast); },
     });
     void fillToolLauncher(); // fills its host when the chunk lands
     workspaceShell = shell;
@@ -2844,7 +2828,7 @@ void viewerLoaded.then(() => {
     // populates the dispatch table's `globalActions` slot (null until now, so
     // embed leaves these keys unbound). A tool shortcut needs a loaded scan and
     // is inert behind any open dialog, Help included.
-    const toolsReady = (): boolean => hasScan() && !dialogOpen();
+    const toolsReady = (): boolean => { if (!hasScan() && !dialogOpen()) showLassoToast('Open a scan first.'); return hasScan() && !dialogOpen(); };
     const editHistory: EditHistoryDeps = { viewer: () => viewer, activeId: () => scans.activeId, blocked: () => helpOverlay.isOpen(), refreshClassUi: () => reclassifyUi?.refresh(), toast: showLassoToast };
     globalActionHandlers = {
       onAnnotate: () => { if (toolsReady()) runTool('annotate'); },
@@ -3405,6 +3389,7 @@ function applyShareState(state: ShareState, cloud: PointCloud): void {
  * only while the requested scan stays active (else refuses, never splices).
  */
 async function exportSession(): Promise<boolean> {
+  const refused = sessionSaveRefusal({ hasScan: !!scans.activeExportTargetId(), heldWork: !!heldSessionWork(), savedViews: viewBookmarks.savedViews.length }); if (refused) { showLassoToast(refused); return false; }
   const withheld: string[] = []; let written: ReturnType<typeof sessionSavedWorkFromText> | null = null; return writeScanScopedExport({ // work left out of the file is said on the saved notice: a second toast would replace it
     requestedScanId: scans.activeExportTargetId(), // streaming leaves activeId null
     activeScanId: () => scans.activeExportTargetId(),
@@ -3910,7 +3895,7 @@ function retireSceneState(): void {
   visuals.resetStreamingFilterSeed();
 }
 function resetToEmptyState(): void {
-  viewer.setMeasureMode(false);
+  lastCloudName = 'contours'; viewer.setMeasureMode(false);
   viewer.setInspectMode(false); viewer.setAnnotateMode(false);
   viewer.clearMeasurements(); clearPendingSessionRestore();
   // No scan open → take the compass down (nothing to orient).
@@ -4150,12 +4135,13 @@ function discardableWork() {
 
 /** Save the current view as a PNG (`app/snapshotAction.ts`, a lazy chunk). */
 async function saveSnapshot(): Promise<void> {
+  const refused = snapshotRefusal(!!scans.activeExportTargetId()); if (refused) { showLassoToast(refused); return; }
   const onError = (message: string): void => dropZone.setError(message);
   const deps = {
     viewer,
     classScopeStamp: currentClassScopeStamp,
     referencePlaneNote: () => inspector.referencePlane?.figureNote() ?? null,
-    onError, toast: showLassoToast, baseName: () => baseName(viewer.streamingCloud?.name ?? scans.activeCloud()?.name ?? lastCloudName),
+    onError, toast: showLassoToast, baseName: () => baseName(viewer.streamingCloud?.name ?? scans.activeCloud()?.name ?? 'openlidarviewer'),
   };
   await loadSnapshotAction().then((m) => m.saveSnapshot(deps), () => onError('Could not save the view'));
 }
