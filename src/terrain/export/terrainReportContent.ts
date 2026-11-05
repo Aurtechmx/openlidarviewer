@@ -42,7 +42,7 @@
  * so the two can never drift.
  */
 
-import { DENSITY_REF_SAMPLE_NOTE } from './analysedBasis';
+import { DENSITY_REF_SAMPLE_NOTE, readinessOnBasis } from './analysedBasis';
 import { blockedCiClause } from '../validate/holdoutCiText';
 import { BLOCKED_CV_PARAMS, type AnalyseContoursResult } from '../contour/analyseContours';
 import { terrainAssessment } from '../contour/terrainAssessment';
@@ -279,7 +279,7 @@ export function buildTerrainReportContent(
         label: 'Export readiness',
         // The readiness engine's own "Tier — reason" formatting — identical
         // to the Export readiness provenance line stamped on every artifact.
-        value: readinessLine(assessment.exportReadiness, assessment.exportReason),
+        value: ((r) => readinessLine(r.tier, r.reason))(readinessOnBasis(assessment.exportReadiness, assessment.exportReason, provenance.analysedBasis, provenance.coverageMode)),
       },
       { label: 'Best for', value: assessment.bestFor },
     ],
@@ -411,7 +411,7 @@ export function buildTerrainReportContent(
         value: assessment.scoreKnown ? `${assessment.score}/100` : 'unknown',
       },
       { label: 'Reason', value: assessment.reason },
-      { label: 'Export readiness', value: assessment.exportReadiness },
+      { label: 'Export readiness', value: readinessOnBasis(assessment.exportReadiness, assessment.exportReason, provenance.analysedBasis, provenance.coverageMode).tier },
       ...(assessment.exportReason
         ? [{ label: 'Export note', value: assessment.exportReason }]
         : []),

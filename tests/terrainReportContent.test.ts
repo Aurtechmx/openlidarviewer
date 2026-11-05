@@ -865,3 +865,14 @@ describe('the blocked cross-validation prose is built from the parameters', () =
     expect(basis).toContain(BLOCKED_CV_PARAMS.cellCap.toLocaleString('en-US'));
   });
 });
+
+describe('buildTerrainReportContent: export readiness on a sample', () => {
+  it('never prints Ready when only a sample was analysed', () => {
+    // A full grid over a sampled read: the assessment itself still says Ready.
+    const analysedBasis = { coverage: 'sampled', analysedPointCount: 100, declaredPointCount: 1000 };
+    const text = JSON.stringify(buildTerrainReportContent(readyResult(), { ...OPTS, analysedBasis } as typeof OPTS));
+    expect(text).toMatch(/"Export readiness","value":"Preview/);
+    expect(text).not.toMatch(/"Export readiness","value":"Ready/);
+  });
+});
+
