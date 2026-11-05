@@ -27,6 +27,8 @@
  * Mounted in `main.ts` next to the Measurements and Annotations panels.
  */
 
+import { chunkFailureText, classifyLoadError, reportChunkFailure } from '../app/staleChunkReload';
+import { chunkFailureNote } from './chunkFailureNote';
 import { blockedCiClause } from '../terrain/validate/holdoutCiText';
 import type { LocalToLonLatSourceZ } from '../export/lonLatMapper';
 import { terrainExportDigests, terrainSourceDigestReady, type TerrainExportDigests } from '../export/terrainExportDigests';
@@ -906,7 +908,10 @@ export class AnalysePanel {
         this._partsListener?.();
       })
       .catch(() => {
-        /* An optional inspection surface: omit it rather than break the panel. */
+        // The note counts as a launcher, so the row stays listed and opens to the reason.
+        if (token !== this._rangeToken) return;
+        this._rangeLauncher.replaceChildren(chunkFailureNote({ key: 'range-frames', what: 'Range frames', retry: () => this._refreshRangeLauncher() }));
+        this._partsListener?.();
       });
   }
 
@@ -993,7 +998,9 @@ export class AnalysePanel {
         this._partsListener?.();
       })
       .catch(() => {
-        /* An optional review surface: omit it rather than break the panel. */
+        if (token !== this._featureToken) return;
+        this._featureLauncher.replaceChildren(chunkFailureNote({ key: 'feature-candidates', what: 'Feature candidates', retry: () => this._refreshFeatureLauncher() }));
+        this._partsListener?.();
       });
   }
 
@@ -1191,8 +1198,11 @@ export class AnalysePanel {
     const status = this.exportProductStatus(kind);
     if (!status.ready) return { ok: false, reason: status.reason };
     if (kind === 'dem') {
-      this._studioExportBtns.get('package')?.click();
-      return { ok: true };
+      // Run on the button pressed, not the detached backing one, so busy and failure reach the lane.
+      return this._exportDemPackage(srcBtn ?? this._demButton).then(
+        (): TerrainProductOutcome => ({ ok: true }),
+        (err: unknown): TerrainProductOutcome => ({ ok: false, reason: classifyLoadError(err) === 'stale-chunk' ? chunkFailureText('DEM export') : 'DEM export failed. Try again.' }),
+      );
     }
     if (this._lanePdfPending) return this._lanePdfPending;
     const result = this._result;
@@ -1614,12 +1624,18 @@ export class AnalysePanel {
           deliverableHost: this._contourDeliverable,
           onLaunch: () => this._contourDeliverable.classList.remove('olv-hidden'),
           onExport: (product, btn, intent, frame) =>
-            this._handleContourStudioExport(product, btn, intent, frame),
+            this._handleContourStudioExport(product, btn, intent, frame, true),
         });
       })
       .catch(() => {
-        /* The launcher is an optional post-analysis surface — if its chunk
-         * fails to load, omit it rather than breaking the panel. */
+        // The status line above reads as complete, so the missing exports are said here.
+        if (token !== this._contourToken || this._result !== result) return;
+        this._contourLauncher.replaceChildren(chunkFailureNote({
+          key: 'contour-studio',
+          what: 'Contour Studio',
+          firstText: 'Contour Studio could not load, so contour exports are unavailable. Your results are kept.',
+          retry: () => this.setContourFrame(ctx),
+        }));
       });
   }
 
@@ -1636,6 +1652,7 @@ export class AnalysePanel {
     srcBtn: HTMLButtonElement,
     intent: ContourExportIntent,
     frame: ContourExportFrameFacts,
+    sayLoadFailure = false,
   ): Promise<ContourExportDecision | null> {
     // The export orchestration (permit gate, dispatch, busy/blocked state) lives
     // in ContourExportAdapter, loaded LAZILY: the permit resolver pulls the
@@ -1671,9 +1688,10 @@ export class AnalysePanel {
         }
         return this._contourExportAdapter.handle(product, srcBtn, intent, frame);
       })
-      .catch(() => {
-        /* The export orchestration chunk failed to load — leave the button
-         * untouched rather than crash the panel. */
+      .catch((err: unknown) => {
+        // The lane's caller has a hint of its own for a null; the Studio button has none.
+        console.error('OpenLiDARViewer: contour export did not run.', err);
+        if (sayLoadFailure && classifyLoadError(err) === 'stale-chunk') reportChunkFailure('Contour export');
         return null;
       });
   }

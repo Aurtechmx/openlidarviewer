@@ -1,3 +1,4 @@
+import { classifyLoadError, reportChunkFailure } from '../app/staleChunkReload';
 import { el } from './dom';
 import { wireDialogA11y, wireBackdropDismiss, dialogOpen, type DialogA11yHandle } from './Modal';
 import {
@@ -317,11 +318,14 @@ export class CommandPalette {
 }
 
 /**
- * Swallow the rejection of an action that returned a promise. The Session log
- * records the failure; the palette has already closed.
+ * Take the rejection of an action that returned a promise: the palette has
+ * already closed, and it must not surface as unhandled. A failed chunk is said
+ * in a toast; an action reports any other failure itself.
  */
 export function settle(result: unknown): void {
   if (result && typeof (result as PromiseLike<unknown>).then === 'function') {
-    Promise.resolve(result).catch(() => {});
+    Promise.resolve(result).catch((err: unknown) => {
+      if (classifyLoadError(err) === 'stale-chunk') reportChunkFailure('This command');
+    });
   }
 }

@@ -112,7 +112,7 @@ import { exportImageAction, runPointExport } from './app/exportImageAction';
 // ground-filter + rasteriser): see compareLoadedLayers' dynamic import.
 import { planInstantAnswer, sameSourcePair } from './intelligence/instantAnswer';
 import { decodeFull } from './convert/decodeFull';
-import { createHelpOverlayLazy, createLazySingleton, createLazySurfaceLoader, buttonLazyTrigger, dialogOpen, retryableOnce, mountPanelOnce } from './app/helpOverlayLazy';
+import { chunkFailureNote, createHelpOverlayLazy, createLazySingleton, createLazySurfaceLoader, buttonLazyTrigger, dialogOpen, retryableOnce, mountPanelOnce } from './app/helpOverlayLazy';
 import {
   buildViewerKeyBindings,
   installKeyDispatch, undoLastEdit, redoLastEdit, type EditHistoryDeps,
@@ -247,7 +247,7 @@ import { prepareEpochFrames, epochUnitMismatchLines, compareSuggestionAllowed } 
 // feeds the colorbar legend's elevation unit from the resolved CRS.
 import { verticalUnitLabel } from './units/units';
 import { createInspectorCardRefreshers } from './app/inspectorCardRefreshers';
-import { installStaleChunkRecovery, makeAmbiguousChunkHandler } from './app/staleChunkReload';
+import { chunkFailureText, classifyLoadError, consumeStaleReloadNotice, guardUserSave, installChunkFailureNet, installStaleChunkRecovery, makeAmbiguousChunkHandler, makeStaleWithWorkHandler, reportChunkFailure, setChunkFailureSurface } from './app/staleChunkReload';
 import { createCrsCoordinator } from './app/crsCoordinator';
 import { remoteCopcName, describeRemoteCopcError } from './app/remoteSourceNaming';
 import { deriveVolumeRecord, formatVolumeNumber } from './render/measure/measureDerivations';
@@ -484,11 +484,10 @@ async function openBatchConverter(): Promise<void> {
  * `ensureViewer()` resolves before any user-driven scan-open at runtime, but it does.
  */
 let viewer: Viewer = null as unknown as Viewer;
-// v0.6 P3: recover from a stale lazy chunk after a deploy. If the Viewer's
-// content-hashed import fails because a newer build replaced the asset mid-session,
-// do ONE guarded reload (sessionStorage cooldown, URL preserved), not a hard boot
-// failure. Ordinary Viewer exceptions are NOT classified as stale and never reload.
-const { importOrReload } = installStaleChunkRecovery({ onOffline: (msg) => appToast().show(msg), onAmbiguous: makeAmbiguousChunkHandler({ showToast: (m, a) => appToast().show(m, a), confirmReload: async (title, message) => (await loadModal()).openConfirm({ title, message, confirmLabel: 'Reload page', cancelLabel: 'Keep working' }) }) });
+// Recover from a stale lazy chunk after a deploy (staleChunkReload.ts): one guarded reload with nothing open; with a scan open the user is told and asked. The dialog's own chunk may be gone too, so the browser's confirm stands in, and a yes flushes the recovery journal first.
+const chunkSurface = { showToast: (m: string, a?: { label: string; onClick: () => void }) => appToast().show(m, a), confirmReload: async (title: string, message: string) => { const ok = await loadModal().then((m) => m.openConfirm({ title, message, confirmLabel: 'Reload page', cancelLabel: 'Keep working' })).catch(() => window.confirm(`${title}\n\n${message}`)); if (ok) await recovery?.snapshotNow().catch(() => false); return ok; } };
+const { importOrReload, reloadNow } = installStaleChunkRecovery({ onOffline: (msg) => appToast().show(msg), hasOpenWork: () => loading || (viewerReady && hasScan()), onStaleWithWork: makeStaleWithWorkHandler(chunkSurface), onAmbiguous: makeAmbiguousChunkHandler(chunkSurface) });
+setChunkFailureSurface({ ...chunkSurface, reload: reloadNow }); installChunkFailureNet(window, chunkSurface.showToast); const staleReloadNotice = consumeStaleReloadNotice(); if (staleReloadNotice) appToast().show(staleReloadNotice); // the net is the last resort for a load no caller reports
 let startViewer: () => void = () => {};
 const viewerStarted = new Promise<void>((resolve) => { startViewer = resolve; });
 /** Start the Viewer import if it has not started, and hand back the shared promise. */
@@ -717,10 +716,11 @@ stage.canvas.addEventListener('contextmenu', (e) => {
 // The on-canvas ViewCube: on by default with a scan open (off on phones until
 // asked), placed top-right clear of the right rail; "Toggle compass" in the
 // palette and `?viewcube=1|0` override. Life cycle: ui/compassController.ts.
-const compass = createCompassController({
+let compassFailureSaid = false; const compass = createCompassController({
   host: () => stage.overlay, urlParams, onView: (view, o) => navWiring.callbacks.onStandardView(view, o), // same path (and Plan View rule) as the NavBar buttons
   onOrient: (_t, o) => navWiring.onOrientView(o.dir), onHome: () => navWiring.callbacks.onReset(),
   cardinalsAreGeographic: () => crsIsKnown(crsService.current()), // local scans show truthful view names
+  onLoadFailed: (explicit) => { if (explicit || !compassFailureSaid) reportChunkFailure('The view cube'); compassFailureSaid = true; }, // refresh retries on many events: said once unless asked for
 });
 void viewerLoaded.then((v) => compass.attachViewer(v));
 
@@ -751,7 +751,7 @@ if (
 // v0.4.3.
 
 /** The app's one toast; see `appToast`. */
-const showLassoToast = appToast().show;
+const showLassoToast = appToast().show; const saveSessionFromUser = guardUserSave(exportSession, showLassoToast); // the close and replace guards keep the rejecting one and say it themselves
 
 /** Input-aware mobile check — drives the touch hint and the tighter point budget. */
 function isPhone(): boolean { return isMobileDevice(); }
@@ -1394,7 +1394,7 @@ const ensureActionRegistry = retryableOnce((): Promise<Action[]> => loadActionRe
   ensureWorkflowConfigPanel,
   ensureShortcutSheet: () => ensureShortcutSheet((sheet) => sheet.open()), // wrapped so a "Try again" retry opens the sheet too
   hasScan,
-  saveSnapshot, copyShareLink, exportSession, handleFile, openScan: () => stage.promptAddDataset(), exportReport: () => exportReportPdf(null),
+  saveSnapshot, copyShareLink, exportSession: saveSessionFromUser, handleFile, openScan: () => stage.promptAddDataset(), exportReport: () => exportReportPdf(null),
   terrainAnalysisEntry: {
     showAnalyseMode: () => showWorkspaceMode('analyse'), showPage: (page) => workspaceShell?.openAnalysePage(page),
     showPanel: () => ensureAnalysePanel().then((p) => { p.setVisible(true); return { hasResult: p.currentResultForProvenance() != null, flowInput: p.flowPulseInput(), terrainAccessInput: p.terrainAccessInput() }; }),
@@ -1571,7 +1571,7 @@ const measureMount = createMeasurePanelMount({
   getViewer: () => viewer,
   crsService,
   getExportPanel: () => exportPanel,
-  exportSession, handleFile, toast: showLassoToast,
+  exportSession: saveSessionFromUser, handleFile, toast: showLassoToast,
   recordUsage, getScanBaseName: () => activeScanName(),
   workbenchStage: stage,
   onWorkbenchClose: () => analyseProfileVisibility.restore(),
@@ -1842,13 +1842,14 @@ const mountReclassifyUi = retryableOnce(async () => {
   classLegendPanel.element.append(ui.element); // rides with the legend onto the Classes page
   reclassifyUi = ui;
 });
-async function showReclassifyUi(): Promise<void> {
+let reclassifyNote: HTMLElement | null = null; async function showReclassifyUi(): Promise<void> {
   if (reclassifyUi) {
     reclassifyUi.setVisible(true);
     reclassifyUi.refresh();
     return;
   }
-  await mountReclassifyUi();
+  reclassifyNote?.remove(); reclassifyNote = null;
+  try { await mountReclassifyUi(); } catch { classLegendPanel.element.append(reclassifyNote = chunkFailureNote({ key: 'class-editing', what: 'Class editing', retry: () => void showReclassifyUi() })); return; } // on the page: a toast would go while the controls stay missing
   // Cast: TS can't see the load reassign the outer `let` across the await.
   (reclassifyUi as ReclassifyUi | null)?.setVisible(true);
 }
@@ -2447,9 +2448,11 @@ clipPanel.subscribe(() => analysePanel?.setClipScopeNote(clipPanel.enabled)); //
 const toolLauncherHost = document.createElement('div');
 let toolLauncherCard: { readonly element: HTMLElement; refresh: () => void } | null = null;
 const refreshToolLauncher = (): void => { workspaceShell?.sync(); toolLauncherCard?.refresh(); };
-async function fillToolLauncher(): Promise<void> {
-  const { createToolLauncher } = await loadToolLauncher();
-  toolLauncherCard = createToolLauncher({
+let toolLauncherFilling = false; async function fillToolLauncher(): Promise<void> {
+  if (toolLauncherFilling || toolLauncherCard) return; toolLauncherFilling = true;
+  const chunk = await loadToolLauncher().catch(() => null); toolLauncherFilling = false;
+  if (!chunk) { toolLauncherHost.replaceChildren(chunkFailureNote({ key: 'tools', what: 'Tools', retry: () => void fillToolLauncher() })); return; }
+  toolLauncherCard = chunk.createToolLauncher({
     getActions: () => ensureActionRegistry(),
     counts: () => ({
       measurements: viewerReady ? viewer.measure.getMeasurements().length : 0,
@@ -2459,8 +2462,7 @@ async function fillToolLauncher(): Promise<void> {
     disabledReason: () => (viewerReady && hasScan() ? null : 'Load a scan to use the tools.'),
     stateOf: (id) => (id === 'tool.clip' && clipPanel.enabled ? `On · ${clipPanel.mode === 'keep-inside' ? 'Keep inside' : 'Keep outside'}` : null),
   });
-  clipPanel.subscribe(() => toolLauncherCard?.refresh());
-  toolLauncherHost.append(toolLauncherCard.element);
+  clipPanel.subscribe(() => toolLauncherCard?.refresh()); toolLauncherHost.replaceChildren(toolLauncherCard.element);
 }
 
 // ── Scan-type routing ────────────────────────────────────────────────────────
@@ -2825,7 +2827,7 @@ void viewerLoaded.then(() => {
         hasScan, crsService,
         onModeChange: refreshToolLauncher, onRoute: (r) => clipPanel.setPageOpen(r.mode === 'work' && r.page === 'clip'),
     });
-    void fillToolLauncher().catch((err: unknown) => { if (debug) console.warn('[toolLauncher] chunk load failed', err); }); // fills its host when the chunk lands
+    void fillToolLauncher(); // fills its host when the chunk lands
     workspaceShell = shell;
     phoneSheet = shell.mobileSheet;
     syncMobileSheet = shell.applyMobileSheet;
@@ -3255,7 +3257,7 @@ function persistPrefs(): void {
  *  Runs before `applyPrefs`, so a saved Eye Dome Lighting / antialiasing
  *  preference still wins; the control writes prefs back on every user change. */
 function mountPerformanceControl(): void {
-  mountQualityControl(stage, {
+  mountQualityControl(stage, { toast: { show: (m, a) => appToast().show(m, a) },
     getViewer: () => viewer, getStreamingQuality: () => streamingUi.quality(),
     device: () => ({ tier: deviceCapsValue.tier, isMobile: isPhone(), backend: viewer.activeBackend() }),
     onStreamingQuality: (q) => streamingUi.noteQualityFromControl(q),
@@ -4027,8 +4029,7 @@ function compareLoadedLayers(): void {
   inspector.setDifferenceAvailable(false);
   inspector.compareDifference.begin(ids, a, b);
   void (async () => {
-    // Load the change-detection code on demand, then yield a frame so the
-    // "working" line paints before the synchronous ground-filter compute.
+    try { // the load is inside, so a failed chunk replaces the working line; a frame's yield lets that line paint before the synchronous compute
     const [{ withheldEpochs }, { summarizeAlignment, buildRegistrationArtifact, summarizeRegistration }, { summarizeChange }, { packageChangeRaster, ChangeRasterRefusal }, { runEpochComparison }] =
       await Promise.all([
         loadCompareEpochs(),
@@ -4039,7 +4040,6 @@ function compareLoadedLayers(): void {
       ]);
     await new Promise((resolve) => setTimeout(resolve, 16));
     if (!current()) return;
-    try {
       const { ctxA, comparable, reason, frameRefusal, frames, beforeCloud, afterCloud, lines, span } = withheldEpochs(prepareEpochFrames(crsService, a, b), a, b);
       if (!comparable) {
         inspector.setCompareResult(
@@ -4084,7 +4084,7 @@ function compareLoadedLayers(): void {
       }
       inspector.setDifferenceAvailable(true);
     } catch (err) {
-      if (current()) inspector.setCompareResult([`Compare failed: ${err instanceof Error ? err.message : String(err)}`]);
+      if (current()) inspector.setCompareResult([classifyLoadError(err) === 'stale-chunk' ? chunkFailureText('Compare') : `Compare failed: ${err instanceof Error ? err.message : String(err)}`]);
     }
   })();
 }

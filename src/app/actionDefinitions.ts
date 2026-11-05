@@ -115,6 +115,7 @@ export function buildActionRegistry(deps: ActionRegistryDeps): Action[] {
     terrainAnalysisEntry: deps.terrainAnalysisEntry,
     observatoryEntry: deps.observatoryEntry,
     buildCurrentStoryInputs: deps.buildCurrentStoryInputs,
+    showLassoToast: { show: deps.showLassoToast },
   });
   const exports_ = contributeExportActions({
     saveSnapshot: deps.saveSnapshot,

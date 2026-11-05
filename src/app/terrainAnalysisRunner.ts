@@ -90,6 +90,7 @@ import { scanPrecisionPermit } from './scanPrecision';
 import { overlayRegistry } from './overlayRegistry';
 import type { PrecisionPermit } from '../geo/inMemoryPrecision';
 import type { TerrainWithheldOutcome } from '../render/terrainStreamSample';
+import { chunkFailureText, classifyLoadError, OFFLINE_CHUNK_MESSAGE } from './staleChunkReload';
 
 /**
  * Derive the interval-INDEPENDENT core params (cell size + resolved CRS / datum)
@@ -441,6 +442,12 @@ async function recoverWithheldAwareCore(
  * identical to the original `runTerrainAnalysis` in main.ts; only the run-state
  * and the lazy-collaborator references moved behind this factory.
  */
+/** The status for a failed run. A failed code chunk is no fault of the scan, and running again will not help. */
+export function terrainFailureStatus(err: unknown, online: boolean): string {
+  if (classifyLoadError(err) !== 'stale-chunk') return `Analysis failed: ${err instanceof Error ? err.message : String(err)}`;
+  return online ? `Terrain analysis did not run. ${chunkFailureText('A part of the app')}` : OFFLINE_CHUNK_MESSAGE;
+}
+
 export function createTerrainAnalysisRunner(
   deps: TerrainAnalysisRunnerDeps,
 ): TerrainAnalysisRunner {
@@ -1072,7 +1079,7 @@ export function createTerrainAnalysisRunner(
       analysePanel.setBusy(false);
       const msg = err instanceof Error ? err.message : String(err);
       // A refusal for the frame or scale is a decision, not a fault: it says the run did not happen.
-      analysePanel.setStatus(err instanceof TerrainRefusalError ? `Terrain analysis did not run. ${msg}` : `Analysis failed: ${msg}`);
+      analysePanel.setStatus(err instanceof TerrainRefusalError ? `Terrain analysis did not run. ${msg}` : terrainFailureStatus(err, typeof navigator === 'undefined' || navigator.onLine !== false));
     } finally {
       // Release the controller reference if it is still ours (a newer run swaps
       // in its own). Leaves an aborted controller in place for the winner.

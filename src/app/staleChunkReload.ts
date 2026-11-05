@@ -19,6 +19,9 @@
  *     the reload surfaces an actionable error instead of trapping the user in a
  *     reload loop. reload() keeps the current URL + query, so the user lands
  *     back where they were.
+ *   - With an open scan (hasOpenWork) the page is never reloaded automatically:
+ *     onStaleWithWork says a new version is available, and a reload happens only
+ *     after the user confirms what it discards.
  *
  * Time, reload, sessionStorage and the event target are all injectable, so the
  * whole decision is unit-tested in Node without a real browser.
@@ -36,6 +39,9 @@ export type StaleChunkVerdict = 'stale-chunk' | 'other';
  * and survives the reload but not a fresh tab.
  */
 export const STALE_RELOAD_MARKER_KEY = 'olv:stale-reload-at';
+
+/** Set by an automatic reload, and read once on the next boot to say why it happened. */
+export const STALE_RELOAD_NOTICE_KEY = 'olv:stale-reload-notice';
 
 /** Default cooldown: a second stale failure within this window will not reload. */
 const DEFAULT_COOLDOWN_MS = 20_000;
@@ -100,6 +106,17 @@ export interface StaleChunkRecoveryOptions {
    * would lose. If absent, importOrReload rejects with the original error.
    */
   onAmbiguous?: (message: string, actions: AmbiguousChunkActions) => void;
+  /**
+   * Whether a reload would lose anything: an open scan, a scan loading, unsaved
+   * work. When true, a chunk proven gone does not reload the page. Absent means
+   * nothing is open, so the automatic reload stands.
+   */
+  hasOpenWork?: () => boolean;
+  /**
+   * Called once per failure burst when a chunk is proven gone and hasOpenWork is
+   * true. The import still rejects, so its caller reports it as well.
+   */
+  onStaleWithWork?: (message: string, actions: { reload(): void }) => void;
 }
 
 /** What the surface behind onAmbiguous can offer the user. */
@@ -123,6 +140,13 @@ export const OFFLINE_CHUNK_MESSAGE =
 /** Shown when a lazy part of the app failed to load and the cause is unclear. */
 export const AMBIGUOUS_CHUNK_MESSAGE =
   'This part of the app could not load. Try again; the page has not been reloaded.';
+
+/** Shown when a deploy swept a chunk away while a scan is open. Retrying cannot help. */
+export const STALE_WITH_WORK_MESSAGE =
+  'A new version of the app is available. Some tools cannot load until the page is reloaded.';
+
+/** Shown on the boot after an automatic reload, which only happens with nothing open. */
+export const STALE_RELOADED_MESSAGE = 'The app was updated and reloaded. Open your file again.';
 
 /** Said before an explicit reload: what it would lose. */
 export const RELOAD_LOSS_MESSAGE =
@@ -209,6 +233,137 @@ export function makeAmbiguousChunkHandler(deps: AmbiguousChunkDeps) {
   };
 }
 
+/** The surface behind onStaleWithWork. One action: a reload, after saying what it discards. */
+export function makeStaleWithWorkHandler(deps: AmbiguousChunkDeps) {
+  return (message: string, { reload }: { reload(): void }): void => {
+    deps.showToast(message, {
+      label: RELOAD_ACTION_LABEL,
+      onClick: () => { void deps.confirmReload('Reload the page?', RELOAD_LOSS_MESSAGE).then((ok) => { if (ok) reload(); }); },
+    });
+  };
+}
+
+/** The label of every action that reloads the page after a confirm. */
+export const RELOAD_ACTION_LABEL = 'Reload…';
+
+/** How long one failure counts as already reported: one import can fail through several paths. */
+const CHUNK_BURST_MS = 2000;
+
+/** The app's toast and confirmed reload, for code that has neither to hand. */
+export interface ChunkFailureSurface extends AmbiguousChunkDeps {
+  reload(): void;
+}
+let surface: ChunkFailureSurface | null = null;
+let clock: () => number = () => Date.now();
+let lastReportAt = Number.NEGATIVE_INFINITY;
+const failures = new Map<string, number>();
+
+/** Wire the surface once, at startup. */
+export function setChunkFailureSurface(next: ChunkFailureSurface | null, now?: () => number): void {
+  surface = next;
+  if (now) clock = now;
+}
+
+/** The action that asks, then reloads. Undefined until the surface is wired. */
+export function chunkReloadAction(): { label: string; onClick: () => void } | undefined {
+  const s = surface;
+  if (!s) return undefined;
+  return {
+    label: RELOAD_ACTION_LABEL,
+    onClick: () => { void s.confirmReload('Reload the page?', RELOAD_LOSS_MESSAGE).then((ok) => { if (ok) s.reload(); }); },
+  };
+}
+
+/** A failed chunk, in words: what could not load, the next step, and what that step costs. */
+export function chunkFailureText(what: string): string {
+  return `${what} could not load. Reload the page to try again. A reload closes open scans, so save your session first if you can.`;
+}
+
+/** Note that a failure was shown, so the safety net does not repeat it. */
+export function markChunkFailureReported(): void {
+  lastReportAt = clock();
+}
+
+/** Toast a failed chunk with a confirmed reload. For a path with no place of its own to say so. */
+export function reportChunkFailure(what: string): void {
+  markChunkFailureReported();
+  surface?.showToast(chunkFailureText(what), chunkReloadAction());
+}
+
+/**
+ * Count a chunk failure for one surface and return which failure this is. A
+ * same-page retry recovers in Firefox, while Chromium and WebKit replay the
+ * failed import until a reload, so the first failure may offer Try again and a
+ * repeat must offer the reload.
+ */
+export function countChunkFailure(key: string): number {
+  const n = (failures.get(key) ?? 0) + 1;
+  failures.set(key, n);
+  return n;
+}
+
+/** That surface loaded: a later failure is a first failure again. */
+export function clearChunkFailure(key: string): void {
+  failures.delete(key);
+}
+
+export function resetChunkFailuresForTests(): void {
+  failures.clear();
+  surface = null;
+  clock = () => Date.now();
+  lastReportAt = Number.NEGATIVE_INFINITY;
+}
+
+/**
+ * The last resort: a chunk failure nothing handled still gives a result. Only
+ * chunk failures are recognised. The event is left as it is, so the console and
+ * the error ledger see what they always saw.
+ */
+export function installChunkFailureNet(
+  target: Pick<EventTargetLike, 'addEventListener'>,
+  show: (message: string, action?: { label: string; onClick: () => void }) => void,
+  now: () => number = () => Date.now(),
+): void {
+  target.addEventListener('unhandledrejection', (event) => {
+    if (classifyLoadError((event as { reason?: unknown }).reason) !== 'stale-chunk') return;
+    const at = now();
+    if (at - lastReportAt < CHUNK_BURST_MS) return;
+    lastReportAt = at;
+    show(chunkFailureText('A part of the app'), chunkReloadAction());
+  });
+}
+
+/**
+ * A save the user pressed for: a failure says no file was written. The save
+ * itself keeps rejecting for the close and replace guards, which say so themselves.
+ */
+export function guardUserSave(
+  save: () => Promise<boolean>,
+  show: (message: string, action?: { label: string; onClick: () => void }) => void,
+): () => Promise<boolean> {
+  return () => save().catch((err: unknown) => {
+    markChunkFailureReported();
+    if (classifyLoadError(err) === 'stale-chunk') {
+      show('Session not saved. Part of the app could not load, so no file was written. Your work is still open.', chunkReloadAction());
+    } else {
+      show(`Session not saved. No file was written. ${errorMessage(err)}`);
+    }
+    return false;
+  });
+}
+
+/** Read and clear the note an automatic reload left, for the boot that follows it. */
+export function consumeStaleReloadNotice(store?: StorageLike | null): string | null {
+  try {
+    const storage = store === undefined ? sessionStorage : store;
+    if (storage?.getItem(STALE_RELOAD_NOTICE_KEY) == null) return null;
+    storage.removeItem(STALE_RELOAD_NOTICE_KEY);
+    return STALE_RELOADED_MESSAGE;
+  } catch {
+    return null;
+  }
+}
+
 /** The handle returned by installStaleChunkRecovery. */
 export interface StaleChunkRecovery {
   /**
@@ -218,6 +373,9 @@ export interface StaleChunkRecovery {
    * ordinary rejection, rejects with the original error, untouched.
    */
   importOrReload<T>(loader: () => Promise<T>): Promise<T>;
+
+  /** Reload now, after the user confirmed. The cooldown guards automatic reloads only. */
+  reloadNow(): void;
 
   /**
    * Detach the `vite:preloadError` listener this installer registered.
@@ -282,6 +440,9 @@ export function classifyLoadError(err: unknown): StaleChunkVerdict {
   return 'other';
 }
 
+/** What one failed chunk came to: 'held' is a chunk proven gone with a scan open. */
+type RecoveryOutcome = 'reloaded' | 'unrecoverable' | 'kept' | 'held';
+
 /**
  * Install the one-shot stale-chunk recovery: registers a `vite:preloadError`
  * handler (when an event target exists) and returns { importOrReload }.
@@ -320,7 +481,7 @@ export function installStaleChunkRecovery(
   // Vite reports one failed import twice: the vite:preloadError event, then the
   // rethrow into importOrReload. Both share one probe and one decision per URL,
   // and the offline note is shown once per failure burst.
-  const decisions = new Map<string, Promise<'reloaded' | 'unrecoverable' | 'kept'>>();
+  const decisions = new Map<string, Promise<RecoveryOutcome>>();
   let offlineNoted = false;
   function noteOffline(): void {
     if (offlineNoted) return;
@@ -334,7 +495,7 @@ export function installStaleChunkRecovery(
    * Reload only for a stale deploy. Offline, or when the probe shows the chunk
    * server is unreachable or still serving the chunk, report and keep the page.
    */
-  function recoverIfStale(err: unknown): Promise<'reloaded' | 'unrecoverable' | 'kept'> {
+  function recoverIfStale(err: unknown): Promise<RecoveryOutcome> {
     const url = chunkUrlFromError(err);
     if (!url) return decide(err, null);
     let d = decisions.get(url);
@@ -347,10 +508,39 @@ export function installStaleChunkRecovery(
     return d;
   }
 
-  async function decide(err: unknown, url: string | null): Promise<'reloaded' | 'unrecoverable' | 'kept'> {
+  /** True unless the check says nothing is open: when it cannot tell, keep the page. */
+  function openWork(): boolean {
+    if (!opts.hasOpenWork) return false;
+    try {
+      return opts.hasOpenWork();
+    } catch {
+      return true;
+    }
+  }
+
+  let staleNoted = false;
+  function noteStale(): void {
+    if (staleNoted) return;
+    staleNoted = true;
+    setTimeout(() => { staleNoted = false; }, CHUNK_BURST_MS);
+    markChunkFailureReported();
+    opts.onStaleWithWork?.(STALE_WITH_WORK_MESSAGE, { reload: reloadNow });
+  }
+
+  function reloadNow(): void {
+    writeMarker(now());
+    reload();
+  }
+
+  async function decide(err: unknown, url: string | null): Promise<RecoveryOutcome> {
     // Reload only on proof the chunk is gone. No URL or no probe proves nothing.
     const found: ChunkProbe | 'unknown' = url && probe ? await probe(url) : 'unknown';
-    if (found === 'missing') return attemptRecover(err);
+    if (found === 'missing') {
+      if (!openWork()) return attemptRecover(err);
+      log('chunk is gone from the server but a scan is open; not reloading');
+      noteStale();
+      return 'held';
+    }
     // The import rejects and its caller reports the failure.
     if (found === 'unknown') log('chunk load failed and the cause is unclear; not reloading');
     else log(`chunk load failed but the server ${found === 'present' ? 'still serves it' : 'is unreachable'}; not reloading`);
@@ -393,6 +583,11 @@ export function installStaleChunkRecovery(
       return 'unrecoverable';
     }
     writeMarker(at);
+    try {
+      storage?.setItem(STALE_RELOAD_NOTICE_KEY, '1');
+    } catch {
+      // Same as the marker: losing the note costs only the sentence on next boot.
+    }
     log(
       `stale-chunk detected ("${errorMessage(err)}") — reloading once to fetch fresh assets (URL preserved)`,
     );
@@ -439,7 +634,7 @@ export function installStaleChunkRecovery(
     ambiguousAttempts += 1;
     onAmbiguous(AMBIGUOUS_CHUNK_MESSAGE, {
       attempt: ambiguousAttempts,
-      reload: () => { attemptRecover(new Error('reload requested after a chunk load failure')); },
+      reload: reloadNow,
       retry: async () => {
         try {
           await loader();
@@ -470,6 +665,7 @@ export function installStaleChunkRecovery(
         reportAmbiguous(loader);
         throw err;
       }
+      if (outcome === 'held') throw err;
       if (outcome === 'unrecoverable' && !onUnrecoverable) {
         // No surface was wired — propagate so the caller can show the error.
         throw err;
@@ -480,7 +676,7 @@ export function installStaleChunkRecovery(
     }
   }
 
-  return { importOrReload, dispose };
+  return { importOrReload, reloadNow, dispose };
 }
 
 /** The slice of a window {@link deferredPageReload} uses. */

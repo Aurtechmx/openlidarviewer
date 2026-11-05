@@ -13,6 +13,7 @@
  * invalidated downstream).
  */
 
+import { chunkFailureText, classifyLoadError } from '../app/staleChunkReload';
 import { el } from './dom';
 import { LassoVolumeTool } from './LassoVolumeTool';
 import { reclassifyOutcome } from './reclassifyOutcome';
@@ -139,6 +140,11 @@ export function createReclassifyUi(opts: ReclassifyUiOptions): ReclassifyUi {
         // where the user clicked until the next run.
         autoNote.textContent = refused || '';
         autoNote.classList.toggle('olv-hidden', !refused);
+      }).catch((err: unknown) => {
+        const text = classifyLoadError(err) === 'stale-chunk' ? chunkFailureText('Auto-classify') : `Auto-classify could not run. ${err instanceof Error ? err.message : String(err)}`;
+        autoNote.textContent = text;
+        autoNote.classList.remove('olv-hidden');
+        opts.onToast?.(text);
       }).finally(() => {
         autoBtn.disabled = false;
         autoBtn.classList.remove('olv-reclass-auto-loading');

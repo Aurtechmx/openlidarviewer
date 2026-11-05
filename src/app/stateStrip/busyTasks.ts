@@ -92,7 +92,8 @@ export function collectBusyTasks(root: ParentNode = document): void {
       label: () => hostText(indicator),
       progress: () => trailFraction(parseFloat((indicator as SVGElement).style?.getPropertyValue('--olv-bs-len') ?? '')),
       live: () => indicatorRunning(indicator),
-      settled: () => indicator.classList.contains('is-settled'),
+      // A failure message left in the toast is not work still running.
+      settled: () => indicator.classList.contains('is-settled') || indicator.closest?.('.olv-toast-error') != null,
       run: () => (indicator as SVGElement).dataset?.run ?? '',
       gone: () => {
         if (indicator.isConnected) {

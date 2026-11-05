@@ -1,3 +1,5 @@
+import { chunkFailureText, clearChunkFailure, countChunkFailure } from '../app/staleChunkReload';
+import { chunkFailureNote } from './chunkFailureNote';
 import { el, iconButton, formatCount } from './dom';
 import { createComparePairPicker, createCompareDifference, beginCompareRun, CompareRunGuard, type ComparePairPicker, type CompareDifferenceDeps, type CompareChoice, type CompareRunStart } from '../app/comparePair';
 import {
@@ -817,8 +819,9 @@ export class Inspector {
           }
           // The chunk failed to load — _ensureGroups already logged it;
           // surface it here too so the click was not silently a no-op.
-          this._groupLoadError.textContent =
-            'Could not load layer groups. Click "+ New group" to try again.';
+          this._groupLoadError.textContent = countChunkFailure('layer-groups') < 2
+            ? 'Could not load layer groups. Click "+ New group" to try again.'
+            : chunkFailureText('Layer groups');
           this._groupLoadError.classList.remove('olv-hidden');
           announce('Could not load layer groups.');
         })
@@ -1725,6 +1728,7 @@ export class Inspector {
     void loadLayerHealthCard().then(({ LayerHealthCard }) => {
       if (this._layerHealth) return;
       this._layerHealth = new LayerHealthCard();
+      this._layerHealthSlot.replaceChildren();
       this._layerHealthSlot.append(this._layerHealth.root);
       const pending = this._layerHealthPending;
       this._layerHealthPending = null;
@@ -1732,7 +1736,11 @@ export class Inspector {
     })
       // Additive surface: a chunk-load failure must not become an unhandled
       // rejection (the caller is synchronous and can't catch this promise).
-      .catch((err) => console.warn('[inspector] layer-health card chunk failed to load', err));
+      .catch((err) => {
+        console.warn('[inspector] layer-health card chunk failed to load', err);
+        // In the slot, so Open Layer Health reveals the reason.
+        if (!this._layerHealth) this._layerHealthSlot.replaceChildren(chunkFailureNote({ key: 'layer-health', what: 'Layer Health' }));
+      });
   }
 
   setLayerCrsFlags(
@@ -2371,6 +2379,7 @@ export class Inspector {
     this._reportChunkPromise = loadRenderReport()
       .then(({ renderReport }) => {
         this._renderReportFn = renderReport;
+        clearChunkFailure('scan-report');
         return renderReport;
       })
       .catch((err) => {
@@ -2384,19 +2393,7 @@ export class Inspector {
   }
 
   private _showReportLoadError(): void {
-    const retry = el('button', {
-      className: 'olv-inline-retry',
-      type: 'button',
-      text: 'Try again',
-      tip: 'Retry loading the scan report.',
-    }) as HTMLButtonElement;
-    retry.addEventListener('click', () => {
-      if (this._pendingReportRows) this.setReport(this._pendingReportRows);
-    });
-    this._report.replaceChildren(
-      el('div', { className: 'olv-report-empty', text: 'Could not load the scan report.' }),
-      retry,
-    );
+    this._report.replaceChildren(chunkFailureNote({ key: 'scan-report', what: 'The scan report', firstText: 'Could not load the scan report.', retry: () => { if (this._pendingReportRows) this.setReport(this._pendingReportRows); } }));
     announce('Could not load the scan report.');
   }
 
@@ -2526,6 +2523,7 @@ export class Inspector {
     this._provenanceChunkPromise = loadRenderProvenance()
       .then(({ renderProvenance }) => {
         this._renderProvenanceFn = renderProvenance;
+        clearChunkFailure('provenance');
         return renderProvenance;
       })
       .catch((err) => {
@@ -2539,19 +2537,7 @@ export class Inspector {
   }
 
   private _showProvenanceLoadError(): void {
-    const retry = el('button', {
-      className: 'olv-inline-retry',
-      type: 'button',
-      text: 'Try again',
-      tip: 'Retry loading provenance.',
-    }) as HTMLButtonElement;
-    retry.addEventListener('click', () => {
-      if (this._pendingProvenanceForChunk) this.setProvenance(this._pendingProvenanceForChunk);
-    });
-    this._provenanceBody.replaceChildren(
-      el('div', { className: 'olv-report-empty', text: 'Could not load provenance.' }),
-      retry,
-    );
+    this._provenanceBody.replaceChildren(chunkFailureNote({ key: 'provenance', what: 'Provenance', firstText: 'Could not load provenance.', retry: () => { if (this._pendingProvenanceForChunk) this.setProvenance(this._pendingProvenanceForChunk); } }));
     announce('Could not load provenance.');
   }
 
@@ -2723,6 +2709,7 @@ export class Inspector {
     this._crsChunkPromise = loadRenderCrs()
       .then(({ renderCrs }) => {
         this._renderCrsFn = renderCrs;
+        clearChunkFailure('crs');
         return renderCrs;
       })
       .catch((err) => {
@@ -2736,19 +2723,7 @@ export class Inspector {
   }
 
   private _showCrsLoadError(): void {
-    const retry = el('button', {
-      className: 'olv-inline-retry',
-      type: 'button',
-      text: 'Try again',
-      tip: 'Retry loading the coordinate system.',
-    }) as HTMLButtonElement;
-    retry.addEventListener('click', () => {
-      if (this._pendingCrs) this.setCrs(this._pendingCrs);
-    });
-    this._crsBody.replaceChildren(
-      el('div', { className: 'olv-report-empty', text: 'Could not load the coordinate system.' }),
-      retry,
-    );
+    this._crsBody.replaceChildren(chunkFailureNote({ key: 'crs', what: 'The coordinate system', firstText: 'Could not load the coordinate system.', retry: () => { if (this._pendingCrs) this.setCrs(this._pendingCrs); } }));
     announce('Could not load the coordinate system.');
   }
 

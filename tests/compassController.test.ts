@@ -13,7 +13,7 @@
  * render loop draws, which already stops when the tab is hidden.
  */
 
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import {
   createCompassController,
   type CompassPlatform,
@@ -410,5 +410,30 @@ describe('compass on a streamed scan', () => {
     cube.state.resolve();
     await Promise.resolve();
     expect(cube.state.mounts).toBe(0);
+  });
+});
+
+describe('a view cube chunk that fails', () => {
+  it('reports the failure, says whether it was asked for, and keeps the preference untouched', async () => {
+    const onLoadFailed = vi.fn();
+    const writes: string[] = [];
+    const c = createCompassController({
+      host: () => ({}) as HTMLElement,
+      urlParams: new URLSearchParams(),
+      loadCube: () => Promise.reject(new TypeError('Failed to fetch dynamically imported module: x.js')),
+      platform: { readPref: () => '0', writePref: (v: string) => { writes.push(v); }, isPhone: () => false } as never,
+      onLoadFailed,
+    } as never);
+    vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const viewer = { clouds: () => ({ length: 1 }), cameraOrientation: () => ({}), onDrawnFrame: () => () => {}, setStandardView() {}, orientView() {}, frameAll() {} };
+    c.attachViewer(viewer as never);
+    const before = writes.length;
+    c.setEnabled(true);
+    await new Promise((r) => setTimeout(r, 0));
+    expect(onLoadFailed).toHaveBeenCalledWith(true);
+    c.refresh();
+    await new Promise((r) => setTimeout(r, 0));
+    expect(onLoadFailed).toHaveBeenLastCalledWith(false);
+    expect(writes.length - before).toBeLessThanOrEqual(1);
   });
 });

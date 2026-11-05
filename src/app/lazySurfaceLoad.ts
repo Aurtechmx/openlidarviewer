@@ -20,7 +20,16 @@
  * chunk against exactly this shape of failure; this module gives every
  * other lazy entry point the same guarantee from one place instead of a
  * bespoke try/catch at each call site.
+ *
+ * A failed chunk is never shown as the browser's message, which names a module
+ * URL. A same-page retry recovers in Firefox, so the first failure keeps Try
+ * again. Chromium and WebKit replay a failed import until the page reloads, so a
+ * repeat failure of the same surface offers the confirmed reload instead. A
+ * cache-busted import is not used: it would load a second copy of the module's
+ * state, and could not reach a failed static dependency of the chunk.
  */
+
+import { chunkFailureText, chunkReloadAction, classifyLoadError, clearChunkFailure, countChunkFailure, markChunkFailureReported } from './staleChunkReload';
 
 /** A trigger element that can carry a visible pending cue while its chunk loads. */
 export interface LazyLoadTrigger {
@@ -65,7 +74,9 @@ export function createLazySurfaceLoader(toast: LazyLoadToast) {
     try {
       // Awaited inside the try, so a `load` that throws before it returns a
       // promise is reported the same way as one that rejects.
-      return await load();
+      const value = await load();
+      clearChunkFailure(label);
+      return value;
     } catch (err) {
       report(toast, err, label, opts.retry);
       return undefined;
@@ -81,7 +92,8 @@ export function createLazySurfaceLoader(toast: LazyLoadToast) {
  * call starts `load`; later calls get the same promise while it runs and once
  * it resolves. A rejection reaches the callers that shared it, and then this
  * drops it, so the next call (a Try again, or the same gesture repeated) starts
- * a fresh load rather than replaying the failure until the page reloads.
+ * a fresh load. Firefox then fetches again; Chromium and WebKit replay a failed
+ * import until the page reloads, which is why a repeat failure offers the reload.
  */
 export function retryableOnce<T>(load: () => Promise<T>): () => Promise<T> {
   let attempt: Promise<T> | null = null;
@@ -121,7 +133,17 @@ export function mountPanelOnce<P extends { element: HTMLElement }>(
 
 /** Show a failure: the error's own message, or a fallback naming the surface. */
 function report(toast: LazyLoadToast, err: unknown, label: string, retry?: () => void): void {
-  toast.show(err instanceof Error ? err.message : `Could not load the ${label}.`, retry ? { label: 'Try again', onClick: retry } : undefined);
+  const tryAgain = retry ? { label: 'Try again', onClick: retry } : undefined;
+  if (classifyLoadError(err) !== 'stale-chunk') {
+    toast.show(err instanceof Error ? err.message : `Could not load the ${label}.`, tryAgain);
+    return;
+  }
+  markChunkFailureReported();
+  if (countChunkFailure(label) < 2) {
+    toast.show(retry ? `The ${label} could not load.` : `The ${label} could not load. Try again. If it keeps failing, reload the page.`, tryAgain);
+    return;
+  }
+  toast.show(chunkFailureText(`The ${label}`), chunkReloadAction());
 }
 
 /** A lazily-built, cached-once value with the same busy/retry contract. */

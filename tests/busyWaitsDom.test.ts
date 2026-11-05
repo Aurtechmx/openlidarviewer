@@ -79,7 +79,8 @@ class FakeNode {
     for (let n = other as FakeNode | null; n; n = n.parentElement) if (n === this) return true;
     return false;
   }
-  closest(): FakeNode | null {
+  closest(sel?: string): FakeNode | null {
+    if (sel === '.olv-toast-error') return null;
     for (let n: FakeNode | null = this; n; n = n.parentElement) if (n.classList.contains('olv-hidden')) return n;
     return null;
   }
@@ -268,6 +269,15 @@ describe('a running task in the strip', () => {
     svg.classList.remove('is-settled');
     svg.remove();
     expect(labels(7000)).toEqual([]);
+  });
+
+  it('ends when its toast turns into an error', () => {
+    const svg = indicator(null);
+    host('section', svg, 'Report generation failed');
+    (svg as unknown as { closest: (s: string) => unknown }).closest = (s) => (s === '.olv-toast-error' ? {} : null);
+    expect(labels(0)).toEqual([]);
+    expect(labels(60_000)).toEqual([]);
+    svg.remove();
   });
 
   it('is listed when it starts inside a lowered sheet the layout hides', () => {

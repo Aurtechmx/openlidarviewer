@@ -26,6 +26,7 @@
  * stay the model's: nothing here decides.
  */
 
+import { classifyLoadError, reportChunkFailure } from './staleChunkReload';
 import { ProcessStudioPanel } from '../ui/ProcessStudioPanel';
 import { deriveScanFacts } from '../process/scanFacts';
 import type { RawScanSignals } from '../process/scanFacts';
@@ -313,6 +314,7 @@ export function createProcessStudio(deps: ProcessStudioDeps): MountedProcessStud
    * panel exactly as it is — no verdict, no remediation — and lets a later
    * refresh try again, rather than rejecting into an unhandled promise.
    */
+  let preflightFailureSaid = false;
   function ensureRuntime(): void {
     if (runtime || loading || !deps.preflight) return;
     loading = loadToolPreflight()
@@ -322,8 +324,13 @@ export function createProcessStudio(deps: ProcessStudioDeps): MountedProcessStud
         loading = null;
         repaint();
       })
-      .catch(() => {
+      .catch((err: unknown) => {
         loading = null;
+        // Every repaint tries again, and one failure is said once.
+        if (!preflightFailureSaid && classifyLoadError(err) === 'stale-chunk') {
+          preflightFailureSaid = true;
+          reportChunkFailure('The Process Studio fix-it actions');
+        }
       });
   }
 

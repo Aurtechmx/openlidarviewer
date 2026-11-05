@@ -19,7 +19,7 @@ export const EXPORT_BUTTON_TOOLTIP =
 import type { ExportHealth } from '../intelligence/scanStory';
 import { renderExportHealthPanel } from './scanStoryViews';
 import { el, optInRow } from './dom';
-import { classifyLoadError, OFFLINE_CHUNK_MESSAGE } from '../app/staleChunkReload';
+import { chunkFailureText, chunkReloadAction, classifyLoadError, clearChunkFailure, countChunkFailure, OFFLINE_CHUNK_MESSAGE } from '../app/staleChunkReload';
 import { conversionNotes, exportedLine } from './conversionNotes';
 import { notableEntries, warningSummary } from '../convert/conversionEvents';
 import { downloadBytes } from '../io/download';
@@ -330,6 +330,9 @@ export class ExportPanel {
   private _findings: SessionFindings | null = null;
   private _findingsPanel: MountedFindingsPanel | null = null;
   private _findingsMountStarted = false;
+  /** The current render's slot; what an import settles into, since a render replaces the one before. */
+  private _findingsSlot: HTMLElement | null = null;
+  private _findingsNote: HTMLElement | null = null;
   private readonly _findingsWatchers = new Set<() => void>();
   private _terrainExports: TerrainExportsLane | null = null;
   private _selected: ExportProduct | null = null;
@@ -1035,10 +1038,14 @@ export class ExportPanel {
       if (this._cb.collectMeasurementFindings && this._cb.exportFindingsReport && (count > 0 || ledgerHasEntries)) {
         const slot = el('div', { className: 'olv-findings-slot' });
         content.append(this._productGroup('Saved findings', slot, undefined, 'findings'));
+        this._findingsSlot = slot;
         if (this._findingsPanel) {
           slot.append(this._findingsPanel.element);
+        } else if (this._findingsNote) {
+          // Only the button retries: a re-render must not start another import.
+          slot.append(this._findingsNote);
         } else {
-          this._mountFindingsLedger(slot);
+          this._mountFindingsLedger();
         }
       }
     }
@@ -1180,7 +1187,7 @@ export class ExportPanel {
    * latest slot via the re-attach path above. Callbacks are re-read from `_cb`
    * at mount time, so this stays correct if the host rewires them.
    */
-  private _mountFindingsLedger(slot: HTMLElement): void {
+  private _mountFindingsLedger(): void {
     if (this._findingsMountStarted) return;
     this._findingsMountStarted = true;
     void Promise.all([loadFindingsPanel(), loadSessionFindings()]).then(
@@ -1189,6 +1196,7 @@ export class ExportPanel {
         if (!panelMod || !findingsMod) throw new Error(FINDINGS_LOAD_FAILED);
         const { buildFindingsPanel } = panelMod;
         const { SessionFindings } = findingsMod;
+        clearChunkFailure('saved-findings');
         this._findings = new SessionFindings();
         const notify = (): void => { for (const fn of [...this._findingsWatchers]) fn(); };
         this._findings.subscribe(notify);
@@ -1231,7 +1239,8 @@ export class ExportPanel {
             return 'downloaded';
           },
         });
-        slot.append(this._findingsPanel.element);
+        // The lane may have re-rendered while the chunk loaded: land in its slot now.
+        this._findingsSlot?.append(this._findingsPanel.element);
       },
     ).catch((err: unknown) => {
       // Offline or a failed chunk: say so in the slot and let the user retry.
@@ -1242,15 +1251,29 @@ export class ExportPanel {
       if (this._findingsPanel) return;
       this._findings = null;
       const chunk = err instanceof Error && (err.message === FINDINGS_LOAD_FAILED || classifyLoadError(err) === 'stale-chunk');
+      if (countChunkFailure('saved-findings') > 1) {
+        const again = el('p', { className: 'olv-findings-load-failed olv-export-fullres-hint', text: `${chunkFailureText('Saved findings')} ` });
+        const reload = chunkReloadAction();
+        if (reload) {
+          const b = el('button', { className: 'olv-bc-pill olv-export-product-btn', text: reload.label }) as HTMLButtonElement;
+          b.type = 'button';
+          b.addEventListener('click', reload.onClick);
+          again.append(b);
+        }
+        this._findingsNote = again;
+        this._findingsSlot?.append(again);
+        return;
+      }
       const note = el('p', {
         className: 'olv-findings-load-failed olv-export-fullres-hint',
         text: chunk ? 'Saved findings could not load. Check the connection and try again. ' : 'Saved findings could not load. ',
       });
       const retry = el('button', { className: 'olv-bc-pill olv-export-product-btn', text: 'Try again', tip: 'Load saved findings again' }) as HTMLButtonElement;
       retry.type = 'button';
-      retry.addEventListener('click', () => { note.remove(); this._mountFindingsLedger(slot); });
+      retry.addEventListener('click', () => { note.remove(); this._findingsNote = null; this._mountFindingsLedger(); });
       note.append(retry);
-      slot.append(note);
+      this._findingsNote = note;
+      this._findingsSlot?.append(note);
     });
   }
 

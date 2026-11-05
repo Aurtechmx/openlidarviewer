@@ -205,7 +205,7 @@ export class AnnotationController {
       },
       (err: unknown) => {
         console.warn('[annotate] editor chunk failed to load', err);
-        this._setHint('The annotation editor could not load. Check the connection and try again');
+        this._setHint('The annotation editor could not load. Reload the page to use it. A reload closes open scans, so save your session first if you can.');
       },
     );
   }

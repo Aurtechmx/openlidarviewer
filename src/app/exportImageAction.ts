@@ -27,6 +27,7 @@ import { sameExportTarget, EXPORT_SCAN_CHANGED_REFUSAL } from '../export/exportS
 import { recordErrorLedger } from './staleChunkReload';
 import { capturePointExportRequest, writePointExport, type PointExportRequestDeps } from './pointExportRequest';
 import type { ExportFormat } from '../io/exporters';
+import { chunkFailureText, classifyLoadError } from './staleChunkReload';
 
 /** The progress surface the action drives (a `DropZone`, structurally). */
 export interface ExportImageProgress {
@@ -153,7 +154,7 @@ export function settleFileExport(work: PromiseLike<unknown>, progress: ExportIma
       recordUsage('error', 'export');
       recordErrorLedger(1, err);
       console.error('[export]', err);
-      progress.setError(`Export failed: ${err instanceof Error ? err.message : String(err)}`);
+      progress.setError(classifyLoadError(err) === 'stale-chunk' ? chunkFailureText('This export') : `Export failed: ${err instanceof Error ? err.message : String(err)}`);
     },
   );
 }

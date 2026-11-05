@@ -31,6 +31,7 @@
  * (see `docs/architecture/architecture-map.md`).
  */
 
+import { chunkFailureText, classifyLoadError } from './staleChunkReload';
 import { activeScanPositionSteps } from './measurementPositionSteps';
 import { pointBasisLine } from '../export/exportSummary';
 import { sourceInterpretationOf, type SourceInterpretationRecord } from '../science/sourceInterpretation';
@@ -713,7 +714,7 @@ export async function runReportExport(templateId: string | null, deps: ReportRun
   } catch (err) {
     recordUsage('error', 'report');
     console.error('[report]', err);
-    deps.dropZone.setError(`Report generation failed: ${err instanceof Error ? err.message : String(err)}`);
+    deps.dropZone.setError(classifyLoadError(err) === 'stale-chunk' ? chunkFailureText('The report') : `Report generation failed: ${err instanceof Error ? err.message : String(err)}`);
   }
 }
 

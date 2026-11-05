@@ -95,6 +95,28 @@ describe('ExportPanel saved findings when the chunk fails to load', () => {
   }
 });
 
+describe('a repeat failure', () => {
+  it('stops offering the same retry and names the reload', async () => {
+    cap.calls = 0;
+    cap.built = 0;
+    cap.mode = 'reject';
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    const { ExportPanel } = await import('../src/ui/ExportPanel');
+    const panel = new ExportPanel({
+      getCloud: () => null, hasFullSource: () => false, isReduced: () => false, getFullCloud: async () => null, exportMeasurements: async () => {},
+      measurementCount: () => 1, activeFindingsTargetId: () => 'scan-A', collectMeasurementFindings: async () => [], exportFindingsReport: async () => 'downloaded',
+    } as never);
+    const root = panel.element as unknown as ClickEl;
+    await waitForCondition(() => failNote(root) !== null, () => 'no first note');
+    const calls = cap.calls;
+    panel.refresh();
+    await new Promise((r) => setTimeout(r, 0));
+    expect(cap.calls, 'a re-render must not import again').toBe(calls);
+    failNote(root)!.find((e) => e.tagName === 'button')!.click();
+    await waitForCondition(() => /Reload the page/.test(failNote(root)?.textContent ?? ''), () => 'no reload wording on the repeat');
+  });
+});
+
 describe('a bug thrown while the findings panel builds', () => {
   it('is logged, drops the half-built ledger, and does not blame the connection', async () => {
     cap.calls = 0;

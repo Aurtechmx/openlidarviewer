@@ -7,7 +7,7 @@
  * only drop.
  */
 
-import { describe, it, expect, beforeAll } from 'vitest';
+import { describe, it, expect, beforeAll, vi } from 'vitest';
 import { computeTerrainCore, contoursFromCore } from '../src/terrain/contour/analyseContours';
 import type { TerrainCoreParams } from '../src/terrain/contour/analyseContours';
 import { installAnalysePanelDom } from './helpers/analysePanelDom';
@@ -49,5 +49,21 @@ describe('exportProduct refusals', () => {
   it('reports the DEM package ready on a covered surface', async () => {
     const { p } = await panel((x, y) => 50 + 0.4 * x + 0.2 * y);
     expect(p.exportProductStatus('dem')).toEqual({ ready: true, reason: '' });
+  });
+});
+
+describe('a DEM package whose chunk fails', () => {
+  it('reports the failure to the lane, on the button pressed', async () => {
+    const { p } = await panel((x, y) => 50 + 0.4 * x + 0.2 * y);
+    const errors = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const inner = p as unknown as { _exportDemPackage: (b: unknown) => Promise<void> };
+    const seen: unknown[] = [];
+    inner._exportDemPackage = (b) => { seen.push(b); return Promise.reject(new TypeError('Failed to fetch dynamically imported module: http://h/d.js')); };
+    const btn = {} as HTMLButtonElement;
+    const out = await p.exportProduct('dem', btn);
+    expect(seen).toEqual([btn]);
+    expect(out).toMatchObject({ ok: false });
+    expect((out as { reason: string }).reason).toMatch(/DEM export could not load\. Reload/);
+    errors.mockRestore();
   });
 });

@@ -32,6 +32,7 @@ import { buildResultModel } from './measureResultModel';
 import { copyToClipboard } from '../ui/clipboard';
 import { loadMeasurePanel, loadProfileWorkbenchRuntime } from '../lazyChunks';
 import { retryableOnce, mountPanelOnce } from './lazySurfaceLoad';
+import { chunkReloadAction, markChunkFailureReported } from './staleChunkReload';
 
 // Re-exported here so the shell reaches it through the cluster that owns the
 // profile-workbench close signal, without adding a main.ts fan-out edge.
@@ -294,17 +295,22 @@ export function createMeasurePanelMount(deps: MeasurePanelMountDeps): MeasurePan
     const offer = (p: MeasurePanel): void => p.offerUndo(`Deleted ${removed.measurement.name}.`, () => {
       if (deps.getViewer().measure.restoreMeasurement(removed)) refresh();
     }, deps.toast, () => deps.getViewer().measure.drafting);
+    const restore = (): void => { if (deps.getViewer().measure.restoreMeasurement(removed)) refresh(); };
     if (panel) offer(panel);
-    else void mount().then(offer, () => {}); // the panel alone, not the reveal `ensure()` performs
+    // The panel alone, not the reveal `ensure()` performs. With no panel the toast still offers it.
+    else void mount().then(offer, () => { deps.toast?.(`Deleted ${removed.measurement.name}.`, { label: 'Undo', onClick: restore }); });
   }
 
   /** The Clear button's Undo: every measurement goes back in its old order, in one change. */
   function offerUndoAll(removed: RemovedMeasurement[]): void {
     const n = removed.length;
-    panel?.offerUndo(`Deleted ${n} ${n === 1 ? 'measurement' : 'measurements'}.`, () => {
+    const message = `Deleted ${n} ${n === 1 ? 'measurement' : 'measurements'}.`;
+    const undo = (): void => {
       const measure = deps.getViewer().measure;
       if (measure.holdChange(() => removed.map((r) => measure.restoreMeasurement(r)).some(Boolean))) refresh();
-    }, deps.toast, () => deps.getViewer().measure.drafting);
+    };
+    if (panel) panel.offerUndo(message, undo, deps.toast, () => deps.getViewer().measure.drafting);
+    else deps.toast?.(message, { label: 'Undo', onClick: undo });
   }
 
   /** Construct the panel; the controller drives its measurement list. */
@@ -422,7 +428,7 @@ export function createMeasurePanelMount(deps: MeasurePanelMountDeps): MeasurePan
     } else {
       // Panel not mounted yet (pre-first-scan, or the chunk is still loading) —
       // kick the lazy mount; `hydrate()` re-runs this once it lands.
-      void ensure();
+      void ensure().catch(() => {}); // the failure is said once, by `mount`
     }
     // Keep the Export panel's Products lane in sync with the measurement count.
     deps.getExportPanel().refresh();
@@ -445,10 +451,22 @@ export function createMeasurePanelMount(deps: MeasurePanelMountDeps): MeasurePan
 
   // The panel's one load, shared by concurrent first mounts. retryableOnce
   // drops a failed load, so the next reveal fetches the chunk again.
+  let mountFailureSaid = false;
   const mount = retryableOnce(() =>
     // No mount hook in bare/embed mode; the force path mounts it directly.
     loadMeasurePanel().then(({ MeasurePanel: Ctor }) =>
-      mountPanelOnce(panel, () => (panel = construct(Ctor)), mountElement, hydrate)),
+      mountPanelOnce(panel, () => (panel = construct(Ctor)), mountElement, hydrate)).then((p) => {
+      mountFailureSaid = false;
+      return p;
+    }, (err: unknown) => {
+      // Every refresh tries again, and one failure is said once.
+      if (!mountFailureSaid) {
+        mountFailureSaid = true;
+        markChunkFailureReported();
+        deps.toast?.('The Measurements list could not load. Your measurements are kept. Reload the page to try again; a reload closes open scans, so save your session first if you can.', chunkReloadAction());
+      }
+      throw err;
+    }),
   );
 
   /**
@@ -498,6 +516,8 @@ export function createMeasurePanelMount(deps: MeasurePanelMountDeps): MeasurePan
     bindUnitFrames: (src) => {
       layerSource = src;
       const v = deps.getViewer();
+      // Bound here too: Clear offers its Undo when the panel's chunk never landed.
+      v.measure.onClearAll = offerUndoAll;
       chainSteps = (m) => positionStepsResolver(src.clouds().map((id) => ({ stableId: src.stableIdFor(id), projectOffset: v.layerProjectOffset(id) })))(m);
       // Navigation up reads the same per-layer frame as the owner frames, and
       // re-aligns when a CRS change moves the active layer's axis.

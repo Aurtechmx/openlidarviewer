@@ -61,11 +61,8 @@ export interface QualityControlOptions {
    */
   liveStreamingQuality?(): StreamingQuality;
   /**
-   * Where a chunk-load failure is reported, with a "Try again" action.
-   * Optional because the current caller (`headerControls.ts`) does not
-   * thread a toast through yet; without one, a failure falls back to
-   * `console.error` — still no unhandled rejection, just not user-visible
-   * until that wiring lands.
+   * Where a chunk-load failure is reported, with a "Try again" action. Without
+   * one (a bare test mount) a failure goes to `console.error`.
    */
   toast?: LazyLoadToast;
   /** The scene the panel's precision check reads. */

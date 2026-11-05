@@ -30,7 +30,7 @@ import { formatInfo } from './formatInfo';
 import type { SourceMetadata } from './PointCloudSource';
 import { buildPreloadSummary } from './preloadSummary';
 import { loadScopeForMode } from './loadScope';
-import { LoadError } from './loadErrors';
+import { classifyLoadError, LoadError } from './loadErrors';
 import type { LoadErrorCategory } from './loadErrors';
 import type { OrganizedRangeSet } from '../model/OrganizedRange';
 import type { AcquisitionStationSet } from '../model/AcquisitionStations';
@@ -607,6 +607,15 @@ export function __setParseWorkerFactoryForTests(factory?: ParseWorkerFactory): v
   }
 }
 
+/**
+ * A worker that failed to fetch a code chunk replays that failure for the rest
+ * of its life, so the next open gets a new worker. An ordinary file error keeps
+ * the shared one.
+ */
+function dropWorkerOnChunkFailure(worker: Worker, msg: { category?: LoadErrorCategory; error: string }): void {
+  if (msg.category === 'resource-load' || classifyLoadError(msg.error) === 'resource-load') dropWorker(worker);
+}
+
 /** Drop the shared worker (terminating it) so the next load starts fresh. */
 function dropWorker(worker: Worker): void {
   worker.terminate();
@@ -812,6 +821,7 @@ export async function loadFile(
         // Rebuild the typed LoadError when the worker carried a category, so
         // the toast shows the precise message rather than a text-classified
         // guess. Falls back to a plain Error for untyped worker failures.
+        dropWorkerOnChunkFailure(worker, msg);
         reject(
           msg.category ? new LoadError(msg.category, msg.error, msg.report) : new Error(msg.error),
         );
@@ -993,6 +1003,7 @@ export async function decodeFullViaWorker(
         if (msg.type === 'progress' || msg.type === 'previewChunk') return;
         detach();
         if (msg.type === 'error') {
+          dropWorkerOnChunkFailure(worker, msg);
           reject(
             msg.category ? new LoadError(msg.category, msg.error, msg.report) : new Error(msg.error),
           );

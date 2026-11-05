@@ -7,6 +7,7 @@
  * computes the summaries; the panel renders them and reports intents back.
  */
 
+import { classifyLoadError, reportChunkFailure } from '../app/staleChunkReload';
 import { el } from './dom';
 import { ICON_EXPAND } from './dockIcons';
 import { openResultFocus } from './ResultFocus';
@@ -794,6 +795,7 @@ export class MeasurePanel {
       await this._buildProfileSheet(s);
     } catch (err) {
       console.error('OpenLiDARViewer: profile PDF export failed.', err);
+      if (classifyLoadError(err) === 'stale-chunk') reportChunkFailure('PDF export');
       btn.textContent = 'Export failed';
       setTimeout(() => {
         btn.textContent = label;

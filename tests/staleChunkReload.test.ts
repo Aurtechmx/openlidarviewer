@@ -547,14 +547,14 @@ describe('an ambiguous chunk failure does not reload', () => {
     expect(loader).toHaveBeenCalledTimes(3);
   });
 
-  it('the offered reload goes through the cooldown', async () => {
+  it('the offered reload, once confirmed, is not refused by the cooldown', async () => {
     const reload = vi.fn();
     const storage = makeStorage({ [STALE_RELOAD_MARKER_KEY]: '1000' });
     const onAmbiguous = vi.fn();
     const { importOrReload } = installStaleChunkRecovery({ now: () => 2000, reload, storage, eventTarget: null, isOnline: () => true, probe: null, onAmbiguous, log: () => {} });
     await expect(importOrReload(() => Promise.reject(noUrlError()))).rejects.toThrow();
     onAmbiguous.mock.calls[0][1].reload();
-    expect(reload).not.toHaveBeenCalled();
+    expect(reload).toHaveBeenCalledTimes(1);
   });
 
   it('a URL the probe reports missing still reloads', async () => {

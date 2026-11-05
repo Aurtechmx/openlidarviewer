@@ -9,7 +9,7 @@
  */
 
 import { RangeReadError, sanitizeUrlForDisplay } from '../io/range/RangeSource';
-import { LoadError } from '../io/loadErrors';
+import { classifyLoadError, LoadError, messageForCategory } from '../io/loadErrors';
 
 /**
  * Display name for a remote EPT source: the dataset folder that holds
@@ -88,5 +88,7 @@ export function describeRemoteCopcError(err: unknown, url: string): string {
     return err.message;
   }
   const detail = err instanceof Error ? err.message : 'unknown error';
+  // The app failed to load its own code; the host was not at fault.
+  if (classifyLoadError(detail) === 'resource-load') return messageForCategory('resource-load');
   return `${shortHost(safeUrl)} was reached, but it could not be read as a COPC scan — ${detail}.`;
 }

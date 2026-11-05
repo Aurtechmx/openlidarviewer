@@ -58,6 +58,11 @@ has not been done. v0.7.0 is the current published release.
 
 ### Fixed
 
+- A code chunk that fails to load no longer reloads the page while a scan is open or loading. A toast says a new version is available and offers a reload, after a confirm that states what it discards. With nothing open the automatic reload stays, and the next start says why it happened.
+- Lazy load failures no longer show a module URL. The first failure offers Try again; a repeat offers the reload. Any load failure no caller reports now shows one toast.
+- Save session says when it did not save. Clear and Delete offer Undo when the Measurements panel failed to load. Compare elevation no longer stays on its working line. The status strip no longer counts a failed task as running.
+- Parts that vanished on a failed load now say so: Tools tab, Range frames, Feature candidates, Contour Studio, class editing, Layer Health, the view cube. Flow Pulse, Terrain Access, Observatory, Auto-classify, the Performance panel, the DEM package and the palette report the failure.
+- A URL open that fails on a code chunk no longer blames the host, and a parse worker that lost a chunk is replaced so the next open can load it.
 - Profile CSV and PDF exports read the coordinate frame of the scan the profile was measured on, so selecting another layer no longer withholds or relabels them. An export is refused, with the step to take, when a recorded source is closed or matches two open scans, when the profile was deleted, or when its scans do not share a horizontal CRS, a vertical reference, a unit and an axis direction. The Profile Workbench opens only while a scan the profile was measured on is active, so the section and its PNG use that scan's frame.
 - A glTF or GLB is checked against its own buffers before any point is read. A model whose accessor runs past its buffer view, or whose buffer has no data, used to open with invented zero points or with points from the next view, and is now refused. Repeated copies of the same bytes draw on the existing extra allocation limit.
 - A glTF that requires meshopt compression is refused with a reason. It used to open with every point at zero. A buffer the extension marks as a meshopt fallback is refused with the same reason.
