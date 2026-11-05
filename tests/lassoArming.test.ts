@@ -62,6 +62,21 @@ describe('disarming the lasso', () => {
     expect(t.d.clearPending).toHaveBeenCalledTimes(1);
   });
 
+  it('keeps a committed result highlight when the tool was not armed', () => {
+    const idle = deps(false);
+    disarmLasso(idle.d, { clearHighlight: 'if-armed' });
+    expect(idle.viewer.clearSelectionHighlight).not.toHaveBeenCalled();
+    const armed = deps(true);
+    disarmLasso(armed.d, { clearHighlight: 'if-armed' });
+    expect(armed.viewer.clearSelectionHighlight).toHaveBeenCalledTimes(1);
+  });
+
+  it('a retired scene clears the highlight even when the tool was not armed', () => {
+    const idle = deps(false);
+    disarmLasso(idle.d, { clearHighlight: true });
+    expect(idle.viewer.clearSelectionHighlight).toHaveBeenCalledTimes(1);
+  });
+
   it('drops a waiting result even when the tool was not armed', () => {
     // A result can wait on the toast's Save after the tool auto-disarmed.
     const t = deps(false);
@@ -78,6 +93,10 @@ describe('the shell', () => {
     expect(start).toBeGreaterThan(-1);
     const body = main.slice(start, main.indexOf('\n}\n', start));
     expect(body).toMatch(/disarmLasso\(lassoArming, \{[^}]*clearPending: true[^}]*\}\)/);
+  });
+
+  it('entering a tool keeps a committed result highlight', () => {
+    expect(main).toContain("disarmVolume: () => { disarmLasso(lassoArming, { clearHighlight: 'if-armed' }); }");
   });
 
   it('arms and disarms only through the helpers, so every path syncs the button', () => {

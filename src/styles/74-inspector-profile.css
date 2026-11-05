@@ -188,7 +188,7 @@
  * label of the active scale (and so the click target is right next
  * to the chart the user is reading). */
 .olv-mp-vex-strip {
-  display: flex; gap: var(--space-xs); padding: var(--space-xs) var(--space-xs) 0 var(--space-xs);
+  display: flex; flex-wrap: wrap; gap: var(--space-xs); padding: var(--space-xs) var(--space-xs) 0 var(--space-xs);
   align-items: center;
 }
 .olv-mp-vex-chip {

@@ -83,6 +83,8 @@ export function createWorkspaceRouter(
   pages: Pages,
   storage: WorkspaceStorage | null = null,
   onSync?: () => void,
+  /** A navigate that takes the user to a page (`focus`): make it reachable. Never runs for automatic routing. */
+  onReveal?: () => void,
 ): WorkspaceRouter {
   for (const [m, list] of Object.entries(pages)) {
     for (const [id, p] of Object.entries(list ?? {})) {
@@ -171,6 +173,7 @@ export function createWorkspaceRouter(
       ws.setMode(mode);
       api.sync();
       if (!focus) return;
+      onReveal?.();
       // The heading of the page, or the first control of the home (past the header).
       const home = (Array.from(ws.mode(mode).children) as HTMLElement[])
         .find((c) => c !== headers.get(mode)?.root && !c.classList.contains('olv-ws-off') && !c.hidden);

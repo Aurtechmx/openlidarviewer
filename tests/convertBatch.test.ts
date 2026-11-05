@@ -128,6 +128,16 @@ describe('runBatch', () => {
     expect(reads).toEqual(['a.las', 'b.las', 'c.las']);
   });
 
+  it('does not record the file a cancel interrupted as a failure', async () => {
+    const ctrl = new AbortController();
+    const decode: DecodeFn = async () => { ctrl.abort(); throw new Error('Load cancelled'); };
+    const results = await runBatch(
+      [{ name: 'a.las', sizeBytes: 8, bytes: async () => new ArrayBuffer(8) }],
+      { format: 'las' }, decode, undefined, ctrl.signal,
+    );
+    expect(results).toEqual([]);
+  });
+
   it('stops before the next file when its AbortSignal fires', async () => {
     const decoded: string[] = [];
     const ctrl = new AbortController();

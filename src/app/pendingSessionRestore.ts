@@ -66,3 +66,12 @@ export function dropPendingSessionForStream(showToast: (message: string) => void
   clearRestoredWork();
   showToast('The imported session was not applied to this streamed scan, so its work was cleared. Import it again to check it against this scan.');
 }
+
+/** Saved views or held work still make a session worth writing with no scan. */
+export function sessionSaveRefusal(s: { hasScan: boolean; heldWork: boolean; savedViews: number }): string | null {
+  return s.hasScan || s.heldWork || s.savedViews > 0 ? null : 'Open a scan first. A session records work on an open scan.';
+}
+
+export function snapshotRefusal(hasScan: boolean): string | null {
+  return hasScan ? null : 'Open a scan first, then save a snapshot.';
+}

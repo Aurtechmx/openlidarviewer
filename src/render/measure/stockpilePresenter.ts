@@ -85,9 +85,16 @@ const CONFIDENCE_LABEL: Record<StockpileConfidence, string> = {
   low: 'Sparse or gappy sampling',
 };
 
-/** A stockpile volume: whole cubic metres, capped at 5 significant figures. */
+/** A stockpile volume, at the five significant figures every displayed volume uses. */
 function vol0(n: number): string {
-  return formatVolumeNumber(n, Math.abs(n) < 1 ? undefined : 0);
+  return formatVolumeNumber(n);
+}
+
+/** An uncertainty term at two significant figures: a band stated finer than that claims precision it has not got. */
+function band(n: number): string {
+  if (!Number.isFinite(n) || n === 0) return formatVolumeNumber(n, 0);
+  const rounded = Number(n.toPrecision(2));
+  return formatVolumeNumber(rounded, Math.max(0, 1 - Math.floor(Math.log10(Math.abs(rounded)))));
 }
 
 function int(n: number): string {
@@ -111,7 +118,7 @@ export function presentStockpile(
   // not a measured coverage interval on the volume.
   const headline = r.withheldReason
     ? `Volume withheld (${r.withheldReason})`
-    : `${vol0(r.volume * vol)} m³ ± ${vol0(r.sigma * vol)} m³ (model band)`;
+    : `${vol0(r.volume * vol)} m³ ± ${band(r.sigma * vol)} m³ (model band)`;
   const relative = `±${(r.relativeError * 100).toFixed(1)}%`;
 
   const baseLabel =
@@ -141,8 +148,8 @@ export function presentStockpile(
     densityRow,
     { label: 'Base plane', value: baseLabel },
     { label: 'Mean thickness', value: `${(b.meanThickness * vert).toFixed(2)} m` },
-    { label: 'Surface spread term', value: `± ${vol0(b.samplingError * vol)} m³` },
-    { label: 'Base-plane term', value: `± ${vol0(b.basePlaneError * vol)} m³` },
+    { label: 'Surface spread term', value: `± ${band(b.samplingError * vol)} m³` },
+    { label: 'Base-plane term', value: `± ${band(b.basePlaneError * vol)} m³` },
   ];
 
   return {
@@ -356,7 +363,7 @@ export function stockpileAreaGridToastLine(v: StockpileAreaGridView): string {
       : `PREVIEW (${v.reason})${v.reason === 'display sample' ? ' · can change between runs' : ''}`;
     line =
       `Stockpile: ${vol0(v.volumeM3)} m³ · ${state} · ${support} · area-weighted grid` +
-      ` · surface term ± ${vol0(v.surfaceTermM3)} m³ (incomplete model)` +
+      ` · surface term ± ${band(v.surfaceTermM3)} m³ (incomplete model)` +
       ` · base ${v.baseZM.toFixed(2)} m${v.baseIsElevation ? '' : ' local height'}` +
       ` (lowest ground, ±${v.baseUncertaintyM.toFixed(2)} m, not in the term)`;
   }

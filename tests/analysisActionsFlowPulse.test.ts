@@ -4,11 +4,7 @@
  * called directly with fake deps, the same shape `actionDefinitions.ts`
  * would build.
  *
- * `showLassoToast` is optional on `AnalysisActionDeps` (the current caller,
- * `src/app/actionDefinitions.ts`, does not thread it through yet — see the
- * interface's doc comment) — this file pins BOTH branches: the ready,
- * toast-driven behaviour once that wiring lands, and today's unwired
- * `console.warn` fallback, so neither regresses.
+ * `actionDefinitions.ts` threads the toast through, so every failure is visible.
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
@@ -46,6 +42,7 @@ function fakeDeps(overrides: Partial<AnalysisActionDeps> = {}): AnalysisActionDe
     },
     observatoryEntry: {} as never,
     buildCurrentStoryInputs: vi.fn(),
+    showLassoToast: fakeToast(),
     ...overrides,
   };
 }
@@ -104,28 +101,6 @@ describe('Flow Pulse Lab action — toast wired', () => {
 
     loadResult = 'success';
     toast.calls[0].action?.onClick();
-    await new Promise((r) => setTimeout(r, 0));
-    expect(openFlowPulseLab).toHaveBeenCalledTimes(1);
-  });
-});
-
-describe('Flow Pulse Lab action — no toast wired (current actionDefinitions.ts wiring)', () => {
-  it('falls back to console.warn on failure, never an unhandled rejection', async () => {
-    loadResult = 'reject';
-    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
-    const unhandled: unknown[] = [];
-    const onUnhandled = (err: unknown) => unhandled.push(err);
-    process.on('unhandledRejection', onUnhandled);
-    flowPulseAction(fakeDeps()).run();
-    await new Promise((r) => setTimeout(r, 0));
-    process.off('unhandledRejection', onUnhandled);
-    expect(warnSpy).toHaveBeenCalledWith('[flow-pulse] lab chunk failed to load', expect.any(Error));
-    expect(unhandled).toEqual([]);
-    warnSpy.mockRestore();
-  });
-
-  it('still opens the lab on a successful load', async () => {
-    flowPulseAction(fakeDeps()).run();
     await new Promise((r) => setTimeout(r, 0));
     expect(openFlowPulseLab).toHaveBeenCalledTimes(1);
   });

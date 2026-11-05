@@ -1,0 +1,194 @@
+{
+  "protocol": "validation/protocols/profile-ground-first-paired-v1.md",
+  "amplitude": 0.6,
+  "wavelength": 6.0,
+  "line": {
+    "a": [
+      40.0,
+      54.0
+    ],
+    "b": [
+      88.0,
+      54.0
+    ]
+  },
+  "numpy": "2.4.6",
+  "files": {
+    "flat_s101_p0.csv": {
+      "background": "flat",
+      "seed": 101,
+      "phase": 0.0,
+      "points": 2080,
+      "groundKeptOfTrue": [
+        1.0,
+        0.5742
+      ],
+      "sha256": "de3a9d730df91590dad788857fcfbd27a00b4b03f26f58eb7b67ce10cbe9d0d0"
+    },
+    "flat_s101_ppi.csv": {
+      "background": "flat",
+      "seed": 101,
+      "phase": 3.141592653589793,
+      "points": 2080,
+      "groundKeptOfTrue": [
+        1.0,
+        0.5213
+      ],
+      "sha256": "26c140429b637b88c1399e14c8553d972b9ee270e37a82a5e061a991ddfc7b68"
+    },
+    "flat_s202_p0.csv": {
+      "background": "flat",
+      "seed": 202,
+      "phase": 0.0,
+      "points": 2055,
+      "groundKeptOfTrue": [
+        1.0,
+        0.5348
+      ],
+      "sha256": "ed67774d8e361b3667b7894962ff6c457aa81333d2604c93d760d3838fc4157b"
+    },
+    "flat_s202_ppi.csv": {
+      "background": "flat",
+      "seed": 202,
+      "phase": 3.141592653589793,
+      "points": 2055,
+      "groundKeptOfTrue": [
+        1.0,
+        0.5603
+      ],
+      "sha256": "169a14ef90099adeaf7c6884d616f6655e904d01b0d202882e52a7645c33f39f"
+    },
+    "rampx10_s101_p0.csv": {
+      "background": "rampx10",
+      "seed": 101,
+      "phase": 0.0,
+      "points": 2080,
+      "groundKeptOfTrue": [
+        1.0,
+        0.7582
+      ],
+      "sha256": "8984d32a9f25548fe6f919fbb6776ac5890cd00424fd7fe6d545ceb9362cabcf"
+    },
+    "rampx10_s101_ppi.csv": {
+      "background": "rampx10",
+      "seed": 101,
+      "phase": 3.141592653589793,
+      "points": 2080,
+      "groundKeptOfTrue": [
+        1.0,
+        0.7725
+      ],
+      "sha256": "d155949600644762ad12a22bbabce7917b439b00ac245723ccd690b2e4837a0e"
+    },
+    "rampx10_s202_p0.csv": {
+      "background": "rampx10",
+      "seed": 202,
+      "phase": 0.0,
+      "points": 2055,
+      "groundKeptOfTrue": [
+        1.0,
+        0.7526
+      ],
+      "sha256": "c61f58c6091dc1485f83d6330f8b47bdfb4eaa0d3deb547cfc20574ff31f4934"
+    },
+    "rampx10_s202_ppi.csv": {
+      "background": "rampx10",
+      "seed": 202,
+      "phase": 3.141592653589793,
+      "points": 2055,
+      "groundKeptOfTrue": [
+        1.0,
+        0.7892
+      ],
+      "sha256": "6c2f2bd6da3083bb8495f581252d2f4aede9366f3db50f67fee7ad93a0e086dc"
+    },
+    "rampx30_s101_p0.csv": {
+      "background": "rampx30",
+      "seed": 101,
+      "phase": 0.0,
+      "points": 2080,
+      "groundKeptOfTrue": [
+        1.0,
+        0.9743
+      ],
+      "sha256": "1f34e3403ce26762c68f98262894ff32c4c670c03ff3c80fec22821b386ebb33"
+    },
+    "rampx30_s101_ppi.csv": {
+      "background": "rampx30",
+      "seed": 101,
+      "phase": 3.141592653589793,
+      "points": 2080,
+      "groundKeptOfTrue": [
+        1.0,
+        0.9743
+      ],
+      "sha256": "75cd4ed4bf32bdb945096f3257a14b036c8359e1ff7037d754453260481873de"
+    },
+    "rampx30_s202_p0.csv": {
+      "background": "rampx30",
+      "seed": 202,
+      "phase": 0.0,
+      "points": 2055,
+      "groundKeptOfTrue": [
+        1.0,
+        0.9865
+      ],
+      "sha256": "1eeb7279f74d43847f05cdfc8a4668757dda57a074c8d9931d3abc2924205949"
+    },
+    "rampx30_s202_ppi.csv": {
+      "background": "rampx30",
+      "seed": 202,
+      "phase": 3.141592653589793,
+      "points": 2055,
+      "groundKeptOfTrue": [
+        1.0,
+        0.9805
+      ],
+      "sha256": "fd75508355ed19a8eca7e9dd1ea018c8506f1fdb43ed642a232c6e8d062efaab"
+    },
+    "hill_s101_p0.csv": {
+      "background": "hill",
+      "seed": 101,
+      "phase": 0.0,
+      "points": 2080,
+      "groundKeptOfTrue": [
+        1.0,
+        0.8373
+      ],
+      "sha256": "2ad04aed4b6951b1c38291f8bf7fad6dd8cc36f17bb3f30fbcc31f8f89474c22"
+    },
+    "hill_s101_ppi.csv": {
+      "background": "hill",
+      "seed": 101,
+      "phase": 3.141592653589793,
+      "points": 2080,
+      "groundKeptOfTrue": [
+        1.0,
+        0.8046
+      ],
+      "sha256": "5ccc904ed47eb002a7051a1fed3f094edc901d7f7b35e1b9959fa72d3bde31fb"
+    },
+    "hill_s202_p0.csv": {
+      "background": "hill",
+      "seed": 202,
+      "phase": 0.0,
+      "points": 2055,
+      "groundKeptOfTrue": [
+        1.0,
+        0.7957
+      ],
+      "sha256": "e9697375f21d4aa00893ecf60bda41f63d748fbac3d6acba12ee29aa97c43ffc"
+    },
+    "hill_s202_ppi.csv": {
+      "background": "hill",
+      "seed": 202,
+      "phase": 3.141592653589793,
+      "points": 2055,
+      "groundKeptOfTrue": [
+        1.0,
+        0.8718
+      ],
+      "sha256": "b81ac1deb345010cee971e83e3e4076f41a1669d66f3d9c58b7cbbb9e98fd378"
+    }
+  }
+}

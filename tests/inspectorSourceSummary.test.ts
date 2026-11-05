@@ -26,4 +26,19 @@ describe('Inspector source summary signal', () => {
     expect(ins.sourceSummary()).toBe('LAZ');
     expect(fn).toHaveBeenCalledTimes(4);
   });
+
+  it('names the active layer, and refreshes when the active layer changes', () => {
+    const ins = new Inspector(fakeCallbacks());
+    ins.addCloud('a', 'a.las', 10);
+    ins.addCloud('b', 'b.ply', 10);
+    const fn = vi.fn();
+    ins.onSourceChange(fn);
+    ins.setActiveLayer('a');
+    expect(ins.sourceSummary()).toBe('LAS');
+    expect(fn).toHaveBeenCalledTimes(1);
+    ins.setActiveLayer('b');
+    expect(ins.sourceSummary()).toBe('PLY');
+    ins.setActiveLayer('gone');
+    expect(ins.sourceSummary()).toBe('PLY');
+  });
 });

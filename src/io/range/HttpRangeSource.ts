@@ -68,6 +68,13 @@ export interface HttpRangeSourceOptions {
   sleep?: (ms: number) => Promise<void>;
 }
 
+/** Plain text for a probe answered with a client-error status. Never echoes the URL. */
+function probeStatusMessage(status: number): string {
+  if (status === 404 || status === 410) return 'No file found at this URL. Check the path and try again.';
+  if (status === 401 || status === 403) return 'The host refused access to this file. Check the link or its permissions.';
+  return `The host answered with status ${status}.`;
+}
+
 /** A range-readable source over a remote URL using HTTP Range requests. */
 export class HttpRangeSource implements RangeSource {
   private readonly _url: string;
@@ -327,10 +334,8 @@ export class HttpRangeSource implements RangeSource {
     }
     if (response.status !== 206) {
       cancelResponseBody(response);
-      throw new RangeReadError(
-        response.status >= 500 ? 'server-error' : 'transport',
-        `Probe returned an unexpected status ${response.status}`,
-      );
+      if (response.status < 500) throw new RangeReadError('http-status', probeStatusMessage(response.status));
+      throw new RangeReadError('server-error', `Probe returned an unexpected status ${response.status}`);
     }
     // Pin the object's validators when HEAD was skipped and this ranged GET is
     // the first successful response.

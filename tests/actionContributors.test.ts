@@ -92,7 +92,7 @@ describe('action contributors', () => {
 
   it('tool actions run the derived classification and toggle the lasso', async () => {
     const lasso = { enabled: false, enable: vi.fn(), disable: vi.fn(), selectionBasis: 'through-surfaces' };
-    const deps = { getViewer: () => ({ clearSelectionHighlight: vi.fn() }) as never, workflowController: {} as never, lassoVolumeTool: lasso as never, syncLassoButton: vi.fn(), runDeriveClassification: vi.fn(async () => undefined), runFillUnclassified: vi.fn(async () => undefined), showLassoToast: toast, runTool: vi.fn() };
+    const deps = { getViewer: () => ({ clearSelectionHighlight: vi.fn(), setLassoMode: vi.fn() }) as never, workflowController: {} as never, lassoVolumeTool: lasso as never, syncLassoButton: vi.fn(), runDeriveClassification: vi.fn(async () => undefined), runFillUnclassified: vi.fn(async () => undefined), showLassoToast: toast, runTool: vi.fn() };
     const actions = contributeToolActions(deps);
     actions.find((a) => a.id === 'tool.classify')!.run();
     expect(deps.runDeriveClassification).toHaveBeenCalled();
@@ -103,7 +103,7 @@ describe('action contributors', () => {
   });
 
   it('analysis and export contributors take two deps each', () => {
-    const analysis = contributeAnalysisActions({ terrainAnalysisEntry: {} as never, observatoryEntry: {} as never, buildCurrentStoryInputs: () => ({}) as never });
+    const analysis = contributeAnalysisActions({ terrainAnalysisEntry: {} as never, observatoryEntry: {} as never, buildCurrentStoryInputs: () => ({}) as never, showLassoToast: { show: vi.fn() } });
     expect(analysis.map((a) => a.id)).toEqual(['analyse.run', 'analyse.contours', 'analyse.flowPulse', 'analyse.terrainAccess', 'analyse.observatory', 'story.dataset']);
     const exp = contributeExportActions({ saveSnapshot: vi.fn(), copyShareLink: vi.fn(), exportSession: vi.fn(), handleFile: vi.fn(), openScan: vi.fn(), exportReport: vi.fn(), buildCurrentStoryInputs: () => ({}) as never, showLassoToast: vi.fn() });
     expect(exp.map((a) => a.id)).toEqual(['scan.open', 'session.open', 'session.export', 'report.pdf', 'tool.snapshot', 'tool.share', 'export.health', 'report.verify']);
@@ -123,7 +123,7 @@ describe('action contributors', () => {
       ...contributeCameraActions({ getViewer: () => ({}) as never, planView: { togglePlanView() {}, notePlanViewPreset() {}, toggleNavigationPanel() {}, showStandardView: () => true, setOrthographic: () => true, frameAll() {} }, capture: vi.fn(), showLassoToast: toast }),
       ...contributeViewActions({ setTheme: vi.fn(), capture: vi.fn(), compass: {} as never, bookmarks: {} as never, toggleOrbitInvert: vi.fn(), resetNavigation: vi.fn(), toggleReferencePlane: vi.fn(), showTouchGestures: vi.fn(), hasScan: () => false, saveCurrentView: vi.fn(), applyView: vi.fn(), showLassoToast: toast }),
       ...contributeToolActions({ getViewer: () => ({}) as never, workflowController: {} as never, lassoVolumeTool: {} as never, syncLassoButton: vi.fn(), runDeriveClassification: vi.fn(), runFillUnclassified: vi.fn(), showLassoToast: toast, runTool: vi.fn() }),
-      ...contributeAnalysisActions({ terrainAnalysisEntry: {} as never, observatoryEntry: {} as never, buildCurrentStoryInputs: () => ({}) as never }),
+      ...contributeAnalysisActions({ terrainAnalysisEntry: {} as never, observatoryEntry: {} as never, buildCurrentStoryInputs: () => ({}) as never, showLassoToast: { show: vi.fn() } }),
       ...contributeExportActions({ saveSnapshot: vi.fn(), copyShareLink: vi.fn(), exportSession: vi.fn(), handleFile: vi.fn(), openScan: vi.fn(), exportReport: vi.fn(), buildCurrentStoryInputs: () => ({}) as never, showLassoToast: vi.fn() }),
       ...contributeWorkflowActions({ workflowController: {} as never, startWorkflowRecording: vi.fn(), dispatchWorkflowEvent: vi.fn(), ensureWorkflowConfigPanel: vi.fn(), showLassoToast: toast }),
       ...contributeHelpActions({ getTour: () => null, ensureShortcutSheet: vi.fn() }),

@@ -1,3 +1,5 @@
+import { chunkFailureText, clearChunkFailure, countChunkFailure } from '../app/staleChunkReload';
+import { chunkFailureNote } from './chunkFailureNote';
 import { el, iconButton, formatCount } from './dom';
 import { createComparePairPicker, createCompareDifference, beginCompareRun, CompareRunGuard, type ComparePairPicker, type CompareDifferenceDeps, type CompareChoice, type CompareRunStart } from '../app/comparePair';
 import {
@@ -172,6 +174,8 @@ export interface InspectorCallbacks {
    * preset change (session restore, public API call) reflects in the UI.
    */
   onRgbAppearancePreset: (id: string) => void;
+  /** Whether any open scan carries RGB, since the looks apply scene-wide. */
+  anyScanHasRgb?: () => boolean;
   onEdlPreset: (id: EdlPresetSelection) => void;
   onSkyPreset: (id: string) => void;
   /** Advanced (streaming COPC only) — white-balance sliders. */
@@ -561,7 +565,8 @@ export class Inspector {
    */
   private readonly _chipsNote = el('p', { className: 'olv-chips-note olv-hidden' });
   /** Visuals Studio — Visuals Studio chip rails. Stored so syncVisuals can re-flag active. */
-  private readonly _visualsRgbRail = el('div', { className: 'olv-chips' });
+  private readonly _visualsRgbRail = el('div', { className: 'olv-chips olv-visuals-rgb-rail' });
+  private readonly _visualsRgbNote = el('div', { className: 'olv-visuals-rgb-note olv-hidden', text: 'This scan has no RGB colours. These looks apply to scans that have them.' });
   private readonly _visualsEdlRail = el('div', { className: 'olv-chips' });
   /** Basic-only shortcuts onto a few of the same presets (same callbacks). */
   private readonly _quickRgbRail = el('div', { className: 'olv-chips olv-hidden' });
@@ -817,8 +822,9 @@ export class Inspector {
           }
           // The chunk failed to load — _ensureGroups already logged it;
           // surface it here too so the click was not silently a no-op.
-          this._groupLoadError.textContent =
-            'Could not load layer groups. Click "+ New group" to try again.';
+          this._groupLoadError.textContent = countChunkFailure('layer-groups') < 2
+            ? 'Could not load layer groups. Click "+ New group" to try again.'
+            : chunkFailureText('Layer groups');
           this._groupLoadError.classList.remove('olv-hidden');
           announce('Could not load layer groups.');
         })
@@ -1362,7 +1368,7 @@ export class Inspector {
     // the other three collapse, and their state persists per user.
     const visualsBody = el('div', { className: 'olv-visuals-body' }, [
       this._persistSection('visuals.workflow', collapsibleSection('Workflow', this._visualsWorkflowRail)),
-      adv(this._persistSection('visuals.rgb', collapsibleSection('RGB', this._visualsRgbRail))),
+      adv(this._persistSection('visuals.rgb', collapsibleSection('RGB', el('div', {}, [this._visualsRgbNote, this._visualsRgbRail])))),
       adv(el('div', { className: 'olv-visuals-group-label', text: 'Depth (EDL)' })),
       adv(this._visualsEdlRail),
       adv(this._persistSection('visuals.background', collapsibleSection('Background', this._visualsSkyRail))),
@@ -1393,7 +1399,7 @@ export class Inspector {
 
     // A view setting, so it sits with Rendering. The settings panel loads with
     // the plane's chunk the first time the section opens or the plane turns on.
-    this.referencePlane = callbacks.referencePlane ? createReferencePlaneSection(callbacks.referencePlane) : null;
+    this.referencePlane = callbacks.referencePlane ? createReferencePlaneSection({ ...callbacks.referencePlane, reveal: () => { if (referencePlaneSection) this._revealSection(referencePlaneSection, null); } }) : null;
     const referencePlaneSection = this.referencePlane
       ? adv(this._persistSection('referencePlane', collapsibleSection('Reference plane', this.referencePlane.element)))
       : null;
@@ -1725,6 +1731,7 @@ export class Inspector {
     void loadLayerHealthCard().then(({ LayerHealthCard }) => {
       if (this._layerHealth) return;
       this._layerHealth = new LayerHealthCard();
+      this._layerHealthSlot.replaceChildren();
       this._layerHealthSlot.append(this._layerHealth.root);
       const pending = this._layerHealthPending;
       this._layerHealthPending = null;
@@ -1732,7 +1739,11 @@ export class Inspector {
     })
       // Additive surface: a chunk-load failure must not become an unhandled
       // rejection (the caller is synchronous and can't catch this promise).
-      .catch((err) => console.warn('[inspector] layer-health card chunk failed to load', err));
+      .catch((err) => {
+        console.warn('[inspector] layer-health card chunk failed to load', err);
+        // In the slot, so Open Layer Health reveals the reason.
+        if (!this._layerHealth) this._layerHealthSlot.replaceChildren(chunkFailureNote({ key: 'layer-health', what: 'Layer Health' }));
+      });
   }
 
   setLayerCrsFlags(
@@ -1919,10 +1930,10 @@ export class Inspector {
     return () => this._sourceListeners.delete(fn);
   }
 
-  /** Format and coordinate system of the newest layer, for the Data home. */
+  /** Format and coordinate system of the active layer (else the newest), for the Data home. */
   sourceSummary(): string {
     const facts = Array.from(this._layerFacts.values());
-    const name = facts[facts.length - 1]?.name ?? '';
+    const name = (this._activeLayer ? this._layerFacts.get(this._activeLayer)?.name : undefined) ?? facts[facts.length - 1]?.name ?? '';
     const dot = name.lastIndexOf('.');
     const format = dot > 0 ? name.slice(dot + 1).toUpperCase() : '';
     return [format, this._pendingCrs?.name].filter(Boolean).join(', ');
@@ -1937,6 +1948,10 @@ export class Inspector {
   setDetailMode(mode: DetailMode): void {
     this._detailMode.setMode(mode);
   }
+
+  private _revealHost: ((target: HTMLElement) => void) | null = null;
+  /** Who makes a section reachable (mode, sheet tab, rail) before it is scrolled to. */
+  setRevealHost(fn: ((target: HTMLElement) => void) | null): void { this._revealHost = fn; }
 
   /** Bring the Layer Health card into view. False while it has no data yet. */
   focusLayerHealth(): boolean {
@@ -1986,7 +2001,7 @@ export class Inspector {
    * are shown — the destination of the `inspect-layer-crs` remediation.
    */
   focusLayers(): boolean {
-    return this._revealSection(this._layersSection, null);
+    return this._revealSection(this._layersSection, 'button, summary, input');
   }
 
   /**
@@ -1994,13 +2009,15 @@ export class Inspector {
    * disclosure, and focus a control inside it when one is named. Opening the
    * bottom sheet is unconditional: the class it adds is scoped to the phone
    * media query, so it is inert on desktop and necessary on a phone, where the
-   * section is otherwise behind a closed sheet.
+   * section is otherwise behind a closed sheet. The class alone does not pick
+   * the tab or the rail, so the shell's reveal host does that.
    */
   private _revealSection(target: HTMLElement | null, focusSelector: string | null): boolean {
     if (!target || target.classList.contains('olv-hidden')) return false;
     // A deep link into a section Basic hides reveals that section, not the mode.
     this._detailMode.reveal(target);
     this.openSheet();
+    this._revealHost?.(target);
     // Duck-typed rather than `instanceof HTMLDetailsElement`: this file is
     // built under recording-DOM stubs in the node test environment, where the
     // constructor does not exist.
@@ -2046,6 +2063,7 @@ export class Inspector {
   setActiveLayer(id: string | null): void {
     this._activeLayer = id;
     for (const rowId of this._layerRows.keys()) this._markActiveLayer(rowId);
+    this._notifySource();
   }
 
   private _markActiveLayer(id: string): void {
@@ -2122,6 +2140,12 @@ export class Inspector {
     this._openingReason = openingReason ?? null;
     // RGB looks only mean something on a scan that carries colour.
     this._quickRgbRail.classList.toggle('olv-hidden', !this._modes.includes('rgb'));
+    const noRgb = !this._modes.includes('rgb') && this._cb.anyScanHasRgb?.() !== true;
+    for (const chip of this._visualsRgbRail.children) {
+      (chip as HTMLButtonElement).disabled = noRgb;
+      if (noRgb) chip.classList.remove('olv-chip-active');
+    }
+    this._visualsRgbNote.classList.toggle('olv-hidden', !noRgb);
     this._renderColorChips();
   }
 
@@ -2213,7 +2237,7 @@ export class Inspector {
   syncVisuals(state: VisualsStudioState): void {
     for (const chip of [...this._visualsRgbRail.children, ...this._quickRgbRail.children]) {
       const id = (chip as HTMLElement).dataset?.presetId;
-      chip.classList.toggle('olv-chip-active', id === state.rgbAppearancePresetId);
+      chip.classList.toggle('olv-chip-active', id === state.rgbAppearancePresetId && !(chip as HTMLButtonElement).disabled);
     }
     for (const chip of [...this._visualsEdlRail.children, ...this._quickEdlRail.children]) {
       const id = (chip as HTMLElement).dataset?.presetId;
@@ -2371,6 +2395,7 @@ export class Inspector {
     this._reportChunkPromise = loadRenderReport()
       .then(({ renderReport }) => {
         this._renderReportFn = renderReport;
+        clearChunkFailure('scan-report');
         return renderReport;
       })
       .catch((err) => {
@@ -2384,19 +2409,7 @@ export class Inspector {
   }
 
   private _showReportLoadError(): void {
-    const retry = el('button', {
-      className: 'olv-inline-retry',
-      type: 'button',
-      text: 'Try again',
-      tip: 'Retry loading the scan report.',
-    }) as HTMLButtonElement;
-    retry.addEventListener('click', () => {
-      if (this._pendingReportRows) this.setReport(this._pendingReportRows);
-    });
-    this._report.replaceChildren(
-      el('div', { className: 'olv-report-empty', text: 'Could not load the scan report.' }),
-      retry,
-    );
+    this._report.replaceChildren(chunkFailureNote({ key: 'scan-report', what: 'The scan report', firstText: 'Could not load the scan report.', retry: () => { if (this._pendingReportRows) this.setReport(this._pendingReportRows); } }));
     announce('Could not load the scan report.');
   }
 
@@ -2526,6 +2539,7 @@ export class Inspector {
     this._provenanceChunkPromise = loadRenderProvenance()
       .then(({ renderProvenance }) => {
         this._renderProvenanceFn = renderProvenance;
+        clearChunkFailure('provenance');
         return renderProvenance;
       })
       .catch((err) => {
@@ -2539,19 +2553,7 @@ export class Inspector {
   }
 
   private _showProvenanceLoadError(): void {
-    const retry = el('button', {
-      className: 'olv-inline-retry',
-      type: 'button',
-      text: 'Try again',
-      tip: 'Retry loading provenance.',
-    }) as HTMLButtonElement;
-    retry.addEventListener('click', () => {
-      if (this._pendingProvenanceForChunk) this.setProvenance(this._pendingProvenanceForChunk);
-    });
-    this._provenanceBody.replaceChildren(
-      el('div', { className: 'olv-report-empty', text: 'Could not load provenance.' }),
-      retry,
-    );
+    this._provenanceBody.replaceChildren(chunkFailureNote({ key: 'provenance', what: 'Provenance', firstText: 'Could not load provenance.', retry: () => { if (this._pendingProvenanceForChunk) this.setProvenance(this._pendingProvenanceForChunk); } }));
     announce('Could not load provenance.');
   }
 
@@ -2723,6 +2725,7 @@ export class Inspector {
     this._crsChunkPromise = loadRenderCrs()
       .then(({ renderCrs }) => {
         this._renderCrsFn = renderCrs;
+        clearChunkFailure('crs');
         return renderCrs;
       })
       .catch((err) => {
@@ -2736,19 +2739,7 @@ export class Inspector {
   }
 
   private _showCrsLoadError(): void {
-    const retry = el('button', {
-      className: 'olv-inline-retry',
-      type: 'button',
-      text: 'Try again',
-      tip: 'Retry loading the coordinate system.',
-    }) as HTMLButtonElement;
-    retry.addEventListener('click', () => {
-      if (this._pendingCrs) this.setCrs(this._pendingCrs);
-    });
-    this._crsBody.replaceChildren(
-      el('div', { className: 'olv-report-empty', text: 'Could not load the coordinate system.' }),
-      retry,
-    );
+    this._crsBody.replaceChildren(chunkFailureNote({ key: 'crs', what: 'The coordinate system', firstText: 'Could not load the coordinate system.', retry: () => { if (this._pendingCrs) this.setCrs(this._pendingCrs); } }));
     announce('Could not load the coordinate system.');
   }
 

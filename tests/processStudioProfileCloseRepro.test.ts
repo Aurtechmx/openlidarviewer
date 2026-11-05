@@ -172,6 +172,7 @@ function buildRig() {
       get datumResolved() { return datumResolved; },
       setKind: () => {},
       worldUp: [0, 0, 1], unitToMetres: 1, verticalUnitToMetres: 1, unitSystem: 'metric',
+      profileCorridorOf: () => null,
       getMeasurements: () => measurements,
       unitFrameOf: () => ({ geographic: false, verticalRefused: false }),
       getSummaries: () => [profileSummary()],

@@ -86,6 +86,7 @@ export function buildActionRegistry(deps: ActionRegistryDeps): Action[] {
     planView: deps.planView,
     capture,
     showLassoToast: deps.showLassoToast,
+    hasScan: deps.hasScan,
   });
   const view = contributeViewActions({
     setTheme: deps.setTheme,
@@ -110,11 +111,14 @@ export function buildActionRegistry(deps: ActionRegistryDeps): Action[] {
     runFillUnclassified: deps.runFillUnclassified,
     showLassoToast: deps.showLassoToast,
     runTool: deps.runTool,
+    hasScan: deps.hasScan,
   });
   const analysis = contributeAnalysisActions({
     terrainAnalysisEntry: deps.terrainAnalysisEntry,
     observatoryEntry: deps.observatoryEntry,
     buildCurrentStoryInputs: deps.buildCurrentStoryInputs,
+    showLassoToast: { show: deps.showLassoToast },
+    hasScan: deps.hasScan,
   });
   const exports_ = contributeExportActions({
     saveSnapshot: deps.saveSnapshot,
@@ -125,11 +129,13 @@ export function buildActionRegistry(deps: ActionRegistryDeps): Action[] {
     exportReport: deps.exportReport,
     buildCurrentStoryInputs: deps.buildCurrentStoryInputs,
     showLassoToast: deps.showLassoToast,
+    hasScan: deps.hasScan,
   });
   const workflow = contributeWorkflowActions({
     workflowController: deps.workflowController,
     startWorkflowRecording: deps.startWorkflowRecording,
     dispatchWorkflowEvent: deps.dispatchWorkflowEvent,
+    hasScan: deps.hasScan,
     ensureWorkflowConfigPanel: deps.ensureWorkflowConfigPanel,
     showLassoToast: deps.showLassoToast,
   });

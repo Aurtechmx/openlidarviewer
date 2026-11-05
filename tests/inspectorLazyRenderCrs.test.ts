@@ -126,6 +126,22 @@ describe('Inspector.setCrs — lazy renderCrs chunk', () => {
     expect(crsBody.querySelectorAll('.olv-crs-select')).toHaveLength(1);
   });
 
+  it('a repeat failure offers a reload rather than the same retry', async () => {
+    state.pending.length = 0;
+    const inspector = new Inspector(fakeCallbacks());
+    const crsBody = byClass((inspector as unknown as { element: FakeEl }).element, 'olv-crs')!;
+    inspector.setCrs(makeCrs());
+    state.pending.pop()?.reject(new Error('network error'));
+    await tick();
+    byClass(crsBody, 'olv-inline-retry')!.click();
+    state.pending.pop()?.reject(new Error('network error'));
+    await tick();
+    expect(findContaining(crsBody, 'Reload the page')).toBeTruthy();
+    expect(findContaining(crsBody, 'Try again')).toBeFalsy();
+    inspector.setCrs(makeCrs());
+    await resolveNextImport();
+  });
+
   it('names the record kind: a VLR CRS and an EVLR CRS get different source labels', async () => {
     for (const [source, label] of [
       ['las-vlr', 'Source: LAS / LAZ georeference VLR'],

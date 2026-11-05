@@ -91,6 +91,8 @@ export class DropZone {
   private _errorArmedAt = 0;
   /** True while a hover or focus holds the error on screen. */
   private _errorPaused = false;
+  private _errorHovered = false;
+  private _errorFocused = false;
   /** Visually-hidden polite live region — mirrors progress / preload text. */
   private readonly _srStatus: HTMLElement;
   /** Visually-hidden assertive live region — mirrors error text. */
@@ -233,10 +235,10 @@ export class DropZone {
     this.toast = el('div', { className: 'olv-toast olv-hidden' }, [this._context, row, this._note, this._bar]);
     // An error stays while it is being read or reached: hovering or focusing
     // the toast holds it, and leaving lets the rest of its time run.
-    this.toast.addEventListener('pointerenter', () => this._pauseErrorHide());
-    this.toast.addEventListener('pointerleave', () => this._resumeErrorHide());
-    this.toast.addEventListener('focusin', () => this._pauseErrorHide());
-    this.toast.addEventListener('focusout', () => this._resumeErrorHide());
+    this.toast.addEventListener('pointerenter', () => this._holdError('hover', true));
+    this.toast.addEventListener('pointerleave', () => this._holdError('hover', false));
+    this.toast.addEventListener('focusin', () => this._holdError('focus', true));
+    this.toast.addEventListener('focusout', () => this._holdError('focus', false));
     // Screen-reader announcements live in two PERMANENTLY rendered,
     // visually-hidden nodes rather than on the toast itself: the toast hides
     // via `display:none`, which removes it from the accessibility tree, so
@@ -347,6 +349,8 @@ export class DropZone {
     this._dismiss.classList.add('olv-hidden');
     this._logBtn.classList.add('olv-hidden');
     this._errorPaused = false;
+    this._errorHovered = false;
+    this._errorFocused = false;
     if (this._hideTimer !== null) {
       window.clearTimeout(this._hideTimer);
       this._hideTimer = null;
@@ -357,6 +361,14 @@ export class DropZone {
   private _armErrorHide(): void {
     this._errorArmedAt = Date.now();
     this._hideTimer = window.setTimeout(() => this._hideError(), this._errorRemaining);
+  }
+
+  /** One hold per reason: the toast resumes only when neither the pointer nor focus is on it. */
+  private _holdError(reason: 'hover' | 'focus', on: boolean): void {
+    if (reason === 'hover') this._errorHovered = on;
+    else this._errorFocused = on;
+    if (this._errorHovered || this._errorFocused) this._pauseErrorHide();
+    else this._resumeErrorHide();
   }
 
   /** Hold the error on screen while it is hovered or focused. */

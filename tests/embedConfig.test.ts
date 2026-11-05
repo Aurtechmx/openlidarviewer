@@ -1,4 +1,4 @@
-import { parseEmbedConfig } from '../src/ui/embedConfig';
+import { autoloadRefusal, parseEmbedConfig } from '../src/ui/embedConfig';
 
 test('an empty query yields the all-default config', () => {
   expect(parseEmbedConfig('')).toEqual({
@@ -50,4 +50,13 @@ test('multiple parameters compose', () => {
   expect(c.embed).toBe(true);
   expect(c.uiMinimal).toBe(true);
   expect(c.autoloadSample).toBe('scan');
+});
+
+test('a link that names a sample nothing can open gets a reason', () => {
+  const refusal = 'This link names a sample that is not available. Open a scan or choose a sample.';
+  expect(autoloadRefusal('', [])).toBeNull();
+  expect(autoloadRefusal('?autoload=sample:zzz', [])).toBe(refusal);
+  expect(autoloadRefusal('?autoload=sample:', [])).toBe(refusal);
+  expect(autoloadRefusal('?autoload=https://h.example/a.laz', [])).toBe(refusal);
+  expect(autoloadRefusal('?autoload=sample:survey', ['survey'])).toBeNull();
 });

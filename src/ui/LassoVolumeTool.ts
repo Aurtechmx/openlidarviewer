@@ -273,18 +273,41 @@ export function armLasso(deps: LassoArmingDeps): void {
 /**
  * Disarm the lasso. Returns whether it was armed, so an Escape handler knows
  * it consumed the key. The button is synced either way. `clearHighlight`
- * drops the selected-point tint; `clearPending` drops the result waiting on
+ * drops the selected-point tint ('if-armed' keeps a committed result's tint
+ * when the tool was already off); `clearPending` drops the result waiting on
  * the toast's Save, which a scene retire must do whether or not the tool was
  * armed, because the result was measured on the scan that is going.
  */
-export function disarmLasso(deps: LassoArmingDeps, opts: { clearHighlight?: boolean; clearPending?: boolean } = {}): boolean {
+export function disarmLasso(deps: LassoArmingDeps, opts: { clearHighlight?: boolean | 'if-armed'; clearPending?: boolean } = {}): boolean {
   const wasArmed = deps.tool.enabled;
   if (wasArmed) {
     deps.tool.disable();
     deps.viewer()?.setLassoMode(false);
   }
-  if (opts.clearHighlight) deps.viewer()?.clearSelectionHighlight();
+  if (opts.clearHighlight === true || (opts.clearHighlight === 'if-armed' && wasArmed)) deps.viewer()?.clearSelectionHighlight();
   if (opts.clearPending) deps.clearPending();
   deps.syncButton();
   return wasArmed;
+}
+
+export interface ToolModeDisarm {
+  disarmVolume(): void;
+  disarmReclassify(): void;
+}
+
+/** A new tool owns the pointer, so a lasso overlay must not stay over it. */
+export function toolModeChanged(_prev: string, next: string, d: ToolModeDisarm): void {
+  if (next === 'none') return;
+  d.disarmReclassify();
+  if (next !== 'lasso') d.disarmVolume();
+}
+
+/** Reclassify's controls are on the Classes page: leaving it ends the lasso. */
+export function disarmReclassifyOffPage(
+  route: { readonly mode: string; readonly page: string | null },
+  ui: { disarm(): boolean } | null | undefined,
+  toast: (message: string) => void,
+): void {
+  if (route.mode === 'data' && route.page === 'classes') return;
+  if (ui?.disarm()) toast('Reclassify lasso off.');
 }

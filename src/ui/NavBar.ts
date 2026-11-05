@@ -250,6 +250,7 @@ export class NavBar {
   /** The "More" disclosure (six axis views) and whether it is open. */
   private readonly _moreToggle: HTMLButtonElement;
   private readonly _moreMenu: HTMLElement;
+  private _publishNavClear: (() => void) | null = null;
   private _moreOpen = false;
   private readonly _modeButtons = new Map<NavMode, HTMLButtonElement>();
   /** The Pan (hand tool) pad — hidden when `?handPan=off` disables it. */
@@ -644,9 +645,12 @@ export class NavBar {
     if (typeof ResizeObserver === 'function' && typeof document !== 'undefined' && document.documentElement) {
       const publish = (): void => {
         const r = this._navRow.getBoundingClientRect();
-        const clear = r.height > 0 ? Math.max(0, Math.round(window.innerHeight - r.top + NAV_TOAST_GAP_PX)) : 0;
+        const menu = this._moreOpen ? this._moreMenu.getBoundingClientRect() : null; // an open menu sits above the row
+        const top = menu && menu.height > 0 ? Math.min(r.top, menu.top) : r.top;
+        const clear = r.height > 0 ? Math.max(0, Math.round(window.innerHeight - top + NAV_TOAST_GAP_PX)) : 0;
         document.documentElement.style.setProperty('--olv-nav-clear', `${clear}px`);
       };
+      this._publishNavClear = publish;
       const ro = new ResizeObserver(publish);
       ro.observe(this._navRow);
       window.addEventListener('resize', publish);
@@ -762,6 +766,9 @@ export class NavBar {
     this._moreOpen = open;
     this._moreMenu.classList.toggle('olv-hidden', !open);
     this._moreToggle.setAttribute('aria-expanded', open ? 'true' : 'false');
+    // Opening More shows the controls are found; the hint would sit over them.
+    if (open && this.touchHint.classList.contains('olv-first-hint')) this.hideTouchHint();
+    this._publishNavClear?.();
   }
 
   /** Whether the "More" disclosure is open. */

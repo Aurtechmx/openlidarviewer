@@ -43,6 +43,7 @@
  */
 
 import type { CrsInfo, CrsLinearUnit } from '../io/crs';
+import { crsDefinitionKey } from '../io/crs';
 import type { CrsKind, CrsSource, ResolvedCrs } from './CoordinateTypes';
 import { isLinearUnitKnown, resolvedFromCrsInfo, unknownCrs } from './CoordinateTypes';
 import type { CrsValidity, CrsValiditySeverity } from './CrsValidation';
@@ -89,6 +90,8 @@ export interface SpatialContext {
   readonly kind: CrsKind;
   /** Declared name of a local / engineering CRS from the source WKT; absent otherwise. */
   readonly localFrameName?: string;
+  /** Normalised definition of a CRS with no EPSG code (see `crsDefinitionKey`); absent otherwise. */
+  readonly crsDefinition?: string;
   /** Convenience mirror of `kind === 'geographic'` (lat/lon in degrees). */
   readonly isGeographic: boolean;
 
@@ -293,11 +296,14 @@ export function spatialContextFrom(
     ? 'valid'
     : verticalScale !== undefined || verticalLinearUnit === 'unknown' ? 'invalid' : 'absent';
 
+  // Without an EPSG code the definition, not the name, identifies the CRS.
+  const definition = resolved.epsg === undefined && resolved.localFrameName === undefined && resolved.wkt ? crsDefinitionKey(resolved.wkt) : undefined;
   return {
     crsName: resolved.name,
     epsg: resolved.epsg,
     kind: resolved.kind,
     ...(resolved.localFrameName !== undefined ? { localFrameName: resolved.localFrameName } : {}),
+    ...(definition !== undefined ? { crsDefinition: definition } : {}),
     isGeographic: resolved.kind === 'geographic',
 
     linearUnit: resolved.linearUnit,

@@ -12,6 +12,11 @@ function viewerWith(clouds: Record<string, PointCloud>): Viewer {
 const CLOUD_A = { name: 'a' } as unknown as PointCloud;
 
 describe('ScanService', () => {
+  it('activeExportTargetId is null before the viewer loads', () => {
+    const svc = createScanService({ getViewer: () => null as unknown as Viewer, context: createAppContext() });
+    expect(svc.activeExportTargetId()).toBeNull();
+  });
+
   it('starts with no selection', () => {
     const svc = createScanService({ getViewer: () => viewerWith({}), context: createAppContext() });
     expect(svc.activeId).toBeNull();

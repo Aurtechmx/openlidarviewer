@@ -3,12 +3,13 @@ import { SOURCE_FORMATS, XYZ_ALIAS_EXTENSIONS } from '../io/sniffFormat';
 import { openConfirm } from './Modal';
 import { FullscreenToggle } from './FullscreenToggle';
 import { announcePolite } from './politeAnnounce';
+import { UrlFieldMessage } from './urlFieldMessage';
 import { formatByteSize as formatBytes } from '../io/formatByteSize';
 import { isMobileDevice } from './isMobileDevice';
 
 /** A built-in sample scan offered on the empty state. */
 export interface Sample {
-  /** Stable short id — the `?autoload=sample:<id>` embed target. */
+  /** Stable short id. `?autoload=sample:<id>` opens it when the list holds it. */
   id: string;
   label: string;
   detail: string;
@@ -115,12 +116,15 @@ function isMultiFileDatasetUrl(url: string): boolean {
   return /\/ept\.json(?:[?#]|$)|tileset\.json(?:[?#]|$)/i.test(url);
 }
 
+export { UrlFieldMessage };
+
 /**
  * Map raw fetch / range-source errors to plain guidance under the URL field.
  * A CORS block on a COPC file can be worked round by downloading the file; an
  * EPT dataset or a tileset is many files, so the only fix is at the host.
  */
 export function friendlyUrlError(err: unknown, url = ''): string {
+  if (err instanceof UrlFieldMessage) return err.message;
   const raw = err instanceof Error ? err.message : String(err ?? '');
   const lower = raw.toLowerCase();
   if (lower.includes('cors') || lower.includes('cross-origin')) {
@@ -880,6 +884,8 @@ export class Stage {
       el('div', { className: 'olv-url-controls' }, [input, submit]),
       this._urlError,
     ]);
+    // The handler words every refusal, so the browser's own check must not stop the press first.
+    form.noValidate = true;
     form.addEventListener('submit', (event) => {
       event.preventDefault();
       void this._handleUrlSubmit(input.value.trim(), options);

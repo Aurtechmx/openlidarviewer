@@ -111,10 +111,9 @@ export function createScanService(deps: ScanServiceDeps): ScanService {
     activeExportTargetId() {
       // Static id wins when a static scan is selected (unchanged identity); a
       // streaming scan leaves `activeId` null, so fall through to the streaming
-      // cloud's stable shell id. Same late-`getViewer()` assumption `activeCloud`
-      // relies on — only the export/terrain guards call this, well after the
-      // viewer is bound and a scan is open.
-      return scan.activeId ?? getViewer().streamingCloud?.id ?? null;
+      // cloud's stable shell id. Key presses reach this before the lazy viewer
+      // loads, when there is no target.
+      return scan.activeId ?? getViewer()?.streamingCloud?.id ?? null;
     },
   };
 }
@@ -170,6 +169,7 @@ export interface ActiveLayerSurfaceDeps<Cloud> {
 export interface ActiveLayerCloud {
   readonly pointCount: number;
   readonly declaredPointCount?: number;
+  readonly metadata?: { readonly truncation?: unknown };
   readonly decodedPointCount?: number;
   readonly classification?: ArrayLike<number>;
   readonly classSample?: ClassSample;
@@ -188,7 +188,8 @@ export function refreshActiveLayerSurfaces<Cloud extends ActiveLayerCloud>(
   deps.refreshDatasetIntelligence(cloud);
   deps.refreshClassLegend(cloud.classification, { loaded: cloud.pointCount, declared: cloud.declaredPointCount, shares: cloud.classSample, scan: layerId }, cloud.classificationProvenance);
   deps.syncColorMode();
-  deps.setDetail(cloud.pointCount, cloud.decodedPointCount ?? cloud.pointCount);
+  // The file's count, as the open showed it: the decoder may have read only a stride of the records. A truncated file holds no more than the decoder read.
+  deps.setDetail(cloud.pointCount, cloud.metadata?.truncation ? Math.max(cloud.pointCount, cloud.decodedPointCount ?? 0) : Math.max(cloud.declaredPointCount ?? 0, cloud.decodedPointCount ?? 0, cloud.pointCount));
   deps.setReport(cloud);
 }
 
@@ -218,4 +219,22 @@ export function refreshStreamSurfaces<Stream>(deps: StreamSurfaceDeps<Stream>, s
   deps.refreshDatasetIntelligence(stream);
   deps.reseedLegend(deps.streamClasses());
   deps.refreshReport();
+}
+
+/**
+ * The class mask is scene-wide, so choosing another active
+ * layer keeps the filter. The legend reseeds for the new layer and resets, then
+ * the hidden classes go back on. A layer with no classes cannot hold a filter,
+ * and the toast says it went.
+ */
+export function carryClassFilter(
+  legend: { getVisibility(): { hiddenCodes(): number[] }; hasClasses(): boolean; applyFilter(hidden: readonly number[]): void },
+  switchLayer: () => void,
+  toast: (message: string) => void,
+): void {
+  const hidden = legend.getVisibility().hiddenCodes();
+  switchLayer();
+  if (hidden.length === 0) return;
+  if (legend.hasClasses()) legend.applyFilter(hidden);
+  else toast('Class filter cleared: all classes are shown. Set it again in Classes.');
 }

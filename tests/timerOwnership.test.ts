@@ -30,6 +30,7 @@ const ACCEPTED: Record<string, readonly Site[]> = {
   'src/ui/fieldSimulation/flowPulseLab.ts': [{ kind: 'requestAnimationFrame', count: 2, owner: 'one-shot yield to the next frame before a run; one-shot coalesced rainfall redraw, at most one pending frame, cancelled by the lab dispose' }],
   'src/ui/fieldSimulation/terrainAccessLab.ts': [{ kind: 'requestAnimationFrame', count: 1, owner: 'one-shot yield so the run card paints before the route search' }],
   'src/ui/ColorbarOverlay.ts': [{ kind: 'requestAnimationFrame', count: 1, owner: 'one-shot coalesced hover-marker redraw, at most one pending frame' }],
+  'src/ui/MeasurePanel.ts': [{ kind: 'requestAnimationFrame', count: 1, owner: 'one-shot coalesced profile-chart redraw on resize, at most one pending frame; the observer that queues it is disconnected when the row is rebuilt' }],
   'src/app/profileWorkbenchSection.ts': [{ kind: 'requestAnimationFrame', count: 2, owner: 'one-shot deferred run' }],
   'src/render/snapshot.ts': [{ kind: 'requestAnimationFrame', count: 2, owner: 'one-shot frame awaits: the capture present loop and the copy' }],
   'src/render/drawSignal.ts': [{ kind: 'requestAnimationFrame', count: 1, owner: 'one-shot frame await' }],

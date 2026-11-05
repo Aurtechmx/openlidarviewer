@@ -27,6 +27,8 @@
  * Mounted in `main.ts` next to the Measurements and Annotations panels.
  */
 
+import { chunkFailureText, classifyLoadError, reportChunkFailure } from '../app/staleChunkReload';
+import { chunkFailureNote } from './chunkFailureNote';
 import { blockedCiClause } from '../terrain/validate/holdoutCiText';
 import type { LocalToLonLatSourceZ } from '../export/lonLatMapper';
 import { terrainExportDigests, terrainSourceDigestReady, type TerrainExportDigests } from '../export/terrainExportDigests';
@@ -389,6 +391,9 @@ export interface TerrainProductStatus { readonly ready: boolean; readonly reason
 export type TerrainProductOutcome = { readonly ok: true } | { readonly ok: false; readonly reason: string };
 
 const NO_TERRAIN_RESULT = 'Run a terrain analysis first.';
+
+/** The map sheet's own code failed, which is not a choice the user still has to make. */
+const MAP_SHEET_LOAD_FAILED = 'The map sheet could not load, so nothing was exported. Reload the page and try again.';
 
 /** Shown when the map sheet cannot start from the Export mode. */
 const MAP_SHEET_OPEN_STUDIO =
@@ -906,7 +911,10 @@ export class AnalysePanel {
         this._partsListener?.();
       })
       .catch(() => {
-        /* An optional inspection surface: omit it rather than break the panel. */
+        // The note counts as a launcher, so the row stays listed and opens to the reason.
+        if (token !== this._rangeToken) return;
+        this._rangeLauncher.replaceChildren(chunkFailureNote({ key: 'range-frames', what: 'Range frames', retry: () => this._refreshRangeLauncher() }));
+        this._partsListener?.();
       });
   }
 
@@ -993,7 +1001,9 @@ export class AnalysePanel {
         this._partsListener?.();
       })
       .catch(() => {
-        /* An optional review surface: omit it rather than break the panel. */
+        if (token !== this._featureToken) return;
+        this._featureLauncher.replaceChildren(chunkFailureNote({ key: 'feature-candidates', what: 'Feature candidates', retry: () => this._refreshFeatureLauncher() }));
+        this._partsListener?.();
       });
   }
 
@@ -1191,8 +1201,11 @@ export class AnalysePanel {
     const status = this.exportProductStatus(kind);
     if (!status.ready) return { ok: false, reason: status.reason };
     if (kind === 'dem') {
-      this._studioExportBtns.get('package')?.click();
-      return { ok: true };
+      // Run on the button pressed, not the detached backing one, so busy and failure reach the lane.
+      return this._exportDemPackage(srcBtn ?? this._demButton).then(
+        (): TerrainProductOutcome => ({ ok: true }),
+        (err: unknown): TerrainProductOutcome => ({ ok: false, reason: classifyLoadError(err) === 'stale-chunk' ? chunkFailureText('DEM export') : 'DEM export failed. Try again.' }),
+      );
     }
     if (this._lanePdfPending) return this._lanePdfPending;
     const result = this._result;
@@ -1221,7 +1234,7 @@ export class AnalysePanel {
       .catch((err: unknown): TerrainProductOutcome => {
         // eslint-disable-next-line no-console
         console.error('OpenLiDARViewer: map sheet export could not start.', err);
-        return { ok: false, reason: MAP_SHEET_OPEN_STUDIO };
+        return { ok: false, reason: MAP_SHEET_LOAD_FAILED };
       })
       .finally(() => { this._lanePdfPending = null; });
     this._lanePdfPending = run;
@@ -1614,12 +1627,18 @@ export class AnalysePanel {
           deliverableHost: this._contourDeliverable,
           onLaunch: () => this._contourDeliverable.classList.remove('olv-hidden'),
           onExport: (product, btn, intent, frame) =>
-            this._handleContourStudioExport(product, btn, intent, frame),
+            this._handleContourStudioExport(product, btn, intent, frame, true),
         });
       })
       .catch(() => {
-        /* The launcher is an optional post-analysis surface — if its chunk
-         * fails to load, omit it rather than breaking the panel. */
+        // The status line above reads as complete, so the missing exports are said here.
+        if (token !== this._contourToken || this._result !== result) return;
+        this._contourLauncher.replaceChildren(chunkFailureNote({
+          key: 'contour-studio',
+          what: 'Contour Studio',
+          firstText: 'Contour Studio could not load, so contour exports are unavailable. Your results are kept.',
+          retry: () => this.setContourFrame(ctx),
+        }));
       });
   }
 
@@ -1636,6 +1655,7 @@ export class AnalysePanel {
     srcBtn: HTMLButtonElement,
     intent: ContourExportIntent,
     frame: ContourExportFrameFacts,
+    sayLoadFailure = false,
   ): Promise<ContourExportDecision | null> {
     // The export orchestration (permit gate, dispatch, busy/blocked state) lives
     // in ContourExportAdapter, loaded LAZILY: the permit resolver pulls the
@@ -1671,9 +1691,10 @@ export class AnalysePanel {
         }
         return this._contourExportAdapter.handle(product, srcBtn, intent, frame);
       })
-      .catch(() => {
-        /* The export orchestration chunk failed to load — leave the button
-         * untouched rather than crash the panel. */
+      .catch((err: unknown) => {
+        // The lane's caller has a hint of its own for a null; the Studio button has none.
+        console.error('OpenLiDARViewer: contour export did not run.', err);
+        if (sayLoadFailure && classifyLoadError(err) === 'stale-chunk') reportChunkFailure('Contour export');
         return null;
       });
   }
@@ -3202,7 +3223,7 @@ export class AnalysePanel {
         } catch (err) {
           // eslint-disable-next-line no-console
           console.error('OpenLiDARViewer: map sheet export failed.', err);
-          errLine.textContent = 'Export failed — see the console for details.';
+          errLine.textContent = 'The PDF could not be made, so nothing was saved. Reload the page and try again.';
           errLine.style.display = '';
           exportBtn.disabled = false;
           cancelBtn.disabled = false;
@@ -3452,7 +3473,7 @@ export class AnalysePanel {
       const ico = el('span', { className: 'olv-fit-ico' });
       ico.innerHTML = fitnessIcon(d.key);
       const tone = el('span', { className: 'olv-fit-tone' });
-      tone.innerHTML = fitnessToneGlyph(d.tone);
+      if (!d.ungraded) tone.innerHTML = fitnessToneGlyph(d.tone); // a figure stated without a grade carries no rating mark
       row.append(
         ico,
         el('span', { className: 'olv-fit-label', text: d.label }),

@@ -14,6 +14,8 @@ import { el } from './dom';
 
 /** What is on while nothing is drawn. */
 export interface EmptyViewCauses {
+  /** Scans are open and every one is hidden. */
+  readonly scansHidden?: boolean;
   readonly clip: boolean;
   readonly classes: boolean;
   readonly elevation: boolean;
@@ -23,12 +25,15 @@ export interface EmptyViewCauses {
 export interface EmptyViewActions {
   turnOffClip(): void;
   resetFilters(): void;
+  /** Show every scan again. Absent, the card names the Data page only. */
+  showScans?(): void;
   /** Where keyboard focus goes when the card hides while it holds focus. */
   returnFocus?(): void;
 }
 
 /** The card's sentence, or null when nothing on could explain an empty view. */
 export function emptyViewText(c: EmptyViewCauses): string | null {
+  if (c.scansHidden) return 'No points are drawn: every scan is hidden. Press Show scans, or tick Show or hide in Data.';
   const on = [
     c.clip && 'the clip box',
     c.classes && 'the class filter',
@@ -46,6 +51,7 @@ export class EmptyViewNotice {
   private readonly _text: HTMLElement;
   private readonly _clipBtn: HTMLButtonElement;
   private readonly _filtersBtn: HTMLButtonElement;
+  private readonly _scansBtn: HTMLButtonElement;
   private readonly _returnFocus: (() => void) | undefined;
 
   constructor(actions: EmptyViewActions) {
@@ -61,9 +67,14 @@ export class EmptyViewNotice {
       title: 'Show every class and clear the elevation and intensity filters',
     }) as HTMLButtonElement;
     this._filtersBtn.addEventListener('click', () => actions.resetFilters());
+    this._scansBtn = el('button', {
+      className: 'olv-result-btn', type: 'button', text: 'Show scans',
+      title: 'Show every scan again',
+    }) as HTMLButtonElement;
+    this._scansBtn.addEventListener('click', () => actions.showScans?.());
     this.element = el('div', { className: 'olv-empty-view olv-hidden' }, [
       this._text,
-      el('div', { className: 'olv-result-actions' }, [this._clipBtn, this._filtersBtn]),
+      el('div', { className: 'olv-result-actions' }, [this._clipBtn, this._filtersBtn, this._scansBtn]),
     ]);
     this.element.setAttribute('role', 'status');
   }
@@ -78,8 +89,10 @@ export class EmptyViewNotice {
     if (held) this._returnFocus?.();
     if (text === null || !causes) return;
     if (this._text.textContent !== text) this._text.textContent = text;
-    this._clipBtn.classList.toggle('olv-hidden', !causes.clip);
-    this._filtersBtn.classList.toggle('olv-hidden', !(causes.classes || causes.elevation || causes.intensity));
+    const hidden = causes.scansHidden === true; // nothing is drawn whatever the clip and filters do
+    this._clipBtn.classList.toggle('olv-hidden', hidden || !causes.clip);
+    this._filtersBtn.classList.toggle('olv-hidden', hidden || !(causes.classes || causes.elevation || causes.intensity));
+    this._scansBtn.classList.toggle('olv-hidden', !hidden);
   }
 
   /** Whether the card is showing. */

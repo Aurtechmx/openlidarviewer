@@ -2,7 +2,7 @@
 
 **This is a development cut on the way to v0.7.1.** It has no tag, no DOI
 and no publication date. It starts as a copy of the v0.7.0 document and
-carries the live figures of the tree; the published record of v0.7.0 is
+carries the figures of the current source; the published record of v0.7.0 is
 [KNOWN_LIMITATIONS_v0.7.0.md](KNOWN_LIMITATIONS_v0.7.0.md) and does not change.
 
 Every entry below was reproduced against this release rather than carried
@@ -259,8 +259,7 @@ reported unresolved rather than given a direction. Interpolated cells are
 routed over, so a path may cross ground no return landed on, and routes stop
 at cells with no elevation.
 
-There is no click-to-pulse on the live scan; `Viewer.ts` has no picking seam
-this feature reaches without growing the monolith. Instead a keyboard- and
+There is no click-to-pulse on the live scan. Instead a keyboard- and
 pointer-accessible 2D result grid stands in for that click, with a
 downstream-path trace, an upstream-catchment trace, and a log-scaled
 accumulation overlay (cell counts, not water) drawn on the grid and, when the
@@ -289,7 +288,7 @@ fill depth in the conditioning limitation carries the same unit, failing
 closed to "in source units" when it did not resolve. The exported ASCII
 rasters carry the real lower-left corner and a `.prj` sidecar when the CRS
 resolves, rather than a fixed local (0, 0) origin. The accumulation overlay
-stays drawn on the scan after the lab closes, until the user turns it off. It
+stays drawn on the scan after the lab closes, until you turn it off. It
 is removed when the terrain or CRS it was built from goes stale: another scan
 loads, the scan closes, the CRS changes or a classification edit invalidates
 the terrain.
@@ -410,7 +409,7 @@ detection code and does not reach the six modules.
 A half-wired alignment tool is worse than none, and the workflow it would need
 is not built.
 
-## Four legs block a merge; the iOS simulator is advisory
+## Four CI jobs block a merge; the iOS simulator is advisory
 
 Chromium, Firefox, WebKit and Windows block a merge. The `e2e-firefox`,
 `e2e-webkit` and `windows` jobs run in `ci.yml` and are listed in `ci-green`'s
@@ -427,27 +426,11 @@ consecutive passes, counted by `scripts/ios-streak.mjs`.
 
 ## The two monoliths are still monoliths
 
-`src/main.ts` is 4,175 lines, after the undo, report and session handlers
-moved out, the Save view snapshot moved to its own lazy module, the Analyse panel's longitude and latitude
-wiring moved to the mapper module, the Planetary Computer CRS record moved to
-its own module, the view cube's wiring was condensed, the epoch comparison
-sequence moved to its own module (twelve lines) and the Clip page's
-construction moved to its own module (seven lines), and
-`src/render/Viewer.ts` is 5,924, 299 lines below its v0.6.9 count of 6,223. Five getters collapsed to make room for a memory
-accessor and a size-mode call, and the streamed draw cull then paid for its own
-wiring by moving the pass onto the streaming renderer and collapsing two more
-expressions. Making the loop request-driven then took another thirty-one out:
-the activity deadlines, the reasons a frame is wanted and the scheduler left
-together as one object, which is fewer lines here and one thing to reach for
-there. The frame gained a decision while the file lost lines. The two-finger
-pinch and pan now share one screen-space shift, which took another
-thirty-six out. The figure view context moved into the export adapter, which
-took twenty-one more. The measure click handling moved into the
-measurement controller, which took twenty-eight more. The draw precision bound's model-view accessor took one line and a shorter doc comment gave back two. The terrain gather's up-axis rule moved to its own module, which took ten more. The clip box's scene outline, per-layer counts and kept shader fold were paid for by two condensed getters and a shorter doc comment, one line under. A shrink-only lint
+`src/main.ts` is 4,161 lines and `src/render/Viewer.ts` is 5,924, 299 lines below its v0.6.9 count of 6,223. Both fell as handlers moved into their own modules. A shrink-only lint
 fails the build when either passes its recorded baseline, so a raise is a hand
 edit to `docs/validation/monolith-size-baseline.json` and always shows in the
 diff.
-Fan-out is 95 for the shell, 73 for the renderer, across 1193 modules with no
+Fan-out is 95 for the shell, 73 for the renderer, across 1198 modules with no
 dependency cycles. Fan-out counts the distinct modules a file imports with a
 value import, source files and external packages alike; type-only and dynamic
 imports are not counted. The shell and the renderer figures are held
@@ -1018,8 +1001,8 @@ meridian convergence at the sheet centre and labelled with that angle.
 
 ## The reference plane is a drawing, not a surface
 
-The View panel's reference plane is a visual grid at an elevation the user
-sets. It has these limits:
+The View panel's reference plane is a visual grid at an elevation you
+set. It has these limits:
 
 - Nothing snaps to it. Measurements, picks and the clip box ignore it.
 - A plane through 3 picked points passes through those points
@@ -1069,8 +1052,7 @@ voxel-reduced load, a streamed source or another format reads "not tested"),
 and on a display sample it tests a subset of the points. A supported grid is a
 grid the stored integers are compatible with; the row does not say which
 operation produced it, who produced the file, or whether the file was converted
-or edited. The row does not use the phase test in
-`src/diagnostics/latticeForensics.ts`.
+or edited.
 
 ## A figure the position step cannot give within 1 cm is withheld
 
@@ -1184,11 +1166,11 @@ compared relief can still pull the fit. The fitting residual and the residual
 at the applied pose are reported separately; neither is a registration
 uncertainty, and a small fitting residual does not validate the alignment.
 
-The test that refuses an unobservable surface was validated on synthetic
+The test that refuses an unobservable surface was checked on synthetic
 lattices. It can pass a sloped plane when the noise-to-spacing ratio is above
 about 0.3 and the shift is small, because noise then supplies the information
 the plane lacks. A fit accepted on noisy relief is therefore not evidence that
-the surface constrained the alignment; validate it against stable areas that
+the surface constrained the alignment; check it against stable areas that
 were surveyed independently of the two epochs.
 
 ## The CRS override fingerprint samples a source, it does not hash it

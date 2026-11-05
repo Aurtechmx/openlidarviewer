@@ -16,6 +16,7 @@ import {
   createLazySingleton,
   buttonLazyTrigger,
 } from '../src/app/lazySurfaceLoad';
+import { resetChunkFailuresForTests, setChunkFailureSurface } from '../src/app/staleChunkReload';
 
 function fakeToast() {
   const calls: Array<{ message: string; action?: { label: string; onClick: () => void } }> = [];
@@ -26,6 +27,30 @@ function fakeTrigger() {
   const states: boolean[] = [];
   return { setBusy: (busy: boolean) => { states.push(busy); }, states };
 }
+
+describe('a repeat chunk failure while offline', () => {
+  it('offers Try again, never a reload', async () => {
+    vi.stubGlobal('navigator', { onLine: false });
+    setChunkFailureSurface({ showToast: vi.fn(), confirmReload: async () => false, reload: vi.fn() });
+    try {
+      const toast = fakeToast();
+      const run = createLazySurfaceLoader(toast);
+      const fail = () => Promise.reject(new TypeError('Failed to fetch dynamically imported module: http://h/a.js'));
+      const retry = (): void => {};
+      await run(fail, 'offline thing', { retry });
+      await run(fail, 'offline thing', { retry });
+      expect(toast.calls).toHaveLength(2);
+      for (const c of toast.calls) {
+        expect(c.message).toMatch(/offline/i);
+        expect(c.message).not.toMatch(/reload/i);
+        expect(c.action?.label).toBe('Try again');
+      }
+    } finally {
+      vi.unstubAllGlobals();
+      resetChunkFailuresForTests();
+    }
+  });
+});
 
 describe('createLazySurfaceLoader', () => {
   it('resolves to the loaded value on success, toggling busy true then false', async () => {

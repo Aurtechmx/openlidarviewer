@@ -4,13 +4,13 @@
  * Terrain analysis, Contour Studio, the Flow Pulse lab and the Dataset
  * Story. The analysis entry and the story inputs are the whole surface.
  */
-import type { Action } from '../../ui/actionRegistry';
+import { scanRequired, type Action } from '../../ui/actionRegistry';
 import { openTerrainAnalysis, type TerrainAnalysisEntryDeps } from '../openTerrainAnalysis';
 import { buildScanStory, type ScanStoryInputs } from '../../intelligence/scanStory';
 import { renderDatasetStoryCard } from '../../ui/scanStoryViews';
 import { openModal } from '../../ui/Modal';
 import { loadFlowPulseLab, loadObservatoryRun, loadTerrainAccessLab } from '../../lazyChunks';
-import { createLazySurfaceLoader, type LazyLoadToast } from '../lazySurfaceLoad';
+import { runWithRetry, type LazyLoadToast } from '../lazySurfaceLoad';
 import type { ObservatoryEntryDeps } from '../openObservatoryRun';
 
 export interface AnalysisActionDeps {
@@ -19,14 +19,9 @@ export interface AnalysisActionDeps {
   /** How to reach the Observatory panel and its run; see {@link openObservatoryRun}. */
   observatoryEntry: ObservatoryEntryDeps;
   buildCurrentStoryInputs: () => ScanStoryInputs;
-  /**
-   * Where a Flow Pulse Lab chunk-load failure is reported, with a "Try
-   * again" action (F7). Optional only because the current caller
-   * (`src/app/actionDefinitions.ts`) does not thread `showLassoToast`
-   * through to this contributor yet — until it does, a failure falls back
-   * to `console.warn`, exactly as before.
-   */
-  showLassoToast?: LazyLoadToast;
+  /** Where a lab's chunk-load failure is reported, with a Try again that re-runs the whole attempt. */
+  showLassoToast: LazyLoadToast;
+  hasScan?: () => boolean;
 }
 
 type LabPanel = Awaited<ReturnType<TerrainAnalysisEntryDeps['showPanel']>>;
@@ -61,6 +56,7 @@ export function contributeAnalysisActions(deps: AnalysisActionDeps): Action[] {
   actions.push(
     {
       id: 'analyse.run',
+      get unavailable() { return scanRequired(deps.hasScan); },
       title: 'Run terrain analysis',
       section: 'Analyse',
       hint: 'Classify ground, build the DTM, validate it, and check contour readiness.',
@@ -71,6 +67,7 @@ export function contributeAnalysisActions(deps: AnalysisActionDeps): Action[] {
     },
     {
       id: 'analyse.contours',
+      get unavailable() { return scanRequired(deps.hasScan); },
       title: 'Create contours',
       section: 'Analyse',
       hint: 'Open Contour Studio. Terrain analysis runs first when the scan has not been analysed yet.',
@@ -93,16 +90,7 @@ export function contributeAnalysisActions(deps: AnalysisActionDeps): Action[] {
             .then(([panel, lab]) => withGround(panel, force, (onClose) => lab.openFlowPulsePreparing(onClose), (p) => {
               lab.openFlowPulseLab(p.flowInput ?? null, { onRunTerrain: () => go(true) });
             }));
-          const toast = deps.showLassoToast;
-          if (toast) {
-            // Named so a successful "Try again" re-runs the WHOLE attempt
-            // (panel + chunk), not just the raw loader — otherwise a retry
-            // that succeeds would refetch bytes nothing then opens the lab with.
-            const attempt = (): void => { void createLazySurfaceLoader(toast)(load, 'Flow Pulse Lab', { retry: attempt }); };
-            attempt();
-          } else {
-            void load().catch((err) => console.warn('[flow-pulse] lab chunk failed to load', err));
-          }
+          runWithRetry(deps.showLassoToast, load, 'Flow Pulse Lab');
         };
         go(false);
       },
@@ -117,11 +105,10 @@ export function contributeAnalysisActions(deps: AnalysisActionDeps): Action[] {
         // The lab opens as its Analyse page beside the scene, running
         // terrain first when the scan has no analysis yet.
         const go = (force: boolean): void => {
-          void Promise.all([entry.showPanel(), loadTerrainAccessLab()])
+          runWithRetry(deps.showLassoToast, () => Promise.all([entry.showPanel(), loadTerrainAccessLab()])
             .then(([panel, lab]) => withGround(panel, force, (onClose) => lab.openTerrainAccessPreparing(onClose), (p) => {
               lab.openTerrainAccessLab(p.terrainAccessInput ?? null, { onRunTerrain: () => go(true) });
-            }))
-            .catch((err) => console.warn('[terrain-access] lab chunk failed to load', err));
+            })), 'Terrain Access Lab');
         };
         go(false);
       },
@@ -136,11 +123,12 @@ export function contributeAnalysisActions(deps: AnalysisActionDeps): Action[] {
         // Dynamically imported, like Flow Pulse above: the coordinator pulls
         // in the whole O1-O8 kernel (rays, ledger, states, shadow-frontier,
         // run record), which must stay out of the action-registry chunk.
-        void loadObservatoryRun().then((mod) => mod.openObservatoryRun(deps.observatoryEntry, true));
+        runWithRetry(deps.showLassoToast, () => loadObservatoryRun().then((mod) => mod.openObservatoryRun(deps.observatoryEntry, true)), 'Observatory');
       },
     },
     {
       id: 'story.dataset',
+      get unavailable() { return scanRequired(deps.hasScan); },
       title: 'Dataset Story',
       section: 'Analyse',
       hint: 'What this scan is, how good it is, what it is best for, and the next step.',

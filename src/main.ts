@@ -1,11 +1,11 @@
-import { parseEmbedConfig } from './ui/embedConfig'; // First: it imports the frame guard, so a page framed by an untrusted site gets a notice and the app does not start.
+import { autoloadRefusal, parseEmbedConfig } from './ui/embedConfig'; // First: it imports the frame guard, so a page framed by an untrusted site gets a notice and the app does not start.
 import '@fontsource/jetbrains-mono/latin-400.css';
 import '@fontsource/jetbrains-mono/latin-500.css';
 import './styles';
 import type { Viewer } from './render/Viewer';
 import { floorPlanPositions } from './app/floorPlanPositions';
 import { isMobileDevice, isTouchFirstDevice } from './ui/isMobileDevice';
-import { Stage } from './ui/Stage';
+import { Stage, UrlFieldMessage } from './ui/Stage';
 import type { Sample } from './ui/Stage';
 import { DropZone } from './ui/DropZone';
 import { Inspector } from './ui/Inspector';
@@ -29,11 +29,11 @@ import {
 import type { ShortcutSheet } from './ui/ShortcutSheet';
 import type { TourHandle } from './ui/onboarding/bootTour';
 import { createTourLauncher } from './app/tourLauncher';
-import { findDuplicateIds, type Action } from './ui/actionRegistry';
+import { actionsForLayout, findDuplicateIds, type Action } from './ui/actionRegistry';
 import { runSceneTool, type SceneTool } from './app/toggleTool';
 import type { SessionIoDeps } from './app/sessionIo';
 import type { SessionSnapshotDeps } from './app/sessionSnapshot';
-import { openScan, clearPendingSessionRestore, heldSessionWork, sourceDigestReady, type OpenScanDeps } from './app/openScan';
+import { openScan, clearPendingSessionRestore, heldSessionWork, sessionSaveRefusal, snapshotRefusal, sourceDigestReady, type OpenScanDeps } from './app/openScan';
 import {
   openStreamingCopc as runOpenStreamingCopc,
   handleRemoteEpt as runHandleRemoteEpt,
@@ -47,13 +47,13 @@ import {
   type GeoExportContext,
   type ReportExportDeps,
 } from './app/reportExport';
-import { WorkflowController, WORKFLOW_RECORDER_ENABLED, saveWorkflowWithToast } from './ui/WorkflowController';
+import { WorkflowController, WORKFLOW_RECORDER_ENABLED, createWorkflowRecording } from './ui/WorkflowController';
 import type { WorkflowConfigPanel } from './ui/WorkflowConfigPanel';
 import { RecommendedViewChip } from './ui/RecommendedViewChip';
 import { recommendCameraPreset, flatnessFromBounds, describeProjectSize } from './render/camera/recommendView';
 import type { WorkflowEvent } from './render/workflow/workflowRecorder';
 import { matchesShortcut } from './render/workflow/workflowConfig';
-import { LassoVolumeTool, armLasso, disarmLasso, type LassoArmingDeps } from './ui/LassoVolumeTool';
+import { LassoVolumeTool, armLasso, disarmLasso, type LassoArmingDeps, disarmReclassifyOffPage, toolModeChanged } from './ui/LassoVolumeTool';
 import {
   downloadBytes as downloadFileBytes,
   downloadText,
@@ -95,7 +95,7 @@ import { createScanRouteCoordinator, routeUnitFrame, type SpaceExportContext } f
 import { TERRAIN_METRIC_VERSION } from './terrain/datasetIntelligence';
 import { ExportPanel, exportClassFacts, exportLayerHooks } from './ui/ExportPanel';
 import { lonLatMapContext } from './export/lonLatMapper';
-import { runFindingsExport, writeScanScopedExport, spaceContextStillCurrent, SPACE_CONTEXT_MOVED, SESSION_EXPORT_SCAN_CHANGED_REFUSAL, sessionSavedNotice } from './export/exportScanIdentity';
+import { runFindingsExport, writeScanScopedExport, spaceContextStillCurrent, SPACE_CONTEXT_MOVED, SESSION_EXPORT_SCAN_CHANGED_REFUSAL, sessionSavedNotice, sessionSavedWorkFromText } from './export/exportScanIdentity';
 import {
   crsIsKnown, georefKnown,
   exportScanFootprintKml,
@@ -112,12 +112,13 @@ import { exportImageAction, runPointExport } from './app/exportImageAction';
 // ground-filter + rasteriser): see compareLoadedLayers' dynamic import.
 import { planInstantAnswer, sameSourcePair } from './intelligence/instantAnswer';
 import { decodeFull } from './convert/decodeFull';
-import { createHelpOverlayLazy, createLazySingleton, createLazySurfaceLoader, buttonLazyTrigger, dialogOpen, retryableOnce, mountPanelOnce } from './app/helpOverlayLazy';
+import { chunkFailureNote, createHelpOverlayLazy, createLazySingleton, createLazySurfaceLoader, buttonLazyTrigger, dialogOpen, retryableOnce, mountPanelOnce } from './app/helpOverlayLazy';
 import {
   buildViewerKeyBindings,
   installKeyDispatch, undoLastEdit, redoLastEdit, type EditHistoryDeps,
   type GlobalActionHandlers,
   type KeyBindingDeps,
+  workflowChordConflict,
 } from './ui/keyBindings';
 import { LoadCancelledError, LoadError, warmParseWorker } from './io/loadFile';
 import { LocalFileSource } from './io/LocalFileSource';
@@ -147,7 +148,7 @@ import { activeSpatialUpAxis, layerUpFrameOf, reexpressElevationFilter } from '.
 // saveCurrentView/applyView can run synchronously from a keystroke while the
 // ordering contract (camera LAST) stays unit-testable outside this bootstrap.
 import type { ViewStateBundle } from './io/viewState';
-import { createViewStateCoordinator } from './app/viewStateCoordinator';
+import { createViewStateCoordinator, saveViewWithNotice } from './app/viewStateCoordinator';
 import { loadPrefs, savePrefs } from './prefs';
 import { applyNavPrefsChange, navigationPrefs, restoreNavPrefs } from './render/navPrefsWiring';
 import { makeNavPaletteActions } from './app/navPaletteActions';
@@ -247,7 +248,7 @@ import { prepareEpochFrames, epochUnitMismatchLines, compareSuggestionAllowed } 
 // feeds the colorbar legend's elevation unit from the resolved CRS.
 import { verticalUnitLabel } from './units/units';
 import { createInspectorCardRefreshers } from './app/inspectorCardRefreshers';
-import { installStaleChunkRecovery, makeAmbiguousChunkHandler } from './app/staleChunkReload';
+import { chunkFailureText, classifyLoadError, consumeStaleReloadNotice, guardUserSave, installChunkFailureNet, installStaleChunkRecovery, makeAmbiguousChunkHandler, makeStaleWithWorkHandler, reportChunkFailure, setChunkFailureSurface } from './app/staleChunkReload';
 import { createCrsCoordinator } from './app/crsCoordinator';
 import { remoteCopcName, describeRemoteCopcError } from './app/remoteSourceNaming';
 import { deriveVolumeRecord, formatVolumeNumber } from './render/measure/measureDerivations';
@@ -257,7 +258,7 @@ import { placedWorldOrigin } from './terrain/canonicalFrame';
 import { createAppRuntime } from './app/AppRuntime';
 import { createLayerService } from './app/LayerService';
 import { createViewBookmarks } from './app/viewBookmarks';
-import { createScanService, survivorAfterRemoval, refreshActiveLayerSurfaces, refreshStreamSurfaces } from './app/ScanService';
+import { carryClassFilter, createScanService, survivorAfterRemoval, refreshActiveLayerSurfaces, refreshStreamSurfaces } from './app/ScanService';
 import { createScanRouteService } from './app/ScanRouteService';
 import { createProjectFrameService, projectFrameInputFrom, sessionImportOrigins } from './app/projectFrame';
 
@@ -484,11 +485,10 @@ async function openBatchConverter(): Promise<void> {
  * `ensureViewer()` resolves before any user-driven scan-open at runtime, but it does.
  */
 let viewer: Viewer = null as unknown as Viewer;
-// v0.6 P3: recover from a stale lazy chunk after a deploy. If the Viewer's
-// content-hashed import fails because a newer build replaced the asset mid-session,
-// do ONE guarded reload (sessionStorage cooldown, URL preserved), not a hard boot
-// failure. Ordinary Viewer exceptions are NOT classified as stale and never reload.
-const { importOrReload } = installStaleChunkRecovery({ onOffline: (msg) => appToast().show(msg), onAmbiguous: makeAmbiguousChunkHandler({ showToast: (m, a) => appToast().show(m, a), confirmReload: async (title, message) => (await loadModal()).openConfirm({ title, message, confirmLabel: 'Reload page', cancelLabel: 'Keep working' }) }) });
+// Recover from a stale lazy chunk after a deploy (staleChunkReload.ts): one guarded reload with nothing open; with a scan open the user is told and asked. The dialog's own chunk may be gone too, so the browser's confirm stands in, and a yes flushes the recovery journal first.
+const chunkSurface = { showToast: (m: string, a?: { label: string; onClick: () => void }) => appToast().show(m, a), confirmReload: async (title: string, message: string) => { const ok = await loadModal().then((m) => m.openConfirm({ title, message, confirmLabel: 'Reload page', cancelLabel: 'Keep working' })).catch(() => window.confirm(`${title}\n\n${message}`)); if (ok) await recovery?.snapshotNow().catch(() => false); return ok; } };
+const { importOrReload, reloadNow } = installStaleChunkRecovery({ onOffline: (msg) => appToast().show(msg), hasOpenWork: () => loading || (viewerReady && hasScan()) || !!heldSessionWork() || viewBookmarks.savedViews.length > 0, onStaleWithWork: makeStaleWithWorkHandler(chunkSurface), onAmbiguous: makeAmbiguousChunkHandler(chunkSurface) });
+setChunkFailureSurface({ ...chunkSurface, reload: reloadNow }); installChunkFailureNet(window, chunkSurface.showToast); const staleReloadNotice = consumeStaleReloadNotice(); if (staleReloadNotice) appToast().show(staleReloadNotice); // the net is the last resort for a load no caller reports
 let startViewer: () => void = () => {};
 const viewerStarted = new Promise<void>((resolve) => { startViewer = resolve; });
 /** Start the Viewer import if it has not started, and hand back the shared promise. */
@@ -653,14 +653,15 @@ function saveLassoVolumeIfPending(): void {
 // immediately so re-orbiting after a measurement requires zero extra
 // clicks. Persistence into the Measurements list + PDF reports is the
 // next focused cut.
-let lassoButton: HTMLButtonElement | null = null;
+let lassoButton: HTMLButtonElement | null = null; let refreshActivePill = (): void => {};
 function syncLassoButton(): void {
   if (!lassoButton) return;
-  lassoButton.classList.toggle('olv-mkind-active', lassoVolumeTool.enabled);
+  lassoButton.classList.toggle('olv-mkind-active', lassoVolumeTool.enabled); refreshActivePill();
 }
 /** Every arm and disarm goes through these, so the overlay, the viewer mode and the button never disagree. */
 const lassoArming: LassoArmingDeps = { tool: lassoVolumeTool, viewer: () => viewer, syncButton: syncLassoButton, clearPending: () => { pendingLassoSave = null; } };
 void viewerLoaded.then((v) => {
+  v.onToolModeChange = (prev, next) => toolModeChanged(prev, next, { disarmVolume: () => { disarmLasso(lassoArming, { clearHighlight: 'if-armed' }); }, disarmReclassify: () => { reclassifyUi?.disarm(); } });
   lassoButton = v.measure.addAuxKindButton(
     'Lasso volume',
     'Lasso Volume — draw a freeform shape on the canvas to measure volume of every 3D point inside.\n' +
@@ -717,10 +718,11 @@ stage.canvas.addEventListener('contextmenu', (e) => {
 // The on-canvas ViewCube: on by default with a scan open (off on phones until
 // asked), placed top-right clear of the right rail; "Toggle compass" in the
 // palette and `?viewcube=1|0` override. Life cycle: ui/compassController.ts.
-const compass = createCompassController({
+let compassFailureSaid = false; const compass = createCompassController({
   host: () => stage.overlay, urlParams, onView: (view, o) => navWiring.callbacks.onStandardView(view, o), // same path (and Plan View rule) as the NavBar buttons
   onOrient: (_t, o) => navWiring.onOrientView(o.dir), onHome: () => navWiring.callbacks.onReset(),
   cardinalsAreGeographic: () => crsIsKnown(crsService.current()), // local scans show truthful view names
+  onLoadFailed: (explicit) => { if (explicit || !compassFailureSaid) reportChunkFailure('The view cube'); compassFailureSaid = true; }, // refresh retries on many events: said once unless asked for
 });
 void viewerLoaded.then((v) => compass.attachViewer(v));
 
@@ -751,7 +753,7 @@ if (
 // v0.4.3.
 
 /** The app's one toast; see `appToast`. */
-const showLassoToast = appToast().show;
+const showLassoToast = appToast().show; const saveSessionFromUser = guardUserSave(exportSession, showLassoToast); // the close and replace guards keep the rejecting one and say it themselves
 
 /** Input-aware mobile check — drives the touch hint and the tighter point budget. */
 function isPhone(): boolean { return isMobileDevice(); }
@@ -1080,7 +1082,7 @@ const inspector = new Inspector({
   },
   onNavigationPrefsChange: (prefs) => applyNavPrefsChange(prefs, viewer, persistPrefs),
   // Visuals Studio — Visuals Studio.
-  onRgbAppearancePreset: (id) => visuals.applyRgbAppearancePreset(id),
+  onRgbAppearancePreset: (id) => visuals.applyRgbAppearancePreset(id), anyScanHasRgb: () => viewerReady && viewer.clouds().some((id) => viewer.getCloud(id)?.colors != null),
   onEdlPreset: (id) => visuals.applyEdlPreset(id),
   onSkyPreset: (id) => visuals.applySky(id),
   onWhiteBalance: (temperature, tint) => visuals.setWhiteBalance(temperature, tint),
@@ -1114,7 +1116,7 @@ const inspector = new Inspector({
     canvas: stage.canvas,
     context: () => crsService.context(),
     sceneOrigin: () => sessionIoDeps.exportOrigin(), // placement-aware: a placed layer is local to the project origin
-    toast: showLassoToast,
+    toast: showLassoToast, hasScan: () => viewerReady && hasScan(),
     crs: crsService,
   },
 });
@@ -1157,7 +1159,7 @@ const crsCoordinator = createCrsCoordinator({
 // Gated on WORKFLOW_RECORDER_ENABLED (see WorkflowController.ts). The controller
 // is always constructed so the `capture()` calls below stay valid; the badge,
 // shortcut and palette entries come only when the flag is on.
-const workflowController = new WorkflowController(showLassoToast);
+const workflowController = new WorkflowController(showLassoToast, () => toggleWorkflowRecord());
 // The one scene-tool command every entry point runs (dock, key, palette, launcher).
 function runTool(tool: SceneTool): void {
   runSceneTool({ viewer: () => { clipFlow.dismissCard(); return viewer; }, workflow: workflowController, toggleClip: () => clipPanel.toggleEnabled(), openPage: (page) => workspaceShell?.openToolPage(page) }, tool);
@@ -1178,7 +1180,7 @@ let workflowConfigPanel: WorkflowConfigPanel | null = null;
 let pendingWorkflowConfig: Parameters<typeof workflowController.setConfig>[0] | undefined;
 // One load for every caller; the next call retries a failed one.
 const ensureWorkflowConfigPanel = retryableOnce(() => loadWorkflowConfigPanel().then(({ WorkflowConfigPanel }) => {
-  const panel = new WorkflowConfigPanel();
+  const panel = new WorkflowConfigPanel({ chordConflict: workflowChordConflict });
   stage.overlay.append(panel.element);
   panel.onChange((cfg) => {
     workflowController.setConfig(cfg);
@@ -1189,27 +1191,8 @@ const ensureWorkflowConfigPanel = retryableOnce(() => loadWorkflowConfigPanel().
   return panel;
 }));
 
-/** Start (with the configured countdown) the right toast. */
-function startWorkflowRecording(): void {
-  const startedNow = workflowController.requestStartRecording();
-  if (startedNow) {
-    showLassoToast('Workflow · recording started. Use the badge to stop.');
-  } else if (workflowController.config.countdownSeconds > 0) {
-    const secs = workflowController.config.countdownSeconds;
-    showLassoToast(`Workflow · recording starts in ${secs}s…`);
-  }
-}
-
-/** Toggle the recorder: idle → start, recording → stop + save. */
-function toggleWorkflowRecord(): void {
-  if (workflowController.state === 'recording') {
-    const workflow = workflowController.stopRecording();
-    if (workflow) void saveWorkflowWithToast(workflowController, workflow, showLassoToast);
-    else showLassoToast('Workflow · nothing recorded yet.');
-  } else {
-    startWorkflowRecording();
-  }
-}
+/** Start and stop, shared by the palette, the shortcut and the badge. */
+const { start: startWorkflowRecording, toggle: toggleWorkflowRecord } = createWorkflowRecording(workflowController, showLassoToast);
 
 // v0.3.9 — command palette (Cmd-K / Ctrl-K). The host owns the
 // registry so every action stays close to the handler that powers
@@ -1393,8 +1376,8 @@ const ensureActionRegistry = retryableOnce((): Promise<Action[]> => loadActionRe
   dispatchWorkflowEvent,
   ensureWorkflowConfigPanel,
   ensureShortcutSheet: () => ensureShortcutSheet((sheet) => sheet.open()), // wrapped so a "Try again" retry opens the sheet too
-  hasScan,
-  saveSnapshot, copyShareLink, exportSession, handleFile, openScan: () => stage.promptAddDataset(), exportReport: () => exportReportPdf(null),
+  hasScan: () => viewerReady && hasScan(),
+  saveSnapshot, copyShareLink, exportSession: saveSessionFromUser, handleFile, openScan: () => stage.promptAddDataset(), exportReport: () => exportReportPdf(null),
   terrainAnalysisEntry: {
     showAnalyseMode: () => showWorkspaceMode('analyse'), showPage: (page) => workspaceShell?.openAnalysePage(page),
     showPanel: () => ensureAnalysePanel().then((p) => { p.setVisible(true); return { hasResult: p.currentResultForProvenance() != null, flowInput: p.flowPulseInput(), terrainAccessInput: p.terrainAccessInput() }; }),
@@ -1408,7 +1391,7 @@ const ensureActionRegistry = retryableOnce((): Promise<Action[]> => loadActionRe
 });
     const dupes = findDuplicateIds(actions);
     if (dupes.length > 0) throw new Error(`Command palette: duplicate action ids: ${dupes.join(', ')}`);
-    return actions;
+    return actionsForLayout(actions, { bare: bareMode, measurements: embedConfig.forceMeasurements, annotations: embedConfig.forceAnnotations });
 }));
 
 // Cmd-K / Ctrl-K (palette, binding 300) and bare `?` (shortcut sheet, binding
@@ -1473,9 +1456,10 @@ const keyBindingDeps: KeyBindingDeps = {
     },
     toggleLasso: () => {
       if (disarmLasso(lassoArming)) showLassoToast('Lasso volume off.');
+      else if (!hasScan()) showLassoToast('Open a scan first.');
       else { armLasso(lassoArming); showLassoToast('Lasso volume armed — draw a shape on the canvas.'); }
     },
-    setCameraPreset: (preset) => navWiring.applyCameraPreset(preset), // tells Plan View too
+    setCameraPreset: (preset) => { if (hasScan()) return navWiring.applyCameraPreset(preset); showLassoToast('Open a scan first.'); return false; }, // tells Plan View too
     toast: (message) => showLassoToast(message),
     openCommandPalette: openCommandPalette,
     toggleShortcutSheet: () => void ensureShortcutSheet((sheet) => sheet.toggle()).catch(() => {}), // already reported via the toast
@@ -1571,7 +1555,7 @@ const measureMount = createMeasurePanelMount({
   getViewer: () => viewer,
   crsService,
   getExportPanel: () => exportPanel,
-  exportSession, handleFile, toast: showLassoToast,
+  exportSession: saveSessionFromUser, handleFile, toast: showLassoToast, onRenamed: () => clipFlow.onMeasurementsChanged(),
   recordUsage, getScanBaseName: () => activeScanName(),
   workbenchStage: stage,
   onWorkbenchClose: () => analyseProfileVisibility.restore(),
@@ -1821,7 +1805,7 @@ const processStudio = createProcessStudioFromShell({
   getViewer: () => viewer, getActiveCloud: () => scans.activeCloud(), getActiveLayerId: () => scans.activeExportTargetId(),
   crsService, classLegend: classLegendPanel,
   resolveLayerCrs: (name, detected, identity) => crsService.resolveFor({ name, detected: detected ?? undefined, source: 'las-vlr', identity }),
-  soloLayer: (id) => layerService.soloOnly(id), classifyScan: () => { void runDeriveClassification(); },
+  soloLayer: (id) => { layerService.soloOnly(id); showLassoToast('Only the active layer is showing. Turn the others back on in the Data tab.'); }, soloAvailable: () => layerService.buildLayerInfos().filter((i) => i.visible).length > 1, classifyScan: () => { void runDeriveClassification(); },
   focusCrs: () => { inspector.focusCrsOverride(); }, focusLayers: () => { inspector.focusLayers(); }, addDataset: () => { stage.promptAddDataset(); },
 });
 
@@ -1834,7 +1818,7 @@ const mountReclassifyUi = retryableOnce(async () => {
   const ui = createReclassifyUi({
     canvas: stage.canvas,
     getViewer: () => viewer,
-    getActiveId: () => scans.activeId,
+    getActiveId: () => scans.activeId, onArmedChange: () => refreshActivePill(),
     onToast: showLassoToast,
     onAutoClassify: async () => (await loadClassifyActions()).runDeriveClassification(classifyDeps()), // a refusal shows beside the button
     onReclassified: (cls) => afterClassEdit(classLegendPanel, cls),
@@ -1842,13 +1826,14 @@ const mountReclassifyUi = retryableOnce(async () => {
   classLegendPanel.element.append(ui.element); // rides with the legend onto the Classes page
   reclassifyUi = ui;
 });
-async function showReclassifyUi(): Promise<void> {
+let reclassifyNote: HTMLElement | null = null; async function showReclassifyUi(): Promise<void> {
   if (reclassifyUi) {
     reclassifyUi.setVisible(true);
     reclassifyUi.refresh();
     return;
   }
-  await mountReclassifyUi();
+  reclassifyNote?.remove(); reclassifyNote = null;
+  try { await mountReclassifyUi(); } catch { classLegendPanel.element.append(reclassifyNote = chunkFailureNote({ key: 'class-editing', what: 'Class editing', retry: () => void showReclassifyUi() })); return; } // on the page: a toast would go while the controls stay missing
   // Cast: TS can't see the load reassign the outer `let` across the await.
   (reclassifyUi as ReclassifyUi | null)?.setVisible(true);
 }
@@ -2437,7 +2422,7 @@ exportPanel.setCrsKnown(crsIsKnown(crsService.current()));
 // and their viewer wiring are built in clipMount.ts over the pure `clipBox` core.
 const { clipPanel, clipFlow } = mountClip({ overlay: stage.overlay, viewer: () => viewer, ready: () => viewerReady, toast: showLassoToast, workflow: workflowController,
   activeId: () => scans.activeId, activeLayerId: () => (scans.activeId ? runtime.layerIdentity.stableIdFor(scans.activeId) : null), revealScene: () => workspaceShell?.revealScene(),
-  openPage: (p, o) => workspaceShell?.openToolPage(p, o), measurePanel: () => measureMount.panel, crs: crsService, emptyView: { classes: { isFiltered: () => classLegendPanel.getVisibility().isFiltered(), showAll: () => classLegendPanel.applyFilter([]) }, ranges: { elevation: () => activeElevFilter !== null, intensity: () => activeIntenFilter !== null, clear: () => { inspector.restoreElevationFilter(null); inspector.restoreIntensityFilter(null); } } } });
+  openPage: (p, o) => workspaceShell?.openToolPage(p, o), measurePanel: () => measureMount.panel, deleteMeasurement: (id) => measureMount.deleteMeasurement(id), crs: crsService, emptyView: { classes: { isFiltered: () => classLegendPanel.getVisibility().isFiltered(), showAll: () => classLegendPanel.applyFilter([]) }, ranges: { elevation: () => activeElevFilter !== null, intensity: () => activeIntenFilter !== null, clear: () => { inspector.restoreElevationFilter(null); inspector.restoreIntensityFilter(null); } }, scans: { showAll: () => { for (const id of viewer.clouds()) layerService.setVisible(id, true); } } } });
 clipPanel.subscribe(() => analysePanel?.setClipScopeNote(clipPanel.enabled)); // every on/off change, restore and scan close: the Terrain page says a run does not use the clip
 
 // The Tools tab held only the Clip box until a tool had been used, so it could
@@ -2447,9 +2432,11 @@ clipPanel.subscribe(() => analysePanel?.setClipScopeNote(clipPanel.enabled)); //
 const toolLauncherHost = document.createElement('div');
 let toolLauncherCard: { readonly element: HTMLElement; refresh: () => void } | null = null;
 const refreshToolLauncher = (): void => { workspaceShell?.sync(); toolLauncherCard?.refresh(); };
-async function fillToolLauncher(): Promise<void> {
-  const { createToolLauncher } = await loadToolLauncher();
-  toolLauncherCard = createToolLauncher({
+let toolLauncherFilling = false; async function fillToolLauncher(): Promise<void> {
+  if (toolLauncherFilling || toolLauncherCard) return; toolLauncherFilling = true;
+  const chunk = await loadToolLauncher().catch(() => null); toolLauncherFilling = false;
+  if (!chunk) { toolLauncherHost.replaceChildren(chunkFailureNote({ key: 'tools', what: 'Tools', retry: () => void fillToolLauncher() })); return; }
+  toolLauncherCard = chunk.createToolLauncher({
     getActions: () => ensureActionRegistry(),
     counts: () => ({
       measurements: viewerReady ? viewer.measure.getMeasurements().length : 0,
@@ -2459,8 +2446,7 @@ async function fillToolLauncher(): Promise<void> {
     disabledReason: () => (viewerReady && hasScan() ? null : 'Load a scan to use the tools.'),
     stateOf: (id) => (id === 'tool.clip' && clipPanel.enabled ? `On · ${clipPanel.mode === 'keep-inside' ? 'Keep inside' : 'Keep outside'}` : null),
   });
-  clipPanel.subscribe(() => toolLauncherCard?.refresh());
-  toolLauncherHost.append(toolLauncherCard.element);
+  clipPanel.subscribe(() => toolLauncherCard?.refresh()); toolLauncherHost.replaceChildren(toolLauncherCard.element);
 }
 
 // ── Scan-type routing ────────────────────────────────────────────────────────
@@ -2547,7 +2533,7 @@ let syncMobileSheet: (() => void) | null = null;
 // The desktop rail and its route (workspaceShell.ts), set once the lazy Viewer
 // resolves. Presentation only: it changes which panel shows, never a tool.
 let workspaceShell: WorkspaceShell | null = null;
-const showWorkspaceMode = (m: WorkspaceMode): void => workspaceShell?.showMode(m);
+const showWorkspaceMode = (m: WorkspaceMode): void => { workspaceShell?.showMode(m); workspaceShell?.revealRail(); };
 
 // Set once the desktop left-panel column (and mobile sheet) are built (full app
 // only). Lets the lazily-mounted Analyse panel insert itself into the DOM in its
@@ -2792,7 +2778,7 @@ void viewerLoaded.then(() => {
     stage.overlay.append(viewer.inspectElements.overlay);
     stage.overlay.append(viewer.inspectElements.hint);
     stage.overlay.append(viewer.annotateElements.overlay);
-    stage.overlay.append(viewer.annotateElements.hint); void loadActiveToolStatus().then((m) => stage.addTeardown(m.wireActiveToolIndicator({ viewer: () => viewer, clipEnabled: () => clipPanel.enabled, mount: stage.overlay, watch: [viewer.measureElements.hint, viewer.inspectElements.hint, viewer.annotateElements.hint] }).dispose)).catch((err: unknown) => { if (debug) console.warn('[activeToolStatus] chunk load failed', err); });
+    stage.overlay.append(viewer.annotateElements.hint); void loadActiveToolStatus().then((m) => { const pill = m.wireActiveToolIndicator({ viewer: () => viewer, clipEnabled: () => clipPanel.enabled, lasso: () => (lassoVolumeTool.enabled ? { key: 'lasso', label: 'Lasso volume: draw a shape', cancel: () => { disarmLasso(lassoArming, { clearHighlight: true }); } } : reclassifyUi?.armed() ? { key: 'reclassify', label: 'Reclassifying: draw around points', cancel: () => { reclassifyUi?.disarm(); } } : null), mount: stage.overlay, watch: [viewer.measureElements.hint, viewer.inspectElements.hint, viewer.annotateElements.hint] }); refreshActivePill = pill.refresh; stage.addTeardown(pill.dispose); }).catch((err: unknown) => { if (debug) console.warn('[activeToolStatus] chunk load failed', err); });
     // Right context rail — one coherent column: the Streaming card (only while a
     // COPC streams) above the Inspector, in normal vertical flow rather than a
     // fixed 50vh absolute split. The rail owns the collapse + wheel containment.
@@ -2822,10 +2808,10 @@ void viewerLoaded.then(() => {
         analysePanel: () => analysePanel, objectPanel: () => objectPanel,
         results: { viewer, identity: runtime.layerIdentity, scans, terrainRunner },
         measurePanel: () => measureMount.panel, setMeasureMountElement: (fn) => measureMount.setMountElement(fn),
-        hasScan, crsService,
-        onModeChange: refreshToolLauncher, onRoute: (r) => clipPanel.setPageOpen(r.mode === 'work' && r.page === 'clip'),
+        hasScan, crsService, toast: showLassoToast,
+        onModeChange: refreshToolLauncher, onRoute: (r) => { clipPanel.setPageOpen(r.mode === 'work' && r.page === 'clip'); disarmReclassifyOffPage(r, reclassifyUi, showLassoToast); },
     });
-    void fillToolLauncher().catch((err: unknown) => { if (debug) console.warn('[toolLauncher] chunk load failed', err); }); // fills its host when the chunk lands
+    void fillToolLauncher(); // fills its host when the chunk lands
     workspaceShell = shell;
     phoneSheet = shell.mobileSheet;
     syncMobileSheet = shell.applyMobileSheet;
@@ -2842,14 +2828,14 @@ void viewerLoaded.then(() => {
     // populates the dispatch table's `globalActions` slot (null until now, so
     // embed leaves these keys unbound). A tool shortcut needs a loaded scan and
     // is inert behind any open dialog, Help included.
-    const toolsReady = (): boolean => hasScan() && !dialogOpen();
+    const toolsReady = (): boolean => { if (!hasScan() && !dialogOpen()) showLassoToast('Open a scan first.'); return hasScan() && !dialogOpen(); };
     const editHistory: EditHistoryDeps = { viewer: () => viewer, activeId: () => scans.activeId, blocked: () => helpOverlay.isOpen(), refreshClassUi: () => reclassifyUi?.refresh(), toast: showLassoToast };
     globalActionHandlers = {
       onAnnotate: () => { if (toolsReady()) runTool('annotate'); },
       onMeasure: () => { if (toolsReady()) runTool('measure'); },
       onInspect: () => { if (toolsReady()) runTool('inspect'); },
       onSaveView: () => {
-        if (toolsReady()) saveCurrentView();
+        if (!dialogOpen()) saveViewWithNotice({ hasScan: () => viewerReady && hasScan(), saveCurrentView, bookmarks, showLassoToast });
       },
       onDeleteSelection: () => {
         const id = viewer.annotate.selectedId;
@@ -2911,10 +2897,10 @@ if (embed) {
 }
 
 // `?autoload=sample:<id>` — open a built-in sample on startup (embed demos).
-if (embedConfig.autoloadSample) {
-  const sample = SAMPLES.find((s) => s.id === embedConfig.autoloadSample);
-  if (sample) void loadFromUrl(sample.url, sample.name);
-}
+const autoloadEntry = SAMPLES.find((s) => s.id === embedConfig.autoloadSample);
+if (autoloadEntry) void loadFromUrl(autoloadEntry.url, autoloadEntry.name);
+const autoloadRefused = autoloadEntry ? null : autoloadRefusal(window.location.search, SAMPLES.map((s) => s.id));
+if (autoloadRefused) dropZone.setError(autoloadRefused);
 
 // `?copc=<url>` deep link (COPC / EPT / 3D Tiles). The lazy gate validates it
 // and asks the user to confirm the host before any fetch; Cancel stays idle.
@@ -3255,7 +3241,7 @@ function persistPrefs(): void {
  *  Runs before `applyPrefs`, so a saved Eye Dome Lighting / antialiasing
  *  preference still wins; the control writes prefs back on every user change. */
 function mountPerformanceControl(): void {
-  mountQualityControl(stage, {
+  mountQualityControl(stage, { toast: { show: (m, a) => appToast().show(m, a) },
     getViewer: () => viewer, getStreamingQuality: () => streamingUi.quality(),
     device: () => ({ tier: deviceCapsValue.tier, isMobile: isPhone(), backend: viewer.activeBackend() }),
     onStreamingQuality: (q) => streamingUi.noteQualityFromControl(q),
@@ -3309,7 +3295,7 @@ function refreshAnnotationPanel(): void {
 
 /** Whether a scan is currently loaded — gates the tool keyboard shortcuts. */
 function hasScan(): boolean {
-  return viewer.clouds().length > 0 || viewer.hasStreamingCloud;
+  return viewerReady && (viewer.clouds().length > 0 || viewer.hasStreamingCloud);
 }
 
 /**
@@ -3403,14 +3389,15 @@ function applyShareState(state: ShareState, cloud: PointCloud): void {
  * only while the requested scan stays active (else refuses, never splices).
  */
 async function exportSession(): Promise<boolean> {
-  return writeScanScopedExport({
+  const refused = sessionSaveRefusal(viewerReady ? { hasScan: !!scans.activeExportTargetId(), heldWork: !!heldSessionWork(), savedViews: viewBookmarks.savedViews.length } : { hasScan: false, heldWork: false, savedViews: 0 }); if (refused) { showLassoToast(refused); return false; }
+  const withheld: string[] = []; let written: ReturnType<typeof sessionSavedWorkFromText> | null = null; return writeScanScopedExport({ // work left out of the file is said on the saved notice: a second toast would replace it
     requestedScanId: scans.activeExportTargetId(), // streaming leaves activeId null
     activeScanId: () => scans.activeExportTargetId(),
     refuse: () => showLassoToast(SESSION_EXPORT_SCAN_CHANGED_REFUSAL),
     // Both lazy imports resolve before any state is read; their exports spread into one deps object.
     load: async () => ({ ...(await loadSession()), ...(await loadExportProvenance()), ...(await loadSessionSnapshot()) }),
-    write: (json) => { downloadText(`${baseName(viewer.streamingCloud?.name ?? scans.activeCloud()?.name ?? 'openlidarviewer')}.olvsession`, json); showLassoToast(sessionSavedNotice(discardableWork(), editedStaticLayerNames(viewer).length > 0)); },
-    serialize: (m) => m.serializeActiveSession(m, { ...sessionSnapshotDeps, onWithheld: showLassoToast }),
+    write: (json) => { downloadText(`${baseName(viewer.streamingCloud?.name ?? scans.activeCloud()?.name ?? 'openlidarviewer')}.olvsession`, json); showLassoToast(sessionSavedNotice(written ?? sessionSavedWorkFromText(json), editedStaticLayerNames(viewer).length > 0, withheld.join(' '))); },
+    serialize: (m) => m.serializeActiveSession(m, { ...sessionSnapshotDeps, onWithheld: (sentence) => { withheld.push(sentence); }, onWritten: (w) => { written = w; } }),
   });
 }
 
@@ -3698,7 +3685,7 @@ async function handleRemoteCopc(url: string, signal?: AbortSignal): Promise<void
       // Transactional: a failed open left the prior scene untouched, so keep it. With no stream
       // behind it only the panel comes down (a URL refused before the Viewer exists has none).
       if (viewer && !viewer.hasStreamingCloud) abandonStreamingOpen();
-      throw new Error(message, { cause: err }); // the Stage field shows it inline with Retry
+      throw new UrlFieldMessage(message, { cause: err }); // the Stage field shows it inline with Retry
     }
   } finally {
     unlinkAbort();
@@ -3908,7 +3895,7 @@ function retireSceneState(): void {
   visuals.resetStreamingFilterSeed();
 }
 function resetToEmptyState(): void {
-  viewer.setMeasureMode(false);
+  lastCloudName = 'contours'; viewer.setMeasureMode(false);
   viewer.setInspectMode(false); viewer.setAnnotateMode(false);
   viewer.clearMeasurements(); clearPendingSessionRestore();
   // No scan open → take the compass down (nothing to orient).
@@ -4027,8 +4014,7 @@ function compareLoadedLayers(): void {
   inspector.setDifferenceAvailable(false);
   inspector.compareDifference.begin(ids, a, b);
   void (async () => {
-    // Load the change-detection code on demand, then yield a frame so the
-    // "working" line paints before the synchronous ground-filter compute.
+    try { // the load is inside, so a failed chunk replaces the working line; a frame's yield lets that line paint before the synchronous compute
     const [{ withheldEpochs }, { summarizeAlignment, buildRegistrationArtifact, summarizeRegistration }, { summarizeChange }, { packageChangeRaster, ChangeRasterRefusal }, { runEpochComparison }] =
       await Promise.all([
         loadCompareEpochs(),
@@ -4039,7 +4025,6 @@ function compareLoadedLayers(): void {
       ]);
     await new Promise((resolve) => setTimeout(resolve, 16));
     if (!current()) return;
-    try {
       const { ctxA, comparable, reason, frameRefusal, frames, beforeCloud, afterCloud, lines, span } = withheldEpochs(prepareEpochFrames(crsService, a, b), a, b);
       if (!comparable) {
         inspector.setCompareResult(
@@ -4084,13 +4069,13 @@ function compareLoadedLayers(): void {
       }
       inspector.setDifferenceAvailable(true);
     } catch (err) {
-      if (current()) inspector.setCompareResult([`Compare failed: ${err instanceof Error ? err.message : String(err)}`]);
+      if (current()) inspector.setCompareResult([classifyLoadError(err) === 'stale-chunk' ? chunkFailureText('Compare') : `Compare failed: ${err instanceof Error ? err.message : String(err)}`]);
     }
   })();
 }
 
 
-function activateLayer(id: string): void { if (scans.activeId === id) { return; } scans.setActive(id); const c = scans.activeCloud(); if (c) refreshActiveLayerSurfaces({ refreshCrs: (cl) => crsCoordinator.refreshCrsForStaticCloud(cl), refreshProvenance: (cl, layerId) => inspectorCards.refreshProvenance(cl, layerId), refreshDatasetIntelligence: (cl) => inspectorCards.refreshDatasetIntelligenceFromStaticCloud(cl), refreshClassLegend, syncColorMode: syncColorModeForActive, setDetail: (shown, total) => inspector.setDetail(shown, total), setReport: (cl) => inspector.setReport(runModules(cl, currentClassScope(cl))) }, c, id); } // a static layer became the active scan: its CRS (so the measure units), cards, class legend, colour chips, point count and Scan Report
+function activateLayer(id: string): void { if (scans.activeId === id) { return; } scans.setActive(id); const c = scans.activeCloud(); if (c) carryClassFilter(classLegendPanel, () => refreshActiveLayerSurfaces({ refreshCrs: (cl) => crsCoordinator.refreshCrsForStaticCloud(cl), refreshProvenance: (cl, layerId) => inspectorCards.refreshProvenance(cl, layerId), refreshDatasetIntelligence: (cl) => inspectorCards.refreshDatasetIntelligenceFromStaticCloud(cl), refreshClassLegend, syncColorMode: syncColorModeForActive, setDetail: (shown, total) => inspector.setDetail(shown, total), setReport: (cl) => inspector.setReport(runModules(cl, currentClassScope(cl))) }, c, id), showLassoToast); } // a static layer became the active scan: its CRS (so the measure units), cards, class legend, colour chips, point count and Scan Report
 function removeCloud(id: string): void {
   const next = survivorAfterRemoval(viewer.clouds(), id, scans.activeId); viewer.removeCloud(id); // removing the active layer promotes a survivor
   inspector.removeCloud(id);
@@ -4150,12 +4135,13 @@ function discardableWork() {
 
 /** Save the current view as a PNG (`app/snapshotAction.ts`, a lazy chunk). */
 async function saveSnapshot(): Promise<void> {
+  const refused = snapshotRefusal(!!scans.activeExportTargetId()); if (refused) { showLassoToast(refused); return; }
   const onError = (message: string): void => dropZone.setError(message);
   const deps = {
     viewer,
     classScopeStamp: currentClassScopeStamp,
     referencePlaneNote: () => inspector.referencePlane?.figureNote() ?? null,
-    onError, toast: showLassoToast, baseName: () => baseName(viewer.streamingCloud?.name ?? scans.activeCloud()?.name ?? lastCloudName),
+    onError, toast: showLassoToast, baseName: () => baseName(viewer.streamingCloud?.name ?? scans.activeCloud()?.name ?? 'openlidarviewer'),
   };
   await loadSnapshotAction().then((m) => m.saveSnapshot(deps), () => onError('Could not save the view'));
 }

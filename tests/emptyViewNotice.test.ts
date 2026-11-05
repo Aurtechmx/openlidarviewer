@@ -119,6 +119,32 @@ describe('mountEmptyView', () => {
   });
 });
 
+describe('every scan hidden', () => {
+  it('says so, with a way back, while a stream or a shown scan gets no such card', async () => {
+    const { mountEmptyView } = await import('../src/app/emptyViewMount');
+    const showAll = vi.fn();
+    const mount = mountEmptyView({
+      clip: { enabled: false, clear: () => {} },
+      classes: { isFiltered: () => false, showAll: () => {} },
+      ranges: { elevation: () => false, intensity: () => false, clear: () => {} },
+      scans: { showAll },
+    });
+    let hidden = true;
+    let frame = (): void => {};
+    mount.watch({ anyPointShown: () => null, clouds: () => ['a'], isCloudVisible: () => !hidden, hasStreamingCloud: false, onDrawnFrame: (l) => { frame = l; return () => {}; } });
+    expect(mount.notice.shown).toBe(true);
+    const root = mount.notice.element as unknown as FakeEl;
+    expect(root.textContent).toContain('No points are drawn: every scan is hidden.');
+    const show = root.querySelectorAll('button').find((b) => b.textContent === 'Show scans')!;
+    expect(show.classList.contains('olv-hidden')).toBe(false);
+    show.click();
+    expect(showAll).toHaveBeenCalledTimes(1);
+    hidden = false;
+    frame();
+    expect(mount.notice.shown).toBe(false);
+  });
+});
+
 describe('ShownPointsMemo', () => {
   it('walks the points only when the state or a layer changes', () => {
     const memo = new ShownPointsMemo();

@@ -201,6 +201,7 @@ export async function runBatch(
       results.push({ source: input.name, report, file: finalFile, sidecar });
       emit(file ? 'done' : 'error');
     } catch (err) {
+      if (signal?.aborted) break; // the user stopped the run; the file is not at fault
       const detail = err instanceof Error ? err.message : String(err);
       results.push({
         source: input.name,

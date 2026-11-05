@@ -866,12 +866,12 @@ function verticalEpsgFromName(name: string): number | undefined {
 
 /** The projected-CRS keywords (WKT1 `PROJCS`, WKT2 `PROJCRS`). */
 function isProjectedKeyword(k: string): boolean {
-  return k === 'PROJCS' || k === 'PROJCRS';
+  return k === 'PROJCS' || k === 'PROJCRS' || k === 'PROJECTEDCRS';
 }
 
 /** The geographic-CRS keywords (WKT1 `GEOGCS`, WKT2 `GEOGCRS`). */
 function isGeographicKeyword(k: string): boolean {
-  return k === 'GEOGCS' || k === 'GEOGCRS';
+  return k === 'GEOGCS' || k === 'GEOGCRS' || k === 'GEOGRAPHICCRS';
 }
 
 /**

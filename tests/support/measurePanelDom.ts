@@ -138,8 +138,19 @@ export class FakeEl {
     else this.children.splice(at, 0, ...nodes);
     return nodes[0] as unknown as FakeEl;
   }
+  /** Markup assigned as `innerHTML` is kept as a string, so it travels as one
+   * text-like node: a swap of such nodes carries the markup to the new parent. */
+  get childNodes(): FakeEl[] {
+    if (this.children.length === 0 && this.innerHTML) {
+      const t = new FakeEl('#text');
+      t.innerHTML = this.innerHTML;
+      return [t];
+    }
+    return this.children;
+  }
   replaceChildren(...kids: unknown[]): void {
     this.children.length = 0;
+    this.innerHTML = kids.map((k) => (k instanceof FakeEl ? k.innerHTML : '')).join('');
     for (const k of kids) this.children.push(...this._adopt(k));
   }
   /** DOM's `Element.remove`: detach this node from its parent, if any. */

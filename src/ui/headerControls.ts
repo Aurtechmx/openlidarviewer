@@ -7,6 +7,7 @@
  * dial. All mount left of the GitHub link, and all are no-ops in embed mode,
  * where there is no top bar to mount into.
  */
+import type { LazyLoadToast } from '../app/lazySurfaceLoad';
 import type { PrecisionDeps } from '../app/precisionCheck';
 import { ThemeToggle } from './ThemeToggle';
 import { QualityControl } from './qualityControl';
@@ -46,6 +47,8 @@ export function mountHeaderControls(
 
 /** What the shell binds the performance control to. */
 export interface QualityControlDeps {
+  /** Where a failed panel chunk is reported. */
+  toast?: LazyLoadToast;
   /** The renderer. A thunk because the Viewer arrives from a lazy chunk. */
   getViewer: () => QualityRenderHost;
   /** The device facts the automatic position is derived from. */
@@ -88,6 +91,7 @@ export function mountQualityControl(
       if (userInitiated) deps.onUserChange();
     },
     onPersist: writeQualityPreference,
+    ...(deps.toast ? { toast: deps.toast } : {}),
     ...(deps.precision ? { precision: deps.precision } : {}),
   });
   if (host.fillQualitySlot) host.fillQualitySlot(control.element);

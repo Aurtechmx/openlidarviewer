@@ -35,7 +35,7 @@ describe('presentStockpile', () => {
     // "± 41" alone reads as a hard bound; the presenter must say it is one
     // standard deviation.
     const v = presentStockpile(result());
-    expect(v.headline).toBe('1,254 m³ ± 41 m³ (model band)');
+    expect(v.headline).toBe('1,254.0 m³ ± 41 m³ (model band)');
     expect(v.relative).toBe('±3.3%');
     expect(v.confidence).toBe('medium');
     expect(v.confidenceLabel).toBe('Uneven sampling');
@@ -72,7 +72,7 @@ describe('presentStockpile', () => {
     const unknown = presentStockpile(result({ densityUnitKnown: false }));
     expect(unknown.unitVerified).toBe(false);
     expect(stockpileToastLine(unknown)).toBe(
-      'Stockpile: 1,254 m³ ± 41 m³ (model band) (±3.3%) · Uneven sampling · units unverified (assumes metres)',
+      'Stockpile: 1,254.0 m³ ± 41 m³ (model band) (±3.3%) · Uneven sampling · units unverified (assumes metres)',
     );
   });
 
@@ -80,7 +80,7 @@ describe('presentStockpile', () => {
     // Same native figures, but in feet → volume in m³ is value × 0.3048³.
     const v = presentStockpile(result({ volume: 1000, sigma: 0 }), { lin: 0.3048 });
     // 1000 ft³ ≈ 28 m³.
-    expect(v.headline).toBe('28 m³ ± 0 m³ (model band)');
+    expect(v.headline).toBe('28.317 m³ ± 0 m³ (model band)');
   });
 
   test('explicit base reads "(set)", not "(lowest ground)"', () => {
@@ -94,7 +94,7 @@ describe('presentStockpile', () => {
 
   test('toast line is a single readable summary', () => {
     expect(stockpileToastLine(presentStockpile(result()))).toBe(
-      'Stockpile: 1,254 m³ ± 41 m³ (model band) (±3.3%) · Uneven sampling',
+      'Stockpile: 1,254.0 m³ ± 41 m³ (model band) (±3.3%) · Uneven sampling',
     );
   });
 
@@ -145,7 +145,7 @@ describe('presentStockpile — compound CRS vertical factor', () => {
     const v = presentStockpile(result(), { lin: 1, vert: US_FOOT });
     const row = (label: string) => v.rows.find((r) => r.label === label)?.value ?? '';
     expect(row('Surface spread term')).toContain('5'); // 18 × 0.3048 = 5.49
-    expect(row('Base-plane term')).toContain('8'); // 25 × 0.3048 = 7.62
+    expect(row('Base-plane term')).toContain('7.6'); // 25 × 0.3048 = 7.62
   });
 });
 
@@ -271,7 +271,7 @@ describe('stockpileAreaGridToastLine', () => {
   test('a measured line names the state, the support and the method', () => {
     const pts = Float32Array.from(prism(3, 0.5, 0.5));
     const line = stockpileAreaGridToastLine(presentStockpileAreaGrid(RECT, pts, base, complete, { elevationDatum: 0 }));
-    expect(line).toMatch(/^Stockpile: 600 m³ · exploratory volume preview · 100% footprint support · 0% interpolated · area-weighted grid/);
+    expect(line).toMatch(/^Stockpile: 600.00 m³ · exploratory volume preview · 100% footprint support · 0% interpolated · area-weighted grid/);
     expect(line).toMatch(/incomplete model/);
     expect(line).toMatch(/base 0\.00 m \(lowest ground, ±0\.05 m, not in the term\)/);
     expect(line).not.toMatch(/1σ|model band/);
@@ -290,7 +290,7 @@ describe('stockpileAreaGridToastLine', () => {
         streaming: true,
       }),
     );
-    expect(line).toMatch(/600 m³ · PREVIEW \(source is streaming and not fully resident\)/);
+    expect(line).toMatch(/600.00 m³ · PREVIEW \(source is streaming and not fully resident\)/);
   });
   test('a withheld result shows no number', () => {
     const half = Float32Array.from(prism(3, 0.5, 0.5, 0, 9));
@@ -311,7 +311,7 @@ describe('stockpileToastSuffix (area-grid)', () => {
   test('a complete prism yields a measured suffix over the lowest-ground base', () => {
     const pts = Float32Array.from([...prism(3, 0.5, 0.5), ...prism(0, 0.5, 0.5)]);
     const suffix = stockpileToastSuffix(RECT, pts);
-    expect(suffix).toMatch(/^ · Stockpile: \d[\d,]* m³ · exploratory volume preview ·/);
+    expect(suffix).toMatch(/^ · Stockpile: \d[\d,.]* m³ · exploratory volume preview ·/);
     expect(suffix).not.toMatch(/MEASURED/);
   });
   test('a reduced source or a strided walk reads PREVIEW (display sample)', () => {

@@ -56,6 +56,7 @@
  */
 
 import { describe, it, expect } from 'vitest';
+import { formatVolumeNumber } from '../src/render/measure/types';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { PointCloud } from '../src/model/PointCloud';
@@ -367,7 +368,8 @@ function legacyConfidence(n: number): 'high' | 'medium' | 'low' {
 }
 
 /** The integer the toast prints for a volume, e.g. "1,254". */
-const toastInt = (v: number): string => Math.round(v).toLocaleString('en-US');
+// The toast prints five significant figures, as every displayed volume does.
+const toastInt = (v: number): string => formatVolumeNumber(v);
 
 // ── truth by quadrature over a convex hull ────────────────────────────────
 

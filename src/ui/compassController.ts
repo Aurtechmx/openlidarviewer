@@ -87,6 +87,8 @@ export interface CompassControllerOptions {
   loadCube?: () => Promise<(opts: ViewCubeOptions) => ViewCubeHandle>;
   /** Defaults to `window` / `document` / `localStorage`. */
   platform?: CompassPlatform;
+  /** The cube's chunk failed; `explicit` when the user just turned it on. */
+  onLoadFailed?: (explicit: boolean) => void;
   /**
    * Whether the active scan's orientation is geographically known (a projected
    * or geographic CRS). Drives the rose labels: cardinals when true, truthful
@@ -161,7 +163,7 @@ export function createCompassController(opts: CompassControllerOptions): Compass
   let handle: ViewCubeHandle | null = null;
   let unsubscribe: (() => void) | null = null;
 
-  function start(): void {
+  function start(explicit = false): void {
     if (!enabled || handle || !viewer) return;
     // Nothing to orient until a scan is open — don't float the compass over the
     // empty drop state.
@@ -191,7 +193,10 @@ export function createCompassController(opts: CompassControllerOptions): Compass
     })
       // Additive HUD: a chunk-load failure must not surface as an unhandled
       // rejection (the caller is synchronous and can't catch this promise).
-      .catch((err) => console.warn('[compass] view-cube chunk failed to load', err));
+      .catch((err) => {
+        console.warn('[compass] view-cube chunk failed to load', err);
+        opts.onLoadFailed?.(explicit);
+      });
   }
 
   function stop(): void {
@@ -214,7 +219,8 @@ export function createCompassController(opts: CompassControllerOptions): Compass
     setEnabled(on: boolean): void {
       enabled = on;
       platform.writePref(on ? 'on' : 'off');
-      refresh();
+      if (on && viewer && hasScan(viewer)) start(true);
+      else refresh();
     },
   };
 }

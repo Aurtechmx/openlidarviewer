@@ -7,6 +7,7 @@
  * prompt carries the existing hold-Space sentence while a modal tool is armed.
  */
 
+import { readFileSync } from 'node:fs';
 import { describe, it, expect, beforeAll, beforeEach } from 'vitest';
 import { FakeEl, installNavBarDom } from './helpers/navBarDom';
 import { STANDARD_VIEW_ORDER } from '../src/render/camera/cameraPresets';
@@ -129,5 +130,23 @@ describe('guidance', () => {
     const { readFileSync } = await import('node:fs');
     const help = readFileSync(new URL('../src/app/helpCatalog.ts', import.meta.url), 'utf8');
     expect(help).toContain('Hold Space while a tool is active to rotate or pan, then release to resume.');
+  });
+});
+
+describe('More over the first-use hint', () => {
+  it('opening More clears the hint that would cover its buttons', async () => {
+    const { bar } = await navbar();
+    bar.flashFirstUseHint();
+    const hint = (bar as unknown as { touchHint: FakeEl }).touchHint;
+    expect(hint.classList.contains('olv-first-hint')).toBe(true);
+    bar.setMoreOpen(true);
+    expect(hint.classList.contains('olv-first-hint')).toBe(false);
+    expect(hint.classList.contains('olv-visible')).toBe(false);
+  });
+
+  it('lifts a toast above the open menu, and back when it closes', () => {
+    const src = readFileSync(new URL('../src/ui/NavBar.ts', import.meta.url), 'utf8');
+    expect(src).toMatch(/this\._moreOpen \? this\._moreMenu\.getBoundingClientRect\(\)/);
+    expect(src).toMatch(/_publishNavClear\?\.\(\)/);
   });
 });

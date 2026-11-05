@@ -79,6 +79,14 @@ export function integrableClouds<T extends IntegrableEntry>(entries: Iterable<T>
   );
 }
 
+/** Why a profile has no chart when several scans are shown and none can be merged; null otherwise. */
+export function sharedDatumRefusal<T extends IntegrableEntry>(entries: Iterable<T>): string | null {
+  const all = [...entries];
+  const shown = all.filter((e) => e.mesh.visible && !e.locked);
+  if (shown.length < 2 || integrableClouds(all).length > 0) return null;
+  return 'No chart: the visible scans have no proven shared vertical datum. Hide all but one, then draw the profile again.';
+}
+
 /**
  * Whether an open streaming source may be merged into a combined estimator.
  *

@@ -45,6 +45,8 @@
    tier uses. Above 1100px nothing here applies and the dock is unchanged. */
 @media (max-width: 1100px) and (min-width: 768px) {
   .olv-dock .olv-tool-more { display: inline-flex; justify-content: center; }
+  /* The unfolded row is wider than this tier: wrap it upward so ••• and Close stay on screen. */
+  .olv-dock.olv-dock-more-open { flex-wrap: wrap; max-width: calc(100vw - 32px); }
   .olv-dock .olv-tool-snapshot,
   .olv-dock .olv-tool-share,
   .olv-dock .olv-tool-probe { display: none; }

@@ -21,6 +21,10 @@ export interface ReferencePlaneDeps extends WorkplaneMountDeps {
   readonly toast: (message: string) => void;
   /** The CRS broadcast: null when the scan closes, which drops the plane. */
   readonly crs: { subscribe(listener: (resolved: unknown) => void): () => void };
+  /** Show the section, for a press made away from it (B or the palette). */
+  readonly reveal?: () => void;
+  /** False with no scan open: the toggle then refuses. */
+  readonly hasScan?: () => boolean;
 }
 
 export interface ReferencePlaneHandle {
@@ -84,7 +88,7 @@ export function createReferencePlaneSection(deps: ReferencePlaneDeps): Reference
   // The last press wins, even when several arrive before the chunk has loaded:
   // the button shows the intent at once, and only the latest intent is applied.
   let wanted = false;
-  const setEnabled = async (on: boolean): Promise<void> => {
+  const setEnabled = async (on: boolean, away = false): Promise<void> => {
     touched = true;
     wanted = on;
     mirror(on);
@@ -92,8 +96,11 @@ export function createReferencePlaneSection(deps: ReferencePlaneDeps): Reference
       const m = await ensure();
       if (wanted !== on) return; // a later press superseded this one
       m.controller.setEnabled(on);
-      // What to do next (set an elevation) is in the panel's status line.
-      deps.toast(on ? 'Reference plane on.' : 'Reference plane off.');
+      // With no elevation nothing draws yet, so the message names the next step.
+      const v = on ? m.controller.view() : null;
+      const placed = !v || v.elevation !== null || v.settings.orientation === 'three-point';
+      deps.toast(!on ? 'Reference plane off.' : placed ? 'Reference plane on.' : 'Reference plane on. Set an elevation to place it.');
+      if (!placed && away) deps.reveal?.();
     } catch {
       wanted = false;
       mirror(false);
@@ -120,8 +127,11 @@ export function createReferencePlaneSection(deps: ReferencePlaneDeps): Reference
   return {
     element,
     isEnabled: () => enabled,
-    setEnabled,
-    toggle: () => void setEnabled(!enabled),
+    setEnabled: (on) => setEnabled(on),
+    toggle: () => {
+      if (!enabled && deps.hasScan?.() === false) { deps.toast('Open a scan first to use the reference plane.'); return; }
+      void setEnabled(!enabled, true);
+    },
     open: async () => {
       await ensure().catch(() => undefined);
     },

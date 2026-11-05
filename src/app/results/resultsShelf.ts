@@ -148,7 +148,7 @@ export function createResultsShelf(deps: ResultsShelfDeps): ResultsShelf {
       wb.addEventListener('click', () => {
         live.textContent = openWorkbench(id)
           ? `Opening ${e.title} in the Profile Workbench.`
-          : `${e.title} cannot open in the Profile Workbench now.`;
+          : `${e.title} cannot open in the Profile Workbench: it has no chart. Its row on the Measure page says why.`;
       });
       actions.append(wb);
     }

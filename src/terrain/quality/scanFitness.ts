@@ -154,6 +154,8 @@ export interface FitnessDimension {
   readonly key: FitnessKey;
   readonly label: string;
   readonly tone: FitnessTone;
+  /** True when the figure is stated but not graded, so it neither limits nor lifts the overall tone. */
+  readonly ungraded?: boolean;
   /** One-line plain-language summary with a benchmark where possible. */
   readonly summary: string;
   /**
@@ -318,6 +320,10 @@ function densityDimension(
   if (d >= DENSITY_READY) tone = 'ready';
   else if (d >= DENSITY_OKAY) tone = 'okay';
   else tone = 'review';
+  // A figure from a sample is stated, not graded: the QL reference would judge
+  // the points read, not the file. The row keeps a neutral tone and stays out
+  // of the overall fold and the limiter.
+  if (onSample) tone = 'okay';
   const v = densityRound(d);
   // "reference" (not "floor met"/"quality level") — this is ground-return
   // density measured against a pulse-density figure, not a QL determination.
@@ -346,7 +352,8 @@ function densityDimension(
     summary += densityRegularity(d, median);
     hint = `${summary} ${DENSITY_BASIS_NOTE}`;
   }
-  return { key: 'density', label: 'Ground detail', tone, summary, hint };
+  return { ...(onSample ? { ungraded: true } : {}),
+    key: 'density', label: 'Ground detail', tone, summary, hint };
 }
 
 /** The accuracy row when the vertical scale did not resolve: neither a pass nor a fail. */
@@ -485,13 +492,13 @@ export function buildScanFitness(inp: FitnessInputs): ScanFitness {
     classificationDimension(inp.unclassifiedFraction, inp.hasGroundClass, inp.unclassifiedBasis),
     integrityDimension(inp),
   ];
-  const overallTone = dimensions.reduce<FitnessTone>((t, d) => worst(t, d.tone), 'ready');
+  const overallTone = dimensions.filter((d) => !d.ungraded).reduce<FitnessTone>((t, d) => worst(t, d.tone), 'ready');
 
   // The verdict leads with what the scan IS good for, then names the biggest
   // limitation — ranked by LIMITER_PRIORITY (not array order), and willing to be
   // negative: a verdict that is always positive is one users stop reading.
   const reviews = dimensions
-    .filter((d) => d.tone === 'review')
+    .filter((d) => d.tone === 'review' && !d.ungraded)
     .sort((a, b) => LIMITER_PRIORITY.indexOf(a.key) - LIMITER_PRIORITY.indexOf(b.key));
   const limiterPhrase: Record<FitnessKey, string> = {
     georeferencing: 'it isn’t placed in the real world (no map position or height datum)',
@@ -540,7 +547,9 @@ export function buildScanFitness(inp: FitnessInputs): ScanFitness {
   } else if (inp.status === 'Preview') {
     verdict = limiterClause ? `Preview only${limiterClause}.` : 'Preview — re-run on the full cloud for a settled grade.';
   } else if (reviews.length === 0) {
-    verdict = 'Ready for terrain products — coverage, density and hold-out residuals all pass.';
+    verdict = dimensions.some((d) => d.ungraded)
+      ? 'Ready for terrain products: coverage and hold-out residuals pass. Ground density is stated from a sample and is not graded.'
+      : 'Ready for terrain products — coverage, density and hold-out residuals all pass.';
   } else {
     // A 'Good' gate with a soft caveat on one axis — positive, but honest.
     verdict = `Usable, with caveats${limiterClause}.`;

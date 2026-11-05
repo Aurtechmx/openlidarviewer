@@ -314,8 +314,17 @@ export function dtmMeasuredParameterSet(grid?: DtmGridRule | null): string {
  * The grid rule of a DTM built by analyseContours. Its grid always comes from
  * the ground filter, which places the origin at the data minimum.
  */
-export function liveDtmGridRule(dtm: { readonly cellSizeM: number } | null | undefined): DtmGridRule | undefined {
-  return dtm == null ? undefined : { cellSizeM: dtm.cellSizeM, origin: 'data-minimum' };
+export function liveDtmGridRule(
+  dtm: { readonly cellSizeM: number; readonly cellUnitToMetres?: number | null } | null | undefined,
+): DtmGridRule | undefined {
+  if (dtm == null) return undefined;
+  // `cellSizeM` is in the scan's horizontal unit despite its name, and the
+  // studied range is in metres. A grid with no resolved metre scale (geographic
+  // cells, an unverified unit) has no metre cell size to judge, so it is not
+  // covered. A grid that does not say (an older cached core) reads as metres.
+  const f = dtm.cellUnitToMetres;
+  if (f === null) return { cellSizeM: Number.NaN, origin: 'other' };
+  return { cellSizeM: dtm.cellSizeM * (f ?? 1), origin: 'data-minimum' };
 }
 
 /** The parameter set an artifact was built with: explicit, by DTM cell class, or the shipped product's. */

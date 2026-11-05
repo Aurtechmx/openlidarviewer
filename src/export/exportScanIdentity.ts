@@ -88,11 +88,23 @@ const count = (n: number, noun: string): string => `${n} ${noun}${n === 1 ? '' :
  * The toast after every session save: what the file holds, that it holds no
  * points, and, when the scan carries class edits, that those are not in it.
  */
-export function sessionSavedNotice(work: SessionSavedWork, hasClassEdits: boolean): string {
+export function sessionSavedNotice(work: SessionSavedWork, hasClassEdits: boolean, withheld?: string | null): string {
   const saved =
     `Session saved: ${count(work.measurements, 'measurement')}, ${count(work.annotations, 'annotation')}, `
     + `${count(work.views, 'saved view')}. It holds no points; open it with the same scan file.`;
-  return hasClassEdits ? `${saved} ${SESSION_CLASS_EDITS_NOT_STORED}` : saved;
+  // Work left out of the file is said on the same toast: a second toast would replace this one.
+  return [saved, hasClassEdits ? SESSION_CLASS_EDITS_NOT_STORED : null, withheld || null].filter(Boolean).join(' ');
+}
+
+/** What a serialised session holds, counted from the text that is written. */
+export function sessionSavedWorkFromText(text: string): SessionSavedWork {
+  try {
+    const o = JSON.parse(text) as Record<string, unknown> | null;
+    const n = (key: string): number => (o && Array.isArray(o[key]) ? (o[key] as unknown[]).length : 0);
+    return { measurements: n('measurements'), annotations: n('annotations'), views: n('views') };
+  } catch {
+    return { measurements: 0, annotations: 0, views: 0 };
+  }
 }
 
 /**

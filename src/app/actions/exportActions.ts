@@ -5,7 +5,7 @@
  * export health check and the integrity-report verifier. The verifier chunk
  * loads on demand.
  */
-import type { Action } from '../../ui/actionRegistry';
+import { scanRequired, type Action } from '../../ui/actionRegistry';
 import { buildExportHealth, type ScanStoryInputs } from '../../intelligence/scanStory';
 import { renderExportHealthPanel } from '../../ui/scanStoryViews';
 import { openModal } from '../../ui/Modal';
@@ -34,6 +34,7 @@ export interface ExportActionDeps {
   buildCurrentStoryInputs: () => ScanStoryInputs;
   /** Where a failed verifier load shows, with a Try again action. */
   showLassoToast: LazyLoadToast['show'];
+  hasScan?: () => boolean;
 }
 
 /** A hidden file input for one pick; `cancel` and `change` both remove it. */
@@ -97,6 +98,7 @@ export function contributeExportActions(deps: ExportActionDeps): Action[] {
     },
     {
       id: 'tool.snapshot',
+      get unavailable() { return scanRequired(deps.hasScan); },
       title: actionTitle('tool.snapshot'),
       section: 'Export',
       hint: 'Write the current view to a PNG, with the scan and scale recorded on it.',
@@ -122,6 +124,7 @@ export function contributeExportActions(deps: ExportActionDeps): Action[] {
       hint: 'What is about to leave the app: scope, classification, CRS, datum, density, readiness.',
       keywords: ['export', 'health', 'check', 'hand-off', 'ready', 'before export'],
       run: () => {
+        if (deps.hasScan?.() === false) { deps.showLassoToast('No scan open. Open a scan to check it.'); return; }
         openModal({ title: 'Export health check', body: renderExportHealthPanel(buildExportHealth(deps.buildCurrentStoryInputs())) });
       },
     },

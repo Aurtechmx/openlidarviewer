@@ -702,6 +702,19 @@ const KEY_DISPLAY_BY_ID: ReadonlyMap<string, string> = new Map(
     .map((b) => [b.id, b.displayKeys as string]),
 );
 
+/**
+ * What already owns a key event, for a chord the recorder settings are offered:
+ * the same table and matcher as the dispatcher, so Shift and Alt variants count
+ * and the check cannot drift. Null when the key is free.
+ */
+export function workflowChordConflict(e: KeyEventLike): string | null {
+  for (const b of buildViewerKeyBindings(DISPLAY_META_DEPS)) {
+    if (b.id === 'workflow-recorder' || !b.match || !matchesKey(b.match, e)) continue;
+    return b.help ?? 'Another command uses it.';
+  }
+  return null;
+}
+
 /** The help chip a binding advertises, or `undefined` for an unknown id. */
 export function keyDisplayFor(id: string): string | undefined {
   return KEY_DISPLAY_BY_ID.get(id);

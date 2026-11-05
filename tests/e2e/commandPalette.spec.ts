@@ -168,7 +168,7 @@ test.describe('command palette keyboard navigation', () => {
     page,
   }) => {
     await openPalette(page);
-    await page.locator('.olv-palette-input').fill('frame');
+    await page.locator('.olv-palette-input').fill('Blue theme');
     await page.locator('.olv-palette-input').press('Enter');
     // Palette closes after firing.
     await expect(page.locator('.olv-palette')).toBeHidden();
@@ -178,8 +178,8 @@ test.describe('command palette keyboard navigation', () => {
     page,
   }) => {
     await openPalette(page);
-    await page.locator('.olv-palette-input').fill('Iso');
-    await page.locator('.olv-palette-row', { hasText: 'Iso view' }).click();
+    await page.locator('.olv-palette-input').fill('Blue theme');
+    await page.locator('.olv-palette-row', { hasText: 'Blue theme' }).click();
     await expect(page.locator('.olv-palette')).toBeHidden();
   });
 });
@@ -226,7 +226,7 @@ test.describe('command palette: action registry chunk failure', () => {
     // Mark this report's button, so the next report can be told apart from it.
     await page.locator(TRY_AGAIN).evaluate((b) => { (b as HTMLElement).dataset.seen = '1'; });
     await page.locator(TRY_AGAIN).click();
-    await expect(page.locator(`${TRY_AGAIN}:not([data-seen])`)).toHaveText('Try again', { timeout: 10_000 });
+    await expect(page.locator(`${TRY_AGAIN}:not([data-seen])`)).toHaveText('Reload…', { timeout: 10_000 });
     await expect(page.locator('.olv-palette')).toHaveCount(0);
   });
 

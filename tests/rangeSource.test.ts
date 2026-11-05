@@ -7,6 +7,8 @@ import {
 } from '../src/io/range/RangeSource';
 import { ArrayBufferRangeSource } from '../src/io/range/ArrayBufferRangeSource';
 import { HttpRangeSource } from '../src/io/range/HttpRangeSource';
+import { describeRemoteCopcError } from '../src/app/remoteSourceNaming';
+import { friendlyUrlError } from '../src/ui/Stage';
 
 // Default test options — disable retries and use a no-op sleep so failure
 // cases don't burn real wall time on the production backoff schedule.
@@ -204,7 +206,25 @@ test('HttpRangeSource.probe reports a CORS-aware transport error', async () => {
 test('HttpRangeSource.probe rejects a non-ok HTTP status', async () => {
   globalThis.fetch = (async () => new Response(null, { status: 404 })) as typeof fetch;
   const src = new HttpRangeSource('https://example.com/missing.copc.laz');
-  await expect(src.probe()).rejects.toMatchObject({ code: 'transport' });
+  await expect(src.probe()).rejects.toMatchObject({
+    code: 'http-status',
+    message: 'No file found at this URL. Check the path and try again.',
+  });
+});
+
+test.each([
+  [410, /No file found/],
+  [401, /refused access/],
+  [403, /refused access/],
+  [418, /status 418/],
+])('a %i probe names the status and does not blame CORS', async (status, text) => {
+  globalThis.fetch = (async () => new Response(null, { status })) as typeof fetch;
+  const url = 'https://example.com/missing.copc.laz';
+  const err = await new HttpRangeSource(url).probe().catch((e: unknown) => e);
+  expect((err as Error).message).toMatch(text);
+  const shown = describeRemoteCopcError(err, url);
+  expect(shown).not.toMatch(/CORS|cross-origin/i);
+  expect(friendlyUrlError(new Error(shown), url)).toBe(shown);
 });
 
 test('HttpRangeSource.readRange rejects an already-aborted signal', async () => {

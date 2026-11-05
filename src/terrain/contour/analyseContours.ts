@@ -72,7 +72,7 @@ import {
   horizontalCellMetresXY,
   METRES_PER_DEGREE,
   metresPerDegreeLatitude,
-  metresPerDegreeLongitude, assertGeographicLatitudeSupported,
+  metresPerDegreeLongitude, assertGeographicLatitudeSupported, gridUnitToMetres,
 } from '../ground/horizontalScale';
 import { alignedClasses, excludeNonGroundClasses, isNoiseClass, NOISE_CLASSES } from '../ground/classificationFilter';
 import { holdoutValidateDtm } from '../validate/holdoutRmse';
@@ -1122,7 +1122,7 @@ export function computeTerrainCore(
   // Single source of truth for the void-fill method: the README's provenance
   // reads this back off the result, so it can't drift from what actually ran.
   const interpolation: 'idw' | 'geodesic' = params.interpolation ?? LIVE_INTERPOLATION;
-  let dtm = built.dtm;
+  let dtm: DtmGrid = { ...built.dtm, cellUnitToMetres: gridUnitToMetres(params) };
   warnings.push(...dtm.warnings);
 
   // Elevation range over covered cells (drives gating + styling).

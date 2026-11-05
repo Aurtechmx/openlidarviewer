@@ -23,7 +23,7 @@ import { sourcePositions } from '../model/pointFrames';
 import { isSessionFile } from '../io/sessionFile';
 import { scanFactsFromStatic } from './sessionScanFacts';
 import { heldSessionWork, takePendingSessionRestore } from './pendingSessionRestore';
-export { clearPendingSessionRestore, heldSessionWork } from './pendingSessionRestore';
+export { clearPendingSessionRestore, heldSessionWork, sessionSaveRefusal, snapshotRefusal } from './pendingSessionRestore';
 import { rememberCloudFile } from '../io/sourceFiles';
 export { sourceDigestReady } from '../io/sourceFiles';
 import { detectCopc } from '../io/copc/copcDetect';
@@ -273,10 +273,14 @@ export async function openScan(file: File, deps: OpenScanDeps): Promise<void> {
   // finally — the session path has no cancel / progress affordance, so it does
   // not share the cloud path's dropzone setup below.
   if (isSessionFile(file.name)) {
+    deps.dropZone.setOpening(`Opening ${file.name}…`);
+    const op = deps.dropZone.operation;
     try {
       await deps.importSession(file);
     } finally {
       deps.setLoading(false);
+      // setError ends the operation, so a session error stays on screen.
+      if (deps.dropZone.operation === op) deps.dropZone.setProgress(null);
     }
     return;
   }

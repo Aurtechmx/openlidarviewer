@@ -5,7 +5,7 @@
  * Absent from the registry when the feature flag is off, not merely inert.
  */
 import type { Action } from '../../ui/actionRegistry';
-import { WORKFLOW_RECORDER_ENABLED, saveWorkflowWithToast, type WorkflowController } from '../../ui/WorkflowController';
+import { COUNTDOWN_CANCELLED, WORKFLOW_RECORDER_ENABLED, saveWorkflowWithToast, type WorkflowController } from '../../ui/WorkflowController';
 import type { WorkflowConfigPanel } from '../../ui/WorkflowConfigPanel';
 import type { WorkflowEvent } from '../../render/workflow/workflowRecorder';
 import { keyDisplayFor } from '../../ui/keyBindings';
@@ -18,6 +18,7 @@ export interface WorkflowActionDeps {
   dispatchWorkflowEvent: (event: WorkflowEvent) => void;
   ensureWorkflowConfigPanel: () => Promise<WorkflowConfigPanel>;
   showLassoToast: LazyLoadToast['show'];
+  hasScan?: () => boolean;
 }
 
 export function contributeWorkflowActions(deps: WorkflowActionDeps): Action[] {
@@ -53,6 +54,11 @@ export function contributeWorkflowActions(deps: WorkflowActionDeps): Action[] {
         'the same scan loaded on the other end.',
       keywords: ['export', 'finish', 'save'],
       run: () => {
+        if (deps.workflowController.countingDown) {
+          deps.workflowController.cancelCountdown();
+          deps.showLassoToast(COUNTDOWN_CANCELLED);
+          return;
+        }
         const workflow = deps.workflowController.stopRecording();
         // The same save the record shortcut uses: it reports saved or
         // cancelled once the picker or download has finished.
@@ -79,7 +85,19 @@ export function contributeWorkflowActions(deps: WorkflowActionDeps): Action[] {
           void (async () => {
             try {
               const workflow = await deps.workflowController.loadFromFile(file);
-              deps.workflowController.replay(workflow, deps.dispatchWorkflowEvent);
+              if (deps.hasScan?.() === false && workflow.events.some((e) => e.type !== 'theme')) {
+                deps.showLassoToast('Workflow · open the scan this workflow was recorded on, then replay it. Nothing was played.');
+                return;
+              }
+              const busy = deps.workflowController.state;
+              if (!deps.workflowController.replay(workflow, deps.dispatchWorkflowEvent)) {
+                deps.showLassoToast(busy === 'playing'
+                  ? 'Workflow · another replay is running, so this file did not play. Stop it from the badge, then try again.'
+                  : busy === 'recording'
+                    ? 'Workflow · still recording, so this file did not play. Stop the recording, then replay it.'
+                    : 'Workflow · a recording is about to start, so this file did not play. Press Stop on the badge, then try again.');
+                return;
+              }
               deps.showLassoToast(
                 `Workflow · playing ${workflow.events.length} event${workflow.events.length === 1 ? '' : 's'}.`,
               );

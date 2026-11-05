@@ -205,6 +205,23 @@ describe('openScan — the file router', () => {
     expect(calls.openLocalCopc).not.toHaveBeenCalled();
   });
 
+  it('shows an opening line for a session, and lets a session error stand', async () => {
+    const { deps, calls } = makeDeps();
+    let op = 7;
+    Object.defineProperty(deps.dropZone, 'operation', { get: () => op });
+    calls.importSession.mockImplementationOnce(async () => {
+      expect(calls.setOpening).toHaveBeenCalledWith('Opening survey.olvsession…');
+    });
+    await openScan(fakeFile('survey.olvsession'), deps);
+    expect(calls.setOpening).toHaveBeenCalledTimes(1);
+    expect(calls.setProgress).toHaveBeenCalledWith(null);
+    calls.setProgress.mockClear();
+    // setError ends the operation, so the error stays on screen.
+    calls.importSession.mockImplementationOnce(async () => { op = 8; });
+    await openScan(fakeFile('survey.olvsession'), deps);
+    expect(calls.setProgress).not.toHaveBeenCalled();
+  });
+
   it('refuses a second .olvsession while a load is in flight (no stacking)', async () => {
     const { deps, calls } = makeDeps({ loading: true });
     await openScan(fakeFile('survey.olvsession'), deps);

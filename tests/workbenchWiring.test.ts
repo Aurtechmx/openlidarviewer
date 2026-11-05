@@ -667,8 +667,8 @@ describe('the plot is redrawn whenever its box changes', () => {
     const canvas = new FakeCanvas();
     let notify = (): void => {};
     const rec = sectionHandle(canvas);
-    // A dock restored from a persisted `collapsed: true` has `display: none`
-    // on its body, so the canvas reads 0x0 at the moment the section lands.
+    // A dock collapsed while its walk runs has `display: none` on its body, so
+    // the canvas reads 0x0 at the moment the section lands.
     const dispose = presentWorkbenchSection(
       rec.handle,
       'p1',

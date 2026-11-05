@@ -168,3 +168,47 @@ describe('auto-classify refusal shown beside the button', () => {
     expect(note().classList.contains('olv-hidden')).toBe(true);
   });
 });
+
+describe('reclassifyUi: Auto-classify when its code fails to load', () => {
+  it('says so beside the button and gives the button back', async () => {
+    const { root } = await makeUiForAutoFailure();
+    const btn = root.byTestId('reclass-auto');
+    expect(btn).toBeTruthy();
+    btn!.click();
+    await new Promise((r) => setTimeout(r, 0));
+    expect(root.textContent).toMatch(/Auto-classify could not load\. Reload the page/);
+    expect(root.textContent).not.toContain('http');
+    expect((btn as unknown as { disabled: boolean }).disabled).toBe(false);
+  });
+});
+
+async function makeUiForAutoFailure() {
+  const { createReclassifyUi } = await import('../src/ui/reclassifyUi');
+  const stage = new FakeEl('div');
+  const canvas = new FakeEl('div');
+  stage.append(canvas);
+  const ui = createReclassifyUi({
+    canvas: canvas as unknown as HTMLCanvasElement,
+    getViewer: () => null,
+    getActiveId: () => null,
+    onAutoClassify: () => Promise.reject(new TypeError('Failed to fetch dynamically imported module: http://h/c.js')),
+  });
+  return { root: ui.element as unknown as FakeEl };
+}
+
+describe('reclassify armed state stays visible and ends with its panel', () => {
+  it('shows the drawing instruction only while armed', async () => {
+    const { armBtn, root } = await makeUi();
+    const hint = root.byTestId('reclass-armed-hint')!;
+    expect(hint.classList.contains('olv-hidden')).toBe(true);
+    armBtn.click();
+    expect(hint.classList.contains('olv-hidden')).toBe(false);
+    expect(hint.textContent).toBe('Draw around points on the scan. Esc cancels.');
+  });
+  it('hiding the panel disarms the lasso', async () => {
+    const { ui, armBtn } = await makeUi();
+    armBtn.click();
+    ui.setVisible(false);
+    expect(armBtn.attrs['aria-pressed']).toBe('false');
+  });
+});

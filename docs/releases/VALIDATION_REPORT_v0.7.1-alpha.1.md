@@ -21,7 +21,7 @@ v0.7.1-alpha.1 has no tag, so no such record exists for it. The committed
 `docs/validation/test-evidence.json` is a development record and is marked
 `releaseAuthoritative: false`.
 
-## What was validated since v0.7.0
+## What was compared since v0.7.0
 
 Terrain Flow Pulse was compared with TauDEM 5.3.8 and GRASS GIS 8.3.2 on public
 DEMs, under a protocol committed before Flow Pulse was run on the data. The
@@ -59,7 +59,7 @@ the grid origin at the data minimum. Other sizes, other origins and filled
 cells are not covered. A terrain product whose method matches none of a claim's
 studies is reported as not covered.
 
-## What was NOT tested, and is not claimed
+## What was not tested, and is not claimed
 
 - No held-out reference validation. No product is at E5, and no accuracy figure
   here is an established field accuracy or a survey-grade result.

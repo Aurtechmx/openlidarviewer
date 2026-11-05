@@ -424,6 +424,29 @@ describe('Profile Workbench — dock geometry', () => {
     expect(host.notified.at(-1)).toBe(expected);
   });
 
+  it('opens showing the section when the last dock was left collapsed', async () => {
+    const host = new FakeHost(1000);
+    host.store.set(PROFILE_WORKBENCH_DOCK_KEY, JSON.stringify({ heightPx: 512, collapsed: true }));
+    const { handle, root } = await mount(host);
+    expect(handle.collapsed()).toBe(false);
+    expect(handle.height()).toBe(512);
+    expect(root.findByText('Collapse').length).toBeGreaterThan(0);
+    expect(root.findByText('Expand')).toHaveLength(0);
+  });
+
+  it('opens showing the section after Escape collapsed the one before', async () => {
+    const host = new FakeHost(1000);
+    const first = await mount(host);
+    const open = first.handle.height();
+    first.root.dispatch('keydown', { key: 'Escape', target: first.root.findByText('Close Profile Workbench')[0] });
+    expect(first.handle.collapsed()).toBe(true);
+    first.handle.close();
+
+    const second = await mount(host);
+    expect(second.handle.collapsed()).toBe(false);
+    expect(second.handle.height()).toBe(open);
+  });
+
   it('opens at the stored height, and at the default when the stored value is unusable', async () => {
     const good = new FakeHost(1000);
     good.store.set(PROFILE_WORKBENCH_DOCK_KEY, JSON.stringify({ heightPx: 512, collapsed: false }));

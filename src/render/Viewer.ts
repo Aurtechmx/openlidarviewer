@@ -179,7 +179,7 @@ import {
 } from './measure/profileSectionSeam';
 import { gatherVolumeBuffers, samplePolygonVolume, cloudReduction, CUT_FILL_VOLUME_METHOD, type VolumeResult } from './measure/polygonVolumeSample';
 import {
-  integrableClouds, integrableEntries, streamingMayCombine, producerClassifiesGround,
+  integrableClouds, sharedDatumRefusal, integrableEntries, streamingMayCombine, producerClassifiesGround,
   analysisClassification,
 } from './integrableClouds';
 import type { LayerCompatibility } from '../model/layerCompatibility';
@@ -1126,7 +1126,7 @@ export class Viewer {
       worldUp: (): Vec3 => this._measure.worldUp, // the scene's, or the measurement's own layer's while it samples
       streamingCoverage: () => this._streamingCoverage(),
     });
-    this._measure.setProfileSampler((a, b, opts) => this.profileSeam.sampleSeries(a, b, opts));
+    this._measure.setProfileSampler((a, b, opts) => this.profileSeam.sampleSeries(a, b, opts)); this._measure.profileChartRefusal = () => sharedDatumRefusal(this._clouds.values());
     // Volume sampler: visible, unlocked clouds plus resident streaming nodes,
     // with their flags and classes so Withheld and noise points stay out.
     // `up` is the measurement's own layer up, matching `autoReferenceZ` (v0.4.4 B1).
@@ -3689,13 +3689,11 @@ export class Viewer {
    * camera, not the camera-at-vertex-time. Result: the lasso selection
    * is offset from what the user drew around.
    *
-   * `_setToolMode('lasso')` flips `_inputEnabled = false` on the
-   * NavController, which both disables OrbitControls AND stops the
-   * per-frame `_controls.update()` call. Damping decay halts. The
-   * camera holds still for the duration of the draw.
+   * `_setToolMode('lasso')` stops OrbitControls and its damping, so the camera
+   * holds still for the draw. Off only ends lasso mode: a tool that replaced it stays on.
    */
   setLassoMode(on: boolean): void {
-    this._setToolMode(on ? 'lasso' : 'none');
+    if (on) this._setToolMode('lasso'); else if (this._toolMode === 'lasso') this._setToolMode('none');
   }
 
   /**
@@ -3906,10 +3904,11 @@ export class Viewer {
     else this._canvas.style.cursor = 'crosshair';
   }
 
+  onToolModeChange: ((prev: ToolMode, next: ToolMode) => void) | null = null;
   private _setToolMode(mode: ToolMode): void {
     if (mode === this._toolMode) return;
     this._toolPaused = false; this._measure.setNavigationPaused(false);
-    this._toolMode = mode;
+    const prev = this._toolMode; this._toolMode = mode;
     this._measure.setActive(mode === 'measure');
     this._inspect.setActive(mode === 'inspect');
     this._annotate.setActive(mode === 'annotate');
@@ -3933,6 +3932,7 @@ export class Viewer {
     this._inspectListeners.onModeChange?.(mode === 'inspect');
     this._annotateListeners.onModeChange?.(mode === 'annotate');
     this._probeListeners.onModeChange?.(mode === 'probe');
+    this.onToolModeChange?.(prev, mode);
   }
 
   // ─────────────────────────────────────────────────────────────────────────

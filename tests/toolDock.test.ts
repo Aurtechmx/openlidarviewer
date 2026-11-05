@@ -23,6 +23,8 @@ beforeAll(() => {
     createElement: (tag: string) => new FakeEl(tag),
     createElementNS: (_ns: string, tag: string) => new FakeEl(tag),
     querySelector: () => null,
+    addEventListener: () => {},
+    removeEventListener: () => {},
   };
   // Deliberately no HTMLButtonElement, matching the historical UI-test stubs.
   g.HTMLInputElement = class HTMLInputElement {};
@@ -264,6 +266,34 @@ describe('the More disclosure across viewport tiers', () => {
     more.dispatchEvent({ type: 'click' });
     expect(dock.dock.classList.contains('olv-dock-more-open')).toBe(false);
     expect(more.getAttribute('aria-expanded')).toBe('false');
+  });
+
+  it('closes on Escape and on a press outside, then stops listening', () => {
+    const g = globalThis as unknown as { document: Record<string, unknown> };
+    const listeners = new Map<string, (e: unknown) => void>();
+    g.document.addEventListener = (t: string, h: (e: unknown) => void) => listeners.set(t, h);
+    g.document.removeEventListener = (t: string) => listeners.delete(t);
+    const dock = makeDock();
+    (dock.dock as unknown as { contains: (n: unknown) => boolean }).contains = (n) => n === 'inside';
+    const more = buttons(dock).find((b) => b.classList.contains('olv-tool-more'))!;
+    const isOpen = (): boolean => dock.dock.classList.contains('olv-dock-more-open');
+    more.dispatchEvent({ type: 'click' });
+    listeners.get('pointerdown')!({ target: 'inside' });
+    expect(isOpen()).toBe(true);
+    listeners.get('keydown')!({ key: 'a' });
+    expect(isOpen()).toBe(true);
+    listeners.get('keydown')!({ key: 'Escape' });
+    expect(isOpen()).toBe(false);
+    expect(more.getAttribute('aria-expanded')).toBe('false');
+    expect(listeners.size).toBe(0);
+    more.dispatchEvent({ type: 'click' });
+    listeners.get('pointerdown')!({ target: 'outside' });
+    expect(isOpen()).toBe(false);
+    expect(listeners.size).toBe(0);
+  });
+
+  it('wraps the open dock on the laptop tier so every tool stays on screen', () => {
+    expect(laptopTier()).toMatch(/\.olv-dock\.olv-dock-more-open \{[^}]*flex-wrap: wrap;[^}]*max-width: calc\(100vw - 32px\)/);
   });
 
   it('shows the button and folds three tools on the laptop tier', () => {

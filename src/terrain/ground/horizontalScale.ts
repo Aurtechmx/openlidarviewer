@@ -312,3 +312,18 @@ export function webMercatorNote(bound: WebMercatorScaleBound | undefined): strin
     'The coordinates and the exported georeference stay in Web Mercator.'
   );
 }
+
+/**
+ * What one grid unit is in metres, carried with the grid so every reader of its
+ * cell size can judge it in metres. Null when no linear scale resolved: a
+ * geographic grid, or a frame that does not state one.
+ */
+export function gridUnitToMetres(frame: {
+  readonly isGeographic?: boolean;
+  readonly horizontalUnitToMetres?: number;
+  readonly horizontalScaleKnown?: boolean;
+}): number | null {
+  const h = frame.horizontalUnitToMetres;
+  const ok = typeof h === 'number' && Number.isFinite(h) && h > 0;
+  return ok && frame.isGeographic !== true && (frame.horizontalScaleKnown ?? true) ? h : null;
+}

@@ -228,6 +228,8 @@ export interface ClipFlowShell {
   readonly activeLayerId: () => string | null;
   readonly openPage: (page: 'clip' | 'measure', options?: { readonly reveal?: boolean }) => void;
   readonly measurePanel: () => Pick<MeasurePanel, 'focusRow' | 'deleteRow'> | null;
+  /** The measurement mount's own delete, which does not wait for the panel chunk. */
+  readonly deleteMeasurement: (id: string) => boolean;
   /** Flip Measure and record it, as the shell's scene-tool command does, without opening its page. */
   readonly toggleMeasure: () => void;
   readonly toast: (message: string) => void;
@@ -260,8 +262,8 @@ export function createClipFlowFromShell(sh: ClipFlowShell): ClipFlow {
     stopMeasureTool: () => { if (v().measureMode) sh.toggleMeasure(); },
     setBoxKind: () => v().measure.setKind('box'),
     // The page is asked for to be read, so a phone sheet opens rather than drops.
-    openDetails: (id) => { sh.openPage('measure', { reveal: true }); sh.measurePanel()?.focusRow(id); },
-    deleteMeasurement: (id) => { sh.measurePanel()?.deleteRow(id); },
+    openDetails: (id) => { sh.openPage('measure', { reveal: true }); const p = sh.measurePanel(); if (p) p.focusRow(id); else sh.toast('The Measurements list is not available. If it does not appear, reload the page; a reload closes open scans.'); },
+    deleteMeasurement: (id) => sh.deleteMeasurement(id),
     lookingDown: () => sh.ready() && looksDown(v().getCameraPose(), v().measure.worldUp),
     setFootprintHint: (on) => { if (sh.ready()) v().measure.boxFootprint = on; },
     watchHint: (fn) => (sh.ready() ? watchHintText(v().measureElements.hint, fn) : () => {}),
