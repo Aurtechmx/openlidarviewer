@@ -255,3 +255,13 @@ test.describe('command palette: action registry chunk failure', () => {
     expect(retried).toBeGreaterThan(0);
   });
 });
+
+test('a clicked row runs the command it shows when ranking mixes sections', async ({ page }) => {
+  await page.goto('/');
+  await page.keyboard.press('ControlOrMeta+KeyK');
+  await page.locator('.olv-palette-input').fill('session');
+  await page.locator('[role=option]', { hasText: 'Session log' }).first().waitFor();
+  await page.locator('[role=option]').filter({ hasText: /^Save session/ }).click();
+  await page.waitForTimeout(800);
+  await expect(page.getByText('Recovery data in this browser was deleted.')).toHaveCount(0);
+});
