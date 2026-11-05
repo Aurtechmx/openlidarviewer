@@ -1351,8 +1351,7 @@ function buildCurrentStoryInputs(): ScanStoryInputs {
 const navWiring = createNavBarWiring({
   getViewer: () => viewer,
   getNavBar: () => navBar,
-  toast: showLassoToast,
-  capture: (event) => workflowController.capture(event),
+  toast: showLassoToast, capture: (event) => workflowController.capture(event),
 });
 // The action registry is built on the first surface that needs it (palette,
 // sheet, a Dataset Story click) from the lazy `actionDefinitions` chunk; a
