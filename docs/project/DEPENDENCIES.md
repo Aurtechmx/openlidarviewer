@@ -96,8 +96,17 @@ result in the attached evidence.
 
 ```
 npm audit
-found 0 vulnerabilities
+3 moderate severity vulnerabilities
 ```
+
+All three are one advisory. GHSA-g3hv-75wg-m249 is a denial of service through
+glob pattern amplification in minimatch before 11.0.1. `@stryker-mutator/core`
+installs minimatch 10.2.5, and npm also reports `@stryker-mutator/core` and
+`@stryker-mutator/vitest-runner` because they depend on it. npm offers no fix.
+
+Stryker runs for mutation testing only and takes its glob patterns from this
+repository's configuration. It is not in the deploy archive. The advisory stays
+open with no forced upgrade until Stryker publishes a compatible release.
 
 The production dependency set is clean as well: `npm audit --omit=dev` reports
 zero.
