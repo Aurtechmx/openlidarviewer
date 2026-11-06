@@ -158,7 +158,7 @@ import type {
   ContourExportPermit,
 } from '../export/contourExportPermit';
 import { permitStamp } from '../export/permitStamp';
-import { DENSITY_REF_SAMPLE_NOTE, densityReferenceFloorFor, isSampledBasis, readinessOnBasis, type AnalysedBasis } from '../terrain/export/analysedBasis';
+import { assessmentOnBasis, DENSITY_REF_SAMPLE_NOTE, densityReferenceFloorFor, isSampledBasis, type AnalysedBasis } from '../terrain/export/analysedBasis';
 import {
   analysisFreshnessBreach,
   FRESHNESS_REFUSALS,
@@ -1715,7 +1715,7 @@ export class AnalysePanel {
   private _renderAssessment(): void {
     this._assessmentRow.replaceChildren();
     if (!this._result) return;
-    const a = terrainAssessment(this._result);
+    const a = assessmentOnBasis(terrainAssessment(this._result), this._contourFrame?.analysedBasis, this._result.dtm.coverageMode);
     const tier = a.status.toLowerCase(); // good | preview | limited | blocked
     this._assessmentRow.className = `olv-analyse-assessment is-${tier}`;
 
@@ -1732,7 +1732,7 @@ export class AnalysePanel {
     // a datum-less but clean scan reads "Surface quality: Good · Export
     // readiness: Preview — vertical datum unknown". Colour reuses the rating
     // tokens (good / moderate / blocked), never a new hardcoded colour.
-    const shown = readinessOnBasis(a.exportReadiness, a.exportReason, this._contourFrame?.analysedBasis, this._result?.dtm.coverageMode);
+    const shown = { tier: a.exportReadiness, reason: a.exportReason };
     let exportTier: 'good' | 'blocked' | 'preview';
     if (shown.tier === 'Ready') {
       exportTier = 'good';
@@ -2116,7 +2116,7 @@ export class AnalysePanel {
     dataAreaM2?: number;
   } | null {
     if (!this._result) return null;
-    const a = terrainAssessment(this._result);
+    const a = assessmentOnBasis(terrainAssessment(this._result), this._contourFrame?.analysedBasis, this._result.dtm.coverageMode);
     const workflows = recommendedWorkflows(a, this._result.quality);
     const products: StoryProduct[] = terrainProducts(a, workflows).map((p) => {
       let status: StoryProduct['status'];

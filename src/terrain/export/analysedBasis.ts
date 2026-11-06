@@ -148,3 +148,13 @@ export function readinessOnBasis<T extends string>(
   if (tier !== 'Ready' || (coverageMode !== 'sampled' && !isSampledBasis(basis))) return { tier, reason };
   return { tier: 'Preview', reason: 'Only a sample of the scan was analysed, so whole-dataset support is not claimed.' };
 }
+
+/** An assessment with its export readiness stated on the analysed basis, for every view graded from it. */
+export function assessmentOnBasis<A extends { readonly exportReadiness: string; readonly exportReason: string }>(
+  assessment: A,
+  basis: AnalysedBasis | null | undefined,
+  coverageMode: string | undefined,
+): A {
+  const shown = readinessOnBasis(assessment.exportReadiness, assessment.exportReason, basis, coverageMode);
+  return { ...assessment, exportReadiness: shown.tier, exportReason: shown.reason };
+}
