@@ -43,6 +43,7 @@ function harness(initial: Record<string, string[]>, opts: { failUrl?: string; ma
         s.set(abs(u), true);
       },
       put: async () => {},
+      match: async (u: string) => s.has(abs(u)) ? name + ':' + abs(u) : undefined,
       keys: async () => [...s.keys()].map((url) => ({ url })),
       delete: async (r: { url: string }) => s.delete(r.url),
     };
@@ -60,7 +61,9 @@ function harness(initial: Record<string, string[]>, opts: { failUrl?: string; ma
     location: { origin: ORIGIN, href: ORIGIN + '/sw.js' },
     registration: { scope: ORIGIN + '/' },
   };
+  let offline = false;
   const fetchFn = async (u: string) => {
+    if (offline) throw new Error('offline');
     fetched.push(u);
     return { ok: opts.manifestOk !== false, status: opts.manifestOk === false ? 404 : 200, json: async () => MANIFEST };
   };
@@ -75,7 +78,20 @@ function harness(initial: Record<string, string[]>, opts: { failUrl?: string; ma
     await fire('message', { data, origin, ports: [{ postMessage: (m: Record<string, unknown>) => replies.push(m) }] });
     return replies;
   };
-  return { stores, fetched, fire, message };
+  const offlineIndex = async () => {
+    offline = true;
+    try {
+      let response: Promise<unknown> = Promise.resolve();
+      await fire('fetch', {
+        request: { method: 'GET', url: ORIGIN + '/', mode: 'navigate', headers: { has: () => false } },
+        respondWith: (pending: Promise<unknown>) => { response = pending; },
+      });
+      return await response;
+    } finally {
+      offline = false;
+    }
+  };
+  return { stores, fetched, fire, message, offlineIndex };
 }
 
 describe('service worker opt-in offline copy', () => {
@@ -93,6 +109,7 @@ describe('service worker opt-in offline copy', () => {
     expect([...h.stores.get(OFFLINE)!.keys()].sort()).toEqual([
       `${ORIGIN}/assets/Viewer-BBBBBBBB.js`,
       `${ORIGIN}/assets/index-AAAAAAAA.js`,
+      `${ORIGIN}/index.html`,
     ]);
     expect(replies.filter((r) => r.type === 'progress')).toHaveLength(2);
     expect(replies.at(-1)).toEqual({ type: 'done', total: 2, failed: 0 });
@@ -136,15 +153,35 @@ describe('service worker opt-in offline copy', () => {
     await h.fire('activate');
     expect(h.stores.has('olv-shell-0.6.9')).toBe(false);
     expect(h.stores.has('olv-shell-0.6.9-offline')).toBe(false);
-    expect(h.stores.get(OFFLINE)!.size).toBe(2);
+    expect(h.stores.get(OFFLINE)!.size).toBe(3); // two bundles and their committed shell
     expect(h.stores.has('other-app')).toBe(true);
+  });
+
+  it.each([{ manifestOk: false }, { failUrl: './assets/index-AAAAAAAA.js' }, { failUrl: './index.html' }])(
+    'keeps both pieces of the previous offline copy after a failed upgrade (%o)', async (options) => {
+      const old = 'olv-shell-0.7.0';
+      const h = harness({ [old]: [ORIGIN + '/'], [old + '-offline']: [ORIGIN + '/assets/old-AAAAAAAA.js'] }, options);
+      await h.fire('activate');
+      expect(h.stores.has(old)).toBe(true);
+      expect(h.stores.has(old + '-offline')).toBe(true);
+      expect(h.stores.get(OFFLINE)?.has(ORIGIN + '/index.html') ?? false).toBe(false);
+      expect(await h.offlineIndex()).toBe(old + ':' + ORIGIN + '/');
+    },
+  );
+
+  it('does not prune the last committed snapshot on a failed same-cache retry', async () => {
+    const saved = [ORIGIN + '/index.html', ORIGIN + '/assets/old-AAAAAAAA.js'];
+    const h = harness({ [OFFLINE]: saved }, { failUrl: './assets/index-AAAAAAAA.js' });
+    await h.message({ type: 'olv-offline-save' });
+    for (const url of saved) expect(h.stores.get(OFFLINE)!.has(url)).toBe(true);
+    expect(await h.offlineIndex()).toBe(OFFLINE + ':' + ORIGIN + '/index.html');
   });
 
   it('activate prunes entries a previous build left in the current offline cache', async () => {
     const h = harness({ [OFFLINE]: [`${ORIGIN}/assets/index-OLDOLDOL.js`] });
     await h.fire('activate');
     expect(h.stores.get(OFFLINE)!.has(`${ORIGIN}/assets/index-OLDOLDOL.js`)).toBe(false);
-    expect(h.stores.get(OFFLINE)!.size).toBe(2);
+    expect(h.stores.get(OFFLINE)!.size).toBe(3); // two bundles and their committed shell
   });
 
   it('activate does not download anything when the user never opted in', async () => {

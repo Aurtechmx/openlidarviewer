@@ -71,6 +71,21 @@ function manifestEntries(m) {
  * copy. Each file is added on its own so one failure cannot abort the rest;
  * `onProgress(done, total)` reports after every file.
  */
+function deleteObsoleteCaches(keys) {
+  return Promise.all(keys.filter((k) => k.startsWith(CACHE_PREFIX) && k !== VERSION && k !== OFFLINE_CACHE)
+    .map((k) => caches.delete(k)));
+}
+
+// Serialize explicit saves and removals so a late save cannot undo a remove.
+let offlineChanges = Promise.resolve();
+function changeOffline(work) {
+  const next = offlineChanges.then(work);
+  offlineChanges = next.catch(() => {});
+  return next;
+}
+
+// CacheStorage has no rename. The saved index is the commit record: publish
+// it only after all its bundles exist, then retire the preceding snapshot.
 function precacheBuild(onProgress) {
   const report = typeof onProgress === 'function' ? onProgress : () => {};
   return fetch('./sw-precache.json', { cache: 'no-store' })
@@ -79,6 +94,7 @@ function precacheBuild(onProgress) {
       caches.open(OFFLINE_CACHE).then((cache) => {
         const entries = manifestEntries(m);
         const total = entries.length;
+        if (!total) throw new Error('Empty offline manifest');
         let done = 0;
         let failed = 0;
         const addOne = (a) =>
@@ -91,9 +107,14 @@ function precacheBuild(onProgress) {
               done += 1;
               report(done, total);
             });
-        return Promise.all(entries.map(addOne))
-          .then(() => pruneCache(cache, entries))
-          .then(() => ({ total, failed }));
+        return Promise.all(entries.map(addOne)).then(async () => {
+          if (!failed) {
+            await cache.add('./index.html');
+            await pruneCache(cache, [...entries, { url: './index.html' }]);
+            await deleteObsoleteCaches(await caches.keys());
+          }
+          return { total, failed };
+        });
       }),
     );
 }
@@ -118,26 +139,15 @@ self.addEventListener('install', (event) => {
 });
 
 self.addEventListener('activate', (event) => {
-  // Drop caches from older versions, then take control of open clients. When
-  // the user opted into an offline copy, refill it for this build first.
-  event.waitUntil(
-    caches
-      .keys()
-      .then((keys) => {
-        const optedIn = keys.some(isOfflineCache);
-        return Promise.all(
-          // Only OLV's own caches — never a co-hosted app's cache on this origin.
-          keys
-            .filter((k) => k.startsWith(CACHE_PREFIX) && k !== VERSION && k !== OFFLINE_CACHE && !isOfflineCache(k))
-            .map((k) => caches.delete(k)),
-        )
-          .then(() => self.clients.claim())
-          .then(() => (optedIn ? precacheBuild().catch(() => {}) : undefined))
-          .then(() =>
-            Promise.all(keys.filter((k) => isOfflineCache(k) && k !== OFFLINE_CACHE).map((k) => caches.delete(k))),
-          );
-      }),
-  );
+  // A failed automatic download must leave the last saved viewer usable.
+  event.waitUntil(caches.keys().then(async (keys) => {
+    if (keys.some(isOfflineCache)) {
+      await changeOffline(() => precacheBuild()).catch(() => {});
+    } else {
+      await deleteObsoleteCaches(keys);
+    }
+    await self.clients.claim();
+  }));
 });
 
 /**
@@ -153,14 +163,15 @@ self.addEventListener('message', (event) => {
   const port = event.ports?.[0];
   if (!data || !port) return;
   if (data.type === 'olv-offline-save') {
-    const work = precacheBuild((done, total) => port.postMessage({ type: 'progress', done, total }))
+    const work = changeOffline(() => precacheBuild((done, total) => port.postMessage({ type: 'progress', done, total })))
       .then((r) => port.postMessage({ type: 'done', total: r.total, failed: r.failed }))
       .catch(() => port.postMessage({ type: 'error' }));
     if (event.waitUntil) event.waitUntil(work);
   } else if (data.type === 'olv-offline-remove') {
-    const work = caches
-      .keys()
-      .then((keys) => Promise.all(keys.filter(isOfflineCache).map((k) => caches.delete(k))))
+    const work = changeOffline(async () => {
+      await deleteObsoleteCaches(await caches.keys());
+      await caches.delete(OFFLINE_CACHE);
+    })
       .then(() => port.postMessage({ type: 'removed' }))
       .catch(() => port.postMessage({ type: 'error' }));
     if (event.waitUntil) event.waitUntil(work);
@@ -215,6 +226,29 @@ function isCacheableAsset(url) {
   return SHELL.some((s) => url.pathname === root + s.replace(/^\.\//, ''));
 }
 
+async function offlineShell() {
+  const keys = await caches.keys();
+  // The current saved index (if committed) references a complete bundle set.
+  if (keys.includes(OFFLINE_CACHE)) {
+    const current = await (await caches.open(OFFLINE_CACHE)).match('./index.html');
+    if (current) return current;
+  }
+  for (const saved of keys.filter((key) => isOfflineCache(key) && key !== OFFLINE_CACHE)) {
+    const previous = await (await caches.open(saved)).match('./index.html');
+    if (previous) return previous;
+    // Earlier workers stored all the bundles in the offline cache but their
+    // original shell in the companion cache under './'. Network navigations
+    // could overwrite the older './index.html' with the new, incompatible HTML.
+    const companion = saved.slice(0, -OFFLINE_SUFFIX.length);
+    if (keys.includes(companion)) {
+      const legacy = await (await caches.open(companion)).match('./');
+      if (legacy) return legacy;
+    }
+  }
+  const shell = await caches.open(VERSION);
+  return (await shell.match('./index.html')) || shell.match('./');
+}
+
 self.addEventListener('fetch', (event) => {
   const req = event.request;
   if (req.method !== 'GET') return; // never cache writes/uploads
@@ -252,7 +286,7 @@ self.addEventListener('fetch', (event) => {
           }
           return res;
         })
-        .catch(() => caches.match('./index.html').then((r) => r || caches.match('./'))),
+        .catch(offlineShell),
     );
     return;
   }
