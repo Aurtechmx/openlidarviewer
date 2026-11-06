@@ -218,7 +218,7 @@
     "laz-perf": "^0.0.7",
     "pdf-lib": "^1.17.1",
     "proj4": "^2.22.0",
-    "three": "^0.186.1"
+    "three": "^0.187.0"
   },
   "devDependencies": {
     "@axe-core/playwright": "4.14.0",
@@ -227,7 +227,7 @@
     "@stryker-mutator/core": "^10.1.1",
     "@stryker-mutator/vitest-runner": "^10.1.1",
     "@types/proj4": "^2.19.0",
-    "@types/three": "^0.186.0",
+    "@types/three": "^0.187.0",
     "@vitest/coverage-v8": "^5.0.5",
     "rollup-plugin-visualizer": "^7.1.1",
     "typescript": "~7.0.2",
