@@ -61,7 +61,7 @@ export function recommendedWorkflows(
 ): WorkflowItem[] {
   const grades = productGradesFor(assessment.status, assessment.exportReadiness);
   const exportGrade = grades.deliverable.status;
-  const note = grades.deliverable.note;
+  const note = assessment.deliverableNote ?? grades.deliverable.note;
 
   const item = (label: string, status: WorkflowItem['status'], n?: string): WorkflowItem =>
     n != null ? { label, status, note: n } : { label, status };
