@@ -45,7 +45,8 @@ export async function showWorkspaceMode(
   // sheet's tabs, so the mode is reached through the sheet.
   const sheetTab = page.locator(`.olv-mobile-sheet .olv-msheet-tab[data-tab="${mode}"]`);
   // Wait for one route to exist: an instant check can miss a shell still mounting.
-  await expect(tab.or(sheetTab).first()).toBeVisible({ timeout: 20_000 });
+  // Filter to visible first: both tabs exist at some widths and the rail's may be hidden.
+  await expect(tab.or(sheetTab).filter({ visible: true }).first()).toBeVisible({ timeout: 20_000 });
   if (await tab.isVisible()) {
     await tab.click();
     await expect(tab).toHaveAttribute('aria-selected', 'true');
