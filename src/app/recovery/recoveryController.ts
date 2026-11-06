@@ -366,7 +366,7 @@ export function startRecovery(deps: RecoveryDeps): RecoveryHandle {
       else if (newest) {
         showNotice(
           `The open file differs from ${newest.fileName}, so the unsaved work (${describe(newest)}) was not restored. Open ${newest.fileName} to restore it.`,
-          [[DISCARD, discard, DISCARD_TIP], [CLEAR, clearAll, CLEAR_TIP]],
+          [['Keep for later', hideNotice, 'Close this notice. The unsaved work stays saved in this browser.'], [DISCARD, discard, DISCARD_TIP], [CLEAR, clearAll, CLEAR_TIP]],
         );
       } else hideNotice();
     }, () => {});
