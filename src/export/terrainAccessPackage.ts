@@ -31,6 +31,7 @@
  * Pure-data: returns ZIP bytes; no DOM.
  */
 
+import { rasterHorizontalWkt } from '../io/crs';
 import { safeEntryName, singleLine } from './safeText';
 import { SOURCE_NOT_SUPPLIED_NOTE, sourceSha256Text, type ExportDigests } from '../science/exportDigestRecord';
 import { crsOriginLine } from '../science/crsOrigin';
@@ -490,6 +491,8 @@ export function buildTerrainAccessPackage(
   // A .prj beside a raster in local metres would make a GIS place it at the CRS origin.
   if (placed && options.wkt) {
     entries.push({ name: `${basename}.prj`, bytes: new TextEncoder().encode(options.wkt) });
+    const horizontal = rasterHorizontalWkt(options.wkt);
+    if (horizontal) entries.push({ name: `${basename}-traversability.prj`, bytes: new TextEncoder().encode(horizontal) });
   }
 
   // The passport binds to the traversability raster: the one file in this

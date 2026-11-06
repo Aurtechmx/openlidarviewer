@@ -75,7 +75,7 @@ describe('ExportPanel: every warning is listed', () => {
 
   it('shows no list when nothing was warned about', async () => {
     const plain = new PointCloud({ positions: new Float32Array([0, 0, 0]), origin: [0, 0, 0], sourceFormat: 'las', name: 'p.las' });
-    const root = await panelFor(plain);
+    const root = await panelFor(plain, { getResolvedSourceCrs: () => ({ epsg: 32612 }) });
     await pressExport(root);
     expect(status(root).textContent).toMatch(/^Exported 1 point/);
     expect(notes(root)!.children).toHaveLength(0);
@@ -119,7 +119,7 @@ describe('ExportPanel: the acquisition-loss opt-in', () => {
   });
 
   it('writes LAS 1.4 without it', async () => {
-    const root = await panelFor(lossyCloud());
+    const root = await panelFor(lossyCloud(), { getResolvedSourceCrs: () => ({ epsg: 32612 }) });
     await pressExport(root);
     expect(hoisted.downloads).toHaveLength(1);
     expect(status(root).className).not.toContain('is-error');

@@ -39,6 +39,7 @@
  * Pure-data: returns ZIP bytes; no DOM.
  */
 
+import { rasterHorizontalWkt } from '../io/crs';
 import { safeEntryName } from './safeText';
 import { SOURCE_NOT_SUPPLIED_NOTE, sourceSha256Text, type ExportDigests } from '../science/exportDigestRecord';
 import { crsOriginLine } from '../science/crsOrigin';
@@ -781,6 +782,13 @@ export function buildFlowPulsePackage(
   // A .prj beside rasters in local metres would make a GIS place them at the CRS origin.
   if (placedOrigin && options.wkt) {
     entries.push({ name: `${basename}.prj`, bytes: new TextEncoder().encode(options.wkt) });
+    const horizontal = rasterHorizontalWkt(options.wkt);
+    if (horizontal) {
+      const bytes = new TextEncoder().encode(horizontal);
+      for (const grid of entries.filter((entry) => entry.name.endsWith('.asc'))) {
+        entries.push({ name: grid.name.slice(0, -4) + '.prj', bytes });
+      }
+    }
   }
 
   const readme = buildFlowReadme(result, {

@@ -689,12 +689,13 @@ export class ExportPanel {
   /**
    * Check whether LAS 1.4 can carry the CRS this export would write, and move
    * the format to LAS 1.2 (with the reason shown) when it cannot. The check
-   * runs the writer's own CRS plan, loaded on demand, and only when an EPSG
-   * code is in play; a user's own pill choice is never undone.
+   * runs the writer's own CRS plan, loaded on demand.
    */
   private _syncLas14(): void {
     const mode = this._crsKnown ? this._crsMode : 'keep';
-    const resolved = this._cb.getResolvedSourceCrs?.() ?? null;
+    const resolved = this._cb.getResolvedSourceCrs
+      ? this._cb.getResolvedSourceCrs()
+      : this._cb.getCloud()?.metadata?.crs;
     const request = {
       mode,
       sourceEpsg: resolved?.epsg ?? null,
@@ -702,7 +703,7 @@ export class ExportPanel {
       targetEpsg: parseEpsg(this._targetEpsg),
     };
     const outEpsg = mode === 'keep' ? request.sourceEpsg : request.targetEpsg;
-    this._las14.run(outEpsg == null ? null : request);
+    this._las14.run(mode !== 'keep' && outEpsg == null ? null : request);
   }
 
   private _applyLas14(block: string | null): void {

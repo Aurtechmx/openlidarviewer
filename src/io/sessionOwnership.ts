@@ -24,6 +24,7 @@
 import type { InspectionSession } from './session';
 import { frameAnchorLayerId, frameLayer, shiftAnnotation, shiftMeasurement, type SessionLayerRecord, type SessionProjectFrame } from './sessionFrame';
 import { fingerprintKey } from '../model/layerFingerprintKey';
+import { sessionContentsDiffer } from './sourceFingerprint';
 import { sourceLocalOwnership, type WorkOwnership } from '../model/workOwnership';
 import type { Measurement } from '../render/measure/types';
 import type { Annotation } from '../render/annotate/types';
@@ -137,6 +138,7 @@ export interface LiveLayerEvidence {
   readonly layerId: string;
   /** The canonical source-fingerprint key that id is anchored on (`fingerprintKey`). */
   readonly fingerprint: string;
+  readonly contentFingerprint?: string;
   /** The file's own source origin, or null when the layer has none. */
   readonly sourceOrigin: Vec3 | null;
   /** The layer's own vertical axis. */
@@ -195,6 +197,7 @@ export function mapSessionLayers(
     const epsg = rec.crs?.epsg;
     candidates.set(rec.layerId, keyHasContentFacts(rec.sourceFingerprint)
       ? live.filter((l) => l.fingerprint === rec.sourceFingerprint
+        && !sessionContentsDiffer(rec.contentFingerprint, l.contentFingerprint)
         && originsAgree(l.sourceOrigin, rec.sourceOrigin)
         && l.upAxis === rec.upAxis
         && (epsg == null || l.epsg == null || l.epsg === epsg))
@@ -263,6 +266,7 @@ export function framelessHeldRecords(session: InspectionSession, layerIds: Itera
         ? fingerprintKey({ fileName: summary.fileName, sourcePoints: summary.sourcePoints, width: summary.width, depth: summary.depth, height: summary.height, epsg: summary.epsg, crs: summary.crs, origin: [o[0], o[1], o[2]] })
         : fingerprintKey({}),
       sourceName: own ? summary.fileName : '',
+      ...(own && summary.contentFingerprint ? { contentFingerprint: summary.contentFingerprint } : {}),
       sourceOrigin: [o[0], o[1], o[2]],
       sourceToProject: [0, 0, 0],
       upAxis: session.upAxis,

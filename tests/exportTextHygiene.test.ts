@@ -245,8 +245,11 @@ describe('batch provenance names the CRS origin the output is tagged with', () =
     expect(wkt(r.file!.bytes)).toBe(wkt(single.file!.bytes));
   });
 
-  it('says unknown when the file declares none, and tags nothing', async () => {
-    const [r] = await runBatch([input('b.las')], { format: 'las14' }, async () => cloud('b.las'));
+  it('says unknown in legacy LAS and declines an extended LAS file with no CRS', async () => {
+    const [refused] = await runBatch([input('b.las')], { format: 'las14' }, async () => cloud('b.las'));
+    expect(refused.report.ok).toBe(false);
+    expect(refused.file).toBeNull();
+    const [r] = await runBatch([input('b.las')], { format: 'las' }, async () => cloud('b.las'));
     expect(record(r.file!.bytes)).toMatch(/CRS source unknown/);
   });
 });

@@ -1069,8 +1069,8 @@ datasets:
     title: "Virginia Tech StREAM Lab Spring 2026 published 0.1 m DTM"
     sourceUrl: https://doi.org/10.5069/G9NZ85W7
     landingPage: https://doi.org/10.5069/G9NZ85W7
-    licence: OpenTopography-attribution
-    licenceUrl: https://opentopography.org/usageterms
+    licence: CC-BY-4.0
+    licenceUrl: https://creativecommons.org/licenses/by/4.0/
     redistribution: attribution-required
     acquisitionDate: 2026-08-20
     sourceSha256: 40c55c63d4d26159444dab98f43abe901310a1360511794f3e420c5d82eab8dd
@@ -3882,7 +3882,7 @@ datasets:
     evidenceRole: oracle
     dataOwner: "Richard Barnes (RichDEM)"
     citation: "Barnes, R. (2016). RichDEM: Terrain Analysis Software. https://github.com/r-barnes/richdem (file tests/depressions/testdem1.dem at commit 9a1c97bb2529e386451a7dd54768b8b74bb4d620)"
-    knownLimitations: "Input of RichDEM's test case "Checking depression filling". Integer elevations; NODATA_value 9 with no cell at 9. Paired with OLV-DS-125. The header declares a 3-unit cell and a UTM-like corner but no CRS, so units are taken as metres for area only. GitHub reports the licence as GPL-3.0; the licence file does not say whether later versions apply."
+    knownLimitations: "Input of RichDEM's test case 'Checking depression filling'. Integer elevations; NODATA_value 9 with no cell at 9. Paired with OLV-DS-125. The header declares a 3-unit cell and a UTM-like corner but no CRS, so units are taken as metres for area only. GitHub reports the licence as GPL-3.0; the licence file does not say whether later versions apply."
     storage: committed
     localPath: validation/field-simulation/richdem-references/tests/depressions/testdem1.dem
     controlPointIds: []
@@ -3948,7 +3948,7 @@ datasets:
     evidenceRole: oracle
     dataOwner: "Richard Barnes (RichDEM)"
     citation: "Barnes, R. (2016). RichDEM: Terrain Analysis Software. https://github.com/r-barnes/richdem (file tests/flow_accum/testdem1.d8 at commit 9a1c97bb2529e386451a7dd54768b8b74bb4d620)"
-    knownLimitations: "Input of RichDEM's test case "Checking flow accumulation". RichDEM D8 codes: 1 W, 2 NW, 3 N, 4 NE, 5 E, 6 SE, 7 S, 8 SW, 0 no flow. A single uniform direction, so it exercises counting and edge exit, not routing choice. Paired with OLV-DS-127. The header declares a 3-unit cell and a UTM-like corner but no CRS, so units are taken as metres for area only. GitHub reports the licence as GPL-3.0; the licence file does not say whether later versions apply."
+    knownLimitations: "Input of RichDEM's test case 'Checking flow accumulation'. RichDEM D8 codes: 1 W, 2 NW, 3 N, 4 NE, 5 E, 6 SE, 7 S, 8 SW, 0 no flow. A single uniform direction, so it exercises counting and edge exit, not routing choice. Paired with OLV-DS-127. The header declares a 3-unit cell and a UTM-like corner but no CRS, so units are taken as metres for area only. GitHub reports the licence as GPL-3.0; the licence file does not say whether later versions apply."
     storage: committed
     localPath: validation/field-simulation/richdem-references/tests/flow_accum/testdem1.d8
     controlPointIds: []

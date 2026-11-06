@@ -19,6 +19,7 @@ import type { CrsInfo } from '../io/crs';
 import { ATTR_COLOUR_INVALID, ATTR_INTENSITY_INVALID, countAttributeInvalid, intensityNormalisationLine } from '../model/PointCloud';
 import { planAxisHandling, rotateYUpToZUp, yUpRotationEvent } from './axisHandling';
 import { cloudToGlobal } from './globalPoints';
+import { las14Availability } from './las14Availability';
 import { describeLoss, inspectLegacyConversion } from '../lasSemantics';
 import { legacyClassReinterpretationRefusal, planClassSemantics } from './classSemantics';
 import {
@@ -149,6 +150,20 @@ function nad27DatumLeg(src: number, dst: number): boolean {
   return a !== b && (a === 'NAD27' || b === 'NAD27');
 }
 
+/** Both user-facing download routes require a valid CRS record for LAS 1.4 extended point formats. */
+export function convertCloudForDownload(cloud: PointCloud, opts: ConvertOptions): ReturnType<typeof convertCloud> {
+  if (opts.format === 'las14' && (opts.crsMode ?? 'keep') === 'keep') {
+    const crs = opts.resolvedSourceCrs === undefined ? cloud.metadata?.crs : opts.resolvedSourceCrs;
+    if (crs?.epsg == null) {
+      const plan = las14Availability({ mode: 'keep', sourceEpsg: null, sourceWkt: crs?.wkt ?? null, targetEpsg: null });
+      if (!plan.ok) {
+        return { file: null, report: { source: cloud.name, ok: false, pointCount: 0, crsNote: '—', log: [{ level: 'error', message: plan.message }] } };
+      }
+    }
+  }
+  return convertCloud(cloud, opts);
+}
+
 /** Convert one cloud. Returns the file (or null) and a report. */
 export function convertCloud(
   cloud: PointCloud,
@@ -208,9 +223,9 @@ export function convertCloud(
   // to the detected metadata exactly as before — a byte-identical no-override path.
   const resolvedProvided = opts.resolvedSourceCrs !== undefined;
   const sourceCrs = resolvedProvided ? opts.resolvedSourceCrs : (cloud.metadata?.crs ?? null);
-  const sourceEpsg = resolvedProvided
-    ? (opts.resolvedSourceCrs?.epsg ?? opts.sourceEpsg ?? null)
-    : (cloud.metadata?.crs?.epsg ?? opts.sourceEpsg ?? null);
+  // The manual source field belongs to Reproject. Keep and Assign must ignore
+  // a value the panel retained after the user left that mode.
+  const sourceEpsg = sourceCrs?.epsg ?? (mode === 'reproject' ? opts.sourceEpsg ?? null : null);
   let g = cloudToGlobal(cloud);
   if (g.count === 0) {
     return fail('Nothing was exported: the scan has no points in the current scope, so no file was written.');

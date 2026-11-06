@@ -35,6 +35,16 @@ export const FILE_FINGERPRINT_WINDOW_BYTES = 64 * 1024;
 /** How the fingerprinted bytes were chosen. */
 export type SourceFingerprintKind = 'file' | 'copc' | 'ept';
 
+/** A session may carry a sampled source fingerprint written by an older version. */
+export function sessionContentFingerprint(value: unknown): string | undefined {
+  return typeof value === 'string' && /^olvsrc[0-9]{1,3}-(file|copc|ept):[a-f0-9]{64}$/.test(value) ? value : undefined;
+}
+
+/** A positive conflict needs two fingerprints of the same version and byte-selection scheme. */
+export function sessionContentsDiffer(saved: string | undefined, live: string | undefined): boolean {
+  return !!saved && !!live && saved !== live && saved.split(':', 1)[0] === live.split(':', 1)[0];
+}
+
 function toHex(buffer: ArrayBuffer): string {
   const bytes = new Uint8Array(buffer);
   let hex = '';

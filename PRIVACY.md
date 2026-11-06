@@ -1,57 +1,51 @@
-# Privacy
+# Viewer privacy
 
-OpenLiDARViewer runs in your browser. This page describes what it does with
-your data.
+## Files and network requests
 
-## Files you open
+OpenLiDARViewer processes files you open from your device in your browser.
+Opening a local scan, measuring it and creating an export do not upload the
+scan or measurements. The viewer has no usage analytics or telemetry service.
 
-Files you open from your device are read and processed on your device. They
-are not uploaded to any server.
+The viewer downloads its application files from the site serving it. When you
+open a remote dataset or sample, it requests the file or the tiles needed for
+the view directly from the dataset host. Each host receives the connection's
+IP address and the requested URLs. Hosting providers set their own access-log
+and retention policies.
 
-## What leaves your device
+When you run a location search in the public LiDAR catalogue, the viewer sends
+a geographic bounding box centred on the coordinates you entered to Microsoft
+Planetary Computer. Opening a result sends the tile URL to Microsoft's signing
+service and then requests the tile from its host. Add `?notelemetry=1` to the
+viewer URL to disable the public catalogue and local usage counters. You can
+still choose to open a remote dataset or sample.
 
-The app contains no analytics and no telemetry. It sends nothing about you or
-your use of it to the project or to anyone else. The network requests it makes
-are these:
+## What the browser keeps
 
-- the app's own files, from the site that serves it, and the full offline copy
-  if you ask for one;
-- a remote dataset or sample you open, from the server that hosts it;
-- a location search in the public LiDAR catalogue, sent to Microsoft Planetary
-  Computer, only when you run one, and, when you open a result, a request to
-  its signing service carrying that tile's address.
+- **Session recovery.** While recovery is enabled, the viewer saves session
+  information, including scan names, measurements, annotations and views, in
+  IndexedDB or, when available as a fallback, local storage. When recovery next
+  starts, it removes entries last saved more than seven days earlier. Entries
+  can remain on disk while the viewer is closed. Choose **Clear recovery data**
+  in Help to erase the recovery entries.
+- **Scan and terrain caches.** For large local scans the viewer can store
+  indexed point tiles on disk in the browser's origin-private file system. It
+  can also keep computed terrain there for reuse across sessions. Clearing
+  recovery data leaves these caches in place.
+- **Preferences and counts.** The viewer keeps settings such as theme and
+  navigation preferences. Session Stats shows local usage counts.
+- **Application files.** A service worker caches viewer files. Choosing
+  **Make available offline** saves a more complete copy for offline use.
+  **Remove offline copy** removes the saved offline copy.
+- **Report signing.** If you choose to create a signing key, the browser stores
+  a non-exportable private key in IndexedDB. Signed reports include the public
+  key and its identifier. Someone who receives two signed reports can tell
+  whether the same key signed them.
 
-The `?notelemetry=1` URL flag turns off the public LiDAR catalogue, including
-its location search.
-
-## Browser storage
-
-The app stores some data in your browser, on your device only:
-
-- session recovery data, so an interrupted session can be restored. Entries
-  older than 7 days are deleted, and "Clear recovery data" in Help removes them
-  at once;
-- your preferences, such as theme, navigation and panel settings;
-- local usage counts, shown in the Session Stats panel and never sent anywhere
-  (the `?notelemetry=1` URL flag turns them off as well);
-- a cache of the app's own files, kept by its service worker so the app loads
-  faster;
-- the full offline copy of the app, only if you choose to make it available
-  offline.
-
-You can remove all of it by clearing the site data for the app in your browser.
-
-The Session log is not stored: it lives in this tab's memory, a reload clears
-it, and it leaves your device only if you copy or export it.
-
-## Remote datasets and samples
-
-When you open a remote dataset, a sample, or search a public data catalogue,
-the data is downloaded directly from the server that hosts it. That server sees
-your IP address and which files and tiles you request, and its own privacy
-terms apply.
+To remove the viewer's browser-stored data, including point tiles, terrain and
+the signing key, clear site data for this viewer's origin in your browser.
+Files you explicitly downloaded or shared are separate copies. The Session log
+lives in tab memory and a reload clears it. You can copy or export it yourself.
 
 ## Warranty
 
-OpenLiDARViewer is provided as is, without warranty of any kind; see sections
-15 and 16 of the GNU AGPL in [LICENSE](LICENSE).
+See sections 15 and 16 of the [GNU AGPL](LICENSE) for the warranty terms.

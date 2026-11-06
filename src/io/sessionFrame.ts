@@ -29,6 +29,7 @@
  * Pure (no DOM, no three.js), so it is unit-tested in Node.
  */
 
+import { sessionContentFingerprint, sessionContentsDiffer } from './sourceFingerprint';
 import { parseResolvedCrs, type SerializedResolvedCrs } from './sessionCrs';
 import type { WorkOwnership } from '../model/workOwnership';
 import type { Measurement } from '../render/measure/types';
@@ -53,6 +54,7 @@ export interface SessionLayerRecord {
   readonly layerId: string;
   /** The canonical source-fingerprint key the id is anchored on. */
   readonly sourceFingerprint: string;
+  readonly contentFingerprint?: string;
   /** The display label at export time. Disclosure only; never an identity. */
   readonly sourceName: string;
   /** The layer's own origin, as its FILE declared it, in source-CRS units (Float64). */
@@ -81,6 +83,7 @@ export interface SessionProjectFrame {
 export interface SessionFrameLayerInput {
   readonly layerId: string;
   readonly sourceFingerprint: string;
+  readonly contentFingerprint?: string;
   readonly sourceName: string;
   readonly sourceOrigin: Vec3;
   readonly crs?: SerializedResolvedCrs;
@@ -227,9 +230,11 @@ function refuse(reasons: readonly string[]): never {
 /** Normalise a validated record: known fields only, Float64 copies, CRS re-parsed. */
 function normalizeRecord(raw: Record<string, unknown>): SessionLayerRecord {
   const crs = parseResolvedCrs(raw.crs);
+  const contentFingerprint = sessionContentFingerprint(raw.contentFingerprint);
   const record: SessionLayerRecord = {
     layerId: raw.layerId as string,
     sourceFingerprint: raw.sourceFingerprint as string,
+    ...(contentFingerprint ? { contentFingerprint } : {}),
     sourceName: raw.sourceName as string,
     sourceOrigin: toVec3(raw.sourceOrigin as Vec3),
     sourceToProject: toVec3(raw.sourceToProject as Vec3),
@@ -288,6 +293,7 @@ export function buildSessionProjectFrame(input: SessionFrameInput): SessionProje
     return {
       layerId: l.layerId,
       sourceFingerprint: l.sourceFingerprint,
+      ...(l.contentFingerprint ? { contentFingerprint: l.contentFingerprint } : {}),
       sourceName: l.sourceName,
       sourceOrigin: toVec3(l.sourceOrigin),
       sourceToProject,
@@ -484,7 +490,7 @@ export function carryHeldSessionWork(
   const oldRec = new Map(held.layers.map((r) => [r.layerId, r]));
   const newRec = new Map<string, SessionLayerRecord>();
   for (const r of held.layers) {
-    const same = frame.layers.filter((l) => l.sourceFingerprint === r.sourceFingerprint && sameOrigin(l.sourceOrigin, r.sourceOrigin) && l.upAxis === r.upAxis);
+    const same = frame.layers.filter((l) => l.sourceFingerprint === r.sourceFingerprint && !sessionContentsDiffer(l.contentFingerprint, r.contentFingerprint) && sameOrigin(l.sourceOrigin, r.sourceOrigin) && l.upAxis === r.upAxis);
     if (same.length === 1) {
       idOf.set(r.layerId, same[0]!.layerId);
       newRec.set(r.layerId, same[0]!);

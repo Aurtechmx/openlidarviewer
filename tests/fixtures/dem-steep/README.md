@@ -11,8 +11,7 @@ without breaking anything that would notice.
 Registered as `OLV-DS-006-ANALYTIC-STEEP-DEM` in
 `validation/datasets/dataset-register.yaml`.
 
-Licence: MIT, the same as the rest of this repository. Nothing here is
-third-party data.
+Licence: MIT for this project-generated fixture.
 
 ## Why it exists
 

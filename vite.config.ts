@@ -312,6 +312,8 @@ function thirdPartyNotices() {
       // deploy archive carry the licence the work is offered under.
       const licence = readFileSync(new URL('./LICENSE', import.meta.url), 'utf8');
       this.emitFile({ type: 'asset', fileName: 'LICENSE', source: licence });
+      const privacy = readFileSync(new URL('./PRIVACY.md', import.meta.url), 'utf8');
+      this.emitFile({ type: 'asset', fileName: 'PRIVACY.md', source: privacy });
     },
   };
 }

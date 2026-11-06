@@ -101,11 +101,16 @@ describe('ExportPanel — LAS 1.2 with classes above 31', () => {
   });
 
   it('choosing LAS 1.4 writes the full classes with no opt-in', async () => {
-    const root = await panelFor(cloud([2, 64]));
+    const root = await panelFor(cloud([2, 64]), { getResolvedSourceCrs: () => ({ epsg: 32612 }) });
     pickFormat(root, 'LAS 1.2');
     pickFormat(root, 'LAS 1.4');
     await pressExport(root);
     expect(hoisted.downloads.length).toBe(1);
+    const bytes = hoisted.downloads[0].bytes;
+    const header = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+    const start = header.getUint32(96, true);
+    const stride = header.getUint16(105, true);
+    expect([bytes[start + 16], bytes[start + stride + 16]]).toEqual([2, 64]);
     expect(status(root).className).not.toContain('is-error');
   });
 

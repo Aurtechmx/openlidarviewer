@@ -38,6 +38,7 @@ import type { PointSizeMode } from '../render/pointStyle';
 import type { ResolvedCrs } from '../geo/CoordinateTypes';
 import type { CrsLinearUnit } from './crs';
 import { UNIT_FACTORS } from '../units/units';
+import { sessionContentFingerprint, sessionContentsDiffer } from './sourceFingerprint';
 import type { BoxBounds } from '../render/measure/geometry';
 import type { ClipBox, ClipMode } from '../render/clip/clipBox';
 import { parseResolvedCrs } from './sessionCrs';
@@ -174,6 +175,8 @@ export interface SessionScanSummary {
   boundsMin?: [number, number, number];
   /** SHA-256 of the source bytes, when known at save time. */
   sha256?: string;
+  /** Versioned fingerprint of sampled source bytes, distinct from a whole-file SHA-256. */
+  contentFingerprint?: string;
 }
 
 /** Inclusive `[min, max]` point-filter windows persisted with a session. */
@@ -995,6 +998,7 @@ export interface ScanFacts {
   readonly boundsMin?: readonly [number, number, number];
   /** SHA-256 of the loaded source bytes, when known. */
   readonly sha256?: string;
+  readonly contentFingerprint?: string;
 }
 
 /**
@@ -1081,6 +1085,9 @@ export function matchSessionToScan(
 
   const reasons: string[] = [];
   const rel = extentRelDiff(summary, loaded);
+  if (sessionContentsDiffer(summary.contentFingerprint, loaded.contentFingerprint)) {
+    return { verdict: 'conflict', reasons: ['the source content fingerprint differs'] };
+  }
 
   // File name and CRS label give the reasons; the name also gates 'strong' below.
   if (
@@ -2011,10 +2018,14 @@ function freshMeasurementId(): string {
 // v3 helpers
 // ─────────────────────────────────────────────────────────────────────────────
 
-/** Type guard for the runtime's ColorMode union. */
+/** Keep session decoding exhaustive when the renderer adds a colour mode. */
+const SESSION_COLOR_MODES = {
+  rgb: true, intensity: true, elevation: true, classification: true, normal: true,
+  gpsTime: true, returnNumber: true, density: true, coverage: true, confidence: true,
+} satisfies Record<ColorMode, true>;
+
 function isColorMode(v: string): v is ColorMode {
-  return v === 'rgb' || v === 'intensity' || v === 'elevation'
-      || v === 'classification' || v === 'normal';
+  return Object.prototype.hasOwnProperty.call(SESSION_COLOR_MODES, v);
 }
 
 /** Type guard for the runtime's PointSizeMode union. */
@@ -2097,6 +2108,8 @@ function parseScanSummary(v: unknown): SessionScanSummary | null {
     out.boundsMin = [v.boundsMin[0], v.boundsMin[1], v.boundsMin[2]];
   }
   if (typeof v.sha256 === 'string' && /^[0-9a-f]{64}$/i.test(v.sha256)) out.sha256 = v.sha256.toLowerCase();
+  const contentFingerprint = sessionContentFingerprint(v.contentFingerprint);
+  if (contentFingerprint) out.contentFingerprint = contentFingerprint;
   return out;
 }
 

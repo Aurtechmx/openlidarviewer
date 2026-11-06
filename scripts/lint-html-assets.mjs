@@ -72,6 +72,7 @@ const DEPLOYED_SEPARATELY = new Map([
 const BUILT_INTO_DIST = new Map([
   ['THIRD_PARTY_NOTICES.md', 'docs/project/THIRD_PARTY_NOTICES.md'],
   ['LICENSE', 'LICENSE'],
+  ['PRIVACY.md', 'PRIVACY.md'],
 ]);
 
 /** Anything with a scheme, a protocol-relative URL, or a bare fragment. */

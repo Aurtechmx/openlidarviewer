@@ -48,19 +48,19 @@ no executable code; they belong to the production graph and are listed for
 completeness. All of these licenses are permissive and compatible with
 AGPL-3.0-only distribution; none require the distributor to relicense.
 
-MIT (29 packages):
+MIT (28 packages):
 
-- @loaders.gl/core 4.5.2
-- @loaders.gl/draco 4.5.2
-- @loaders.gl/gltf 4.5.2
-- @loaders.gl/images 4.5.2
-- @loaders.gl/loader-utils 4.5.2
-- @loaders.gl/obj 4.5.2
-- @loaders.gl/ply 4.5.2
-- @loaders.gl/schema 4.5.1
-- @loaders.gl/schema-utils 4.5.2
-- @loaders.gl/textures 4.5.2
-- @loaders.gl/worker-utils 4.5.2
+- @loaders.gl/core 4.5.4
+- @loaders.gl/draco 4.5.4
+- @loaders.gl/gltf 4.5.4
+- @loaders.gl/images 4.5.4
+- @loaders.gl/loader-utils 4.5.4
+- @loaders.gl/obj 4.5.4
+- @loaders.gl/ply 4.5.4
+- @loaders.gl/schema 4.5.4
+- @loaders.gl/schema-utils 4.5.4
+- @loaders.gl/textures 4.5.4
+- @loaders.gl/worker-utils 4.5.4
 - @math.gl/core 4.1.0
 - @math.gl/types 4.1.0
 - @pdf-lib/standard-fonts 1.0.0
@@ -72,11 +72,10 @@ MIT (29 packages):
 - @types/node 25.9.8
 - json-with-bigint 3.5.12
 - ktx-parse 0.7.1
-- meshoptimizer 1.2.0
 - mgrs 1.0.0
 - pdf-lib 1.17.1
 - proj4 2.22.0
-- three 0.186.0
+- three 0.186.1
 - undici-types 7.24.6
 - wkt-parser 1.5.5
 
@@ -124,12 +123,12 @@ expressions, unchanged. The `.d.mts` files beside them add type declarations
 only. MIT code is compatible with the AGPL-3.0 licence of this project; the
 SPDX headers and the MIT licence text are kept.
 
-## Development-only dependencies (not bundled into the shipped build)
+## Build and development dependencies
 
 The following are used during typecheck, test, lint, or build only.
-They are NOT distributed in `dist/` and do not need re-distribution
-of their license text alongside the shipped artifact. They are listed
-here for transparency.
+The full development tools do not ship with the viewer. The build does emit
+small pieces of Vite and Rolldown runtime code into the browser bundle. Their
+notices are included below.
 
 | Package | Declared range | Resolved | License | Upstream |
 | --- | --- | --- | --- | --- |
@@ -148,6 +147,105 @@ here for transparency.
 | @loaders.gl/las | ^4.5.4 | 4.5.4 | MIT | https://github.com/visgl/loaders.gl |
 | @axe-core/playwright | 4.14.0 | 4.14.0 | MPL-2.0 | https://github.com/dequelabs/axe-core-npm |
 
+## Notices for emitted runtime helpers and PDF font metrics
+The production chunks named `preload-helper-*.js` and `rolldown-runtime-*.js`
+carry code emitted by Vite 8.3.5 and Rolldown 1.2.3. The following are the
+upstream notices for Vite core, Rolldown and the components credited by Rolldown.
+
+### Vite core
+MIT License
+
+Copyright (c) 2019-present, VoidZero Inc. and Vite contributors
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+### Rolldown
+MIT License
+
+Copyright (c) 2024-present VoidZero Inc. & Contributors
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+end of terms and conditions
+
+The licenses of externally maintained libraries from which parts of the Software is derived are listed [here](https://github.com/rolldown/rolldown/blob/main/THIRD-PARTY-LICENSE).
+
+### Rolldown third-party notices
+The MIT License (MIT)
+
+Copyright (c) 2017 [these people](https://github.com/rollup/rollup/graphs/contributors)
+
+Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the "Software"), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+
+---
+
+MIT License
+
+Copyright (c) 2020 Evan Wallace
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+### Upstream credit for PDF font metrics
+The README accompanying `@pdf-lib/standard-fonts` 1.0.0 identifies Christopher
+Brown's MIT-licensed `afm` as its upstream project and retains this credit:
+
+Copyright 2015–2018 Christopher Brown.
+[MIT Licensed](https://chbrown.github.io/licenses/MIT/#2015-2018).
+
+The MIT permission text is reproduced below with the package notices.
+
 ## License texts
 
 The full licence texts, each bundled package's copyright lines, and the NOTICE
@@ -164,8 +262,8 @@ installed packages. Points it cannot read from the packages themselves:
   (C) 1995-2017 Jean-loup Gailly and Mark Adler. Both texts are reproduced.
 - tslib is 0BSD, which requires no attribution; its text is reproduced anyway.
 
-Development-only dependencies are not distributed, so their texts are not
-reproduced. Their licences are listed in the table above.
+The table above lists the development tools. Notices for the runtime helpers
+emitted into the browser bundle are reproduced separately above.
 
 ## How to refresh this notice
 
@@ -234,7 +332,8 @@ test suite; they are not part of the published web app.
   single-point LAS 1.2 files from the PDAL test corpus
   (https://github.com/PDAL/PDAL, `test/data/las/`), each verified byte-identical
   to upstream. Copyright (c) 2025, Hobu, Inc. (howard@hobu.co), released under
-  the BSD 3-Clause licence that covers the PDAL distribution; its text is the
+  the BSD 3-Clause licence that covers the PDAL distribution. The upstream
+  notice is bundled in `tests/fixtures/las-pdal/LICENSE.txt`; its text is the
   "Overall PDAL license (BSD)" section of
   https://github.com/PDAL/PDAL/blob/master/LICENSE.txt. `utm15.las` carries its
   CRS in GeoTIFF keys rather than WKT and was written by libLAS 1.2 in 2008;
@@ -355,9 +454,13 @@ traceability rather than obligation.
 
 ### Virginia Tech StREAM Lab Spring 2026 Drone Lidar Survey
 
-- Provider: OpenTopography
-- Licence: see the OpenTopography dataset terms at the DOI below
+- Creators: W. Hession, L. Lehmann, J. Resop and A. Chandel (2026).
+- Distributor: OpenTopography. This survey was supported by the Virginia Tech
+  Department of Biological Systems Engineering.
 - DOI: <https://doi.org/10.5069/G9NZ85W7>
+- Licence: [Creative Commons Attribution 4.0 International](https://creativecommons.org/licenses/by/4.0/).
+- Changes: OLV cropped and re-encoded the point data, generated a binned
+  elevation grid and extracted a reference grid from the published terrain raster.
 - Committed derivatives: `validation/terrain-field/crops/sl-field.bin`,
   `crops/sl-field.crop.json`, `references/sl-field__bincell-dtm.asc`,
   `references/sl-field__published-dtm.asc`
@@ -383,12 +486,13 @@ taken from `validation/datasets/dataset-register.yaml`.
 - Creator: National Center for Airborne Laser Mapping (NCALM), distributed by
   OpenTopography
 - Title: Jemez River Basin Snow-off Lidar Survey
-- Link: <https://opentopography.org/>
+- Link: <https://doi.org/10.5069/G9RB72JV>
 - Licence: CC BY 4.0, <https://creativecommons.org/licenses/by/4.0/>
 - Modified: decode statistics and ground-filter agreement statistics were
-  computed from tile `ot_356000_3972000_1.laz`. The point data is not
-  redistributed.
-- Committed derivatives: `validation/real-scene/decode-stats/OLV-DS-090.json`,
+  computed from tile `ot_356000_3972000_1.laz`. The intake fixture redistributes
+  2,000 subsampled XYZ and intensity records as text.
+- Committed derivatives: `validation/intake-corpus/seeds/OLV-DS-090-subsample.txt`,
+  `validation/real-scene/decode-stats/OLV-DS-090.json`,
   `validation/real-scene/gf-strata/OLV-DS-090.json`
 
 ### OLV-DS-040: 3DPC of a gypsum slope in Finestrat, Alicante (Spain)
@@ -460,6 +564,7 @@ taken from `validation/datasets/dataset-register.yaml`.
   <https://github.com/r-barnes/richdem/blob/9a1c97bb2529e386451a7dd54768b8b74bb4d620/LICENSE.txt>
 - Modified: not modified; the six files are kept byte for byte and read as
   test references. No RichDEM code is included or run.
+- Upstream licence text: `validation/field-simulation/richdem-references/LICENSE.txt`
 - Committed derivatives: `validation/field-simulation/richdem-references/`
 
 ### OLV-DS-093: 2019 USFS Lidar, Rogue River-Siskiyou National Forest, tile 10TDM3449

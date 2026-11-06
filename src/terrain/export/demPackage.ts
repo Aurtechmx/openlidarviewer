@@ -44,6 +44,8 @@ import {
   type ExportPermitStamp,
 } from './exportProvenance';
 import { writeAsciiGrid } from './demAsciiGrid';
+import { crsFromWkt, rasterHorizontalWkt } from '../../io/crs';
+import { compoundWkt, wktForEpsg } from '../../io/epsgWkt';
 import {
   verticalUnitGeoKeyCode,
   resolveVerticalGeoKeys,
@@ -774,6 +776,26 @@ export function assembleDemPackage(
   const verticalGeoKeys = resolveVerticalGeoKeys(verticalEpsg, verticalUnitCode);
   const isGeographic = options.isGeographic ?? false;
 
+  // ASCII Grid readers discover a .prj only under the raster's own stem.
+  const horizontalWkt = placed
+    ? rasterHorizontalWkt(options.wkt ?? wktForEpsg(epsg))
+    : null;
+  let elevationWkt = horizontalWkt;
+  if (horizontalWkt && verticalGeoKeys.status === 'written') {
+    // Prefer a verified definition in the unit actually exported. A WKT2
+    // horizontal cannot take a WKT1 vertical clause; keep a matching source
+    // compound verbatim when its vertical axis and unit agree with our grid.
+    const compound = compoundWkt(horizontalWkt, verticalGeoKeys.epsg);
+    if (compound) elevationWkt = compound;
+    else if (options.wkt && options.wkt.trim() !== horizontalWkt) {
+      const source = crsFromWkt(options.wkt);
+      if (source.verticalEpsg === verticalGeoKeys.epsg && !source.verticalAxisDown
+          && verticalUnitGeoKeyCode(source.verticalUnitToMetres) === verticalGeoKeys.unitCode) {
+        elevationWkt = options.wkt;
+      }
+    }
+  }
+
   // Bounds extent in CRS units: lower-left corner of the lower-left cell to the
   // upper-right corner of the upper-right cell.
   const boundsMinX = xll;
@@ -839,6 +861,8 @@ export function assembleDemPackage(
         bytes: writeGeoTiffDroppingVerticalConflict({ ...common, epsg, isGeographic, verticalEpsg: g.verticalEpsg, verticalUnitCode: g.unitCode }),
       },
     );
+    const prj = g.key === 'chm' ? horizontalWkt : elevationWkt;
+    if (prj) entries.push({ name: `${basename}-${g.key}.prj`, bytes: new TextEncoder().encode(prj) });
   }
 
   // Terrain evidence raster: per-cell support on the DTM's grid and NoData

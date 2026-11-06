@@ -12,6 +12,7 @@
  *   nothing else stops an overclaim from standing unchallenged.
  */
 import { describe, expect, it } from 'vitest';
+import { compoundWkt, wktForEpsg } from '../src/io/epsgWkt';
 
 import { buildFlowPulseConfig, buildFlowPulsePackage } from '../src/export/flowPulsePackage';
 import {
@@ -104,6 +105,19 @@ describe('the package carries every required file', () => {
     const readme = textOf(zip, 'flow-README.txt');
     expect(readme).not.toContain('flow.prj');
     expect(readme).toContain('UTM zone 13N (not applied');
+  });
+
+  it('pairs only emitted ASCII grids with their horizontal projection', () => {
+    const horizontal = wktForEpsg(32610)!;
+    const result = runOf();
+    const opts = { basename: 'flow', wkt: compoundWkt(horizontal, 5703),
+      worldOrigin: { x: 600000, y: 4000000 }, gridFrame: { originH1: 0, originH2: 0, cellSize: 1 } };
+    const zip = buildFlowPulsePackage(result, { ...opts, catchment: { mask: catchmentFrom(result, 12), outletCell: 12 } });
+    for (const key of ['accumulation', 'direction', 'catchment']) {
+      expect(textOf(zip, `flow-${key}.prj`)).toBe(horizontal);
+    }
+    expect(extractEntry(buildFlowPulsePackage(result, opts), 'flow-catchment.prj')).toBeNull();
+    expect(extractEntry(buildFlowPulsePackage(result, { ...opts, worldOrigin: null }), 'flow-direction.prj')).toBeNull();
   });
 
   it('keeps the .prj when the export is placed, and states the raster cell size in CRS units', () => {

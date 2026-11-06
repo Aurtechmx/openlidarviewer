@@ -62,7 +62,7 @@ describe('batch converter: a re-decode that did not read every point', () => {
   it('converts a complete decode, and keeps the other files of the batch', async () => {
     const results = await runBatch(
       [input('bad.e57'), input('good.e57')],
-      { format: 'las14' },
+      { format: 'las14', crsMode: 'assign', targetEpsg: 32612 },
       async (_b, name) => (name === 'bad.e57' ? cloud({ declaredPointCount: 300, loadStride: 100 }) : cloud({ declaredPointCount: 3 })),
     );
     expect(results.map((r) => r.report.ok)).toEqual([false, true]);

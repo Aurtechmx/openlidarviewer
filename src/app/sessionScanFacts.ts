@@ -45,6 +45,7 @@ function declaredUnitsOf(crs: ScanUnitCrs | null | undefined): Pick<DeclaredSpat
 /** The streaming-source slice `scanFactsFromStreaming` reads — a structural subset of {@link StreamingSource}. */
 export interface StreamingScanSource {
   readonly name: string;
+  readonly sourceDigest?: string | null;
   readonly sourcePointCount: number | null;
   dataBounds(): readonly [number, number, number, number, number, number];
   crs(): ScanUnitCrs | null | undefined;
@@ -53,6 +54,7 @@ export interface StreamingScanSource {
 /** The static-cloud slice `scanFactsFromStatic` reads — a structural subset of {@link PointCloud}. */
 export interface StaticScanCloud {
   readonly name: string;
+  readonly sourceDigest?: string | null;
   readonly pointCount: number;
   /**
    * Source-truth counts, preferred over the display-sampled `pointCount` for
@@ -87,6 +89,7 @@ export function scanFactsFromStreaming(cloud: StreamingScanSource): ScanFacts {
   const crs = cloud.crs();
   return {
     fileName: cloud.name,
+    ...(cloud.sourceDigest ? { contentFingerprint: cloud.sourceDigest } : {}),
     // `sourcePoints` is optional in the session schema, so an unknown total
     // is an absent field rather than a stored zero.
     sourcePoints: cloud.sourcePointCount ?? undefined,
@@ -130,6 +133,7 @@ export function scanFactsFromStatic(cloud: StaticScanCloud): ScanFacts {
   const o = cloud.sourceOrigin;
   return {
     fileName: cloud.name,
+    ...(cloud.sourceDigest ? { contentFingerprint: cloud.sourceDigest } : {}),
     sourcePoints: cloud.declaredPointCount ?? cloud.decodedPointCount ?? cloud.pointCount,
     width: b.max[0] - b.min[0],
     depth: b.max[1] - b.min[1],
