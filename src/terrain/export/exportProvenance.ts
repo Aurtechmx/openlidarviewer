@@ -499,6 +499,8 @@ export function buildExportProvenance(
   const crs = dtm?.crs ?? result.model?.crs ?? null;
   const datum = dtm?.verticalDatum ?? result.model?.verticalDatum ?? null;
   const coverageMode = dtm?.coverageMode ?? result.model?.coverageMode ?? 'unknown';
+  // Normalize once so JSON, scientific records and human-readable exports agree.
+  const readiness = readinessOnBasis(assessment.exportReadiness, assessment.exportReason, opts.analysedBasis, coverageMode);
   const style =
     result.generationParams?.contourStyle ?? result.model?.contourStyle ?? null;
   const intervalM = result.intervalM ?? result.model?.intervalM ?? null;
@@ -624,8 +626,8 @@ export function buildExportProvenance(
     contourGeneralizeToleranceCells: generalizeToleranceCells,
     deliverablePurpose: opts.deliverablePurpose ?? null,
     surfaceQuality: assessment.status,
-    exportReadiness: assessment.exportReadiness,
-    exportReason: assessment.exportReason,
+    exportReadiness: readiness.tier,
+    exportReason: readiness.reason,
     accuracy,
     complexity,
     pointDensityPerM2,
@@ -972,7 +974,7 @@ export function provenanceLines(p: ExportProvenance): string[] {
     kv('Surface quality', p.surfaceQuality),
     // The "Tier — reason" formatting is the readiness engine's, so this stamp
     // and the Terrain Intelligence Report row can never word the verdict apart.
-    kv('Export readiness', ((r) => readinessLine(r.tier, r.reason))(readinessOnBasis(p.exportReadiness, p.exportReason, p.analysedBasis, p.coverageMode))),
+    kv('Export readiness', readinessLine(p.exportReadiness, p.exportReason)),
     kv('Vertical RMSEz', p.accuracy ? fmtM(p.accuracy.rmseZM) : 'unknown'),
     // "-style (hold-out)": the stamp states the figures' true strength —
     // ASPRS 2014 FORMULAS on internally withheld points, not independent
