@@ -100,3 +100,22 @@ test('a blocked assessment stays blocked on a sample', () => {
     SAMPLED_OPTS.analysedBasis, 'sampled',
   )).toEqual({ exportReadiness: 'Blocked', exportReason: 'gate' });
 });
+
+test('a sampled report does not blame georeferencing or recommend the held-back products', () => {
+  const report = buildTerrainReportContent(readyResult(), SAMPLED_OPTS);
+  const held = report.workflows.filter(w => /DEM|Contour|Map sheet/.test(w.label));
+  expect(held).toHaveLength(3);
+  for (const w of held) {
+    expect(w.note).toContain('sample');
+    expect(w.note).not.toContain('georeferencing');
+  }
+  const bestFor = report.sections.flatMap(s => s.rows).find(r => r.label === 'Best for');
+  expect(bestFor?.value).toBe('measurement, inspection and terrain analysis');
+});
+
+test('a full read keeps its Best for line and clean workflow rows', () => {
+  const report = buildTerrainReportContent(readyResult(), { verticalUnitToMetres: 1 });
+  expect(report.workflows.every(w => !w.note)).toBe(true);
+  const bestFor = report.sections.flatMap(s => s.rows).find(r => r.label === 'Best for');
+  expect(bestFor?.value).toContain('DEM export');
+});

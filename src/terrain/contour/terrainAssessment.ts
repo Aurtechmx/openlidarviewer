@@ -105,6 +105,8 @@ export interface TerrainAssessment {
   readonly reason: string;
   /** What this surface is suitable for. */
   readonly bestFor: string;
+  /** Why the deliverable rows are held back, when the engine's note would not name the cause. */
+  readonly deliverableNote?: string;
   /** What to be careful with, or '' when there is nothing to caution. */
   readonly useCaution: string;
   /** What this surface is honestly not suitable for, given its status. */

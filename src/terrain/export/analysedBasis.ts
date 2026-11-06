@@ -149,12 +149,29 @@ export function readinessOnBasis<T extends string>(
   return { tier: 'Preview', reason: 'Only a sample of the scan was analysed, so whole-dataset support is not claimed.' };
 }
 
-/** An assessment with its export readiness stated on the analysed basis, for every view graded from it. */
-export function assessmentOnBasis<A extends { readonly exportReadiness: string; readonly exportReason: string }>(
+/**
+ * An assessment with its export readiness stated on the analysed basis, for
+ * every view graded from it. When the basis is what holds a Ready scan back, the
+ * lines derived from Ready say so as well: Best for stops naming the deliverables
+ * and the workflow rows name the sample rather than a georeferencing gap.
+ */
+export function assessmentOnBasis<A extends {
+  readonly exportReadiness: string;
+  readonly exportReason: string;
+  readonly bestFor?: string;
+  readonly deliverableNote?: string;
+}>(
   assessment: A,
   basis: AnalysedBasis | null | undefined,
   coverageMode: string | undefined,
 ): A {
   const shown = readinessOnBasis(assessment.exportReadiness, assessment.exportReason, basis, coverageMode);
-  return { ...assessment, exportReadiness: shown.tier, exportReason: shown.reason };
+  if (shown.tier === assessment.exportReadiness) return assessment;
+  return {
+    ...assessment,
+    exportReadiness: shown.tier,
+    exportReason: shown.reason,
+    bestFor: 'measurement, inspection and terrain analysis',
+    deliverableNote: 'sample only, whole dataset not analysed',
+  };
 }
