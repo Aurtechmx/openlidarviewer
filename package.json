@@ -218,7 +218,7 @@
     "laz-perf": "^0.0.7",
     "pdf-lib": "^1.17.1",
     "proj4": "^2.22.0",
-    "three": "^0.186.1"
+    "three": "^0.187.0"
   },
   "devDependencies": {
     "@axe-core/playwright": "4.14.0",
