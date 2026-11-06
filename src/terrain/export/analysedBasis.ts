@@ -84,7 +84,12 @@ const fmt = (n: number): string => n.toLocaleString('en-US');
 export function analysedBasisLine(b: AnalysedBasis | null | undefined): string {
   if (!b) return 'unknown';
   const of = b.declaredPointCount != null ? ` of ${fmt(b.declaredPointCount)}` : '';
-  if (b.coverage === 'full') return `${fmt(b.analysedPointCount)}${of} points (full read)`;
+  if (b.coverage === 'full') {
+    const how = isSampledBasis(b)
+      ? '(analysis subsample of the fully loaded scan); whole-dataset support not claimed'
+      : '(full read)';
+    return `${fmt(b.analysedPointCount)}${of} points ${how}`;
+  }
   const set = 'resident streaming set';
   const r = b.residentPointCount;
   const how = b.coverage === 'partial' ? 'truncated file' : b.coverage === 'resident-only'

@@ -16,7 +16,7 @@ import * as serializers from '../src/export/measurementExport';
 import * as reportSerializers from '../src/export/measurementReport';
 import { geoContextForCloud } from '../src/app/reportExport';
 import { CrsService } from '../src/geo/CrsService';
-import type { CrsInfo } from '../src/io/crs';
+import { crsFromWkt, type CrsInfo } from '../src/io/crs';
 import type { Measurement } from '../src/render/measure/types';
 import type { PointCloud } from '../src/model/PointCloud';
 
@@ -189,3 +189,47 @@ describe('measurement export uses the owning scan frame', () => {
 });
 
 const FOOT_SCAN: Scan = { id: 'foot', stable: 'layer-foot', file: 'foot.las', crs: FOOT };
+
+
+const gridWkt = (falseEasting: number): string => [
+  'PROJCS["Site grid",GEOGCS["WGS 84",DATUM["WGS_1984",SPHEROID["WGS 84",6378137,298.257223563]],',
+  'PRIMEM["Greenwich",0],UNIT["degree",0.0174532925199433]],PROJECTION["Transverse_Mercator"],',
+  'PARAMETER["latitude_of_origin",0],PARAMETER["central_meridian",-111],PARAMETER["scale_factor",0.9996],',
+  `PARAMETER["false_easting",${falseEasting}],PARAMETER["false_northing",0],UNIT["metre",1]]`,
+].join('');
+
+describe('two custom surveyed grids with the same title', () => {
+  it.each(['csv', 'geojson'] as const)('refuses combined %s for different false eastings', async (format) => {
+    const a: Scan = { ...A, crs: crsFromWkt(gridWkt(500000)) };
+    const b: Scan = { ...B, crs: crsFromWkt(gridWkt(600000)) };
+    expect(a.crs.name).toBe(b.crs.name);
+    expect(a.crs.epsg).toBeUndefined();
+    const w = world([a, b], 'a');
+    const between: Measurement = { ...w.dist('m1', a), pickLayers: [a.stable, b.stable] };
+    await exportMeasurementsFile(format, w.make([between]));
+    expect(w.files).toEqual([]);
+    expect(w.refusals[0]).toContain('different coordinate frames');
+  });
+
+  it('exports measurements from two scans that provide the same custom definition', async () => {
+    const crs = crsFromWkt(gridWkt(500000));
+    const a = { ...A, crs };
+    const b = { ...B, crs };
+    const w = world([a, b], 'b');
+    await exportMeasurementsFile('csv', w.make([w.dist('m1', a), w.dist('m2', b)]));
+    expect(w.refusals).toEqual([]);
+    expect(w.files).toHaveLength(2);
+  });
+
+  it('requires evidence beyond a shared grid name only for multi-scan exports', async () => {
+    const crs = { ...crsFromWkt(gridWkt(500000)), wkt: undefined };
+    const a = { ...A, crs };
+    const b = { ...B, crs };
+    const w = world([a, b], 'a');
+    await exportMeasurementsFile('csv', w.make([w.dist('m1', a), w.dist('m2', b)]));
+    expect(w.files).toEqual([]);
+    expect(w.refusals[0]).toContain('cannot be verified as the same');
+    await exportMeasurementsFile('csv', w.make([w.dist('m1', a)]));
+    expect(w.files).toHaveLength(2);
+  });
+});

@@ -173,10 +173,11 @@ function describeCoverage(mode: string): { value: string; rating: SupportingMetr
 export function scopeForSampledBasis(
   metrics: ReadonlyArray<SupportingMetric>,
   sampled: boolean,
+  sampleLabel = 'display sample',
 ): ReadonlyArray<SupportingMetric> {
   if (!sampled) return metrics;
   return metrics.map((m) =>
-    m.label === 'Scan scope' && m.value === 'full' ? { label: m.label, value: 'display sample', rating: 'fair' } : m,
+    m.label === 'Scan scope' && m.value === 'full' ? { label: m.label, value: sampleLabel, rating: 'fair' } : m,
   );
 }
 

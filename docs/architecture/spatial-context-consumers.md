@@ -65,7 +65,7 @@ has re-opened the divergence this closes.
 | 9 | PDF reports | migrated | `src/app/reportExport.ts` | `linearUnitKnown`, `linearUnitToMetres`, `verticalUnitToMetres` |
 | 10 | LAS export | migrated | `src/convert/convertCloud.ts` | `linearUnit`, `verticalLinearUnit`, `verticalEpsg` |
 | 11 | GeoJSON / KML / DXF export | migrated | `src/main.ts`, `src/app/kmlActions.ts`, `src/app/measurementExportActions.ts`, `src/app/measurementExportFrame.ts`, `src/export/scanFootprint.ts`, `src/ui/featureCandidatesMount.ts`, `src/app/layerUpFrames.ts`, `src/geo/frame/layerUpFrame.ts` | `isGeographic`, `verticalDatum`, `verticalMetresPerUnit`, `upAxis` (from the per-layer up frame: format, then the layer's own CRS), `kind`, `epsg`, `crsName` |
-| 12 | Measurement labels | migrated | `src/main.ts` | `linearUnitToMetres`, `linearUnitKnown`, `isGeographic`, `verticalMetresPerUnit` |
+| 12 | Measurement labels | migrated | `src/app/measureLayerUnits.ts`, `src/main.ts` | `linearUnitToMetres`, `linearUnitKnown`, `isGeographic`, `verticalMetresPerUnit` |
 | 13 | Elevation colorbars | migrated | `src/main.ts`, `src/app/terrainAnalysisRunner.ts` | `verticalMetresPerUnit`, `kind` |
 | 14 | Classification | migrated | `src/render/class/classifierCues.ts` | `linearUnitToMetres`, `verticalMetresPerUnit` |
 | 15 | Streaming scan report | migrated | `src/analysis/streamingExtentRows.ts`, `src/app/streamingScanReport.ts`, `src/app/streamingReportSeam.ts` | `linearUnitKnown`, `linearUnitToMetres`, `verticalMetresPerUnit`, `isGeographic` |

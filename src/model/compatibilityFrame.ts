@@ -13,7 +13,7 @@
  * never treated as a frame identity on its own.
  */
 import type { ResolvedCrs } from '../geo/CoordinateTypes';
-import type { CompatibilityInput } from './layerCompatibility';
+import { horizontalKey, sharedKeyIsUnproven, type CompatibilityInput } from './layerCompatibility';
 import { crsDefinitionKey } from '../io/crs';
 
 /** Classifier facts without the layer id. */
@@ -38,4 +38,10 @@ export function compatibilityFrameOf(crs: ResolvedCrs | null | undefined): Compa
     ...(crs.verticalDatum !== undefined ? { verticalDatum: crs.verticalDatum } : {}),
     ...(crs.verticalEpsg !== undefined ? { verticalEpsg: crs.verticalEpsg } : {}),
   };
+}
+
+/** A shared value proves horizontal agreement for distinct measurement owners; null means unverified. */
+export function measurementHorizontalIdentity(crs: ResolvedCrs | null | undefined): string | null {
+  const key = horizontalKey({ id: '', ...compatibilityFrameOf(crs) });
+  return key !== null && !sharedKeyIsUnproven(key) ? key : null;
 }
