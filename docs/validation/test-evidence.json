@@ -87,7 +87,7 @@
     "liveEntryKiB": 431,
     "ceilingKiB": 795
   },
-  "packageLockSha256": "605c01fa59080dde6aca0357b4c8634c08ea59ff62efb30ddcf24c9717a5bece",
+  "packageLockSha256": "81be517f89cd2d14183820da9bbb633f9e6b9e2abeaa6131109c64958feeff85",
   "sbom": {
     "sha256": "0dce3877292be0201b6bae08f203f66d600b3ddfe19bb2044ddd0fb9ae95c3a8",
     "rootName": "openlidarviewer",

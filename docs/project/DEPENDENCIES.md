@@ -68,8 +68,8 @@ Build, test, docs, and mutation tooling. None reaches the deployed app.
 | @axe-core/playwright | 4.14.0 | 4.14.0 | MPL-2.0 |
 | @loaders.gl/las | ^4.5.4 | 4.5.4 | MIT |
 | @playwright/test | ^1.63.0 | 1.63.0 | Apache-2.0 |
-| @stryker-mutator/core | ^10.0.0 | 10.0.0 | Apache-2.0 |
-| @stryker-mutator/vitest-runner | ^10.0.0 | 10.0.0 | Apache-2.0 |
+| @stryker-mutator/core | ^10.1.1 | 10.1.1 | Apache-2.0 |
+| @stryker-mutator/vitest-runner | ^10.1.1 | 10.1.1 | Apache-2.0 |
 | @types/proj4 | ^2.19.0 | 2.19.0 | MIT |
 | @types/three | ^0.186.0 | 0.186.0 | MIT |
 | @vitest/coverage-v8 | ^5.0.5 | 5.0.5 | MIT |
