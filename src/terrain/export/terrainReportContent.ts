@@ -42,7 +42,7 @@
  * so the two can never drift.
  */
 
-import { DENSITY_REF_SAMPLE_NOTE, readinessOnBasis } from './analysedBasis';
+import { assessmentOnBasis, DENSITY_REF_SAMPLE_NOTE, readinessOnBasis } from './analysedBasis';
 import { blockedCiClause } from '../validate/holdoutCiText';
 import { BLOCKED_CV_PARAMS, type AnalyseContoursResult } from '../contour/analyseContours';
 import { terrainAssessment } from '../contour/terrainAssessment';
@@ -258,7 +258,7 @@ export function buildTerrainReportContent(
   const provenance = buildExportProvenance(result, opts);
   // The top-level verdict the panel renders — Surface Quality + score + reason,
   // and Export Readiness + reason. Single source of truth for the assessment.
-  const assessment = terrainAssessment(result);
+  const assessment = assessmentOnBasis(terrainAssessment(result), opts.analysedBasis, result.dtm?.coverageMode);
   const limitations = explainLimitations(result);
   const workflowItems = recommendedWorkflows(assessment, result.quality);
 

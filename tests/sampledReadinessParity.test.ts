@@ -1,4 +1,5 @@
 import { test, expect } from 'vitest';
+import { assessmentOnBasis } from '../src/terrain/export/analysedBasis';
 import {geojsonString} from '../src/terrain/contour/geojsonContours';
 import { readyResult } from './support/readyContourResult';
 import {analysisRecordFromProvenance, buildExportProvenance, provenanceJson, provenanceLines} from '../src/terrain/export/exportProvenance';
@@ -65,4 +66,37 @@ test('a sampled basis cannot promote a blocked export', () => {
   expect(full.exportReadiness).toBe('Blocked');
   expect(sampled.exportReadiness).toBe('Blocked');
   expect(sampled.exportReason).toBe(full.exportReason);
+});
+
+const SAMPLED_OPTS = {
+  verticalUnitToMetres: 1,
+  analysedBasis: {
+    coverage: 'sampled' as const, loadStride: 10,
+    analysedPointCount: 25_600, declaredPointCount: 256_000,
+  },
+};
+const DELIVERABLES = ['DEM', 'Contours', 'Map sheet'];
+
+test('a sampled report never lists a product deliverable as Available', () => {
+  const report = buildTerrainReportContent(readyResult(), SAMPLED_OPTS);
+  const rows = report.products.filter(p => DELIVERABLES.some(d => p.label.includes(d)));
+  expect(rows).toHaveLength(3);
+  for (const row of rows) {
+    expect(row.availability).toBe('Preview');
+    expect(row.note).toContain('sample');
+  }
+  expect(report.workflows.some(w => /DEM|Contour|Map sheet/.test(w.label) && w.mark === '✓')).toBe(false);
+});
+
+test('a full read still lists the deliverables as Available', () => {
+  const report = buildTerrainReportContent(readyResult(), { verticalUnitToMetres: 1 });
+  const rows = report.products.filter(p => DELIVERABLES.some(d => p.label.includes(d)));
+  expect(rows.map(p => p.availability)).toEqual(['Available', 'Available', 'Available']);
+});
+
+test('a blocked assessment stays blocked on a sample', () => {
+  expect(assessmentOnBasis(
+    { exportReadiness: 'Blocked', exportReason: 'gate' },
+    SAMPLED_OPTS.analysedBasis, 'sampled',
+  )).toEqual({ exportReadiness: 'Blocked', exportReason: 'gate' });
 });
