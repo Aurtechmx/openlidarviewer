@@ -1609,7 +1609,7 @@ export class AnalysePanel {
     this._contourFrame = ctx;
     // The assessment's Scan scope reads the frame's coverage, and the frame
     // usually lands after the result, so it is redrawn with the other rows.
-    if (this._result) { this._renderFitness(); this._renderAssessment(); this._renderValidation(); }
+    if (this._result) { this._renderFitness(); this._renderAssessment(); this._renderValidation(); this._renderExportGate(); }
     this._contourLauncher.replaceChildren();
     // Always re-hide first: opening the deliverable is an explicit user action,
     // and a fresh frame must not leak the previous scan's open panel.
@@ -1801,7 +1801,11 @@ export class AnalysePanel {
     // only the full numeric breakdown is tiered behind one keyboard-accessible
     // disclosure, with the headline numbers promoted into the primary row.
     // A display sample is not a full read, whatever the grid's extent says.
-    this._assessmentRow.append(this._renderAssessMetrics(scopeForSampledBasis(a.supportingMetrics, this._contourFrame?.analysedBasis?.coverage === 'sampled')));
+    const basis = this._contourFrame?.analysedBasis;
+    const analysisSample = basis?.coverage === 'full' && isSampledBasis(basis);
+    const metrics = scopeForSampledBasis(a.supportingMetrics, basis?.coverage === 'sampled' || analysisSample,
+      analysisSample ? 'full load, analysis sample' : 'display sample');
+    this._assessmentRow.append(this._renderAssessMetrics(metrics));
 
     // Derived complexity metrics (v0.5.4) — one compact line under the
     // assessment: VRM median [IQR] with its window, TPI dominant class with
@@ -3563,41 +3567,28 @@ export class AnalysePanel {
     this._demButton.title = hasDtm
       ? 'Download the elevation rasters (DTM / DSM / CHM) as ASCII Grid + GeoTIFF with a metadata sheet'
       : 'No covered DTM cells to export';
-    // One-line caveat under the DEM button when the surface is not full coverage
-    // or the GEOREFERENCED export is not ready — the README spells out the rest.
-    // The DEM is the georeferenced deliverable, so the note keys off EXPORT
-    // readiness (CRS + datum gated), using the SAME condition the README caveat
-    // does (coverage !== 'full' || exportReadiness !== 'available') so the
-    // button note and the README can't disagree. Any georeferencing gap (unknown
-    // CRS / datum) is named inline.
+    // Show the verdict written into the exported DEM, including the analysis point budget.
     const coverageMode = r.dtm.coverageMode;
-    const notFull = coverageMode !== 'full';
-    const exp = r.quality.exportReadiness;
-    const exportNotReady = exp !== 'available';
-    const demNoteApplies = hasDtm && (notFull || exportNotReady);
+    const assessment = assessmentOnBasis(terrainAssessment(r), this._contourFrame?.analysedBasis, coverageMode);
+    const demNoteApplies = hasDtm && (coverageMode !== 'full' || assessment.exportReadiness !== 'Ready');
     // v0.5.5 P12 — the DEM caveat and the contour preview caveat used to
     // render as two ADJACENT banners with overlapping content ("Preliminary
     // DEM — …" stacked directly above "Preview export — not survey-grade
     // …"). When BOTH apply, they merge into one consolidated caveat that
     // states both facts; each still renders alone when only one applies.
     // No disclosed information is removed — only the duplicate framing.
-    const previewNoteApplies = e === 'previewOnly' && hasFeatures;
+    const previewNoteApplies = assessment.exportReadiness === 'Preview' && hasFeatures;
     const merged = demNoteApplies && previewNoteApplies;
     if (demNoteApplies) {
-      let verdict: 'blocked' | 'preview' | 'ready';
-      if (exp === 'blocked') {
-        verdict = 'blocked';
-      } else if (exp === 'previewOnly') {
-        verdict = 'preview';
-      } else {
-        verdict = 'ready';
-      }
-      const georef = r.quality.exportReasons.length > 0 ? ` (${r.quality.exportReasons.join(', ')})` : '';
+      const scope = coverageMode === 'full' && isSampledBasis(this._contourFrame?.analysedBasis)
+        ? 'grid extent: full; analysis input: sampled' : `coverage: ${coverageMode}`;
+      const verdict = assessment.exportReadiness.toLowerCase();
+      const georef = assessment.exportReason ? ` (${assessment.exportReason})` : '';
       this._demNote.textContent = merged
-        ? `Preliminary DEM — coverage: ${coverageMode}; export readiness: ${verdict}${georef}. ` +
+        ? `Preliminary DEM — ${scope}; export readiness: ${verdict}${georef}. ` +
           `Contour and DEM exports are previews — not survey-grade (see the reasons above); ` +
           `the README carries the caveat. Not for reliable terrain products.`
-        : `Preliminary DEM — coverage: ${coverageMode}; export readiness: ${verdict}${georef}. ` +
+        : `Preliminary DEM — ${scope}; export readiness: ${verdict}${georef}. ` +
           `Exported with a caveat in the README; not for reliable terrain products.`;
       this._demNote.style.display = '';
     } else {

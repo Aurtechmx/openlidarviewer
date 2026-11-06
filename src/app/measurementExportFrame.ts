@@ -21,6 +21,7 @@ import type { ResolvedCrs } from '../geo/CoordinateTypes';
 import type { CrsService } from '../geo/CrsService';
 import { datasetIdentity } from '../geo/CrsService';
 import { layerUpFrameOf } from './layerUpFrames';
+import { measurementHorizontalIdentity } from '../model/compatibilityFrame';
 import { spatialUpAxisOf } from '../geo/frame/layerUpFrame';
 import { geoContextForCloud } from './reportExport';
 import { spatialContextFrom, verticalMetresPerUnit, type SpatialContext, type SpatialUpAxis } from '../geo/SpatialContext';
@@ -61,6 +62,8 @@ export interface ExportFrame {
   readonly classificationEpoch: number;
   /** Identity of the frame for equality: every field a coordinate, unit or label depends on. */
   readonly key: string;
+  /** Whether distinct scans can prove their horizontal frames agree by this identity. */
+  readonly horizontalIdentityKnown: boolean;
   /** Short label for a refusal sentence: the EPSG code, else the CRS name. */
   readonly label: string;
 }
@@ -108,20 +111,22 @@ export function measureUnitFrameOf(ctx: SpatialContext): MeasureUnitFrame {
 }
 
 /** A non-active scan's own spatial context: its resolved CRS, a remembered override included. */
-export function scanContextOf(crs: Pick<CrsService, 'resolveFor'>, c: PointCloud): SpatialContext {
-  return spatialContextFrom(crs.resolveFor({ name: c.name, detected: c.metadata?.crs ?? undefined, source: 'las-vlr', identity: datasetIdentity(c) }));
+export function scanCrsOf(crs: Pick<CrsService, 'resolveFor'>, c: PointCloud): ResolvedCrs {
+  return crs.resolveFor({ name: c.name, detected: c.metadata?.crs ?? undefined, source: 'las-vlr', identity: datasetIdentity(c) });
 }
 
 /** Build a frame from a scan's geo context, spatial context and resolved up-axis. */
 export function exportFrameOf(geo: GeoExportContext, ctx: SpatialContext, upAxis: SpatialUpAxis, classificationEpoch = 0): ExportFrame {
   const scalars = frameScalars(ctx);
+  const horizontalId = measurementHorizontalIdentity(geo.crs);
   const key = JSON.stringify([
-    ctx.kind, ctx.epsg ?? null, geo.crsName ?? null, ctx.linearUnit,
+    ctx.kind, ctx.epsg ?? null, geo.crsName ?? null, ctx.linearUnit, horizontalId,
     scalars.unitToMetres, scalars.verticalUnitToMetres, scalars.verticalScaleInvalid, scalars.geographic, scalars.verticalRefused, scalars.unitsVerified,
     ctx.verticalReference, ctx.verticalDatum ?? null, ctx.verticalEpsg ?? null, upAxis,
   ]);
   const label = ctx.epsg != null ? `EPSG:${ctx.epsg}` : geo.crsName ?? 'no CRS';
-  return { geo, ...scalars, upAxis, classificationEpoch, key, label };
+  const horizontalIdentityKnown = horizontalId !== null;
+  return { geo, ...scalars, upAxis, classificationEpoch, key, horizontalIdentityKnown, label };
 }
 
 /** The slice of the app the per-scan frame reads. */
@@ -218,6 +223,7 @@ export function resolveOwnerFrame(
       continue;
     }
     for (const o of e) {
+      if (owners.has(o.viewerId)) continue;
       const f = frames.of(o.viewerId);
       if (!f) return { refused: `Not exported: the scan "${o.name}" is not open, so its coordinate frame cannot be resolved. Reopen it, then export again.` };
       owners.set(o.viewerId, o);
@@ -232,6 +238,10 @@ export function resolveOwnerFrame(
     return { refused: mixedFrameRefusal([...groups.values()].map((g) => ({ frame: g.frame, names: [...g.names].sort((a, b) => a.localeCompare(b)) }))) };
   }
   const only = [...groups.values()][0]!;
+  if (owners.size > 1 && !only.frame.horizontalIdentityKnown) {
+    const names = [...only.names].sort((a, b) => a.localeCompare(b)).join(' and ');
+    return { refused: `Not exported: the horizontal coordinate systems of ${names} cannot be verified as the same. Export one scan's measurements at a time.` };
+  }
   return { frame: only.frame, owners: [...owners.values()] };
 }
 
@@ -258,7 +268,7 @@ export function framesOfApp(src: AppFrameSource): ExportFrames {
     cloud: src.cloud,
     // The scan's OWN resolved CRS, a remembered override included, as the
     // Inspector shows it; never the active scan's.
-    resolveCrs: (c) => src.crs.resolveFor({ name: c.name, detected: c.metadata?.crs ?? undefined, source: 'las-vlr', identity: datasetIdentity(c) }),
+    resolveCrs: (c) => scanCrsOf(src.crs, c),
     // The scan's own resolved frame (`app/layerUpFrames.ts`): a PLY under a CRS is Z-up.
     upAxisOf: (c) => spatialUpAxisOf(layerUpFrameOf(src.crs, c, false)),
     geoOf: geoContextForCloud,

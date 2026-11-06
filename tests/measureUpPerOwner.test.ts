@@ -8,7 +8,7 @@
  */
 import { describe, it, expect, beforeAll } from 'vitest';
 import type { Measurement, MeasureUnitFrame, Vec3 } from '../src/render/measure/types';
-import { UP_AXIS_CONFLICT } from '../src/render/measure/types';
+import { CROSS_FRAME_MEASUREMENT, UP_AXIS_CONFLICT } from '../src/render/measure/types';
 import type { MeasureController as MC } from '../src/render/measure/MeasureController';
 import { bindMeasureUnitFrames, chainUnitFrame } from '../src/app/measureLayerUnits';
 import { exportMeasurementsFile, type MeasurementExportActionDeps } from '../src/app/measurementExportActions';
@@ -59,6 +59,20 @@ const labelsOf = (measure: MC): string[] =>
     ._buildModel().labels.filter((l) => l.primary).map((l) => l.text);
 
 describe('per-owner up axis in the live readouts', () => {
+  it('withholds incompatible cross-grid picks in the restored row, overlay and chain while keeping a single-layer distance', async () => {
+    const measure = await controller(Z);
+    measure.setUnitResolver((layerId) => ({ ...frame(Z), horizontalIdentity: layerId }));
+    const a = m('a', 'distance', [[0, 0, 0], [10, 0, 0]], ['gridA', 'gridA']);
+    const cross = m('cross', 'distance', [[0, 0, 0], [10, 0, 0]], ['gridA', 'gridB']);
+    measure.loadMeasurements([a, cross]);
+    const [local, other] = measure.getSummaries();
+    expect(local!.value).toContain('10.000');
+    expect(other!.value).toBe(CROSS_FRAME_MEASUREMENT);
+    expect(other!.lineMetrics).toBeUndefined();
+    expect(labelsOf(measure)).toContain(CROSS_FRAME_MEASUREMENT);
+    expect(chainUnitFrame([measure.unitFrameOf(cross)])).toEqual({ refusal: CROSS_FRAME_MEASUREMENT });
+  });
+
   it('a LAS height reads 5 m whether the scene is Z-up or Y-up', async () => {
     const measure = await controller(Z);
     measure.loadMeasurements([LAS_WORK()[0]!]);
