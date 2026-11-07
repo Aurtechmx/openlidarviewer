@@ -598,6 +598,11 @@ export function upAxisRefusesKind(kind: MeasurementKind): boolean {
   return kind === 'height' || kind === 'slope' || kind === 'profile' || kind === 'box' || kind === 'volume';
 }
 
+/** Why a cross-layer figure of `kind` is withheld: an up-dependent one names the up conflict first. */
+export function crossFrameRefusalText(kind: MeasurementKind, upRefusal: string | null): string {
+  return upRefusal === UP_AXIS_CONFLICT && upAxisRefusesKind(kind) ? UP_AXIS_CONFLICT : CROSS_FRAME_MEASUREMENT;
+}
+
 /** Whether two up vectors are the same axis. */
 export function sameUp(a: Vec3, b: Vec3): boolean {
   return a[0] === b[0] && a[1] === b[1] && a[2] === b[2];
