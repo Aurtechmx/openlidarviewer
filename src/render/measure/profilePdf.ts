@@ -136,7 +136,10 @@ import { pdfInfoDate } from '../../pdfInfoDate';
 // kept out of the builder so the geometry of the sheet can be asserted
 // without reading a PDF back.
 import {
-  buildStationBand,
+  buildRoundChainageBand,
+  chooseProfileScales,
+  formatScaleDenominator,
+  steepestGradeOverBase,
   crsDisplayLabel,
   fitTitleValue,
   placeCalloutLabel,
@@ -217,6 +220,18 @@ export interface ProfilePdfInput {
    * absent, the record's truncated sources (if any) supply it.
    */
   readonly coverageNote?: string | null;
+  /**
+   * Height of the picked end point minus the picked start point, metres: the
+   * Δh the measurement readout shows. Printed beside the derived surface's
+   * own end-station figures, which are read on a different basis.
+   */
+  readonly pickedRiseM?: number | null;
+  /**
+   * Vertical exaggeration asked for (e.g. the on-screen chart's). Used when it
+   * is a standard ratio and the relief fits the plot at it; otherwise the
+   * largest standard ratio that fits is used.
+   */
+  readonly verticalExaggeration?: number | null;
 }
 
 /**
@@ -365,6 +380,8 @@ const TITLE_BLOCK_GUTTER = 26;
  * trimmed loses the qualification it was printed to carry.
  */
 const STUB_W = 152;
+/** Minimum base length for the technical notes' second max-grade figure, metres. */
+const GRADE_BASE_M = 10;
 /** Column reserved at the far left for the rotated height-axis title. */
 const AXIS_COL = 22;
 /**
@@ -401,22 +418,6 @@ function put(
   color = INK,
 ): void {
   p.drawText(winAnsiSafe(s), { x, y, size, font: f, color });
-}
-
-/** "Nice" station interval keeping ≤ ~12 gridlines across the span. */
-function niceInterval(span: number): number {
-  if (!Number.isFinite(span) || span <= 0) return 1;
-  const ladder = [1, 2, 5, 10, 20, 25, 50, 100, 200, 250, 500, 1000, 2000, 5000];
-  for (const v of ladder) if (span / v <= 12) return v;
-  let v = 10_000;
-  while (span / v > 12) v *= 2;
-  return v;
-}
-
-/** Convert a ground-metres-per-paper-point density to a 1:N scale ratio. */
-function scaleRatio(groundM: number, paperPt: number): number {
-  const paperM = (paperPt / 72) * 0.0254; // points → metres on paper
-  return paperM > 0 ? groundM / paperM : 0;
 }
 
 /**
@@ -1040,6 +1041,10 @@ export async function buildProfilePdf(input: ProfilePdfInput): Promise<Uint8Arra
   const reduction: SourceReduction | undefined = input.withheld?.reduction ?? record?.reduction;
   const crsLabel = crsDisplayLabel(input.crs);
   const projectName = input.project?.trim() ? input.project.trim() : null;
+  const baseGrade = steepestGradeOverBase(
+    stats.stations.map((st) => ({ chainage: st.chainage, height: st.elevation })),
+    GRADE_BASE_M,
+  );
   const steepestSpanM =
     intel.steepest == null ? null : intel.steepest.toChainage - intel.steepest.fromChainage;
 
@@ -1055,7 +1060,7 @@ export async function buildProfilePdf(input: ProfilePdfInput): Promise<Uint8Arra
     ...(coverage
       ? [`Coverage: ${coverage}. The profile is sampled from the points read, not the whole file.`]
       : []),
-    describeSampleNote(input.withheld ?? null, reduction, input.method ?? null),
+    describeSampleNote(input.withheld ?? null, reduction, input.method ?? null, residentOnly),
     NOT_SURVEY_GRADE_NOTE +
       (residentOnly
         ? ' Sampled from streaming-resident points only - may refine as more data loads.'
@@ -1116,46 +1121,53 @@ export async function buildProfilePdf(input: ProfilePdfInput): Promise<Uint8Arra
     minEl != null && maxEl != null && span != null &&
     Number.isFinite(span) && span >= 0
   ) {
-    const elSpan = span < 1e-6 ? 1 : span; // avoid /0 on a flat line
-    const mapX = (c: number) => plotLeft + (c / len) * plotW;
-    const mapYdown = (e: number) => (1 - (e - minEl) / elSpan) * plotH; // local y-down
+    // Standard print scales, chosen before anything is drawn: the drawing is
+    // made at exactly the scales the header states. The frame is as wide as
+    // the chainage at that scale, and the height axis is widened to round
+    // ticks with margin so no plotted value falls outside it.
+    const scales = chooseProfileScales({
+      lengthM: len,
+      minM: minEl,
+      maxM: maxEl,
+      plotWpt: plotW,
+      plotHpt: plotH,
+      k,
+      requestedExaggeration: input.verticalExaggeration ?? null,
+    });
+    const drawW = scales.drawnWpt;
+    const drawRight = plotLeft + drawW;
+    const axisSpanM = scales.axisHiM - scales.axisLoM;
+    const mapX = (c: number) => plotLeft + (c / len) * drawW;
+    const mapYdown = (e: number) => ((scales.axisHiM - e) / axisSpanM) * plotH; // local y-down
 
-    // Grid — vertical (chainage) and horizontal (height). Tick VALUES are
-    // chosen in the DISPLAY unit (B9): an imperial sheet needs gridlines on
-    // nice 10/25/50 ft steps, not on metre steps relabelled in feet — the
-    // display values convert back through `/k` only for positioning.
-    // Both walks are iteration-capped — `niceInterval` keeps ≤ ~12 lines, so
-    // 64 is far beyond legitimate counts and bounds the loop on any input.
-    const hInt = niceInterval(len * k);
-    for (let cD = 0, n = 0; cD <= len * k + 1e-9 && n < 64; cD += hInt, n++) {
-      const x = mapX(cD / k);
-      rule(page, x, plotTopY, x, plotBotY, GRID, 0.5);
-      // Round-interval stationing under the grid. The band below carries the
-      // stations the samples actually fall on, which are not round numbers;
-      // this row is what lets a reader take a chainage off the grid itself.
-      const tick = formatStation(cD / k, system);
-      put(
-        page,
-        tick,
-        x - f.mono.widthOfTextAtSize(tick, T_TICK) / 2,
-        plotBotY - 13,
-        T_TICK,
-        f.mono,
-        INK_MUTED,
-      );
-    }
-    const vInt = niceInterval(elSpan * k);
+    // The station band, resolved first: the grid verticals stand on its
+    // stations. Round chainages at a standard interval, 0 and the end always.
+    const bandHeightStr = (m: number | null) => (m == null ? '-' : (m * k).toFixed(2));
+    const bandMeasure = (t: string) => f.mono.widthOfTextAtSize(winAnsiSafe(t), T_BAND) + BAND_PAD;
+    const sampledStations = stats.stations.map((st) => ({ chainage: st.chainage, height: st.elevation }));
+    const band = buildRoundChainageBand({
+      stations: sampledStations,
+      lengthM: len,
+      k,
+      mapX,
+      columnWpt: Math.max(
+        bandMeasure(formatStation(len, system)),
+        bandMeasure(bandHeightStr(maxEl)),
+        bandMeasure(bandHeightStr(minEl)),
+      ),
+    });
+    for (const c of band.columns) rule(page, c.x, plotTopY, c.x, plotBotY, GRID, 0.5);
+    // Height grid on round ticks of the display unit, from the axis bottom.
     for (
-      let eD = Math.ceil((minEl * k) / vInt) * vInt, n = 0;
-      eD <= maxEl * k + 1e-9 && n < 64;
-      eD += vInt, n++
+      let n = 0, eD = scales.firstTick;
+      eD <= scales.axisHiM * k + 1e-9 && n < 64;
+      n++, eD = scales.firstTick + n * scales.tickStep
     ) {
       const y = plotTopY - mapYdown(eD / k);
-      rule(page, plotLeft, y, plotRight, y, GRID_MINOR, 0.5);
-      // Right-aligned against the axis: a column of heights is read down its
-      // last digit, and a left-aligned column of different-width numbers puts
-      // the units, tens and hundreds places in three different columns.
-      const tick = `${eD.toFixed(1)}`;
+      rule(page, plotLeft, y, drawRight, y, GRID_MINOR, 0.5);
+      // Right-aligned against the axis, so a column of heights reads down
+      // its last figure.
+      const tick = eD.toFixed(scales.tickStep < 0.1 ? 2 : 1);
       put(
         page,
         tick,
@@ -1198,7 +1210,7 @@ export async function buildProfilePdf(input: ProfilePdfInput): Promise<Uint8Arra
     // lines: the section is a drawing, and a drawing is bounded on all four
     // sides. Last, because the ground fill reaches the floor and would
     // otherwise erase the edge it is standing on.
-    strokeBox(page, plotLeft, plotBotY, plotW, plotH, INK_DIM, 1);
+    strokeBox(page, plotLeft, plotBotY, drawW, plotH, INK_DIM, 1);
 
     // The height axis title, rotated to read up the left edge of the plot.
     // It is `heightLabel`'s own string and nothing else: the axis is where a
@@ -1226,7 +1238,7 @@ export async function buildProfilePdf(input: ProfilePdfInput): Promise<Uint8Arra
       plotTopY,
       plotBotY,
       plotLeft,
-      plotRight,
+      plotRight: drawRight,
       system,
       pairLength: steepestSpanM == null ? '' : lenStr(steepestSpanM),
     });
@@ -1235,24 +1247,7 @@ export async function buildProfilePdf(input: ProfilePdfInput): Promise<Uint8Arra
     // One ruled row per quantity, columns dropped from the same x mapping the
     // polyline was drawn with, so a vertical from the curve lands on its own
     // figures. Row headings sit in the fixed stub at the left.
-    const partialStr = (m: number | null) => (m == null ? '-' : (m * k).toFixed(1));
-    const bandHeightStr = (m: number | null) => (m == null ? 'gap' : (m * k).toFixed(2));
-    const bandMeasure = (t: string) => f.mono.widthOfTextAtSize(winAnsiSafe(t), T_BAND) + BAND_PAD;
-    const band = buildStationBand({
-      stations: stats.stations.map((st) => ({ chainage: st.chainage, height: st.elevation })),
-      mapX,
-      plotLeft,
-      plotW,
-      // The column is as wide as its widest figure: thinning against the
-      // chainage alone would let a long height overlap its neighbour.
-      widest: (st) => {
-        const cells = [formatStation(st.chainage, system), bandHeightStr(st.height)];
-        return cells.reduce((a, b) => (bandMeasure(b) > bandMeasure(a) ? b : a), cells[0]);
-      },
-      measure: bandMeasure,
-      fontSize: T_BAND,
-    });
-
+    const partialStr = (m: number | null) => (m == null ? '-' : (m * k).toFixed(2));
     const stubX = M + AXIS_COL;
     const bandRows: Array<[string, (i: number) => string]> = [
       [`Partial dist. (${unit})`, (i) => partialStr(band.columns[i].partial)],
@@ -1261,7 +1256,7 @@ export async function buildProfilePdf(input: ProfilePdfInput): Promise<Uint8Arra
     ];
     for (let r = 0; r <= bandRows.length; r++) {
       const y = bandTop - r * BAND_ROW_H;
-      rule(page, stubX, y, plotRight, y, RULE, 0.5);
+      rule(page, stubX, y, drawRight, y, RULE, 0.5);
     }
     // Horizontal rules, and the single vertical that separates the stub from
     // the figures. Not a border per cell: a full grid of cell borders is more
@@ -1285,7 +1280,7 @@ export async function buildProfilePdf(input: ProfilePdfInput): Promise<Uint8Arra
         // The height row is the measured one, so it carries the weight the way
         // the schedule's height column does. Partial distance and chainage
         // describe WHERE the station is rather than what was found there.
-        const measured = r === bandRows.length - 1 && t !== 'gap';
+        const measured = r === bandRows.length - 1 && t !== '-';
         // Courier throughout, so the figures of one row line up digit under
         // digit whatever their magnitude. A cell that says `gap` takes the
         // gap colour, the same mark the station schedule uses for the same
@@ -1293,11 +1288,16 @@ export async function buildProfilePdf(input: ProfilePdfInput): Promise<Uint8Arra
         put(
           page,
           t,
-          c.x - (measured ? f.monoBold : f.mono).widthOfTextAtSize(t, T_BAND) / 2,
+          // The end columns sit on the frame edges, so their figures are set
+          // inward from the edge rather than centred across it.
+          ((w) =>
+            i === 0 ? c.x + 2 : i === band.columns.length - 1 ? c.x - w - 2 : c.x - w / 2)(
+            (measured ? f.monoBold : f.mono).widthOfTextAtSize(t, T_BAND),
+          ),
           y,
           T_BAND,
           measured ? f.monoBold : f.mono,
-          t === 'gap' ? GAP_MARK : INK,
+          t === '-' && r === bandRows.length - 1 ? GAP_MARK : INK,
         );
       });
     });
@@ -1308,9 +1308,9 @@ export async function buildProfilePdf(input: ProfilePdfInput): Promise<Uint8Arra
     // two rows of the sheet spent saying so.
     {
       const caption =
-        band.shown >= band.total
-          ? `Station data band - all ${band.total} stations shown`
-          : `Station data band - ${band.shown} of ${band.total} stations shown (thinned to fit)`;
+        `Station data band - every ${formatScaleDenominator(band.interval)} ${unit} and the end chainage; ` +
+        `${reference === 'orthometric' ? 'elevations' : 'heights'} at round chainages interpolated between ` +
+        `the ${band.total} sampled stations, '-' where a neighbouring station has no returns`;
       put(
         page,
         caption,
@@ -1324,27 +1324,18 @@ export async function buildProfilePdf(input: ProfilePdfInput): Promise<Uint8Arra
 
     // Stated scales + VEX + the print instruction, in the plot header where a
     // reader looks before taking a measurement off the paper.
-    const hScale = scaleRatio(len, plotW);
-    const vScale = scaleRatio(elSpan, plotH);
-    // `scaleRatio` returns the DENOMINATOR of a 1:N scale, so a SMALLER value
-    // is a LARGER drawing. Vertical 1:73 beside horizontal 1:386 means the
-    // relief is drawn 386/73 times taller than the run, which is the
-    // exaggeration. The reciprocal would report a compression on a sheet whose
-    // relief is stretched, and every grade read off it would be wrong by the
-    // square of the error the reader was told to correct for.
-    const vex = vScale > 0 ? hScale / vScale : 1;
-    // The print instruction is part of the scale statement, not a footnote:
-    // every ratio on this line is false on a sheet scaled to fit.
-    // Below 1 the vertical scale is the smaller drawing, so the relief is
-    // drawn flatter than the run and the ratio is a compression. It is said as
-    // one, with its consequence, and never under the word exaggeration.
+    // The scales the drawing was made at, standard ratios by construction.
+    const hScale = scales.horizontal;
+    const vScale = scales.vertical;
+    // Horizontal over vertical denominator: above 1 the relief is stretched.
+    const vex = scales.exaggeration;
     const vexText = verticalScaleStatement(vex);
     // With no known ground unit a 1:N ratio would read source units as
     // metres, so the sheet says so, as the map sheet does; the exaggeration
     // is a ratio of the two and stays.
     const ratios = system === 'unverified'
       ? 'Horizontal and vertical scale: units unknown'
-      : `Horizontal 1:${Math.round(hScale)}   ·   Vertical 1:${Math.round(vScale)}`;
+      : `Horizontal 1:${formatScaleDenominator(hScale)}   ·   Vertical 1:${formatScaleDenominator(vScale)}`;
     const scaleLine = `${ratios}   ·   ${vexText}   |   PRINT AT 100% ON ${SHEET_SIZE}`;
     put(page, scaleLine, M, scaleLineY, T_SCALE, f.bold, INK);
     const axisTitle =
@@ -1464,6 +1455,16 @@ export async function buildProfilePdf(input: ProfilePdfInput): Promise<Uint8Arra
           ? 'Net grade between the first and last covered stations. Local grades reach the maximum below.'
           : `Net grade between the first and last covered stations; it spans ${stats.meanGradeGaps} missing ${stats.meanGradeGaps === 1 ? 'station' : 'stations'}, so it is not an observed slope. Local grades reach the maximum below.`,
     },
+    ...(input.pickedRiseM != null && Number.isFinite(input.pickedRiseM)
+      ? [{
+          item: 'Picked endpoints rise',
+          value: `${input.pickedRiseM >= 0 ? '+' : '-'}${riseStr(Math.abs(input.pickedRiseM))}`,
+          remark:
+            'Height of the picked end point minus the picked start point, as the measurement ' +
+            'readout shows it. The station figures on this sheet are read off the derived surface ' +
+            'at the end stations, so the two can differ.',
+        }]
+      : []),
     {
       item: 'Max grade (ratio, angle)',
       value: `${formatGradeRatio(stats.maxGrade)}, ${formatGradeDegrees(stats.maxGrade)}`,
@@ -1472,6 +1473,17 @@ export async function buildProfilePdf(input: ProfilePdfInput): Promise<Uint8Arra
         'sensitive to canopy and noise. Neighbouring pairs can read very differently; ' +
         'it is not a measure of buildability.',
     },
+    ...(baseGrade == null
+      ? []
+      : [{
+          item: `Max grade over ${lenStr(GRADE_BASE_M)} or more`,
+          value:
+            `${formatGradePercent(baseGrade.grade)}  (${formatStation(baseGrade.fromChainage, system)} to ` +
+            `${formatStation(baseGrade.toChainage, system)}, ${lenStr(baseGrade.toChainage - baseGrade.fromChainage)})`,
+          remark:
+            `Steepest grade between sampled stations at least ${lenStr(GRADE_BASE_M)} apart, ` +
+            'with no gap station between them. Less sensitive to single-station noise than the pair figure.',
+        }]),
     {
       item: 'Steepest section',
       value:
@@ -1496,7 +1508,7 @@ export async function buildProfilePdf(input: ProfilePdfInput): Promise<Uint8Arra
       value: `${stats.sampleCount}  ·  ${(stats.coverage * 100).toFixed(0)}%`,
       remark:
         gapCount === 0
-          ? 'Every station returned. No part of the section is interpolated.'
+          ? 'Every station returned. Band heights at round chainages are interpolated between sampled stations.'
           : `${gapCount} station(s) had no return in the corridor and are drawn as breaks.`,
       limit: gapCount > 0,
     },

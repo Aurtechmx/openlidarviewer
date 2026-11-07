@@ -35,7 +35,8 @@ import type {
 } from './types';
 import { crossFrameRefusalText, GEOGRAPHIC_NOT_AVAILABLE, MIN_POINTS, UP_AXIS_CONFLICT, VERTICAL_NOT_AVAILABLE, VERTICAL_SCALE_NOT_AVAILABLE, frameRefusalText, isFull, pickedUnitFrame, upAxisRefusesKind, type MeasureUnitFrame } from './types';
 import type { WorkOwnership } from '../../model/workOwnership';
-import type { ProfileProvenance } from './profileProvenance';
+import type { ProfileProvenance, ProfileProvenanceInput } from './profileProvenance';
+import { stampProfileSample } from './profileSampleStamp';
 import type { WithheldReadCounts } from '../../science/withheldCounts';
 import {
   distance,
@@ -259,6 +260,7 @@ export interface ProfileSamplerResult {
   method?: string;
   /** Truncation note when a static source read was truncated. */
   coverageNote?: string;
+  provenanceInput?: Omit<ProfileProvenanceInput, 'capturedAt'>; // sources read + accepted counts, for the provenance record
 }
 
 /**
@@ -314,6 +316,7 @@ export interface MeasurementSummary {
    * field and the panel simply skips the chart.
    */
   profileChart?: ProfileChartSample[];
+  profilePickedRiseM?: number; // profile only: picked end minus picked start height, metres (the readout's Δh)
   /**
    * Profile only — when true, the chart was sampled from streaming
    * resident nodes only. The panel surfaces a coverage caption so the
@@ -1167,6 +1170,7 @@ export class MeasureController {
         m.kind === 'area' && m.points.length >= 3 && areaRingVerdictCached(m.points).ok && metricsOk
           ? areaBreakdown(m.points, this._worldUp, f, this._effVertical())
           : undefined,
+      ...(m.kind === 'profile' && m.points.length >= 2 && metricsOk && !this._unitUnverified() ? { profilePickedRiseM: ((q) => profileMetrics(q[0], q[1], this._worldUp).verticalDrop * f)(this._iso([m.points[0], m.points[1]])) } : {}),
       volumeResidentOnly: m.volumeResidentOnly,
       volumeBaseLevel: this._volumeBaseLevel(m),
       trust: m.trust,
@@ -1318,7 +1322,7 @@ export class MeasureController {
     try {
       const result = this._inFrameOf(m, () => sampler(m.points[0], m.points[1], opts));
       if (!result) return false;
-      this._stampProfileSample(m, result);
+      stampProfileSample(m, result);
       this._noteDerivedUp(m);
     } catch {
       // Sampler errors must not poison the existing measurement — the row
@@ -1360,7 +1364,7 @@ export class MeasureController {
         sampleCount: m.profileChart?.length ?? null,
       }));
       if (!result) return false;
-      this._stampProfileSample(m, result);
+      stampProfileSample(m, result);
       this._noteDerivedUp(m);
       return true;
     } catch {
@@ -2000,45 +2004,6 @@ export class MeasureController {
     };
   }
 
-  /**
-   * Stamp a profile-sampler result onto a measurement record. Normalises
-   * both legacy (raw array) and current ({samples, residentOnly, …}) sampler
-   * return shapes; keeps the B4 provenance fields (corridor / percentile, in
-   * render units) so the PDF/CSV print the values that actually shaped the
-   * estimate. Shared by the commit path and the resample path (B7/B8) so the
-   * two can never stamp differently.
-   */
-  private _stampProfileSample(
-    m: Measurement,
-    result: ProfileChartSample[] | ProfileSamplerResult,
-  ): void {
-    const samples = Array.isArray(result) ? result : result.samples;
-    const residentOnly = Array.isArray(result) ? false : result.residentOnly;
-    if (!samples || samples.length === 0) return;
-    m.profileChart = samples;
-    // Resident-only reflects the LATEST sample — a re-sample after streaming
-    // completes may clear the caveat, so assign rather than only-set-true.
-    m.profileChartResidentOnly = residentOnly || undefined;
-    // Assigned, not only set: a resample replaces the counts with its own.
-    m.profileWithheld = Array.isArray(result) ? undefined : result.withheld;
-    m.profileMethod = Array.isArray(result) ? undefined : result.method;
-    m.profileCoverageNote = Array.isArray(result) ? undefined : result.coverageNote;
-    if (!Array.isArray(result)) {
-      if (
-        typeof result.corridorWidth === 'number' &&
-        Number.isFinite(result.corridorWidth)
-      ) {
-        m.profileCorridorWidth = result.corridorWidth;
-      }
-      if (
-        typeof result.groundPercentile === 'number' &&
-        Number.isFinite(result.groundPercentile)
-      ) {
-        m.profileGroundPercentile = result.groundPercentile;
-      }
-    }
-  }
-
   private _commitDraft(): void {
     if (!this._draft) return;
     const m = this._draft;
@@ -2061,7 +2026,7 @@ export class MeasureController {
         // In the owner's frame: the profile is cut along its layer's own up.
         const sampler = this._profileSampler;
         const result = this._inFrameOf(m, () => sampler(m.points[0], m.points[1], opts));
-        if (result) this._stampProfileSample(m, result);
+        if (result) stampProfileSample(m, result);
         else { const why = this.profileChartRefusal?.(); if (why) this._chartWithheld.set(m.id, why); }
       } catch {
         // Sampler errors must not poison the measurement; the scalar

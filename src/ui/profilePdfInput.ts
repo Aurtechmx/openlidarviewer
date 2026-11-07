@@ -68,6 +68,7 @@ export function profilePdfInputFor(
     datumKnown: s.profileDatumKnown !== false,
     provenance: s.profileProvenance ?? null,
     coverageNote: s.profileCoverageNote ?? null,
+    pickedRiseM: s.profilePickedRiseM ?? null,
     generatedAt: options.generatedAt,
   };
 }
