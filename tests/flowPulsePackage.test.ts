@@ -120,6 +120,16 @@ describe('the package carries every required file', () => {
     expect(extractEntry(buildFlowPulsePackage(result, { ...opts, worldOrigin: null }), 'flow-direction.prj')).toBeNull();
   });
 
+  it('builds the .prj from the EPSG code when the source has no WKT', () => {
+    const opts = { basename: 'flow', crsName: 'EPSG:32610',
+      worldOrigin: { x: 600000, y: 4000000 }, gridFrame: { originH1: 0, originH2: 0, cellSize: 1 } };
+    const zip = buildFlowPulsePackage(runOf(), opts);
+    expect(textOf(zip, 'flow.prj')).toBe(wktForEpsg(32610));
+    expect(textOf(zip, 'flow-accumulation.prj')).toBe(wktForEpsg(32610));
+    expect(textOf(zip, 'flow-README.txt')).toContain('flow.prj');
+    expect(extractEntry(buildFlowPulsePackage(runOf(), { ...opts, worldOrigin: null }), 'flow.prj')).toBeNull();
+  });
+
   it('keeps the .prj when the export is placed, and states the raster cell size in CRS units', () => {
     const wkt = 'PROJCS["NAD83(2011) / UTM zone 13N",...]';
     const zip = buildFlowPulsePackage(runOf(), {
