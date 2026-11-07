@@ -87,15 +87,22 @@
 
     <h2>Privacy</h2>
     <p>
-      Files you open are processed on your device and are not uploaded. The app
-      has no analytics and no telemetry. It uses your browser's local storage
-      for session recovery (kept for up to 7 days), your preferences and local usage counts, and keeps a
-      cache of its own files, plus the full offline copy if you choose to make
-      one. None of it leaves your device. When you open a remote dataset or a sample, it is downloaded
-      from the server that hosts it, and that server sees your IP address and
-      the tiles you view. A location search in the public LiDAR catalogue is sent
-      to Microsoft Planetary Computer, only when you run one, and opening a result
-      sends a request to its signing service carrying that tile's address. See <a href="https://github.com/aurtechmx/openlidarviewer/blob/main/PRIVACY.md">PRIVACY.md</a>.
+      Local scans and measurements are processed in your browser. The viewer has
+      no usage analytics or telemetry service. The viewer host receives requests
+      for app files. When you open a remote dataset or sample, its host sees your
+      IP address and the requested files or tiles. A catalogue location search
+      sends a bounding box to Microsoft Planetary Computer. Opening a result
+      sends its tile address to Microsoft's signing service.
+    </p>
+    <p>
+      The browser can retain recovery entries, preferences, local usage counts,
+      viewer files, indexed scan tiles and computed terrain. When recovery starts,
+      it removes entries last saved more than seven days earlier. Clear recovery
+      data in Help removes the recovery entries. Clear the viewer's site data in
+      your browser to erase its other stored data as well. If you choose to sign
+      reports, the browser stores a private key. The public key in shared reports
+      lets recipients link reports signed with that key.
+      Read the <a href="PRIVACY.md">privacy notice for this build</a>.
     </p>
 
     <h2>Built with</h2>
@@ -125,10 +132,11 @@
       <li>
         <strong>Jemez River Basin Snow-off Lidar Survey</strong> (2010), by the
         National Center for Airborne Laser Mapping (NCALM), distributed by
-        <a href="https://opentopography.org/">OpenTopography</a>. Licensed
+        <a href="https://doi.org/10.5069/G9RB72JV">OpenTopography</a>. Licensed
         <a href="https://creativecommons.org/licenses/by/4.0/">CC BY 4.0</a>.
         Modified: decode and ground-filter agreement statistics were computed
-        from tile ot_356000_3972000_1.laz; the point data is not redistributed.
+        from tile ot_356000_3972000_1.laz. The source archive includes a
+        2,000-point text subsample containing XYZ and intensity.
         Register id OLV-DS-090.
       </li>
       <li>

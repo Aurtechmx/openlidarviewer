@@ -1,6 +1,6 @@
 import { test, expect, type Page } from '@playwright/test';
 import { readFileSync } from 'node:fs';
-import { showWorkspaceMode } from './helpers';
+import { assignScanCrs, showWorkspaceMode } from './helpers';
 import { buildLas, readLas, type RawPoint } from '../helpers/rawLas';
 
 /**
@@ -48,6 +48,7 @@ test('Fill unclassified keeps legacy key-point and overlap meaning in a LAS 1.4 
   await runPaletteAction(page, 'Fill unclassified', 'Fill unclassified points');
   await expect(page.getByText(/Fill unclassified · filled/)).toBeVisible({ timeout: 30_000 });
 
+  await assignScanCrs(page);
   await showWorkspaceMode(page, 'output');
   const panel = page.locator('.olv-export-panel');
   await expect(panel).toBeVisible({ timeout: 20_000 });

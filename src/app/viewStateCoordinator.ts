@@ -31,7 +31,9 @@ import type { ViewBookmarksService } from './viewBookmarks';
 import type { RenderingState } from '../ui/Inspector';
 import type { SavedCameraState } from '../render/annotate/types';
 import type { CameraPose } from '../render/NavController';
-import type { ColorMode } from '../render/colorModes';
+import { availableModes, type ColorMode } from '../render/colorModes';
+import type { PointCloud } from '../model/PointCloud';
+import type { StreamingSource } from '../render/streaming/StreamingSource';
 import type { ClipBox } from '../render/clip/clipBox';
 import type { PointSizeMode } from '../render/pointStyle';
 import type { SplatMode } from '../render/splatShader';
@@ -51,6 +53,8 @@ export interface ViewStateViewer {
   readonly splatMode: SplatMode;
   readonly hasStreamingCloud: boolean;
   clouds(): string[];
+  getCloud(id: string): PointCloud | undefined;
+  readonly streamingCloud: Pick<StreamingSource, 'availableColorModes'> | null;
   activeColorMode(): ColorMode;
   getClip(): ClipBox | null;
   setClip(clip: ClipBox | null): void;
@@ -212,9 +216,17 @@ export function createViewStateCoordinator(
         });
       },
       colorMode: (mode) => {
-        // Apply to every static cloud; the streaming subsystem too.
-        for (const id of viewer.clouds()) viewer.setColorMode(id, mode);
-        viewer.setStreamingColorMode(mode);
+        // A saved view can span scans with different attributes. Leave a
+        // layer's display alone when it cannot draw this colour mode.
+        for (const id of viewer.clouds()) {
+          const cloud = viewer.getCloud(id);
+          if (cloud && (mode === 'coverage' || mode === 'confidence' || availableModes(cloud).includes(mode))) {
+            viewer.setColorMode(id, mode);
+          }
+        }
+        if (viewer.streamingCloud?.availableColorModes().some((available) => available === mode)) {
+          viewer.setStreamingColorMode(mode);
+        }
       },
       classFilter: (codes) => {
         // v5 — re-apply the saved class-visibility filter. The panel re-renders

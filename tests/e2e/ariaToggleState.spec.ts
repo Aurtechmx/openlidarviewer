@@ -40,14 +40,15 @@ test.describe('ExportPanel — format pills a11y state', () => {
   test('the format row exposes aria-pressed and flips it on click', async ({ page }) => {
     const panel = await openExpandedPanel(page, 'output', '.olv-export-panel');
 
-    const las14 = panel.locator('.olv-bc-pill', { hasText: 'LAS 1.4' });
+    // This scan has no CRS, so LAS 1.2 is selected and LAS 1.4 is refused.
+    const las12 = panel.locator('.olv-bc-pill', { hasText: 'LAS 1.2' });
     const xyz = panel.locator('.olv-bc-pill', { hasText: 'XYZ' });
-    await expect(las14).toHaveAttribute('aria-pressed', 'true');
+    await expect(las12).toHaveAttribute('aria-pressed', 'true');
     await expect(xyz).toHaveAttribute('aria-pressed', 'false');
 
     await xyz.click();
     await expect(xyz).toHaveAttribute('aria-pressed', 'true');
-    await expect(las14).toHaveAttribute('aria-pressed', 'false');
+    await expect(las12).toHaveAttribute('aria-pressed', 'false');
   });
 });
 

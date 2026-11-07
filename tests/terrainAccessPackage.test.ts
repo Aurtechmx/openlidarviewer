@@ -12,6 +12,7 @@
  *   unchallenged.
  */
 import { describe, expect, it } from 'vitest';
+import { compoundWkt, wktForEpsg } from '../src/io/epsgWkt';
 
 import { buildTerrainAccessConfig, buildTerrainAccessPackage } from '../src/export/terrainAccessPackage';
 import { runTerrainAccess, TERRAIN_ACCESS_DEFAULTS, type TerrainAccessParams } from '../src/simulation/terrainAccess/terrainAccessRunner';
@@ -253,6 +254,17 @@ describe('georeferenced export', () => {
     expect(asc).toMatch(/xllcorner 0\n/);
     expect(asc).toMatch(/yllcorner 0\n/);
     expect(() => extractEntry(zip, 'ta.prj')).toThrow();
+  });
+
+  it('pairs the traversability grid with the horizontal projection only', () => {
+    const horizontal = wktForEpsg(32610)!;
+    const opts = {
+      basename: 'ta', wkt: compoundWkt(horizontal, 5703),
+      worldOrigin: { x: 600000, y: 4000000 }, gridPlacement: { originH1: 0, originH2: 0, cellSize: 1 },
+    };
+    const zip = buildTerrainAccessPackage(runOf(), opts);
+    expect(textOf(zip, 'ta-traversability.prj')).toBe(horizontal);
+    expect(() => extractEntry(buildTerrainAccessPackage(runOf(), { ...opts, worldOrigin: null }), 'ta-traversability.prj')).toThrow();
   });
 
   it('writes a .prj sidecar with the supplied WKT when the CRS resolves', () => {

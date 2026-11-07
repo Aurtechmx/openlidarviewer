@@ -15,6 +15,7 @@
 
 import type { CrsMode } from './types';
 import { planLas14Crs } from './writeLas';
+import { isUsableWkt } from '../io/epsgWkt';
 
 /** The facts that decide the CRS an export writes. */
 export interface Las14Request {
@@ -29,7 +30,7 @@ export interface Las14Request {
 
 export type Las14Availability =
   | { readonly ok: true }
-  | { readonly ok: false; readonly epsg: number; readonly message: string };
+  | { readonly ok: false; readonly epsg: number | null; readonly message: string };
 
 /** The EPSG code the output carries, or null when the export writes no code. */
 export function las14OutputEpsg(r: Pick<Las14Request, 'mode' | 'sourceEpsg' | 'targetEpsg'>): number | null {
@@ -39,9 +40,12 @@ export function las14OutputEpsg(r: Pick<Las14Request, 'mode' | 'sourceEpsg' | 't
 /** Whether LAS 1.4 can be written for this request, and why not when it cannot. */
 export function las14Availability(r: Las14Request): Las14Availability {
   const epsg = las14OutputEpsg(r);
-  if (epsg == null) return { ok: true };
   // The source WKT describes the output only while the CRS is kept.
-  const plan = planLas14Crs({ epsg, wkt: r.mode === 'keep' ? r.sourceWkt : null });
+  const wkt = r.mode === 'keep' ? r.sourceWkt : null;
+  if (epsg == null && !isUsableWkt(wkt)) {
+    return { ok: false, epsg, message: 'LAS 1.4 point formats 6 and 7 require a coordinate system as OGC WKT. This scan has no known CRS. Supply its actual CRS, or choose XYZ for unreferenced coordinates.' };
+  }
+  const plan = planLas14Crs({ epsg, wkt });
   if (plan.ok) return { ok: true };
   return {
     ok: false,

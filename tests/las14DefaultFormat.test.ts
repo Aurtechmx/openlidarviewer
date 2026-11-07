@@ -11,6 +11,7 @@
 
 import { describe, it, expect, beforeAll, beforeEach, vi } from 'vitest';
 import { FakeEl as BaseFakeEl } from './helpers/exportPanelPillDomFake';
+import { parseLasHeader } from '../src/io/lasHeader';
 import { PointCloud } from '../src/model/PointCloud';
 import type { ResolvedCrs } from '../src/geo/CoordinateTypes';
 import { las14Availability, las14OutputEpsg } from '../src/convert/las14Availability';
@@ -19,7 +20,7 @@ import { wktForEpsg } from '../src/io/epsgWkt';
 const rec = vi.hoisted(() => ({
   downloads: [] as Array<{ name: string; bytes: Uint8Array }>,
   decode: null as null | ((name: string) => unknown),
-  results: [] as Array<Array<{ file: { filename: string } | null; report: { ok: boolean; log: Array<{ message: string }> } }>>,
+  results: [] as Array<Array<{ file: { filename: string; bytes: Uint8Array } | null; report: { ok: boolean; log: Array<{ message: string }> } }>>,
 }));
 vi.mock('../src/io/download', async (orig) => ({
   ...(await orig<Record<string, unknown>>()),
@@ -117,9 +118,9 @@ describe('las14Availability', () => {
     expect(las14OutputEpsg({ mode: 'reproject', sourceEpsg: 2229, targetEpsg: 32613 })).toBe(32613);
   });
 
-  it('writes no code, so nothing blocks, for a scan without one', () => {
-    expect(las14Availability({ mode: 'keep', sourceEpsg: null, sourceWkt: null, targetEpsg: null }).ok).toBe(true);
-    expect(las14Availability({ mode: 'assign', sourceEpsg: null, sourceWkt: null, targetEpsg: null }).ok).toBe(true);
+  it('requires a usable WKT or a representable EPSG for LAS 1.4', () => {
+    expect(las14Availability({ mode: 'keep', sourceEpsg: null, sourceWkt: null, targetEpsg: null }).ok).toBe(false);
+    expect(las14Availability({ mode: 'assign', sourceEpsg: null, sourceWkt: null, targetEpsg: null }).ok).toBe(false);
   });
 });
 
@@ -201,10 +202,11 @@ describe('ExportPanel: the default format can succeed', () => {
     expect(p._format).toBe('las');
   });
 
-  it('a scan with no CRS is not blocked', async () => {
+  it('offers a different format for a scan without a CRS', async () => {
     const p = await makePanel(null);
-    expect(p._format).toBe('las14');
-    expect(pillOf(p.element, 'LAS 1.4').disabled).toBe(false);
+    expect(p._format).toBe('las');
+    expect(pillOf(p.element, 'LAS 1.4').disabled).toBe(true);
+    expect(pillOf(p.element, 'LAS 1.4').title).toContain('no known CRS');
   });
 });
 
@@ -257,6 +259,20 @@ describe('BatchConverter: the default format can succeed', () => {
     await bc.whenLas14Checked();
     expect(bc._format).toBe('las14');
     expect(pillOf(bc.element, 'LAS 1.4').disabled).toBe(false);
+  });
+
+  it('Keep ignores the source EPSG typed earlier under Reproject', async () => {
+    rec.decode = () => scan();
+    const bc = await makeBatch();
+    pillOf(bc.element, 'LAS 1.2').click();
+    pillOf(bc.element, 'Reproject').click();
+    (bc.element.findByClass('olv-bc-input')[0] as FakeEl).enter('32612');
+    pillOf(bc.element, 'Keep').click();
+    await bc.whenLas14Checked();
+    await bc._convert();
+    const { file, report } = rec.results[0][0];
+    expect(report.ok).toBe(true);
+    expect(parseLasHeader(file!.bytes.slice().buffer).crs?.epsg ?? null).toBeNull();
   });
 
   it('a kept State Plane file is refused per file with the reason and a way forward', async () => {

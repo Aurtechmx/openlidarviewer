@@ -728,6 +728,26 @@ export function crsFromWkt(wkt: string): CrsInfo {
   };
 }
 
+/** A horizontal raster sidecar must keep the actual projection and exclude absolute heights. */
+export function rasterHorizontalWkt(wkt: string | null | undefined): string | null {
+  if (!wkt) return null;
+  const text = trimWkt(wkt);
+  const root = parseWkt(text);
+  if (!root || root.start !== 0 || root.end !== text.length) return null;
+
+  const isPlanarFrame = (node: WktNode): boolean => {
+    const source = sourceOfBoundCrs(node);
+    const cs = wktChildNodes(source).find((n) => n.keyword === 'CS');
+    return (isHorizontalCrsKeyword(source.keyword) || isLocalCrsKeyword(source.keyword))
+      && !isGeocentricNode(source)
+      && (cs == null || wktFirstNumber(cs) === 2);
+  };
+  const horizontal = isCompoundKeyword(root.keyword)
+    ? wktChildNodes(root).find(isPlanarFrame)
+    : isPlanarFrame(root) ? root : null;
+  return horizontal?.end == null ? null : text.slice(horizontal.start, horizontal.end);
+}
+
 /** Clauses that describe a CRS (codes, usage, remarks) without defining it. */
 const NON_DEFINING_WKT_KEYWORDS: ReadonlySet<string> = new Set([
   'AUTHORITY', 'ID', 'USAGE', 'SCOPE', 'AREA', 'BBOX', 'VERTICALEXTENT', 'TEMPORALEXTENT', 'REMARK', 'CITATION', 'URI',
@@ -791,7 +811,7 @@ function sourceOfBoundCrs(node: WktNode): WktNode {
   if (node.keyword === 'BOUNDCRS') {
     const source = wktChildNodes(node).find((n) => n.keyword === 'SOURCECRS');
     const inner = source ? wktChildNodes(source)[0] : undefined;
-    return inner ? sourceOfBoundCrs(inner) : { keyword: node.keyword, start: node.start, children: [] };
+    return inner ? sourceOfBoundCrs(inner) : { ...node, children: [] };
   }
   let changed = false;
   const children = node.children.map((c) => {

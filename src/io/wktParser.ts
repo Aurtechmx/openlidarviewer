@@ -50,6 +50,8 @@ export interface WktNode {
    * before the first vertical keyword is the horizontal slice" rule exactly.
    */
   readonly start: number;
+  /** Exclusive source end; null for an unterminated node. */
+  readonly end: number | null;
   /** The clause's children, in source order. */
   readonly children: readonly WktChild[];
 }
@@ -158,8 +160,8 @@ function tokenize(src: string): Tok[] {
       i++;
       continue;
     }
-    if (ch === '[') { out.push({ t: 'lb', i }); i++; continue; }
-    if (ch === ']') { out.push({ t: 'rb', i }); i++; continue; }
+    if (ch === '[' || ch === '(') { out.push({ t: 'lb', i }); i++; continue; }
+    if (ch === ']' || ch === ')') { out.push({ t: 'rb', i }); i++; continue; }
     if (ch === ',') { out.push({ t: 'comma', i }); i++; continue; }
     if (ch === '"') {
       // Quoted string — read to the next quote (or end). Matches the old
@@ -228,10 +230,11 @@ function parseTokens(tokens: Tok[]): WktNode | null {
     const start = idTok.i;
     pos += 2; // consume the keyword and its opening bracket
 
+    let end: number | null = null;
     const children: WktChild[] = [];
     while (pos < tokens.length) {
       const tk = tokens[pos];
-      if (tk.t === 'rb') { pos++; break; } // close this node
+      if (tk.t === 'rb') { end = tk.i + 1; pos++; break; } // close this node
       if (tk.t === 'comma') { pos++; continue; }
       if (tk.t === 'string') { children.push({ type: 'string', value: tk.v }); pos++; continue; }
       if (tk.t === 'number') { children.push({ type: 'number', value: tk.n }); pos++; continue; }
@@ -252,7 +255,7 @@ function parseTokens(tokens: Tok[]): WktNode | null {
       }
     }
 
-    return { keyword: keyword.toUpperCase(), start, children };
+    return { keyword: keyword.toUpperCase(), start, end, children };
   };
 
   // Find the first top-level `IDENT [` and parse it as the root.

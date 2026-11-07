@@ -24,6 +24,8 @@
 //    camera-only view stops being byte-identical to its v6 form.
 
 import { describe, it, expect, vi } from 'vitest';
+import { PointCloud } from '../src/model/PointCloud';
+import { colorForMode } from '../src/render/colorModes';
 import {
   createViewStateCoordinator,
   type ViewStateCoordinator,
@@ -89,6 +91,7 @@ function harness(
     activeScanId?: string | null;
     hasStreamingCloud?: boolean;
     clouds?: string[];
+    layerClouds?: Record<string, PointCloud>;
     clip?: ClipBox | null;
     hiddenCodes?: number[];
     filters?: { elevation: [number, number] | null; intensity: [number, number] | null };
@@ -120,6 +123,8 @@ function harness(
     splatMode: 'classic',
     hasStreamingCloud: opts.hasStreamingCloud ?? false,
     clouds: () => opts.clouds ?? ['scan-a'],
+    getCloud: (id: string) => opts.layerClouds?.[id] ?? { intensity: new Uint16Array([1]) },
+    streamingCloud: opts.hasStreamingCloud ? { availableColorModes: () => ['intensity'] } : null,
     activeColorMode: () => 'elevation',
     getClip: () => opts.clip ?? null,
     setClip,
@@ -284,10 +289,23 @@ describe('apply — the ordered restore', () => {
   });
 
   it('applies the colour mode to every static cloud and to the stream', () => {
-    const h = harness({ clouds: ['a', 'b'] });
+    const h = harness({ clouds: ['a', 'b'], hasStreamingCloud: true });
     h.coordinator.apply({ colorMode: 'intensity' });
     expect(h.setColorMode.mock.calls.map((c) => c[0])).toEqual(['a', 'b']);
     expect(h.setStreamingColorMode).toHaveBeenCalledWith('intensity');
+  });
+
+  it('restores the clip and camera when one scan has no saved colour channel', () => {
+    const xyz = new Float32Array([0, 0, 0, 2, 3, 4]);
+    const plain = new PointCloud({ name: 'bare.ply', origin: [0,0,0], sourceFormat: 'ply', positions: xyz });
+    const painted = new PointCloud({ name: 'painted.ply', origin: [0,0,0], sourceFormat: 'ply', positions: xyz, colors: new Uint8Array([255, 0, 0, 0, 255, 0]) });
+    const layers: Record<string, PointCloud> = { bare: plain, painted };
+    const h = harness({ clouds: ['bare', 'painted'], layerClouds: layers });
+    h.setColorMode.mockImplementation((id: string) => colorForMode('rgb', layers[id]!));
+    h.coordinator.apply({ colorMode: 'rgb', clip: CLIP, camera: CAMERA });
+    expect(h.setColorMode.mock.calls.map(([id]) => id)).toEqual(['painted']);
+    expect(h.setClip).toHaveBeenCalledWith(CLIP);
+    expect(h.applyCameraState).toHaveBeenCalledWith(CAMERA);
   });
 
   it('fires no sink for an absent field', () => {

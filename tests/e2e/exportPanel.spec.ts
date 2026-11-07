@@ -1,6 +1,6 @@
 import { test, expect, type Page, type Locator } from '@playwright/test';
 import { readFileSync } from 'node:fs';
-import { dropDenseGridPly, showWorkspaceMode } from './helpers';
+import { assignScanCrs, dropDenseGridPly, showWorkspaceMode } from './helpers';
 import { buildSourceLas, parseLasRecords, spreadRecords } from '../helpers/sourceLasQuantisation';
 
 /**
@@ -12,10 +12,11 @@ import { buildSourceLas, parseLasRecords, spreadRecords } from '../helpers/sourc
  * Load a scan via `drop`, switch to the Output workspace mode, and return the
  * Export panel expanded (panels mount collapsed).
  */
-async function openExportPanel(page: Page, drop: (page: Page) => Promise<void>): Promise<Locator> {
+async function openExportPanel(page: Page, drop: (page: Page) => Promise<void>, crs = false): Promise<Locator> {
   await page.goto('/?test=1');
   await drop(page);
   await expect(page.locator('.olv-empty')).toBeHidden({ timeout: 20_000 });
+  if (crs) await assignScanCrs(page);
   // The Export panel lives in the Output workspace mode.
   await showWorkspaceMode(page, 'output');
 
@@ -52,6 +53,13 @@ test('after a scan loads, the Export panel offers formats and exports a file', a
 
   // Status confirms the export and reports points.
   await expect(panel.locator('.olv-export-status')).toContainText(/points|Exported/i);
+});
+
+test('a scan with no CRS cannot select LAS 1.4 and states why', async ({ page }) => {
+  const panel = await openExportPanel(page, dropDenseGridPly);
+  await expect(panel.locator('.olv-bc-pill', { hasText: 'LAS 1.4' })).toBeDisabled();
+  await expect(panel.locator('.olv-bc-pill', { hasText: 'LAS 1.2' })).toHaveAttribute('aria-pressed', 'true');
+  await expect(panel.locator('#olv-export-las14-note')).toContainText('require a coordinate system');
 });
 
 /**
@@ -122,7 +130,7 @@ test('Export panel: LAS 1.2 class-wrap opt-in previews, refuses, then writes wra
     classification: Uint8Array.from(classes),
   });
 
-  const panel = await openExportPanel(page, (p) => dropLasBytes(p, las, 'high-classes.las'));
+  const panel = await openExportPanel(page, (p) => dropLasBytes(p, las, 'high-classes.las'), true);
   // Wait for the classification to actually be attached — a scan-independent
   // row that shows whenever the cloud carries a classification, regardless of
   // format — before touching the format pills, so a slower engine's decode
@@ -183,7 +191,7 @@ test('Export panel: LAS 1.2 refuses a class that changes meaning, then writes it
     classification: Uint8Array.from(classes),
   });
 
-  const panel = await openExportPanel(page, (p) => dropLasBytes(p, las, 'rail.las'));
+  const panel = await openExportPanel(page, (p) => dropLasBytes(p, las, 'rail.las'), true);
   await expect(panel.getByRole('checkbox', { name: 'Include classification' })).toBeVisible({ timeout: 20_000 });
 
   const optIn = panel.locator('.olv-export-fullres', { hasText: LEGACY_CLASS_REINTERPRETATION_OPT_IN });
@@ -282,7 +290,7 @@ for (const pill of ['LAS 1.4', 'LAS 1.2']) {
     const records = spreadRecords(500, 200, scale);
     const source = new Uint8Array(buildSourceLas({ version: '1.4', scale, offset, records }));
 
-    const panel = await openExportPanel(page, (p) => dropLasBytes(p, source, 'cm-scale.las'));
+    const panel = await openExportPanel(page, (p) => dropLasBytes(p, source, 'cm-scale.las'), true);
     await expect(panel.getByRole('checkbox', { name: 'Include classification' })).toBeVisible({ timeout: 20_000 });
     await panel.locator('.olv-bc-pill', { hasText: pill }).click();
 
@@ -313,7 +321,7 @@ test('Export panel: LAS 1.2 refuses to drop the overlap flag, then writes once a
     classificationFlags: Uint8Array.from([0, 8, 8]),
   });
 
-  const panel = await openExportPanel(page, (p) => dropLasBytes(p, las, 'overlap.las'));
+  const panel = await openExportPanel(page, (p) => dropLasBytes(p, las, 'overlap.las'), true);
   await expect(panel.getByRole('checkbox', { name: 'Include classification' })).toBeVisible({ timeout: 20_000 });
   const optIn = panel.locator('.olv-export-fullres', { hasText: LEGACY_OVERLAP_DROP_OPT_IN });
   await expect(optIn).toBeHidden();

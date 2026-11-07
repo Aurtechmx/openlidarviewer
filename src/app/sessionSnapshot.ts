@@ -113,6 +113,7 @@ export function serializeActiveSession(
     const crs = streamingCloud.crs();
     scanSummary = {
       fileName: streamingCloud.name,
+      ...(streamingCloud.sourceDigest ? { contentFingerprint: streamingCloud.sourceDigest } : {}),
       sourcePoints: streamingCloud.sourcePointCount,
       width: b[3] - b[0],
       depth: b[4] - b[1],
@@ -124,6 +125,7 @@ export function serializeActiveSession(
     const crs = cloud.metadata?.crs;
     scanSummary = {
       fileName: cloud.name,
+      ...(cloud.sourceDigest ? { contentFingerprint: cloud.sourceDigest } : {}),
       sourcePoints: cloud.declaredPointCount ?? cloud.decodedPointCount ?? cloud.pointCount,
       width: b.max[0] - b.min[0],
       depth: b.max[1] - b.min[1],

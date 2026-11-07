@@ -840,3 +840,11 @@ export async function useAdvancedInspector(page: Page): Promise<void> {
     }
   });
 }
+
+/** Assign a projected CRS to the open scan: LAS 1.4 point formats 6 and 7 are refused without one. */
+export async function assignScanCrs(page: Page, epsg = '32613'): Promise<void> {
+  await showWorkspaceMode(page, 'data');
+  const crs = page.locator('summary', { hasText: 'Coordinate system' }).first();
+  if (!(await crs.evaluate((el) => (el.parentElement as HTMLDetailsElement).open))) await crs.click();
+  await page.locator('.olv-crs-select').first().selectOption(epsg);
+}

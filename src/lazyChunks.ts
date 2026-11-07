@@ -394,7 +394,10 @@ export const loadBatchConverter = () => import('./ui/BatchConverter');
  * in-project Export panel, which mounts on every scan load but must not drag
  * proj4 into the initial bundle — so it imports the engine lazily on Export.
  */
-export const loadConvertEngine = () => import('./convert/convertCloud');
+export const loadConvertEngine = async () => {
+  const { convertCloudForDownload, resolveExportDigests } = await import('./convert/convertCloud');
+  return { convertCloud: convertCloudForDownload, resolveExportDigests };
+};
 
 /**
  * Load the LAS 1.2 class-wrap guard for the Export panel's live preview. It

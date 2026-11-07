@@ -35,7 +35,9 @@
    "sensor": "DJI Matrice 350 RTK + Zenmuse L1 (UAV)",
    "publishedProducts": "0.1 m DTM (with interpolated stream bathymetry) and 0.1 m CHM",
    "terrain": "riparian; open field + dirt road (good ground) beside dense trees + stream (poor ground)",
-   "licence": "see OpenTopography dataset terms",
+   "licence": "CC BY 4.0",
+   "licenceUrl": "https://creativecommons.org/licenses/by/4.0/",
+   "citation": "Hession, W., Lehmann, L., Resop, J. and Chandel, A. (2026). Virginia Tech StREAM Lab Spring 2026 Drone Lidar Survey. OpenTopography. https://doi.org/10.5069/G9NZ85W7",
    "role": "high-density DTM/CHM real-reference leg; crop to open-field ground away from the stream (bathymetry is interpolated in the published DTM)"
   },
   {

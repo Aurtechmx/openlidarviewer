@@ -15,7 +15,7 @@ import { fullDecodeRefusal } from '../export/fullDecodeRefusal';
 import { declaredCrsOrigin } from '../science/crsOrigin';
 import { exportDigests } from '../science/exportDigestRecord';
 import type { PointCloud } from '../model/PointCloud';
-import { convertCloud } from './convertCloud';
+import { convertCloudForDownload } from './convertCloud';
 import type { ConvertOptions, ConvertedFile, ConvertReport } from './types';
 import { formatByteSize } from '../io/formatByteSize';
 import { MAX_WHOLE_FILE_BYTES } from '../io/loadPlan';
@@ -176,7 +176,7 @@ export async function runBatch(
         continue;
       }
       emit('converting');
-      const { file, report } = convertCloud(cloud, { ...options, digests: exportDigests({ sha256, note: null }, declaredCrsOrigin(cloud.metadata?.crs)) });
+      const { file, report } = convertCloudForDownload(cloud, { ...options, digests: exportDigests({ sha256, note: null }, declaredCrsOrigin(cloud.metadata?.crs)) });
       const finalFile = file
         ? { ...file, filename: dedupeName(file.filename, seen) }
         : null;

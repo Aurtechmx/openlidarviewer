@@ -10,7 +10,7 @@
  */
 
 import { describe, it, expect } from 'vitest';
-import { convertCloud } from '../src/convert/convertCloud';
+import { convertCloud, convertCloudForDownload } from '../src/convert/convertCloud';
 import { LasCrsError, planLas14Crs, writeLas14 } from '../src/convert/writeLas';
 import { PointCloud } from '../src/model/PointCloud';
 import type { CrsInfo } from '../src/io/crs';
@@ -148,11 +148,13 @@ describe('no WKT can be produced: refused, never "kept"', () => {
     expect(() => writeLas14(g, { epsg: 2231 })).toThrow(LasCrsError);
   });
 
-  it('a cloud with no CRS writes no WKT and leaves bit 4 clear', () => {
-    const { file, report } = convertCloud(cloud(undefined, false), { format: 'las14', crsMode: 'keep' });
-    expect(report.ok).toBe(true);
-    expect(encoding(file!.bytes) & 0x10).toBe(0);
-    expect(vlrs(file!.bytes).some((r) => r.recordId === 2112 || r.recordId === 34735)).toBe(false);
+  it.each([false, true])('refuses a download with no CRS (RGB: %s)', (rgb) => {
+    const scan = cloud(undefined, rgb);
+    const { file, report } = convertCloudForDownload(scan, { format: 'las14', crsMode: 'keep' });
+    expect(file).toBeNull();
+    expect(report.ok).toBe(false);
+    expect(messages(report)).toMatch(/no known CRS/);
+    expect(convertCloudForDownload(scan, { format: 'xyz', crsMode: 'keep' }).report.ok).toBe(true);
   });
 });
 

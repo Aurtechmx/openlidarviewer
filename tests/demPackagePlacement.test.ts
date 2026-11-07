@@ -5,6 +5,8 @@
  * writes no .prj and no GeoKeys, and the README says the frame is local.
  */
 import { describe, expect, it } from 'vitest';
+import { compoundWkt, wktForEpsg } from '../src/io/epsgWkt';
+import { rasterHorizontalWkt } from '../src/io/crs';
 import { buildDemPackage } from '../src/terrain/export/demPackage';
 import { demResultFor, DEM_PKG_OPTS } from './helpers/demPackageFixture';
 import { extractEntry } from './helpers/zipReader';
@@ -44,9 +46,36 @@ describe('DEM package placement', () => {
     expect(text(zip, 'site-README.txt')).not.toContain('not georeferenced');
   });
 
+  it('names each grid projection and keeps the canopy height relative', () => {
+    const horizontal = wktForEpsg(32610)!;
+    const wkt = compoundWkt(horizontal, 5703)!;
+    const zip = buildDemPackage(demResultFor(grid()), { ...DEM_PKG_OPTS, basename: 'site', wkt });
+    expect(text(zip, 'site-dtm.prj')).toBe(wkt);
+    expect(text(zip, 'site-dsm.prj')).toBe(wkt);
+    expect(text(zip, 'site-chm.prj')).toBe(horizontal);
+    expect(text(zip, 'site.prj')).toBe(wkt);
+  });
+
+  it('uses the written unit variant and only recognised EPSG definitions', () => {
+    const horizontal = wktForEpsg(32610)!;
+    const zip = buildDemPackage(demResultFor(grid(), 1200 / 3937), { ...DEM_PKG_OPTS, basename: 'site' });
+    expect(text(zip, 'site-dtm.prj')).toBe(compoundWkt(horizontal, 6360));
+    expect(text(zip, 'site-chm.prj')).toBe(horizontal);
+  });
+
+  it('extracts custom WKT2 horizontal coordinates without a guessed EPSG or vertical axis', () => {
+    const horizontal = 'PROJCRS["Site, grid",BASEGEOGCRS["Local"],CS[Cartesian,2],LENGTHUNIT["metre",1]]';
+    const wkt = `COMPOUNDCRS["Site",${horizontal},VERTCRS["Site heights",CS[vertical,1]]]`;
+    expect(rasterHorizontalWkt(wkt)).toBe(horizontal);
+    expect(rasterHorizontalWkt('COMPOUNDCRS["Vertical only",VERTCRS["Height"]]')).toBeNull();
+    expect(rasterHorizontalWkt('GEOGCRS["3D",CS[ellipsoidal,3]]')).toBeNull();
+  });
+
   it('unplaced: no .prj, an untagged GeoTIFF, and a README that says the frame is local', () => {
     const zip = buildDemPackage(demResultFor(grid()), { basename: 'site', wkt: WKT, generationDateIso: DEM_PKG_OPTS.generationDateIso });
-    expect(extractEntry(zip, 'site.prj')).toBeNull();
+    for (const name of ['site.prj', 'site-dtm.prj', 'site-dsm.prj', 'site-chm.prj']) {
+      expect(extractEntry(zip, name)).toBeNull();
+    }
     const tif = extractEntry(zip, 'site-dtm.tif')!;
     expect(geoKey(tif, 3072)).toBeNull();
     expect(geoKey(tif, 4096)).toBeNull();

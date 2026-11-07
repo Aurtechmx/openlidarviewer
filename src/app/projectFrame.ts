@@ -285,7 +285,7 @@ export function createProjectFrameService(context: AppContext): ProjectFrameServ
 export interface ProjectFrameSources {
   readonly frame: { readonly projectOrigin: readonly [number, number, number] } | null;
   readonly layerIds: readonly string[];
-  cloud(id: string): { readonly sourceOrigin?: readonly [number, number, number]; readonly sourceFormat: SourceFormat } | null | undefined;
+  cloud(id: string): { readonly sourceDigest?: string | null; readonly sourceOrigin?: readonly [number, number, number]; readonly sourceFormat: SourceFormat } | null | undefined;
   record(id: string): { readonly layerId: string; readonly fingerprint: string; readonly displayName: string } | null;
   placement(id: string): { readonly vertical: boolean } | null;
 }
@@ -326,6 +326,7 @@ export function projectFrameInputFrom(src: ProjectFrameSources, force = false): 
     layers.push({
       layerId: record.layerId,
       sourceFingerprint: record.fingerprint,
+      ...(cloud.sourceDigest ? { contentFingerprint: cloud.sourceDigest } : {}),
       sourceName: record.displayName,
       sourceOrigin: [o[0], o[1], o[2]],
       upAxis: isZUpFormat(cloud.sourceFormat) ? 'z' : 'y',
@@ -376,6 +377,7 @@ export interface SessionImportSources {
   viewerIds(): readonly string[];
   stableIdFor(viewerId: string): string | null;
   cloud(viewerId: string): {
+    readonly sourceDigest?: string | null;
     readonly sourceOrigin?: V3;
     readonly sourceFormat?: SourceFormat;
     readonly metadata?: { readonly crs?: { readonly epsg?: number | null } | null } | null;
@@ -438,6 +440,7 @@ function liveLayerEvidence(src: SessionImportSources): LiveLayerEvidence[] {
     out.push({
       layerId: rec.layerId,
       fingerprint: rec.fingerprint,
+      ...(cloud.sourceDigest ? { contentFingerprint: cloud.sourceDigest } : {}),
       sourceOrigin: so ? [so[0], so[1], so[2]] : null,
       upAxis: cloud.sourceFormat && isZUpFormat(cloud.sourceFormat) ? 'z' : 'y',
       epsg: cloud.metadata?.crs?.epsg ?? null,
