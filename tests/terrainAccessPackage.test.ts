@@ -292,6 +292,14 @@ describe('georeferenced export', () => {
     expect(jsonOf<{ coordinateFrame: string }>(zip, 'ta-route.geojson').coordinateFrame).toBe('local-planar-metres');
   });
 
+  it('a placed raster with a WKT but no CRS name says the .prj carries the CRS', () => {
+    const zip = buildTerrainAccessPackage(runOf(), { basename: 'ta', wkt: wktForEpsg(32610),
+      worldOrigin: { x: 600000, y: 4000000 }, gridPlacement: { originH1: 0, originH2: 0, cellSize: 1 } });
+    const readme = textOf(zip, 'ta-README.txt');
+    expect(readme).toContain('the .prj carries the source CRS definition');
+    expect(textOf(zip, 'ta.prj')).toBe(wktForEpsg(32610));
+  });
+
   it('builds the .prj from the EPSG code when the source has no WKT', () => {
     const zip = buildTerrainAccessPackage(runOf(), {
       basename: 'ta', crsName: 'EPSG:32610',
