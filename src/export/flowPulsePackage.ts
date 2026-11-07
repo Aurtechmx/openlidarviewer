@@ -40,6 +40,8 @@
  */
 
 import { rasterHorizontalWkt } from '../io/crs';
+import { wktForEpsg } from '../io/epsgWkt';
+import { epsgFromCrsLabel } from '../export/crsIdentifier';
 import { safeEntryName } from './safeText';
 import { SOURCE_NOT_SUPPLIED_NOTE, sourceSha256Text, type ExportDigests } from '../science/exportDigestRecord';
 import { crsOriginLine } from '../science/crsOrigin';
@@ -780,9 +782,11 @@ export function buildFlowPulsePackage(
   });
 
   // A .prj beside rasters in local metres would make a GIS place them at the CRS origin.
-  if (placedOrigin && options.wkt) {
-    entries.push({ name: `${basename}.prj`, bytes: new TextEncoder().encode(options.wkt) });
-    const horizontal = rasterHorizontalWkt(options.wkt);
+  // Same rule as the DEM: with no source WKT, build it from the EPSG code.
+  const wkt = placedOrigin ? (options.wkt ?? wktForEpsg(epsgFromCrsLabel(options.crsName))) : null;
+  if (placedOrigin && wkt) {
+    entries.push({ name: `${basename}.prj`, bytes: new TextEncoder().encode(wkt) });
+    const horizontal = rasterHorizontalWkt(wkt);
     if (horizontal) {
       const bytes = new TextEncoder().encode(horizontal);
       for (const grid of entries.filter((entry) => entry.name.endsWith('.asc'))) {
@@ -793,7 +797,7 @@ export function buildFlowPulsePackage(
 
   const readme = buildFlowReadme(result, {
     basename, generationDateIso, softwareName, softwareVersion, build,
-    crsName: options.crsName ?? null, hasWkt: placedOrigin != null && !!options.wkt,
+    crsName: options.crsName ?? null, hasWkt: placedOrigin != null && !!wkt,
     verticalUnitLabel: options.verticalUnitLabel ?? 'units', hasPath, hasCatchment, sourceInterpretation,
     elevationOrigin, terrainCaveat: options.terrainCaveat ?? null, rasterCellSize: frame?.cellSize ?? null,
     pathFrame: pathFrameName(placedOrigin, options.crsName != null),
@@ -870,3 +874,4 @@ export function buildFlowPulsePackage(
 
 /** SHA-256 of `bytes`, re-exported so a caller can verify a package entry without a second import. */
 export { sha256Hex };
+

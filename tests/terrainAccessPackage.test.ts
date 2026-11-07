@@ -292,6 +292,16 @@ describe('georeferenced export', () => {
     expect(jsonOf<{ coordinateFrame: string }>(zip, 'ta-route.geojson').coordinateFrame).toBe('local-planar-metres');
   });
 
+  it('builds the .prj from the EPSG code when the source has no WKT', () => {
+    const zip = buildTerrainAccessPackage(runOf(), {
+      basename: 'ta', crsName: 'EPSG:32610',
+      worldOrigin: { x: 600000, y: 4000000 }, gridPlacement: { originH1: 0, originH2: 0, cellSize: 1 },
+    });
+    expect(textOf(zip, 'ta.prj')).toBe(wktForEpsg(32610));
+    expect(textOf(zip, 'ta-traversability.prj')).toBe(wktForEpsg(32610));
+    expect(() => extractEntry(buildTerrainAccessPackage(runOf(), { basename: 'ta', crsName: 'EPSG:32610', worldOrigin: null }), 'ta.prj')).toThrow();
+  });
+
   it('states the raster cell size with its unit', () => {
     const placed = textOf(buildTerrainAccessPackage(runOf(), {
       basename: 'ta', worldOrigin: { x: 400123.5, y: 3600456.25 }, gridPlacement: { originH1: 0, originH2: 0, cellSize: 1 },

@@ -32,6 +32,8 @@
  */
 
 import { rasterHorizontalWkt } from '../io/crs';
+import { wktForEpsg } from '../io/epsgWkt';
+import { epsgFromCrsLabel } from '../export/crsIdentifier';
 import { safeEntryName, singleLine } from './safeText';
 import { SOURCE_NOT_SUPPLIED_NOTE, sourceSha256Text, type ExportDigests } from '../science/exportDigestRecord';
 import { crsOriginLine } from '../science/crsOrigin';
@@ -416,6 +418,8 @@ export function buildTerrainAccessPackage(
   const grid = result.grid;
   const place = terrainAccessPlacement(grid, options.worldOrigin ?? null, options.gridPlacement ?? null, options.crsName ?? null);
   const placed = place.frame !== 'local-planar-metres';
+  // Same rule as the DEM: with no source WKT, build it from the EPSG code.
+  const wkt = placed ? (options.wkt ?? wktForEpsg(epsgFromCrsLabel(options.crsName))) : null;
 
   const entries: ZipEntry[] = [];
 
@@ -479,7 +483,7 @@ export function buildTerrainAccessPackage(
   });
 
   const readme = buildTerrainAccessReadme(result, {
-    basename, generationDateIso, build, crsName: options.crsName ?? null, hasWkt: placed && !!options.wkt, rasterCellSize: place.cellX, sourceInterpretation,
+    basename, generationDateIso, build, crsName: options.crsName ?? null, hasWkt: placed && !!wkt, rasterCellSize: place.cellX, sourceInterpretation,
     frame: place.frame,
     sourceSha256Text: options.sourceSha256 ?? (options.digests ? sourceSha256Text(options.digests) : (result.record.source.sourceDigest ?? SOURCE_NOT_SUPPLIED_NOTE)),
   });
@@ -489,9 +493,9 @@ export function buildTerrainAccessPackage(
   });
 
   // A .prj beside a raster in local metres would make a GIS place it at the CRS origin.
-  if (placed && options.wkt) {
-    entries.push({ name: `${basename}.prj`, bytes: new TextEncoder().encode(options.wkt) });
-    const horizontal = rasterHorizontalWkt(options.wkt);
+  if (placed && wkt) {
+    entries.push({ name: `${basename}.prj`, bytes: new TextEncoder().encode(wkt) });
+    const horizontal = rasterHorizontalWkt(wkt);
     if (horizontal) entries.push({ name: `${basename}-traversability.prj`, bytes: new TextEncoder().encode(horizontal) });
   }
 
@@ -554,3 +558,4 @@ export function buildTerrainAccessPackage(
 }
 
 export { sha256Hex } from '../terrain/export/sha256';
+
