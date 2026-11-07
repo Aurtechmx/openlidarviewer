@@ -5,11 +5,11 @@
   "releaseChannel": "development",
   "releaseAuthoritative": false,
   "tag": null,
-  "commit": "ba813ef1ebf6feb3a35e18b41d484a7d074357c3",
+  "commit": "4425aa3275c035f9d3cef01f1fb2f3c0e7e53ec8",
   "source": "git",
   "identityFrom": "git",
   "repository": null,
-  "generatedAt": "2026-10-30T18:22:41.161Z",
+  "generatedAt": "2026-11-07T21:21:33.756Z",
   "nodeVersion": "v22.23.4",
   "npmVersion": "10.9.9",
   "platform": "darwin-arm64",
@@ -19,7 +19,7 @@
   "workflowSha": null,
   "gateExit": 0,
   "gateLog": "release/gate.log",
-  "gateLogSha256": "2a39df14d963f48fdf44b50ea3c6b035bdf5e960dd9955f41aa6633b8c99b11c",
+  "gateLogSha256": "54ebb088a3c05643b5ece93b00424921cc75d8112e63c3d9ae2d52cd3e03e087",
   "stages": {
     "mutation": "not-executed"
   },
@@ -54,46 +54,46 @@
   },
   "buckets": {
     "unit": {
-      "passed": 16213,
+      "passed": 16685,
       "skipped": 59,
       "runs": 3
     },
     "export": {
-      "passed": 1740,
+      "passed": 1756,
       "skipped": 0,
       "runs": 1
     },
     "terrain": {
-      "passed": 4225,
+      "passed": 4290,
       "skipped": 12,
       "runs": 2
     },
     "ui": {
-      "passed": 1327,
+      "passed": 1399,
       "skipped": 0,
       "runs": 1
     },
     "slow": {
-      "passed": 1602,
+      "passed": 1611,
       "skipped": 32,
       "runs": 2
     }
   },
   "total": {
-    "passed": 25107,
+    "passed": 25741,
     "skipped": 103
   },
   "bundle": {
-    "liveEntryKiB": 431,
+    "liveEntryKiB": 442,
     "ceilingKiB": 795
   },
-  "packageLockSha256": "81be517f89cd2d14183820da9bbb633f9e6b9e2abeaa6131109c64958feeff85",
+  "packageLockSha256": "219067a583558ef97d06106943f02327209c269652d71da9581f8725e110d065",
   "sbom": {
-    "sha256": "0dce3877292be0201b6bae08f203f66d600b3ddfe19bb2044ddd0fb9ae95c3a8",
+    "sha256": "42e7bbd9a233683d1d1d8936647b04e4bc12653a83155100a1a425ca7f727b04",
     "rootName": "openlidarviewer",
     "rootVersion": "0.7.1-alpha.1",
     "bomRef": "openlidarviewer@0.7.1-alpha.1",
-    "components": 36
+    "components": 37
   },
   "science": {
     "e4ClaimCount": 18,
