@@ -279,13 +279,8 @@ export function buildExportSummary(input: ExportSummaryInput): ExportSummary {
         : { level: 'error', message: wrap.refusal },
     );
   }
-  if (input.format === 'las14' && input.crsMode === 'keep' && input.crsLabel && input.hasWkt === false) {
-    warnings.push({
-      level: 'info',
-      message:
-        'CRS recorded as GeoTIFF keys — strict LAS 1.4 readers prefer OGC WKT for point formats 6/7.',
-    });
-  }
+  // No CRS note for LAS 1.4: the writer always records the CRS as OGC WKT
+  // (built from the EPSG code when the source has no WKT) or refuses the export.
   if (input.viewDecimated && !input.fullRes) {
     // Informational, not a warning: exporting the display view is the default
     // behaviour of the panel, and the next sentence says how to change it.

@@ -115,10 +115,10 @@ describe('buildExportSummary — warnings', () => {
     expect(lines.filter((l) => /5 bits|5-bit|wrap|clamp|above 31/i.test(l))).toEqual([]);
   });
 
-  it('LAS 1.4 keep without WKT notes the GeoTIFF-keys fallback', () => {
-    expect(warns({ ...base, crsLabel: 'EPSG:32612', hasWkt: false })).toEqual(
-      expect.arrayContaining([expect.stringMatching(/info:.*GeoTIFF keys/i)]),
-    );
+  it('LAS 1.4 keep without a source WKT does not claim a GeoTIFF-keys fallback', () => {
+    // The LAS 1.4 writer builds the WKT from the EPSG code, so the output has one.
+    const lines = warns({ ...base, crsLabel: 'EPSG:32612', hasWkt: false });
+    expect(lines.filter((l) => /GeoTIFF keys|prefer OGC WKT/i.test(l))).toEqual([]);
   });
 
   it('a decimated view is flagged unless full-res is ticked', () => {
