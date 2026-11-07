@@ -257,13 +257,16 @@ export function routeFrameLines(frame: TerrainAccessCoordinateFrame, crsName: st
 }
 
 /** The README CRS line: a CRS name is stated as applied only when the export is placed. */
-function crsLine(crsName: string | null, frame: TerrainAccessCoordinateFrame): string {
+function crsLine(crsName: string | null, frame: TerrainAccessCoordinateFrame, hasWkt = false): string {
   if (frame === 'local-planar-metres') {
     return crsName == null
       ? 'not georeferenced — the raster uses a local (0, 0) origin'
       : `${crsName} (not applied: local metres)`;
   }
-  return crsName ?? 'not resolved — the raster uses the scan\'s source coordinates';
+  if (crsName != null) return crsName;
+  return hasWkt
+    ? 'not named — the raster uses the scan\'s source coordinates; the .prj carries the source CRS definition'
+    : 'not resolved — the raster uses the scan\'s source coordinates';
 }
 
 /** The raster cell size as written in the .asc, with the unit it is in. */
@@ -337,7 +340,7 @@ function buildTerrainAccessReadme(result: TerrainAccessResult, opts: {
     `  Input digest   ${r.source.analysisInputDigest}`,
     `  Input coverage ${r.source.basis.coverage} (${r.source.basis.complete ? 'complete' : 'partial'})`,
     `  Cells read     ${r.source.basis.measuredCells} of ${r.source.basis.totalCells}`,
-    `  CRS            ${crsLine(opts.crsName, opts.frame)}`,
+    `  CRS            ${crsLine(opts.crsName, opts.frame, opts.hasWkt)}`,
     ...(opts.sourceInterpretation.crsOrigin ? [`  ${crsOriginLine(opts.sourceInterpretation.crsOrigin)}`] : []),
     '',
     'Grid',

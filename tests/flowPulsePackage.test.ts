@@ -120,6 +120,16 @@ describe('the package carries every required file', () => {
     expect(extractEntry(buildFlowPulsePackage(result, { ...opts, worldOrigin: null }), 'flow-direction.prj')).toBeNull();
   });
 
+  it('a placed package with a WKT but no CRS name does not call itself unreferenced', () => {
+    const zip = buildFlowPulsePackage(runOf(), { basename: 'flow', wkt: wktForEpsg(32610),
+      worldOrigin: { x: 600000, y: 4000000 }, gridFrame: { originH1: 0, originH2: 0, cellSize: 1 } });
+    const readme = textOf(zip, 'flow-README.txt');
+    expect(readme).not.toContain('not georeferenced');
+    expect(readme).not.toContain('(0, 0) origin');
+    expect(readme).toContain('the .prj carries the source CRS definition');
+    expect(textOf(zip, 'flow.prj')).toBe(wktForEpsg(32610));
+  });
+
   it('builds the .prj from the EPSG code when the source has no WKT', () => {
     const opts = { basename: 'flow', crsName: 'EPSG:32610',
       worldOrigin: { x: 600000, y: 4000000 }, gridFrame: { originH1: 0, originH2: 0, cellSize: 1 } };

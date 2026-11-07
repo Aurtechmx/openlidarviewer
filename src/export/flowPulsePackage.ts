@@ -173,8 +173,13 @@ const NO_DATA = -9999;
  * The CRS name is the resolved-frame label; the WKT only feeds the .prj.
  */
 /** The README CRS line: a CRS name is stated as applied only when the export is placed. */
-function crsLine(crsName: string | null, placed: boolean): string {
-  if (crsName == null) return 'not georeferenced — rasters use a local (0, 0) origin';
+function crsLine(crsName: string | null, placed: boolean, hasWkt = false): string {
+  if (crsName == null) {
+    if (!placed) return 'not georeferenced — rasters use a local (0, 0) origin';
+    return hasWkt
+      ? 'not named — rasters use the scan\'s source coordinates; the .prj carries the source CRS definition'
+      : 'not resolved — rasters use the scan\'s source coordinates';
+  }
   return placed ? crsName : `${crsName} (not applied: rasters are in local metres from (0, 0))`;
 }
 
@@ -452,7 +457,7 @@ function buildFlowReadme(result: FlowPulseResult, opts: {
     `  Input coverage ${r.source.basis.coverage} (${r.source.basis.complete ? 'complete' : 'partial'})`,
     `  Cells read     ${r.source.basis.measuredCells} of ${r.source.basis.totalCells}`,
     `  Withheld excluded   ${r.source.basis.withheldExcluded === null ? 'not recorded' : String(r.source.basis.withheldExcluded)}`,
-    `  CRS            ${crsLine(opts.crsName, opts.placed)}`,
+    `  CRS            ${crsLine(opts.crsName, opts.placed, opts.hasWkt)}`,
     ...(opts.sourceInterpretation.crsOrigin ? [`  ${crsOriginLine(opts.sourceInterpretation.crsOrigin)}`] : []),
     `  Vertical unit  ${opts.verticalUnitLabel === 'units' ? 'unresolved — every fill-depth/elevation figure below is in source units' : opts.verticalUnitLabel}`,
     `  Terrain verdict    ${opts.terrainCaveat ? `${opts.terrainCaveat.verdict} (${interpolatedShareText(opts.terrainCaveat)})` : 'not flagged Blocked or Preview'}`,
