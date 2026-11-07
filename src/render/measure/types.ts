@@ -639,7 +639,9 @@ export function pickedUnitFrame(own: readonly MeasureUnitFrame[], hasDistinctLay
   if (hasDistinctLayers && own.some((f) => f.horizontalIdentity !== undefined)) {
     const identity = own[0]!.horizontalIdentity;
     if (!identity || !own.every((f) => f.horizontalIdentity === identity)) {
-      return { ...UNRESOLVED_UNIT_FRAME, up: worldUp, upRefusal: CROSS_FRAME_MEASUREMENT, crossFrameRefusal: true };
+      // Layers that also disagree on up keep that reason for up-dependent figures.
+      const upConflict = !own.every((f) => sameUp(f.up ?? worldUp, own[0]!.up ?? worldUp));
+      return { ...UNRESOLVED_UNIT_FRAME, up: worldUp, upRefusal: CROSS_FRAME_MEASUREMENT, crossFrameRefusal: true, ...(upConflict ? { upConflict } : {}) };
     }
   }
   const units = own.every((f) => sameUnitFrame(f, own[0]!)) ? own[0]! : UNRESOLVED_UNIT_FRAME;

@@ -1122,7 +1122,7 @@ export class MeasureController {
 
   private _summaryOf(m: Measurement): MeasurementSummary {
     if (this._crossFrameRefusal) {
-      return { id: m.id, kind: m.kind, name: m.name, value: CROSS_FRAME_MEASUREMENT };
+      return { id: m.id, kind: m.kind, name: m.name, value: this._crossFrameText(m.kind) };
     }
     const f = this._unitToMetres;
     // The row, its breakdown and the overlay obey one refusal: a frame whose axes are not ground
@@ -2314,9 +2314,14 @@ export class MeasureController {
    * own caveat): the factor is an inert 1, so values print in source units
    * marked unverified rather than as metres.
    */
+  /** Why a cross-layer figure of `kind` is withheld: an up-dependent one names the up conflict first. */
+  private _crossFrameText(kind: MeasurementKind): string {
+    return this._upRefusalText === UP_AXIS_CONFLICT && upAxisRefusesKind(kind) ? UP_AXIS_CONFLICT : CROSS_FRAME_MEASUREMENT;
+  }
+
   /** The frame refusal for `kind` in the current frame (see `frameRefusalText`). */
   private _frameRefusal(kind: MeasurementKind): string | null {
-    if (this._crossFrameRefusal) return CROSS_FRAME_MEASUREMENT;
+    if (this._crossFrameRefusal) return this._crossFrameText(kind);
     return frameRefusalText(kind, this._geographicCrs, this._verticalRefused, this._verticalUnitInvalid);
   }
 
@@ -2374,7 +2379,7 @@ export class MeasureController {
   /** The headline value string for a measurement, shown in the panel. */
   /** The figures of `m` withheld on its scan's position step, in its own frame. */ private _unresolved(m: Measurement): string[] { return unresolvedKeysFor(m, this._positionSteps?.(m) ?? null, this.upFor(m), this._ownUnitFrame(m) ?? this._activeUnitFrame()); }
   private _headlineText(m: Measurement): string {
-    if (this._crossFrameRefusal) return CROSS_FRAME_MEASUREMENT;
+    if (this._crossFrameRefusal) return this._crossFrameText(m.kind);
     const p = m.points;
     // Every figure that combines the horizontal and vertical axes is computed
     // on the isotropic points, so a compound CRS reads what the export writes.

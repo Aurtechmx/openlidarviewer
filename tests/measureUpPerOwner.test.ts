@@ -73,6 +73,18 @@ describe('per-owner up axis in the live readouts', () => {
     expect(chainUnitFrame([measure.unitFrameOf(cross)])).toEqual({ refusal: CROSS_FRAME_MEASUREMENT });
   });
 
+  it('unverified picks across up axes withhold a height for its up conflict and a distance for its grid', async () => {
+    const measure = await controller(Z);
+    measure.setUnitResolver((layerId) => ({ ...frame(layerId === 'las' ? Z : Y), horizontalIdentity: null }));
+    measure.loadMeasurements([
+      m('height', 'height', [[0, 0, 0], [0, 0, 5]], ['las', 'ply']),
+      m('distance', 'distance', [[0, 0, 0], [10, 0, 0]], ['las', 'ply']),
+    ]);
+    const [height, distance] = measure.getSummaries();
+    expect(height!.value).toBe(UP_AXIS_CONFLICT);
+    expect(distance!.value).toBe(CROSS_FRAME_MEASUREMENT);
+  });
+
   it('a LAS height reads 5 m whether the scene is Z-up or Y-up', async () => {
     const measure = await controller(Z);
     measure.loadMeasurements([LAS_WORK()[0]!]);
