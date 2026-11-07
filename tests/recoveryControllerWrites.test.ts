@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs';
 /**
  * recoveryControllerWrites.test.ts: when a recovery snapshot may reach the
  * journal, and when the restore offer goes away.
@@ -608,6 +609,25 @@ describe('reopening a source offers the newest saved work for that source', () =
     app.snapshots[0].resolve(session(0));
     await drain();
     expect(app.noticeText()).toContain('This file matches your unsaved work: 4 measurements on other.las');
+  });
+
+  it('Keep for later closes the notice about another file and deletes nothing', async () => {
+    const b = at(session(4, OTHER), Date.now() - 1000);
+    const s = fakeStore([b]);
+    const app = await start(s.store);
+    app.handle.onSourceLoaded();
+    app.snapshots[0].resolve(session(0));
+    await drain();
+    expect(app.noticeText()).toContain('was not restored');
+    await app.click('Keep for later');
+    expect(app.buttons()).toEqual([]);
+    expect(s.log).toEqual([]);
+    expect(s.entries.get(OTHER_KEY)).toBe(b);
+  });
+
+  it('an open annotation form hides the recovery notice so its Save stays reachable', () => {
+    const css = readFileSync('src/styles/72-panel-rails.css', 'utf8');
+    expect(css).toContain('body:has(.olv-anno-editor:not(.olv-hidden)) .olv-toast.olv-recovery-notice { display: none; }');
   });
 
   it('a failed restore keeps the entry and Discard removes that entry and keeps B', async () => {

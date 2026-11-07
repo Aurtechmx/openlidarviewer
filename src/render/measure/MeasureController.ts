@@ -33,7 +33,7 @@ import type {
   UnitSystem,
   VolumeRecord,
 } from './types';
-import { GEOGRAPHIC_NOT_AVAILABLE, MIN_POINTS, UNRESOLVED_UNIT_FRAME, UP_AXIS_CONFLICT, VERTICAL_NOT_AVAILABLE, VERTICAL_SCALE_NOT_AVAILABLE, frameRefusalText, isFull, sameUnitFrame, sameUp, upAxisRefusesKind, type MeasureUnitFrame } from './types';
+import { crossFrameRefusalText, GEOGRAPHIC_NOT_AVAILABLE, MIN_POINTS, UP_AXIS_CONFLICT, VERTICAL_NOT_AVAILABLE, VERTICAL_SCALE_NOT_AVAILABLE, frameRefusalText, isFull, pickedUnitFrame, upAxisRefusesKind, type MeasureUnitFrame } from './types';
 import type { WorkOwnership } from '../../model/workOwnership';
 import type { ProfileProvenance } from './profileProvenance';
 import type { WithheldReadCounts } from '../../science/withheldCounts';
@@ -547,6 +547,7 @@ export class MeasureController {
    * axis-dependent figure prints instead. Null otherwise.
    */
   private _upRefusalText: string | null = null;
+  private _crossFrameRefusal = false;
   private _units: UnitSystem = 'metric';
   /**
    * Render-units → metres factor from the scan's CRS (B2, v0.4.5). Render
@@ -996,7 +997,7 @@ export class MeasureController {
    * that names the layer(s) it was taken on (`pickLayers`, else its owner)
    * reads out in that layer's units and frame verdicts, whichever scan is
    * active; one spanning layers whose frames differ reads as unverified
-   * ({@link UNRESOLVED_UNIT_FRAME}). A null answer, or work naming no layer,
+   * (the unresolved unit frame). A null answer, or work naming no layer,
    * keeps the active scan's factors.
    */
   setPositionStepResolver(resolve: ((m: Measurement) => AxisSteps | null) | null): void { this._positionSteps = resolve; this._emitChange(); }
@@ -1037,15 +1038,7 @@ export class MeasureController {
     if (frames.every((f) => f === null)) return null;
     const active = this._activeUnitFrame();
     const own = frames.map((f) => f ?? active);
-    const units = own.every((f) => sameUnitFrame(f, own[0]!)) ? own[0]! : UNRESOLVED_UNIT_FRAME;
-    // The up axis is the layers' own, never the scene's: a Z-up survey keeps Z
-    // while a Y-up scan drives navigation. Layers that disagree share no vertical.
-    // A layer with no resolved up axis withholds every axis-dependent figure.
-    const ups = own.map((f) => f.up ?? this._worldUp);
-    if (!ups.every((u) => sameUp(u, ups[0]!))) return { ...units, up: this._worldUp, upConflict: true };
-    const upRefusal = own.find((f) => f.upRefusal)?.upRefusal;
-    const { upRefusal: _drop, ...rest } = units;
-    return { ...rest, up: ups[0]!, upConflict: false, ...(upRefusal ? { upRefusal } : {}) };
+    return pickedUnitFrame(own, new Set(ids).size > 1, this._worldUp);
   }
 
   /**
@@ -1077,6 +1070,7 @@ export class MeasureController {
     const set = (f: MeasureUnitFrame): void => {
       // Up and the datum it reduces the origin along travel with the frame.
       this._worldUp = f.up ?? saved.up!;
+      this._crossFrameRefusal = f.crossFrameRefusal === true;
       this._upRefusalText = f.upConflict === true ? UP_AXIS_CONFLICT : f.upRefusal ?? null;
       this._originUp = f === saved || !this._origin ? savedOriginUp : elevationDatumOffset(this._origin, this._worldUp);
       this._unitToMetres = f.unitToMetres;
@@ -1127,6 +1121,9 @@ export class MeasureController {
   }
 
   private _summaryOf(m: Measurement): MeasurementSummary {
+    if (this._crossFrameRefusal) {
+      return { id: m.id, kind: m.kind, name: m.name, value: crossFrameRefusalText(m.kind, this._upRefusalText) };
+    }
     const f = this._unitToMetres;
     // The row, its breakdown and the overlay obey one refusal: a frame whose axes are not ground
     // distances prints the reason, and a figure withheld on the position step leaves no breakdown.
@@ -2319,6 +2316,7 @@ export class MeasureController {
    */
   /** The frame refusal for `kind` in the current frame (see `frameRefusalText`). */
   private _frameRefusal(kind: MeasurementKind): string | null {
+    if (this._crossFrameRefusal) return crossFrameRefusalText(kind, this._upRefusalText);
     return frameRefusalText(kind, this._geographicCrs, this._verticalRefused, this._verticalUnitInvalid);
   }
 
@@ -2376,6 +2374,7 @@ export class MeasureController {
   /** The headline value string for a measurement, shown in the panel. */
   /** The figures of `m` withheld on its scan's position step, in its own frame. */ private _unresolved(m: Measurement): string[] { return unresolvedKeysFor(m, this._positionSteps?.(m) ?? null, this.upFor(m), this._ownUnitFrame(m) ?? this._activeUnitFrame()); }
   private _headlineText(m: Measurement): string {
+    if (this._crossFrameRefusal) return crossFrameRefusalText(m.kind, this._upRefusalText);
     const p = m.points;
     // Every figure that combines the horizontal and vertical axes is computed
     // on the isotropic points, so a compound CRS reads what the export writes.

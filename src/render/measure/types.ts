@@ -546,7 +546,13 @@ export function reductionExportFields(w: VolumeWithheldCounts): Record<string, s
  * and frame verdicts of the layer it was taken on. Render space keeps each
  * layer's source units, so these belong to the layer, not to the active scan.
  */
+export const CROSS_FRAME_MEASUREMENT = 'Not available: the picked scans have no verified common horizontal coordinate system.';
+
 export interface MeasureUnitFrame {
+  /** A proven horizontal frame, null when unresolved; omitted by legacy providers. */
+  readonly horizontalIdentity?: string | null;
+  /** The points belong to different layers whose horizontal frames cannot be combined. */
+  readonly crossFrameRefusal?: boolean;
   readonly unitToMetres: number;
   /** Up-axis factor; null rides the horizontal one. */
   readonly verticalUnitToMetres: number | null;
@@ -592,6 +598,11 @@ export function upAxisRefusesKind(kind: MeasurementKind): boolean {
   return kind === 'height' || kind === 'slope' || kind === 'profile' || kind === 'box' || kind === 'volume';
 }
 
+/** Why a cross-layer figure of `kind` is withheld: an up-dependent one names the up conflict first. */
+export function crossFrameRefusalText(kind: MeasurementKind, upRefusal: string | null): string {
+  return upRefusal === UP_AXIS_CONFLICT && upAxisRefusesKind(kind) ? UP_AXIS_CONFLICT : CROSS_FRAME_MEASUREMENT;
+}
+
 /** Whether two up vectors are the same axis. */
 export function sameUp(a: Vec3, b: Vec3): boolean {
   return a[0] === b[0] && a[1] === b[1] && a[2] === b[2];
@@ -626,4 +637,25 @@ export function sameUnitFrame(a: MeasureUnitFrame, b: MeasureUnitFrame): boolean
     a.verticalUnitKnown === b.verticalUnitKnown && a.verticalUnitInvalid === b.verticalUnitInvalid &&
     a.crsKnown === b.crsKnown && a.geographic === b.geographic &&
     a.verticalRefused === b.verticalRefused && a.projected === b.projected;
+}
+
+/** Combine the frames of one measurement's picks. The caller supplies at least one frame. */
+export function pickedUnitFrame(own: readonly MeasureUnitFrame[], hasDistinctLayers: boolean, worldUp: Vec3): MeasureUnitFrame {
+  if (hasDistinctLayers && own.some((f) => f.horizontalIdentity !== undefined)) {
+    const identity = own[0]!.horizontalIdentity;
+    if (!identity || !own.every((f) => f.horizontalIdentity === identity)) {
+      // Layers that also disagree on up keep that reason for up-dependent figures.
+      const upConflict = !own.every((f) => sameUp(f.up ?? worldUp, own[0]!.up ?? worldUp));
+      return { ...UNRESOLVED_UNIT_FRAME, up: worldUp, upRefusal: CROSS_FRAME_MEASUREMENT, crossFrameRefusal: true, ...(upConflict ? { upConflict } : {}) };
+    }
+  }
+  const units = own.every((f) => sameUnitFrame(f, own[0]!)) ? own[0]! : UNRESOLVED_UNIT_FRAME;
+  // The up axis is the layers' own, never the scene's: a Z-up survey keeps Z
+  // while a Y-up scan drives navigation. Layers that disagree share no vertical.
+  // A layer with no resolved up axis withholds every axis-dependent figure.
+  const ups = own.map((f) => f.up ?? worldUp);
+  if (!ups.every((u) => sameUp(u, ups[0]!))) return { ...units, up: worldUp, upConflict: true };
+  const upRefusal = own.find((f) => f.upRefusal)?.upRefusal;
+  const { upRefusal: _drop, ...rest } = units;
+  return { ...rest, up: ups[0]!, upConflict: false, ...(upRefusal ? { upRefusal } : {}) };
 }

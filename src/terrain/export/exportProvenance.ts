@@ -501,6 +501,10 @@ export function buildExportProvenance(
   const coverageMode = dtm?.coverageMode ?? result.model?.coverageMode ?? 'unknown';
   // Normalize once so JSON, scientific records and human-readable exports agree.
   const readiness = readinessOnBasis(assessment.exportReadiness, assessment.exportReason, opts.analysedBasis, coverageMode);
+  // The scan can be fully loaded while the terrain gather reads a bounded subset.
+  const sourceCoverage = opts.analysedBasis?.coverage;
+  const dataBasis = sourceCoverage === 'full' && (isSampledBasis(opts.analysedBasis) || coverageMode === 'sampled')
+    ? 'sampled' : sourceCoverage;
   const style =
     result.generationParams?.contourStyle ?? result.model?.contourStyle ?? null;
   const intervalM = result.intervalM ?? result.model?.intervalM ?? null;
@@ -594,7 +598,7 @@ export function buildExportProvenance(
     analysedBasis: opts.analysedBasis ?? null,
     analysedBasisLine: analysedBasisLine(opts.analysedBasis),
     sourceInterpretation: {
-      ...sourceInterpretationOf(opts.analysedBasis?.interpretationLevel, opts.analysedBasis?.coverage),
+      ...sourceInterpretationOf(opts.analysedBasis?.interpretationLevel, dataBasis),
       ...(opts.digests ? { crsOrigin: opts.digests.crsOrigin } : {}),
     },
     sourceSha256: opts.digests?.sourceSha256 ?? null,

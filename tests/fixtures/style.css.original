@@ -5453,6 +5453,7 @@ body:has(.olv-colorbar.olv-colorbar-floating) .olv-project-card {
 /* The session recovery notice waits for an answer, so it sits beside the left
    rail and leaves the rail's controls usable. Phones use the bottom sheet. */
 .olv-toast.olv-recovery-notice { left: 16px; max-width: min(360px, calc(100vw - 32px)); }
+body:has(.olv-anno-editor:not(.olv-hidden)) .olv-toast.olv-recovery-notice { display: none; }
 @media (min-width: 768px) and (min-height: 501px) {
   .olv-toast.olv-recovery-notice {
     left: calc(16px + 14px + var(--olv-rail-width));

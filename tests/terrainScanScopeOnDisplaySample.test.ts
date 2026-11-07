@@ -56,6 +56,13 @@ describe('Scan scope on the Terrain page', () => {
       for (const c of chips) expect(c).toContain('display sample');
     }
   });
+  it('states both full file loading and the terrain subsample on both displayed chips, in either update order', async () => {
+    for (const frameFirst of [true, false]) {
+      const chips = await scopeChips(FULL_SUBSAMPLED, frameFirst);
+      expect(chips).toHaveLength(2);
+      for (const chip of chips) expect(chip).toContain('full load, analysis sample');
+    }
+  });
   it('stays full on a full load whose analysis read a subsample', async () => {
     const chips = await scopeChips(FULL_SUBSAMPLED, false);
     expect(chips.length).toBeGreaterThanOrEqual(2);

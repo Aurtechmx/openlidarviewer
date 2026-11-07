@@ -22,9 +22,12 @@
 
 import type { PointCloud } from '../model/PointCloud';
 import type { MeasureController } from '../render/measure/MeasureController';
-import { UNRESOLVED_UNIT_FRAME, sameUnitFrame, type MeasureUnitFrame } from '../render/measure/types';
-import { measureUnitFrameOf, scanContextOf } from './measurementExportFrame';
-import { layerUpFrameOf, measureUpFieldsOf, type LayerFrameCrs } from './layerUpFrames';
+import { CROSS_FRAME_MEASUREMENT, UNRESOLVED_UNIT_FRAME, sameUnitFrame, type MeasureUnitFrame } from '../render/measure/types';
+import { measureUnitFrameOf, scanCrsOf } from './measurementExportFrame';
+import { measurementHorizontalIdentity } from '../model/compatibilityFrame';
+import { spatialContextFrom } from '../geo/SpatialContext';
+import { layerCrsFromContext, resolveLayerUpFrame } from '../geo/frame/layerUpFrame';
+import { measureUpFieldsOf, type LayerFrameCrs } from './layerUpFrames';
 import { positionStepsResolver } from './measurementPositionSteps';
 
 /** The slice of the app a layer's unit frame is resolved from. */
@@ -80,8 +83,15 @@ export function bindMeasureUnitFrames(measure: MeasureController, src: LayerUnit
       // The up axis is the layer's resolved frame (format, then its own CRS),
       // the rule terrain, conversion and navigation share: a PLY under a
       // projected CRS reads its height along Z, as its terrain does.
-      if (id === src.activeId()) out = { ...measureUnitFrameOf(src.crs.context()), ...(c ? measureUpFieldsOf(layerUpFrameOf(src.crs, c, true)) : {}) };
-      else if (c) out = { ...measureUnitFrameOf(scanContextOf(src.crs, c)), ...measureUpFieldsOf(layerUpFrameOf(src.crs, c, false)) };
+      const active = id === src.activeId();
+      const resolved = active ? src.crs.current?.() : c ? scanCrsOf(src.crs, c) : null;
+      const context = active ? src.crs.context() : spatialContextFrom(resolved ?? null);
+      if (c || active) {
+        const up = c ? measureUpFieldsOf(resolveLayerUpFrame({
+          format: c.sourceFormat, crs: resolved === undefined ? layerCrsFromContext(context) : resolved,
+        })) : {};
+        out = { ...measureUnitFrameOf(context), ...up, horizontalIdentity: measurementHorizontalIdentity(resolved) };
+      }
     }
     memo.set(layerId, out);
     return out;
@@ -128,6 +138,7 @@ export function chainUnitFrame(frames: readonly MeasureUnitFrame[]): { frame: Me
   const first = frames[0];
   if (!first) return { frame: UNRESOLVED_UNIT_FRAME };
   const up = (f: MeasureUnitFrame): string => (f.up ? f.up.join(',') : 'scene');
+  if (frames.some((f) => f.crossFrameRefusal)) return { refusal: CROSS_FRAME_MEASUREMENT };
   if (frames.some((f) => f.upConflict === true || up(f) !== up(first))) return { refusal: 'not combined: the selected measurements sit on layers with different up axes' };
   if (frames.some((f) => f.upRefusal)) return { refusal: 'not combined: a selected measurement sits on a layer with no resolved up axis' };
   if (frames.every((f) => sameUnitFrame(f, first))) return { frame: first };
