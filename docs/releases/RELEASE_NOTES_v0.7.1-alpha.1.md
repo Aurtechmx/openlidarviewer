@@ -97,6 +97,7 @@ v0.6.6 remain available under MIT.
 - Colour chips and measure buttons expose their pressed state, and measure results are announced to screen readers.
 - A restored session checks its source file and does not apply saved state to a file that has changed.
 - A new app version does not reload the page by itself while saved views or held session work are open. It asks first. A failed automatic upgrade keeps the saved offline copy, and offline, a part of the app that cannot load says so and offers no reload.
+- Make available offline saves a copy only when the index.html it fetches matches the SHA-256 recorded in the build's asset manifest and every bundle the page loads is listed there. If the site changes during a save, nothing is written, the earlier offline copy is kept, and the page says to reload and try again.
 - The notice about unsaved work from another file has Keep for later and no longer covers an open annotation form. The session recovery notice sits beside the left rail.
 - The command palette runs the command its row shows when results from several sections are ranked together.
 - On a phone, the annotation form keeps Save in reach.
@@ -121,6 +122,7 @@ v0.6.6 remain available under MIT.
 - Six RichDEM test grids agree with Flow Pulse as corroboration. No level changes from them.
 - D8 tie order, flat resolution, flow length and the peak-flow estimate were not compared. Agreement on archival data is not field validation.
 - Flow Pulse exports a drainage sheet PDF next to Drainage in 3D. A dialog chooses its sections: drainage map, hydrology summary, traced path and catchment, and depression table. The sheet has a cover page, a site map with labelled catchments, catchment pages and an appendix of definitions and sources. Every page is marked PREVIEW, and a long scan name is shortened so the footer stays clear of that label.
+- The cover of the drainage and watershed sheets gives two watershed counts: those over 1 % of the area and the smaller ones. It used to give only the first, which did not match the outlet count on the other pages. The depression table note reads, for example, "25 of 1,464 depressions shown".
 - Flow Pulse and Terrain Access packages write a `.prj` beside their placed rasters when the scan has an EPSG code but no WKT, and their READMEs say the `.prj` carries the source CRS definition.
 
 ## Format robustness
