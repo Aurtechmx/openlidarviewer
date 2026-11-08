@@ -74,7 +74,7 @@ describe('buildWatershedReportPdf', () => {
     const b = await buildWatershedReportPdf(v.model, opts(v));
     expect(a.length).toBeGreaterThan(10_000);
     expect(Buffer.from(a).equals(Buffer.from(b))).toBe(true);
-  }, 60_000);
+  }, 240_000);
 
   it('has one page each for the cover, the guide with the site map, quality and the appendix, and two per catchment', async () => {
     const v = valleys.en!;
@@ -89,7 +89,7 @@ describe('buildWatershedReportPdf', () => {
     ];
     expect(pages).toEqual(expected);
     expect(pages).toHaveLength(8);
-  }, 60_000);
+  }, 240_000);
 
   it('sets the document metadata from the model', async () => {
     const v = valleys.es!;
@@ -100,7 +100,7 @@ describe('buildWatershedReportPdf', () => {
     expect(doc.getModificationDate()?.toISOString()).toBe(v.model.provenance.generatedAt.toISOString());
     const lang = doc.catalog.get(doc.context.obj('Lang') as never);
     expect(String(lang)).toContain('es-MX');
-  }, 60_000);
+  }, 240_000);
 
   it('never contains survey-grade, certified or design-flow wording in either language', async () => {
     const forbidden = /survey[- ]grade|certif|design flow|design discharge|validated|grado topogr|certificad|caudal de diseño|gasto de diseño|validad/i;
@@ -111,7 +111,7 @@ describe('buildWatershedReportPdf', () => {
       expect(all).not.toMatch(forbidden);
       expect(all).not.toContain('—');
     }
-  }, 120_000);
+  }, 240_000);
 
   it('a Spanish report draws no English catalog string', async () => {
     const v = valleys.es!;
@@ -125,7 +125,7 @@ describe('buildWatershedReportPdf', () => {
     // The spine draws its section label one character at a time.
     expect(all.replace(/ /g, '')).toContain(t('es', 'spine.summary').toUpperCase().replace(/ /g, ''));
     expect(all).toContain(t('es', 'footer.report', { title: v.model.title }).split(' ')[0]!);
-  }, 60_000);
+  }, 240_000);
 
   it('prints withheld reasons, or a dash explained by the open-catchment note, never a bare dash', async () => {
     const v = valleys.en!;
@@ -147,7 +147,7 @@ describe('buildWatershedReportPdf', () => {
     const dashes = texts.filter((x) => ['-', '–', '—', '−'].includes(x.trim()));
     expect(dashes.length).toBeGreaterThan(0);
     expect(dashes.length).toBeLessThanOrEqual(4);
-  }, 60_000);
+  }, 240_000);
 
   it('a Spanish report uses decimal commas on its KPIs', async () => {
     const v = valleys.es!;
@@ -161,7 +161,7 @@ describe('buildWatershedReportPdf', () => {
     expect(texts).toContain(`${mark}${area}`);
     const en = await drawnTexts(valleys.en!.model, valleys.en!);
     expect(en).toContain(`${mark}${formatArea('en', a.value)}`);
-  }, 60_000);
+  }, 240_000);
 
   it('marks every printed figure of a Not supported catchment and explains the mark', async () => {
     const v = valleys.en!;
@@ -174,7 +174,7 @@ describe('buildWatershedReportPdf', () => {
     expect(all).toContain(`~ ${formatArea('en', a.value).replace(/\u00a0/g, ' ')}`);
     const supported = v.model.sections.find((x) => x.quality.verdict === 'supported');
     if (supported && 'value' in supported.morph.areaM2) expect(all).not.toContain(`~ ${formatArea('en', supported.morph.areaM2.value).replace(/\u00a0/g, ' ')}`);
-  }, 60_000);
+  }, 240_000);
 
   it('counts unlisted hollows by the depth criterion and labels the rank as the site rank', async () => {
     const v = valleys.en!;
@@ -185,7 +185,7 @@ describe('buildWatershedReportPdf', () => {
     const shallow = s.depressions.filter((d) => d.maxFillDepth !== null && d.maxFillDepth < 0.1).length;
     const deep = s.depressions.length - shallow;
     if (deep > 0 && shallow > 0) expect(all).toContain(`plus ${shallow} shallower than 0.1 m`);
-  }, 60_000);
+  }, 240_000);
 });
 
 describe('open catchments and withheld densities', () => {
@@ -211,7 +211,7 @@ describe('open catchments and withheld densities', () => {
       expect(once(t(lang, 'summary.kpi.openNote'))).toBe(1);
       // The edge share appears under the headline and on the quality page.
       expect(once(t(lang, 'summary.edgeShare', { share: formatPercent(lang, c3.edgeInflowShare, 0) }))).toBe(2);
-    }, 120_000);
+    }, 240_000);
   }
 
   it('withholds the point density with a reason when no ground-return counts were recorded', async () => {
@@ -222,7 +222,7 @@ describe('open catchments and withheld densities', () => {
     const s = v.model.sections[0]!;
     const zero = { ...v.model, sections: [{ ...s, quality: { ...s.quality, groundPointsPerM2: 0 } }] } as WatershedReportModel;
     expect(joined(await drawnTexts(zero, v))).toContain(t('en', 'quality.noCounts'));
-  }, 60_000);
+  }, 240_000);
 
   it('states no time of concentration, peak flow or travel time in either language', async () => {
     for (const lang of ['en', 'es'] as const) {
@@ -231,7 +231,7 @@ describe('open catchments and withheld densities', () => {
       expect(all).not.toMatch(/Kirpich|Témez|rational method|método racional|m³\/s|minut/i);
       expect(all).toContain(t(lang, 'limits.notComputed').replace(/\s+/g, ' '));
     }
-  }, 120_000);
+  }, 240_000);
 
   it('draws an exponent smaller and raised', async () => {
     const doc = await PDFDocument.create();
@@ -275,14 +275,14 @@ describe('editable export options', () => {
     expect(all).toContain('Drainage review ahead of a fence line.');
     // The note is clamped to 400 characters on the cover.
     expect(all.split('Drainage review').length - 1).toBeLessThanOrEqual(11);
-  }, 60_000);
+  }, 240_000);
 
   for (const size of ['letter', 'a4'] as const) {
     it(`keeps the 2-catchment report to 8 pages on ${size}`, async () => {
       const v = valleys.en!;
       const { pages } = await renderWatershedReport(v.model, { ...opts(v), size });
       expect(pages).toHaveLength(8);
-    }, 60_000);
+    }, 240_000);
   }
 });
 

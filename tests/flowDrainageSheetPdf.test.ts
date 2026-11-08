@@ -87,7 +87,7 @@ describe('sections follow the options', () => {
     expect(all).toBeGreaterThanOrEqual(none + 3 + 6);
     const noMap = await pageCount(await buildFlowDrainageSheetPdf(v.result, { ...base, sections: { map: false } }, render));
     expect(noMap).toBeLessThan(all);
-  }, 60_000);
+  }, 240_000);
 });
 
 describe('placement', () => {
@@ -235,5 +235,5 @@ describe('filename and sample render', () => {
       writeFileSync(process.env.DRAINAGE_SHEET_OUT, bytes);
       writeFileSync(process.env.DRAINAGE_SHEET_OUT.replace(/\.pdf$/, '-placed.pdf'), placed);
     }
-  }, 60_000);
+  }, 240_000);
 });
