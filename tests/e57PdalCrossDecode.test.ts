@@ -56,6 +56,7 @@
 
 import { describe, it, expect } from 'vitest';
 import { existsSync, readFileSync } from 'node:fs';
+import { createHash } from 'node:crypto';
 import { join } from 'node:path';
 import { parseE57 } from '../src/io/e57/parseE57';
 
@@ -160,6 +161,14 @@ describe('E57 cross-decode reference', () => {
 });
 
 withSource('OLV and PDAL decode the same E57 the same way', () => {
+  it('the supplied E57 is the file the reference was generated from', () => {
+    // A recorded checksum only links the committed numbers to these bytes if it
+    // is checked: without this, a different file at E57_PATH would be compared
+    // against a reference that does not describe it.
+    const actual = createHash('sha256').update(readFileSync(E57_PATH!)).digest('hex');
+    expect(actual).toBe(reference.sha256);
+  });
+
   /** Mean, min and max over EVERY decoded value of one column. */
   function summarize(c: ArrayLike<number>): DimStats {
     let min = Infinity;

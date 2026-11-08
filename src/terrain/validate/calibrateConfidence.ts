@@ -70,7 +70,7 @@ export interface ConfidenceCalibration {
   readonly assessable: boolean;
   /** The vertical tolerance τ the reliability is defined against. */
   readonly toleranceM: number;
-  /** Held-out sample count the fit used. */
+  /** Held-out samples on measured cells that the fit used. */
   readonly sampleSize: number;
   /** The fitted curve: ascending raw-confidence knots → calibrated %. */
   readonly curve: ReadonlyArray<{ rawConfidence: number; calibrated: number; count: number }>;
@@ -268,11 +268,12 @@ function crossFitEvaluation(
   };
 }
 
-/** Fit a calibration from held-out (confidence, error) samples. */
+/** Fit a calibration from held-out (confidence, error) samples on measured cells. */
 export function fitConfidenceCalibration(
-  samples: ReadonlyArray<ConfidenceSample>,
+  allSamples: ReadonlyArray<ConfidenceSample>,
   params: CalibrationFitParams,
 ): ConfidenceCalibration {
+  let samples = allSamples;
   const minSamples = params.minSamples ?? 40;
   const binCount = Math.max(2, Math.floor(params.bins ?? 10));
   const rawTol = params.toleranceM;
@@ -281,6 +282,10 @@ export function fitConfidenceCalibration(
   // RMSE) reads as reliable rather than collapsing to 0% confidence.
   const floor = Math.max(0, params.toleranceFloorM ?? 0.01);
   const tol = Math.max(rawTol, floor);
+  // The curve is applied to measured cells of the delivered surface only, so it
+  // is fitted and scored on held-out returns whose delivered cell is measured.
+  // Samples the caller did not map onto the delivered grid are kept.
+  samples = samples.filter((s) => s.deliveredMeasured !== false);
   if (samples.length < minSamples) return { ...identity, toleranceM: tol, sampleSize: samples.length };
 
   const minBinCount = Math.max(1, Math.floor(params.minBinCount ?? 5));
@@ -356,7 +361,7 @@ export function applyConfidenceCalibration(
     meanConfidence: cells > 0 ? sum / cells : Number.NaN,
     warnings: [
       ...grid.warnings,
-      `confidence calibrated against measured error (tolerance ${calibration.toleranceM.toFixed(2)} m, ${calibration.sampleSize} held-out samples)${evNote}`,
+      `confidence calibrated against measured error (tolerance ${calibration.toleranceM.toFixed(2)} m, ${calibration.sampleSize} held-out samples on measured cells; same-scan reliability)${evNote}`,
     ],
   };
 }

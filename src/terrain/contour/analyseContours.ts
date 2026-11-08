@@ -936,7 +936,7 @@ export function blockedHoldoutModelOptions(
   despikeApplied: boolean,
   params: Pick<
     TerrainCoreParams,
-    'isGeographic' | 'latitudeDeg' | 'horizontalUnitToMetres' | 'verticalUnitToMetres'
+    'isGeographic' | 'latitudeDeg' | 'horizontalUnitToMetres' | 'verticalUnitToMetres' | 'interpolation'
   >,
 ): ConstructorParameters<typeof DtmSurfaceModel>[0] {
   return {
@@ -949,6 +949,7 @@ export function blockedHoldoutModelOptions(
     },
     aggregation,
     despike: despikeApplied,
+    interpolation: params.interpolation,
     verticalUnitToMetres: params.verticalUnitToMetres,
     isGeographic: params.isGeographic,
     latitudeDeg: params.latitudeDeg,
@@ -1145,6 +1146,7 @@ export function computeTerrainCore(
     // the classification), so the RMSE isn't measuring a different surface.
     aggregation,
     despike: despikeApplied,
+    interpolation: params.interpolation,
     isGeographic: params.isGeographic,
     latitudeDeg: params.latitudeDeg,
     verticalUnitToMetres: params.verticalUnitToMetres,
@@ -1253,7 +1255,16 @@ export function computeTerrainCore(
   // than a bare heuristic. τ is the measured RMSE. When there isn't
   // enough held-out evidence the fit is not assessable and the grid is
   // left untouched — we never synthesise a calibration from noise.
-  const confidenceCalibration = fitConfidenceCalibration(validation.samples ?? [], {
+  // Tag each held-out sample by its cell in the DELIVERED grid: the curve is
+  // applied to delivered measured cells, so it is fitted on samples there.
+  const deliveredSamples = (validation.samples ?? []).map((s) => {
+    if (s.h1 === undefined || s.h2 === undefined) return s;
+    const col = Math.floor((s.h1 - dtm.originH1) / dtm.cellSizeM);
+    const row = Math.floor((s.h2 - dtm.originH2) / dtm.cellSizeM);
+    const inside = col >= 0 && row >= 0 && col < dtm.cols && row < dtm.rows;
+    return { ...s, deliveredMeasured: inside && dtm.coverage[row * dtm.cols + col] === 2 };
+  });
+  const confidenceCalibration = fitConfidenceCalibration(deliveredSamples, {
     toleranceM: Number.isFinite(validation.rmse) && validation.rmse > 0 ? validation.rmse : null,
   });
   if (confidenceCalibration.assessable) {
