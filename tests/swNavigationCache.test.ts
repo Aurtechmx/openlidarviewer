@@ -33,7 +33,30 @@ interface FakeResponse {
   readonly status: number;
   readonly redirected: boolean;
   readonly type: string;
+  readonly headers?: Headers;
+  arrayBuffer?(): Promise<ArrayBuffer>;
   clone(): FakeResponse;
+}
+
+/** The content type a host serves for a path, so the worker's type check sees a real one. */
+function typeFor(url: string): string {
+  const path = new URL(url).pathname;
+  if (/\.m?js$/.test(path)) return 'text/javascript';
+  if (path.endsWith('.css')) return 'text/css';
+  if (path.endsWith('.wasm')) return 'application/wasm';
+  if (/\.woff2?$/.test(path)) return 'font/woff2';
+  return 'application/octet-stream';
+}
+
+/** Give a fake response the headers and body a stored refresh reads. */
+function served(r: FakeResponse, url: string): FakeResponse {
+  const withBody: FakeResponse = {
+    ...r,
+    headers: r.headers ?? new Headers({ 'content-type': typeFor(url) }),
+    arrayBuffer: async () => new TextEncoder().encode(r.marker).buffer as ArrayBuffer,
+    clone: () => withBody,
+  };
+  return withBody;
 }
 
 function res(marker: string, opts: Partial<FakeResponse> = {}): FakeResponse {
@@ -55,9 +78,10 @@ class FakeCache {
     for (const k of keys) this.store.set(k, res(`precached:${k}`));
     return Promise.resolve();
   }
-  put(key: string | { url: string }, response: FakeResponse): Promise<void> {
-    this.store.set(typeof key === 'string' ? key : key.url, response);
-    return Promise.resolve();
+  async put(key: string | { url: string }, response: FakeResponse | Response): Promise<void> {
+    // The worker stores a refresh as a new Response holding the verified bytes.
+    const stored = response instanceof Response ? res(await response.text()) : response;
+    this.store.set(typeof key === 'string' ? key : key.url, stored);
   }
   match(key: string | { url: string }): Promise<FakeResponse | undefined> {
     return Promise.resolve(this.store.get(typeof key === 'string' ? key : key.url));
@@ -127,7 +151,7 @@ async function bootWorker(scope = 'https://viewer.example/'): Promise<Harness> {
   new Function('self', 'caches', 'fetch', SW_SOURCE)(
     selfObj,
     cachesObj,
-    (req: unknown) => fetchImpl(req),
+    (req: unknown) => fetchImpl(req).then((r) => served(r, (req as { url?: string }).url ?? String(req))),
   );
 
   // Run 'install' so the SHELL list (including './index.html') is precached.
@@ -158,6 +182,7 @@ async function bootWorker(scope = 'https://viewer.example/'): Promise<Harness> {
       return out;
     },
     async asset(url, opts = {}) {
+      const pending: Promise<unknown>[] = [];
       let responded: Promise<FakeResponse | undefined> | undefined;
       listeners.get('fetch')?.({
         request: {
@@ -169,8 +194,12 @@ async function bootWorker(scope = 'https://viewer.example/'): Promise<Harness> {
         respondWith(p: Promise<FakeResponse | undefined>) {
           responded = Promise.resolve(p);
         },
+        waitUntil(p: Promise<unknown>) {
+          pending.push(p);
+        },
       });
       const out = responded ? await responded : undefined;
+      await Promise.all(pending);
       await flush();
       return out;
     },
