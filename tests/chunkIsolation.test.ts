@@ -5,8 +5,9 @@
  * produced `dist/assets/*.js` files and asserts the v0.3.7 chunk-graph
  * contract:
  *
- *   - `vendor-three-webgpu` exists and is the ONLY chunk over the
- *     500 KB Vite warning threshold.
+ *   - `vendor-three-webgpu` exists and, with the lazy `vendor-fontkit` when
+ *     the report is wired in, is the only chunk over the 500 KB Vite
+ *     warning threshold.
  *   - Every required code-split chunk exists by name.
  *   - The startup shell (`index-*.js`) contains no inlined WebGPU
  *     runtime, no pdf-lib, no laz-perf, no EPT runtime, no report
@@ -105,6 +106,14 @@ const DIST = join(process.cwd(), 'dist', 'assets');
 const WARNING_THRESHOLD = 532 * 1024;
 
 /**
+ * Chunks allowed past the warning threshold. vendor-fontkit is @pdf-lib/fontkit
+ * (about 740 KiB), loaded only by the watershed report's font embedding. It is
+ * budgeted in scripts/check-bundle-budget.mjs and is not required to exist until
+ * the report is wired in.
+ */
+const OVERSIZE_ALLOWED = ['vendor-three-webgpu', 'vendor-fontkit'];
+
+/**
  * Required chunk-name prefixes — substring-matched against the filename.
  *
  * Worker chunks are NOT listed by hand here: `workerChunkPins()` derives every
@@ -161,6 +170,11 @@ const REQUIRED_CHUNK_PREFIXES = [
 const SHELL_FORBIDDEN_CONTENT = [
   // pdf-lib's font-loader carries a distinctive base64 prelude.
   'PDFDocument',
+  // fontkit's font-engine tables and the report font embedder belong to the
+  // lazy vendor-fontkit and report chunks only.
+  'registerFontkit',
+  'SYMBOL_ONLY_CHARS',
+  'Newsreader-Regular',
   // laz-perf's WASM glue exports a distinctive symbol.
   'LASZip',
   // Three.js WebGPU runtime carries the WebGPURenderer class name.
@@ -204,14 +218,14 @@ describe('post-build chunk isolation contract', () => {
   });
 
   it.skipIf(!distExists)(
-    'vendor-three-webgpu is the only chunk over the 500 KB warning threshold',
+    'only the allowed vendor chunks are over the 500 KB warning threshold',
     () => {
       const oversized = files
         .map((f) => ({ f, size: statSync(join(DIST, f)).size }))
         .filter((entry) => entry.size > WARNING_THRESHOLD)
         .map((entry) => entry.f);
-      // The expected set is a single chunk — vendor-three-webgpu.
-      const unexpected = oversized.filter((f) => !f.includes('vendor-three-webgpu'));
+      // The expected set is OVERSIZE_ALLOWED: vendor-three-webgpu, and vendor-fontkit once emitted.
+      const unexpected = oversized.filter((f) => !OVERSIZE_ALLOWED.some((a) => f.includes(a)));
       expect(unexpected, `unexpected oversized chunks: ${unexpected.join(', ')}`).toEqual([]);
       // Sanity — the WebGPU vendor chunk itself must still be present
       // and over threshold (otherwise the manualChunks rule regressed).
@@ -266,10 +280,10 @@ describe('post-build chunk isolation contract', () => {
   );
 
   it.skipIf(!distExists)(
-    'every app-owned chunk except vendor-three-webgpu is under the warning threshold',
+    'every app-owned chunk except the allowed vendor chunks is under the warning threshold',
     () => {
       const appOwnedOversized = files
-        .filter((f) => !f.includes('vendor-three-webgpu'))
+        .filter((f) => !OVERSIZE_ALLOWED.some((a) => f.includes(a)))
         .map((f) => ({ f, size: statSync(join(DIST, f)).size }))
         .filter((entry) => entry.size > WARNING_THRESHOLD);
       expect(

@@ -73,7 +73,10 @@ import {
 import { FlowOverlay, type FlowOverlayHost } from '../../render/FlowOverlay';
 import type { HorizontalScale } from '../../simulation/flowPulse/dtmFlowGrid';
 import type { AnalyseContoursResult } from '../../terrain/contour/analyseContours';
-import { loadFlowPulsePackage, loadWatershedGif, registerFlowOverlayInvalidator } from '../../lazyChunks';
+import { loadFlowDrainageSheet, loadFlowPulsePackage, loadWatershedGif, registerFlowOverlayInvalidator } from '../../lazyChunks';
+import { drainageSheetDialog, exportDrainageSheet, verticalToMetresOf } from './flowDrainageSheetDialog';
+import { catchmentStudyGateText, linearUnitOf } from '../../export/flowDrainageSheetUnits';
+import { watershedReportGate } from '../../simulation/flowPulse/watershed/reportGate';
 import { downloadBytes } from '../../io/download';
 import { labRun, publishLabRun, takeResultReopen } from '../../app/results/resultSignals';
 import type { buildFlowPulsePackage, FlowGridFrame } from '../../export/flowPulsePackage';
@@ -1068,6 +1071,40 @@ function mountFlowPulseInteractive(
 
   exportButton.addEventListener('click', () => void handleExport());
 
+  const drainageButton = button('Drainage sheet (PDF)', 'olv-flow-drainage-sheet', 'Choose sections, then export a printable drainage sheet of this run.');
+  drainageButton.addEventListener('click', () => {
+    if (!outcome.ok || busy || drainageButton.nextElementSibling?.classList.contains('olv-flow-drainage-dialog')) return;
+    const dialog = drainageSheetDialog({
+      hasPath: !!lastTrace?.ok, hasCatchment: !!lastCatchment?.ok,
+      catchmentReason: catchmentStudyGateText(watershedReportGate(outcome, conditioning)),
+      onCancel: () => { dialog.remove(); drainageButton.focus(); },
+      onExport: (sections) => {
+        dialog.remove();
+        drainageButton.disabled = true;
+        void (async () => {
+          try {
+            const { buildFlowDrainageSheetPdf } = await loadFlowDrainageSheet();
+            const digests = (await input.exportDigests?.()) ?? null;
+            announce(await exportDrainageSheet({
+              outcome, stale: input.isStale?.() ?? false, path: lastTrace, catchment: lastCatchment,
+              basename: input.filename ?? input.layerId ?? 'flow-pulse', georef: flowPulseGeorefOf(input, digests),
+              rainfall: outcome.ok && displayChannelField(outcome, rainfall) ? rainfall : null,
+              snappedFrom: lastSnap && outcome.ok ? lastSnap.from.row * outcome.grid.cols + lastSnap.from.col : null,
+              linearUnit: linearUnitOf(input.resolvedUnitToMetres), sections, dtm: input.result.dtm,
+              verticalToMetres: verticalToMetresOf(flowElevationReference(input).unitLabel, linearUnitOf(input.resolvedUnitToMetres)),
+            }, buildFlowDrainageSheetPdf, downloadBytes));
+          } catch (err) {
+            announce(`Drainage sheet failed: ${err instanceof Error ? err.message : String(err)}`);
+          } finally {
+            drainageButton.disabled = false;
+          }
+        })();
+      },
+    });
+    drainageButton.after(dialog);
+    dialog.querySelector<HTMLElement>('.olv-flow-drainage-export')?.focus();
+  });
+
   const gifLabel = 'Export GIF';
   const gifButton = button(gifLabel, 'olv-flow-gif-export', 'Export an animated GIF of this catchment, revealed by D8 flow length to the outlet.');
   let gifBusy = false;
@@ -1175,6 +1212,7 @@ function mountFlowPulseInteractive(
         conditioningCtl.element,
         exportButton,
         ...(overlayHost ? [overlayToggle] : []),
+        drainageButton,
       ]),
       labDetails([
         metricField ? flowDischargeLegend() : flowGridLegend(grid.maxUpstream),

@@ -38,6 +38,7 @@ export const END = '<!-- generated:licence-texts:end -->';
 const FALLBACK_COPYRIGHT = {
   'laz-perf': 'Copyright Hobu, Inc. and the laz-perf contributors (https://github.com/hobuinc/laz-perf)',
   draco3d: 'Copyright The Draco Authors, Google LLC (https://github.com/google/draco)',
+  '@pdf-lib/fontkit': 'Copyright Devon Govett (foliojs/fontkit) and Andrew Dillon (Hopding/fontkit fork), the authors named in the package.json files of both repositories',
   flatbuffers: 'Copyright Google Inc. and the FlatBuffers authors (https://github.com/google/flatbuffers)',
 };
 
@@ -58,6 +59,29 @@ freely, subject to the following restrictions:
    misrepresented as being the original software.
 3. This notice may not be removed or altered from any source distribution.`;
 
+/** Standard MIT text for a package that declares MIT but ships no licence file. */
+const mitText = (holder) => `MIT License
+
+${holder}
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.`;
+
 /**
  * Assets committed to the repository rather than installed from npm, bundled
  * like a package. `dir` holds the licence file; `modified` is the modification
@@ -72,6 +96,18 @@ export const VENDORED = [
     dir: 'src/fonts/olv-font',
     modified:
       'Modified in 2026 for the Olv Font project: horizontal proportions, spacing, additional glyphs and OpenType features. A derivative of Poppins, renamed as the OFL requires.',
+  },
+  {
+    name: 'Newsreader',
+    version: 'google/fonts@e7db6ca6',
+    licence: 'OFL-1.1',
+    dir: 'src/export/watershedReport/fonts/newsreader',
+  },
+  {
+    name: 'Figtree',
+    version: 'google/fonts@e7db6ca6',
+    licence: 'OFL-1.1',
+    dir: 'src/export/watershedReport/fonts/figtree',
   },
   {
     name: 'spe-check',
@@ -150,6 +186,9 @@ export function buildBlock(components, readPkg) {
     if (!p.files.licences.length) {
       note = ' The published package ships no licence file; the standard text of its declared licence applies.';
       if (/Apache-2\.0/.test(p.licence) && apacheCanonical) refs.push(addText('Apache-2.0', apacheCanonical, user));
+    }
+    if (!p.files.licences.length && p.licence === 'MIT' && FALLBACK_COPYRIGHT[p.name]) {
+      refs.push(addText('MIT', mitText(FALLBACK_COPYRIGHT[p.name]), user));
     }
     if (/Zlib/.test(p.licence)) refs.push(addText('Zlib', ZLIB_TEXT, user));
     if (p.modified) copyright.add(p.modified);

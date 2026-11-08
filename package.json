@@ -215,6 +215,7 @@
     "@loaders.gl/gltf": "^4.5.4",
     "@loaders.gl/obj": "^4.5.4",
     "@loaders.gl/ply": "^4.5.4",
+    "@pdf-lib/fontkit": "1.1.1",
     "laz-perf": "^0.0.7",
     "pdf-lib": "^1.17.1",
     "proj4": "^2.22.0",

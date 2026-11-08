@@ -54,6 +54,7 @@ These ship in the deploy archive.
 | @loaders.gl/gltf | ^4.5.4 | 4.5.4 | MIT |
 | @loaders.gl/obj | ^4.5.4 | 4.5.4 | MIT |
 | @loaders.gl/ply | ^4.5.4 | 4.5.4 | MIT |
+| @pdf-lib/fontkit | 1.1.1 | 1.1.1 | MIT |
 | laz-perf | ^0.0.7 | 0.0.7 | Apache-2.0 |
 | pdf-lib | ^1.17.1 | 1.17.1 | MIT |
 | proj4 | ^2.22.0 | 2.22.0 | MIT |

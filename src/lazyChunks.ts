@@ -946,3 +946,9 @@ export const loadRemoteDeepLink = () => import('./app/remoteDeepLink');
 // startup script: the palette and dialogs are styled before any of them opens.
 import './ui/wayfinding.css';
 export const loadExportDigests = () => import('./export/exportDigests');
+
+/**
+ * The Flow Pulse drainage sheet PDF (pdf-lib). Reached only from the Lab's
+ * Drainage sheet button, so a session that never prints one never downloads it.
+ */
+export const loadFlowDrainageSheet = () => import('./export/flowDrainageSheetPdf');

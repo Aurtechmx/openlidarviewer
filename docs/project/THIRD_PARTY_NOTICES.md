@@ -33,6 +33,7 @@ only the direct entry points.
 | @loaders.gl/ply | ^4.5.4 | 4.5.4 | MIT | https://github.com/visgl/loaders.gl |
 | laz-perf | ^0.0.7 | 0.0.7 | Apache-2.0 | https://github.com/hobuinc/laz-perf |
 | pdf-lib | ^1.17.1 | 1.17.1 | MIT | https://github.com/Hopding/pdf-lib |
+| @pdf-lib/fontkit | 1.1.1 | 1.1.1 | MIT | https://github.com/Hopding/fontkit |
 | proj4 | ^2.22.0 | 2.22.0 | MIT | https://github.com/proj4js/proj4js |
 | @fontsource-variable/inter | ^5.3.0 | 5.3.0 | OFL-1.1 | https://github.com/rsms/inter |
 | @fontsource/jetbrains-mono | ^5.3.0 | 5.3.0 | OFL-1.1 | https://github.com/JetBrains/JetBrainsMono |
@@ -63,6 +64,7 @@ MIT (28 packages):
 - @loaders.gl/worker-utils 4.5.4
 - @math.gl/core 4.1.0
 - @math.gl/types 4.1.0
+- @pdf-lib/fontkit 1.1.1
 - @pdf-lib/standard-fonts 1.0.0
 - @pdf-lib/upng 1.0.1
 - @probe.gl/env 4.1.1
@@ -109,6 +111,32 @@ Olv Font is a modified version of Poppins (Copyright 2020 The Poppins Project
 Authors) under a different family name, as the SIL Open Font License requires
 of a derivative. Its copyright lines and licence text are in the generated
 section below.
+
+### Watershed report fonts
+
+The watershed study PDF embeds four static TrueType instances of Newsreader
+(Copyright 2020 The Newsreader Project Authors) and Figtree (Copyright 2022 The
+Figtree Project Authors), both under the SIL Open Font License 1.1. They are
+loaded only by the report's lazy chunk. The upstream files are the variable
+fonts in the official Google Fonts repository, https://github.com/google/fonts,
+commit `e7db6ca603fd4862010383ff17ffd6cc4ffac1c0`, directories `ofl/newsreader`
+and `ofl/figtree`, which publish no static files. The four instances were cut
+from those variable fonts with fontTools `varLib.instancer` (Newsreader at
+optical size 24, weights 400 and 700; Figtree at weights 400 and 700), then
+given static family and style names and matching weight flags. No outline was
+changed. Neither family declares a Reserved Font Name, so the original
+names are kept. The licence files are copied unchanged.
+
+| File in `src/export/watershedReport/fonts/` | SHA-256 |
+| --- | --- |
+| upstream `ofl/newsreader/Newsreader[opsz,wght].ttf` | `8a08d13f8a6c0d51be379a60af84f945f65369a67e509ee3c3bdcc421254d7c1` |
+| upstream `ofl/figtree/Figtree[wght].ttf` | `26ad3db9b31ff7dde67a91ff515d022d2f495cd506590699cf264f0bfe6fb714` |
+| `newsreader/Newsreader-Regular.ttf` | `765e74dd2b7d22050caac0c65cc7250dfecc3c8defe900d864504162b8435307` |
+| `newsreader/Newsreader-Bold.ttf` | `e7744ca5bea23c7a34fd34be942ff68abe0b39f5e8dd13be8a8a426a40a8a3ae` |
+| `figtree/Figtree-Regular.ttf` | `115c462e287054b3e1aece95905c3ed6b68cdfae97f51f82c1439a464a2fe2b2` |
+| `figtree/Figtree-Bold.ttf` | `aa94bc0590b379b2a69e6299295a66b840a783f997b84d2187fab34b9212bc56` |
+| `newsreader/OFL.txt` (upstream, unchanged) | `fdfad38143ec470553cae82a1e45320bdd1b9ec70415d37bd0171051d8a4ded8` |
+| `figtree/OFL.txt` (upstream, unchanged) | `140d37233e7f3ce7313798befa9600893bcceaf41a55fa0fa5ad52f7f657a268` |
 
 ## Vendored code (committed to the repository, bundled into the shipped build)
 
@@ -711,142 +739,160 @@ Licence: MIT. Text: T4.
 - Copyright © 2010-2017 three.js authors
 - Copyright 2011-2018 CesiumJS Contributors
 
+#### @pdf-lib/fontkit 1.1.1
+
+Licence: MIT. Text: T5. The published package ships no licence file; the standard text of its declared licence applies.
+
+- Copyright Devon Govett (foliojs/fontkit) and Andrew Dillon (Hopding/fontkit fork), the authors named in the package.json files of both repositories (from the upstream repository; the package names no holder)
+
 #### @pdf-lib/standard-fonts 1.0.0
 
-Licence: MIT. Text: T5.
+Licence: MIT. Text: T6.
 
 - Copyright (c) 2018 Andrew Dillon
 
 #### @pdf-lib/upng 1.0.1
 
-Licence: MIT. Text: T6.
+Licence: MIT. Text: T7.
 
 - Copyright (c) 2017 Photopea
 
 #### @probe.gl/env 4.1.1
 
-Licence: MIT. Text: T7.
+Licence: MIT. Text: T8.
 
 - Copyright Vis.gl contributors.
 
 #### @probe.gl/log 4.1.1
 
-Licence: MIT. Text: T7.
+Licence: MIT. Text: T8.
 
 - Copyright Vis.gl contributors.
 
 #### @probe.gl/stats 4.1.2
 
-Licence: MIT. Text: T7.
+Licence: MIT. Text: T8.
 
 - Copyright Vis.gl contributors.
 
 #### @types/geojson 7946.0.16
 
-Licence: MIT. Text: T8.
+Licence: MIT. Text: T9.
 
 - Copyright (c) Microsoft Corporation.
 
 #### @types/node 25.9.8
 
-Licence: MIT. Text: T8.
+Licence: MIT. Text: T9.
 
 - Copyright (c) Microsoft Corporation.
 
 #### apache-arrow 21.2.0
 
-Licence: Apache-2.0. Text: T9.
+Licence: Apache-2.0. Text: T10.
 
 - Copyright 2017-2025 The Apache Software Foundation
 
 #### draco3d 1.5.7
 
-Licence: Apache-2.0. Text: T9. The published package ships no licence file; the standard text of its declared licence applies.
+Licence: Apache-2.0. Text: T10. The published package ships no licence file; the standard text of its declared licence applies.
 
 - Copyright The Draco Authors, Google LLC (https://github.com/google/draco) (from the upstream repository; the package names no holder)
 
 #### flatbuffers 25.9.23
 
-Licence: Apache-2.0. Text: T9.
+Licence: Apache-2.0. Text: T10.
 
 - Copyright Google Inc. and the FlatBuffers authors (https://github.com/google/flatbuffers) (from the upstream repository; the package names no holder)
 
 #### json-with-bigint 3.5.12
 
-Licence: MIT. Text: T10.
+Licence: MIT. Text: T11.
 
 - Copyright (c) 2023 Ivan Korolenko
 
 #### ktx-parse 0.7.1
 
-Licence: MIT. Text: T11.
+Licence: MIT. Text: T12.
 
 - Copyright (c) 2020 Don McCurdy
 
 #### laz-perf 0.0.7
 
-Licence: Apache-2.0. Text: T9. The published package ships no licence file; the standard text of its declared licence applies.
+Licence: Apache-2.0. Text: T10. The published package ships no licence file; the standard text of its declared licence applies.
 
 - Copyright Hobu, Inc. and the laz-perf contributors (https://github.com/hobuinc/laz-perf) (from the upstream repository; the package names no holder)
 
 #### mgrs 1.0.0
 
-Licence: MIT. Text: T12.
+Licence: MIT. Text: T13.
 
 - Copyright (c) 2012, Mike Adair, Richard Greenwood, Didier Richard, Stephen Irons, Olivier Terral, Calvin Metcalf
 
 #### pako 1.0.11
 
-Licence: (MIT AND Zlib). Text: T13, T14.
+Licence: (MIT AND Zlib). Text: T14, T15.
 
 - Copyright (C) 2014-2017 by Vitaly Puzrin and Andrei Tuputcyn
 
 #### pdf-lib 1.17.1
 
-Licence: MIT. Text: T15.
+Licence: MIT. Text: T16.
 
 - Copyright (c) 2019 Andrew Dillon
 
 #### proj4 2.22.0
 
-Licence: MIT. Text: T16.
+Licence: MIT. Text: T17.
 
 - Copyright (c) 2014, Mike Adair, Richard Greenwood, Didier Richard, Stephen Irons, Olivier Terral and Calvin Metcalf
 
 #### three 0.186.1
 
-Licence: MIT. Text: T17.
+Licence: MIT. Text: T18.
 
 - Copyright © 2010-2026 three.js authors
 
 #### tslib 2.8.1
 
-Licence: 0BSD. Text: T18.
+Licence: 0BSD. Text: T19.
 
 - Copyright (c) Microsoft Corporation.
 
 #### undici-types 7.24.6
 
-Licence: MIT. Text: T19.
+Licence: MIT. Text: T20.
 
 - Copyright (c) Matteo Collina and Undici contributors
 
 #### wkt-parser 1.5.5
 
-Licence: MIT. Text: T16.
+Licence: MIT. Text: T17.
 
 - Copyright (c) 2014, Mike Adair, Richard Greenwood, Didier Richard, Stephen Irons, Olivier Terral and Calvin Metcalf
 
 #### Olv Font 2.000
 
-Licence: OFL-1.1. Text: T20.
+Licence: OFL-1.1. Text: T21.
 
 - Copyright 2020 The Poppins Project Authors (https://github.com/itfoundry/Poppins)
 - Modified in 2026 for the Olv Font project: horizontal proportions, spacing, additional glyphs and OpenType features. A derivative of Poppins, renamed as the OFL requires.
 
+#### Newsreader google/fonts@e7db6ca6
+
+Licence: OFL-1.1. Text: T22.
+
+- Copyright 2020 The Newsreader Project Authors (http://github.com/productiontype/Newsreader)
+
+#### Figtree google/fonts@e7db6ca6
+
+Licence: OFL-1.1. Text: T23.
+
+- Copyright 2022 The Figtree Project Authors (https://github.com/erikdkennedy/figtree)
+
 #### spe-check sha256-53229a0e
 
-Licence: MIT. Text: T21.
+Licence: MIT. Text: T24.
 
 - Copyright (c) 2026 A. Urias
 
@@ -1211,6 +1257,34 @@ Cesium-derived code can be found in the submodule: modules/3d-tiles
 
 #### T5: MIT
 
+Applies to: @pdf-lib/fontkit 1.1.1.
+
+```
+MIT License
+
+Copyright Devon Govett (foliojs/fontkit) and Andrew Dillon (Hopding/fontkit fork), the authors named in the package.json files of both repositories
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+```
+
+#### T6: MIT
+
 Applies to: @pdf-lib/standard-fonts 1.0.0.
 
 ```
@@ -1237,7 +1311,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-#### T6: MIT
+#### T7: MIT
 
 Applies to: @pdf-lib/upng 1.0.1.
 
@@ -1265,7 +1339,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-#### T7: MIT
+#### T8: MIT
 
 Applies to: @probe.gl/env 4.1.1, @probe.gl/log 4.1.1, @probe.gl/stats 4.1.2.
 
@@ -1291,7 +1365,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 ```
 
-#### T8: MIT
+#### T9: MIT
 
 Applies to: @types/geojson 7946.0.16, @types/node 25.9.8.
 
@@ -1319,7 +1393,7 @@ MIT License
     SOFTWARE
 ```
 
-#### T9: Apache-2.0
+#### T10: Apache-2.0
 
 Applies to: apache-arrow 21.2.0, draco3d 1.5.7, flatbuffers 25.9.23, laz-perf 0.0.7.
 
@@ -1527,7 +1601,7 @@ Apache License
    limitations under the License.
 ```
 
-#### T10: MIT
+#### T11: MIT
 
 Applies to: json-with-bigint 3.5.12.
 
@@ -1555,7 +1629,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-#### T11: MIT
+#### T12: MIT
 
 Applies to: ktx-parse 0.7.1.
 
@@ -1583,7 +1657,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-#### T12: MIT
+#### T13: MIT
 
 Applies to: mgrs 1.0.0.
 
@@ -1609,7 +1683,7 @@ Copyright (c) 2012, Mike Adair, Richard Greenwood, Didier Richard, Stephen Irons
  DEALINGS IN THE SOFTWARE._
 ```
 
-#### T13: (MIT AND Zlib)
+#### T14: (MIT AND Zlib)
 
 Applies to: pako 1.0.11.
 
@@ -1637,7 +1711,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 ```
 
-#### T14: Zlib
+#### T15: Zlib
 
 Applies to: pako 1.0.11.
 
@@ -1659,7 +1733,7 @@ freely, subject to the following restrictions:
 3. This notice may not be removed or altered from any source distribution.
 ```
 
-#### T15: MIT
+#### T16: MIT
 
 Applies to: pdf-lib 1.17.1.
 
@@ -1687,7 +1761,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-#### T16: MIT
+#### T17: MIT
 
 Applies to: proj4 2.22.0, wkt-parser 1.5.5.
 
@@ -1723,7 +1797,7 @@ Copyright (c) 2014, Mike Adair, Richard Greenwood, Didier Richard, Stephen Irons
  DEALINGS IN THE SOFTWARE._
 ```
 
-#### T17: MIT
+#### T18: MIT
 
 Applies to: three 0.186.1.
 
@@ -1751,7 +1825,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
 ```
 
-#### T18: 0BSD
+#### T19: 0BSD
 
 Applies to: tslib 2.8.1.
 
@@ -1770,7 +1844,7 @@ OTHER TORTIOUS ACTION, ARISING OUT OF OR IN CONNECTION WITH THE USE OR
 PERFORMANCE OF THIS SOFTWARE.
 ```
 
-#### T19: MIT
+#### T20: MIT
 
 Applies to: undici-types 7.24.6.
 
@@ -1798,7 +1872,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-#### T20: OFL-1.1
+#### T21: OFL-1.1
 
 Applies to: Olv Font 2.000.
 
@@ -1898,7 +1972,207 @@ FROM, OUT OF THE USE OR INABILITY TO USE THE FONT SOFTWARE OR FROM
 OTHER DEALINGS IN THE FONT SOFTWARE.
 ```
 
-#### T21: MIT
+#### T22: OFL-1.1
+
+Applies to: Newsreader google/fonts@e7db6ca6.
+
+```
+Copyright 2020 The Newsreader Project Authors (http://github.com/productiontype/Newsreader)
+
+This Font Software is licensed under the SIL Open Font License, Version 1.1.
+This license is copied below, and is also available with a FAQ at:
+http://scripts.sil.org/OFL
+
+
+-----------------------------------------------------------
+SIL OPEN FONT LICENSE Version 1.1 - 26 February 2007
+-----------------------------------------------------------
+
+PREAMBLE
+The goals of the Open Font License (OFL) are to stimulate worldwide
+development of collaborative font projects, to support the font creation
+efforts of academic and linguistic communities, and to provide a free and
+open framework in which fonts may be shared and improved in partnership
+with others.
+
+The OFL allows the licensed fonts to be used, studied, modified and
+redistributed freely as long as they are not sold by themselves. The
+fonts, including any derivative works, can be bundled, embedded,
+redistributed and/or sold with any software provided that any reserved
+names are not used by derivative works. The fonts and derivatives,
+however, cannot be released under any other type of license. The
+requirement for fonts to remain under this license does not apply
+to any document created using the fonts or their derivatives.
+
+DEFINITIONS
+"Font Software" refers to the set of files released by the Copyright
+Holder(s) under this license and clearly marked as such. This may
+include source files, build scripts and documentation.
+
+"Reserved Font Name" refers to any names specified as such after the
+copyright statement(s).
+
+"Original Version" refers to the collection of Font Software components as
+distributed by the Copyright Holder(s).
+
+"Modified Version" refers to any derivative made by adding to, deleting,
+or substituting -- in part or in whole -- any of the components of the
+Original Version, by changing formats or by porting the Font Software to a
+new environment.
+
+"Author" refers to any designer, engineer, programmer, technical
+writer or other person who contributed to the Font Software.
+
+PERMISSION & CONDITIONS
+Permission is hereby granted, free of charge, to any person obtaining
+a copy of the Font Software, to use, study, copy, merge, embed, modify,
+redistribute, and sell modified and unmodified copies of the Font
+Software, subject to the following conditions:
+
+1) Neither the Font Software nor any of its individual components,
+in Original or Modified Versions, may be sold by itself.
+
+2) Original or Modified Versions of the Font Software may be bundled,
+redistributed and/or sold with any software, provided that each copy
+contains the above copyright notice and this license. These can be
+included either as stand-alone text files, human-readable headers or
+in the appropriate machine-readable metadata fields within text or
+binary files as long as those fields can be easily viewed by the user.
+
+3) No Modified Version of the Font Software may use the Reserved Font
+Name(s) unless explicit written permission is granted by the corresponding
+Copyright Holder. This restriction only applies to the primary font name as
+presented to the users.
+
+4) The name(s) of the Copyright Holder(s) or the Author(s) of the Font
+Software shall not be used to promote, endorse or advertise any
+Modified Version, except to acknowledge the contribution(s) of the
+Copyright Holder(s) and the Author(s) or with their explicit written
+permission.
+
+5) The Font Software, modified or unmodified, in part or in whole,
+must be distributed entirely under this license, and must not be
+distributed under any other license. The requirement for fonts to
+remain under this license does not apply to any document created
+using the Font Software.
+
+TERMINATION
+This license becomes null and void if any of the above conditions are
+not met.
+
+DISCLAIMER
+THE FONT SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO ANY WARRANTIES OF
+MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT
+OF COPYRIGHT, PATENT, TRADEMARK, OR OTHER RIGHT. IN NO EVENT SHALL THE
+COPYRIGHT HOLDER BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY,
+INCLUDING ANY GENERAL, SPECIAL, INDIRECT, INCIDENTAL, OR CONSEQUENTIAL
+DAMAGES, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+FROM, OUT OF THE USE OR INABILITY TO USE THE FONT SOFTWARE OR FROM
+OTHER DEALINGS IN THE FONT SOFTWARE.
+```
+
+#### T23: OFL-1.1
+
+Applies to: Figtree google/fonts@e7db6ca6.
+
+```
+Copyright 2022 The Figtree Project Authors (https://github.com/erikdkennedy/figtree)
+
+This Font Software is licensed under the SIL Open Font License, Version 1.1.
+This license is copied below, and is also available with a FAQ at:
+http://scripts.sil.org/OFL
+
+
+-----------------------------------------------------------
+SIL OPEN FONT LICENSE Version 1.1 - 26 February 2007
+-----------------------------------------------------------
+
+PREAMBLE
+The goals of the Open Font License (OFL) are to stimulate worldwide
+development of collaborative font projects, to support the font creation
+efforts of academic and linguistic communities, and to provide a free and
+open framework in which fonts may be shared and improved in partnership
+with others.
+
+The OFL allows the licensed fonts to be used, studied, modified and
+redistributed freely as long as they are not sold by themselves. The
+fonts, including any derivative works, can be bundled, embedded,
+redistributed and/or sold with any software provided that any reserved
+names are not used by derivative works. The fonts and derivatives,
+however, cannot be released under any other type of license. The
+requirement for fonts to remain under this license does not apply
+to any document created using the fonts or their derivatives.
+
+DEFINITIONS
+"Font Software" refers to the set of files released by the Copyright
+Holder(s) under this license and clearly marked as such. This may
+include source files, build scripts and documentation.
+
+"Reserved Font Name" refers to any names specified as such after the
+copyright statement(s).
+
+"Original Version" refers to the collection of Font Software components as
+distributed by the Copyright Holder(s).
+
+"Modified Version" refers to any derivative made by adding to, deleting,
+or substituting -- in part or in whole -- any of the components of the
+Original Version, by changing formats or by porting the Font Software to a
+new environment.
+
+"Author" refers to any designer, engineer, programmer, technical
+writer or other person who contributed to the Font Software.
+
+PERMISSION & CONDITIONS
+Permission is hereby granted, free of charge, to any person obtaining
+a copy of the Font Software, to use, study, copy, merge, embed, modify,
+redistribute, and sell modified and unmodified copies of the Font
+Software, subject to the following conditions:
+
+1) Neither the Font Software nor any of its individual components,
+in Original or Modified Versions, may be sold by itself.
+
+2) Original or Modified Versions of the Font Software may be bundled,
+redistributed and/or sold with any software, provided that each copy
+contains the above copyright notice and this license. These can be
+included either as stand-alone text files, human-readable headers or
+in the appropriate machine-readable metadata fields within text or
+binary files as long as those fields can be easily viewed by the user.
+
+3) No Modified Version of the Font Software may use the Reserved Font
+Name(s) unless explicit written permission is granted by the corresponding
+Copyright Holder. This restriction only applies to the primary font name as
+presented to the users.
+
+4) The name(s) of the Copyright Holder(s) or the Author(s) of the Font
+Software shall not be used to promote, endorse or advertise any
+Modified Version, except to acknowledge the contribution(s) of the
+Copyright Holder(s) and the Author(s) or with their explicit written
+permission.
+
+5) The Font Software, modified or unmodified, in part or in whole,
+must be distributed entirely under this license, and must not be
+distributed under any other license. The requirement for fonts to
+remain under this license does not apply to any document created
+using the Font Software.
+
+TERMINATION
+This license becomes null and void if any of the above conditions are
+not met.
+
+DISCLAIMER
+THE FONT SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO ANY WARRANTIES OF
+MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT
+OF COPYRIGHT, PATENT, TRADEMARK, OR OTHER RIGHT. IN NO EVENT SHALL THE
+COPYRIGHT HOLDER BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY,
+INCLUDING ANY GENERAL, SPECIAL, INDIRECT, INCIDENTAL, OR CONSEQUENTIAL
+DAMAGES, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+FROM, OUT OF THE USE OR INABILITY TO USE THE FONT SOFTWARE OR FROM
+OTHER DEALINGS IN THE FONT SOFTWARE.
+```
+
+#### T24: MIT
 
 Applies to: spe-check sha256-53229a0e.
 

@@ -616,7 +616,7 @@ export default defineConfig(({ mode }) => {
     // three.webgpu is intentionally isolated as a vendor chunk.
     // It is large because Three.js WebGPU/TSL runtime is heavy
     // (~1.1 MB pre-min, ~800 KB post-min). The Vite warning that fires
-    // is acceptable as long as `vendor-three-webgpu` is the ONLY chunk
+    // is acceptable as long as `vendor-three-webgpu` (and the lazy vendor-fontkit) are the ONLY chunks
     // breaching the 500 KB threshold and no app-owned workflows
     // (report, export, EPT, LAZ, COPC, debug, benchmark) leak into the
     // startup shell.
@@ -661,6 +661,10 @@ export default defineConfig(({ mode }) => {
         manualChunks(id: string): string | undefined {
           // pdf-lib runtime + vendored fonts/PNG/zlib it pulls in.
           if (id.includes('node_modules/pdf-lib/')) return 'vendor-pdf';
+          // fontkit is the one @pdf-lib package that is large (about 700 KB
+          // minified), and only the watershed report needs it. Its own chunk keeps
+          // the other PDF exports from downloading it.
+          if (id.includes('node_modules/@pdf-lib/fontkit/')) return 'vendor-fontkit';
           if (id.includes('node_modules/@pdf-lib/')) return 'vendor-pdf';
           if (id.includes('node_modules/pako/')) return 'vendor-pdf';
           // LAZ decompressor (JS glue) — the WASM blob lives at

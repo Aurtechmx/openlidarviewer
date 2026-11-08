@@ -150,6 +150,19 @@ test('run, conditioning, click-to-pulse, catchment, keyboard path, and the overl
   const download = await downloadPromise;
   expect(download.suggestedFilename()).toMatch(/-flow-pulse\.zip$/);
 
+  // DRAINAGE SHEET: the dialog lists the sections, all available ones ticked,
+  // and Export PDF downloads `<scan>-drainage.pdf`.
+  await labPage.locator('.olv-flow-drainage-sheet').click();
+  const sheetDialog = labPage.locator('.olv-flow-drainage-dialog');
+  await expect(sheetDialog).toBeVisible();
+  await expect(sheetDialog.locator('.olv-flow-drainage-opt[data-section="map"]')).toBeChecked();
+  await expect(sheetDialog.locator('.olv-flow-drainage-opt[data-section="traced"]')).toBeChecked();
+  const pdfPromise = page.waitForEvent('download');
+  await sheetDialog.locator('.olv-flow-drainage-export').click();
+  const pdf = await pdfPromise;
+  expect(pdf.suggestedFilename()).toMatch(/-drainage\.pdf$/);
+  await expect(sheetDialog).toHaveCount(0);
+
   // Switching conditioning re-runs the model and clears the trace and
   // catchment drawn above; the live region says so.
   await floodBtn.click();

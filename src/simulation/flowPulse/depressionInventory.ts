@@ -88,6 +88,32 @@ export interface DepressionInventoryResult {
   readonly largestOutletElevation: number | null;
 }
 
+/**
+ * The cells of the depression that holds `seed`, grouped as the inventory
+ * groups them: 8-connected runs of filled cells. Two touching pits are one
+ * depression here. In raw mode (`filled` null) a depression is its one sink.
+ */
+export function depressionMembers(filled: Uint8Array | null, cols: number, rows: number, seed: number): number[] {
+  const out = [seed];
+  if (filled === null || filled[seed] !== 1) return out;
+  const seen = new Set<number>([seed]);
+  for (let head = 0; head < out.length; head++) {
+    const at = out[head] as number;
+    const col = at % cols;
+    const row = (at - col) / cols;
+    for (const [dc, dr] of D8_NEIGHBOURS) {
+      const c = col + dc;
+      const r = row + dr;
+      if (c < 0 || r < 0 || c >= cols || r >= rows) continue;
+      const j = r * cols + c;
+      if (filled[j] !== 1 || seen.has(j)) continue;
+      seen.add(j);
+      out.push(j);
+    }
+  }
+  return out;
+}
+
 const EMPTY: readonly DepressionEntry[] = Object.freeze([]);
 
 /**
