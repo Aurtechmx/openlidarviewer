@@ -188,6 +188,20 @@ const SPINE_TEXT = 11.9;
 const SPINE_BOTTOM = 62;
 
 /** `spine.pageNo` is advisory: the number printed is the page's position in `doc`, so numbers never repeat. */
+/**
+ * Fit the footer into `room` points. A long title is shortened with '...' and
+ * the part after the last ' · ' (the sheet or catchment name) is kept whole.
+ */
+export function fitFooter(footer: string, room: number, fonts: ReportFonts): string {
+  const fits = (s: string) => widthOf(s, fonts.body, SZ.caption, fonts) <= room;
+  if (fits(footer)) return footer;
+  const cut = footer.lastIndexOf(' · ');
+  const tail = cut >= 0 ? footer.slice(cut) : '';
+  let head = [...(cut >= 0 ? footer.slice(0, cut) : footer)];
+  while (head.length > 0 && !fits(head.join('') + '...' + tail)) head = head.slice(0, -1);
+  return head.length > 0 ? head.join('') + '...' + tail : tail.slice(3);
+}
+
 export function newPage(
   doc: PDFDocument,
   size: PageSize,
@@ -225,8 +239,10 @@ export function newPage(
   const left = SPINE_W + MARGIN_LEFT;
   const right = w - MARGIN_RIGHT;
   page.drawLine({ start: { x: left, y: 40 }, end: { x: right, y: 40 }, thickness: 0.5, color: PALETTE.rule });
-  drawRuns(page, footer, left, 28, { font: fonts.body, size: SZ.caption, color: PALETTE.mute }, fonts);
   // The terrain status (PREVIEW / not survey-grade) on every page, right-aligned in the footer.
+  const statusW = spine.status ? widthOf(spine.status, fonts.bodyBold, SZ.caption, fonts) + 12 : 0;
+  const footText = fitFooter(footer, right - left - statusW, fonts);
+  drawRuns(page, footText, left, 28, { font: fonts.body, size: SZ.caption, color: PALETTE.mute }, fonts);
   if (spine.status) drawRight(page, spine.status, right, 28, { font: fonts.bodyBold, size: SZ.caption, color: PALETTE.earth }, fonts);
   return { page, y: h - MARGIN_TOP, left, right, bottom: BOTTOM, ctx };
 }

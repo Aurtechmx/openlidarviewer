@@ -208,13 +208,13 @@
 }
 .olv-lab-actions > :is(.olv-flow-export, .olv-ta-run):disabled { opacity: 0.45; cursor: not-allowed; }
 .olv-lab-actions > :is(.olv-flow-export, .olv-ta-run):focus-visible { outline: var(--focus-ring); outline-offset: var(--focus-ring-offset); }
-.olv-lab-actions > :is(.olv-flow-overlay-toggle, .olv-ta-overlay-toggle, .olv-ta-export, .olv-ta-retry) { min-height: 32px; }
+.olv-lab-actions > :is(.olv-flow-overlay-toggle, .olv-flow-drainage-sheet, .olv-flow-drainage-export, .olv-flow-drainage-cancel, .olv-ta-overlay-toggle, .olv-ta-export, .olv-ta-retry) { min-height: 32px; }
 .olv-ta-retry {
   font: inherit; font-size: var(--text-xs); color: var(--text-dim);
   background: none; border: 0.5px solid var(--hairline); border-radius: var(--radius-sm);
   padding: var(--space-xs) var(--space-md); cursor: pointer;
 }
-.olv-ta-retry:focus-visible, .olv-flow-export:focus-visible { outline: var(--focus-ring); outline-offset: var(--focus-ring-offset); }
+.olv-ta-retry:focus-visible, .olv-flow-export:focus-visible, .olv-flow-drainage-sheet:focus-visible, .olv-flow-drainage-export:focus-visible, .olv-flow-drainage-cancel:focus-visible, .olv-flow-drainage-opt:focus-visible { outline: var(--focus-ring); outline-offset: var(--focus-ring-offset); }
 
 .olv-lab-details { border-top: 0.5px solid var(--hairline); padding-top: var(--space-md); font-size: var(--text-xs); color: var(--text-dim); }
 .olv-lab-details-summary {
@@ -268,7 +268,7 @@
 /* Touch: every lab control meets the 44 px floor. */
 @media (pointer: coarse) {
   .olv-lab-chip-summary, .olv-lab-details-summary, .olv-ah-run, .olv-ah-open, .olv-at-link, .olv-at-link.is-primary,
-  .olv-flow-cond-btn, .olv-flow-mode-btn, .olv-flow-overlay-toggle, .olv-flow-export,
+  .olv-flow-cond-btn, .olv-flow-mode-btn, .olv-flow-overlay-toggle, .olv-flow-export, .olv-flow-drainage-sheet, .olv-flow-drainage-export, .olv-flow-drainage-cancel,
   .olv-ta-segmented-btn, .olv-ta-run, .olv-ta-export, .olv-ta-retry, .olv-ta-overlay-toggle, .olv-ta-form-submit, .olv-ta-example {
     min-height: 44px;
   }
