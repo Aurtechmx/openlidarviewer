@@ -4,14 +4,21 @@
  * The opt-in offline copy: "Make available offline" asks the controlling
  * service worker (public/sw.js) to cache every file the build lists in
  * sw-precache.json, and "Remove offline copy" deletes that cache. The choice is
- * kept in local storage for the page; the worker keeps its own record (the
- * offline cache itself) and refills it for a new build when it activates.
+ * kept in local storage for the page, under a key that names the deployment's
+ * path so two deployments on one origin keep separate choices; the worker
+ * keeps its own record (the offline cache itself) and refills it for a new
+ * build when it activates.
  * Loaded on demand from the Help actions, never at startup.
  */
 import { storageRemove, storageSet } from '../ui/safeStorage';
 import { formatBytesIn } from '../io/formatByteSize';
 
 export const OFFLINE_OPT_IN_KEY = 'olv.offline-copy';
+
+/** The opt-in key for the deployment at `pathname`: the base key plus its directory ('/a/'). */
+export function offlineOptInKey(pathname: string = typeof location !== 'undefined' ? location.pathname : '/'): string {
+  return `${OFFLINE_OPT_IN_KEY}@${pathname.replace(/[^/]*$/, '') || '/'}`;
+}
 const UNAVAILABLE = 'Offline copies are not available here. The app is not running under its service worker.';
 
 type Notify = (message: string) => void;
@@ -77,11 +84,11 @@ export async function makeAvailableOffline(notify: Notify, env: OfflineCopyEnv =
         return false;
       }
       if (r.type === 'done' && !r.failed) {
-        storageSet(OFFLINE_OPT_IN_KEY, '1');
+        storageSet(offlineOptInKey(), '1');
         notify(`The app is available offline (${size}).`);
         resolve(true);
       } else if (r.type === 'done') {
-        storageSet(OFFLINE_OPT_IN_KEY, '1');
+        storageSet(offlineOptInKey(), '1');
         notify(`Offline copy incomplete: ${r.failed} of ${r.total} files failed. Run Make available offline again when online.`);
         resolve(false);
       } else if (r.reason === 'build-mismatch') {
@@ -98,7 +105,7 @@ export async function makeAvailableOffline(notify: Notify, env: OfflineCopyEnv =
 
 /** Delete the offline cache and forget the choice. */
 export async function removeOfflineCopy(notify: Notify, env: OfflineCopyEnv = defaultEnv()): Promise<boolean> {
-  storageRemove(OFFLINE_OPT_IN_KEY);
+  storageRemove(offlineOptInKey());
   if (!env.controller) {
     notify(UNAVAILABLE);
     return false;
