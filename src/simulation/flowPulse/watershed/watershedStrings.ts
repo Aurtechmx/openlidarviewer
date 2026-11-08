@@ -19,7 +19,7 @@ import type { ReportLanguage } from './watershedReportModel';
 const EN = {
   // Cover
   'cover.kicker': 'Drainage sheet · screening study',
-  'cover.counts': 'Watersheds: {watersheds} · studied catchments: {catchments}',
+  'cover.counts': 'Watersheds over {share} % of the area: {watersheds}; smaller: {minor} · studied catchments: {catchments}',
   'cover.date': '{date} · {software}',
   'cover.preparedBy': 'Prepared by',
   'cover.checkedBy': 'Checked by',
@@ -333,7 +333,7 @@ export type StringKey = keyof typeof EN;
 
 const ES: Record<StringKey, string> = {
   'cover.kicker': 'Hoja de drenaje · estudio preliminar',
-  'cover.counts': 'Cuencas del levantamiento: {watersheds} · cuencas de aportación estudiadas: {catchments}',
+  'cover.counts': 'Cuencas de más del {share} % del área: {watersheds}; menores: {minor} · cuencas de aportación estudiadas: {catchments}',
   'cover.date': '{date} · {software}',
   'cover.preparedBy': 'Elaboró',
   'cover.checkedBy': 'Revisó',

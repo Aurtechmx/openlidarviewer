@@ -36,6 +36,7 @@ import {
   type PageCursor, type PageSize,
 } from './pageKit';
 import { drawMapPage, siteRaster, smoothLine } from './mapPage';
+import { DEFAULT_MINOR_SHARE } from '../../simulation/flowPulse/watershed/watershedPartition';
 import { drawChannelProfile, fitSize, strokePath, wrapText } from './charts';
 
 export interface WatershedReportOptions {
@@ -343,8 +344,12 @@ async function drawCover(doc: PDFDocument, model: WatershedReportModel, opts: Wa
     y -= 3;
   }
   const watersheds = model.partition.watersheds.filter((w) => !w.minor).length;
-  y -= 13;
-  drawRuns(page, t(lang, 'cover.counts', { watersheds, catchments: model.sections.length }), L, y, { font: fonts.body, size: 11, color: PALETTE.ink2 }, fonts);
+  const minor = model.partition.watersheds.length - watersheds;
+  const counts = t(lang, 'cover.counts', { watersheds, minor, share: DEFAULT_MINOR_SHARE * 100, catchments: model.sections.length });
+  wrapText(counts, fonts.body, 11, maxW, fonts).forEach((line, k) => {
+    y -= k === 0 ? 13 : 14;
+    drawRuns(page, line, L, y, { font: fonts.body, size: 11, color: PALETTE.ink2 }, fonts);
+  });
   if (opts.status) {
     for (const line of wrapText(opts.status, fonts.bodyBold, 11, maxW, fonts)) {
       y -= 16;

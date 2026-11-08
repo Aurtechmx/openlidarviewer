@@ -140,7 +140,7 @@ describe('depression table', () => {
     const all = v.result.depressions.depressions.length;
     const t = buildDrainageSheetModel(v.result, { depressionRows: 2 }).depressions!;
     expect(t.rows.length).toBe(Math.min(2, all));
-    expect(t.note).toContain(`${Math.min(2, all)} of ${all} shown`);
+    expect(t.note).toContain(`${Math.min(2, all)} of ${all.toLocaleString('en-US')} depressions shown`);
     expect(t.header).toEqual(['Rank', 'Cells', 'Area (m2)', 'Max fill depth (source units)', 'Outlet elev. local (source units)', 'Seed col', 'Seed row']);
   });
 });
