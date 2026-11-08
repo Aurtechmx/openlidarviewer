@@ -62,6 +62,13 @@ describe('offline copy actions', () => {
     expect(msgs.at(-1)).toMatch(/Could not make the app available offline/);
   });
 
+  it('says the site changed during the save and the earlier copy is kept', async () => {
+    const msgs: string[] = [];
+    const f = fakeController([{ type: 'error', reason: 'build-mismatch' }]);
+    expect(await makeAvailableOffline((m) => msgs.push(m), { controller: f.controller, fetchManifest: async () => ({ totalBytes: 1 }) })).toBe(false);
+    expect(msgs.at(-1)).toMatch(/updated while saving.*earlier offline copy is kept/);
+  });
+
   it('remove posts the request and forgets the choice', async () => {
     const msgs: string[] = [];
     const f = fakeController([{ type: 'removed' }]);

@@ -41,6 +41,7 @@ interface SwReply {
   done?: number;
   total?: number;
   failed?: number;
+  reason?: string;
 }
 
 function post(env: OfflineCopyEnv, message: unknown, onReply: (r: SwReply) => boolean): void {
@@ -82,6 +83,9 @@ export async function makeAvailableOffline(notify: Notify, env: OfflineCopyEnv =
       } else if (r.type === 'done') {
         storageSet(OFFLINE_OPT_IN_KEY, '1');
         notify(`Offline copy incomplete: ${r.failed} of ${r.total} files failed. Run Make available offline again when online.`);
+        resolve(false);
+      } else if (r.reason === 'build-mismatch') {
+        notify('The site was updated while saving, so nothing was saved and any earlier offline copy is kept. Reload the page and try again.');
         resolve(false);
       } else {
         notify('Could not make the app available offline. Check the connection and try again.');

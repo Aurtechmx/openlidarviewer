@@ -9,6 +9,7 @@
 import { describe, it, expect } from 'vitest';
 import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
+import { createHash } from 'node:crypto';
 import { join, resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { buildSwPrecacheManifest } from '../scripts/lib/swPrecacheManifest.mjs';
@@ -18,7 +19,10 @@ const VERSION = /const VERSION = '([^']+)'/.exec(SW_SOURCE)![1];
 const OFFLINE = `${VERSION}-offline`;
 const ORIGIN = 'https://viewer.example';
 
+const HTML = '<!doctype html><script type="module" src="./assets/index-AAAAAAAA.js"></script>';
+const sha = (text: string) => createHash('sha256').update(text).digest('hex');
 const MANIFEST = {
+  index: { url: './index.html', sha256: sha(HTML) },
   totalBytes: 30,
   assets: [
     { url: './assets/index-AAAAAAAA.js', bytes: 10 },
@@ -27,7 +31,7 @@ const MANIFEST = {
   ],
 };
 
-function harness(initial: Record<string, string[]>, opts: { failUrl?: string; manifestOk?: boolean } = {}) {
+function harness(initial: Record<string, string[]>, opts: { failUrl?: string; manifestOk?: boolean; html?: string; manifest?: object } = {}) {
   const stores = new Map<string, Map<string, true>>();
   for (const [k, v] of Object.entries(initial)) stores.set(k, new Map(v.map((u) => [u, true as const])));
   const fetched: string[] = [];
@@ -42,7 +46,7 @@ function harness(initial: Record<string, string[]>, opts: { failUrl?: string; ma
         if (opts.failUrl && u === opts.failUrl) throw new Error('404');
         s.set(abs(u), true);
       },
-      put: async () => {},
+      put: async (u: string) => { s.set(abs(u), true); },
       match: async (u: string) => s.has(abs(u)) ? name + ':' + abs(u) : undefined,
       keys: async () => [...s.keys()].map((url) => ({ url })),
       delete: async (r: { url: string }) => s.delete(r.url),
@@ -65,7 +69,12 @@ function harness(initial: Record<string, string[]>, opts: { failUrl?: string; ma
   const fetchFn = async (u: string) => {
     if (offline) throw new Error('offline');
     fetched.push(u);
-    return { ok: opts.manifestOk !== false, status: opts.manifestOk === false ? 404 : 200, json: async () => MANIFEST };
+    if (u === './index.html') {
+      if (opts.failUrl === u) return { ok: false, status: 404, redirected: false };
+      const bytes = new TextEncoder().encode(opts.html ?? HTML);
+      return { ok: true, status: 200, redirected: false, headers: new Headers({ 'content-type': 'text/html' }), arrayBuffer: async () => bytes.buffer };
+    }
+    return { ok: opts.manifestOk !== false, status: opts.manifestOk === false ? 404 : 200, json: async () => opts.manifest ?? MANIFEST };
   };
   new Function('self', 'caches', 'fetch', 'URL', SW_SOURCE)(selfObj, cachesObj, fetchFn, URL);
   const fire = async (type: string, extra: object = {}) => {
@@ -126,6 +135,20 @@ describe('service worker opt-in offline copy', () => {
     const h = harness({}, { manifestOk: false });
     const replies = await h.message({ type: 'olv-offline-save' });
     expect(replies.at(-1)).toEqual({ type: 'error' });
+  });
+
+  it.each([
+    ['an index.html from another build', { html: HTML + '<!-- next deploy -->' }],
+    ['an index.html that references an unlisted bundle', { html: '<script src="./assets/index-ZZZZZZZZ.js"></script>', manifest: { ...MANIFEST, index: { url: './index.html', sha256: sha('<script src="./assets/index-ZZZZZZZZ.js"></script>') } } }],
+    ['a manifest with no index digest', { manifest: { totalBytes: 30, assets: MANIFEST.assets } }],
+  ])('refuses %s and keeps the previous offline copy untouched', async (_label, options) => {
+    const saved = [ORIGIN + '/index.html', ORIGIN + '/assets/old-AAAAAAAA.js'];
+    const h = harness({ [OFFLINE]: saved }, options);
+    const replies = await h.message({ type: 'olv-offline-save' });
+    expect(replies.at(-1)).toEqual({ type: 'error', reason: 'build-mismatch' });
+    expect([...h.stores.get(OFFLINE)!.keys()].sort()).toEqual([...saved].sort());
+    expect(replies.filter((r) => r.type === 'progress')).toEqual([]);
+    expect(await h.offlineIndex()).toBe(OFFLINE + ':' + ORIGIN + '/index.html');
   });
 
   it('remove deletes every OLV offline cache and keeps the shell', async () => {
@@ -200,7 +223,9 @@ describe('sw-precache.json manifest', () => {
       writeFileSync(join(dir, 'assets', 'index-AAAAAAAA.js'), 'x'.repeat(10));
       writeFileSync(join(dir, 'assets', 'lazDecode-BBBBBBBB.wasm'), 'x'.repeat(25));
       writeFileSync(join(dir, 'assets', 'readme.txt'), 'ignored');
+      writeFileSync(join(dir, 'index.html'), HTML);
       expect(buildSwPrecacheManifest(dir)).toEqual({
+        index: { url: './index.html', sha256: sha(HTML) },
         totalBytes: 35,
         assets: [
           { url: './assets/index-AAAAAAAA.js', bytes: 10 },

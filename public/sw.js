@@ -84,17 +84,50 @@ function changeOffline(work) {
   return next;
 }
 
+/** A save refused because the page and the manifest come from different builds. */
+class BuildMismatch extends Error {}
+
+function hex(buffer) {
+  return [...new Uint8Array(buffer)].map((b) => b.toString(16).padStart(2, '0')).join('');
+}
+
+/**
+ * Fetch index.html once and check it belongs to the build the manifest
+ * describes: its SHA-256 must equal `m.index.sha256`, and every assets/ file it
+ * references must be listed. The deploy can change between the manifest
+ * request and this one; a mismatch must not be saved. Resolves to the verified
+ * bytes and headers, which are the ones stored.
+ */
+async function verifiedIndex(m, entries) {
+  const expected = m && m.index && typeof m.index.sha256 === 'string' ? m.index.sha256.toLowerCase() : null;
+  if (!expected) throw new BuildMismatch('manifest has no index digest');
+  const res = await fetch('./index.html', { cache: 'no-store' });
+  if (!res.ok || res.redirected) throw new Error('index ' + res.status);
+  const body = await res.arrayBuffer();
+  if (hex(await crypto.subtle.digest('SHA-256', body)) !== expected) throw new BuildMismatch('index digest');
+  const listed = new Set(entries.map((a) => new URL(a.url, self.location.href).href));
+  const html = new TextDecoder().decode(body);
+  for (const ref of html.matchAll(/\b(?:src|href)\s*=\s*["']([^"']*assets\/[^"']+)["']/gi)) {
+    const url = new URL(ref[1], self.location.href);
+    if (url.origin === self.location.origin && !listed.has(url.href)) throw new BuildMismatch('unlisted ' + url.pathname);
+  }
+  return { body, headers: res.headers };
+}
+
 // CacheStorage has no rename. The saved index is the commit record: publish
 // it only after all its bundles exist, then retire the preceding snapshot.
+// The index is verified against the manifest before any file is written, so
+// a refused save leaves the previous copy exactly as it was.
 function precacheBuild(onProgress) {
   const report = typeof onProgress === 'function' ? onProgress : () => {};
   return fetch('./sw-precache.json', { cache: 'no-store' })
     .then((res) => (res.ok ? res.json() : Promise.reject(new Error('manifest ' + res.status))))
-    .then((m) =>
-      caches.open(OFFLINE_CACHE).then((cache) => {
-        const entries = manifestEntries(m);
+    .then(async (m) => {
+      const entries = manifestEntries(m);
+      if (!entries.length) throw new Error('Empty offline manifest');
+      const index = await verifiedIndex(m, entries);
+      return caches.open(OFFLINE_CACHE).then((cache) => {
         const total = entries.length;
-        if (!total) throw new Error('Empty offline manifest');
         let done = 0;
         let failed = 0;
         const addOne = (a) =>
@@ -109,14 +142,14 @@ function precacheBuild(onProgress) {
             });
         return Promise.all(entries.map(addOne)).then(async () => {
           if (!failed) {
-            await cache.add('./index.html');
+            await cache.put('./index.html', new Response(index.body, { status: 200, headers: index.headers }));
             await pruneCache(cache, [...entries, { url: './index.html' }]);
             await deleteObsoleteCaches(await caches.keys());
           }
           return { total, failed };
         });
-      }),
-    );
+      });
+    });
 }
 
 /** Delete every entry of `cache` that the manifest `entries` no longer lists. */
@@ -165,7 +198,7 @@ self.addEventListener('message', (event) => {
   if (data.type === 'olv-offline-save') {
     const work = changeOffline(() => precacheBuild((done, total) => port.postMessage({ type: 'progress', done, total })))
       .then((r) => port.postMessage({ type: 'done', total: r.total, failed: r.failed }))
-      .catch(() => port.postMessage({ type: 'error' }));
+      .catch((err) => port.postMessage(err instanceof BuildMismatch ? { type: 'error', reason: 'build-mismatch' } : { type: 'error' }));
     if (event.waitUntil) event.waitUntil(work);
   } else if (data.type === 'olv-offline-remove') {
     const work = changeOffline(async () => {
