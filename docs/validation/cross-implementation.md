@@ -51,7 +51,7 @@ no order statistic. The twelfth is a reader rather than an algorithm:
 `E57-INGEST`, against PDAL 2.10.2 `readers.e57` over every point of a public
 CC-BY terrestrial scan. Nine dimensions are compared (cartesian X/Y/Z, the
 `nor:` namespaced surface normals, and colour) as an exact quantised integer sum
-at a 1×10⁻⁶ quantum, which one wrong point of 1,788,994 cannot survive. The
+at a 1×10⁻⁶ quantum, which one wrong point of 1,788,994 cannot survive, together with count, extremes and 18 positional samples. This is aggregate agreement per field: compensating errors at two records, or a reordering, would cancel in the sum, so it does not establish the same value at every index. The
 thirteenth is a coordinate conversion: `CRS-UTM-PROJECTION`, against PROJ 9.8.1
 `cs2cs` and GeographicLib 2.7 `GeoConvert` over 36 frozen WGS-84 coordinates.
 The two legs answer different questions. GeoConvert applies the UTM zone rules

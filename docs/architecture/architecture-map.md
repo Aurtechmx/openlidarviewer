@@ -92,8 +92,6 @@ so it belongs beside the panels.
 
 ### Checked and deliberately NOT extracted
 
-Recorded so the next pass does not re-derive them:
-
 - The filter cluster (`_classFiltered`, `_elevFilter*`, `_intenFilter*`),
   not CPU predicates. They are three.js shader uniforms folded in a TSL pass;
   there is no Node-testable logic to lift.
