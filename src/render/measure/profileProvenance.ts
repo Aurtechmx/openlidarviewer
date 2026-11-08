@@ -463,9 +463,13 @@ export function describeSampleNote(
   withheld: WithheldReadCounts | null,
   reduction: SourceReduction | undefined,
   method: string | null,
+  residentOnly = false,
 ): string {
+  // On a streaming read the second figure is the points resident when the
+  // series was sampled, not the source total, and the sentence says so.
+  const read = withheld ? describeProfilePointsRead(withheld, false) : '';
   const points = withheld
-    ? `Points: ${describeProfilePointsRead(withheld, false)} (${method ?? 'method not recorded'}).`
+    ? `Points: ${residentOnly ? read.replace(' analysed;', ' resident points analysed (streaming source; not the full file);') : read} (${method ?? 'method not recorded'}).`
     : 'Points: Withheld handling not recorded; sampled before Withheld points were excluded.';
   return reduction
     ? `${points} Sample basis: ${describeSampleBasis(reduction)}. ${describeSampleCaveat(reduction)}`

@@ -332,3 +332,278 @@ export function fitTitleValue(
   if (lines.length > 3) lines = [...lines.slice(0, 2), text.clip(lines.slice(2).join(' '), 6.5)];
   return { lines, size: 6.5, first: 18, step: 5.2 };
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Standard print scales
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** Points per metre of paper. */
+const PT_PER_PAPER_M = 72 / 0.0254;
+
+/** Standard horizontal scale denominators, one decade; larger decades repeat ×10. */
+export const STANDARD_SCALE_DENOMINATORS = [100, 200, 250, 500, 1000, 1250, 2000, 2500, 5000] as const;
+
+/** Standard vertical exaggerations, largest first. */
+export const STANDARD_EXAGGERATIONS = [100, 50, 25, 20, 10, 5, 2.5, 2, 1] as const;
+
+/** Round elevation tick steps, one decade; others scale by powers of ten. */
+const TICK_STEPS = [1, 2, 2.5, 5] as const;
+
+/** The smallest standard denominator not below `min`. */
+export function standardScaleAtLeast(min: number): number {
+  if (!Number.isFinite(min) || min <= STANDARD_SCALE_DENOMINATORS[0]) return STANDARD_SCALE_DENOMINATORS[0];
+  for (let decade = 1; decade < 1e9; decade *= 10) {
+    for (const d of STANDARD_SCALE_DENOMINATORS) {
+      if (d * decade >= min * (1 - 1e-9)) return d * decade;
+    }
+  }
+  return min;
+}
+
+/** The smallest round step (1/2/2.5/5 × 10^n) that splits `span` into at most `maxSteps`. */
+export function roundTickStep(span: number, maxSteps: number): number {
+  if (!Number.isFinite(span) || span <= 0) return 0.1;
+  let decade = 10 ** Math.floor(Math.log10(span / maxSteps));
+  for (let n = 0; n < 4; n++, decade *= 10) {
+    for (const s of TICK_STEPS) if (span / (s * decade) <= maxSteps + 1e-9) return s * decade;
+  }
+  return span;
+}
+
+/** A 1:N denominator as printed: integer, or one decimal when it is not one. */
+export function formatScaleDenominator(n: number): string {
+  const r = Math.round(n * 10) / 10;
+  return Number.isInteger(r) ? String(r) : r.toFixed(1);
+}
+
+export interface ProfileScaleRequest {
+  /** Horizontal length, metres. */
+  readonly lengthM: number;
+  /** Lowest and highest plotted height, metres. */
+  readonly minM: number;
+  readonly maxM: number;
+  /** Available plot box, points. */
+  readonly plotWpt: number;
+  readonly plotHpt: number;
+  /** Display units per metre (1 metric, 3.28… imperial). Ticks are round in display units. */
+  readonly k: number;
+  /** A vertical exaggeration asked for by the caller; used when it is standard and fits. */
+  readonly requestedExaggeration?: number | null;
+}
+
+export interface ProfileScales {
+  /** Horizontal 1:N. */
+  readonly horizontal: number;
+  /** Vertical 1:N. */
+  readonly vertical: number;
+  /** horizontal / vertical. */
+  readonly exaggeration: number;
+  /** Width the chainage takes at the horizontal scale, points. At most plotWpt. */
+  readonly drawnWpt: number;
+  /** Elevation axis bottom and top, metres. The axis spans exactly plotHpt at the vertical scale. */
+  readonly axisLoM: number;
+  readonly axisHiM: number;
+  /** Elevation tick step, display units. */
+  readonly tickStep: number;
+  /** First tick, display units: the axis bottom, a multiple of tickStep. */
+  readonly firstTick: number;
+}
+
+/**
+ * Choose the print scales of a longitudinal profile.
+ *
+ * The horizontal scale is the smallest standard 1:N at which the length fits
+ * the plot width. The height range is widened to round ticks with a quarter
+ * step of margin either side, so every plotted value sits inside the frame.
+ * The exaggeration is the largest standard ratio at which that range fits the
+ * plot height; a requested ratio is used instead when it is standard and fits.
+ * When even 1:1 does not fit, the vertical scale is the smallest standard
+ * denominator that does, and the sheet states a compression.
+ */
+export function chooseProfileScales(req: ProfileScaleRequest): ProfileScales {
+  const { lengthM, plotWpt, plotHpt, k } = req;
+  const horizontal = standardScaleAtLeast((lengthM * PT_PER_PAPER_M) / plotWpt);
+  const drawnWpt = (lengthM / horizontal) * PT_PER_PAPER_M;
+
+  const minD = req.minM * k;
+  const maxD = req.maxM * k;
+  const tickStep = roundTickStep(maxD - minD, 6);
+  const margin = tickStep / 4;
+  const loD = Math.floor((minD - margin) / tickStep) * tickStep;
+  const hiD = Math.ceil((maxD + margin) / tickStep) * tickStep;
+  const neededM = (hiD - loD) / k;
+  // The vertical denominator at which the needed range fills the plot height.
+  const vMin = (neededM * PT_PER_PAPER_M) / plotHpt;
+
+  const fits = (vex: number) => horizontal / vex >= vMin * (1 - 1e-9);
+  const requested = req.requestedExaggeration;
+  let exaggeration: number;
+  let vertical: number;
+  if (
+    requested != null &&
+    (STANDARD_EXAGGERATIONS as readonly number[]).includes(requested) &&
+    fits(requested)
+  ) {
+    exaggeration = requested;
+    vertical = horizontal / requested;
+  } else {
+    const best = STANDARD_EXAGGERATIONS.find(fits);
+    if (best != null) {
+      exaggeration = best;
+      vertical = horizontal / best;
+    } else {
+      vertical = standardScaleAtLeast(vMin);
+      exaggeration = horizontal / vertical;
+    }
+  }
+
+  // The axis covers the whole plot height at the chosen scale. The spare
+  // height is split above and below in whole ticks, so the curve sits near
+  // the middle and the axis still starts on a round value.
+  const fullD = (plotHpt / PT_PER_PAPER_M) * vertical * k;
+  const spareSteps = Math.max(0, Math.floor((fullD - (hiD - loD)) / tickStep + 1e-9));
+  const axisLoD = loD - Math.floor(spareSteps / 2) * tickStep;
+  return {
+    horizontal,
+    vertical,
+    exaggeration,
+    drawnWpt,
+    axisLoM: axisLoD / k,
+    axisHiM: (axisLoD + fullD) / k,
+    tickStep,
+    firstTick: axisLoD,
+  };
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Round-chainage station band
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** Standard band intervals, display units. */
+export const BAND_INTERVALS = [5, 10, 20, 25, 50, 100, 200, 250, 500, 1000, 2000, 2500, 5000] as const;
+
+/**
+ * Height at `chainage`, interpolated linearly between the two sampled stations
+ * either side. A chainage on a sampled station takes that station's height.
+ * Null when either neighbour is a gap, or outside the sampled range: a height
+ * is never carried across a station that had no returns.
+ */
+export function interpolateStationHeight(
+  stations: readonly StationBandInput[],
+  chainage: number,
+): number | null {
+  const eps = 1e-6;
+  for (let i = 0; i < stations.length; i++) {
+    const s = stations[i];
+    if (Math.abs(s.chainage - chainage) <= eps) return s.height;
+    const n = stations[i + 1];
+    if (n && s.chainage < chainage && chainage < n.chainage) {
+      if (s.height == null || n.height == null) return null;
+      const t = (chainage - s.chainage) / (n.chainage - s.chainage);
+      return s.height + t * (n.height - s.height);
+    }
+  }
+  return null;
+}
+
+export interface RoundBandRequest {
+  /** Sampled stations, ascending chainage, metres. */
+  readonly stations: readonly StationBandInput[];
+  /** Section length, metres. The last band station. */
+  readonly lengthM: number;
+  /** Display units per metre. */
+  readonly k: number;
+  /** The plot's own chainage (metres) → page x mapping. */
+  readonly mapX: (chainage: number) => number;
+  /** Width one column needs, points, padding included. */
+  readonly columnWpt: number;
+}
+
+export interface RoundBandLayout extends StationBandLayout {
+  /** The round interval, display units. */
+  readonly interval: number;
+}
+
+/**
+ * Band stations at a round interval (5/10/20/25/50/100… display units), the
+ * smallest whose columns do not touch, always including 0 and the end
+ * chainage. A round station within a column and a half of either end is dropped so
+ * the end figures are never overprinted. Heights are interpolated between
+ * sampled stations by {@link interpolateStationHeight}. `total` is the number
+ * of sampled stations, for the caption.
+ */
+export function buildRoundChainageBand(req: RoundBandRequest): RoundBandLayout {
+  const { lengthM, k, mapX } = req;
+  const sampled = req.stations.filter((s) => Number.isFinite(s.chainage));
+  if (!(lengthM > 0) || sampled.length === 0) {
+    return { columns: [], shown: 0, total: sampled.length, interval: 0 };
+  }
+  const pxPerDisplay = (mapX(lengthM) - mapX(0)) / (lengthM * k);
+  let interval: number = BAND_INTERVALS[BAND_INTERVALS.length - 1];
+  for (const iv of BAND_INTERVALS) {
+    if (iv * pxPerDisplay >= req.columnWpt) {
+      interval = iv;
+      break;
+    }
+  }
+  const chainages: number[] = [];
+  const lenD = lengthM * k;
+  for (let n = 0; n * interval < lenD - 1e-9 && n < 10_000; n++) chainages.push((n * interval) / k);
+  // The end figures are set inward from the frame edges, so the round
+  // stations beside them need a column and a half of clear width.
+  const endClear = req.columnWpt * 1.5;
+  while (
+    chainages.length > 1 &&
+    mapX(lengthM) - mapX(chainages[chainages.length - 1]) < endClear
+  ) {
+    chainages.pop();
+  }
+  while (chainages.length > 1 && mapX(chainages[1]) - mapX(0) < endClear) chainages.splice(1, 1);
+  chainages.push(lengthM);
+  const columns: StationBandColumn[] = chainages.map((c, i) => ({
+    chainage: c,
+    x: mapX(c),
+    height: interpolateStationHeight(sampled, c),
+    partial: i === 0 ? null : c - chainages[i - 1],
+  }));
+  return { columns, shown: columns.length, total: sampled.length, interval };
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Steepest grade over a minimum base
+// ─────────────────────────────────────────────────────────────────────────────
+
+export interface BaseGrade {
+  /** Signed rise over run. */
+  readonly grade: number;
+  readonly fromChainage: number;
+  readonly toChainage: number;
+}
+
+/**
+ * The steepest grade between two sampled stations at least `baseM` apart,
+ * taking for each start station the nearest end station that reaches the
+ * base. A pair with a gap station anywhere between them is not used.
+ */
+export function steepestGradeOverBase(
+  stations: readonly StationBandInput[],
+  baseM: number,
+): BaseGrade | null {
+  let best: BaseGrade | null = null;
+  for (let i = 0; i < stations.length; i++) {
+    const a = stations[i];
+    if (a.height == null) continue;
+    for (let j = i + 1; j < stations.length; j++) {
+      const b = stations[j];
+      if (b.height == null) break;
+      const run = b.chainage - a.chainage;
+      if (run < baseM - 1e-9) continue;
+      const grade = (b.height - a.height) / run;
+      if (best == null || Math.abs(grade) > Math.abs(best.grade)) {
+        best = { grade, fromChainage: a.chainage, toChainage: b.chainage };
+      }
+      break;
+    }
+  }
+  return best;
+}

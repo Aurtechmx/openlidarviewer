@@ -39,7 +39,9 @@ import {
   type WithheldReadCounts,
   type SourceReduction,
 } from '../../science/withheldCounts';
-import { resolveCorridorHalfWidth } from './profileCorridor';
+import { resolveCorridorHalfWidth, profileCorridorAccepts, createProfileHitScratch } from './profileCorridor';
+import type { ProfileProvenanceInput } from './profileProvenance';
+import { NON_GROUND_CLASSES } from '../../terrain/ground/classificationFilter';
 import { cloudReduction, summariseReductions, type CloudReduction, type ReductionSource } from './volumeReduction';
 import { describeSampleBasis } from './profileProvenance';
 import { buildProfileFrame, type ProfileFrame } from './profileGeometry';
@@ -83,6 +85,10 @@ export interface ProfileSeamLayer extends IntegrableEntry {
   readonly bounds: ProfileSourceBounds | null;
   /** Float64 placement into the project frame; null/absent = identity. */
   readonly placement?: LayerSpatialTransform | null;
+  /** Display name for the provenance record. Absent = the id. */
+  readonly displayName?: string;
+  /** Where the class codes came from; absent = from the file when a channel is present. */
+  readonly classificationSource?: 'producer' | 'derived';
   /** The source file's truncation, or null / absent for a complete read. */
   readonly truncation?: Truncation | null;
   /**
@@ -153,6 +159,13 @@ export interface ProfileSeriesResult {
   method: string;
   /** Truncation note when a static source read was truncated; absent otherwise. */
   coverageNote?: string;
+  /**
+   * The sources the series read, with the corridor's accepted count per
+   * source, for the measurement's provenance record. The caller stamps the
+   * capture time. Units are left `unknown`: the seam does not know the frame,
+   * and an unknown reference defers to the declared datum downstream.
+   */
+  provenanceInput?: Omit<ProfileProvenanceInput, 'capturedAt'>;
 }
 
 /** User overrides for the derived series. Absent fields take the defaults. */
@@ -376,6 +389,45 @@ function walkScene(deps: ProfileSectionSeamDeps): SceneWalk {
   return { statics, residents };
 }
 
+/** Layer id the provenance record files every resident streaming node under. */
+export const STREAMING_SOURCE_ID = 'streaming';
+
+function formatInt(n: number): string {
+  return Math.round(n).toLocaleString('en-US');
+}
+
+/**
+ * The provenance slot of every return the corridor accepts, read from the
+ * same buffers (placement applied) and the same half-width the series used.
+ * Counts only; nothing here changes what the series samples.
+ */
+function corridorSlots(
+  a: Vec3,
+  b: Vec3,
+  up: Vec3,
+  halfWidth: number,
+  positions: Float32Array,
+  buffers: readonly ProfileSourceBuffer[],
+  bufferSlots: readonly number[],
+): { count: number; sourceSlot: Uint32Array } {
+  const frame = buildProfileFrame(a, b, up);
+  const band = Math.max(0, halfWidth);
+  const bandSq = band * band;
+  const out = createProfileHitScratch();
+  const slots: number[] = [];
+  let off = 0;
+  buffers.forEach((buf, bi) => {
+    const end = off + buf.pos.length;
+    for (let i = off; i + 2 < end; i += 3) {
+      if (profileCorridorAccepts(frame, band, bandSq, positions[i]!, positions[i + 1]!, positions[i + 2]!, out)) {
+        slots.push(bufferSlots[bi]!);
+      }
+    }
+    off = end;
+  });
+  return { count: slots.length, sourceSlot: Uint32Array.from(slots) };
+}
+
 export function createProfileSectionSeam(deps: ProfileSectionSeamDeps): ProfileSectionSeam {
   const generation = new SectionGeneration();
   let lastFullyResident = false;
@@ -409,6 +461,10 @@ export function createProfileSectionSeam(deps: ProfileSectionSeamDeps): ProfileS
     let everySourceFlagged = true;
     const reductions: Array<CloudReduction | undefined> = [];
     const { statics, residents } = walkScene(deps);
+    // Provenance slot per buffer: one per static layer, and one shared slot
+    // for every resident node of the streaming source.
+    const bufferSlots: number[] = [];
+    let streamingClassified = residents.length > 0;
     const take = (
       raw: ProfileSourceBuffer,
       channels: ProfileSourceChannels | null,
@@ -432,11 +488,14 @@ export function createProfileSectionSeam(deps: ProfileSectionSeamDeps): ProfileS
     };
     for (const { layer, pos } of statics) {
       const cls = alignedClassification(layer.channels, pos.length);
+      bufferSlots.push(bufferSlots.length);
       take({ pos, cls, placement: layer.placement }, layer.channels, false);
       reductions.push(layer.reductionSource ? cloudReduction(layer.reductionSource) : undefined);
     }
     for (const { node, pos } of residents) {
       const cls = alignedClassification(node.channels, pos.length);
+      bufferSlots.push(statics.length);
+      if (!cls) streamingClassified = false;
       take({ pos, cls }, node.channels, true);
     }
     if (total === 0) return null;
@@ -472,6 +531,7 @@ export function createProfileSectionSeam(deps: ProfileSectionSeamDeps): ProfileS
     // caveat in mixed scenes). Once every known node is resident, the walk
     // covers the whole stream. That is the same test the terrain analysis
     // applies (`fullyResident` below).
+    const withheldReduction = withSourceMix(summariseReductions(reductions), reductions, residents.length);
     return {
       samples,
       residentOnly: streamingPoints > 0 && !fullyResident(),
@@ -479,12 +539,41 @@ export function createProfileSectionSeam(deps: ProfileSectionSeamDeps): ProfileS
       groundPercentile,
       withheld: {
         ...withheldReadCounts(sourcePoints, withheldExcluded, everySourceFlagged),
-        ...((r) => (r ? { reduction: r } : {}))(
-          withSourceMix(summariseReductions(reductions), reductions, residents.length),
-        ),
+        ...(withheldReduction ? { reduction: withheldReduction } : {}),
       },
       method: PROFILE_SERIES_METHOD_TAG,
       ...(coverageNote ? { coverageNote } : {}),
+      provenanceInput: {
+        method: PROFILE_SERIES_METHOD_TAG,
+        up: [up[0], up[1], up[2]],
+        sources: [
+          ...statics.map(({ layer, pos }, slot) => ({
+            slot,
+            layerId: layer.id,
+            displayName: layer.displayName ?? layer.id,
+            classification:
+              alignedClassification(layer.channels, pos.length) === undefined
+                ? ('absent' as const)
+                : (layer.classificationSource ?? 'producer'),
+            streaming: false,
+            truncation: layer.truncation ?? null,
+          })),
+          ...(residents.length > 0
+            ? [{
+                slot: statics.length,
+                layerId: STREAMING_SOURCE_ID,
+                displayName: `Streaming source (${formatInt(residents.length)} resident nodes)`,
+                classification: streamingClassified ? ('producer' as const) : ('absent' as const),
+                streaming: true,
+                coverage: deps.streamingCoverage(),
+              }]
+            : []),
+        ],
+        accepted: corridorSlots(a, b, up, corridorWidth, positions, buffers, bufferSlots),
+        excludedClasses: anyClass ? [...NON_GROUND_CLASSES] : [],
+        units: { linearUnit: 'unknown', verticalReference: 'unknown', verticalMetresPerUnit: null },
+        ...(withheldReduction ? { reduction: withheldReduction } : {}),
+      },
     };
   }
 

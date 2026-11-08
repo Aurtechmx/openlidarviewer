@@ -720,7 +720,7 @@ export function prepareWorkbenchSection(options: ComposeSectionOptions): Workben
     { label: 'Drawn', value: formatCount(indices.length) },
     { label: 'Corridor half-width', value: axisSpanCaption(section.band * scale, unit) },
     {
-      label: 'Chainage span',
+      label: 'Returns chainage span (incl. end caps)',
       value: axisSpanCaption((bounds.maxChainage - bounds.minChainage) * scale, unit),
     },
     {

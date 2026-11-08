@@ -403,7 +403,9 @@ describe('profile sheet: station data band', () => {
       }));
     expect(cells.length).toBeGreaterThan(4);
 
-    for (const c of cells) {
+    // The two end columns sit on the frame edges and set their figures
+    // inward; every other column is centred on its chainage.
+    for (const c of cells.filter((x) => x.chainage > 0 && x.chainage < length)) {
       const expected = plot.left + (c.chainage / length) * (plot.right - plot.left);
       expect(
         c.centre,
@@ -412,7 +414,7 @@ describe('profile sheet: station data band', () => {
     }
   });
 
-  it('thins dense stations and says how many it is showing', async () => {
+  it('labels round chainages and says the heights are interpolated', async () => {
     const bytes = await buildProfilePdf({
       name: 'Band thinning',
       samples: rollingSection(),
@@ -420,13 +422,10 @@ describe('profile sheet: station data band', () => {
     });
     const caption = sheetPage(bytes).drawn.find((d) => d.text.startsWith('Station data band'));
     expect(caption).toBeDefined();
-    const m = /Station data band - (\d+) of (\d+) stations shown/.exec(caption!.text);
+    const m = /Station data band - every (\d+) m and the end chainage; heights at round chainages interpolated between the (\d+) sampled stations/.exec(caption!.text);
     expect(m).not.toBeNull();
-    const shown = Number(m![1]);
-    const total = Number(m![2]);
-    expect(total).toBe(181);
-    expect(shown).toBeGreaterThan(2);
-    expect(shown).toBeLessThan(total);
+    expect(Number(m![2])).toBe(181);
+    expect([5, 10, 20, 25, 50, 100]).toContain(Number(m![1]));
   });
 
   it('takes its column x straight from the mapping it is given', () => {
@@ -555,7 +554,8 @@ describe('profile sheet: the gap colour', () => {
     // And nothing else on the sheet wears it. A schedule that painted every
     // cell would look exactly as deliberate and mean nothing.
     const wearingIt = cells.filter((c) => c.fill === GAP_FILL).map((c) => c.text);
-    expect([...new Set(wearingIt)]).toEqual(['gap']);
+    // The band marks a gap with a dash, the schedule with the word.
+    expect([...new Set(wearingIt)].sort()).toEqual(['-', 'gap']);
     // The heights that DID return are set in the ordinary ink.
     const heights = cells.filter(
       (c) => c.base.startsWith('Courier') && /^1\d\d\.\d\d$/.test(c.text),
