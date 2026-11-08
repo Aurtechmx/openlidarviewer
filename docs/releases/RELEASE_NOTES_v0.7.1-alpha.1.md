@@ -98,6 +98,8 @@ v0.6.6 remain available under MIT.
 - A restored session checks its source file and does not apply saved state to a file that has changed.
 - A new app version does not reload the page by itself while saved views or held session work are open. It asks first. A failed automatic upgrade keeps the saved offline copy, and offline, a part of the app that cannot load says so and offers no reload.
 - Make available offline saves a copy only when the index.html it fetches matches the SHA-256 recorded in the build's asset manifest and every bundle the page loads is listed there. If the site changes during a save, nothing is written, the earlier offline copy is kept, and the page says to reload and try again.
+- Every file in the offline copy is checked against the SHA-256 in the asset manifest before it is stored. A host that answers a script request with an HTML page and status 200 no longer leaves a copy that cannot start. Background refreshes of cached files use the same check.
+- Two deployments on one origin, such as `/a/` and `/b/`, keep separate offline copies. Saving or removing the copy at one path leaves the other path's copy alone.
 - The notice about unsaved work from another file has Keep for later and no longer covers an open annotation form. The session recovery notice sits beside the left rail.
 - The command palette runs the command its row shows when results from several sections are ranked together.
 - On a phone, the annotation form keeps Save in reach.
@@ -111,6 +113,7 @@ v0.6.6 remain available under MIT.
 - The build ships `PRIVACY.md`, and the third-party notices add the missing entries and test fixture licences, including the Newsreader and Figtree fonts (OFL) used by the drainage sheet.
 - `npm run dem:package -- <crop> <outdir>` writes the DEM package from a committed crop and checks it with the three Python readers.
 - The release workflow sets `SOURCE_DATE_EPOCH` to the tagged commit's time.
+- The release workflow waits for the tag's own CI run when an older run at the same commit has already failed, instead of stopping at once. A passing run is still required.
 - The DEM package carries a QGIS `.qml` style for its evidence, attention and sensitivity rasters, and its README lists every code.
 - CITATION.cff, codemeta.json and .zenodo.json carry the same metadata, and a lint checks them.
 - The method id `olv.dtm.idw-fill` is now `olv.dtm.geodesic-fill@1`. The old id still resolves, and a cached terrain core is rebuilt once.
