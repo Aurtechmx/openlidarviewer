@@ -4,7 +4,7 @@ export interface CiJob { name: string; status: string; conclusion: string | null
 export type CiState = 'ready' | 'pending' | 'failed' | 'missing';
 export function parseCiJobs(yml: string): Map<string, CiJobDef>;
 export function requiredJobNames(jobs: Map<string, CiJobDef>): string[];
-export function evaluateCiRuns(runs: CiRun[], jobsByRun: Map<number, CiJob[]>, required: string[]): { state: CiState; detail: string };
+export function evaluateCiRuns(runs: CiRun[], jobsByRun: Map<number, CiJob[]>, required: string[]): { state: CiState; detail: string; runIds: number[] };
 export const MAX_API_ATTEMPTS: number;
 export const API_RETRY_DELAY_MS: number;
 export function runsQuery(repo: string, workflow: string, sha: string): string;
@@ -13,7 +13,7 @@ export interface PollCiOptions {
   timeoutMs: number;
   intervalMs: number;
   missingGraceMs: number;
-  fetchState: () => { state: string; detail: string } | Promise<{ state: string; detail: string }>;
+  fetchState: () => { state: string; detail: string; runIds?: number[] } | Promise<{ state: string; detail: string; runIds?: number[] }>;
   maxAttempts?: number;
   retryDelayMs?: number;
   now?: () => number;
