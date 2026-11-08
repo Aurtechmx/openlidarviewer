@@ -10,7 +10,7 @@ import { PDFDocument } from 'pdf-lib';
 import type { PDFFont, PDFPage } from 'pdf-lib';
 import { embedReportFonts } from '../src/export/watershedReport/reportFonts';
 import type { ReportFonts } from '../src/export/watershedReport/reportFonts';
-import { PALETTE, newPage, heading, paragraph, table, kpiRow, chip, callout } from '../src/export/watershedReport/pageKit';
+import { PALETTE, newPage, heading, paragraph, table, kpiRow, chip, callout, fitFooter, widthOf } from '../src/export/watershedReport/pageKit';
 import type { PageCursor } from '../src/export/watershedReport/pageKit';
 
 const FONT_DIR = join(process.cwd(), 'src', 'export', 'watershedReport', 'fonts');
@@ -264,5 +264,18 @@ describe('page kit', () => {
       const best = (Math.max(fg, bg) + 0.05) / (Math.min(fg, bg) + 0.05);
       expect(best).toBeGreaterThanOrEqual(4.5);
     }
+  });
+});
+
+describe('fitFooter', () => {
+  const footer = 'SL_Spring2026_classified_projected_clipped_1 · drainage sheet';
+  it('keeps a footer that fits', () => {
+    expect(fitFooter(footer, 2000, fonts)).toBe(footer);
+  });
+  it('shortens a long title and keeps the sheet name whole', () => {
+    const room = 150;
+    const out = fitFooter(footer, room, fonts);
+    expect(out).toMatch(/^SL_Spring.*\.\.\. · drainage sheet$/);
+    expect(widthOf(out, fonts.body, 10.5, fonts)).toBeLessThanOrEqual(room + 0.5);
   });
 });
