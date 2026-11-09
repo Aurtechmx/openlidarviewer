@@ -1060,6 +1060,9 @@ export function createTerrainAnalysisRunner(
         // scan is in. A refused permit blocks every registered deliverable.
         precision: framePrecision(),
       });
+      // The frame carries the analysed basis, which grades a sampled scan's
+      // deliverables as Preview, so the story is built again on it.
+      refreshDatasetStory(analysePanel);
       // Hand the fresh result to the host AFTER the panel adopts it, so any
       // post-analysis wiring (e.g. the Viewer's coverage colour grid) sees the
       // same winning result the panel shows.
