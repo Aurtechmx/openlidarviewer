@@ -152,9 +152,37 @@ describe('pollCi', () => {
     expect(h.lines.at(-1)).toMatch(/no CI run exists/);
   });
 
-  it('a failed run fails at once', async () => {
+  it('a run that appears after the first poll and fails, fails at once', async () => {
     const h = harness();
-    expect(await pollCi({ ...base, ...h, fetchState: () => ({ state: 'failed', detail: 'x' }) })).toBe(1);
+    const script = [{ state: 'missing', detail: 'none', runIds: [] }, { state: 'failed', detail: 'x', runIds: [7] }];
+    let i = 0;
+    expect(await pollCi({ ...base, ...h, fetchState: () => script[Math.min(i++, script.length - 1)] })).toBe(1);
+    expect(i).toBe(2);
+  });
+
+  it('an older failed run at the commit waits for the tag run, which then passes', async () => {
+    const h = harness();
+    const script = [
+      { state: 'failed', detail: 'run 1 failed', runIds: [1] },
+      { state: 'pending', detail: 'run 2 started', runIds: [1, 2] },
+      { state: 'ready', detail: 'run 2 passed', runIds: [1, 2] },
+    ];
+    let i = 0;
+    expect(await pollCi({ ...base, ...h, fetchState: () => script[Math.min(i++, script.length - 1)] })).toBe(0);
+    expect(i).toBe(3);
+  });
+
+  it('an older failed run with no new run fails once the grace period ends', async () => {
+    const h = harness();
+    let calls = 0;
+    const code = await pollCi({ ...base, ...h, fetchState: () => { calls++; return { state: 'failed', detail: 'x', runIds: [1] }; } });
+    expect(code).toBe(1);
+    expect(calls).toBe(base.missingGraceMs / base.intervalMs + 1);
+    expect(h.lines.at(-1)).toMatch(/CI did not pass/);
+  });
+
+  it('evaluateCiRuns reports the run ids it saw', () => {
+    expect(evaluateCiRuns([], new Map(), ['ci-green']).runIds).toEqual([]);
   });
 });
 

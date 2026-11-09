@@ -30,6 +30,10 @@
  * A missing run is polled for the grace period only (the tag push starts CI
  * and the release workflow together, so CI may not be listed yet); a pending
  * run is polled until the timeout. Either one still unresolved then fails.
+ * A failed result is final at once only when a run that was not listed on the
+ * first poll failed; while only earlier runs are listed (an older failed
+ * branch run at the same commit), it is polled for the grace period too, so
+ * the tag's own run has time to appear. A passing run is still required.
  * A failed `gh api` call inside the loop is retried after a short wait, up to
  * MAX_API_ATTEMPTS consecutive failures, so one transient network or
  * rate-limit error does not decide the release.
@@ -116,10 +120,11 @@ function jobMatches(apiName, displayName) {
  * @param {{ id: number, status: string, conclusion: string | null, html_url?: string }[]} runs
  * @param {Map<number, { name: string, status: string, conclusion: string | null }[]>} jobsByRun
  * @param {string[]} required display names from requiredJobNames
- * @returns {{ state: 'ready' | 'pending' | 'failed' | 'missing', detail: string }}
+ * @returns {{ state: 'ready' | 'pending' | 'failed' | 'missing', detail: string, runIds: number[] }}
  */
 export function evaluateCiRuns(runs, jobsByRun, required) {
-  if (runs.length === 0) return { state: 'missing', detail: 'no CI run exists for this commit' };
+  const runIds = runs.map((r) => r.id);
+  if (runs.length === 0) return { state: 'missing', detail: 'no CI run exists for this commit', runIds };
   const problems = [];
   for (const run of runs) {
     if (run.status !== 'completed') continue;
@@ -132,13 +137,13 @@ export function evaluateCiRuns(runs, jobsByRun, required) {
         if (leg.conclusion !== 'success') bad.push(`${leg.name}: ${leg.conclusion ?? leg.status}`);
       }
     }
-    if (bad.length === 0) return { state: 'ready', detail: `CI run ${run.id} passed every required job` };
+    if (bad.length === 0) return { state: 'ready', detail: `CI run ${run.id} passed every required job`, runIds };
     problems.push(`CI run ${run.id} (${run.conclusion ?? run.status}): ${bad.join(', ')}`);
   }
   if (runs.some((r) => r.status !== 'completed')) {
-    return { state: 'pending', detail: `CI is still running for this commit${problems.length ? `; ${problems.join('; ')}` : ''}` };
+    return { state: 'pending', detail: `CI is still running for this commit${problems.length ? `; ${problems.join('; ')}` : ''}`, runIds };
   }
-  return { state: 'failed', detail: problems.join('; ') };
+  return { state: 'failed', detail: problems.join('; '), runIds };
 }
 
 function arg(argv, flag, fallback) {
@@ -210,7 +215,7 @@ async function main(argv) {
  *   timeoutMs: number,
  *   intervalMs: number,
  *   missingGraceMs: number,
- *   fetchState: () => { state: string, detail: string } | Promise<{ state: string, detail: string }>,
+ *   fetchState: () => { state: string, detail: string, runIds?: number[] } | Promise<{ state: string, detail: string, runIds?: number[] }>,
  *   maxAttempts?: number,
  *   retryDelayMs?: number,
  *   now?: () => number,
@@ -233,6 +238,8 @@ export async function pollCi(opts) {
   const started = now();
   const deadline = started + timeoutMs;
   let failures = 0;
+  /** Run ids listed on the first successful poll; null until then. */
+  let firstSeen = null;
   for (;;) {
     let result;
     try {
@@ -250,11 +257,17 @@ export async function pollCi(opts) {
       continue;
     }
     const { state, detail } = result;
+    const ids = Array.isArray(result.runIds) ? result.runIds : [];
+    if (firstSeen === null) firstSeen = new Set(ids);
     log(`${new Date(now()).toISOString()} ${state}: ${detail}`);
     if (state === 'ready') return 0;
     if (state === 'failed') {
-      error(`::error::CI did not pass for ${sha}: ${detail}`);
-      return 1;
+      const newRunFailed = ids.some((id) => !firstSeen.has(id));
+      if (newRunFailed || now() - started >= missingGraceMs) {
+        error(`::error::CI did not pass for ${sha}: ${detail}`);
+        return 1;
+      }
+      log(`only runs listed on the first poll have failed; waiting up to ${missingGraceMs / 60_000} min for a new run`);
     }
     if (state === 'missing' && now() - started >= missingGraceMs) {
       error(`::error::no CI run exists for ${sha} after ${missingGraceMs / 60_000} min`);
