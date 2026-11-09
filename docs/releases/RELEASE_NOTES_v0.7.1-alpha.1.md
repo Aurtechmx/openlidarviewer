@@ -72,6 +72,10 @@ v0.6.6 remain available under MIT.
 - The map sheet and terrain report cite the cartographic contour claim for generalised or smoothed contours, as the GeoJSON and DXF exports do.
 - The map sheet's accuracy heading reads "Internal hold-out accuracy".
 - Ground confidence is reported as two figures, for measured and for interpolated cells.
+- The random and blocked hold-out checks rebuild the surface with the void-fill method the delivered surface used. Before, an IDW surface was scored as a geodesic one.
+- The confidence curve applied to measured cells is fitted on held-out returns whose cell is measured in the delivered surface. It is a same-scan reliability, not an accuracy against surveyed ground.
+- The E57 comparison with PDAL is described as agreement on per-field quantised sums, counts, extremes and 18 positional samples, not point-for-point agreement. The test now checks the supplied E57 against the SHA-256 the reference records.
+- The validation report lists the retrospective Marsh Island and Coconino checkpoint comparisons, says they were not preregistered, and says the Coconino VVA figures assume the DTM reaches the checkpoint. No prospective field study is bundled.
 - Change detection says when it assumed the vertical unit from the horizontal unit.
 - The DEM package export no longer fails above the attention-raster sample limit. Unsampled cells are written as unresolved.
 - TPI and VRM warn when more than 10% of their cells are interpolated.
