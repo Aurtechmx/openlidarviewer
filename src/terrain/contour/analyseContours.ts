@@ -82,10 +82,7 @@ import { spatialBlockHoldout, type SpatialBlockResult } from '../validate/spatia
 import { DtmSurfaceModel } from '../validate/dtmSurfaceModel';
 import { axisGetters } from '../ground/axisGetters';
 import { checkConfidenceOrdering } from '../validate/calibrationCheck';
-import {
-  fitConfidenceCalibration,
-  applyConfidenceCalibration,
-} from '../validate/calibrateConfidence';
+import { fitConfidenceCalibration, tagDeliveredCells, applyConfidenceCalibration } from '../validate/calibrateConfidence';
 import {
   tallyDtmCellStatus,
   type CellStatusTally,
@@ -936,7 +933,7 @@ export function blockedHoldoutModelOptions(
   despikeApplied: boolean,
   params: Pick<
     TerrainCoreParams,
-    'isGeographic' | 'latitudeDeg' | 'horizontalUnitToMetres' | 'verticalUnitToMetres'
+    'isGeographic' | 'latitudeDeg' | 'horizontalUnitToMetres' | 'verticalUnitToMetres' | 'interpolation'
   >,
 ): ConstructorParameters<typeof DtmSurfaceModel>[0] {
   return {
@@ -949,6 +946,7 @@ export function blockedHoldoutModelOptions(
     },
     aggregation,
     despike: despikeApplied,
+    interpolation: params.interpolation,
     verticalUnitToMetres: params.verticalUnitToMetres,
     isGeographic: params.isGeographic,
     latitudeDeg: params.latitudeDeg,
@@ -1145,6 +1143,7 @@ export function computeTerrainCore(
     // the classification), so the RMSE isn't measuring a different surface.
     aggregation,
     despike: despikeApplied,
+    interpolation: params.interpolation,
     isGeographic: params.isGeographic,
     latitudeDeg: params.latitudeDeg,
     verticalUnitToMetres: params.verticalUnitToMetres,
@@ -1253,7 +1252,7 @@ export function computeTerrainCore(
   // than a bare heuristic. τ is the measured RMSE. When there isn't
   // enough held-out evidence the fit is not assessable and the grid is
   // left untouched — we never synthesise a calibration from noise.
-  const confidenceCalibration = fitConfidenceCalibration(validation.samples ?? [], {
+  const confidenceCalibration = fitConfidenceCalibration(tagDeliveredCells(validation.samples ?? [], dtm), {
     toleranceM: Number.isFinite(validation.rmse) && validation.rmse > 0 ? validation.rmse : null,
   });
   if (confidenceCalibration.assessable) {

@@ -21,6 +21,7 @@
 
 import { describe, it, expect, beforeAll } from 'vitest';
 import { analyseContours } from '../src/terrain/contour/analyseContours';
+import { terrainAssessment } from '../src/terrain/contour/terrainAssessment';
 import { NOT_SURVEY_GRADE_NOTE } from '../src/terrain/export/exportNotes';
 import type { TerrainPoint } from '../src/terrain/TerrainContracts';
 
@@ -88,7 +89,8 @@ describe('AnalysePanel — consolidated not-survey-grade banner', () => {
     });
     panel.update(result);
     const root = panel.element as unknown as FakeEl;
-    if (result.quality.exportReadiness === 'available' && result.dtm.coverageMode === 'full') {
+    // The panel's banners follow terrainAssessment, so branch on the same verdict.
+    if (terrainAssessment(result).exportReadiness === 'Ready' && result.dtm.coverageMode === 'full') {
       expect(root.findContaining('Preliminary DEM')).toHaveLength(0);
       expect(root.findContaining('Preview export')).toHaveLength(0);
     } else {

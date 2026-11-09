@@ -68,6 +68,8 @@ export interface HoldoutParams {
    * one the user receives rather than a despiked variant.
    */
   readonly despike?: boolean;
+  /** Void-fill method of the delivered surface, so the hold-out rebuild fills voids the same way. Omitted → the builder's default. */
+  readonly interpolation?: 'idw' | 'geodesic';
   /** Vertical axis of the source frame. Default `'z'`. */
   readonly verticalAxis?: VerticalAxis;
   /** Density (returns/cell) earning full confidence; default = scene median. */
@@ -361,6 +363,7 @@ export function holdoutValidateDtm(
   const { dtm } = buildSurfaceFromRaster(raster, {
     targetCount: params.targetCount,
     despike: params.despike,
+    interpolation: params.interpolation,
     isGeographic: params.isGeographic,
     latitudeDeg: params.latitudeDeg,
     horizontalUnitToMetres: params.horizontalUnitToMetres,
@@ -507,7 +510,7 @@ export function holdoutValidateDtm(
     zoneSq[zone].add(sq);
     zoneAbs[zone].add(abs);
     zoneCnt[zone] += 1;
-    if (samples) samples.push({ confidence: predConf, absError: abs, zone });
+    if (samples) samples.push({ confidence: predConf, absError: abs, zone, h1: getH1(p), h2: getH2(p) });
   }
 
   if (covered === 0) {

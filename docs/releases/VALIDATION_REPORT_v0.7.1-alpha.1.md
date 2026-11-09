@@ -61,8 +61,14 @@ studies is reported as not covered.
 
 ## What was not tested, and is not claimed
 
-- No held-out reference validation. No product is at E5, and no accuracy figure
-  here is an established field accuracy or a survey-grade result.
+- No prospective field validation is bundled, so no product is at E5 and no
+  accuracy figure here is an established field accuracy or a survey-grade
+  result. Two retrospective checkpoint comparisons are included in
+  `validation/terrain-field/`: Marsh Island (101 surveyed checkpoints) and
+  Coconino (58 of the 60 checkpoints inside the downloaded tiles). They were
+  found after the fact rather than preregistered. The Coconino VVA residuals
+  are conditional on the DTM reaching the checkpoint: the 2 rejected
+  checkpoints have no classified ground in their cell.
 - Flow Pulse was not compared on D8 tie order, flat resolution, flow length or
   the peak-flow estimate, and agreement on archival data is not field
   validation. Terrain Access is not validated as a safety or trafficability

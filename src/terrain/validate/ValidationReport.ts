@@ -38,11 +38,21 @@ export interface ConfidenceSample {
   /** Absolute vertical residual at that point, source linear units. */
   readonly absError: number;
   /**
-   * Whether the held-out point landed on a measured or interpolated cell.
-   * Optional (older callers omit it); the measured-vs-model reliability split
-   * uses it to keep an empirical reliability separate from model-based support.
+   * Whether the held-out point landed on a measured or interpolated cell of
+   * the TRAINING surface (built without the held-out points). Optional (older
+   * callers omit it); the measured-vs-model reliability split uses it to keep
+   * an empirical reliability separate from model-based support.
    */
   readonly zone?: SurfaceZone;
+  /** Horizontal position of the held-out point, for mapping it onto the delivered grid. */
+  readonly h1?: number;
+  readonly h2?: number;
+  /**
+   * Whether the point's cell is measured in the DELIVERED surface. Set by the
+   * terrain core before calibration; the calibration applied to measured cells
+   * is fitted on samples where this is not false.
+   */
+  readonly deliveredMeasured?: boolean;
 }
 
 /** Slope band a held-out point fell in (by local Horn slope). */

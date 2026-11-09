@@ -59,6 +59,8 @@ export interface DtmSurfaceOptions {
    * different surface. Defaults to the live builder's default (on) when omitted.
    */
   readonly despike?: boolean;
+  /** Void-fill method of the delivered surface; omitted → the builder's default. */
+  readonly interpolation?: 'idw' | 'geodesic';
   readonly targetCount?: number;
 }
 
@@ -105,6 +107,7 @@ export class DtmSurfaceModel implements SurfaceModel {
       // through so the validated grid is the delivered grid, not a despiked
       // variant of it. Omitted → undefined → the live builder's default (on).
       despike: this.opts.despike,
+      interpolation: this.opts.interpolation,
     });
     this.z = dtm.z;
     this.coverage = dtm.coverage;
