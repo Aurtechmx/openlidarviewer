@@ -268,6 +268,24 @@ function crossFitEvaluation(
   };
 }
 
+/**
+ * Tag each held-out sample by its cell in the DELIVERED grid. The curve is
+ * applied to delivered measured cells, so it is fitted on samples there.
+ * Samples without a position are returned unchanged.
+ */
+export function tagDeliveredCells(
+  samples: ReadonlyArray<ConfidenceSample>,
+  dtm: Pick<DtmGrid, 'originH1' | 'originH2' | 'cellSizeM' | 'cols' | 'rows' | 'coverage'>,
+): ConfidenceSample[] {
+  return samples.map((s) => {
+    if (s.h1 === undefined || s.h2 === undefined) return s;
+    const col = Math.floor((s.h1 - dtm.originH1) / dtm.cellSizeM);
+    const row = Math.floor((s.h2 - dtm.originH2) / dtm.cellSizeM);
+    const inside = col >= 0 && row >= 0 && col < dtm.cols && row < dtm.rows;
+    return { ...s, deliveredMeasured: inside && dtm.coverage[row * dtm.cols + col] === 2 };
+  });
+}
+
 /** Fit a calibration from held-out (confidence, error) samples on measured cells. */
 export function fitConfidenceCalibration(
   allSamples: ReadonlyArray<ConfidenceSample>,

@@ -82,10 +82,7 @@ import { spatialBlockHoldout, type SpatialBlockResult } from '../validate/spatia
 import { DtmSurfaceModel } from '../validate/dtmSurfaceModel';
 import { axisGetters } from '../ground/axisGetters';
 import { checkConfidenceOrdering } from '../validate/calibrationCheck';
-import {
-  fitConfidenceCalibration,
-  applyConfidenceCalibration,
-} from '../validate/calibrateConfidence';
+import { fitConfidenceCalibration, tagDeliveredCells, applyConfidenceCalibration } from '../validate/calibrateConfidence';
 import {
   tallyDtmCellStatus,
   type CellStatusTally,
@@ -1255,16 +1252,7 @@ export function computeTerrainCore(
   // than a bare heuristic. τ is the measured RMSE. When there isn't
   // enough held-out evidence the fit is not assessable and the grid is
   // left untouched — we never synthesise a calibration from noise.
-  // Tag each held-out sample by its cell in the DELIVERED grid: the curve is
-  // applied to delivered measured cells, so it is fitted on samples there.
-  const deliveredSamples = (validation.samples ?? []).map((s) => {
-    if (s.h1 === undefined || s.h2 === undefined) return s;
-    const col = Math.floor((s.h1 - dtm.originH1) / dtm.cellSizeM);
-    const row = Math.floor((s.h2 - dtm.originH2) / dtm.cellSizeM);
-    const inside = col >= 0 && row >= 0 && col < dtm.cols && row < dtm.rows;
-    return { ...s, deliveredMeasured: inside && dtm.coverage[row * dtm.cols + col] === 2 };
-  });
-  const confidenceCalibration = fitConfidenceCalibration(deliveredSamples, {
+  const confidenceCalibration = fitConfidenceCalibration(tagDeliveredCells(validation.samples ?? [], dtm), {
     toleranceM: Number.isFinite(validation.rmse) && validation.rmse > 0 ? validation.rmse : null,
   });
   if (confidenceCalibration.assessable) {
