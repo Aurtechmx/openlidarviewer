@@ -50,6 +50,16 @@ describe('the runner mounts the Dataset Story on the panel', { timeout: INSTRUME
     expect(card.textContent).toContain('Aerial / airborne ALS');
   });
 
+  it('builds the story again after the frame lands, so the analysed basis grades it', async () => {
+    const framesSeen: number[] = [];
+    const frameCount = { read: () => 0 };
+    const h = terrainRunnerHarness({ buildStoryInputs: () => { framesSeen.push(frameCount.read()); return INPUTS; } });
+    frameCount.read = () => h.frames.length;
+    await h.runner.run();
+    expect(h.frames.length).toBeGreaterThanOrEqual(1);
+    expect(framesSeen.at(-1)).toBe(h.frames.length);
+  });
+
   it('a host that wires no builder gets no story and no failure', async () => {
     const h = terrainRunnerHarness();
     await h.runner.run();
