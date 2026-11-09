@@ -452,7 +452,7 @@ export function buildDrainageSheetModel(result: FlowPulseResult, options: FlowDr
       }),
       note: all.length === 0
         ? 'No depressions were catalogued.'
-        : `${shown.length} of ${all.length} shown, largest first.${elevationOrigin == null ? ' Outlet elevations are in the load-time recentred frame.' : ''}${conditioning === 'raw' ? ' Raw mode records no fill depth or outlet elevation.' : ''}`,
+        : `${shown.length} of ${all.length.toLocaleString('en-US')} depressions shown, largest first.${elevationOrigin == null ? ' Outlet elevations are in the load-time recentred frame.' : ''}${conditioning === 'raw' ? ' Raw mode records no fill depth or outlet elevation.' : ''}`,
     };
   }
 

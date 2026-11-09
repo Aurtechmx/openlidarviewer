@@ -60,6 +60,11 @@ describe('watershed catalog', () => {
     expect(() => t('en', 'checkOnSite.body', {})).toThrow();
   });
 
+  it('counts the small watersheds on the cover beside the large ones', () => {
+    expect(t('en', 'cover.counts', { watersheds: 20, share: 1, minor: 132, catchments: 0 }))
+      .toBe('Watersheds over 1 % of the area: 20; smaller: 132 · studied catchments: 0');
+  });
+
   it('labels the verdicts', () => {
     expect([t('en', 'verdict.supported'), t('en', 'verdict.limited'), t('en', 'verdict.not-supported')])
       .toEqual(['Supported', 'Limited', 'Not supported']);
