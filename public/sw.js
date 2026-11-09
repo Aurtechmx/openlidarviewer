@@ -16,12 +16,20 @@
  *     when offline (keeps a fresh index online; avoids the stale-hash white
  *     screen a precached HTML entry would cause).
  *   - same-origin GET assets → cache-first with a background refresh; the
- *     /assets/* files are content-hashed and immutable, so this is safe.
+ *     /assets/* files are content-hashed and immutable, so this is safe. A
+ *     refreshed file is stored only when its type and, once an offline copy
+ *     exists, its SHA-256 match the build it belongs to.
  *   - full build copy        → only on request ("Make available offline"),
- *     into its own cache; install caches just the fixed shell.
+ *     into its own cache; install caches just the fixed shell. Every file is
+ *     checked against the SHA-256 in sw-precache.json before it is stored.
+ *
+ * Several deployments can share one origin (/a/ and /b/). Every cache name
+ * carries this worker's scope, and a worker reads, refreshes and deletes only
+ * its own scope's caches, so one deployment cannot replace or remove another's
+ * offline copy.
  */
 
-// Bump on every release: `activate` prunes any OLV cache whose name !== VERSION,
+// Bump on every release: `activate` prunes this scope's OLV caches of other versions,
 // so changing the name is what drops the previous release's cached bundles.
 // Tied to the app version so a tagged release prunes automatically. The
 // `olv-shell-` prefix is load-bearing: CacheStorage is ORIGIN-wide, not scoped
@@ -51,17 +59,48 @@ const SHELL = [
 // persisted opt-in: a worker cannot read the page's localStorage, so an
 // updated worker re-precaches on activate when any OLV offline cache exists.
 const OFFLINE_SUFFIX = '-offline';
-const OFFLINE_CACHE = VERSION + OFFLINE_SUFFIX;
+// Cache names end with '@' and the scope path: 'olv-shell-0.7.1@/a/' and
+// 'olv-shell-0.7.1@/a/-offline'. Names without '@' come from workers before
+// this scheme; any scope may read them as a fallback and retire them.
+const SCOPE_TAG = '@' + scopeRoot();
+const SHELL_CACHE = VERSION + SCOPE_TAG;
+const OFFLINE_CACHE = SHELL_CACHE + OFFLINE_SUFFIX;
+// The manifest of the committed offline copy, stored beside it. Its digests
+// check background refreshes of the same files.
+const SAVED_MANIFEST = './sw-precache.json';
 
-function isOfflineCache(k) {
-  return k.startsWith(CACHE_PREFIX) && k.endsWith(OFFLINE_SUFFIX);
+/** Whether cache `k` belongs to this worker's scope (or predates scoped names). */
+function isOwnCache(k) {
+  if (!k.startsWith(CACHE_PREFIX)) return false;
+  const base = k.endsWith(OFFLINE_SUFFIX) ? k.slice(0, -OFFLINE_SUFFIX.length) : k;
+  return base.endsWith(SCOPE_TAG) || !base.includes('@');
 }
 
-/** Manifest entries as {url, bytes}; accepts the older plain-string form. */
+function isOfflineCache(k) {
+  return isOwnCache(k) && k.endsWith(OFFLINE_SUFFIX);
+}
+
+/** Manifest entries as {url, bytes, sha256}; accepts the older plain-string form. */
 function manifestEntries(m) {
   return (m && Array.isArray(m.assets) ? m.assets : [])
     .map((a) => (typeof a === 'string' ? { url: a, bytes: 0 } : a))
     .filter((a) => a && typeof a.url === 'string' && HASHED_APP_ASSET.test(a.url));
+}
+
+/** The MIME types a browser accepts for each bundle type; anything else (an HTML fallback page) is refused. */
+function typeFits(url, contentType) {
+  const type = (contentType || '').split(';')[0].trim().toLowerCase();
+  const path = new URL(url, self.location.href).pathname.toLowerCase();
+  if (/\.m?js$/.test(path)) return /^(?:text|application)\/(?:x-)?(?:javascript|ecmascript)$/.test(type);
+  if (path.endsWith('.css')) return type === 'text/css';
+  if (path.endsWith('.wasm')) return type === 'application/wasm' || type === 'application/octet-stream';
+  if (/\.woff2?$/.test(path)) return /^(?:font\/|application\/(?:font-|x-font-|octet-stream))/.test(type);
+  return false;
+}
+
+/** A plain, same-origin 200 response for the file itself, not a redirect or error page. */
+function plainOk(res) {
+  return !!res && res.status === 200 && !res.redirected && (res.type === undefined || res.type === 'basic' || res.type === 'default');
 }
 
 /**
@@ -72,7 +111,7 @@ function manifestEntries(m) {
  * `onProgress(done, total)` reports after every file.
  */
 function deleteObsoleteCaches(keys) {
-  return Promise.all(keys.filter((k) => k.startsWith(CACHE_PREFIX) && k !== VERSION && k !== OFFLINE_CACHE)
+  return Promise.all(keys.filter((k) => isOwnCache(k) && k !== SHELL_CACHE && k !== OFFLINE_CACHE)
     .map((k) => caches.delete(k)));
 }
 
@@ -84,22 +123,72 @@ function changeOffline(work) {
   return next;
 }
 
+/** A save refused because the page and the manifest come from different builds. */
+class BuildMismatch extends Error {}
+
+function hex(buffer) {
+  return [...new Uint8Array(buffer)].map((b) => b.toString(16).padStart(2, '0')).join('');
+}
+
+/**
+ * Fetch index.html once and check it belongs to the build the manifest
+ * describes: its SHA-256 must equal `m.index.sha256`, and every assets/ file it
+ * references must be listed. The deploy can change between the manifest
+ * request and this one; a mismatch must not be saved. Resolves to the verified
+ * bytes and headers, which are the ones stored.
+ */
+async function verifiedIndex(m, entries) {
+  const expected = m && m.index && typeof m.index.sha256 === 'string' ? m.index.sha256.toLowerCase() : null;
+  if (!expected) throw new BuildMismatch('manifest has no index digest');
+  const res = await fetch('./index.html', { cache: 'no-store' });
+  if (!res.ok || res.redirected) throw new Error('index ' + res.status);
+  const body = await res.arrayBuffer();
+  if (hex(await crypto.subtle.digest('SHA-256', body)) !== expected) throw new BuildMismatch('index digest');
+  const listed = new Set(entries.map((a) => new URL(a.url, self.location.href).href));
+  const html = new TextDecoder().decode(body);
+  for (const ref of html.matchAll(/\b(?:src|href)\s*=\s*["']([^"']*assets\/[^"']+)["']/gi)) {
+    const url = new URL(ref[1], self.location.href);
+    if (url.origin === self.location.origin && !listed.has(url.href)) throw new BuildMismatch('unlisted ' + url.pathname);
+  }
+  return { body, headers: res.headers };
+}
+
+/**
+ * Fetch one listed bundle and check its bytes against the manifest. Resolves
+ * to a Response holding exactly the verified bytes; rejects on a redirect, a
+ * non-200 status, a wrong content type or a digest mismatch, so a host's HTML
+ * fallback page is never stored in place of a script.
+ */
+async function verifiedAsset(a) {
+  const want = typeof a.sha256 === 'string' ? a.sha256.toLowerCase() : null;
+  if (!want) throw new BuildMismatch('no digest for ' + a.url);
+  const res = await fetch(a.url, { cache: 'no-store' });
+  if (!plainOk(res) || !typeFits(a.url, res.headers.get('content-type'))) throw new Error('asset ' + res.status);
+  const body = await res.arrayBuffer();
+  if (hex(await crypto.subtle.digest('SHA-256', body)) !== want) throw new Error('asset digest');
+  return new Response(body, { status: 200, headers: res.headers });
+}
+
 // CacheStorage has no rename. The saved index is the commit record: publish
 // it only after all its bundles exist, then retire the preceding snapshot.
+// The index is verified against the manifest before any file is written, so
+// a refused save leaves the previous copy exactly as it was.
 function precacheBuild(onProgress) {
   const report = typeof onProgress === 'function' ? onProgress : () => {};
   return fetch('./sw-precache.json', { cache: 'no-store' })
     .then((res) => (res.ok ? res.json() : Promise.reject(new Error('manifest ' + res.status))))
-    .then((m) =>
-      caches.open(OFFLINE_CACHE).then((cache) => {
-        const entries = manifestEntries(m);
+    .then(async (m) => {
+      const entries = manifestEntries(m);
+      if (!entries.length) throw new Error('Empty offline manifest');
+      if (entries.some((a) => typeof a.sha256 !== 'string')) throw new BuildMismatch('manifest has no asset digests');
+      const index = await verifiedIndex(m, entries);
+      return caches.open(OFFLINE_CACHE).then((cache) => {
         const total = entries.length;
-        if (!total) throw new Error('Empty offline manifest');
         let done = 0;
         let failed = 0;
         const addOne = (a) =>
-          cache
-            .add(a.url)
+          verifiedAsset(a)
+            .then((res) => cache.put(a.url, res))
             .catch(() => {
               failed += 1;
             })
@@ -109,14 +198,16 @@ function precacheBuild(onProgress) {
             });
         return Promise.all(entries.map(addOne)).then(async () => {
           if (!failed) {
-            await cache.add('./index.html');
-            await pruneCache(cache, [...entries, { url: './index.html' }]);
+            await cache.put(SAVED_MANIFEST, new Response(JSON.stringify(m), { headers: { 'content-type': 'application/json' } }));
+            await cache.put('./index.html', new Response(index.body, { status: 200, headers: index.headers }));
+            await pruneCache(cache, [...entries, { url: './index.html' }, { url: SAVED_MANIFEST }]);
+            savedDigests = null;
             await deleteObsoleteCaches(await caches.keys());
           }
           return { total, failed };
         });
-      }),
-    );
+      });
+    });
 }
 
 /** Delete every entry of `cache` that the manifest `entries` no longer lists. */
@@ -129,7 +220,7 @@ self.addEventListener('install', (event) => {
   // Cache only the fixed shell; activate immediately so offline works next load.
   event.waitUntil(
     caches
-      .open(VERSION)
+      .open(SHELL_CACHE)
       .then((cache) => cache.addAll(SHELL))
       .then(() => self.skipWaiting())
       .catch(() => {
@@ -165,12 +256,13 @@ self.addEventListener('message', (event) => {
   if (data.type === 'olv-offline-save') {
     const work = changeOffline(() => precacheBuild((done, total) => port.postMessage({ type: 'progress', done, total })))
       .then((r) => port.postMessage({ type: 'done', total: r.total, failed: r.failed }))
-      .catch(() => port.postMessage({ type: 'error' }));
+      .catch((err) => port.postMessage(err instanceof BuildMismatch ? { type: 'error', reason: 'build-mismatch' } : { type: 'error' }));
     if (event.waitUntil) event.waitUntil(work);
   } else if (data.type === 'olv-offline-remove') {
     const work = changeOffline(async () => {
       await deleteObsoleteCaches(await caches.keys());
       await caches.delete(OFFLINE_CACHE);
+      savedDigests = null;
     })
       .then(() => port.postMessage({ type: 'removed' }))
       .catch(() => port.postMessage({ type: 'error' }));
@@ -245,8 +337,51 @@ async function offlineShell() {
       if (legacy) return legacy;
     }
   }
-  const shell = await caches.open(VERSION);
+  const shell = await caches.open(SHELL_CACHE);
   return (await shell.match('./index.html')) || shell.match('./');
+}
+
+/**
+ * Look `req` up in this scope's caches only: the current offline copy first,
+ * then earlier offline copies (a failed upgrade keeps serving the old build),
+ * then the shell. caches.match() would search every cache on the origin,
+ * including another deployment's.
+ */
+async function matchOwn(req) {
+  const keys = (await caches.keys()).filter(isOwnCache);
+  const rank = (k) => (k === OFFLINE_CACHE ? 0 : k.endsWith(OFFLINE_SUFFIX) ? 1 : k === SHELL_CACHE ? 2 : 3);
+  for (const k of keys.sort((a, b) => rank(a) - rank(b))) {
+    const hit = await (await caches.open(k)).match(req, { ignoreVary: true });
+    if (hit) return hit;
+  }
+  return undefined;
+}
+
+// url -> sha256 of the committed offline copy; null until read, reset on save/remove.
+let savedDigests = null;
+function digestsForRefresh() {
+  if (!savedDigests) {
+    savedDigests = (async () => {
+      const map = new Map();
+      if (!(await caches.keys()).includes(OFFLINE_CACHE)) return map;
+      const res = await (await caches.open(OFFLINE_CACHE)).match(SAVED_MANIFEST);
+      if (!res) return map;
+      for (const a of manifestEntries(await res.json())) {
+        if (typeof a.sha256 === 'string') map.set(new URL(a.url, self.location.href).href, a.sha256.toLowerCase());
+      }
+      return map;
+    })().catch(() => new Map());
+  }
+  return savedDigests;
+}
+
+/** Store a background refresh only when it is the file the build describes. */
+async function storeRefresh(req, res) {
+  if (!plainOk(res) || !typeFits(req.url, res.headers.get('content-type'))) return;
+  const body = await res.arrayBuffer();
+  const want = (await digestsForRefresh()).get(new URL(req.url).href);
+  if (want && hex(await crypto.subtle.digest('SHA-256', body)) !== want) return;
+  await (await caches.open(SHELL_CACHE)).put(req, new Response(body, { status: 200, headers: res.headers }));
 }
 
 self.addEventListener('fetch', (event) => {
@@ -282,7 +417,7 @@ self.addEventListener('fetch', (event) => {
           // offline fallback would serve a non-app document as the app.
           if (res.ok && !res.redirected && isShellNavigation(url)) {
             const copy = res.clone();
-            caches.open(VERSION).then((c) => c.put('./index.html', copy)).catch(() => {});
+            caches.open(SHELL_CACHE).then((c) => c.put('./index.html', copy)).catch(() => {});
           }
           return res;
         })
@@ -300,12 +435,12 @@ self.addEventListener('fetch', (event) => {
   // `Vary: Origin` would otherwise miss the precached copy for a module script
   // request (which carries Origin) and fail the load offline.
   event.respondWith(
-    caches.match(req, { ignoreVary: true }).then((cached) => {
+    matchOwn(req).then((cached) => {
       const network = fetch(req)
         .then((res) => {
-          if (res && res.status === 200 && res.type === 'basic') {
-            const copy = res.clone();
-            caches.open(VERSION).then((c) => c.put(req, copy)).catch(() => {});
+          if (res && res.status === 200) {
+            const stored = storeRefresh(req, res.clone()).catch(() => {});
+            if (event.waitUntil) event.waitUntil(stored);
           }
           return res;
         })

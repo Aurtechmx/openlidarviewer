@@ -50,7 +50,8 @@ describe('service worker activate cleanup is scoped to OLV caches', () => {
     const { listeners, remaining } = evalSw([
       'olv-shell-0.6.5', // stale OLV → delete
       'olv-shell-0.6.6', // previous OLV release → delete
-      CURRENT!, // current (matches VERSION) → keep
+      `${CURRENT!}@/`, // current release in this scope → keep
+      `${CURRENT!}@/other/`, // another deployment on this origin → MUST survive
       'my-other-app-v3', // a co-hosted PWA on the same origin → MUST survive
       'workbox-precache-v2', // another library's cache → MUST survive
     ]);
@@ -59,7 +60,8 @@ describe('service worker activate cleanup is scoped to OLV caches', () => {
     await done;
     expect(remaining.has('olv-shell-0.6.5')).toBe(false); // pruned
     expect(remaining.has('olv-shell-0.6.6')).toBe(false); // pruned (previous release)
-    expect(remaining.has(CURRENT!)).toBe(true); // kept (current)
+    expect(remaining.has(`${CURRENT!}@/`)).toBe(true); // kept (current)
+    expect(remaining.has(`${CURRENT!}@/other/`)).toBe(true); // another deployment's cache
     expect(remaining.has('my-other-app-v3')).toBe(true); // untouched
     expect(remaining.has('workbox-precache-v2')).toBe(true); // untouched
   });
