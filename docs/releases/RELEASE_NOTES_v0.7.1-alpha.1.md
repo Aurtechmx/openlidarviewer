@@ -1,13 +1,13 @@
 # OpenLiDARViewer v0.7.1-alpha.1
 
 This is an alpha on the way to v0.7.1. It has no tag, no DOI and no
-publication date, and the walkthrough of every workflow on a real scan in the
-packaged build has not been done. The published release is v0.7.0, and its
+publication date. The workflows were walked through on a real scan in the
+packaged build of commit `f11abebc1`. The published release is v0.7.0, and its
 record, [RELEASE_NOTES_v0.7.0.md](RELEASE_NOTES_v0.7.0.md), does not change.
 
 These notes list what changed since v0.7.0 (tag `v0.7.0`). Volumes and terrain
-outputs now state only the evidence that covers them, figures on a sampled load
-say so, scenes clean up after close and replace, exports name the scan they
+outputs now state only the evidence that covers them, figures and deliverables
+from a sampled load say so, Flow Pulse exports a drainage sheet PDF, scenes clean up after close and replace, exports name the scan they
 were measured on, startup and large loads are faster, and the file loaders
 handle more malformed input. The license is AGPL-3.0-only; releases through
 v0.6.6 remain available under MIT.
@@ -30,6 +30,8 @@ v0.6.6 remain available under MIT.
 - The Technical Report has a Terrain analysis section and states the same analysed basis as the map sheet. The terrain verdict names the unclassified share instead of saying the points are not classified to ground.
 - The Dataset Story names the bounding box as a bounding box, and the Scan Report's Classification line updates after every class edit.
 - The DTM evidence rule converts the run's cell size to metres before judging the studied range, so a scan in feet is read correctly, and a sampled run's ground density is stated without a QL grade. After a layer becomes active, the point-count detail shows the file's count.
+- On a sampled scan, the DEM, contour, map sheet and other terrain products read Preview, and their workflow rows name the sample as the reason. Best for no longer lists those products. A full read is unchanged.
+- The terrain report, structured exports and analysis records do not state export readiness when the analysis read a sample. Terrain exports and labels say when a fully loaded scan was analysed from a sample.
 
 ## Scans and layers
 
@@ -59,6 +61,9 @@ v0.6.6 remain available under MIT.
 - The result card's Delete deletes through the measurement controller, so it works before the Measurements panel has loaded. The stockpile toast shows five significant figures, and a volume chain with no measured volume states a member's own reason, blaming a clip region only when no member gives one.
 - The Profile Workbench always opens showing the section. Once it had been collapsed, with its button or with Escape, every later open showed only its header strip until Expand was pressed.
 - A profile's PDF, station CSV and workbench image name the scan the profile was measured on, in that scan's coordinate system, and are withheld with the step to take when the source cannot be settled. The Profile Workbench opens only while a scan the profile was measured on is active.
+- The profile PDF prints at standard horizontal and vertical scales, its axes contain the sampled minimum and maximum, and the scale line prints the scale that is drawn. It adds a station band at round chainages, a maximum grade over a fixed base length and the rise between the picked endpoints.
+- A profile records how it was sampled when it is committed and when it is resampled. On a streamed scan, the points note says how many loaded points were analysed. The workbench chainage span row says it includes the end caps.
+- A measurement across two scans is refused, in the live view and in the CSV and GeoJSON exports, when their horizontal grids cannot be shown to be the same.
 
 ## Terrain evidence
 
@@ -67,6 +72,10 @@ v0.6.6 remain available under MIT.
 - The map sheet and terrain report cite the cartographic contour claim for generalised or smoothed contours, as the GeoJSON and DXF exports do.
 - The map sheet's accuracy heading reads "Internal hold-out accuracy".
 - Ground confidence is reported as two figures, for measured and for interpolated cells.
+- The random and blocked hold-out checks rebuild the surface with the void-fill method the delivered surface used. Before, an IDW surface was scored as a geodesic one.
+- The confidence curve applied to measured cells is fitted on held-out returns whose cell is measured in the delivered surface. It is a same-scan reliability, not an accuracy against surveyed ground.
+- The E57 comparison with PDAL is described as agreement on per-field quantised sums, counts, extremes and 18 positional samples, not point-for-point agreement. The test now checks the supplied E57 against the SHA-256 the reference records.
+- The validation report lists the retrospective Marsh Island and Coconino checkpoint comparisons, says they were not preregistered, and says the Coconino VVA figures assume the DTM reaches the checkpoint. No prospective field study is bundled.
 - Change detection says when it assumed the vertical unit from the horizontal unit.
 - The DEM package export no longer fails above the attention-raster sample limit. Unsampled cells are written as unresolved.
 - TPI and VRM warn when more than 10% of their cells are interpolated.
@@ -90,12 +99,25 @@ v0.6.6 remain available under MIT.
 - Error messages stay up in proportion to their length, can be dismissed and link to the Session log. A failed URL open shows its reason and Retry.
 - A browser with neither WebGPU nor WebGL 2 is told so before the file is decoded.
 - Colour chips and measure buttons expose their pressed state, and measure results are announced to screen readers.
+- A restored session checks its source file and does not apply saved state to a file that has changed.
+- A new app version does not reload the page by itself while saved views or held session work are open. It asks first. A failed automatic upgrade keeps the saved offline copy, and offline, a part of the app that cannot load says so and offers no reload.
+- Make available offline saves a copy only when the index.html it fetches matches the SHA-256 recorded in the build's asset manifest and every bundle the page loads is listed there. If the site changes during a save, nothing is written, the earlier offline copy is kept, and the page says to reload and try again.
+- Every file in the offline copy is checked against the SHA-256 in the asset manifest before it is stored. A host that answers a script request with an HTML page and status 200 no longer leaves a copy that cannot start. Background refreshes of cached files use the same check.
+- Two deployments on one origin, such as `/a/` and `/b/`, keep separate offline copies. Saving or removing the copy at one path leaves the other path's copy alone.
+- The notice about unsaved work from another file has Keep for later and no longer covers an open annotation form. The session recovery notice sits beside the left rail.
+- The command palette runs the command its row shows when results from several sections are ranked together.
+- On a phone, the annotation form keeps Save in reach.
+- Frame all and the camera presets are recorded from the dock, the navigation bar, ViewCube Home, the keys and the canvas menu, and the recorder lists what it records.
+- L, the camera view keys, Save session and the snapshot key say "Open a scan first" before the viewer has loaded.
+- Starting a tool keeps the highlight of a finished lasso result. Undo after deleting a profile brings back the reason it has no chart. A COPC URL that cannot be reached also suggests downloading the file and using Open scan.
 
 ## Reproducibility
 
 - The release gate runs from a source archive and records `source: "archive"`. REPRODUCIBILITY.md gives the command.
+- The build ships `PRIVACY.md`, and the third-party notices add the missing entries and test fixture licences, including the Newsreader and Figtree fonts (OFL) used by the drainage sheet.
 - `npm run dem:package -- <crop> <outdir>` writes the DEM package from a committed crop and checks it with the three Python readers.
 - The release workflow sets `SOURCE_DATE_EPOCH` to the tagged commit's time.
+- The release workflow waits for the tag's own CI run when an older run at the same commit has already failed, instead of stopping at once. A passing run is still required.
 - The DEM package carries a QGIS `.qml` style for its evidence, attention and sensitivity rasters, and its README lists every code.
 - CITATION.cff, codemeta.json and .zenodo.json carry the same metadata, and a lint checks them.
 - The method id `olv.dtm.idw-fill` is now `olv.dtm.geodesic-fill@1`. The old id still resolves, and a cached terrain core is rebuilt once.
@@ -106,6 +128,9 @@ v0.6.6 remain available under MIT.
 - TERRAIN-FLOW-DEPRESSION-INVENTORY moves from E2 to E3, from TauDEM's filled depressions and a synthetic suite with hand-derived values.
 - Six RichDEM test grids agree with Flow Pulse as corroboration. No level changes from them.
 - D8 tie order, flat resolution, flow length and the peak-flow estimate were not compared. Agreement on archival data is not field validation.
+- Flow Pulse exports a drainage sheet PDF next to Drainage in 3D. A dialog chooses its sections: drainage map, hydrology summary, traced path and catchment, and depression table. The sheet has a cover page, a site map with labelled catchments, catchment pages and an appendix of definitions and sources. Every page is marked PREVIEW, and a long scan name is shortened so the footer stays clear of that label.
+- The cover of the drainage and watershed sheets gives two watershed counts: those over 1 % of the area and the smaller ones. It used to give only the first, which did not match the outlet count on the other pages. The depression table note reads, for example, "25 of 1,464 depressions shown".
+- Flow Pulse and Terrain Access packages write a `.prj` beside their placed rasters when the scan has an EPSG code but no WKT, and their READMEs say the `.prj` carries the source CRS definition.
 
 ## Format robustness
 
@@ -129,6 +154,8 @@ The scan report has a "Storage history" row for LAS and LAZ files opened from di
 - A bound CRS takes its unit from its source CRS. Two custom coordinate systems with the same name are compared on their definition. Trailing NUL characters in a CRS text no longer slow the comparison.
 - A saved session keeps the catalogue name behind an asserted CRS, and an export with an assigned CRS records the assignment in the file.
 - `PROJECTEDCRS` and `GEOGRAPHICCRS` are read as WKT2 keywords. The change-detection frame check compares two same-name custom CRSs on their definition, as the layer check does. `base_level` in the measurement CSV and GeoJSON is read along the scan's up axis. The session-saved toast counts what the file holds and says what was left out.
+- Rasters in a DEM package get a `.prj` from the stored definition of their EPSG code.
+- The LAS 1.4 export records the CRS as OGC WKT, built from the EPSG code when the source has none, or refuses the export. The panel no longer says the CRS is stored as GeoTIFF keys.
 
 ## Evidence tooling
 
