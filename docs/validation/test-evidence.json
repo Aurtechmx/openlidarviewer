@@ -1,7 +1,7 @@
 {
   "schemaVersion": 3,
   "project": "openlidarviewer",
-  "version": "0.7.1-alpha.1",
+  "version": "0.7.1",
   "releaseChannel": "development",
   "releaseAuthoritative": false,
   "tag": null,
@@ -91,8 +91,8 @@
   "sbom": {
     "sha256": "42e7bbd9a233683d1d1d8936647b04e4bc12653a83155100a1a425ca7f727b04",
     "rootName": "openlidarviewer",
-    "rootVersion": "0.7.1-alpha.1",
-    "bomRef": "openlidarviewer@0.7.1-alpha.1",
+    "rootVersion": "0.7.1",
+    "bomRef": "openlidarviewer@0.7.1",
     "components": 37
   },
   "science": {

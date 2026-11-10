@@ -4,11 +4,11 @@ The format is based on Keep a Changelog and the project follows Semantic Version
 
 ## [Unreleased]
 
-## [0.7.1-alpha.1] - 2026-11-09
+## [0.7.1] - 2026-11-09
 
-An alpha on the way to v0.7.1. It has no tag and no DOI, and its test figures
-are not release-authoritative. The workflows were walked through on a real scan in the
-packaged build of commit `f11abebc1`. v0.7.0 is the current published release.
+The walkthrough of every workflow in the packaged build was done on the public
+Virginia Tech StREAM Lab Spring 2026 drone lidar scans (OpenTopography,
+https://doi.org/10.5069/G9NZ85W7).
 
 ### Added
 

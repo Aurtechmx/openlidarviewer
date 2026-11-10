@@ -1,8 +1,10 @@
-# OpenLiDARViewer v0.7.1-alpha.1
+# OpenLiDARViewer v0.7.1
 
-This is an alpha on the way to v0.7.1. It has no tag and no DOI. The workflows were walked through on a real scan in the
-packaged build of commit `f11abebc1`. The published release is v0.7.0, and its
-record, [RELEASE_NOTES_v0.7.0.md](RELEASE_NOTES_v0.7.0.md), does not change.
+The walkthrough of every workflow in the packaged build was done on the public
+Virginia Tech StREAM Lab Spring 2026 drone lidar scans (OpenTopography,
+https://doi.org/10.5069/G9NZ85W7).
+The v0.7.0 record, [RELEASE_NOTES_v0.7.0.md](RELEASE_NOTES_v0.7.0.md), does not
+change.
 
 These notes list what changed since v0.7.0 (tag `v0.7.0`). Volumes and terrain
 outputs now state only the evidence that covers them, figures and deliverables
@@ -182,4 +184,4 @@ The register holds 41 claims, 18 of them at E4 and none at E5. Since v0.7.0, MEA
 
 ## Known limits
 
-[KNOWN_LIMITATIONS_v0.7.1-alpha.1.md](KNOWN_LIMITATIONS_v0.7.1-alpha.1.md) lists the limits of this build. The validation record is [VALIDATION_REPORT_v0.7.1-alpha.1.md](VALIDATION_REPORT_v0.7.1-alpha.1.md), and the dated history is in [CHANGELOG.md](../../CHANGELOG.md).
+[KNOWN_LIMITATIONS_v0.7.1.md](KNOWN_LIMITATIONS_v0.7.1.md) lists the limits of this build. The validation record is [VALIDATION_REPORT_v0.7.1.md](VALIDATION_REPORT_v0.7.1.md), and the dated history is in [CHANGELOG.md](../../CHANGELOG.md).
