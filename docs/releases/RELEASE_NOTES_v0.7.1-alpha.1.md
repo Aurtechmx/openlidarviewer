@@ -1,7 +1,6 @@
 # OpenLiDARViewer v0.7.1-alpha.1
 
-This is an alpha on the way to v0.7.1. It has no tag, no DOI and no
-publication date. The workflows were walked through on a real scan in the
+This is an alpha on the way to v0.7.1. It has no tag and no DOI. The workflows were walked through on a real scan in the
 packaged build of commit `f11abebc1`. The published release is v0.7.0, and its
 record, [RELEASE_NOTES_v0.7.0.md](RELEASE_NOTES_v0.7.0.md), does not change.
 

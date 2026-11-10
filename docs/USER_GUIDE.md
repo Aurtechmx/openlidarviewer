@@ -89,7 +89,7 @@ The view cube in the top-right corner of the scan turns with the camera. Click o
 
 Keyboard and mouse. Press `?` any time for the full shortcut sheet. The ones worth knowing up front: `Cmd-K` (or `Ctrl-K`) opens a command palette that searches every tool and action, `Ctrl/Cmd-Z` undoes your last edit, right-clicking the scan opens a quick menu (focus here, frame, standard views), and holding `Space` while a tool is active lets you move the camera without putting the tool down. The full list is in [docs/navigation.md](navigation.md).
 
-To use the viewer with no connection, run Make available offline from the command palette or Help. It downloads the app files once (the exact size is shown before it starts), and Remove offline copy deletes them.
+To use the viewer with no connection, run Make available offline from the command palette or Help. It downloads the app files once (the exact size is shown before it starts), and Remove offline copy deletes them. Each file is checked against the SHA-256 recorded in the build before it is stored, so a failed check keeps the earlier offline copy. Two copies of the app on one site, such as `/a/` and `/b/`, keep separate offline copies.
 
 ---
 
@@ -121,7 +121,7 @@ Open the Tools tab and start Measure, or press M. A toolbar appears over the vie
 - Height: vertical difference between a pair of points
 - Angle: the angle at a corner
 - Slope: rise, run, angle, and grade percent
-- Profile: a cross-section between a pair of points, with a height chart. Its Endpoint gradient is the net change between the first and last stations that have data, and it says how many stations between them are missing, for example "5.00% (spans 1 missing station)"
+- Profile: a cross-section between a pair of points, with a height chart. Its Endpoint gradient is the net change between the first and last stations that have data, and it says how many stations between them are missing, for example "5.00% (spans 1 missing station)". Its PDF prints at standard horizontal and vertical scales, with a station band at round chainages and the maximum grade over a fixed base length.
 - Box: two opposite corners, reported as width, depth, height and volume
 - Volume: cut and fill against a base level, from a polygon or a lasso. For a polygon the base level is the median of the outline's vertex heights. The row shows it under the result (marked local when the scan has no datum), Copy result and the PDF report carry it, and the measurement CSV and GeoJSON write it as `base_level`
 
@@ -182,6 +182,8 @@ The blocked hold-out RMSE comes with a 95% confidence interval when two or more 
 - Contour vectors: GeoJSON in the scan's own coordinates, GeoJSON in WGS 84, DXF, or SVG
 - Export Contours: a printable map sheet, where you also pick the contour interval from the ones this surface supports
 - Intelligence report (PDF): the assessment, coverage, accuracy figures and warnings in one sheet
+- Drainage sheet (PDF), from Flow Pulse next to Drainage in 3D: a dialog picks the sections (drainage map, hydrology summary, traced path and catchment, depression table). The sheet has a cover page, a site map with labelled catchments, catchment pages and an appendix of definitions and sources. Every page is marked PREVIEW.
+- Flow Pulse and Terrain Access packages (ZIP): when the scan has an EPSG code but no WKT, each placed raster gets a `.prj` with the source coordinate system, and the README says so.
 
 Once a run exists, the Export tab's Products list also offers DEM package (ZIP) and Contour map sheet (PDF). They run the same exports as the Analyse buttons. The map sheet button opens the map sheet dialog. If the sheet is refused, the dialog stays open and says why. A button that cannot run is disabled and shows the reason on hover, for example "No contours at this interval to export." or that the analysis belongs to a different scan.
 

@@ -1,7 +1,6 @@
 # Reproducibility: OpenLiDARViewer 0.7.1-alpha.1
 
-**This is a development cut on the way to v0.7.1.** It has no tag, no DOI
-and no publication date. It starts as a copy of the v0.7.0 document and
+**This is a development cut on the way to v0.7.1.** It has no tag and no DOI. It starts as a copy of the v0.7.0 document and
 carries the figures of the current source; the published record of v0.7.0 is
 [REPRODUCIBILITY_v0.7.0.md](REPRODUCIBILITY_v0.7.0.md) and does not change.
 

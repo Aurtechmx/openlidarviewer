@@ -6,9 +6,9 @@ The format is based on Keep a Changelog and the project follows Semantic Version
 
 ## [0.7.1-alpha.1] - 2026-11-09
 
-An alpha on the way to v0.7.1. It has no tag and no DOI, its test figures are
-not release-authoritative, and the real-scan walkthrough in the packaged build
-has not been done. v0.7.0 is the current published release.
+An alpha on the way to v0.7.1. It has no tag and no DOI, and its test figures
+are not release-authoritative. The workflows were walked through on a real scan in the
+packaged build of commit `f11abebc1`. v0.7.0 is the current published release.
 
 ### Added
 
