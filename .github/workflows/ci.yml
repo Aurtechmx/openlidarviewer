@@ -34,8 +34,16 @@ jobs:
       # against npm's published keys, so a tarball that was altered after
       # publication, or served from somewhere other than the registry it names,
       # fails here. Needs the installed tree, so it follows `npm ci`.
+      # Up to three attempts, 20 s apart: a missing registry key response
+      # (EMISSINGSIGNATUREKEY) is retried, and three failures still fail the job.
       - name: Registry signatures verify
-        run: npm audit signatures
+        run: |
+          for attempt in 1 2 3; do
+            npm audit signatures && exit 0
+            echo "npm audit signatures failed (attempt $attempt of 3)"
+            [ "$attempt" -lt 3 ] && sleep 20
+          done
+          exit 1
       # `npm ci` must not rewrite the lockfile. If it does, the resolved tree
       # is not the one the SBOM, the audit, and the evidence describe.
       - name: Lockfile is unchanged by a clean install
