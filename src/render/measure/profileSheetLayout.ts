@@ -522,6 +522,8 @@ export interface RoundBandRequest {
 export interface RoundBandLayout extends StationBandLayout {
   /** The round interval, display units. */
   readonly interval: number;
+  /** Round chainages left out because they sat within a column and a half of an end. */
+  readonly omitted: number;
 }
 
 /**
@@ -536,7 +538,7 @@ export function buildRoundChainageBand(req: RoundBandRequest): RoundBandLayout {
   const { lengthM, k, mapX } = req;
   const sampled = req.stations.filter((s) => Number.isFinite(s.chainage));
   if (!(lengthM > 0) || sampled.length === 0) {
-    return { columns: [], shown: 0, total: sampled.length, interval: 0 };
+    return { columns: [], shown: 0, total: sampled.length, interval: 0, omitted: 0 };
   }
   const pxPerDisplay = (mapX(lengthM) - mapX(0)) / (lengthM * k);
   let interval: number = BAND_INTERVALS[BAND_INTERVALS.length - 1];
@@ -552,6 +554,7 @@ export function buildRoundChainageBand(req: RoundBandRequest): RoundBandLayout {
   // The end figures are set inward from the frame edges, so the round
   // stations beside them need a column and a half of clear width.
   const endClear = req.columnWpt * 1.5;
+  const roundCount = chainages.length;
   while (
     chainages.length > 1 &&
     mapX(lengthM) - mapX(chainages[chainages.length - 1]) < endClear
@@ -559,6 +562,7 @@ export function buildRoundChainageBand(req: RoundBandRequest): RoundBandLayout {
     chainages.pop();
   }
   while (chainages.length > 1 && mapX(chainages[1]) - mapX(0) < endClear) chainages.splice(1, 1);
+  const omitted = roundCount - chainages.length;
   chainages.push(lengthM);
   const columns: StationBandColumn[] = chainages.map((c, i) => ({
     chainage: c,
@@ -566,7 +570,7 @@ export function buildRoundChainageBand(req: RoundBandRequest): RoundBandLayout {
     height: interpolateStationHeight(sampled, c),
     partial: i === 0 ? null : c - chainages[i - 1],
   }));
-  return { columns, shown: columns.length, total: sampled.length, interval };
+  return { columns, shown: columns.length, total: sampled.length, interval, omitted };
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

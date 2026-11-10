@@ -422,7 +422,7 @@ describe('profile sheet: station data band', () => {
     });
     const caption = sheetPage(bytes).drawn.find((d) => d.text.startsWith('Station data band'));
     expect(caption).toBeDefined();
-    const m = /Station data band - every (\d+) m and the end chainage; heights at round chainages interpolated between the (\d+) sampled stations/.exec(caption!.text);
+    const m = /Station data band - every (\d+) m and the end chainage(?:, without the round chainages beside the start and the end)?; heights at round chainages interpolated between the (\d+) sampled stations/.exec(caption!.text);
     expect(m).not.toBeNull();
     expect(Number(m![2])).toBe(181);
     expect([5, 10, 20, 25, 50, 100]).toContain(Number(m![1]));

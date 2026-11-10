@@ -233,6 +233,27 @@ describe('open catchments and withheld densities', () => {
     }
   }, 240_000);
 
+  it('shows no empty verdict table and no catchment-page limit when no catchment was studied', async () => {
+    for (const lang of ['en', 'es'] as const) {
+      const v = valleys[lang]!;
+      const none = { ...v.model, sections: [] } as WatershedReportModel;
+      const all = joined(await drawnTexts(none, v));
+      expect(all).toContain(t(lang, 'quality.noCatchment').replace(/\s+/g, ' '));
+      expect(all).not.toContain(t(lang, 'limits.notComputed').replace(/\s+/g, ' '));
+      // The verdict table's own column heading is not drawn.
+      expect(all.toLowerCase()).not.toContain(t(lang, 'quality.pointDensity').toLowerCase());
+    }
+  }, 240_000);
+
+  it('states how much of the grid has elevation next to the measured share on the cover', async () => {
+    const v = valleys.en!;
+    const all = joined(await drawnTexts(v.model, v));
+    expect(all).toContain(t('en', 'cover.measuredShare', {
+      share: formatPercent('en', v.model.site.measuredShare),
+      data: formatPercent('en', v.model.site.gridDataShare),
+    }).replace(/\s+/g, ' '));
+  }, 240_000);
+
   it('draws an exponent smaller and raised', async () => {
     const doc = await PDFDocument.create();
     const fonts = await embedReportFonts(doc, loadFont);

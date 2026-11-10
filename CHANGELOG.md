@@ -58,6 +58,10 @@ packaged build of commit `f11abebc1`. v0.7.0 is the current published release.
 
 ### Fixed
 
+- The drainage sheet prints no empty catchment verdict table, and no limit about catchment pages, when no catchment was studied. It says so instead.
+- The drainage sheet cover states the share of the grid that has elevation next to the share of those cells that are measured, so a narrow scan does not read as fully measured.
+- The profile sheet's station band says when it leaves out the round chainages beside the start and the end.
+- The raster agreement records name files from the repository root, and the reference runner records them that way, instead of a path on the machine that ran it.
 - A new app version no longer reloads the page by itself while saved views or held session work are open. It asks first.
 - Offline, a part of the app that cannot load says so and offers no reload.
 - L, the camera view keys, Save session and the snapshot key say "Open a scan first" before the viewer has loaded, instead of doing nothing.

@@ -185,6 +185,8 @@ describe('site and provenance', () => {
     expect(m.site.analysedAreaM2).toBe(400);
     expect(m.site.cellSizeM).toEqual([1, 1]);
     expect(m.site.measuredShare).toBe(1);
+    // The 20 x 20 fixture has an elevation in every cell, so the whole grid has data.
+    expect(m.site.gridDataShare).toBe(1);
     expect(m.site.crsName).toBe('EPSG:32610');
     expect(m.network.thresholdM2).toBe(2500);
   });

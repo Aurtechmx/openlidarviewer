@@ -397,7 +397,7 @@ async function drawCover(doc: PDFDocument, model: WatershedReportModel, opts: Wa
     x = drawRuns(page, displayName(s.label, opts.catchmentNames), x, y, { font: fonts.bodyBold, size: 11.25, color: PALETTE.ink }, fonts) + 5;
     x += chip(page, x, y, s.quality.verdict, t(lang, verdictKey(s.quality.verdict)), fonts) + 14;
   }
-  drawRuns(page, t(lang, 'cover.measuredShare', { share: formatPercent(lang, model.site.measuredShare) }), L, y - 18, { font: fonts.body, size: 10.6, color: PALETTE.ink2 }, fonts);
+  drawRuns(page, t(lang, 'cover.measuredShare', { share: formatPercent(lang, model.site.measuredShare), data: formatPercent(lang, model.site.gridDataShare) }), L, y - 18, { font: fonts.body, size: 10.6, color: PALETTE.ink2 }, fonts);
 
   // Title block: hairlines only, a label over each value.
   const site = model.site;
@@ -635,30 +635,38 @@ function drawQuality(c: PageCursor, model: WatershedReportModel, lang: ReportLan
   const ts = { size: sc.table };
 
   cur = sectionTitle(cur, t(lang, 'quality.verdictsTitle'), fonts);
-  cur = paragraph(cur, t(lang, 'quality.rule', {
-    measured: formatPercent(lang, SUPPORTED_MEASURED_SHARE, 0),
-    channel: formatPercent(lang, SUPPORTED_CHANNEL_INTERPOLATED_SHARE, 0),
-    cells: MAX_FAR_INTERPOLATED_RUN,
-  }), fonts, { size: sc.body });
-  cur = table(cur, cols(cur, [
-    [t(lang, 'table.catchment'), 'left', 0.16], [t(lang, 'table.verdict'), 'left', 0.17],
-    [`${t(lang, 'quality.measuredShare')} (%)`, 'right', 0.19], [`${t(lang, 'quality.channelInterpolated')} (%)`, 'right', 0.27],
-    [t(lang, 'quality.pointDensity'), 'right', 0.21],
-  ]), model.sections.map((s) => [
-    displayName(s.label, names), t(lang, verdictKey(s.quality.verdict)), formatNumber(lang, s.quality.measuredShare * 100, 1),
-    formatNumber(lang, s.quality.channelInterpolatedShare * 100, 1),
-    densityText(lang, s.quality.groundPointsPerM2),
-  ]), fonts, ts);
-  for (const s of model.sections) {
-    const parts = [...qualityReasons(s.quality, lang)];
-    if (isOpen(s)) parts.push(t(lang, 'summary.edgeShare', { share: formatPercent(lang, s.edgeInflowShare, 0) }));
-    cur = paragraph(cur, parts.join(' '), fonts, { lead: `${s.label}.`, size: sc.body });
+  if (model.sections.length === 0) {
+    cur = paragraph(cur, t(lang, 'quality.noCatchment'), fonts, { size: sc.body });
+  } else {
+    cur = paragraph(cur, t(lang, 'quality.rule', {
+      measured: formatPercent(lang, SUPPORTED_MEASURED_SHARE, 0),
+      channel: formatPercent(lang, SUPPORTED_CHANNEL_INTERPOLATED_SHARE, 0),
+      cells: MAX_FAR_INTERPOLATED_RUN,
+    }), fonts, { size: sc.body });
+    cur = table(cur, cols(cur, [
+      [t(lang, 'table.catchment'), 'left', 0.16], [t(lang, 'table.verdict'), 'left', 0.17],
+      [`${t(lang, 'quality.measuredShare')} (%)`, 'right', 0.19], [`${t(lang, 'quality.channelInterpolated')} (%)`, 'right', 0.27],
+      [t(lang, 'quality.pointDensity'), 'right', 0.21],
+    ]), model.sections.map((s) => [
+      displayName(s.label, names), t(lang, verdictKey(s.quality.verdict)), formatNumber(lang, s.quality.measuredShare * 100, 1),
+      formatNumber(lang, s.quality.channelInterpolatedShare * 100, 1),
+      densityText(lang, s.quality.groundPointsPerM2),
+    ]), fonts, ts);
+    for (const s of model.sections) {
+      const parts = [...qualityReasons(s.quality, lang)];
+      if (isOpen(s)) parts.push(t(lang, 'summary.edgeShare', { share: formatPercent(lang, s.edgeInflowShare, 0) }));
+      cur = paragraph(cur, parts.join(' '), fonts, { lead: `${s.label}.`, size: sc.body });
+    }
   }
 
   cur = sectionTitle(cur, t(lang, 'limits.title'), fonts);
+  // The catchment pages are the ones that omit a time of concentration, so a
+  // sheet with no studied catchment has no such pages to describe.
   const limits = [
     t(lang, 'limits.terrainOnly'), t(lang, 'limits.d8', { bias: formatPercent(lang, D8_BIAS, 1) }), t(lang, 'limits.filled'),
-    t(lang, 'limits.interpolated'), t(lang, 'limits.open'), t(lang, 'limits.notComputed'), t(lang, 'limits.screening'),
+    t(lang, 'limits.interpolated'), t(lang, 'limits.open'),
+    ...(model.sections.length > 0 ? [t(lang, 'limits.notComputed')] : []),
+    t(lang, 'limits.screening'),
   ];
   // Two columns of numbered limits, numbered down the left column first.
   const mid = Math.round((cur.left + cur.right) / 2);
