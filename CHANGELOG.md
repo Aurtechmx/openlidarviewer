@@ -4,16 +4,7 @@ The format is based on Keep a Changelog and the project follows Semantic Version
 
 ## [Unreleased]
 
-### Fixed
-
-- A new app version no longer reloads the page by itself while saved views or held session work are open. It asks first.
-- Offline, a part of the app that cannot load says so and offers no reload.
-- L, the camera view keys, Save session and the snapshot key say "Open a scan first" before the viewer has loaded, instead of doing nothing.
-- Starting a tool keeps the highlight of a finished lasso result.
-- A COPC URL that cannot be reached also suggests downloading the file and using Open scan.
-- Undo after deleting a profile brings back the reason it has no chart.
-
-## [0.7.1-alpha.1] - 2026-10-25
+## [0.7.1-alpha.1] - 2026-11-09
 
 An alpha on the way to v0.7.1. It has no tag and no DOI, its test figures are
 not release-authoritative, and the real-scan walkthrough in the packaged build
@@ -67,6 +58,17 @@ has not been done. v0.7.0 is the current published release.
 
 ### Fixed
 
+- A new app version no longer reloads the page by itself while saved views or held session work are open. It asks first.
+- Offline, a part of the app that cannot load says so and offers no reload.
+- L, the camera view keys, Save session and the snapshot key say "Open a scan first" before the viewer has loaded, instead of doing nothing.
+- Starting a tool keeps the highlight of a finished lasso result.
+- A COPC URL that cannot be reached also suggests downloading the file and using Open scan.
+- Undo after deleting a profile brings back the reason it has no chart.
+- Make available offline checks index.html and every bundle against the SHA-256 digests in the build manifest before writing any file, refuses an HTML fallback page served for a script, and keeps the earlier offline copy when a check fails. Each deployment path keeps its own caches.
+- The drainage and watershed sheet cover counts both the watersheds over 1 % of the area and the smaller ones, in English and Spanish, so the total matches the outlet count. The depression table note reads "25 of 1,464 depressions shown".
+- The random and blocked hold-out checks rebuild the surface with the void-fill method the delivered surface used, and the confidence curve for measured cells is fitted on measured samples only.
+- On a display-sampled scan, the first terrain run's Dataset Story no longer lists products under Best for while Export readiness says Preview.
+- The release check that waits for CI at the tagged commit keeps polling for the tag's own run when only an older run at that commit has failed.
 - Sum and Average on a chain with no contributing row show no figure instead of 0. Cut and Net give a withheld polygon's reason, as Fill does.
 - The Results shelf names the layer a measurement was picked on, and says when that layer is closed.
 - The class filter stays on when the active layer changes. A layer with no classes clears it with a message.
