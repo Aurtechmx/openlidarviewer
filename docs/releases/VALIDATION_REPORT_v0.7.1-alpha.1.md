@@ -1,8 +1,8 @@
 # Validation report: OpenLiDARViewer v0.7.1-alpha.1
 
-This is an alpha on the way to v0.7.1. It has no tag, no DOI and no
-publication date, and the walkthrough of every workflow on a real scan in the
-packaged build has not been done. The published record of v0.7.0 is
+This is an alpha on the way to v0.7.1. It has no tag and no DOI.
+The workflows were walked through on a real scan in the
+packaged build of commit `f11abebc1`. The published record of v0.7.0 is
 [VALIDATION_REPORT_v0.7.0.md](VALIDATION_REPORT_v0.7.0.md) and does not change.
 
 ## Baseline
