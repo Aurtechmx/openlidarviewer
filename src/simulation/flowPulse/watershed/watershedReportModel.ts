@@ -173,7 +173,10 @@ export interface WatershedReportModel {
   readonly site: {
     readonly analysedAreaM2: number;
     readonly cellSizeM: readonly [number, number];
+    /** Share of the cells that carry an elevation whose ground is measured, not interpolated. */
     readonly measuredShare: number;
+    /** Share of the whole grid that carries an elevation. */
+    readonly gridDataShare: number;
     readonly pointCount: number;
     readonly crsName: string | null;
     readonly elevationsRelative: boolean;
@@ -304,6 +307,7 @@ export function buildWatershedReportModel(input: {
       analysedAreaM2: valid * grid.cellMetresX * grid.cellMetresY,
       cellSizeM: [grid.cellMetresX, grid.cellMetresY],
       measuredShare: valid > 0 ? measured / valid : 0,
+      gridDataShare: cells > 0 ? valid / cells : 0,
       pointCount: dtm.analyzedPointCount,
       crsName: input.crsName,
       elevationsRelative: input.originZ == null || !Number.isFinite(input.originZ),

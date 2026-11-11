@@ -121,7 +121,7 @@ Open the Tools tab and start Measure, or press M. A toolbar appears over the vie
 - Height: vertical difference between a pair of points
 - Angle: the angle at a corner
 - Slope: rise, run, angle, and grade percent
-- Profile: a cross-section between a pair of points, with a height chart. Its Endpoint gradient is the net change between the first and last stations that have data, and it says how many stations between them are missing, for example "5.00% (spans 1 missing station)". Its PDF prints at standard horizontal and vertical scales, with a station band at round chainages and the maximum grade over a fixed base length.
+- Profile: a cross-section between a pair of points, with a height chart. Its Endpoint gradient is the net change between the first and last stations that have data, and it says how many stations between them are missing, for example "5.00% (spans 1 missing station)". Its PDF prints at standard horizontal and vertical scales, with a station band at round chainages and the steepest grade over one station pair and over a stated minimum distance.
 - Box: two opposite corners, reported as width, depth, height and volume
 - Volume: cut and fill against a base level, from a polygon or a lasso. For a polygon the base level is the median of the outline's vertex heights. The row shows it under the result (marked local when the scan has no datum), Copy result and the PDF report carry it, and the measurement CSV and GeoJSON write it as `base_level`
 

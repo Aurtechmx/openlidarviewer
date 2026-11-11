@@ -24,7 +24,7 @@ const EN = {
   'cover.preparedBy': 'Prepared by',
   'cover.checkedBy': 'Checked by',
   'cover.dataQuality': 'Data quality',
-  'cover.measuredShare': '{share} of the ground measured by the scan',
+  'cover.measuredShare': '{share} of the cells with elevation are measured; {data} of the grid has elevation',
 
   // Reading guide
   'guide.fiveThings': 'Reading the maps',
@@ -247,6 +247,7 @@ const EN = {
   'quality.title': 'How far the scan supports this study',
   'quality.siteTitle': 'The terrain model',
   'quality.verdictsTitle': 'Verdict for each catchment',
+  'quality.noCatchment': 'No catchment was studied, so there is no verdict to show. Set a catchment outlet in Flow Pulse and export the sheet again to add one.',
   'quality.rule': 'Supported means at least {measured} of the ground measured, no more than {channel} of the main channel over interpolated ground, and a complete catchment. Not supported means the main channel crosses more than {cells} cells in a row interpolated far from any measured point, or touches a gap in the data. Anything else is Limited.',
   'quality.siteMeasured': 'Measured ground, whole site',
   'quality.analysedArea': 'Area analysed',
@@ -338,7 +339,7 @@ const ES: Record<StringKey, string> = {
   'cover.preparedBy': 'Elaboró',
   'cover.checkedBy': 'Revisó',
   'cover.dataQuality': 'Calidad de los datos',
-  'cover.measuredShare': '{share} del terreno medido por el levantamiento',
+  'cover.measuredShare': '{share} de las celdas con elevación están medidas; {data} de la cuadrícula tiene elevación',
 
   'guide.fiveThings': 'Cómo leer los planos',
   'guide.item1': 'Cada color del plano del sitio es un área cuya agua sale por un solo punto. Las líneas discontinuas marcan los parteaguas entre ellas.',
@@ -540,6 +541,7 @@ const ES: Record<StringKey, string> = {
   'quality.title': 'Qué tanto respalda el levantamiento este estudio',
   'quality.siteTitle': 'El modelo de terreno',
   'quality.verdictsTitle': 'Calificación de cada cuenca',
+  'quality.noCatchment': 'No se estudió ninguna cuenca de aportación, así que no hay calificación que mostrar. Defina una salida de cuenca en Flow Pulse y exporte la hoja de nuevo para agregar una.',
   'quality.rule': 'Respaldado significa al menos {measured} del terreno medido, no más del {channel} del cauce principal sobre terreno interpolado y una cuenca completa. Sin respaldo significa que el cauce principal cruza más de {cells} celdas seguidas interpoladas lejos de cualquier punto medido, o toca un hueco sin datos. Cualquier otro caso es Limitado.',
   'quality.siteMeasured': 'Terreno medido, todo el sitio',
   'quality.analysedArea': 'Área analizada',

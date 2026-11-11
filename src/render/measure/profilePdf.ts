@@ -1308,7 +1308,8 @@ export async function buildProfilePdf(input: ProfilePdfInput): Promise<Uint8Arra
     // two rows of the sheet spent saying so.
     {
       const caption =
-        `Station data band - every ${formatScaleDenominator(band.interval)} ${unit} and the end chainage; ` +
+        `Station data band - every ${formatScaleDenominator(band.interval)} ${unit} and the end chainage` +
+        `${band.omitted > 0 ? ', without the round chainages beside the start and the end' : ''}; ` +
         `${reference === 'orthometric' ? 'elevations' : 'heights'} at round chainages interpolated between ` +
         `the ${band.total} sampled stations, '-' where a neighbouring station has no returns`;
       put(

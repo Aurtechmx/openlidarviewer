@@ -51,7 +51,7 @@ import {
   constants,
 } from 'node:fs';
 import { createHash } from 'node:crypto';
-import { resolve, basename } from 'node:path';
+import { resolve, basename, relative, sep } from 'node:path';
 import { platform, arch } from 'node:process';
 import { FIXTURES, MATRIX_DIR, FIXTURE_DIR, SUNS, cellMetres } from './generate-raster-fixtures.mjs';
 import { binaryOnPath } from './lib/binaryOnPath.mjs';
@@ -59,6 +59,11 @@ import { isCliEntry } from './lib/isCliEntry.mjs';
 
 const OUT_DIR = resolve(MATRIX_DIR, 'gdal');
 const GDALDEM = 'gdaldem';
+// The matrix directory is validation/cross-implementation/raster-matrix, so the
+// repository root is three levels up. Recorded command lines name files from
+// the repository root, never an absolute path on the machine that ran them.
+const REPO_ROOT = resolve(MATRIX_DIR, '..', '..', '..');
+const recordedArg = (a) => (a.startsWith(REPO_ROOT + sep) ? relative(REPO_ROOT, a) : a);
 
 /**
  * Run a command and RETURN its failure rather than throwing.
@@ -233,16 +238,17 @@ function main() {
       // mistaken for the product of a command that has since started failing.
       if (existsSync(outPath)) rmSync(outPath);
       const r = run(GDALDEM, built.argv);
-      const commandLine = [GDALDEM, ...built.argv.map((a) => (a.includes(' ') ? JSON.stringify(a) : a))].join(' ');
+      const recordedArgv = built.argv.map(recordedArg);
+      const commandLine = [GDALDEM, ...recordedArgv.map((a) => (a.includes(' ') ? JSON.stringify(a) : a))].join(' ');
       if (r.exitCode !== 0 || !existsSync(outPath)) {
         runs.push({ runId, fixtureId: spec.id, product, reference: 'GDAL', status: 'failed',
           reason: r.stderr.trim() || `exit ${r.exitCode} and no output file`,
-          argv: built.argv, commandLine, exitCode: r.exitCode, unit: built.unit, axisScaling: built.axisScaling });
+          argv: recordedArgv, commandLine, exitCode: r.exitCode, unit: built.unit, axisScaling: built.axisScaling });
         process.stdout.write(`FAILED  ${runId}: exit ${r.exitCode}\n`);
         continue;
       }
       runs.push({ runId, fixtureId: spec.id, product, reference: 'GDAL', status: 'ok',
-        argv: built.argv, commandLine, exitCode: r.exitCode,
+        argv: recordedArgv, commandLine, exitCode: r.exitCode,
         stderr: r.stderr.trim() || null,
         unit: built.unit, axisScaling: built.axisScaling,
         output: `gdal/${basename(outPath)}`, sha256: sha256(outPath) });

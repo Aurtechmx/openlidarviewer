@@ -207,6 +207,19 @@ describe('round-chainage station band', () => {
     expect(band.total).toBe(6);
   });
 
+  it('counts the round chainages it leaves out beside the ends', () => {
+    // 20 px per metre, 90 px of clear width at each end: 25 m sits 79 px from the 28.95 m end and is dropped.
+    const atEnd = buildRoundChainageBand({ stations, lengthM: 28.95, k: 1, mapX: (c) => 100 + c * 20, columnWpt: 60 });
+    expect(atEnd.omitted).toBe(1);
+    // 10 px per metre, 60 px of clear width: 5 m sits 50 px from the start and is dropped.
+    const atStart = buildRoundChainageBand({ stations, lengthM: 28.95, k: 1, mapX: (c) => 100 + c * 10, columnWpt: 40 });
+    expect(atStart.omitted).toBeGreaterThan(0);
+    expect(atStart.columns[1].chainage).toBeGreaterThan(5);
+    // Wide columns spaced well inside both ends leave nothing out.
+    const none = buildRoundChainageBand({ stations, lengthM: 30, k: 1, mapX: (c) => 100 + c * 40, columnWpt: 60 });
+    expect(none.omitted).toBe(0);
+  });
+
   it('widens the interval until the columns no longer touch', () => {
     const band = buildRoundChainageBand({
       stations,
@@ -219,6 +232,15 @@ describe('round-chainage station band', () => {
     for (let i = 1; i < band.columns.length; i++) {
       expect(band.columns[i].x - band.columns[i - 1].x).toBeGreaterThanOrEqual(60);
     }
+  });
+
+  it('says on the sheet when the band leaves out the round chainages beside the ends', async () => {
+    const samples: ProfileChartSample[] = [];
+    for (let i = 0; i < 64; i++) samples.push({ distance: i * 2.4, height: 600 + Math.sin(i / 5) * 3 });
+    const bytes = await buildProfilePdf({ name: 'Long', samples, generatedAt: FIXED_DATE });
+    const text = drawnOn(bytes).map((d) => d.text).join(' | ');
+    expect(text).toContain('Station data band - every');
+    expect(text).toContain('without the round chainages beside the start and the end');
   });
 
   it('prints the dash at a gap and states the basis on the sheet', async () => {
