@@ -4,11 +4,11 @@ The format is based on Keep a Changelog and the project follows Semantic Version
 
 ## [Unreleased]
 
-## [0.7.1-alpha.1] - 2026-11-09
+## [0.7.1] - 2026-11-09
 
-An alpha on the way to v0.7.1. It has no tag and no DOI, and its test figures
-are not release-authoritative. The workflows were walked through on a real scan in the
-packaged build of commit `f11abebc1`. v0.7.0 is the current published release.
+The walkthrough of every workflow in the packaged build was done on the public
+Virginia Tech StREAM Lab Spring 2026 drone lidar scans (OpenTopography,
+https://doi.org/10.5069/G9NZ85W7).
 
 ### Added
 
@@ -108,7 +108,7 @@ packaged build of commit `f11abebc1`. v0.7.0 is the current published release.
 - A buffer view with a byte stride of 0, or a stride that is not a multiple of four, opens when its bytes are present; the parser reads both correctly.
 - A refused Profile Workbench says "Not opened" and names reopening the Workbench as the step, instead of "Not exported ... export again". A profile across scans whose heights carry no shared vertical reference names the step to take.
 - The profile's compact chart draws heights at the same scale as distances by default and says so ("1:1"); the chips offer 5×, 10× and 20× vertical exaggeration and Fit, and the Fit badge states the exaggeration the relief took to fill the chart. Before, the relief always filled the chart height, so 1 m of rise over 300 m read like a ridge, and the stretch was not stated. The chart is drawn again at its real size on mount and on resize, so the stated ratio holds.
-- The automatic corridor of a new profile stops at a 5 m half-width on a scan with a known metre scale. It was always 5 % of the line's length, 37 m on a 740 m line, and it stays so where no metre scale resolved or the frame is geographic. On transects of a real survey, a 37 m corridor read up to 1.0 m RMS from a narrow line of ground returns, against 0.10 to 0.19 m at 5 m. A wider corridor can still be chosen, and a saved profile keeps its recorded width. A paired injection-recovery test of taking heights from ground returns first found a cost on flat ground and no measured benefit, so the chart keeps the percentile over every accepted return: `validation/protocols/profile-ground-first-paired-v1-result.md`.
+- The automatic corridor of a new profile stops at a 5 m half-width on a scan with a known metre scale. It was always 5 % of the line's length, 37 m on a 740 m line, and it stays so where no metre scale resolved or the frame is geographic. On transects of a real survey, a 37 m corridor read up to 1.0 m RMS from a narrow line of ground returns, against 0.10 to 0.19 m at 5 m. A wider corridor can still be chosen, and a saved profile keeps its recorded width.
 - The DTM evidence rule read the run's cell size as metres whatever the scan's horizontal unit, so on a scan in feet the terrain report, the DEM package evidence contract and the export provenance could state E4 for a cell size outside the studied range, or withhold it for one inside. The cell size is converted first, and a geographic grid is not covered.
 - On a sampled terrain run the Ground detail row said the density was not compared with the QL figures while the verdict named the pulse-density reference as the limiter. The sampled figure is stated and not graded.
 - The measurement CSV and GeoJSON wrote `base_level` from the third coordinate, which on a Y-up scan is not the height. It is read along the frame's up axis as the output carries it.

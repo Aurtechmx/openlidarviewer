@@ -1,23 +1,25 @@
-# Validation report: OpenLiDARViewer v0.7.1-alpha.1
+# Validation report: OpenLiDARViewer v0.7.1
 
-This is an alpha on the way to v0.7.1. It has no tag and no DOI.
-The workflows were walked through on a real scan in the
-packaged build of commit `f11abebc1`. The published record of v0.7.0 is
+The walkthrough of every workflow in the packaged build was done on the public
+Virginia Tech StREAM Lab Spring 2026 drone lidar scans (OpenTopography,
+https://doi.org/10.5069/G9NZ85W7).
+The published record of v0.7.0 is
 [VALIDATION_REPORT_v0.7.0.md](VALIDATION_REPORT_v0.7.0.md) and does not change.
 
 ## Baseline
 
-v0.7.1-alpha.1 develops from v0.7.0, tag `v0.7.0`. The v0.7.0 evidence record
+v0.7.1 develops from v0.7.0, tag `v0.7.0`. The v0.7.0 evidence record
 is unchanged and remains the authority for that release.
 
 ## Test record
 
 The test counts, the live entry size, the browser matrix and the packaging
-digests are not typed into this document. For a tagged release they come from
-the release-authoritative record that the exact-tag workflow generates under
-`OLV_GATE_MODE=release` and attaches to the release with `gate.log`,
-`gate.log.sha256`, the SBOM, the release manifest and `SHA256SUMS`.
-v0.7.1-alpha.1 has no tag, so no such record exists for it. The committed
+digests for this release are not typed into this document. They come from the
+release-authoritative record, `test-evidence-v0.7.1.json`, which the exact-tag
+workflow generates under `OLV_GATE_MODE=release` and attaches to the release
+with `gate.log`, `gate.log.sha256`, the SBOM, the release manifest and
+`SHA256SUMS`. The record names the commit it measured, and that commit is the
+tagged commit. The committed
 `docs/validation/test-evidence.json` is a development record and is marked
 `releaseAuthoritative: false`.
 
@@ -80,5 +82,5 @@ studies is reported as not covered.
 - Analyses on a sampled or partly resident source were not validated against the
   full file.
 
-[KNOWN_LIMITATIONS_v0.7.1-alpha.1.md](KNOWN_LIMITATIONS_v0.7.1-alpha.1.md) lists
+[KNOWN_LIMITATIONS_v0.7.1.md](KNOWN_LIMITATIONS_v0.7.1.md) lists
 each limit with what it discloses.

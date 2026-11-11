@@ -1,8 +1,10 @@
-# OpenLiDARViewer v0.7.1-alpha.1
+# OpenLiDARViewer v0.7.1
 
-This is an alpha on the way to v0.7.1. It has no tag and no DOI. The workflows were walked through on a real scan in the
-packaged build of commit `f11abebc1`. The published release is v0.7.0, and its
-record, [RELEASE_NOTES_v0.7.0.md](RELEASE_NOTES_v0.7.0.md), does not change.
+The walkthrough of every workflow in the packaged build was done on the public
+Virginia Tech StREAM Lab Spring 2026 drone lidar scans (OpenTopography,
+https://doi.org/10.5069/G9NZ85W7).
+The v0.7.0 record, [RELEASE_NOTES_v0.7.0.md](RELEASE_NOTES_v0.7.0.md), does not
+change.
 
 These notes list what changed since v0.7.0 (tag `v0.7.0`). Volumes and terrain
 outputs now state only the evidence that covers them, figures and deliverables
@@ -56,7 +58,7 @@ v0.6.6 remain available under MIT.
 - A vertex released before the next frame lands where the pointer was let go, a drag follows one pointer and is cancelled cleanly, and dragging a box corner past the opposite corner no longer moves that corner. The vertex touch target is 44 px on a touch screen.
 - A double-click while a tool is paused with Space focuses the camera and keeps the measurement open.
 - The profile's compact chart draws heights at the same scale as distances by default and says so. The chips offer 5×, 10× and 20× exaggeration and Fit, and Fit states the exaggeration it took.
-- The automatic corridor of a new profile stops at a 5 m half-width instead of growing with the line, on a scan with a known metre scale. Without one it stays 5 % of the line's length. On transects of a real survey, a 37 m corridor read up to 1.0 m RMS from a narrow line of ground returns, against 0.10 to 0.19 m at 5 m. A paired test of a ground-first rule found no measured benefit, so the chart keeps the percentile over every accepted return.
+- The automatic corridor of a new profile stops at a 5 m half-width instead of growing with the line, on a scan with a known metre scale. Without one it stays 5 % of the line's length. On transects of a real survey, a 37 m corridor read up to 1.0 m RMS from a narrow line of ground returns, against 0.10 to 0.19 m at 5 m.
 - The result card's Delete deletes through the measurement controller, so it works before the Measurements panel has loaded. The stockpile toast shows five significant figures, and a volume chain with no measured volume states a member's own reason, blaming a clip region only when no member gives one.
 - The Profile Workbench always opens showing the section. Once it had been collapsed, with its button or with Escape, every later open showed only its header strip until Expand was pressed.
 - A profile's PDF, station CSV and workbench image name the scan the profile was measured on, in that scan's coordinate system, and are withheld with the step to take when the source cannot be settled. The Profile Workbench opens only while a scan the profile was measured on is active.
@@ -82,7 +84,7 @@ v0.6.6 remain available under MIT.
 
 ## Performance
 
-- The 3D engine loads after the first screen. Startup code fell from 597 KiB to 353 KiB gzipped, and a build check fails if it grows back.
+- The 3D engine loads after the first screen. The entry chunk is 442 KiB (159.5 KiB gzipped), up from 412 KiB in v0.7.0, and the build fails if it exceeds 795 KiB.
 - Large scans reach their final display sample sooner (3 M points: 2.0 s to 1.4 s).
 - E57 integer fields decode a byte window at a time (10 M values: 1.8 to 9.3 s before, 0.08 to 0.29 s after).
 - Streaming spends less main-thread time while the camera moves, and filters rebuild point materials once.
@@ -169,7 +171,7 @@ The scan report has a "Storage history" row for LAS and LAZ files opened from di
 
 ## Evidence register
 
-The register holds 41 claims, 18 of them at E4 and none at E5. Since v0.7.0, MEAS-BOX (E3) and STORAGE-HISTORY (E2) are new, TERRAIN-FLOW-PULSE moved to E4 and TERRAIN-FLOW-DEPRESSION-INVENTORY moved to E3. Nothing here is a survey-grade result, and held-out validation against independent reference data has not been done.
+The register holds 41 claims, 18 of them at E4 and none at E5. Since v0.7.0, MEAS-BOX (E3) and STORAGE-HISTORY (E2) are new, TERRAIN-FLOW-PULSE moved to E4 and TERRAIN-FLOW-DEPRESSION-INVENTORY moved to E3. Nothing here is a survey-grade result. The validation report lists retrospective checkpoint comparisons at Marsh Island and Coconino, which were not preregistered, and no prospective field study is bundled.
 
 ## Changes that affect scripts
 
@@ -182,4 +184,4 @@ The register holds 41 claims, 18 of them at E4 and none at E5. Since v0.7.0, MEA
 
 ## Known limits
 
-[KNOWN_LIMITATIONS_v0.7.1-alpha.1.md](KNOWN_LIMITATIONS_v0.7.1-alpha.1.md) lists the limits of this build. The validation record is [VALIDATION_REPORT_v0.7.1-alpha.1.md](VALIDATION_REPORT_v0.7.1-alpha.1.md), and the dated history is in [CHANGELOG.md](../../CHANGELOG.md).
+[KNOWN_LIMITATIONS_v0.7.1.md](KNOWN_LIMITATIONS_v0.7.1.md) lists the limits of this build. The validation record is [VALIDATION_REPORT_v0.7.1.md](VALIDATION_REPORT_v0.7.1.md), and the dated history is in [CHANGELOG.md](../../CHANGELOG.md).
