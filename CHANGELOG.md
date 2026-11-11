@@ -4,7 +4,7 @@ The format is based on Keep a Changelog and the project follows Semantic Version
 
 ## [Unreleased]
 
-## [0.7.1] - 2026-11-09
+## [0.7.1] - 2026-11-11
 
 The walkthrough of every workflow in the packaged build was done on the public
 Virginia Tech StREAM Lab Spring 2026 drone lidar scans (OpenTopography,
