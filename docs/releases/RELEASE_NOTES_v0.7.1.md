@@ -84,7 +84,7 @@ v0.6.6 remain available under MIT.
 
 ## Performance
 
-- The 3D engine loads after the first screen. Startup code fell from 597 KiB to 353 KiB gzipped, and a build check fails if it grows back.
+- The 3D engine loads after the first screen. The entry chunk is 442 KiB (159.5 KiB gzipped), up from 412 KiB in v0.7.0, and the build fails if it exceeds 795 KiB.
 - Large scans reach their final display sample sooner (3 M points: 2.0 s to 1.4 s).
 - E57 integer fields decode a byte window at a time (10 M values: 1.8 to 9.3 s before, 0.08 to 0.29 s after).
 - Streaming spends less main-thread time while the camera moves, and filters rebuild point materials once.
@@ -171,7 +171,7 @@ The scan report has a "Storage history" row for LAS and LAZ files opened from di
 
 ## Evidence register
 
-The register holds 41 claims, 18 of them at E4 and none at E5. Since v0.7.0, MEAS-BOX (E3) and STORAGE-HISTORY (E2) are new, TERRAIN-FLOW-PULSE moved to E4 and TERRAIN-FLOW-DEPRESSION-INVENTORY moved to E3. Nothing here is a survey-grade result, and held-out validation against independent reference data has not been done.
+The register holds 41 claims, 18 of them at E4 and none at E5. Since v0.7.0, MEAS-BOX (E3) and STORAGE-HISTORY (E2) are new, TERRAIN-FLOW-PULSE moved to E4 and TERRAIN-FLOW-DEPRESSION-INVENTORY moved to E3. Nothing here is a survey-grade result. The validation report lists retrospective checkpoint comparisons at Marsh Island and Coconino, which were not preregistered, and no prospective field study is bundled.
 
 ## Changes that affect scripts
 
