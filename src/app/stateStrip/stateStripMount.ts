@@ -17,7 +17,7 @@ import { lastAnalysisRows, subscribeAnalysisRows } from '../../process/analysisR
 import { liveTasks, subscribeTaskActivity } from '../../process/taskActivity';
 import { clearBusyWaits, collectBusyTasks, showBusyWaits } from './busyTasks';
 import { readStrip } from './stripReads';
-import { clipOn, clipScope, subscribeClipScope } from '../../render/clip/clipScope';
+import { clipOn, clipReadoutShown, clipScope, subscribeClipScope } from '../../render/clip/clipScope';
 import { createStateStrip, type StripItemId } from '../../ui/stateStrip';
 
 export interface StateStripCrs {
@@ -46,7 +46,7 @@ export interface MountedStateStrip {
 }
 
 export function mountStateStrip(d: StateStripMountDeps): MountedStateStrip {
-  const strip = createStateStrip({ open: d.open });
+  const strip = createStateStrip({ open: d.open, clipReadoutShown });
   let timer: ReturnType<typeof setTimeout> | null = null;
   let disposed = false;
 

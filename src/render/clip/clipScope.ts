@@ -24,6 +24,25 @@ export function clipTurnOff(): (() => void) | null {
   return turnOff;
 }
 
+let readoutShown: (() => boolean) | null = null;
+
+/**
+ * The Clip panel registers whether its own polite readout is on screen. While
+ * it is, that readout already speaks each clip change, so the state strip
+ * stays quiet rather than say it twice.
+ */
+export function setClipReadoutShown(fn: (() => boolean) | null): void {
+  readoutShown = fn;
+}
+
+export function clipReadoutShown(): boolean {
+  try {
+    return readoutShown?.() ?? false;
+  } catch {
+    return false;
+  }
+}
+
 /** "Showing inside box" / "Showing outside box"; empty when the mode is unknown. */
 export function clipModePhrase(s: ClipScope): string {
   return s.mode === undefined ? '' : `Showing ${s.mode === 'keep-inside' ? 'inside' : 'outside'} box`;

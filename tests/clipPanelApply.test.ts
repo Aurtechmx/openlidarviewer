@@ -13,7 +13,7 @@
 
 import { describe, it, expect, beforeAll, beforeEach, afterEach, vi } from 'vitest';
 import type { ClipBox } from '../src/render/clip/clipBox';
-import { clipOn, clipScope, clipTurnOff } from '../src/render/clip/clipScope';
+import { clipOn, clipReadoutShown, clipScope, clipTurnOff } from '../src/render/clip/clipScope';
 import { FakeEl, installFakeDom } from './support/measurePanelDom';
 
 beforeAll(() => {
@@ -145,6 +145,23 @@ describe('ClipPanel responsiveness (spec 6B)', () => {
     expect(t.panel.enabled).toBe(false);
     t.panel.dispose();
     expect(clipTurnOff()).toBeNull();
+  });
+
+  it('registers whether its polite readout is on screen, and dispose clears the registration', async () => {
+    const t = await make();
+    const readout = t.readout as unknown as { isConnected: boolean; checkVisibility: () => boolean };
+    let visible = true;
+    readout.isConnected = true;
+    readout.checkVisibility = () => visible;
+    expect(clipReadoutShown()).toBe(true);
+    visible = false;
+    expect(clipReadoutShown()).toBe(false);
+    visible = true;
+    readout.isConnected = false;
+    expect(clipReadoutShown()).toBe(false);
+    readout.isConnected = true;
+    t.panel.dispose();
+    expect(clipReadoutShown()).toBe(false);
   });
 
   it('invalidateCount recounts against the new data', async () => {

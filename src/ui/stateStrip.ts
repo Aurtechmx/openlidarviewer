@@ -26,6 +26,8 @@ export type StripItemId = 'dataset' | 'crs' | 'vertical' | 'basis' | 'clip' | 'p
 export interface StateStripHost {
   /** Open the place that explains the item. */
   open(item: StripItemId): void;
+  /** True while the Clip panel's own polite readout is on screen; the strip then leaves clip changes to it. */
+  clipReadoutShown?(): boolean;
 }
 
 export interface StateStrip {
@@ -192,7 +194,8 @@ export function createStateStrip(host: StateStripHost): StateStrip {
     stopWaiting();
     spoken = key;
     spokenCounted = counted;
-    announcePolite(text);
+    // Recorded either way, so a state the readout already spoke is not said again once it closes.
+    if (!host.clipReadoutShown?.()) announcePolite(text);
   };
   const announceClip = (key: string, text: string, counted: boolean): void => {
     if (key === spoken) {

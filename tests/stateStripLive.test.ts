@@ -380,6 +380,84 @@ describe('strip UI', () => {
       });
     });
 
+    it('leaves clip changes to the Clip panel readout while it is on screen, and does not repeat them when it closes', async () => {
+      await withRegion(async (history) => {
+        const { createStateStrip } = await import('../src/ui/stateStrip');
+        let readout = true;
+        const strip = createStateStrip({ open: vi.fn(), clipReadoutShown: () => readout });
+        strip.render(readStrip(reads()));
+        // The panel's own polite readout says these; the strip says nothing.
+        strip.render(on(5, 9, 'keep-inside'));
+        strip.render(on(3, 9, 'keep-outside'));
+        strip.render(streamed(null));
+        strip.render(streamed('keep-inside'));
+        vi.advanceTimersByTime(5000);
+        expect(history).toEqual([]);
+        // The panel closes: the state it already heard is not said again.
+        readout = false;
+        strip.render(streamed('keep-inside'));
+        vi.advanceTimersByTime(5000);
+        expect(history).toEqual([]);
+        // The strip's own Turn off, with the panel closed, is said.
+        strip.render(streamed(null));
+        expect(history).toEqual(['Clip off']);
+        strip.dispose();
+      });
+    });
+
+    it('speaks every clip change while the Clip panel readout is not on screen', async () => {
+      await withRegion(async (history) => {
+        const { createStateStrip } = await import('../src/ui/stateStrip');
+        const strip = createStateStrip({ open: vi.fn(), clipReadoutShown: () => false });
+        strip.render(readStrip(reads()));
+        strip.render(on(5, 9, 'keep-inside'));
+        strip.render(on(3, 9, 'keep-outside'));
+        strip.render(streamed(null));
+        expect(history).toEqual([
+          'Clipped: 5 of 9 points, Showing inside box',
+          'Clipped: 3 of 9 points, Showing outside box',
+          'Clip off',
+        ]);
+        strip.dispose();
+      });
+    });
+
+    it('the mounted strip asks the Clip panel whether its readout is on screen', async () => {
+      await withRegion(async (history) => {
+        const { mountStateStrip } = await import('../src/app/stateStrip/stateStripMount');
+        const { setClipOn, setClipReadoutShown, setClipScope } = await import('../src/render/clip/clipScope');
+        const doc = (globalThis as unknown as { document: Record<string, unknown> }).document;
+        doc.querySelectorAll = () => [];
+        let readout = true;
+        setClipReadoutShown(() => readout);
+        const mounted = mountStateStrip({
+          crs: { current: () => null, context: () => spatialContextFrom(null), subscribe: () => () => {} },
+          streamingName: () => null,
+          activeCloudName: () => 'site.las',
+          onActiveChange: () => () => {},
+          studio: { state: () => ({ facts: null }), subscribe: () => () => {} },
+          results: null,
+          hasScan: () => true,
+          open: vi.fn(),
+        });
+        try {
+          setClipScope({ kept: 5, total: 9, mode: 'keep-inside' });
+          setClipOn('keep-inside');
+          expect(history).toEqual([]);
+          readout = false;
+          setClipScope(null);
+          setClipOn(null);
+          expect(history).toEqual(['Clip off']);
+        } finally {
+          mounted.dispose();
+          setClipReadoutShown(null);
+          setClipScope(null);
+          setClipOn(null);
+          delete doc.querySelectorAll;
+        }
+      });
+    });
+
     it('closing the scan says nothing, and the next scan does not hear an old clip turned off', async () => {
       await withRegion(async (history) => {
         const { createStateStrip } = await import('../src/ui/stateStrip');
