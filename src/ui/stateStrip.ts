@@ -109,10 +109,13 @@ export function createStateStrip(host: StateStripHost): StateStrip {
     if (id === 'clip') element.append(clipOff);
   }
 
-  /** Repaint one item; true when anything about it changed. */
-  const paint = (id: StripItemId, text: string | null, validity: SciState | null, short?: string, wait?: string): boolean => {
+  /**
+   * Repaint one item; true when anything about it changed. `spoken` is the
+   * text for the accessible name when it differs from the shown text.
+   */
+  const paint = (id: StripItemId, text: string | null, validity: SciState | null, short?: string, wait?: string, spoken?: string): boolean => {
     const b = buttons.get(id)!;
-    const key = `${text}|${validity}|${short}|${wait}`;
+    const key = `${text}|${validity}|${short}|${wait}|${spoken}`;
     if (b.dataset.key === key) return false;
     b.dataset.key = key;
     if (text === null) {
@@ -149,7 +152,7 @@ export function createStateStrip(host: StateStripHost): StateStrip {
     b.replaceChildren(...parts);
     b.dataset.validity = validity ?? '';
     const state = validity && caution(validity) ? ` (${STATE_LABEL[validity]})` : '';
-    const name = `${ITEM_NAME[id]}: ${text}${state}. ${ITEM_TARGET[id]}`;
+    const name = `${ITEM_NAME[id]}: ${spoken ?? text}${state}. ${ITEM_TARGET[id]}`;
     if (b.getAttribute('aria-label') !== name) b.setAttribute('aria-label', name);
     return true;
   };
@@ -290,11 +293,12 @@ export function createStateStrip(host: StateStripHost): StateStrip {
       const phrase = side ? clipModePhrase({ kept: 0, total: 0, mode: side }) : '';
       const clipText = s.clip ? clipStatusText(s.clip) : s.clipOn ? 'Clip on' : null;
       const clipLine = clipText === null ? null : `${clipText}${phrase ? ` · ${phrase}` : ''}`;
-      const clipChanged = paint('clip', clipLine, clipText === null ? null : 'info');
+      // Spoken (announcement and accessible name) with a comma: some screen
+      // readers read "·" aloud as "middle dot". The shown text keeps the dot.
+      const spokenLine = clipText === null ? '' : `${clipText}${phrase ? `, ${phrase}` : ''}`;
+      const clipChanged = paint('clip', clipLine, clipText === null ? null : 'info', undefined, undefined, spokenLine);
       clipOff.hidden = clipText === null;
       if (clipChanged && clipLine !== null) revealClip();
-      // Spoken with a comma: some screen readers read "·" aloud as "middle dot".
-      const spokenLine = clipText === null ? '' : `${clipText}${phrase ? `, ${phrase}` : ''}`;
       announceClip(clipLine === null ? 'off' : side ?? 'on', spokenLine, !!s.clip);
       const p = s.processing?.value;
       paint(

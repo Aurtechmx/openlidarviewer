@@ -260,6 +260,21 @@ describe('strip UI', () => {
     expect(css).toMatch(/\.olv-ss-clip \.olv-ss-text\s*\{[^}]*max-width:\s*none/);
   });
 
+  it('names the clip item with a comma where its text shows a middle dot', async () => {
+    const { createStateStrip } = await import('../src/ui/stateStrip');
+    const strip = createStateStrip({ open: vi.fn() });
+    const item = () => (strip.element as unknown as FakeEl).querySelector('.olv-ss-clip')!;
+    strip.render(readStrip(reads({ clip: () => ({ kept: 5, total: 9, mode: 'keep-inside' }), clipOn: () => 'keep-inside' })));
+    expect(item().textContent).toBe('Clipped: 5 of 9 points · Showing inside box');
+    expect(item().getAttribute('aria-label')).toBe('Clip box: Clipped: 5 of 9 points, Showing inside box. Opens the Clip box');
+    strip.render(readStrip(reads({ clip: () => null, clipOn: () => 'keep-outside' })));
+    expect(item().textContent).toBe('Clip on · Showing outside box');
+    expect(item().getAttribute('aria-label')).toBe('Clip box: Clip on, Showing outside box. Opens the Clip box');
+    // An item with no side phrase keeps its name as it was.
+    strip.render(readStrip(reads({ clip: () => ({ kept: 9, total: 9 }) })));
+    expect(item().getAttribute('aria-label')).toBe('Clip box: Clip on: keeps all 9 points. Opens the Clip box');
+  });
+
   it('says which side of the box is kept, and offers Turn off beside the clip item', async () => {
     const { createStateStrip } = await import('../src/ui/stateStrip');
     const { setClipTurnOff } = await import('../src/render/clip/clipScope');
