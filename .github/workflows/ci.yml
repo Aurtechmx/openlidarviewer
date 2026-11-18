@@ -172,6 +172,11 @@ jobs:
       # plain-build isolation rule against the shipped artifact.
       - name: Chunk-isolation contract (plain build)
         run: npm run test:build
+      # Reads the plain build test:build just wrote, before build:live replaces
+      # it. The live build's string array keeps the text of a function the
+      # bundler dropped, so a check of that build can miss the loss.
+      - name: Protected statements in the plain build (each phrase is in code the bundler kept)
+        run: npm run check:protected-phrases:built
       - name: Live-shell bundle budget (obfuscated build that ships)
         run: npm run build:live && npm run check:bundle
       - name: No test seam in the shipped build

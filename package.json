@@ -41,6 +41,7 @@
     "check:no-embed-origins": "node scripts/check-no-embed-origins.mjs",
     "check:deps": "node scripts/check-dep-singletons.mjs",
     "check:protected-phrases": "node scripts/check-protected-phrases.mjs",
+    "check:protected-phrases:built": "node scripts/check-protected-phrases.mjs --built dist",
     "preview": "vite preview",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",

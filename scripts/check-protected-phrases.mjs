@@ -2,9 +2,9 @@
 /**
  * check-protected-phrases.mjs
  *
- * Fails when a statement the app must keep saying is no longer in the source.
+ * Fails when a statement the app must keep saying is no longer in the app.
  * scripts/protected-phrases.json lists each statement with the surfaces it
- * must reach. Three rules, applied to `src/**\/*.ts` with comments removed:
+ * must reach. Three rules read `src/**\/*.ts` with comments removed:
  *   - ui: the phrase occurs somewhere in src/. Catches a statement whose text
  *     was deleted or reworded.
  *   - export: the phrase also occurs outside src/ui/ (or in the export panel).
@@ -14,25 +14,38 @@
  *     removal of the last code that reads the constant. Any reference counts,
  *     whether or not it puts the text on screen. An entry marked `knownUnused`
  *     is exempt: its constant had no reference when the entry was added.
+ * A fourth rule reads a production build, with `--built <dir>`:
+ *   - built: every 'ui' and 'export' phrase occurs in a .js, .mjs or .html
+ *     file under <dir>. The bundler drops code that nothing reaches, so this
+ *     catches text whose last caller was removed: a formatting function that
+ *     no display calls any more takes its text out of the build.
+ *     Run it on the plain build (`npm run build`). The live build's
+ *     string-array pass moves a module's strings into one array that stays
+ *     while any code in the module is used, so the text of a dropped function
+ *     stays too, and on that build this rule can pass text nothing shows.
  *
  * What it does not catch: a display site removed while the text stays in code
- * that still runs. Most entries name no constant (statements written inline in
- * a function or class body, and the method IDs), so only `ui` and `export`
- * apply to them. A status line that stops calling the function that formats
- * the text, or a caption that is still built but no longer appended to its
- * panel, leaves every rule green. DOM tests that read the text from the
- * rendered element are the guard for display.
+ * the bundler keeps. A phrase passes if any kept code holds it, on screen or
+ * not. These leave every rule green: one display site removed while another
+ * still shows the same text; a caption that is still built but no longer
+ * appended to its panel; on-screen text removed while an export still writes
+ * it. Most entries name no constant (statements written inline in a function
+ * or class body, and the method IDs), so `use` does not apply to them. DOM
+ * tests that read the text from the rendered element are the guard for
+ * display.
  *
  * The rules are a pure function of `read(path)` and `list(dir)` so
  * tests/protectedPhrases.test.ts can prove each one fails without touching the
- * real tree. `read` returns the file text or null; `list` returns the .ts files
+ * real tree. `read` returns the file text or null; `list` returns the files
  * under a directory.
  *
  * Usage: `node scripts/check-protected-phrases.mjs` (also
- * `npm run check:protected-phrases`).
+ * `npm run check:protected-phrases`), and after `npm run build`,
+ * `node scripts/check-protected-phrases.mjs --built dist` (also
+ * `npm run check:protected-phrases:built`).
  */
 
-import { readFileSync, readdirSync, statSync } from 'node:fs';
+import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, resolve, join } from 'node:path';
 import { isCliEntry } from './lib/isCliEntry.mjs';
@@ -43,6 +56,10 @@ import { isCliEntry } from './lib/isCliEntry.mjs';
 // the UI layer", with the export panel's own wording as the one UI exception.
 const UI_DIR = 'src/ui/';
 const EXPORT_PANEL = 'src/ui/ExportPanel.ts';
+// The built files that can put text in front of a user: scripts and pages.
+// Source maps, the precache list and copied documents quote text without
+// running it.
+const BUILT_FILE = /\.(?:js|mjs|html)$/;
 
 /**
  * Blank out line and block comments, keeping string and template literals and
@@ -198,9 +215,11 @@ const escapeRe = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
 /**
  * Check every entry. Returns `{ missing }`: one `{ id, surface }` per rule an
- * entry fails, with surface 'ui', 'export' or 'use'.
+ * entry fails, with surface 'ui', 'export', 'use' or 'built'. With
+ * `options.built` (a build directory such as 'dist'), every 'ui' and 'export'
+ * phrase must also occur in the JavaScript or HTML files under it.
  */
-export function checkProtectedPhrases(phrases, read, list) {
+export function checkProtectedPhrases(phrases, read, list, options = {}) {
   const files = list('src').filter((p) => p.endsWith('.ts'));
   const texts = new Map();
   for (const p of files) {
@@ -209,6 +228,15 @@ export function checkProtectedPhrases(phrases, read, list) {
   }
   // Built on first use: only entries with a constant need it.
   let codes = null;
+  let builtTexts = null;
+  if (options.built) {
+    builtTexts = [];
+    for (const p of list(options.built)) {
+      if (!BUILT_FILE.test(p)) continue;
+      const t = read(p);
+      if (t != null) builtTexts.push(t);
+    }
+  }
   const inExportCode = (p) => !p.startsWith(UI_DIR) || p === EXPORT_PANEL;
 
   const missing = [];
@@ -230,34 +258,59 @@ export function checkProtectedPhrases(phrases, read, list) {
       }
       if (refs < 1) missing.push({ id: e.id, surface: 'use' });
     }
+    if (
+      builtTexts != null &&
+      (e.surfaces.includes('ui') || e.surfaces.includes('export')) &&
+      !builtTexts.some((t) => t.includes(e.phrase))
+    ) {
+      missing.push({ id: e.id, surface: 'built' });
+    }
   }
   return { missing };
 }
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 
-function listTs(dir) {
+function listFiles(dir) {
   const out = [];
   const walk = (rel) => {
     for (const name of readdirSync(resolve(ROOT, rel))) {
       const p = join(rel, name);
       if (statSync(resolve(ROOT, p)).isDirectory()) walk(p);
-      else if (p.endsWith('.ts')) out.push(p.split('\\').join('/'));
+      else out.push(p.split('\\').join('/'));
     }
   };
   walk(dir);
   return out;
 }
 
-function main() {
+function main(argv) {
+  const at = argv.indexOf('--built');
+  const built = at === -1 ? null : argv[at + 1];
+  if (at !== -1 && !built) {
+    console.error('check:protected-phrases: --built needs a directory, for example --built dist.');
+    process.exit(2);
+  }
+  if (built && !existsSync(resolve(ROOT, built, 'index.html'))) {
+    console.error(`check:protected-phrases: no build at ${built}. Run "npm run build" first.`);
+    process.exit(1);
+  }
   const phrases = JSON.parse(readFileSync(resolve(ROOT, 'scripts/protected-phrases.json'), 'utf8'));
-  const { missing } = checkProtectedPhrases(phrases, (p) => readFileSync(resolve(ROOT, p), 'utf8'), listTs);
+  const { missing } = checkProtectedPhrases(
+    phrases,
+    (p) => readFileSync(resolve(ROOT, p), 'utf8'),
+    listFiles,
+    built ? { built } : {},
+  );
   if (missing.length > 0) {
     console.error('check:protected-phrases FAILED. A protected statement is no longer in the app:');
     for (const m of missing) console.error(`  ${m.id} (${m.surface})`);
+    if (missing.some((m) => m.surface === 'built')) {
+      console.error(`(built): in no JavaScript or HTML file under ${built}; the bundler kept no code that holds it.`);
+    }
     process.exit(1);
   }
-  console.log(`check:protected-phrases OK — ${phrases.length} phrases`);
+  console.log(`check:protected-phrases OK — ${phrases.length} phrases${built ? `, each also in ${built}` : ''}`);
 }
 
-if (isCliEntry(import.meta.url)) main();
+if (isCliEntry(import.meta.url)) main(process.argv.slice(2));

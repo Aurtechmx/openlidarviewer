@@ -179,6 +179,71 @@ describe('checkProtectedPhrases', () => {
     expect(checkProtectedPhrases(phrases, read, list).missing).toEqual([]);
   });
 
+  describe('built output', () => {
+    const uiEntry: Entry[] = [{ id: 'p4', phrase: 'Not survey-grade.', surfaces: ['ui'] }];
+    const srcFile = { 'src/ui/x.ts': "export const a = 'Not survey-grade.';" };
+    const built = { built: 'dist' };
+
+    it('fails a phrase that is in the source but not in the built output', () => {
+      const { read, list } = fake({
+        ...srcFile,
+        'dist/index.html': '<!doctype html><title>Viewer</title>',
+        'dist/assets/index-a1.js': 'const a="something else";',
+      });
+      expect(checkProtectedPhrases(uiEntry, read, list, built).missing).toEqual([{ id: 'p4', surface: 'built' }]);
+    });
+
+    it('passes a phrase that is in the source and the built output', () => {
+      const { read, list } = fake({
+        ...srcFile,
+        'dist/index.html': '<!doctype html><title>Viewer</title>',
+        'dist/assets/index-a1.js': 'const a="Not survey-grade.";',
+      });
+      expect(checkProtectedPhrases(uiEntry, read, list, built).missing).toEqual([]);
+    });
+
+    it('accepts a phrase in built HTML', () => {
+      const { read, list } = fake({ ...srcFile, 'dist/index.html': '<p>Not survey-grade.</p>' });
+      expect(checkProtectedPhrases(uiEntry, read, list, built).missing).toEqual([]);
+    });
+
+    it('checks export phrases in the built output', () => {
+      const phrases: Entry[] = [{ id: 'p2', phrase: 'Preview export', surfaces: ['export'] }];
+      const { read, list } = fake({
+        'src/export/x.ts': "export const a = 'Preview export';",
+        'dist/assets/index-a1.js': 'const a="other";',
+      });
+      expect(checkProtectedPhrases(phrases, read, list, built).missing).toEqual([{ id: 'p2', surface: 'built' }]);
+    });
+
+    it('reads only built JavaScript and HTML', () => {
+      const { read, list } = fake({
+        ...srcFile,
+        'dist/assets/index-a1.js': 'const a="other";',
+        'dist/sw-precache.json': '["Not survey-grade."]',
+        'dist/llms.txt': 'Not survey-grade.',
+        'dist/assets/index-a1.js.map': '{"sourcesContent":["Not survey-grade."]}',
+      });
+      expect(checkProtectedPhrases(uiEntry, read, list, built).missing).toEqual([{ id: 'p4', surface: 'built' }]);
+    });
+
+    it('reports a phrase missing from both the source and the build once per rule', () => {
+      const { read, list } = fake({
+        'src/ui/x.ts': "export const a = 'other';",
+        'dist/assets/index-a1.js': 'const a="other";',
+      });
+      expect(checkProtectedPhrases(uiEntry, read, list, built).missing).toEqual([
+        { id: 'p4', surface: 'ui' },
+        { id: 'p4', surface: 'built' },
+      ]);
+    });
+
+    it('does not read the build without the option', () => {
+      const { read, list } = fake({ ...srcFile, 'dist/assets/index-a1.js': 'const a="other";' });
+      expect(checkProtectedPhrases(uiEntry, read, list).missing).toEqual([]);
+    });
+  });
+
   it('ships only the public fields', () => {
     const phrases = JSON.parse(readFileSync(resolve(ROOT, 'scripts/protected-phrases.json'), 'utf8')) as Record<string, unknown>[];
     const allowed = new Set(['id', 'category', 'phrase', 'surfaces', 'constant', 'knownUnused']);
