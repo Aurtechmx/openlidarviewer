@@ -1,6 +1,8 @@
 /**
- * When the DEM GeoTIFFs carry no CRS key but a .prj in the package holds the
- * CRS, the README says so and names that .prj.
+ * When the DEM GeoTIFFs carry no horizontal CRS key but a .prj in the
+ * package holds the CRS, the README says so and names that .prj. A stored
+ * vertical code still gives the DTM and DSM their vertical keys, so the line
+ * names the horizontal key only.
  *
  * GDAL's GeoTIFF driver does not read a .prj beside a .tif, so a GIS opens
  * those rasters with no CRS. That happens for an EPSG code outside 1024..32766
@@ -36,21 +38,21 @@ function geoKeys(bytes: Uint8Array): Map<number, number> {
 }
 
 const LINES = [
-  '  GeoTIFF CRS    No .tif file here carries a CRS key. Assign every GeoTIFF in',
-  '                 this folder the horizontal CRS in s-chm.prj.',
+  '  GeoTIFF CRS    No .tif file here carries a horizontal CRS key. Assign every',
+  '                 GeoTIFF in this folder the horizontal CRS in s-chm.prj.',
 ];
 const LINE = LINES[0]!;
 
 const CODE_90000_WKT = 'PROJCS["Custom grid",GEOGCS["WGS 84",DATUM["WGS_1984",SPHEROID["WGS 84",6378137,298.257223563]],PRIMEM["Greenwich",0],UNIT["degree",0.0174532925199433]],PROJECTION["Transverse_Mercator"],UNIT["metre",1],AUTHORITY["EPSG","90000"]]';
 const NO_CODE_WKT = 'PROJCS["Site transverse Mercator",GEOGCS["WGS 84",DATUM["WGS_1984",SPHEROID["WGS 84",6378137,298.257223563]],PRIMEM["Greenwich",0],UNIT["degree",0.0174532925199433]],PROJECTION["Transverse_Mercator"],PARAMETER["central_meridian",-111.5],PARAMETER["scale_factor",0.9999],UNIT["metre",1]]';
 
-function dtm(epsg: number | null, crs: string): DtmGrid {
+function dtm(epsg: number | null, crs: string, verticalEpsg: number | null = null): DtmGrid {
   return {
     cols: 2, rows: 2, cellSizeM: 1, originH1: 0, originH2: 0,
     z: new Float32Array([1, 2, 3, 4]), coverage: new Uint8Array([2, 2, 2, 2]),
     confidence: new Float32Array(4).fill(90), counts: new Uint32Array(4).fill(1),
     interpDistanceCells: new Float32Array(4), meanConfidence: 90,
-    crs, horizontalEpsg: epsg, verticalDatum: null, verticalEpsg: null, verticalUnitToMetres: 1,
+    crs, horizontalEpsg: epsg, verticalDatum: null, verticalEpsg, verticalUnitToMetres: 1,
     coverageMode: 'full', sourcePointCount: 100, analyzedPointCount: 100, warnings: [],
   } as unknown as DtmGrid;
 }
@@ -71,6 +73,20 @@ describe('the GeoTIFFs carry no CRS key and a .prj holds the CRS', () => {
     expect(extractEntry(zip, 's-chm.prj')).toBeTruthy();
     // The existing line stays.
     expect(text.replace(/\s+/g, ' ')).toContain('EPSG:90000 cannot be stored in GeoTIFF keys; the CRS is in the .prj only.');
+  });
+
+  it('an EPSG code outside the range with a WKT and a stored vertical code', () => {
+    const zip = buildDemPackage(demResultAround(dtm(90000, 'EPSG:90000', 5703)), { ...OPTS, wkt: CODE_90000_WKT });
+    const keys = geoKeys(extractEntry(zip, 's-dtm.tif')!);
+    // The DTM carries its vertical CRS keys, and no horizontal one.
+    expect(keys.get(4096)).toBe(5703);
+    expect(keys.get(4099)).toBe(9001);
+    expect(keys.has(3072)).toBe(false);
+    expect(keys.has(2048)).toBe(false);
+    const text = readme(zip);
+    expect(text).toContain(LINES.join('\n'));
+    expect(text).not.toContain('carries a CRS key');
+    expect(text).toContain('Vertical CRS   EPSG:5703');
   });
 
   it('a custom horizontal WKT with no EPSG code', () => {

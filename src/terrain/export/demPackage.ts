@@ -648,8 +648,9 @@ export function buildDemReadme(opts: DemReadmeOptions): string {
           : []),
     // GDAL's GeoTIFF driver does not read a .prj beside a .tif, and the
     // evidence raster has no .prj of its own: the CHM's holds the horizontal CRS.
+    // A stored vertical code still gives the DTM and DSM their vertical keys.
     ...(opts.placed !== false && opts.crsInPrjOnly
-      ? labelledReadmeLines('GeoTIFF CRS', `No .tif file here carries a CRS key. Assign every GeoTIFF in this folder the horizontal CRS in ${basename}-chm.prj.`)
+      ? labelledReadmeLines('GeoTIFF CRS', `No .tif file here carries a horizontal CRS key. Assign every GeoTIFF in this folder the horizontal CRS in ${basename}-chm.prj.`)
       : []),
     opts.placed === false
       ? `  Bounds (local offsets in the project frame, ${hUnit})`
