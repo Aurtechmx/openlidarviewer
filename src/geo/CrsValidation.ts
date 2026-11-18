@@ -26,7 +26,8 @@
  *       claim a metric value without an explicit projection step.
  *
  *   `unknown-needs-confirmation`
- *       Confidence is `'none'` OR the kind is `'unknown'`. Block the
+ *       Confidence is `'none'`, the kind is `'unknown'`, or the kind is
+ *       `'projected'` with no known linear unit. Block the
  *       cubic-metre headline; show the value as "—" with a "confirm CRS
  *       to measure" prompt.
  *
@@ -52,7 +53,7 @@
  * with no DOM / proj4 stubbing.
  */
 
-import type { ResolvedCrs } from './CoordinateTypes';
+import { isLinearUnitKnown, type ResolvedCrs } from './CoordinateTypes';
 
 /** The verdict tags the inspector branches on. */
 export type CrsValidity =
@@ -120,7 +121,8 @@ export interface CrsValidationResult {
  * The function intentionally does NOT consult `userConfirmed`. A user
  * who explicitly chose "treat as local" gets the `safe-explicit-local`
  * branch via `kind === 'local'`; a user who chose a projected CRS
- * gets `safe-metric` via `kind === 'projected'`. The override flag
+ * gets `safe-metric` via `kind === 'projected'` when its linear unit is
+ * known (`isLinearUnitKnown`). The override flag
  * matters for round-tripping in sessions, not for measurement gating.
  */
 export function validateCrsForMeasurement(
@@ -164,6 +166,19 @@ export function validateCrsForMeasurement(
           canSaveMeasurement: false,
           reason: WEB_MERCATOR_REASON,
           suggestion: 'Reproject to a conformal local CRS (UTM, state plane) before measuring.',
+        };
+      }
+      // A projected kind is not a unit. With no known linear unit (the
+      // placeholder factor 1) the metres would be source units relabelled, so
+      // this verdict agrees with the context's unit gate and withholds them.
+      if (!isLinearUnitKnown(crs)) {
+        return {
+          validity: 'unknown-needs-confirmation',
+          severity: 'warn',
+          canDisplayMetric: false,
+          canSaveMeasurement: false,
+          reason: 'Projected CRS with no known linear unit; metric measurements are withheld.',
+          suggestion: 'Pick a CRS whose unit is known in the Inspector before measuring.',
         };
       }
       return {

@@ -72,15 +72,15 @@ const UNIT_COLS: Record<UnitCol, UnitSpec> = {
     expectValidity: 'safe-metric',
   },
   // Projected but the unit is not one we can honour (e.g. a British-foot GeoTIFF
-  // code). The ladder alone would pass this — kind is still 'projected' — so the
-  // cell exists to prove `isLinearUnitKnown` is what closes it.
+  // code). Kind is still 'projected'; `isLinearUnitKnown` refuses it, and the
+  // ladder now refuses it too, so the verdict a volume Save reads agrees.
   unknown: {
     linearUnit: 'unknown',
     linearUnitToMetres: 1,
     isGeographic: false,
     expectKnown: false,
     expectPermitted: false,
-    expectValidity: 'safe-metric',
+    expectValidity: 'unknown-needs-confirmation',
   },
   // Geographic (lat/lon in degrees). The ladder refuses it (requires-projection)
   // and the unit gate refuses it too; both must agree on "not permitted".
