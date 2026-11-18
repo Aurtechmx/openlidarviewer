@@ -216,6 +216,26 @@ describe('strip UI', () => {
     expect(off().hidden).toBe(true);
   });
 
+  it('keeps the clip item itself at full width: no shrink, no cap, outranking the phone item rule', async () => {
+    // A text-level check only: it reads the rules, it does not lay the strip out.
+    // Real overlap is for the packaged-build walkthrough to confirm.
+    const css = (await import('node:fs')).readFileSync(new URL('../src/ui/stateStrip.css', import.meta.url), 'utf8');
+    const rule = /(^|\n)\s*([^{}@]*\.olv-ss-clip(?![\w-])[^{}]*)\{([^}]*)\}/g;
+    let clipItem: { selector: string; body: string } | null = null;
+    for (const m of css.matchAll(rule)) {
+      const selector = m[2].trim();
+      if (!/\.olv-ss-text/.test(selector)) clipItem = { selector, body: m[3] };
+    }
+    expect(clipItem, 'no rule for the clip item itself').not.toBeNull();
+    expect(clipItem!.body).toMatch(/flex-shrink:\s*0/);
+    expect(clipItem!.body).toMatch(/max-width:\s*none/);
+    // Class count stands in for specificity: these selectors hold classes only.
+    const classes = (sel: string): number => (sel.match(/\.[\w-]+/g) ?? []).length;
+    const phone = /@media[^{]*\{[\s\S]*?\n\s*(\.olv-ss-item)\s*\{[^}]*max-width:\s*100%/.exec(css);
+    expect(phone, 'the phone .olv-ss-item max-width rule moved').not.toBeNull();
+    expect(classes(clipItem!.selector)).toBeGreaterThan(classes(phone![1]));
+  });
+
   it('does not cap the clip item text, so the side phrase is never cut', async () => {
     const css = (await import('node:fs')).readFileSync(new URL('../src/ui/stateStrip.css', import.meta.url), 'utf8');
     expect(css).toMatch(/\.olv-ss-clip \.olv-ss-text\s*\{[^}]*max-width:\s*none/);

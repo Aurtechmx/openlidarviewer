@@ -53,6 +53,9 @@
 .olv-ss-dataset .olv-ss-text { color: var(--text); }
 /* The clip item carries the side kept after its count; that phrase must not be cut. */
 .olv-ss-clip .olv-ss-text { max-width: none; overflow: visible; text-overflow: clip; }
+/* The item itself must not shrink or be capped either, or its uncut text paints over
+   Turn off beside it. Two classes outrank the phone rule `.olv-ss-item { max-width: 100% }`. */
+.olv-state-strip .olv-ss-clip { flex-shrink: 0; max-width: none; }
 .olv-ss-glyph { flex: none; }
 .olv-ss-wait { flex: none; font-variant-numeric: tabular-nums; }
 /* The elapsed time stays out of the button's text (stateStrip.ts). */
