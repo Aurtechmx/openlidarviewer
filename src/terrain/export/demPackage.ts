@@ -279,9 +279,10 @@ export interface DemReadmeOptions {
   /** False when the rasters carry no world origin: no CRS is written and the README says so. Default true. */
   readonly placed?: boolean;
   /**
-   * True when placed rasters carry no CRS: no EPSG code and no horizontal WKT
-   * resolved, so they sit at the scan's own source coordinates. The README then
-   * names that frame instead of a projected CRS. Default false.
+   * True when placed rasters carry no CRS: no EPSG code the GeoTIFF keys can
+   * hold and no horizontal WKT, so they sit at the scan's own source
+   * coordinates. The README then names that frame instead of a projected CRS.
+   * Default false.
    */
   readonly sourceCoordinates?: boolean;
   readonly result: AnalyseContoursResult;
@@ -625,11 +626,15 @@ export function buildDemReadme(opts: DemReadmeOptions): string {
     `  NODATA value   ${opts.noData ?? DEFAULT_NO_DATA}`,
     `  Coverage       ${pct(cov.measured)} measured, ${pct(cov.interp)} interpolated`,
     // The frame wording matches the flow package's `scan-source-coordinates`.
+    // A resolved code the keys cannot hold is named by its own line instead,
+    // since a CRS was resolved; the bounds below still name the source frame.
     ...(opts.placed === false
       ? ['  Frame          local frame, not georeferenced; elevations recentred']
-      : opts.sourceCoordinates
-        ? ['  Frame          scan source coordinates; no CRS resolved; rasters carry no CRS']
-        : unstoredEpsgReadmeLines(opts.unstoredEpsg)),
+      : opts.unstoredEpsg
+        ? unstoredEpsgReadmeLines(opts.unstoredEpsg)
+        : opts.sourceCoordinates
+          ? ['  Frame          scan source coordinates; no CRS resolved; rasters carry no CRS']
+          : []),
     opts.placed === false
       ? `  Bounds (local offsets in the project frame, ${hUnit})`
       : opts.sourceCoordinates
@@ -1046,7 +1051,7 @@ export function assembleDemPackage(
   }
   const readme = buildDemReadme({
     placed,
-    sourceCoordinates: placed && epsg == null && horizontalWkt == null,
+    sourceCoordinates: placed && !isGeoTiffEpsgCode(epsg) && horizontalWkt == null,
     verticalUnitToMetres: options.verticalUnitToMetres ?? null,
     verticalGeoKeys,
     unstoredEpsg: unstorableEpsg ? { epsg, inPrj: horizontalWkt != null || !!options.wkt } : null,

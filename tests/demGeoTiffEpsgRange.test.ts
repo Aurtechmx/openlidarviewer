@@ -101,15 +101,20 @@ describe('the DEM package for a code outside the GeoTIFF range', () => {
     expect(keys.has(3072)).toBe(false);
     expect(new TextDecoder().decode(extractEntry(zip, 's-dtm.prj')!)).toContain('AUTHORITY["EPSG","90000"]');
     expect(readme(zip)).toContain('EPSG:90000 cannot be stored in GeoTIFF keys; the CRS is in the .prj only.');
+    expect(readme(zip)).toContain('Bounds (CRS units, projected)');
   });
 
-  it('a code with no WKT: no CRS key, no .prj, and the README says the rasters carry no CRS', () => {
-    const zip = buildDemPackage(demResultAround(dtm(163684)), OPTS);
+  it.each([90000, 163684])('EPSG %i with no WKT: no CRS key, no .prj, and the README names scan source coordinates', (epsg) => {
+    const zip = buildDemPackage(demResultAround(dtm(epsg)), { ...OPTS, linearUnit: 'unknown' });
     const keys = geoKeys(extractEntry(zip, 's-dtm.tif')!);
     expect(keys.get(1024)).toBe(32767);
     expect(keys.has(3072)).toBe(false);
     expect(extractEntry(zip, 's-dtm.prj')).toBeFalsy();
-    expect(readme(zip)).toContain('EPSG:163684 cannot be stored in GeoTIFF keys; the rasters carry no CRS.');
+    expect(extractEntry(zip, 's.prj')).toBeFalsy();
+    const text = readme(zip);
+    expect(text).toContain(`EPSG:${epsg} cannot be stored in GeoTIFF keys; the rasters carry no CRS.`);
+    expect(text).toContain('Bounds (scan source coordinates, units)');
+    expect(text).not.toContain('CRS units, projected');
   });
 
   it('EPSG:32612 is unchanged and the README says nothing about it', () => {
