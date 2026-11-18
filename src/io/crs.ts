@@ -658,7 +658,8 @@ export function crsFromWkt(wkt: string): CrsInfo {
   // Linear units. A projected WKT typically contains TWO UNIT clauses:
   // an angular one inside the nested GEOGCS (e.g. degrees), then the
   // projected linear one at the top level (metres / feet / etc.). We need
-  // the LAST one in the horizontal slice for projected CRSs. For geographic
+  // the LAST one in the horizontal slice that is not inside the base GEOGCS,
+  // the projection or its parameters (see lastLinearUnit). For geographic
   // CRSs the unit is degrees and the "linear" field falls back to 'unknown'.
   const projectedPresent = horizNodes.some((n) => isProjectedKeyword(n.keyword));
   // A geodetic root is geocentric (Cartesian X/Y/Z from the Earth's centre) or,
@@ -1002,13 +1003,27 @@ function firstNumericArg(node: WktNode): number | undefined {
 }
 
 /**
+ * Clauses whose units are not the projected CRS's own: the base geographic CRS
+ * (its angular unit, its ellipsoid's length unit), and the projection and its
+ * parameters (a false easting in metres on a foot grid).
+ */
+const FOREIGN_UNIT_SCOPES: ReadonlySet<string> = new Set([
+  'GEOGCS', 'GEOGCRS', 'GEOGRAPHICCRS', 'BASEGEOGCRS', 'BASEGEODCRS', 'PARAMETER', 'CONVERSION', 'PROJECTION',
+]);
+
+/**
  * The LAST linear unit clause among `candidates` (document order), returning
  * its name + scale. WKT1 `UNIT` and WKT2 `LENGTHUNIT` are read; `ANGLEUNIT` is
  * not. A node qualifies only when it has a quoted name and a numeric scale.
  * The caller passes the horizontal slice of a tree whose BOUNDCRS wrappers were
  * already reduced to their source CRS, so a target CRS's unit is never seen.
+ * A unit inside a {@link FOREIGN_UNIT_SCOPES} clause is skipped: a WKT1 PROJCS
+ * with no UNIT of its own otherwise took its GEOGCS degree as a linear unit.
  */
 function lastLinearUnit(candidates: readonly WktNode[]): { name: string; scale: number } | undefined {
+  const scopes = candidates.filter((n) => FOREIGN_UNIT_SCOPES.has(n.keyword));
+  const inForeignScope = (n: WktNode): boolean =>
+    scopes.some((s) => s.start < n.start && n.start < (s.end ?? Infinity));
   let result: { name: string; scale: number } | undefined;
   for (const n of candidates) {
     // WKT1 spells the unit `UNIT[...]`; WKT2 (ISO 19162, emitted by modern
@@ -1016,6 +1031,7 @@ function lastLinearUnit(candidates: readonly WktNode[]): { name: string; scale: 
     // only `UNIT` silently dropped a declared foot unit and defaulted to metre,
     // reporting every distance 3.28x too small on a WKT2 foot-CRS file.
     if (n.keyword !== 'UNIT' && n.keyword !== 'LENGTHUNIT') continue;
+    if (inForeignScope(n)) continue;
     const name = wktNodeName(n);
     if (name === undefined) continue;
     const scale = wktFirstNumber(n);
