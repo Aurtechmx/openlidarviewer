@@ -12,6 +12,7 @@
 import './stateStrip.css';
 import { el } from './dom';
 import { announcePolite } from './politeAnnounce';
+import { MOBILE_LANDSCAPE_MAX_HEIGHT, MOBILE_MAX_WIDTH } from './isMobileDevice';
 import { fullFileAvailability, reloadAvailability, reviewSampleTip, sampleActionLinks } from '../app/fullFileActions';
 import { STATE_GLYPH, STATE_LABEL, type SciState } from './stateChip';
 import { linearUnitLabel } from '../io/crs';
@@ -69,6 +70,13 @@ const ITEM_TARGET: Readonly<Record<StripItemId, string>> = {
  */
 export const CLIP_ANNOUNCE_WAIT_MS = 600;
 
+/**
+ * The touch-phone layout, where the strip keeps one row and scrolls sideways
+ * (the matching rule in stateStrip.css).
+ */
+export const STRIP_SCROLL_QUERY =
+  `(pointer: coarse) and (max-width: ${MOBILE_MAX_WIDTH}px), (pointer: coarse) and (max-height: ${MOBILE_LANDSCAPE_MAX_HEIGHT}px)`;
+
 /** A caution worth a glyph on the strip: anything short of measured or info. */
 function caution(v: SciState): boolean {
   return v !== 'measured' && v !== 'info';
@@ -99,10 +107,11 @@ export function createStateStrip(host: StateStripHost): StateStrip {
     if (id === 'clip') element.append(clipOff);
   }
 
-  const paint = (id: StripItemId, text: string | null, validity: SciState | null, short?: string, wait?: string): void => {
+  /** Repaint one item; true when anything about it changed. */
+  const paint = (id: StripItemId, text: string | null, validity: SciState | null, short?: string, wait?: string): boolean => {
     const b = buttons.get(id)!;
     const key = `${text}|${validity}|${short}|${wait}`;
-    if (b.dataset.key === key) return;
+    if (b.dataset.key === key) return false;
     b.dataset.key = key;
     if (text === null) {
       // A hidden item keeps no text: a task that has left must not stay in the
@@ -111,7 +120,7 @@ export function createStateStrip(host: StateStripHost): StateStrip {
       b.replaceChildren();
       b.removeAttribute('aria-label');
       b.dataset.validity = '';
-      return;
+      return true;
     }
     b.hidden = false;
     const parts: Node[] = [];
@@ -140,6 +149,27 @@ export function createStateStrip(host: StateStripHost): StateStrip {
     const state = validity && caution(validity) ? ` (${STATE_LABEL[validity]})` : '';
     const name = `${ITEM_NAME[id]}: ${text}${state}. ${ITEM_TARGET[id]}`;
     if (b.getAttribute('aria-label') !== name) b.setAttribute('aria-label', name);
+    return true;
+  };
+
+  // On a touch phone the strip is one row that scrolls sideways and the clip
+  // item sits fifth, so it can rest off-screen. When it appears or its text
+  // changes, the strip itself is scrolled (never the page, which
+  // scrollIntoView can move) until the item and Turn off beside it clear the
+  // fade at the row's end; an item wider than the row shows its start.
+  const revealClip = (): void => {
+    if (typeof matchMedia !== 'function' || !matchMedia(STRIP_SCROLL_QUERY).matches) return;
+    const item = buttons.get('clip')!;
+    const cs = typeof getComputedStyle === 'function' ? getComputedStyle(element) : null;
+    const padStart = parseFloat(cs?.paddingLeft ?? '') || 0;
+    const fade = parseFloat(cs?.paddingRight ?? '') || 0;
+    const start = item.offsetLeft - padStart;
+    const end = clipOff.hidden ? item.offsetLeft + item.offsetWidth : clipOff.offsetLeft + clipOff.offsetWidth;
+    const room = element.clientWidth - fade;
+    let next = element.scrollLeft;
+    if (end > next + room) next = end - room;
+    if (start < next) next = Math.max(0, start);
+    if (next !== element.scrollLeft) element.scrollLeft = next;
   };
 
   // The strip is a row of buttons, not a live region, so clip changes are said
@@ -252,8 +282,9 @@ export function createStateStrip(host: StateStripHost): StateStrip {
       const phrase = side ? clipModePhrase({ kept: 0, total: 0, mode: side }) : '';
       const clipText = s.clip ? clipStatusText(s.clip) : s.clipOn ? 'Clip on' : null;
       const clipLine = clipText === null ? null : `${clipText}${phrase ? ` · ${phrase}` : ''}`;
-      paint('clip', clipLine, clipText === null ? null : 'info');
+      const clipChanged = paint('clip', clipLine, clipText === null ? null : 'info');
       clipOff.hidden = clipText === null;
+      if (clipChanged && clipLine !== null) revealClip();
       announceClip(clipLine === null ? 'off' : side ?? 'on', clipLine ?? '', !!s.clip);
       const p = s.processing?.value;
       paint(

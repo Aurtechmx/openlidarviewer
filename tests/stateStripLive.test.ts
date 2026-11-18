@@ -377,6 +377,81 @@ describe('strip UI', () => {
     });
   });
 
+  describe('the clip item on a touch phone', () => {
+    /** Layout numbers the fake DOM does not compute. */
+    type Box = { offsetLeft: number; offsetWidth: number; clientWidth: number; scrollLeft: number };
+    const setBox = (n: FakeEl, b: Partial<Box>): void => { Object.assign(n, b); };
+    const box = (n: FakeEl): Box => n as unknown as Box;
+
+    /** A strip whose row runs past a 300 px screen: the clip item at 400..600, Turn off at 600..660. */
+    const make = async (phone: boolean) => {
+      const { createStateStrip, STRIP_SCROLL_QUERY } = await import('../src/ui/stateStrip');
+      vi.stubGlobal('matchMedia', (q: string) => ({ matches: phone && q === STRIP_SCROLL_QUERY }));
+      vi.stubGlobal('getComputedStyle', () => ({ paddingLeft: '4px', paddingRight: '32px' }));
+      const strip = createStateStrip({ open: vi.fn() });
+      const root = strip.element as unknown as FakeEl;
+      const item = root.querySelector('.olv-ss-clip')!;
+      const off = root.querySelector('.olv-ss-clipoff')!;
+      const scrolled = vi.fn();
+      (item as unknown as { scrollIntoView: () => void }).scrollIntoView = scrolled;
+      setBox(root, { clientWidth: 300, scrollLeft: 0 });
+      setBox(item, { offsetLeft: 400, offsetWidth: 200 });
+      setBox(off, { offsetLeft: 600, offsetWidth: 60 });
+      return { strip, root, scrolled };
+    };
+    const clipOn = (kept: number) => readStrip(reads({ clip: () => ({ kept, total: 9, mode: 'keep-inside' }), clipOn: () => 'keep-inside' }));
+
+    it('scrolls the strip, and only the strip, to show the clip item and Turn off when it appears', async () => {
+      try {
+        const { strip, root, scrolled } = await make(true);
+        strip.render(readStrip(reads()));
+        expect(box(root).scrollLeft).toBe(0);
+        strip.render(clipOn(5));
+        // Turn off's right edge (660) clears the 32 px fade at the strip's end.
+        expect(box(root).scrollLeft).toBe(660 - (300 - 32));
+        expect(scrolled).not.toHaveBeenCalled();
+      } finally {
+        vi.unstubAllGlobals();
+      }
+    });
+
+    it('brings it back when its text changes, and leaves the strip where the user put it otherwise', async () => {
+      try {
+        const { strip, root } = await make(true);
+        strip.render(clipOn(5));
+        box(root).scrollLeft = 0;
+        // The same facts again: the user's scroll stays.
+        strip.render(clipOn(5));
+        expect(box(root).scrollLeft).toBe(0);
+        strip.render(clipOn(6));
+        expect(box(root).scrollLeft).toBe(392);
+        // Scrolled past it: the item's start comes back into view.
+        box(root).scrollLeft = 500;
+        strip.render(clipOn(7));
+        expect(box(root).scrollLeft).toBe(400 - 4);
+      } finally {
+        vi.unstubAllGlobals();
+      }
+    });
+
+    it('does not scroll outside the touch-phone layout', async () => {
+      try {
+        const { strip, root } = await make(false);
+        strip.render(clipOn(5));
+        expect(box(root).scrollLeft).toBe(0);
+      } finally {
+        vi.unstubAllGlobals();
+      }
+    });
+
+    it('uses the same media condition as the stylesheet rule that makes the strip scroll', async () => {
+      const { STRIP_SCROLL_QUERY } = await import('../src/ui/stateStrip');
+      const css = (await import('node:fs')).readFileSync(new URL('../src/ui/stateStrip.css', import.meta.url), 'utf8');
+      const rule = new RegExp(`@media ${STRIP_SCROLL_QUERY.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')} \\{\\s*\\.olv-state-strip \\{[^}]*overflow-x: auto`);
+      expect(css).toMatch(rule);
+    });
+  });
+
   it('shows the elapsed time and the estimate in their own span, out of the accessible name and the button text', async () => {
     const { createStateStrip } = await import('../src/ui/stateStrip');
     const strip = createStateStrip({ open: vi.fn() });
