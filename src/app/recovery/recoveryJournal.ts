@@ -288,6 +288,22 @@ export async function openIndexedDbStore(idb: IDBFactory): Promise<RecoveryStore
 }
 
 /**
+ * Copy the localStorage fallback entries into `target`, oldest first, then
+ * remove the fallback key. The key stays when any put rejects, so a failed
+ * move loses nothing. Returns the number of entries moved.
+ */
+export async function migrateLocalFallback(
+  target: RecoveryStore,
+  storage: Pick<Storage, 'getItem' | 'setItem' | 'removeItem'>,
+  key = 'olv:recovery:journal',
+): Promise<number> {
+  const entries = (await createLocalStore(storage, key).list()).slice().reverse();
+  for (const e of entries) await target.put(e);
+  if (storage.getItem(key) !== null) storage.removeItem(key);
+  return entries.length;
+}
+
+/**
  * Open the best available store: IndexedDB, else localStorage, else null.
  * Each candidate is probed with a read so a store that opens but cannot be
  * used (some private modes) falls through instead of failing later.
@@ -300,6 +316,13 @@ export async function openRecoveryStore(env: {
     try {
       const store = await openIndexedDbStore(env.indexedDB);
       await store.list();
+      if (env.localStorage) {
+        try {
+          await migrateLocalFallback(store, env.localStorage);
+        } catch {
+          // The fallback copy stays where it is.
+        }
+      }
       return store;
     } catch {
       // Fall through to localStorage.
