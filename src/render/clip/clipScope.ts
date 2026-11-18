@@ -9,6 +9,24 @@
 export interface ClipScope {
   readonly kept: number;
   readonly total: number;
+  /** Which side of the box is kept; the state strip says it beside the count. */
+  readonly mode?: 'keep-inside' | 'keep-outside';
+}
+
+let turnOff: (() => void) | null = null;
+
+/** The Clip panel registers its own clear here, so the state strip can offer Turn off. */
+export function setClipTurnOff(fn: (() => void) | null): void {
+  turnOff = fn;
+}
+
+export function clipTurnOff(): (() => void) | null {
+  return turnOff;
+}
+
+/** "Showing inside box" / "Showing outside box"; empty when the mode is unknown. */
+export function clipModePhrase(s: ClipScope): string {
+  return s.mode === undefined ? '' : `Showing ${s.mode === 'keep-inside' ? 'inside' : 'outside'} box`;
 }
 
 let current: ClipScope | null = null;

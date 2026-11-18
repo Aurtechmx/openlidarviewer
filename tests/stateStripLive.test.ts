@@ -194,6 +194,27 @@ describe('strip UI', () => {
     expect(open).toHaveBeenCalledWith('clip');
   });
 
+  it('says which side of the box is kept, and offers Turn off beside the clip item', async () => {
+    const { createStateStrip } = await import('../src/ui/stateStrip');
+    const { setClipTurnOff } = await import('../src/render/clip/clipScope');
+    const strip = createStateStrip({ open: vi.fn() });
+    const root = strip.element as unknown as FakeEl;
+    const off = () => root.querySelector('.olv-ss-clipoff')!;
+    strip.render(readStrip(reads()));
+    expect(off().hidden).toBe(true);
+    strip.render(readStrip(reads({ clip: () => ({ kept: 5, total: 9, mode: 'keep-inside' }) })));
+    expect(root.querySelector('.olv-ss-clip')!.textContent).toBe('Clipped: 5 of 9 points · Showing inside box');
+    strip.render(readStrip(reads({ clip: () => ({ kept: 9, total: 9, mode: 'keep-outside' }) })));
+    expect(root.querySelector('.olv-ss-clip')!.textContent).toBe('Clip on: keeps all 9 points · Showing outside box');
+    expect(off().hidden).toBe(false);
+    expect(off().getAttribute('aria-label')).toBe('Turn off clipping');
+    const clear = vi.fn();
+    setClipTurnOff(clear);
+    off().fire('click');
+    expect(clear).toHaveBeenCalledTimes(1);
+    setClipTurnOff(null);
+  });
+
   it('shows the elapsed time and the estimate in their own span, out of the accessible name and the button text', async () => {
     const { createStateStrip } = await import('../src/ui/stateStrip');
     const strip = createStateStrip({ open: vi.fn() });

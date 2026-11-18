@@ -14,7 +14,7 @@ import { el } from './dom';
 import { fullFileAvailability, reloadAvailability, reviewSampleTip, sampleActionLinks } from '../app/fullFileActions';
 import { STATE_GLYPH, STATE_LABEL, type SciState } from './stateChip';
 import { linearUnitLabel } from '../io/crs';
-import { clipStatusText } from '../render/clip/clipScope';
+import { clipModePhrase, clipStatusText, clipTurnOff } from '../render/clip/clipScope';
 import type { StripSnapshot } from '../app/stateStrip/stripReads';
 import type { Coverage } from '../process/ProcessPlan';
 import { formatWait, WAIT_SHOWN_AFTER_MS } from '../process/waitClock';
@@ -72,6 +72,14 @@ export function createStateStrip(host: StateStripHost): StateStrip {
   // The "Export all N points" action sits beside a sampled basis.
   const fullFileSlot = el('span', { className: 'olv-ss-fullfile' });
   let fullFileKey = '';
+  // Turn off sits beside the clip item (a button cannot nest in a button) and
+  // shows with it, so the clip is never more than one click from off.
+  const clipOff = el('button', {
+    className: 'olv-ss-item olv-ss-clipoff', type: 'button', text: 'Turn off',
+    ariaLabel: 'Turn off clipping', tip: 'Turn the clip off and show the whole scan',
+  });
+  clipOff.hidden = true;
+  clipOff.addEventListener('click', () => clipTurnOff()?.());
   const ids: StripItemId[] = ['dataset', 'crs', 'vertical', 'basis', 'clip', 'processing', 'review'];
   for (const id of ids) {
     const b = el('button', { className: `olv-ss-item olv-ss-${id}`, type: 'button', tip: ITEM_TARGET[id] });
@@ -80,6 +88,7 @@ export function createStateStrip(host: StateStripHost): StateStrip {
     buttons.set(id, b);
     element.append(b);
     if (id === 'basis') element.append(fullFileSlot);
+    if (id === 'clip') element.append(clipOff);
   }
 
   const paint = (id: StripItemId, text: string | null, validity: SciState | null, short?: string, wait?: string): void => {
@@ -174,7 +183,10 @@ export function createStateStrip(host: StateStripHost): StateStrip {
       buttons.get('basis')!.title = s.basis?.value === 'resident-only'
         ? 'Only the points currently in memory, not the whole file.'
         : '';
-      paint('clip', s.clip ? clipStatusText(s.clip) : null, s.clip ? 'info' : null);
+      // The count wording is the shared one; the side kept is said beside it.
+      const phrase = s.clip ? clipModePhrase(s.clip) : '';
+      paint('clip', s.clip ? `${clipStatusText(s.clip)}${phrase ? ` · ${phrase}` : ''}` : null, s.clip ? 'info' : null);
+      clipOff.hidden = !s.clip;
       const p = s.processing?.value;
       paint(
         'processing',

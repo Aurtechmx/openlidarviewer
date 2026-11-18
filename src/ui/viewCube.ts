@@ -112,9 +112,8 @@ const OBSTACLE_SELECTOR = [
   '.olv-navbar',
   '.olv-nav-prompt-tool',
   '.olv-dock',
-  // The clip flow's result card and active-clip chip. Hidden ones have no box and are skipped in place().
+  // The clip flow's result card. A hidden one has no box and is skipped in place().
   '.olv-result-card',
-  '.olv-clip-indicator',
 ].join(', ');
 
 function cubeTargetForViewId(view: StandardView): string {

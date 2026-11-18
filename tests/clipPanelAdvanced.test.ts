@@ -75,7 +75,7 @@ describe('Clip page: Advanced disclosure', () => {
     expect(t.applied.map((c) => c?.box.max[0])).toEqual([2, 3]);
     t.setKept(42);
     vi.advanceTimersByTime(t.wait);
-    expect(clipScope()).toEqual({ kept: 42, total: 100 });
+    expect(clipScope()).toEqual({ kept: 42, total: 100, mode: 'keep-inside' });
     expect(t.find('.olv-export-fullres-hint')[0].textContent).toBe('42 of 100 points kept.');
   });
 });

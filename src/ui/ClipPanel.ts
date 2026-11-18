@@ -23,7 +23,7 @@
 import { el } from './dom';
 import type { ClipBox, ClipMode } from '../render/clip/clipBox';
 import type { BoxBounds } from '../render/measure/geometry';
-import { setClipScope } from '../render/clip/clipScope';
+import { setClipScope, setClipTurnOff } from '../render/clip/clipScope';
 
 export { fitBoundsInProject } from '../render/clip/fitBoundsInProject';
 
@@ -175,6 +175,8 @@ export class ClipPanel {
       title: 'Turn the clip off and show the whole scan. The box and its bounds stay.',
     }) as HTMLButtonElement;
     this._turnOff.addEventListener('click', () => this.clear());
+    // The state strip's Turn off runs the same clear.
+    setClipTurnOff(() => this.clear());
     const actions = el('div', { className: 'olv-bc-pills olv-clip-actions' }, [fit, this._turnOff]);
 
     this._draw = el('button', {
@@ -693,7 +695,7 @@ export class ClipPanel {
     this._readout.textContent = clipReadoutText(c, this._mode);
     this._hasCount = c !== null;
     this._syncTurnOff();
-    setClipScope(c ? { kept: c.kept, total: c.total } : null);
+    setClipScope(c ? { kept: c.kept, total: c.total, mode: this._mode } : null);
   }
 }
 

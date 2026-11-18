@@ -60,7 +60,7 @@ describe('ClipPanel.adoptBounds', () => {
     expect(t.inputs.map((i) => i.value)).toEqual(['1.000', '4.000', '2.000', '5.000', '3.000', '6.000']);
     vi.advanceTimersByTime(t.wait);
     expect(t.readout.textContent).toBe('10 of 100 points kept.');
-    expect(clipScope()).toEqual({ kept: 10, total: 100 });
+    expect(clipScope()).toEqual({ kept: 10, total: 100, mode: 'keep-inside' });
   });
 
   it('then behaves like any clip: Outside switch and numeric edits re-apply', async () => {
