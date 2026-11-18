@@ -1,12 +1,13 @@
 /**
- * When the DEM GeoTIFFs carry no CRS key but a .prj beside them holds the
- * CRS, the README says so in one line.
+ * When the DEM GeoTIFFs carry no CRS key but a .prj in the package holds the
+ * CRS, the README says so and names that .prj.
  *
  * GDAL's GeoTIFF driver does not read a .prj beside a .tif, so a GIS opens
  * those rasters with no CRS. That happens for an EPSG code outside 1024..32766
  * (the keys cannot hold it) and for a custom horizontal WKT with no EPSG code.
- * The ASCII grids read the same .prj, so only the GeoTIFFs need the line. A
- * code the keys can hold, or no .prj at all, prints nothing new.
+ * The evidence raster has no .prj of its own, so the line names the CHM's
+ * .prj (horizontal only) for every GeoTIFF. A code the keys can hold, or no
+ * .prj at all, prints nothing new.
  */
 import { describe, expect, it } from 'vitest';
 import { buildDemPackage } from '../src/terrain/export/demPackage';
@@ -34,7 +35,11 @@ function geoKeys(bytes: Uint8Array): Map<number, number> {
   throw new Error('no GeoKey directory');
 }
 
-const LINE = '  GeoTIFF CRS    no CRS key in the .tif files; assign the CRS from <stem>.prj';
+const LINES = [
+  '  GeoTIFF CRS    No .tif file here carries a CRS key. Assign every GeoTIFF in',
+  '                 this folder the horizontal CRS in s-chm.prj.',
+];
+const LINE = LINES[0]!;
 
 const CODE_90000_WKT = 'PROJCS["Custom grid",GEOGCS["WGS 84",DATUM["WGS_1984",SPHEROID["WGS 84",6378137,298.257223563]],PRIMEM["Greenwich",0],UNIT["degree",0.0174532925199433]],PROJECTION["Transverse_Mercator"],UNIT["metre",1],AUTHORITY["EPSG","90000"]]';
 const NO_CODE_WKT = 'PROJCS["Site transverse Mercator",GEOGCS["WGS 84",DATUM["WGS_1984",SPHEROID["WGS 84",6378137,298.257223563]],PRIMEM["Greenwich",0],UNIT["degree",0.0174532925199433]],PROJECTION["Transverse_Mercator"],PARAMETER["central_meridian",-111.5],PARAMETER["scale_factor",0.9999],UNIT["metre",1]]';
@@ -60,8 +65,10 @@ describe('the GeoTIFFs carry no CRS key and a .prj holds the CRS', () => {
     expect(geoKeys(extractEntry(zip, 's-dtm.tif')!).has(3072)).toBe(false);
     expect(extractEntry(zip, 's-dtm.prj')).toBeTruthy();
     const text = readme(zip);
-    expect(text.split('\n')).toContain(LINE);
+    expect(text).toContain(LINES.join('\n'));
     expect(text.split('\n').filter((l) => l === LINE)).toHaveLength(1);
+    // The file the line names is in the package.
+    expect(extractEntry(zip, 's-chm.prj')).toBeTruthy();
     // The existing line stays.
     expect(text.replace(/\s+/g, ' ')).toContain('EPSG:90000 cannot be stored in GeoTIFF keys; the CRS is in the .prj only.');
   });
@@ -72,7 +79,8 @@ describe('the GeoTIFFs carry no CRS key and a .prj holds the CRS', () => {
     expect(keys.get(1024)).toBe(32767);
     expect(keys.has(3072)).toBe(false);
     expect(extractEntry(zip, 's-dtm.prj')).toBeTruthy();
-    expect(readme(zip).split('\n')).toContain(LINE);
+    expect(readme(zip)).toContain(LINES.join('\n'));
+    expect(extractEntry(zip, 's-chm.prj')).toBeTruthy();
   });
 });
 

@@ -410,6 +410,12 @@ function unstoredEpsgReadmeLines(u: { readonly epsg: number; readonly inPrj: boo
   return lines.map((l, i) => (i === 0 ? `  CRS            ${l.slice(pad.length)}` : l));
 }
 
+/** Prose under a README label in the Raster block's column, wrapped. */
+function labelledReadmeLines(label: string, text: string): string[] {
+  const pad = '                 ';
+  return wrapReadme(text, pad).map((l, i) => (i === 0 ? `  ${label.padEnd(pad.length - 2)}${l.slice(pad.length)}` : l));
+}
+
 /** Wrap prose to README width under a fixed indent. */
 function wrapReadme(text: string, indent: string, width = 78): string[] {
   const out: string[] = [];
@@ -640,9 +646,10 @@ export function buildDemReadme(opts: DemReadmeOptions): string {
         : opts.sourceCoordinates
           ? ['  Frame          scan source coordinates; no CRS resolved; rasters carry no CRS']
           : []),
-    // GDAL's GeoTIFF driver does not read a .prj beside a .tif.
+    // GDAL's GeoTIFF driver does not read a .prj beside a .tif, and the
+    // evidence raster has no .prj of its own: the CHM's holds the horizontal CRS.
     ...(opts.placed !== false && opts.crsInPrjOnly
-      ? ['  GeoTIFF CRS    no CRS key in the .tif files; assign the CRS from <stem>.prj']
+      ? labelledReadmeLines('GeoTIFF CRS', `No .tif file here carries a CRS key. Assign every GeoTIFF in this folder the horizontal CRS in ${basename}-chm.prj.`)
       : []),
     opts.placed === false
       ? `  Bounds (local offsets in the project frame, ${hUnit})`
