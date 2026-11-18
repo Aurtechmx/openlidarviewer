@@ -834,21 +834,27 @@ export class CrsService {
       ...(detected?.verticalLinearUnit !== undefined ? { verticalLinearUnit: detected.verticalLinearUnit } : {}),
       ...(detected?.verticalAxisDown ? { verticalAxisDown: true as const } : {}),
     };
-    // Linear unit, in priority order: borrow the detector's when it described
-    // this exact EPSG; else read the registry entry's unit (set only for the
-    // non-metre entries; otherwise metres for a projected override and
-    // 'unknown' for a geographic one, which is angular); else the kind and unit
-    // the EPSG code itself names. That last case is a code from a session
+    // A registry entry whose kind differs from the override's is a
+    // contradiction, whatever else describes the code: a session file or a
+    // catalogue record can claim projected for EPSG:4326, which read degrees as
+    // metres. The picker always sends the entry's own kind.
+    // Otherwise the linear unit, in priority order: borrow the detector's when
+    // it described this exact EPSG; else read the registry entry's unit (set
+    // only for the non-metre entries; otherwise metres for a projected entry
+    // and 'unknown' for a geographic one, which is angular); else the kind and
+    // unit the EPSG code itself names. That last case is a code from a session
     // file, a catalogue record or an old stored record: the picker offers
     // registry entries only.
-    const unit = confirmsDetected
-      ? { linearUnit: detected.linearUnit, linearUnitToMetres: detected.linearUnitToMetres }
-      : entry
-        ? {
-          linearUnit: entry.linearUnit ?? (override.kind === 'geographic' ? 'unknown' as const : 'metre' as const),
-          linearUnitToMetres: entry.linearUnitToMetres ?? 1,
-        }
-        : overrideCodeUnit(override.epsg, override.kind);
+    const unit = entry && entry.kind !== override.kind
+      ? { contradicts: entry.kind }
+      : confirmsDetected
+        ? { linearUnit: detected.linearUnit, linearUnitToMetres: detected.linearUnitToMetres }
+        : entry
+          ? {
+            linearUnit: entry.linearUnit ?? (override.kind === 'geographic' ? 'unknown' as const : 'metre' as const),
+            linearUnitToMetres: entry.linearUnitToMetres ?? 1,
+          }
+          : overrideCodeUnit(override.epsg, override.kind);
     if ('contradicts' in unit) {
       // The code names a different kind of CRS than the override claims. No
       // kind or unit is guessed, and the code is not carried, so no export

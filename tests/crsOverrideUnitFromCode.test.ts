@@ -84,30 +84,73 @@ describe('an override whose kind contradicts its code resolves to an unknown CRS
   });
 });
 
-describe('a catalogue record on a stream that declares no CRS', () => {
+/** A stream that declares no CRS, opened from a catalogue item whose record states `epsg`. */
+function catalogueResolve(epsg: number): { svc: CrsService; crs: ReturnType<CrsService['resolveForScan']> } {
   const item: PcStacItem = {
-    id: 'Tile_Foot',
+    id: `Tile_${epsg}`,
     source: 'copc',
-    assetUrl: 'https://example.blob.core.windows.net/lidar/Tile_Foot.copc.laz',
+    assetUrl: `https://example.blob.core.windows.net/lidar/Tile_${epsg}.copc.laz`,
     bbox: [-118.3, 34.0, -118.2, 34.1],
-    epsg: 2229,
+    epsg,
   };
+  const port = memoryPort();
+  recordCatalogueCrs(item, port);
+  const svc = new CrsService(port);
+  const identity = datasetIdentity({
+    sourcePointCount: 1000,
+    renderOrigin: [6_400_000, 1_800_000, 300],
+    dataBounds: () => [0, 0, 0, 100, 100, 10],
+    catalogItem: { id: item.id, bbox: item.bbox },
+  });
+  const crs = svc.resolveForScan({ name: `Tile_${epsg}.copc.laz`, detected: undefined, source: 'copc-meta', identity });
+  return { svc, crs };
+}
 
+describe('a catalogue record on a stream that declares no CRS', () => {
   it('EPSG:2229 from the catalogue is in US survey feet', () => {
-    const port = memoryPort();
-    recordCatalogueCrs(item, port);
-    const svc = new CrsService(port);
-    const identity = datasetIdentity({
-      sourcePointCount: 1000,
-      renderOrigin: [6_400_000, 1_800_000, 300],
-      dataBounds: () => [0, 0, 0, 100, 100, 10],
-      catalogItem: { id: item.id, bbox: item.bbox },
-    });
-    const crs = svc.resolveForScan({ name: 'Tile_Foot.copc.laz', detected: undefined, source: 'copc-meta', identity });
+    const { crs } = catalogueResolve(2229);
     expect(crs.source).toBe('catalog-tile');
     expect(crs.linearUnit).toBe('us-survey-foot');
     expect(crs.linearUnitToMetres).toBe(1200 / 3937);
   });
+});
+
+describe('a registry override whose kind contradicts the registry entry', () => {
+  it.each([4326, 4258, 4979])('EPSG:%i (geographic) sent as projected resolves to an unknown CRS', (epsg) => {
+    const svc = sessionOverride(epsg);
+    const crs = svc.current()!;
+    expect(crs.kind).toBe('unknown');
+    expect(crs.name).toBe(`EPSG:${epsg} (the code is a geographic CRS, not projected)`);
+    expect(crs.epsg).toBeUndefined();
+    expect(svc.context().metricClaimsPermitted).toBe(false);
+  });
+
+  it('EPSG:32612 (projected) sent as geographic resolves to an unknown CRS', () => {
+    const svc = sessionOverride(32612, 'geographic');
+    expect(svc.current()!.kind).toBe('unknown');
+    expect(svc.current()!.name).toBe('EPSG:32612 (the code is a projected CRS, not geographic)');
+    expect(svc.current()!.epsg).toBeUndefined();
+    expect(svc.context().metricClaimsPermitted).toBe(false);
+  });
+
+  it('a catalogue record 4326 on a stream that declares no CRS resolves to an unknown CRS', () => {
+    const { svc, crs } = catalogueResolve(4326);
+    expect(crs.source).toBe('catalog-tile');
+    expect(crs.kind).toBe('unknown');
+    expect(crs.epsg).toBeUndefined();
+    expect(svc.context().metricClaimsPermitted).toBe(false);
+  });
+
+  it.each([[4326, 'geographic'], [4979, 'geographic'], [32612, 'projected'], [25832, 'projected']] as const)(
+    'EPSG:%i picked as %s is unchanged',
+    (epsg, kind) => {
+      const crs = sessionOverride(epsg, kind).current()!;
+      expect(crs.kind).toBe(kind);
+      expect(crs.epsg).toBe(epsg);
+      expect(crs.linearUnit).toBe(kind === 'geographic' ? 'unknown' : 'metre');
+      expect(crs.linearUnitToMetres).toBe(1);
+    },
+  );
 });
 
 describe('codes that resolve today are unchanged', () => {
