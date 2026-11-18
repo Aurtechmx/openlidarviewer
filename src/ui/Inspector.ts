@@ -983,6 +983,7 @@ export class Inspector {
       className: 'olv-slider',
       type: 'range',
       title: 'Drag to set how pronounced the depth shading is',
+      ariaLabel: 'EDL strength',
     });
     this._edlStrengthSlider.type = 'range';
     this._edlStrengthSlider.min = String(EDL_STRENGTH_RANGE.min);

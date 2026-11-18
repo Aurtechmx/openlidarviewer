@@ -281,6 +281,10 @@ describe('Inspector Basic / Advanced', () => {
     // One control, not a Basic copy beside the Advanced one.
     expect(sliders).toHaveLength(1);
     expect(sliders[0].parent).toBe(row);
+    // Named for what it sets, not by its tooltip; value text as the point-size slider has it.
+    expect(sliders[0].getAttribute('aria-label')).toBe('EDL strength');
+    const pointSize = root(ins).querySelectorAll('input').find((n) => n.type === 'range' && n.title.includes('size of each point'))!;
+    expect(sliders[0].getAttribute('aria-valuetext')).toBe(pointSize.getAttribute('aria-valuetext'));
     const shown = (): boolean => !tierHidden(ins, row) && !row.classList.contains('olv-hidden');
     expect(ins.detailMode()).toBe('basic');
     ins.syncRendering(rendering(true));
