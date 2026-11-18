@@ -40,6 +40,7 @@
     "check:built-csp": "node scripts/check-built-csp.mjs",
     "check:no-embed-origins": "node scripts/check-no-embed-origins.mjs",
     "check:deps": "node scripts/check-dep-singletons.mjs",
+    "check:protected-phrases": "node scripts/check-protected-phrases.mjs",
     "preview": "vite preview",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",

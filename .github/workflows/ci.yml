@@ -137,6 +137,8 @@ jobs:
         run: npm run lint:claims-language
       - name: Archive-vocab lint (shipped files stay in a product-facing voice)
         run: npm run lint:archive-vocab
+      - name: Protected statements (each required phrase is still in src/, and its constant still used)
+        run: npm run check:protected-phrases
       # 6 s measured, so it rides this job instead of paying npm ci and runner
       # setup again in one of its own. Running only on a tag is how 22 files of
       # `.agents/` plugin scaffolding merged through a green pull request and
