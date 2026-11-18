@@ -18,6 +18,9 @@ import type { StreamingQuality } from '../streaming/streamingBudget';
 
 /** The renderer surface the quality control drives. Satisfied by `Viewer`. */
 export interface QualityRenderHost {
+  /** The live state, read when the Performance panel opens. Optional for a bare host. */
+  readonly edlEnabled?: boolean;
+  readonly antialiasing?: boolean;
   setEdlEnabled(on: boolean): void;
   setAntialiasing(on: boolean): void;
   setStreamingQuality(quality: StreamingQuality, isMobile: boolean): void;

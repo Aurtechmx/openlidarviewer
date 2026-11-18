@@ -85,6 +85,10 @@ export function mountQualityControl(
     device: deps.device(),
     preference: readQualityPreference(),
     liveStreamingQuality: deps.getStreamingQuality,
+    liveRendering: () => {
+      const v = deps.getViewer();
+      return { edlEnabled: v.edlEnabled, antialiasing: v.antialiasing };
+    },
     onApply: (settings: QualitySettings, userInitiated: boolean) => {
       applyQualitySettings(deps.getViewer(), settings, deps.device().isMobile);
       deps.onStreamingQuality(settings.streamingQuality);

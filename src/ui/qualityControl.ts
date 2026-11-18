@@ -61,6 +61,13 @@ export interface QualityControlOptions {
    */
   liveStreamingQuality?(): StreamingQuality;
   /**
+   * Eye Dome Lighting and antialiasing as the renderer has them now. Anything
+   * can turn them on (a Visuals preset, a saved view, the renderer's own
+   * default), so on open the control adopts a differing value as a pinned
+   * Advanced field, and its checkboxes never show a state the scene is not in.
+   */
+  liveRendering?(): { readonly edlEnabled?: boolean; readonly antialiasing?: boolean };
+  /**
    * Where a chunk-load failure is reported, with a "Try again" action. Without
    * one (a bare test mount) a failure goes to `console.error`.
    */
@@ -166,6 +173,16 @@ export class QualityControl {
         ...this._preference,
         overrides: { ...this._preference.overrides, streamingQuality: live },
       };
+    }
+    const render = this._options.liveRendering?.();
+    if (render) {
+      const settings = this.settings();
+      const adopt: { edlEnabled?: boolean; antialiasing?: boolean } = {};
+      if (render.edlEnabled !== undefined && render.edlEnabled !== settings.edlEnabled) adopt.edlEnabled = render.edlEnabled;
+      if (render.antialiasing !== undefined && render.antialiasing !== settings.antialiasing) adopt.antialiasing = render.antialiasing;
+      if (Object.keys(adopt).length > 0) {
+        this._preference = { ...this._preference, overrides: { ...this._preference.overrides, ...adopt } };
+      }
     }
     panel.render(this._preference, this.settings());
     panel.refreshPrecision();

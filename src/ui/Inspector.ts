@@ -176,7 +176,8 @@ export interface InspectorCallbacks {
   onRgbAppearancePreset: (id: string) => void;
   /** Whether any open scan carries RGB, since the looks apply scene-wide. */
   anyScanHasRgb?: () => boolean;
-  onEdlPreset: (id: EdlPresetSelection) => void;
+  /** Not drawn here any more: EDL is the Speed/Quality control's. Callers may still pass it. */
+  onEdlPreset?: (id: EdlPresetSelection) => void;
   onSkyPreset: (id: string) => void;
   /** Advanced (streaming COPC only) — white-balance sliders. */
   onWhiteBalance: (temperature: number, tint: number) => void;
@@ -264,16 +265,6 @@ const VISUALS_RGB_CHIPS: ReadonlyArray<{ id: string; label: string }> = [
 
 /** The RGB looks offered as Basic quick shortcuts. */
 const QUICK_RGB_IDS: readonly string[] = ['natural', 'photoreal-rgb', 'survey', 'high-contrast'];
-
-/** The three named EDL presets. Off is the Speed/Quality control's. */
-const VISUALS_EDL_CHIPS: ReadonlyArray<{
-  id: EdlPresetSelection;
-  label: string;
-}> = [
-  { id: 'subtle', label: 'Subtle' },
-  { id: 'balanced', label: 'Balanced' },
-  { id: 'inspection', label: 'Inspection' },
-];
 
 /** The five sky chips Visuals Studio surfaces. */
 const VISUALS_SKY_CHIPS: ReadonlyArray<{ id: string; label: string }> = [
@@ -566,7 +557,6 @@ export class Inspector {
   /** Visuals Studio — Visuals Studio chip rails. Stored so syncVisuals can re-flag active. */
   private readonly _visualsRgbRail = el('div', { className: 'olv-chips olv-visuals-rgb-rail' });
   private readonly _visualsRgbNote = el('div', { className: 'olv-visuals-rgb-note olv-hidden', text: 'This scan has no RGB colours. These looks apply to scans that have them.' });
-  private readonly _visualsEdlRail = el('div', { className: 'olv-chips' });
   /** Basic-only shortcuts onto a few of the same presets (same callbacks). */
   private readonly _quickRgbRail = el('div', { className: 'olv-chips olv-hidden' });
   private readonly _visualsSkyRail = el('div', { className: 'olv-chips' });
@@ -1251,16 +1241,6 @@ export class Inspector {
       chip.addEventListener('click', () => this._cb.onRgbAppearancePreset(def.id));
       this._visualsRgbRail.append(chip);
     }
-    for (const def of VISUALS_EDL_CHIPS) {
-      const chip = el('button', {
-        className: 'olv-chip',
-        text: def.label,
-        title: `Apply the ${def.label} EDL preset`,
-      });
-      chip.dataset.presetId = def.id ?? 'off';
-      chip.addEventListener('click', () => this._cb.onEdlPreset(def.id));
-      this._visualsEdlRail.append(chip);
-    }
     for (const def of VISUALS_SKY_CHIPS) {
       const chip = el('button', {
         className: 'olv-chip',
@@ -1343,8 +1323,6 @@ export class Inspector {
     const visualsBody = el('div', { className: 'olv-visuals-body' }, [
       this._persistSection('visuals.workflow', collapsibleSection('Workflow', this._visualsWorkflowRail)),
       adv(this._persistSection('visuals.rgb', collapsibleSection('RGB', el('div', {}, [this._visualsRgbNote, this._visualsRgbRail])))),
-      adv(el('div', { className: 'olv-visuals-group-label', text: 'Depth (EDL)' })),
-      adv(this._visualsEdlRail),
       adv(this._persistSection('visuals.background', collapsibleSection('Background', this._visualsSkyRail))),
       adv(this._wbAdvancedDetails),
     ]);
@@ -2211,11 +2189,6 @@ export class Inspector {
     for (const chip of [...this._visualsRgbRail.children, ...this._quickRgbRail.children]) {
       const id = (chip as HTMLElement).dataset?.presetId;
       chip.classList.toggle('olv-chip-active', id === state.rgbAppearancePresetId && !(chip as HTMLButtonElement).disabled);
-    }
-    for (const chip of this._visualsEdlRail.children) {
-      const id = (chip as HTMLElement).dataset?.presetId;
-      const wanted = state.edlPresetId ?? 'off';
-      chip.classList.toggle('olv-chip-active', id === wanted);
     }
     for (const chip of this._visualsSkyRail.children) {
       const id = (chip as HTMLElement).dataset?.presetId;
