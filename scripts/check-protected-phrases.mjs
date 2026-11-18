@@ -5,13 +5,23 @@
  * Fails when a statement the app must keep saying is no longer in the source.
  * scripts/protected-phrases.json lists each statement with the surfaces it
  * must reach. Three rules, applied to `src/**\/*.ts` with comments removed:
- *   - ui: the phrase occurs somewhere in src/.
+ *   - ui: the phrase occurs somewhere in src/. Catches a statement whose text
+ *     was deleted or reworded.
  *   - export: the phrase also occurs outside src/ui/ (or in the export panel).
+ *     Catches export wording that is left only in UI code.
  *   - use: an entry that names a `constant` has that identifier referenced at
- *     least once outside its own definition. Without this rule, deleting the
- *     only display site would leave the string in place and the check green.
- *     An entry marked `knownUnused` is exempt: its constant had no reference
- *     when the entry was added.
+ *     least once outside its definition, an import or a re-export. Catches the
+ *     removal of the last code that reads the constant. Any reference counts,
+ *     whether or not it puts the text on screen. An entry marked `knownUnused`
+ *     is exempt: its constant had no reference when the entry was added.
+ *
+ * What it does not catch: a display site removed while the text stays in code
+ * that still runs. Most entries name no constant (statements written inline in
+ * a function or class body, and the method IDs), so only `ui` and `export`
+ * apply to them. A status line that stops calling the function that formats
+ * the text, or a caption that is still built but no longer appended to its
+ * panel, leaves every rule green. DOM tests that read the text from the
+ * rendered element are the guard for display.
  *
  * The rules are a pure function of `read(path)` and `list(dir)` so
  * tests/protectedPhrases.test.ts can prove each one fails without touching the

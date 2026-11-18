@@ -353,6 +353,26 @@ Firefox, WebKit and Windows legs. Its `ci-at-tag` job checks through the GitHub
 API that a CI run at the tagged commit completed with `ci-green` and every job
 it needs at `success`, and `release-ready` depends on that job.
 
+### Protected statements
+
+`npm run check:protected-phrases` runs in the `verify` job. It keeps the
+statements listed in `scripts/protected-phrases.json` (caveats, limits and
+method IDs the app must keep showing or writing) in `src/**/*.ts`, with
+comments removed:
+
+| Rule | Fails when |
+|------|------------|
+| `ui` | the phrase is no longer anywhere in `src/` |
+| `export` | an export phrase is left only in UI code other than `src/ui/ExportPanel.ts` |
+| `use` | an entry's `constant` is referenced nowhere but its definition, an import or a re-export |
+
+It does not check that a statement is shown. A display site can be removed
+while the text stays in code that still runs: a status line that stops calling
+the function that formats the text, or a caption that is still built but no
+longer appended to its panel. Every rule stays green in that case. Most
+entries name no `constant`, so only `ui` and `export` apply to them. DOM tests
+that read the text from the rendered element remain the guard for display.
+
 ---
 
 ## 11. Coding standards
