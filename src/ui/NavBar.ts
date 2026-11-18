@@ -3,7 +3,7 @@ import { el } from './dom';
 import { storageGet, storageSet } from './safeStorage';
 import { appTransientLane } from './transientLane';
 import { seatClear, watchSeat } from './hudSeat';
-import { NAVIGATION_PANEL } from './actionNames';
+import { FRAME_ALL, NAVIGATION_PANEL } from './actionNames';
 import type { NavMode } from '../render/NavController';
 import {
   CAMERA_PRESET_KEY,
@@ -49,6 +49,15 @@ export interface NavBarCallbacks {
    * back through {@link NavBar.setPlanActive}.
    */
   onPlanView: () => void;
+}
+
+export interface NavBarOptions {
+  /**
+   * Put Frame all in the nav row. For the bare layouts (`?embed=1`,
+   * `?ui=minimal`), which mount no dock, so the row is the only place a touch
+   * user can reset the view. Off elsewhere: the dock carries Frame all once.
+   */
+  readonly frameAllButton?: boolean;
 }
 
 interface ModeDef {
@@ -290,7 +299,7 @@ export class NavBar {
   /** Pending post-gesture hide of the touch hint; see `_yieldTouchHint`. */
   private _touchYieldTimer: number | null = null;
 
-  constructor(callbacks: NavBarCallbacks) {
+  constructor(callbacks: NavBarCallbacks, options: NavBarOptions = {}) {
     this._cb = callbacks;
 
     // ── Mode selector ─────────────────────────────────────────────────────
@@ -616,7 +625,24 @@ export class NavBar {
       this._moreToggle.focus();
     });
     const more = el('div', { className: 'olv-nav-more-wrap' }, [this._moreToggle, this._moreMenu]);
-    this._navRow = el('div', { className: 'olv-nav-row' }, [switcher, more, this._panelToggle, this._speed]);
+    // Frame all beside the selector, in the bare layouts only (see NavBarOptions).
+    const frameAll: HTMLButtonElement[] = [];
+    if (options.frameAllButton === true) {
+      const btn = el('button', {
+        className: 'olv-nav-frame-all',
+        type: 'button',
+        text: FRAME_ALL,
+        title: `${FRAME_ALL} (R): fit the camera to the entire scan`,
+        ariaLabel: FRAME_ALL,
+      });
+      btn.setAttribute('aria-keyshortcuts', 'R');
+      btn.addEventListener('click', () => {
+        btn.blur();
+        this._cb.onReset();
+      });
+      frameAll.push(btn);
+    }
+    this._navRow = el('div', { className: 'olv-nav-row' }, [switcher, ...frameAll, more, this._panelToggle, this._speed]);
     this.element = el('div', { className: 'olv-navbar' }, [this._hud, this._navRow]);
     // Layout clearance for the bottom toast lane: how far above the viewport's
     // bottom edge the mode row's top sits, plus a gap, published as

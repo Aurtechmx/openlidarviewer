@@ -55,10 +55,10 @@ describe('tablet touch targets', () => {
     expect(body).toMatch(/min-width: 48px; min-height: 48px/);
   });
 
-  it('gives the mode segments and More 44 px targets', () => {
+  it('gives the mode segments, the embed Frame all and More 44 px targets', () => {
     const body = mediaBody(CSS);
     expect(body).toContain('.olv-modes-segmented .olv-mode { height: 44px; min-width: 44px; }');
-    expect(body).toContain('.olv-nav-more { width: 44px; height: 44px; }');
+    expect(body).toContain('.olv-nav-more, .olv-nav-frame-all { width: 44px; height: 44px; }');
   });
 
   it('sizes the navigation card, empty state, palette and tour controls at 44 px', () => {

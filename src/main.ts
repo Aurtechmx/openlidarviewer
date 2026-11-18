@@ -1513,7 +1513,7 @@ dock.setEmpty(true);
 inspector.setEmpty(true);
 
 // Navigation bar; the opening fit keeps the scan above its mode triangle.
-const navBar = new NavBar(navWiring.callbacks);
+const navBar = new NavBar(navWiring.callbacks, { frameAllButton: bareMode });
 void viewerLoaded.then((v) => v.setFramingReserve(() => navBar.framingReservePx()));
 const projectCard = new ProjectCard();
 

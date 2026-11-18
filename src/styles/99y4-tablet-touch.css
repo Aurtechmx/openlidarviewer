@@ -49,8 +49,8 @@
 
   /* The mode segments, Frame all and More grow to 44 px targets. */
   .olv-modes-segmented .olv-mode { height: 44px; min-width: 44px; }
-  .olv-nav-more { width: 44px; height: 44px; }
-  .olv-nav-more { width: auto; min-width: 44px; }
+  .olv-nav-more, .olv-nav-frame-all { width: 44px; height: 44px; }
+  .olv-nav-more, .olv-nav-frame-all { width: auto; min-width: 44px; }
   .olv-speed-slider { height: 44px; }
 
   /* Camera chips and mode pads keep their row; the chip text stays on one line. */

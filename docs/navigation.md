@@ -4,7 +4,7 @@ OpenLiDARViewer has a game-like navigation system, so a point cloud can be explo
 
 ## Modes
 
-Switch with the Orbit | Walk | Fly | Pan control at the bottom centre, or with the number keys. Frame all is in the dock, and the `R` key does the same.
+Switch with the Orbit | Walk | Fly | Pan control at the bottom centre, or with the number keys. Frame all is in the dock, and the `R` key does the same. Embed mode (`?embed=1`) and `?ui=minimal` have no dock, so Frame all sits beside the mode control there.
 
 | Mode | Best for |
 |---|---|
