@@ -37,7 +37,7 @@ import {
   resolvedFromCrsInfo,
   unknownCrs,
 } from './CoordinateTypes';
-import { unitKeyContradictionNote, type CrsInfo, type CrsLinearUnit } from '../io/crs';
+import { metresPerLinearUnit, unitKeyContradictionNote, type CrsInfo, type CrsLinearUnit } from '../io/crs';
 import { epsgCrsKind, type EpsgCrsKind } from '../convert/epsg';
 import {
   validateCrsForMeasurement,
@@ -53,9 +53,12 @@ import { getCrsEntry, resolveHorizontalDatum } from './CrsRegistry';
 import {
   clearOverride as defaultClearOverride,
   getOverride as defaultGetOverride,
+  isLocalLinearUnit,
   keyForDataset,
+  LOCAL_UNIT_NAMES,
   setOverride as defaultSetOverride,
   type CrsOverride,
+  type LocalLinearUnit,
 } from './CrsOverrideStore';
 
 /** The port the service uses to read + write user overrides. */
@@ -280,6 +283,8 @@ export interface OverrideSuggestion {
   readonly epsg: number | null;
   /** The kinds `setOverride` can re-apply; any other stored kind is not offered. */
   readonly kind: 'projected' | 'geographic' | 'local';
+  /** The unit of a remembered local choice, when it declared one. */
+  readonly localUnit?: LocalLinearUnit;
   readonly reason: OverrideSuggestionReason;
 }
 
@@ -539,7 +544,7 @@ export class CrsService {
     const s = this._suggestion;
     if (!s || s.datasetKey !== this._currentDatasetKey) return null;
     return this.setOverride({
-      override: { epsg: s.epsg, kind: s.kind },
+      override: { epsg: s.epsg, kind: s.kind, ...(s.localUnit ? { localUnit: s.localUnit } : {}) },
       detected: this._currentDetected,
       source: this._currentSource,
     });
@@ -598,7 +603,7 @@ export class CrsService {
     const k = override?.kind;
     const suggestion = override && match?.kind === 'candidate' && !redundant
       && (k === 'projected' || k === 'geographic' || k === 'local')
-      ? { datasetKey, epsg: override.epsg, kind: k, reason: match.reason }
+      ? { datasetKey, epsg: override.epsg, kind: k, ...(k === 'local' && override.localUnit ? { localUnit: override.localUnit } : {}), reason: match.reason }
       : null;
     return { resolved, suggestion };
   }
@@ -620,6 +625,8 @@ export class CrsService {
     readonly override: {
       readonly epsg: number | null;
       readonly kind: 'projected' | 'geographic' | 'local' | 'detected';
+      /** With `kind: 'local'`: the unit the user declared. Any other value is ignored. */
+      readonly localUnit?: LocalLinearUnit;
     };
     /**
      * The detected CRS for the active dataset, so the service can
@@ -651,9 +658,11 @@ export class CrsService {
       this._setCurrent(resolved);
       return resolved;
     }
+    const localUnit = args.override.kind === 'local' && isLocalLinearUnit(args.override.localUnit) ? args.override.localUnit : undefined;
     const record = {
       epsg: args.override.epsg,
       kind: args.override.kind,
+      ...(localUnit ? { localUnit } : {}),
       // What this file declared when the choice was made — see resolveForScan.
       // Without it the entry cannot be told apart from one belonging to an
       // unrelated file that happens to share a name.
@@ -818,11 +827,14 @@ export class CrsService {
     detected: CrsInfo | undefined,
   ): ResolvedCrs {
     if (override.kind === 'local' || override.epsg === null) {
+      // A unit the user declared for local coordinates converts like any other
+      // known unit; without one the frame withholds metric figures.
+      const unit = override.kind === 'local' && isLocalLinearUnit(override.localUnit) ? override.localUnit : undefined;
       return {
         kind: 'local',
-        name: 'Local coordinates (no CRS)',
-        linearUnit: 'unknown',
-        linearUnitToMetres: 1,
+        name: unit ? LOCAL_UNIT_NAMES[unit] : 'Local coordinates (no CRS)',
+        linearUnit: unit ?? 'unknown',
+        linearUnitToMetres: unit ? metresPerLinearUnit(unit) : 1,
         source: 'user-override',
         confidence: 'high',
         userConfirmed: true,

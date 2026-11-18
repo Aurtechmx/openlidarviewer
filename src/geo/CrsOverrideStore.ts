@@ -28,6 +28,21 @@ const STORAGE_KEY = 'olv:crs-overrides';
 const MAX_ENTRIES = 100;
 const SCHEMA_VERSION = 1;
 
+/** A linear unit the user can declare for local coordinates. */
+export type LocalLinearUnit = 'metre' | 'us-survey-foot' | 'foot';
+
+/** Whether `v` is a {@link LocalLinearUnit}. */
+export function isLocalLinearUnit(v: unknown): v is LocalLinearUnit {
+  return v === 'metre' || v === 'us-survey-foot' || v === 'foot';
+}
+
+/** The name of local coordinates in a declared unit, as the picker and the resolved CRS say it. */
+export const LOCAL_UNIT_NAMES: Readonly<Record<LocalLinearUnit, string>> = {
+  metre: 'Local coordinates in metres (no CRS)',
+  'us-survey-foot': 'Local coordinates in US survey feet (no CRS)',
+  foot: 'Local coordinates in international feet (no CRS)',
+};
+
 /**
  * One user-supplied CRS choice. Stored under a `datasetKey` (typically
  * the loaded scan's `name` — see `keyForDataset()`).
@@ -37,6 +52,12 @@ export interface CrsOverride {
   readonly epsg: number | null;
   /** What kind of CRS this represents — gates whether conversion is offered. */
   readonly kind: CrsKind;
+  /**
+   * The linear unit the user declared for local coordinates; only with
+   * `kind: 'local'`. Absent means no unit, so metric figures are withheld.
+   * On read, any other value (or a unit on another kind) is dropped.
+   */
+  readonly localUnit?: LocalLinearUnit;
   /** Timestamp (ms since epoch) of the most recent set; drives LRU eviction. */
   readonly updatedAt: number;
   /**
@@ -174,7 +195,7 @@ export function getOverride(datasetKey: string): CrsOverride | undefined {
   const envelope = safeLoad();
   if (!envelope) return undefined;
   const entry = envelope.entries.find((e) => e.key === datasetKey);
-  return entry?.override;
+  return entry ? normalizeOverride(entry.override) : undefined;
 }
 
 /**
@@ -227,7 +248,19 @@ export function snapshotOverrides(): readonly (CrsOverride & {
   if (isSuppressed()) return [];
   const envelope = safeLoad();
   if (!envelope) return [];
-  return envelope.entries.map((e) => ({ datasetKey: e.key, ...e.override }));
+  return envelope.entries.map((e) => ({ datasetKey: e.key, ...normalizeOverride(e.override) }));
+}
+
+/**
+ * A stored record with its local unit checked: kept only as one of the three
+ * units on a local record. A corrupt or hand-edited unit is dropped, so the
+ * frame withholds metric figures instead of converting by a guess.
+ */
+function normalizeOverride(o: CrsOverride): CrsOverride {
+  if (!('localUnit' in o)) return o;
+  if (o.kind === 'local' && isLocalLinearUnit(o.localUnit)) return o;
+  const { localUnit: _dropped, ...rest } = o;
+  return rest;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

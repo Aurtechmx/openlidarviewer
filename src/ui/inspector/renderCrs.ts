@@ -17,11 +17,21 @@
 import { el } from '../dom';
 import type { ResolvedCrs } from '../../geo/CoordinateTypes';
 import { listCrsEntriesByRegion, getCrsEntry } from '../../geo/CrsRegistry';
+import { LOCAL_UNIT_NAMES, type LocalLinearUnit } from '../../geo/CrsOverrideStore';
 
 export type CrsOverride = {
   epsg: number | null;
   kind: 'projected' | 'geographic' | 'local' | 'detected';
+  /** With `kind: 'local'`: the unit the user declared. */
+  localUnit?: LocalLinearUnit;
 };
+
+/** The picker's local choices with a declared unit, in the order shown. */
+const LOCAL_UNIT_OPTIONS: readonly (readonly [value: string, unit: LocalLinearUnit])[] = [
+  ['__local_m__', 'metre'],
+  ['__local_ussft__', 'us-survey-foot'],
+  ['__local_ft__', 'foot'],
+];
 
 /** Render the full Coordinate-system section body into `body`. */
 export function renderCrs(
@@ -118,10 +128,22 @@ export function renderCrs(
   optDetected.textContent =
     c.source === 'user-override' ? 'Reset to detected' : 'Use detected';
   select.append(optDetected);
+  // The active local choice is preselected, so the select shows it rather
+  // than its first option. Only the user's own choice: a file's local frame
+  // was not picked here.
+  const activeLocal = c.kind === 'local' && c.source === 'user-override';
   const optLocal = document.createElement('option');
   optLocal.value = '__local__';
   optLocal.textContent = 'Local coordinates (no CRS)';
+  if (activeLocal && !LOCAL_UNIT_OPTIONS.some(([, u]) => u === c.linearUnit)) optLocal.selected = true;
   select.append(optLocal);
+  for (const [value, unit] of LOCAL_UNIT_OPTIONS) {
+    const opt = document.createElement('option');
+    opt.value = value;
+    opt.textContent = LOCAL_UNIT_NAMES[unit];
+    if (activeLocal && c.linearUnit === unit) opt.selected = true;
+    select.append(opt);
+  }
   for (const group of listCrsEntriesByRegion()) {
     const og = document.createElement('optgroup');
     og.label = ({
@@ -157,6 +179,11 @@ export function renderCrs(
     if (v === '__local__') {
       // Pin genuine local coordinates (no CRS) — persisted, not cleared.
       onOverride({ epsg: null, kind: 'local' });
+      return;
+    }
+    const localUnit = LOCAL_UNIT_OPTIONS.find(([value]) => value === v)?.[1];
+    if (localUnit) {
+      onOverride({ epsg: null, kind: 'local', localUnit });
       return;
     }
     const epsg = Number.parseInt(v, 10);

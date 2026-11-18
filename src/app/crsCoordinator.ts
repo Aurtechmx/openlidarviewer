@@ -17,6 +17,8 @@ import { type CrsSource } from '../geo/CoordinateTypes';
 import type { CrsService } from '../geo/CrsService';
 import {
   keyForDataset as crsKeyForDataset,
+  LOCAL_UNIT_NAMES,
+  type LocalLinearUnit,
 } from '../geo/CrsOverrideStore';
 import { increment as recordUsage } from '../diagnostics/usageCounters';
 import type { StreamingSourceKind } from '../render/streaming/StreamingSource';
@@ -118,6 +120,7 @@ export interface CrsCoordinator {
   handleCrsOverride(override: {
     epsg: number | null;
     kind: 'projected' | 'geographic' | 'local' | 'detected';
+    localUnit?: LocalLinearUnit;
   }): void;
   /**
    * Forget the dataset key currently in scope. Called from the reset-to-empty
@@ -156,7 +159,7 @@ export function createCrsCoordinator(deps: CrsCoordinatorDeps): CrsCoordinator {
   function applySuggestion(s: OverrideSuggestion): void {
     const now = crsService.overrideSuggestion();
     if (!now || now.datasetKey !== s.datasetKey || now.epsg !== s.epsg || now.kind !== s.kind) return;
-    handleCrsOverride({ epsg: s.epsg, kind: s.kind });
+    handleCrsOverride({ epsg: s.epsg, kind: s.kind, ...(s.localUnit ? { localUnit: s.localUnit } : {}) });
   }
 
   /** Push the pending suggestion (or none) to the persistent surface. */
@@ -187,7 +190,7 @@ export function createCrsCoordinator(deps: CrsCoordinatorDeps): CrsCoordinator {
     const token = `${s.datasetKey}|${s.kind}|${s.epsg}|${JSON.stringify(identity ?? null)}`;
     if (offered.has(token)) return;
     offered.add(token);
-    const label = s.epsg !== null ? `EPSG:${s.epsg}` : 'Local coordinates';
+    const label = s.epsg !== null ? `EPSG:${s.epsg}` : s.localUnit ? LOCAL_UNIT_NAMES[s.localUnit] : 'Local coordinates';
     deps.notify(
       `A CRS (${label}) was remembered for a file with this name. It was not applied because this file could not be confirmed as the same source. Apply it to this file?`,
       {
@@ -276,6 +279,7 @@ export function createCrsCoordinator(deps: CrsCoordinatorDeps): CrsCoordinator {
   function handleCrsOverride(override: {
     epsg: number | null;
     kind: 'projected' | 'geographic' | 'local' | 'detected';
+    localUnit?: LocalLinearUnit;
   }): void {
     if (!currentCrsDatasetKey) return;
     // ONE writer: the override goes through `crsService.setOverride`, which
