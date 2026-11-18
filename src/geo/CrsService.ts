@@ -824,12 +824,15 @@ export class CrsService {
     // CRS keeps its height datum/unit when the user corrects the horizontal
     // EPSG (and a same-EPSG confirmation must not lose it at all). Preserve the
     // detected vertical fields unconditionally; without this even confirming
-    // the detected EPSG stripped valid vertical metadata (the C2 defect).
+    // the detected EPSG stripped valid vertical metadata (the C2 defect). The
+    // depth axis is one of them: a horizontal override cannot flip it, and
+    // dropping it let depths under an unlisted datum pass as heights.
     const vertical = {
       verticalEpsg: detected?.verticalEpsg,
       verticalDatum: detected?.verticalDatum,
       verticalUnitToMetres: detected?.verticalUnitToMetres,
       ...(detected?.verticalLinearUnit !== undefined ? { verticalLinearUnit: detected.verticalLinearUnit } : {}),
+      ...(detected?.verticalAxisDown ? { verticalAxisDown: true as const } : {}),
     };
     // Linear unit, in priority order: borrow the detector's when it described
     // this exact EPSG; else read the registry entry's unit (set only for the
