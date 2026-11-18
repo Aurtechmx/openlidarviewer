@@ -138,7 +138,6 @@ function loadXyzSync(
     },
   );
 
-
   const count = xs.length;
   if (count === 0) throw new Error('XYZ file has no readable points');
 
