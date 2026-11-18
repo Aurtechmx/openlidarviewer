@@ -29,6 +29,7 @@ import {
   heldKey,
   isSizeRefusal,
   openRecoveryStore,
+  removeLocalFallback,
   pruneStale,
   type RecoveryEntry,
   type RecoveryStore,
@@ -206,6 +207,8 @@ export function startRecovery(deps: RecoveryDeps): RecoveryHandle {
   const wipe = (): Promise<void> | undefined => {
     invalidate();
     cleared = true;
+    // A fallback copy that did not migrate to IndexedDB is deleted with the rest.
+    removeLocalFallback((() => { try { return localStorage; } catch { return undefined; } })());
     return store?.clear();
   };
 

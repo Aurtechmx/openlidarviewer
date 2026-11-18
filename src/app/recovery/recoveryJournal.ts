@@ -221,6 +221,18 @@ export function createLocalStore(storage: Pick<Storage, 'getItem' | 'setItem' | 
   };
 }
 
+/** Delete the localStorage fallback copy, wherever it was left. Never throws. */
+export function removeLocalFallback(
+  storage: Pick<Storage, 'removeItem'> | undefined,
+  key = 'olv:recovery:journal',
+): void {
+  try {
+    storage?.removeItem(key);
+  } catch {
+    // Nothing more can be done for a store that refuses the delete.
+  }
+}
+
 /** Whether an entry is past {@link MAX_ENTRY_AGE_MS}. A future timestamp counts as fresh. */
 export const isStale = (e: RecoveryEntry, now: number, maxAge = MAX_ENTRY_AGE_MS): boolean => now - e.savedAt > maxAge;
 

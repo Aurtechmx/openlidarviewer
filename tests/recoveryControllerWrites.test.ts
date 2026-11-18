@@ -530,6 +530,62 @@ describe('a clear asked for before the journal is ready', () => {
   });
 });
 
+describe('the localStorage fallback copy is deleted with the rest of the journal', () => {
+  const FALLBACK_KEY = 'olv:recovery:journal';
+  /** A fallback copy that did not migrate: the key stays in localStorage beside the IndexedDB entries. */
+  const withFallback = (): RecoveryEntry => {
+    const e = entryFor(session(3, OTHER));
+    storage.set(FALLBACK_KEY, JSON.stringify([e]));
+    return e;
+  };
+
+  it('Clear all saved work removes the IndexedDB entries and the fallback key', async () => {
+    const s = fakeStore([entryFor(session(2, OTHER))]);
+    withFallback();
+    const app = await start(s.store);
+
+    await app.click('Clear all saved work');
+
+    expect(s.entries.size).toBe(0);
+    expect(storage.has(FALLBACK_KEY)).toBe(false);
+    expect(app.noticeText()).toBe('Recovery data in this browser was deleted.');
+  });
+
+  it('Turn off recovery removes the IndexedDB entries and the fallback key', async () => {
+    const s = fakeStore([entryFor(session(2, OTHER))]);
+    withFallback();
+    const app = await start(s.store);
+
+    await app.click('Turn off recovery');
+
+    expect(s.entries.size).toBe(0);
+    expect(storage.has(FALLBACK_KEY)).toBe(false);
+  });
+
+  it('Discard this work removes only its entry and leaves the fallback key', async () => {
+    const s = fakeStore([entryFor(session(2, OTHER))]);
+    const fallback = withFallback();
+    const app = await start(s.store);
+
+    await app.click('Discard this work');
+
+    expect(s.entries.size).toBe(0);
+    expect(storage.get(FALLBACK_KEY)).toBe(JSON.stringify([fallback]));
+  });
+
+  it('Clear all saved work with no fallback key behaves as before', async () => {
+    const s = fakeStore([entryFor(session(2, OTHER))]);
+    const app = await start(s.store);
+
+    await app.click('Clear all saved work');
+
+    expect(s.log).toContain('clear');
+    expect(s.entries.size).toBe(0);
+    expect(storage.size).toBe(0);
+    expect(app.noticeText()).toBe('Recovery data in this browser was deleted.');
+  });
+});
+
 describe('reopening a source offers the newest saved work for that source', () => {
   const OTHER_KEY = fingerprintKey(OTHER)!;
   const at = (json: string, savedAt: number): RecoveryEntry => {
