@@ -427,6 +427,11 @@ function overrideCodeUnit(
   }
 }
 
+/** A resolved kind named as the EPSG tables name it: a local frame is an engineering CRS. */
+function epsgKindOf(kind: CrsKind): EpsgCrsKind {
+  return kind === 'local' ? 'engineering' : kind;
+}
+
 export class CrsService {
   private readonly _port: CrsOverridePort;
   private readonly _listeners: Set<CrsListener> = new Set();
@@ -861,9 +866,14 @@ export class CrsService {
     // and 'unknown' for a geographic one, which is angular); else the kind and
     // unit the EPSG code itself names. That last case is a code from a session
     // file, a catalogue record or an old stored record: the picker offers
-    // registry entries only.
+    // registry entries only. Confirming the file's own code confirms the
+    // file's kind too: a session saying projected for a geocentric or
+    // geographic file, or geographic for a projected one, contradicts it.
+    const detectedKind = confirmsDetected ? resolvedFromCrsInfo(detected, 'user-override')?.kind : undefined;
     const unit = entry && entry.kind !== override.kind
       ? { contradicts: entry.kind }
+      : detectedKind !== undefined && detectedKind !== override.kind
+        ? { contradicts: epsgKindOf(detectedKind) }
       : confirmsDetected
         ? { linearUnit: detected.linearUnit, linearUnitToMetres: detected.linearUnitToMetres }
         : entry
@@ -876,7 +886,7 @@ export class CrsService {
       // The code names a different kind of CRS than the override claims. No
       // kind or unit is guessed, and the code is not carried, so no export
       // writes it as the claimed kind.
-      const article = unit.contradicts === 'engineering' ? 'an' : 'a';
+      const article = unit.contradicts === 'engineering' || unit.contradicts === 'unknown' ? 'an' : 'a';
       return unresolved(`EPSG:${override.epsg} (the code is ${article} ${unit.contradicts} CRS, not ${override.kind})`);
     }
     const name =
