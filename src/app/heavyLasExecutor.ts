@@ -90,7 +90,7 @@ const BUILD_MEMORY_BUDGET_BYTES = 128 * 1024 * 1024;
  * so a session that opens many large files does not grow the cache without bound.
  * A live store (one another tab holds open) is never evicted, whatever its age.
  */
-const CACHE_BUDGET_BYTES = 8 * 1024 * 1024 * 1024;
+export const OOC_CACHE_BUDGET_BYTES = 2 * 1024 ** 3;
 
 /**
  * Fingerprint the file before any decode, so a persisted index can be looked up
@@ -352,7 +352,7 @@ async function recordAndEvict(
       });
       const live = await liveStoreNames(locks);
       if (live) {
-        for (const name of selectEvictions(map.entries, { budgetBytes: CACHE_BUDGET_BYTES, liveNames: live })) {
+        for (const name of selectEvictions(map.entries, { budgetBytes: OOC_CACHE_BUDGET_BYTES, liveNames: live })) {
           // The snapshot above narrows the candidates; it cannot decide them.
           // It names a different lock from the store's own, so a reader can take
           // residency between the snapshot and the delete. The exclusive lock is
