@@ -53,6 +53,33 @@ describe('ASCII export .prj sidecar', () => {
     expect(text(file!.bytes)).toContain('EPSG:2229');
   });
 
+  describe('keep mode with a resolver', () => {
+    const WKT_B = wktForEpsg(32613) as string;
+    const resolved = (extra: Record<string, unknown>): CrsInfo =>
+      ({ kind: 'projected', name: 'resolved', ...extra }) as unknown as CrsInfo;
+
+    it('keep mode writes no .prj when the resolver says no CRS, even if the file declares one', () => {
+      const { file } = convertCloud(cloud(), { format: 'xyz', crsMode: 'keep', resolvedSourceCrs: null });
+      expect(file).not.toBeNull();
+      expect(file?.prj).toBeUndefined();
+    });
+
+    it('keep mode writes the override WKT, not the declared one', () => {
+      const { file } = convertCloud(cloud(), {
+        format: 'xyz', crsMode: 'keep', resolvedSourceCrs: resolved({ epsg: 32613, wkt: WKT_B }),
+      });
+      expect(file?.prj).toBe(WKT_B);
+      expect(file?.prj).not.toBe(SOURCE_WKT);
+    });
+
+    it('keep mode writes no .prj when the resolved CRS has no WKT', () => {
+      const { file } = convertCloud(cloud(), {
+        format: 'xyz', crsMode: 'keep', resolvedSourceCrs: resolved({ epsg: 32613 }),
+      });
+      expect(file?.prj).toBeUndefined();
+    });
+  });
+
   it('LAS output has no .prj', () => {
     const { file } = convertCloud(cloud(), { format: 'las', crsMode: 'assign', targetEpsg: 32613 });
     expect(file?.prj).toBeUndefined();

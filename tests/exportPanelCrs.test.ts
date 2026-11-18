@@ -16,6 +16,7 @@ import { FakeEl } from './helpers/exportPanelPillDomFake';
 const rec = vi.hoisted(() => ({
   downloads: [] as Array<{ name: string; text: string; mime: string }>,
   convertResolvedCrs: [] as Array<unknown>,
+  prj: undefined as string | undefined,
 }));
 vi.mock('../src/io/download', async (orig) => ({
   ...(await orig<Record<string, unknown>>()),
@@ -25,17 +26,11 @@ vi.mock('../src/io/download', async (orig) => ({
 vi.mock('../src/lazyChunks', async (orig) => ({
   ...(await orig<Record<string, unknown>>()),
   loadConvertEngine: async () => ({
-    convertCloud: (
-      cloud: { metadata?: { crs?: { wkt?: string } } },
-      options: { resolvedSourceCrs?: { wkt?: string } | null; crsMode?: string },
-    ) => {
+    convertCloud: (_cloud: unknown, options: { resolvedSourceCrs?: unknown }) => {
       rec.convertResolvedCrs.push(options.resolvedSourceCrs);
-      // Mirrors the converter: keep mode hands back the resolved source WKT as
-      // `prj` (declared metadata only when no resolver is wired).
-      const source = options.resolvedSourceCrs !== undefined ? options.resolvedSourceCrs : (cloud.metadata?.crs ?? null);
-      const prj = (options.crsMode ?? 'keep') === 'keep' ? source?.wkt : undefined;
+      // The converter owns the `.prj` rule; the panel only downloads what it returns.
       return {
-        file: { filename: 'scan.xyz', mime: 'text/plain', bytes: new Uint8Array([1]), ...(prj ? { prj } : {}) },
+        file: { filename: 'scan.xyz', mime: 'text/plain', bytes: new Uint8Array([1]), ...(rec.prj ? { prj: rec.prj } : {}) },
         report: { source: 'scan', ok: true, pointCount: 1, crsNote: '—', log: [] },
       };
     },
@@ -289,15 +284,16 @@ describe('ExportPanel: scan-area export is independent of the measure surface', 
 // silence "unused" for the shared helper while keeping it available for edits.
 void makePanel;
 
-describe('ExportPanel — one resolved CRS snapshot drives data + .prj (transaction consistency)', () => {
+describe('ExportPanel — the converter .prj is downloaded as returned (the keep-mode rule is tested in asciiExportPrj)', () => {
   async function runExport(opts: {
     getResolvedSourceCrs?: () => { wkt?: string; epsg?: number } | null;
-    cloudWkt?: string;
+    prj?: string;
   }): Promise<typeof rec> {
     rec.downloads.length = 0;
     rec.convertResolvedCrs.length = 0;
+    rec.prj = opts.prj;
     const { ExportPanel } = await import('../src/ui/ExportPanel');
-    const cloud = { name: 'scan', pointCount: 1, metadata: opts.cloudWkt ? { crs: { wkt: opts.cloudWkt } } : undefined };
+    const cloud = { name: 'scan', pointCount: 1, metadata: { crs: { wkt: 'WKT-A' } } };
     const panel = new ExportPanel({
       getCloud: () => cloud as never,
       hasFullSource: () => false,
@@ -315,45 +311,28 @@ describe('ExportPanel — one resolved CRS snapshot drives data + .prj (transact
   }
   const prj = (r: typeof rec) => r.downloads.find((d) => d.name.endsWith('.prj'));
 
-  it('Case A — override: converter and .prj both get WKT-B, never WKT-A', async () => {
-    const r = await runExport({ cloudWkt: 'WKT-A', getResolvedSourceCrs: () => ({ wkt: 'WKT-B' }) });
-    expect((r.convertResolvedCrs[0] as { wkt?: string })?.wkt).toBe('WKT-B');
+  it('downloads file.prj beside the data, named from the data file', async () => {
+    const r = await runExport({ getResolvedSourceCrs: () => ({ wkt: 'WKT-B' }), prj: 'WKT-B' });
+    expect(prj(r)?.name).toBe('scan.prj');
     expect(prj(r)?.text).toBe('WKT-B');
-    expect(r.downloads.some((d) => d.text.includes('WKT-A'))).toBe(false);
   });
 
-  it('Case B — Local/no CRS: converter gets null, no .prj, WKT-A never resurrected', async () => {
-    const r = await runExport({ cloudWkt: 'WKT-A', getResolvedSourceCrs: () => null });
-    expect(r.convertResolvedCrs[0]).toBeNull();
+  it('downloads no .prj when the converter returns none, and builds no WKT itself', async () => {
+    const r = await runExport({ getResolvedSourceCrs: () => null });
     expect(prj(r)).toBeUndefined();
     expect(r.downloads.some((d) => d.text.includes('WKT-A'))).toBe(false);
   });
 
-  it('Case C — no resolver wired: legacy declared-metadata fallback stays intact', async () => {
-    const r = await runExport({ cloudWkt: 'WKT-A' });
-    expect(r.convertResolvedCrs[0]).toBeUndefined();
-    expect(prj(r)?.text).toBe('WKT-A');
-  });
-
-  it('Case D — CRS changes mid-export: the request-time snapshot (B) wins over a later C', async () => {
+  it('passes the resolver value to the converter once, at request time', async () => {
     let n = 0;
-    const r = await runExport({
-      cloudWkt: 'WKT-A',
-      getResolvedSourceCrs: () => (n++ === 0 ? { wkt: 'WKT-B' } : { wkt: 'WKT-C' }),
-    });
+    const r = await runExport({ getResolvedSourceCrs: () => (n++ === 0 ? { wkt: 'WKT-B' } : { wkt: 'WKT-C' }), prj: 'WKT-B' });
     expect((r.convertResolvedCrs[0] as { wkt?: string })?.wkt).toBe('WKT-B');
-    expect(prj(r)?.text).toBe('WKT-B');
     expect(r.downloads.some((d) => d.text.includes('WKT-C'))).toBe(false);
   });
 
-  it('Case E — override to a known EPSG with no WKT writes no .prj (never resurrects source A)', async () => {
-    // CrsService drops the declared WKT on an override to a different EPSG, so
-    // resolvedSourceCrs carries an epsg but no wkt. The safe behaviour is to write
-    // no .prj rather than the rejected source WKT; the binary formats still carry
-    // the resolved EPSG. (ASCII keep + EPSG-only override → no sidecar; documented.)
-    const r = await runExport({ cloudWkt: 'WKT-A', getResolvedSourceCrs: () => ({ epsg: 32613 }) });
-    expect(prj(r)).toBeUndefined();
-    expect(r.downloads.some((d) => d.text.includes('WKT-A'))).toBe(false);
+  it('with no resolver wired, passes undefined so the converter falls back to declared metadata', async () => {
+    const r = await runExport({});
+    expect(r.convertResolvedCrs[0]).toBeUndefined();
   });
 });
 
