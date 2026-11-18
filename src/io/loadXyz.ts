@@ -39,6 +39,19 @@ export function loadXyz(
   return new Promise((resolve) => resolve(loadXyzSync(buffer, name, onProgress)));
 }
 
+const ESRI_GRID_REFUSAL =
+  'This file is an ESRI ASCII raster grid (ncols/nrows header), not a point list. Open it in a GIS as a raster.';
+
+/**
+ * True when the leading lines are an ESRI ASCII grid header: `ncols` first,
+ * then `nrows`, `cellsize` and `xllcorner` or `xllcenter` among the first six.
+ */
+function isEsriGridHeader(lines: readonly string[]): boolean {
+  if (lines.length === 0 || !/^ncols\s+\d+\s*$/i.test(lines[0])) return false;
+  const has = (re: RegExp): boolean => lines.some((l) => re.test(l));
+  return has(/^nrows\s/i) && has(/^cellsize\s/i) && has(/^xll(corner|center)\s/i);
+}
+
 function loadXyzSync(
   buffer: ArrayBuffer,
   name: string,
@@ -52,11 +65,18 @@ function loadXyzSync(
   let hasColor: boolean | null = null;
   let colorMax = 0;
 
+  // The first six content lines decide whether this is a raster grid header.
+  const head: string[] = [];
+
   readTextLines(
     buffer,
     (raw) => {
       const line = raw.trim();
       if (line === '' || line.startsWith('#')) return;
+      if (head.length < 6) {
+        head.push(line);
+        if (head.length === 6 && isEsriGridHeader(head)) throw new Error(ESRI_GRID_REFUSAL);
+      }
 
       const tok = tokenize(line);
       const x = Number(tok[0]);
@@ -92,6 +112,8 @@ function loadXyzSync(
         : undefined,
     },
   );
+
+  if (head.length < 6 && isEsriGridHeader(head)) throw new Error(ESRI_GRID_REFUSAL);
 
   const count = xs.length;
   if (count === 0) throw new Error('XYZ file has no readable points');
