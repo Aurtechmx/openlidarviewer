@@ -41,15 +41,40 @@ export function loadXyz(
 
 const ESRI_GRID_REFUSAL =
   'This file is an ESRI ASCII raster grid (ncols/nrows header), not a point list. Open it in a GIS as a raster.';
+const GRASS_GRID_REFUSAL =
+  'This file is a GRASS ASCII raster grid (north/south/east/west header), not a point list. Open it in a GIS as a raster.';
+
+/** Number of leading content lines inspected for a raster header. */
+const GRID_HEAD_LINES = 8;
+
+type GridKind = 'esri' | 'grass' | null;
 
 /**
- * True when the leading lines are an ESRI ASCII grid header: `ncols` first,
- * then `nrows`, `cellsize` and `xllcorner` or `xllcenter` among the first six.
+ * Classifies the leading content lines. ESRI ASCII grid: `ncols` and `nrows`,
+ * `cellsize` or `dx` with `dy`, and an `xll`/`yll` corner or centre key, in any
+ * order and case. GRASS ASCII raster: `north:`, `south:`, `east:`, `west:` plus
+ * `rows:` and `cols:`.
  */
-function isEsriGridHeader(lines: readonly string[]): boolean {
-  if (lines.length === 0 || !/^ncols\s+\d+\s*$/i.test(lines[0])) return false;
+function gridHeaderKind(lines: readonly string[]): GridKind {
   const has = (re: RegExp): boolean => lines.some((l) => re.test(l));
-  return has(/^nrows\s/i) && has(/^cellsize\s/i) && has(/^xll(corner|center)\s/i);
+  const key = (k: string): boolean => has(new RegExp(`^${k}\\s+\\S`, 'i'));
+  if (
+    key('ncols') &&
+    key('nrows') &&
+    (key('cellsize') || (key('dx') && key('dy'))) &&
+    has(/^[xy]ll(corner|center)\s+\S/i)
+  ) {
+    return 'esri';
+  }
+  const g = (k: string): boolean => has(new RegExp(`^${k}\\s*:\\s*\\S`, 'i'));
+  if (g('north') && g('south') && g('east') && g('west') && g('rows') && g('cols')) return 'grass';
+  return null;
+}
+
+function refuseGrid(lines: readonly string[]): void {
+  const kind = gridHeaderKind(lines);
+  if (kind === 'esri') throw new Error(ESRI_GRID_REFUSAL);
+  if (kind === 'grass') throw new Error(GRASS_GRID_REFUSAL);
 }
 
 function loadXyzSync(
@@ -65,7 +90,7 @@ function loadXyzSync(
   let hasColor: boolean | null = null;
   let colorMax = 0;
 
-  // The first six content lines decide whether this is a raster grid header.
+  // The first eight content lines decide whether this is a raster grid header.
   const head: string[] = [];
 
   readTextLines(
@@ -73,9 +98,9 @@ function loadXyzSync(
     (raw) => {
       const line = raw.trim();
       if (line === '' || line.startsWith('#')) return;
-      if (head.length < 6) {
+      if (head.length < GRID_HEAD_LINES) {
         head.push(line);
-        if (head.length === 6 && isEsriGridHeader(head)) throw new Error(ESRI_GRID_REFUSAL);
+        refuseGrid(head);
       }
 
       const tok = tokenize(line);
@@ -113,7 +138,6 @@ function loadXyzSync(
     },
   );
 
-  if (head.length < 6 && isEsriGridHeader(head)) throw new Error(ESRI_GRID_REFUSAL);
 
   const count = xs.length;
   if (count === 0) throw new Error('XYZ file has no readable points');

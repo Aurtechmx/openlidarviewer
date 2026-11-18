@@ -24,6 +24,31 @@ describe('loadXyz refuses an ESRI ASCII raster grid', () => {
     await expect(loadXyz(buf(txt), 'a.asc')).rejects.toThrow('ESRI ASCII raster grid');
   });
 
+  it('rejects a header with nrows first', async () => {
+    const txt = 'nrows 2\nncols 2\nxllcorner 0\nyllcorner 0\ncellsize 1\n1 2\n3 4\n';
+    await expect(loadXyz(buf(txt), 'a.asc')).rejects.toThrow('ESRI ASCII raster grid');
+  });
+
+  it('rejects a dx/dy header with non-square cells', async () => {
+    const txt = 'ncols 2\nnrows 2\nxllcorner 0\nyllcorner 0\ndx 1\ndy 2\n1 2\n3 4\n';
+    await expect(loadXyz(buf(txt), 'a.asc')).rejects.toThrow('ESRI ASCII raster grid');
+  });
+
+  it('rejects upper-case keys in any order', async () => {
+    const txt = 'YLLCORNER 0\nCELLSIZE 1\nNROWS 2\nXLLCORNER 0\nNCOLS 2\n1 2\n3 4\n';
+    await expect(loadXyz(buf(txt), 'a.asc')).rejects.toThrow('ESRI ASCII raster grid');
+  });
+
+  it('rejects a GRASS ASCII raster header and names GRASS', async () => {
+    const txt = 'north: 4000\nsouth: 3000\neast: 2000\nwest: 1000\nrows: 2\ncols: 2\n1 2\n3 4\n';
+    await expect(loadXyz(buf(txt), 'a.asc')).rejects.toThrow('GRASS');
+  });
+
+  it('loads a point file whose first line starts with the word ncols', async () => {
+    const pc = await loadXyz(buf('ncols 5\n1 2 3\n4 5 6\n'), 'pts.asc');
+    expect(pc.pointCount).toBe(2);
+  });
+
   it('still loads a three-column point .asc', async () => {
     const g = { count: 3, x: Float64Array.from([1, 2, 3]), y: Float64Array.from([4, 5, 6]), z: Float64Array.from([7, 8, 9]) };
     const pc = await loadXyz(buf(writeAsc(g)), 'pts.asc');
