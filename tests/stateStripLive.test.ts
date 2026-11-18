@@ -309,18 +309,20 @@ describe('strip UI', () => {
         strip.render(readStrip(reads()));
         expect(history).toEqual([]);
         strip.render(on(5, 9, 'keep-inside'));
+        // Spoken with a comma; the strip itself still shows the middle dot.
+        expect(root.querySelector('.olv-ss-clip')!.textContent).toBe('Clipped: 5 of 9 points · Showing inside box');
         // A repaint, and a count change on the same side, say nothing new.
         strip.render(on(5, 9, 'keep-inside'));
         strip.render(on(6, 9, 'keep-inside'));
-        expect(history).toEqual(['Clipped: 5 of 9 points · Showing inside box']);
+        expect(history).toEqual(['Clipped: 5 of 9 points, Showing inside box']);
         strip.render(on(3, 9, 'keep-outside'));
-        expect(history).toEqual(['Clipped: 5 of 9 points · Showing inside box', 'Clipped: 3 of 9 points · Showing outside box']);
+        expect(history).toEqual(['Clipped: 5 of 9 points, Showing inside box', 'Clipped: 3 of 9 points, Showing outside box']);
         strip.render(streamed(null));
         strip.render(streamed(null));
         vi.advanceTimersByTime(5000);
         expect(history).toEqual([
-          'Clipped: 5 of 9 points · Showing inside box',
-          'Clipped: 3 of 9 points · Showing outside box',
+          'Clipped: 5 of 9 points, Showing inside box',
+          'Clipped: 3 of 9 points, Showing outside box',
           'Clip off',
         ]);
         // Through the app's one polite region: the strip mints no live region of its own.
@@ -339,7 +341,7 @@ describe('strip UI', () => {
         expect(history).toEqual([]);
         strip.render(on(5, 9, 'keep-inside'));
         vi.advanceTimersByTime(5000);
-        expect(history).toEqual(['Clipped: 5 of 9 points · Showing inside box']);
+        expect(history).toEqual(['Clipped: 5 of 9 points, Showing inside box']);
         history.length = 0;
         strip.render(streamed(null));
         // A streamed scan has no count: the clip and its side are said on their own.
@@ -347,7 +349,7 @@ describe('strip UI', () => {
         vi.advanceTimersByTime(5000);
         strip.render(streamed('keep-outside'));
         vi.advanceTimersByTime(5000);
-        expect(history).toEqual(['Clip off', 'Clip on · Showing inside box', 'Clip on · Showing outside box']);
+        expect(history).toEqual(['Clip off', 'Clip on, Showing inside box', 'Clip on, Showing outside box']);
         // On and off again before anything was said: nothing is said.
         strip.render(streamed(null));
         history.length = 0;
@@ -367,12 +369,12 @@ describe('strip UI', () => {
         strip.render(null);
         strip.render(readStrip(reads()));
         vi.advanceTimersByTime(5000);
-        expect(history).toEqual(['Clipped: 5 of 9 points · Showing inside box']);
+        expect(history).toEqual(['Clipped: 5 of 9 points, Showing inside box']);
         // A clip waiting for its count is dropped with the strip.
         strip.render(streamed('keep-inside'));
         strip.dispose();
         vi.advanceTimersByTime(5000);
-        expect(history).toEqual(['Clipped: 5 of 9 points · Showing inside box']);
+        expect(history).toEqual(['Clipped: 5 of 9 points, Showing inside box']);
       });
     });
   });

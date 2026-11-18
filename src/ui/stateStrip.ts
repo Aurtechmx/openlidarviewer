@@ -285,7 +285,9 @@ export function createStateStrip(host: StateStripHost): StateStrip {
       const clipChanged = paint('clip', clipLine, clipText === null ? null : 'info');
       clipOff.hidden = clipText === null;
       if (clipChanged && clipLine !== null) revealClip();
-      announceClip(clipLine === null ? 'off' : side ?? 'on', clipLine ?? '', !!s.clip);
+      // Spoken with a comma: some screen readers read "·" aloud as "middle dot".
+      const spokenLine = clipText === null ? '' : `${clipText}${phrase ? `, ${phrase}` : ''}`;
+      announceClip(clipLine === null ? 'off' : side ?? 'on', spokenLine, !!s.clip);
       const p = s.processing?.value;
       paint(
         'processing',
