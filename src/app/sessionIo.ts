@@ -29,6 +29,7 @@ import type { CrsService } from '../geo/CrsService';
 import type { ResolvedCrs } from '../geo/CoordinateTypes';
 import { isLocalLinearUnit, type LocalLinearUnit } from '../geo/CrsOverrideStore';
 import { metresPerLinearUnit } from '../io/crs';
+import { epsgCrsKind, type EpsgCrsKind } from '../convert/epsg';
 import type { ViewStateBundle } from '../io/viewState';
 import { buildViewState } from '../io/viewState';
 import { isExportStale, staleExportReason } from '../export/exportStaleness';
@@ -318,10 +319,18 @@ function noticeCrsLabel(name: string | undefined, epsg: number | undefined): str
 export function kindConflictSentence(
   scan: { readonly name?: string; readonly epsg?: number; readonly isGeographic?: boolean; readonly geocentric?: boolean } | undefined,
   session: ResolvedCrs,
+  /** The kind the EPSG table gives the session's code. */
+  tableKind: EpsgCrsKind,
 ): string {
   const scanKind = scan?.geocentric ? 'geocentric' : scan?.isGeographic ? 'geographic' : 'projected';
-  return `This session's coordinate system, ${noticeCrsLabel(session.name, session.epsg)} (${session.kind}), was not applied ` +
+  const lead = `This session's coordinate system, ${noticeCrsLabel(session.name, session.epsg)} (${session.kind}), was not applied ` +
     `because the scan declares a ${scanKind} one, ${noticeCrsLabel(scan?.name, scan?.epsg)}, which stays in use.`;
+  if (tableKind === session.kind) return lead;
+  // Why no action is offered: the code is not of the kind the session names.
+  if (tableKind === 'unknown') {
+    return `${lead} EPSG:${session.epsg} is not in the EPSG tables this app holds, so its kind cannot be checked.`;
+  }
+  return `${lead} EPSG:${session.epsg} is ${tableKind === 'engineering' ? 'an' : 'a'} ${tableKind} CRS, not a ${session.kind} one.`;
 }
 
 /**
@@ -342,7 +351,7 @@ export async function importSession(
   // The coordinate-system disclosure, held until the final toast: the toast host
   // shows one message at a time, so a notice shown earlier is replaced by the
   // restore toast before it can be read.
-  let crsNotice: { readonly text: string; readonly action: { readonly label: string; readonly onClick: () => void } } | null = null;
+  let crsNotice: { readonly text: string; readonly action?: { readonly label: string; readonly onClick: () => void } } | null = null;
   try {
     // A shared `.olvsession` is untrusted; reject an over-large file up front,
     // before it is read, so `JSON.parse` of the whole text can't exhaust memory.
@@ -631,9 +640,13 @@ export async function importSession(
         }
       };
       if (kindConflict) {
+        // The action is offered only when the EPSG table gives the code the
+        // session's kind: applied otherwise, it would store an unknown CRS for
+        // the scan, which every later open would then show.
+        const tableKind = epsgCrsKind(sessionCrs.epsg).kind;
         crsNotice = {
-          text: ` ${kindConflictSentence(override.detected, sessionCrs)}`,
-          action: { label: 'Use session CRS', onClick: applySessionCrs },
+          text: ` ${kindConflictSentence(override.detected, sessionCrs, tableKind)}`,
+          ...(tableKind === sessionCrs.kind ? { action: { label: 'Use session CRS', onClick: applySessionCrs } } : {}),
         };
       }
       // What the service actually applied, not what the file claims: the notice

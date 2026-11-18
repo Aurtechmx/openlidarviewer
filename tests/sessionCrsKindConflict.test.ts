@@ -170,10 +170,12 @@ describe('a user CRS of another kind restores the work under the scan\'s CRS', (
     expect(r.crsService.current()!.kind).toBe('geocentric');
     expect(r.crsService.current()!.epsg).toBe(4978);
     expect(elevationWorkflowRefusal(r.crsService.context())).not.toBeNull();
-    expect(r.toasts.some((t) => KIND_NOTICE.test(t))).toBe(true);
-    // Applied on request, the resolver still refuses projected for a geocentric code.
-    r.actions[r.toasts.findIndex((t) => KIND_NOTICE.test(t))]!.onClick();
-    expect(r.crsService.current()!.kind).toBe('unknown');
+    const i = r.toasts.findIndex((t) => KIND_NOTICE.test(t));
+    expect(r.toasts[i]).toContain('This session\'s coordinate system, EPSG:4978 (projected), was not applied because the scan declares a geocentric one, WGS 84 (EPSG:4978), which stays in use. EPSG:4978 is a geocentric CRS, not a projected one.');
+    // No action: applying it would store an unknown CRS for the scan, and
+    // every later open would show unknown instead of geocentric.
+    expect(r.actions[i]).toBeUndefined();
+    expect(r.store.size).toBe(0);
   });
 
   it('a geographic 4326 file keeps its CRS under a projected 4326 session, with the notice', async () => {
@@ -182,7 +184,18 @@ describe('a user CRS of another kind restores the work under the scan\'s CRS', (
     expect(r.setCrsOverride).not.toHaveBeenCalled();
     expect(r.crsService.current()!.kind).toBe('geographic');
     expect(r.crsService.current()!.epsg).toBe(4326);
-    expect(r.toasts.some((t) => KIND_NOTICE.test(t))).toBe(true);
+    const i = r.toasts.findIndex((t) => KIND_NOTICE.test(t));
+    expect(r.toasts[i]).toContain('EPSG:4326 is a geographic CRS, not a projected one.');
+    expect(r.actions[i]).toBeUndefined();
+  });
+
+  it('a session code the EPSG tables do not hold gets the notice without the action', async () => {
+    const r = await restore(crsFromWkt(WGS84), sessionCrs(2181, 'projected'));
+    expect(r.loadMeasurements).toHaveBeenCalledTimes(1);
+    expect(r.crsService.current()!.kind).toBe('geographic');
+    const i = r.toasts.findIndex((t) => KIND_NOTICE.test(t));
+    expect(r.toasts[i]).toContain('EPSG:2181 is not in the EPSG tables this app holds, so its kind cannot be checked.');
+    expect(r.actions[i]).toBeUndefined();
   });
 });
 
