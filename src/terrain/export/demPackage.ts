@@ -303,6 +303,11 @@ export interface DemReadmeOptions {
    * written. Omitted or null prints no line.
    */
   readonly unstoredEpsg?: { readonly epsg: number; readonly inPrj: boolean } | null;
+  /**
+   * True when the GeoTIFFs carry no CRS key but each raster's .prj holds the
+   * CRS: a GIS reading the GeoTIFF alone finds none. Default false.
+   */
+  readonly crsInPrjOnly?: boolean;
   /** The NoData value every raster in the package declares. Default -9999. */
   readonly noData?: number;
   /**
@@ -635,6 +640,10 @@ export function buildDemReadme(opts: DemReadmeOptions): string {
         : opts.sourceCoordinates
           ? ['  Frame          scan source coordinates; no CRS resolved; rasters carry no CRS']
           : []),
+    // GDAL's GeoTIFF driver does not read a .prj beside a .tif.
+    ...(opts.placed !== false && opts.crsInPrjOnly
+      ? ['  GeoTIFF CRS    no CRS key in the .tif files; assign the CRS from <stem>.prj']
+      : []),
     opts.placed === false
       ? `  Bounds (local offsets in the project frame, ${hUnit})`
       : opts.sourceCoordinates
@@ -1055,6 +1064,7 @@ export function assembleDemPackage(
     verticalUnitToMetres: options.verticalUnitToMetres ?? null,
     verticalGeoKeys,
     unstoredEpsg: unstorableEpsg ? { epsg, inPrj: horizontalWkt != null || !!options.wkt } : null,
+    crsInPrjOnly: placed && !isGeoTiffEpsgCode(epsg) && horizontalWkt != null,
     noData: packageNoData,
     result,
     basename,

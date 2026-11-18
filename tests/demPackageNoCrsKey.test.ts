@@ -1,0 +1,93 @@
+/**
+ * When the DEM GeoTIFFs carry no CRS key but a .prj beside them holds the
+ * CRS, the README says so in one line.
+ *
+ * GDAL's GeoTIFF driver does not read a .prj beside a .tif, so a GIS opens
+ * those rasters with no CRS. That happens for an EPSG code outside 1024..32766
+ * (the keys cannot hold it) and for a custom horizontal WKT with no EPSG code.
+ * The ASCII grids read the same .prj, so only the GeoTIFFs need the line. A
+ * code the keys can hold, or no .prj at all, prints nothing new.
+ */
+import { describe, expect, it } from 'vitest';
+import { buildDemPackage } from '../src/terrain/export/demPackage';
+import type { DtmGrid } from '../src/terrain/ground/cellConfidence';
+import { demResultAround } from './helpers/demPackageFixture';
+import { extractEntry } from './helpers/zipReader';
+
+const GEO_KEY_DIRECTORY = 34735;
+
+/** The GeoKey directory of the first IFD as a key -> value map. */
+function geoKeys(bytes: Uint8Array): Map<number, number> {
+  const dv = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  const ifd = dv.getUint32(4, true);
+  const n = dv.getUint16(ifd, true);
+  for (let i = 0; i < n; i++) {
+    const p = ifd + 2 + i * 12;
+    if (dv.getUint16(p, true) !== GEO_KEY_DIRECTORY) continue;
+    const count = dv.getUint32(p + 4, true);
+    const off = dv.getUint32(p + 8, true);
+    const u16 = Array.from({ length: count }, (_, k) => dv.getUint16(off + k * 2, true));
+    const keys = new Map<number, number>();
+    for (let k = 0; k < u16[3]; k++) keys.set(u16[4 + k * 4], u16[7 + k * 4]);
+    return keys;
+  }
+  throw new Error('no GeoKey directory');
+}
+
+const LINE = '  GeoTIFF CRS    no CRS key in the .tif files; assign the CRS from <stem>.prj';
+
+const CODE_90000_WKT = 'PROJCS["Custom grid",GEOGCS["WGS 84",DATUM["WGS_1984",SPHEROID["WGS 84",6378137,298.257223563]],PRIMEM["Greenwich",0],UNIT["degree",0.0174532925199433]],PROJECTION["Transverse_Mercator"],UNIT["metre",1],AUTHORITY["EPSG","90000"]]';
+const NO_CODE_WKT = 'PROJCS["Site transverse Mercator",GEOGCS["WGS 84",DATUM["WGS_1984",SPHEROID["WGS 84",6378137,298.257223563]],PRIMEM["Greenwich",0],UNIT["degree",0.0174532925199433]],PROJECTION["Transverse_Mercator"],PARAMETER["central_meridian",-111.5],PARAMETER["scale_factor",0.9999],UNIT["metre",1]]';
+
+function dtm(epsg: number | null, crs: string): DtmGrid {
+  return {
+    cols: 2, rows: 2, cellSizeM: 1, originH1: 0, originH2: 0,
+    z: new Float32Array([1, 2, 3, 4]), coverage: new Uint8Array([2, 2, 2, 2]),
+    confidence: new Float32Array(4).fill(90), counts: new Uint32Array(4).fill(1),
+    interpDistanceCells: new Float32Array(4), meanConfidence: 90,
+    crs, horizontalEpsg: epsg, verticalDatum: null, verticalEpsg: null, verticalUnitToMetres: 1,
+    coverageMode: 'full', sourcePointCount: 100, analyzedPointCount: 100, warnings: [],
+  } as unknown as DtmGrid;
+}
+
+const OPTS = { basename: 's', worldOrigin: { x: 500_000, y: 4_000_000 }, generationDateIso: '2026-01-01T00:00:00.000Z' } as const;
+
+const readme = (zip: Uint8Array): string => new TextDecoder().decode(extractEntry(zip, 's-README.txt')!);
+
+describe('the GeoTIFFs carry no CRS key and a .prj holds the CRS', () => {
+  it('an EPSG code outside 1024..32766 with a WKT', () => {
+    const zip = buildDemPackage(demResultAround(dtm(90000, 'EPSG:90000')), { ...OPTS, wkt: CODE_90000_WKT });
+    expect(geoKeys(extractEntry(zip, 's-dtm.tif')!).has(3072)).toBe(false);
+    expect(extractEntry(zip, 's-dtm.prj')).toBeTruthy();
+    const text = readme(zip);
+    expect(text.split('\n')).toContain(LINE);
+    expect(text.split('\n').filter((l) => l === LINE)).toHaveLength(1);
+    // The existing line stays.
+    expect(text.replace(/\s+/g, ' ')).toContain('EPSG:90000 cannot be stored in GeoTIFF keys; the CRS is in the .prj only.');
+  });
+
+  it('a custom horizontal WKT with no EPSG code', () => {
+    const zip = buildDemPackage(demResultAround(dtm(null, 'Site transverse Mercator')), { ...OPTS, wkt: NO_CODE_WKT });
+    const keys = geoKeys(extractEntry(zip, 's-dtm.tif')!);
+    expect(keys.get(1024)).toBe(32767);
+    expect(keys.has(3072)).toBe(false);
+    expect(extractEntry(zip, 's-dtm.prj')).toBeTruthy();
+    expect(readme(zip).split('\n')).toContain(LINE);
+  });
+});
+
+describe('no new line when the keys hold the CRS or there is no .prj', () => {
+  it('EPSG:32612 is unchanged', () => {
+    const zip = buildDemPackage(demResultAround(dtm(32612, 'EPSG:32612')), OPTS);
+    expect(geoKeys(extractEntry(zip, 's-dtm.tif')!).get(3072)).toBe(32612);
+    expect(readme(zip)).not.toContain('GeoTIFF CRS');
+  });
+
+  it('an EPSG code outside the range with no WKT keeps its own line only', () => {
+    const zip = buildDemPackage(demResultAround(dtm(90000, 'EPSG:90000')), { ...OPTS, linearUnit: 'unknown' });
+    expect(extractEntry(zip, 's-dtm.prj')).toBeFalsy();
+    const text = readme(zip);
+    expect(text).not.toContain('GeoTIFF CRS');
+    expect(text.replace(/\s+/g, ' ')).toContain('EPSG:90000 cannot be stored in GeoTIFF keys; the rasters carry no CRS.');
+  });
+});
