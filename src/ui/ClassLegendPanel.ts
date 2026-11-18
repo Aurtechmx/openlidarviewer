@@ -494,18 +494,19 @@ export class ClassLegendPanel {
     this._syncCountsNote();
   }
 
-  /** Paint the one counts-basis caption from the streaming and sampled flags. */
+  /**
+   * Paint the one counts-basis caption from the streaming and sampled flags.
+   * Each statement that applies is written whole, with its own denominator;
+   * when both apply, both sentences share the line.
+   */
   private _syncCountsNote(): void {
     const streaming = this._streaming;
     const sampled = this._sampled;
     this._countsNote.classList.toggle('olv-hidden', !streaming && !sampled);
-    this._countsNote.textContent = streaming && sampled
-      ? 'Counts from unique decoded nodes seen so far, and Solo and hide act on the loaded display sample — not full-source totals.'
-      : streaming
-        ? 'Counts from unique decoded nodes seen so far, not full-source totals.'
-        : sampled
-          ? 'Counts, Solo and hide act on the loaded display sample — not the full cloud.'
-          : '';
+    const parts: string[] = [];
+    if (streaming) parts.push('Counts from unique decoded nodes seen so far, not full-source totals.');
+    if (sampled) parts.push('Counts, Solo and hide act on the loaded display sample — not the full cloud.');
+    this._countsNote.textContent = parts.join(' ');
   }
 
   /** The derive-caption key for the held codes, or undefined when they are unknown. */
