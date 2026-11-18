@@ -9,6 +9,7 @@
  * `reproject.ts`; everything else is dependency-free.
  */
 
+import { isGeoTiffEpsgCode } from './geoTiffEpsg';
 import { exportDigestLines } from '../science/exportDigestRecord';
 import { DISPLAY_SAMPLE_SUFFIX, displaySampleLine, pointBasisLine } from '../export/exportSummary';
 import { truncationOf } from '../io/truncation';
@@ -413,10 +414,10 @@ export function convertCloud(
     // the wrong CRS); otherwise the writer builds a verified WKT for outEpsg,
     // and refuses when it has none (planLas14Crs, below).
     const sourceWkt = opts.format === 'las14' && mode === 'keep' ? (sourceCrs?.wkt ?? null) : null;
-    if (opts.format === 'las' && outEpsg != null && outEpsg > 65535) {
+    if (opts.format === 'las' && outEpsg != null && !isGeoTiffEpsgCode(outEpsg)) {
       log.push({
         level: 'warn',
-        message: `EPSG:${outEpsg} is too large to record in a LAS GeoKey — the file is written without a CRS tag.`,
+        message: `EPSG:${outEpsg} is outside 1024 to 32766, the range a LAS GeoKey records as an EPSG code — the file is written without a CRS tag.`,
       });
     }
     // Linear unit: kept files carry the source unit; output that was ACTUALLY
