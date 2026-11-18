@@ -64,15 +64,16 @@ describe('validateCrsForMeasurement — local coordinates', () => {
     );
     expect(r.validity).toBe('safe-explicit-local');
     expect(r.severity).toBe('caution');
-    expect(r.canDisplayMetric).toBe(true);
-    expect(r.canSaveMeasurement).toBe(true);
+    // No declared unit: metres would be an assumption, so none are shown or saved.
+    expect(r.canDisplayMetric).toBe(false);
+    expect(r.canSaveMeasurement).toBe(false);
   });
 
-  it('surfaces a "assume metres" caveat for local', () => {
+  it('says a local frame with no declared unit withholds metric measurements', () => {
     const r = validateCrsForMeasurement(
       make({ kind: 'local', linearUnit: 'unknown', linearUnitToMetres: 1 }),
     );
-    expect(crsCaveatLine(r)).toMatch(/metres/i);
+    expect(crsCaveatLine(r)).toBe('Local coordinates with no declared unit; metric measurements are withheld.');
   });
 });
 

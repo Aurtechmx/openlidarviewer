@@ -14,10 +14,11 @@
  *       metres-per-unit ratio. Measurements display real cubic metres.
  *
  *   `safe-explicit-local`
- *       Local-coordinate dataset (phone scans, raw scanner output).
- *       Measurements display in source units, with no projection
- *       claim. The empty-state copy is "units assumed metres" — not
- *       "trust this for surveying".
+ *       Local-coordinate dataset (phone scans, raw scanner output,
+ *       LOCAL_CS / ENGCRS frames), with no projection claim. A frame that
+ *       declares its linear unit is converted by it; one that declares
+ *       none withholds every metric figure, since metres would be an
+ *       assumption.
  *
  *   `requires-projection`
  *       Geographic (lat/lon in degrees). Distance and volume in
@@ -115,6 +116,16 @@ export interface CrsValidationResult {
   readonly suggestion: string;
 }
 
+/** A local frame's declared linear unit, in words. */
+function localUnitWords(crs: ResolvedCrs): string {
+  switch (crs.linearUnit) {
+    case 'metre': return 'metres';
+    case 'foot': return 'international feet';
+    case 'us-survey-foot': return 'US survey feet';
+    case 'unknown': return `a unit of ${crs.linearUnitToMetres} m`;
+  }
+}
+
 /**
  * Classify a `ResolvedCrs` for measurement safety.
  *
@@ -191,15 +202,27 @@ export function validateCrsForMeasurement(
       };
 
     case 'local':
+      // A local or engineering frame with no declared unit gives no metres:
+      // reading its numbers as metres would be an assumption, so no metric
+      // figure is shown or saved. A declared unit converts as usual.
+      if (!isLinearUnitKnown(crs)) {
+        return {
+          validity: 'safe-explicit-local',
+          severity: 'caution',
+          canDisplayMetric: false,
+          canSaveMeasurement: false,
+          reason: 'Local coordinates with no declared unit; metric measurements are withheld.',
+          suggestion:
+            'Pick the correct projected CRS in the Inspector and confirm its units to enable metric measurements. Accuracy also depends on the source data.',
+        };
+      }
       return {
         validity: 'safe-explicit-local',
         severity: 'caution',
         canDisplayMetric: true,
         canSaveMeasurement: true,
-        reason:
-          'Local coordinates — measurements assume the source units are metres.',
-        suggestion:
-          'Pick the correct projected CRS in the Inspector and confirm its units to enable metric measurements. Accuracy also depends on the source data.',
+        reason: `Local coordinates in ${localUnitWords(crs)}; measurements are converted from the declared unit.`,
+        suggestion: 'Accuracy also depends on the source data.',
       };
 
     case 'geographic':

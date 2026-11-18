@@ -467,9 +467,9 @@ export function verticalMetresPerUnit(
 
 /**
  * Why a volume cannot be stated in metres in this frame, or null when it can.
- * The CRS verdict's reason first (a geographic or unknown frame); then a
- * vertical unit the source declares but that cannot be read, which no
- * horizontal factor may stand in for.
+ * The CRS verdict's reason first (a geographic or unknown frame, or a local
+ * frame with no declared unit); then a vertical unit the source declares but
+ * that cannot be read, which no horizontal factor may stand in for.
  */
 export function volumeClaimRefusal(ctx: SpatialContext, verdict: { readonly canDisplayMetric: boolean; readonly reason: string; readonly suggestion: string }): string | null {
   if (!verdict.canDisplayMetric) return `${verdict.reason} ${verdict.suggestion}`;
@@ -481,11 +481,10 @@ export function volumeClaimRefusal(ctx: SpatialContext, verdict: { readonly canD
  * The unit caveat a volume readout carries. A volume multiplies two horizontal
  * factors by a vertical one; when the file declares no vertical unit the
  * vertical factor is borrowed from the horizontal unit, and the readout says
- * so. `validity` is the CRS verdict's validity, where `safe-explicit-local`
- * means the units themselves are assumed metres.
+ * so. A local frame with no declared unit never reaches here: its volume is
+ * refused (see {@link volumeClaimRefusal}), not stated as assumed metres.
  */
-export function volumeUnitCaveat(ctx: SpatialContext, validity: string): string {
-  if (validity === 'safe-explicit-local') return ' · units assumed metres';
+export function volumeUnitCaveat(ctx: SpatialContext): string {
   return ctx.verticalUnitToMetres === undefined && ctx.verticalScaleState !== 'invalid' ? ' · heights assumed in the horizontal unit (vertical unit not declared)' : '';
 }
 

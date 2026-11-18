@@ -5,14 +5,15 @@
  * but the measurement verdict passed any projected kind as safe-metric, so the
  * lasso volume printed cubic and square metres at factor 1 and offered Save.
  * Both checks now agree: no metric display, no Save, and a volume refusal.
- * A projected CRS with a known unit, and local coordinates, keep their verdicts.
+ * A projected CRS with a known unit keeps its verdict. Local coordinates with
+ * no declared unit are refused as well (tests/volumeLocalFrameUnit.test.ts).
  */
 import { describe, expect, it } from 'vitest';
 import { CrsService, type CrsOverridePort } from '../src/geo/CrsService';
 import type { CrsOverride } from '../src/geo/CrsOverrideStore';
 import type { ResolvedCrs } from '../src/geo/CoordinateTypes';
 import { validateCrsForMeasurement } from '../src/geo/CrsValidation';
-import { spatialContextFrom, volumeClaimRefusal, volumeUnitCaveat } from '../src/geo/SpatialContext';
+import { spatialContextFrom, volumeClaimRefusal } from '../src/geo/SpatialContext';
 import { crsFromWkt } from '../src/io/crs';
 
 function memoryPort(): CrsOverridePort {
@@ -107,15 +108,14 @@ describe('a projected CRS with a known linear unit is unchanged', () => {
     expect(verdict.canSaveMeasurement).toBe(true);
   });
 
-  it('local coordinates keep the units-assumed-metres verdict', () => {
+  it('local coordinates with no declared unit withhold the volume', () => {
     const crs: ResolvedCrs = {
       kind: 'local', name: 'Local coordinates (no CRS)', linearUnit: 'unknown', linearUnitToMetres: 1,
       source: 'user-override', confidence: 'high', userConfirmed: true,
     };
     const verdict = validateCrsForMeasurement(crs);
     expect(verdict.validity).toBe('safe-explicit-local');
-    expect(verdict.canSaveMeasurement).toBe(true);
-    expect(volumeClaimRefusal(spatialContextFrom(crs), verdict)).toBeNull();
-    expect(volumeUnitCaveat(spatialContextFrom(crs), verdict.validity)).toBe(' · units assumed metres');
+    expect(verdict.canSaveMeasurement).toBe(false);
+    expect(volumeClaimRefusal(spatialContextFrom(crs), verdict)).toContain('no declared unit');
   });
 });

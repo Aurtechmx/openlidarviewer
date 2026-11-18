@@ -89,12 +89,11 @@ describe('volume readout unit caveat', () => {
     spatialContextFrom({ source: 'epsg', name: 'EPSG:2231', linearUnit: 'foot', linearUnitToMetres: 0.3048, ...o } as CrsInfo);
 
   it('says the heights borrow the horizontal unit when no vertical unit is declared', () => {
-    expect(volumeUnitCaveat(ctx({}), 'safe')).toBe(' · heights assumed in the horizontal unit (vertical unit not declared)');
+    expect(volumeUnitCaveat(ctx({}))).toBe(' · heights assumed in the horizontal unit (vertical unit not declared)');
   });
 
-  it('adds nothing when a vertical unit is declared, and keeps the local-units caveat', () => {
-    expect(volumeUnitCaveat(ctx({ verticalUnitToMetres: 0.3048 }), 'safe')).toBe('');
-    expect(volumeUnitCaveat(ctx({}), 'safe-explicit-local')).toBe(' · units assumed metres');
+  it('adds nothing when a vertical unit is declared', () => {
+    expect(volumeUnitCaveat(ctx({ verticalUnitToMetres: 0.3048 }))).toBe('');
   });
 });
 
