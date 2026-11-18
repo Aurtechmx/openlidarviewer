@@ -586,6 +586,39 @@ describe('the localStorage fallback copy is deleted with the rest of the journal
   });
 });
 
+describe('Clear recovery data with no recovery session running', () => {
+  const FALLBACK_KEY = 'olv:recovery:journal';
+  /** A fresh module copy, so no earlier test's handle is active. */
+  const freshClear = async (): Promise<() => Promise<void>> => {
+    vi.resetModules();
+    return (await import('../src/app/recovery/recoveryController')).clearRecoveryJournal;
+  };
+
+  it('removes the fallback key a failed migration left, and the stored entries', async () => {
+    const s = fakeStore([entryFor(session(2, OTHER))]);
+    fake.store = s.store;
+    storage.set(FALLBACK_KEY, JSON.stringify([entryFor(session(3, OTHER))]));
+    const clear = await freshClear();
+
+    await clear();
+
+    expect(s.entries.size).toBe(0);
+    expect(storage.has(FALLBACK_KEY)).toBe(false);
+  });
+
+  it('still clears the store when there is no fallback key', async () => {
+    const s = fakeStore([entryFor(session(2, OTHER))]);
+    fake.store = s.store;
+    const clear = await freshClear();
+
+    await clear();
+
+    expect(s.log).toEqual(['clear']);
+    expect(s.entries.size).toBe(0);
+    expect(storage.size).toBe(0);
+  });
+});
+
 describe('reopening a source offers the newest saved work for that source', () => {
   const OTHER_KEY = fingerprintKey(OTHER)!;
   const at = (json: string, savedAt: number): RecoveryEntry => {

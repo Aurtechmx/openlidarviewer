@@ -446,6 +446,7 @@ export function startRecovery(deps: RecoveryDeps): RecoveryHandle {
 export async function clearRecoveryJournal(): Promise<void> {
   activeHandle?.clear();
   await activeWipe?.()?.catch(() => {});
+  removeLocalFallback((() => { try { return localStorage; } catch { return undefined; } })());
   const store = await openRecoveryStore({
     indexedDB: typeof indexedDB === 'undefined' ? undefined : indexedDB,
     localStorage: (() => { try { return localStorage; } catch { return undefined; } })(),
