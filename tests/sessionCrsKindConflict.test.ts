@@ -1,14 +1,17 @@
 /**
- * A session CRS that names a different kind than the scan's own declared CRS
- * is not applied: the scan keeps its CRS and the session conflict notice says
- * why.
+ * A session CRS of another kind than the scan's own declared CRS refuses the
+ * CRS, never the work.
  *
  * A session saying "projected EPSG:4978" over a geocentric 4978 file, or
  * "projected EPSG:4326" over a geographic 4326 file, was restored as the
- * author's override. The code matched the file's, so no notice showed, and a
- * geocentric scan lost its elevation-workflow refusal. A session that agrees
- * with the file still applies quietly, and a file whose own GeoKeys contradict
- * their code can still be corrected by a session that names the code's kind.
+ * author's override and a geocentric scan lost its elevation-workflow refusal.
+ * The scan now keeps its CRS, the session's measurements, annotations and
+ * views restore under it, and the notice names both CRSs with an action that
+ * applies the session's CRS the way an Inspector pick does. A CRS the session
+ * file merely records (not the user's confirmed choice) is never applied and
+ * raises no kind conflict. A session that agrees with the file still applies
+ * quietly, and a file whose own GeoKeys contradict their code can still be
+ * corrected by a session that names the code's kind.
  */
 import { beforeAll, describe, expect, it, vi } from 'vitest';
 import { importSession, type SessionIoDeps, type SessionModule } from '../src/app/sessionIo';
@@ -44,17 +47,17 @@ function geoKeys(keys: readonly (readonly [number, number])[]): Uint8Array {
 const sessionModule: SessionModule = { parseSession, rebaseSessionGeometry, matchSessionToScan, detectSessionSpatialConflict };
 const asFile = (text: string): File => ({ text: async () => text }) as unknown as File;
 
-/** The CRS a session records when its author picked `epsg` as `kind`. */
-function sessionCrs(epsg: number, kind: 'projected' | 'geographic'): ResolvedCrs {
+/** The CRS a session records when its author picked `epsg` as `kind` (or, with `fromFile`, the file's own). */
+function sessionCrs(epsg: number, kind: 'projected' | 'geographic', fromFile = false): ResolvedCrs {
   return {
     kind,
     name: `EPSG:${epsg}`,
     epsg,
     linearUnit: kind === 'projected' ? 'metre' : 'unknown',
     linearUnitToMetres: 1,
-    source: 'user-override',
+    source: fromFile ? 'las-vlr' : 'user-override',
     confidence: 'high',
-    userConfirmed: true,
+    userConfirmed: !fromFile,
   };
 }
 
@@ -115,29 +118,91 @@ async function restore(declared: CrsInfo, crs: ResolvedCrs) {
   } as never));
   const ok = await importSession(file, {}, deps);
   const toasts = showToast.mock.calls.map((c) => c[0] as string);
-  return { ok, crsService, setCrsOverride, loadMeasurements, toasts };
+  const actions = showToast.mock.calls.map((c) => c[1] as { label: string; onClick: () => void } | undefined);
+  return { ok, crsService, store, setCrsOverride, loadMeasurements, toasts, actions };
 }
 
-describe('a session CRS whose kind contradicts the scan\'s declared CRS is not applied', () => {
+const KIND_NOTICE = /was not applied/;
+const REFUSAL = /conflicts with this scan/;
+
+describe('a user CRS of another kind restores the work under the scan\'s CRS', () => {
+  it('a geographic 4326 file with a projected 32612 session', async () => {
+    const r = await restore(crsFromWkt(WGS84), sessionCrs(32612, 'projected'));
+    expect(r.ok).toBe(true);
+    expect(r.loadMeasurements).toHaveBeenCalledTimes(1);
+    // The stored geometry is handed over as saved: figures are computed from
+    // it under the active CRS, which is the scan's.
+    expect(r.loadMeasurements.mock.calls[0][0][0].points).toEqual([[0, 0, 0], [1, 0, 0]]);
+    expect(r.setCrsOverride).not.toHaveBeenCalled();
+    expect(r.crsService.current()!.kind).toBe('geographic');
+    expect(r.crsService.current()!.epsg).toBe(4326);
+    expect(r.toasts.some((t) => REFUSAL.test(t))).toBe(false);
+    const i = r.toasts.findIndex((t) => KIND_NOTICE.test(t));
+    expect(r.toasts[i]).toContain('The scan keeps its own coordinate system, WGS 84 (EPSG:4326) (geographic). This session\'s, EPSG:32612 (projected), is a different kind and was not applied.');
+    expect(r.toasts[i]).not.toContain('load the session on its own scan');
+    expect(r.actions[i]?.label).toBe('Use session CRS');
+    r.actions[i]!.onClick();
+    expect(r.setCrsOverride).toHaveBeenCalledTimes(1);
+    expect(r.setCrsOverride.mock.calls[0][0].persist).toBe(true);
+    expect(r.crsService.current()!.kind).toBe('projected');
+    expect(r.crsService.current()!.epsg).toBe(32612);
+    expect(r.store.size).toBe(1);
+  });
+
+  it('a projected 32612 file with a geographic 4326 session', async () => {
+    const r = await restore(crsFromWkt(UTM), sessionCrs(4326, 'geographic'));
+    expect(r.ok).toBe(true);
+    expect(r.loadMeasurements).toHaveBeenCalledTimes(1);
+    expect(r.crsService.current()!.kind).toBe('projected');
+    expect(r.crsService.current()!.epsg).toBe(32612);
+    const i = r.toasts.findIndex((t) => KIND_NOTICE.test(t));
+    expect(r.toasts[i]).toContain('WGS 84 / UTM zone 12N (EPSG:32612) (projected)');
+    expect(r.toasts[i]).toContain('EPSG:4326 (geographic)');
+    r.actions[i]!.onClick();
+    expect(r.crsService.current()!.kind).toBe('geographic');
+    expect(r.crsService.current()!.epsg).toBe(4326);
+  });
+
   it('a geocentric 4978 file keeps its CRS and its elevation refusal under a projected 4978 session', async () => {
     const r = await restore(crsFromWkt(GEOCENTRIC), sessionCrs(4978, 'projected'));
+    expect(r.ok).toBe(true);
+    expect(r.loadMeasurements).toHaveBeenCalledTimes(1);
     expect(r.setCrsOverride).not.toHaveBeenCalled();
     expect(r.crsService.current()!.kind).toBe('geocentric');
     expect(r.crsService.current()!.epsg).toBe(4978);
     expect(elevationWorkflowRefusal(r.crsService.context())).not.toBeNull();
-    const notice = r.toasts.find((t) => /conflicts with this scan/.test(t));
-    expect(notice).toBeDefined();
-    expect(notice).toContain('the session\'s CRS is projected EPSG:4978 but the scan declares geocentric EPSG:4978');
-    expect(r.loadMeasurements).not.toHaveBeenCalled();
+    expect(r.toasts.some((t) => KIND_NOTICE.test(t))).toBe(true);
+    // Applied on request, the resolver still refuses projected for a geocentric code.
+    r.actions[r.toasts.findIndex((t) => KIND_NOTICE.test(t))]!.onClick();
+    expect(r.crsService.current()!.kind).toBe('unknown');
   });
 
   it('a geographic 4326 file keeps its CRS under a projected 4326 session, with the notice', async () => {
     const r = await restore(crsFromWkt(WGS84), sessionCrs(4326, 'projected'));
+    expect(r.loadMeasurements).toHaveBeenCalledTimes(1);
     expect(r.setCrsOverride).not.toHaveBeenCalled();
     expect(r.crsService.current()!.kind).toBe('geographic');
     expect(r.crsService.current()!.epsg).toBe(4326);
-    const notice = r.toasts.find((t) => /conflicts with this scan/.test(t));
-    expect(notice).toContain('the session\'s CRS is projected EPSG:4326 but the scan declares geographic EPSG:4326');
+    expect(r.toasts.some((t) => KIND_NOTICE.test(t))).toBe(true);
+  });
+});
+
+describe('a CRS the session file only records raises no kind conflict', () => {
+  it('a geocentric 4978 file with a file-derived projected 4978 session CRS', async () => {
+    const r = await restore(crsFromWkt(GEOCENTRIC), sessionCrs(4978, 'projected', true));
+    expect(r.ok).toBe(true);
+    expect(r.loadMeasurements).toHaveBeenCalledTimes(1);
+    expect(r.setCrsOverride).not.toHaveBeenCalled();
+    expect(r.crsService.current()!.kind).toBe('geocentric');
+    expect(r.toasts.some((t) => REFUSAL.test(t) || KIND_NOTICE.test(t))).toBe(false);
+  });
+
+  it('a geographic 4326 file with a file-derived projected 4326 session CRS', async () => {
+    const r = await restore(crsFromWkt(WGS84), sessionCrs(4326, 'projected', true));
+    expect(r.ok).toBe(true);
+    expect(r.loadMeasurements).toHaveBeenCalledTimes(1);
+    expect(r.crsService.current()!.kind).toBe('geographic');
+    expect(r.toasts.some((t) => REFUSAL.test(t) || KIND_NOTICE.test(t))).toBe(false);
   });
 });
 

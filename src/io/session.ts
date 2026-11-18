@@ -1349,7 +1349,8 @@ export function detectSessionSpatialConflict(
   // centred X/Y/Z as a ground plane. A file whose declared kind contradicts
   // the EPSG table for its own code (GeoKeys with model type 2 and the
   // projected code 32612) makes no kind claim: the table settles that code's
-  // kind when the session is applied. A local session claims no kind.
+  // kind when the session is applied. A local session claims no kind, and the
+  // restore refuses only the session's CRS on a kind conflict, not its work.
   const fileKind = declaredKindClaim(declared);
   if (
     fileKind !== undefined &&

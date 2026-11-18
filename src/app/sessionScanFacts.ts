@@ -208,7 +208,9 @@ export function sessionSpatialClaimsOf(session: { readonly upAxis: 'y' | 'z'; re
   return {
     upAxis: session.upAxis,
     epsg: c?.epsg,
-    ...(c ? { kind: c.kind } : {}),
+    // Only a CRS the restore applies (the user's own choice) claims a kind: a
+    // CRS a file wrote for itself is never applied, so it contradicts nothing.
+    ...(c && c.userConfirmed === true && c.source === 'user-override' ? { kind: c.kind } : {}),
     linearUnit: c?.linearUnit,
     ...(c ? { linearUnitToMetres: c.linearUnitToMetres } : {}),
     ...(c?.linearUnitByFactor ? { linearUnitByFactor: true } : {}),

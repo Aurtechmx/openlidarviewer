@@ -286,6 +286,27 @@ export function appliedCrsSentence(crs: ResolvedCrs): string {
   return `This session set the coordinate system to ${label}. It applies to this scan for now and is not saved on this device.`;
 }
 
+/** A CRS named for a notice: its name, capped, with its EPSG code when the name lacks it. */
+function noticeCrsLabel(name: string | undefined, epsg: number | undefined): string {
+  const raw = (name ?? '').replace(/\s+/g, ' ').trim();
+  const capped = raw.length > CRS_NOTICE_NAME_MAX ? `${raw.slice(0, CRS_NOTICE_NAME_MAX - 1)}…` : raw;
+  if (!capped) return epsg != null ? `EPSG:${epsg}` : 'an unnamed coordinate system';
+  return epsg != null && !capped.includes(String(epsg)) ? `${capped} [EPSG:${epsg}]` : capped;
+}
+
+/**
+ * The sentence for a session CRS of another kind than the scan's declared
+ * CRS: both are named, and the scan's is the one in use.
+ */
+export function kindConflictSentence(
+  scan: { readonly name?: string; readonly epsg?: number; readonly isGeographic?: boolean; readonly geocentric?: boolean } | undefined,
+  session: ResolvedCrs,
+): string {
+  const scanKind = scan?.geocentric ? 'geocentric' : scan?.isGeographic ? 'geographic' : 'projected';
+  return `The scan keeps its own coordinate system, ${noticeCrsLabel(scan?.name, scan?.epsg)} (${scanKind}). ` +
+    `This session's, ${noticeCrsLabel(session.name, session.epsg)} (${session.kind}), is a different kind and was not applied.`;
+}
+
 /**
  * Import an inspection session: restore measurements, annotations and views.
  * `skipScanConfirm` is set only by the "Apply anyway" action after a partial
@@ -344,6 +365,10 @@ export async function importSession(
     // is nothing to rebase against; keep the verbatim geometry (the missing-
     // scan toast below already tells the user to drop the scan).
     const haveCloud = viewer.clouds().length > 0 || viewer.hasStreamingCloud;
+    // A session CRS of another kind than the scan's own declared CRS. It
+    // refuses the session's CRS, never its work: the work restores under the
+    // scan's CRS and the notice offers the session's.
+    let kindConflict = false;
     // Capture the scan this import matches against, re-checked before we attach
     // state. A session restore routes ahead of the loading guard, so a scan
     // swapped in mid-import must not inherit another scan's measurements.
@@ -429,10 +454,11 @@ export async function importSession(
       // structurally usable override (local, or projected/geographic with a
       // finite EPSG) — and let a crs/unit conflict through. An UP-AXIS conflict is
       // a different, harder failure (a CRS picker never rotates geometry) and is
-      // NEVER waved through; neither is a KIND conflict, a session naming a
-      // projected or geographic CRS over a file that declares another kind (a
-      // geocentric file would lose its elevation refusal). Every other case
-      // keeps the existing hard refusal.
+      // NEVER waved through. A KIND conflict (the user's projected or
+      // geographic CRS over a file that declares another kind) is not a
+      // refusal of the session: its CRS is not applied, the work is, and the
+      // notice offers the session's CRS. Every other case keeps the existing
+      // hard refusal.
       const persistedOverride =
         match?.verdict === 'strong' &&
         !!session.crs &&
@@ -441,9 +467,10 @@ export async function importSession(
         (session.crs.kind === 'local' ||
           ((session.crs.kind === 'projected' || session.crs.kind === 'geographic') &&
             Number.isFinite(session.crs.epsg)));
-      if (spatial.hasConflict) {
-        const hardConflict = spatial.conflicts.some((c) => c.field === 'axis' || c.field === 'kind');
-        if (!(persistedOverride && !hardConflict)) {
+      kindConflict = spatial.conflicts.some((c) => c.field === 'kind');
+      if (spatial.conflicts.some((c) => c.field !== 'kind')) {
+        const axisConflict = spatial.conflicts.some((c) => c.field === 'axis');
+        if (!(persistedOverride && !axisConflict)) {
           const why = spatial.conflicts.map((c) => c.reason).join('; ');
           deps.showToast(
             `This session's spatial metadata conflicts with this scan (${why}) — it was not applied. ` +
@@ -579,9 +606,21 @@ export async function importSession(
         source: 'user-override' as const,
       };
       const declared = declaredSpatialForActiveScan(viewer, deps);
+      // The action applies the session's CRS the way an Inspector pick does.
+      const applySessionCrs = (): void => {
+        if (viewer.streamingCloud === activeStreaming && deps.getActiveScanId() === activeStaticId) {
+          deps.setCrsOverride({ ...override, persist: true });
+        }
+      };
+      if (kindConflict) {
+        crsNotice = {
+          text: ` ${kindConflictSentence(override.detected, sessionCrs)}`,
+          action: { label: 'Use session CRS', onClick: applySessionCrs },
+        };
+      }
       // What the service actually applied, not what the file claims: the notice
       // names this, and nothing is claimed when nothing was applied (null).
-      const appliedCrs = deps.setCrsOverride({ ...override, persist: false });
+      const appliedCrs = kindConflict ? null : deps.setCrsOverride({ ...override, persist: false });
       // A local choice matches the file only when the file declares neither a
       // code nor a linear unit: a declared unit with no EPSG is still a
       // coordinate system the session has replaced. A code matches only with
@@ -596,18 +635,8 @@ export async function importSession(
             (declared.kind === undefined || declared.kind === (appliedCrs?.kind ?? sessionCrs.kind)) &&
             (declared.linearUnitToMetres === undefined || declared.linearUnitToMetres === sessionCrs.linearUnitToMetres);
       if (!sameAsFile && appliedCrs) {
-        crsNotice = {
-          text: ` ${appliedCrsSentence(appliedCrs)}`,
-          action: {
-            label: 'Keep',
-            // Only for the scan it was applied to: the override acts on whichever scan is active.
-            onClick: () => {
-              if (viewer.streamingCloud === activeStreaming && deps.getActiveScanId() === activeStaticId) {
-                deps.setCrsOverride({ ...override, persist: true });
-              }
-            },
-          },
-        };
+        // Only for the scan it was applied to: the override acts on whichever scan is active.
+        crsNotice = { text: ` ${appliedCrsSentence(appliedCrs)}`, action: { label: 'Keep', onClick: applySessionCrs } };
       }
     }
 
