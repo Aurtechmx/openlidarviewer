@@ -81,6 +81,109 @@ export function stripComments(text) {
   return out;
 }
 
+
+/**
+ * Reduce comment-free source to the text that can actually use an identifier:
+ * import statements and export lists are removed, and the text of string and
+ * template literals is blanked. A `${...}` interpolation is code and stays.
+ */
+export function codeOnly(text) {
+  const t = text
+    .replace(/\bimport\s+[^;'"`]*?\bfrom\s*(['"])[^'"\n]*\1/g, ' ')
+    .replace(/\bexport\s*(?:type\s*)?(?:\{[^}]*\}|\*(?:\s*as\s+[\w$]+)?)\s*from\s*(['"])[^'"\n]*\1/g, ' ')
+    .replace(/\bexport\s*(?:type\s*)?\{[^}]*\}/g, ' ');
+  let out = '';
+  let i = 0;
+  const n = t.length;
+  // Each entry is the brace depth of an open `${` inside a template literal.
+  const stack = [];
+  let depth = 0;
+  const skipString = (q) => {
+    out += q;
+    i++;
+    while (i < n && t[i] !== q) {
+      if (t[i] === '\\') i++;
+      else if (t[i] === '\n' && q !== '`') break;
+      if (t[i] === '\n') out += '\n';
+      i++;
+    }
+    if (i < n && t[i] === q) {
+      out += q;
+      i++;
+    }
+  };
+  const skipTemplate = () => {
+    out += '`';
+    i++;
+    while (i < n && t[i] !== '`') {
+      if (t[i] === '\\') i += 2;
+      else if (t[i] === '$' && t[i + 1] === '{') {
+        out += '${';
+        i += 2;
+        stack.push(depth);
+        depth = 0;
+        return false;
+      } else {
+        if (t[i] === '\n') out += '\n';
+        i++;
+      }
+    }
+    if (i < n) {
+      out += '`';
+      i++;
+    }
+    return true;
+  };
+  while (i < n) {
+    const c = t[i];
+    if (c === "'" || c === '"') skipString(c);
+    else if (c === '`') skipTemplate();
+    else if (c === '{') {
+      depth++;
+      out += c;
+      i++;
+    } else if (c === '}') {
+      if (stack.length > 0 && depth === 0) {
+        depth = stack.pop();
+        out += '}';
+        i++;
+        // Back in the template text that follows the interpolation.
+        while (skipTemplateTail());
+      } else {
+        depth--;
+        out += c;
+        i++;
+      }
+    } else {
+      out += c;
+      i++;
+    }
+  }
+  return out;
+
+  /** Continue a template literal after a closing `}`; true if another `${` opened. */
+  function skipTemplateTail() {
+    while (i < n && t[i] !== '`') {
+      if (t[i] === '\\') i += 2;
+      else if (t[i] === '$' && t[i + 1] === '{') {
+        out += '${';
+        i += 2;
+        stack.push(depth);
+        depth = 0;
+        return false;
+      } else {
+        if (t[i] === '\n') out += '\n';
+        i++;
+      }
+    }
+    if (i < n) {
+      out += '`';
+      i++;
+    }
+    return false;
+  }
+}
+
 const escapeRe = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
 /**
@@ -94,6 +197,8 @@ export function checkProtectedPhrases(phrases, read, list) {
     const raw = read(p);
     if (raw != null) texts.set(p, stripComments(raw));
   }
+  // Built on first use: only entries with a constant need it.
+  let codes = null;
   const inExportCode = (p) => !p.startsWith(UI_DIR) || p === EXPORT_PANEL;
 
   const missing = [];
@@ -108,8 +213,9 @@ export function checkProtectedPhrases(phrases, read, list) {
       const name = escapeRe(e.constant);
       const ident = new RegExp(`(?<![\\w$])${name}(?![\\w$])`, 'g');
       const definition = new RegExp(`\\bconst\\s+${name}(?![\\w$])`, 'g');
+      if (codes == null) codes = new Map([...texts].map(([p, t]) => [p, codeOnly(t)]));
       let refs = 0;
-      for (const t of texts.values()) {
+      for (const t of codes.values()) {
         refs += (t.match(ident) || []).length - (t.match(definition) || []).length;
       }
       if (refs < 1) missing.push({ id: e.id, surface: 'use' });

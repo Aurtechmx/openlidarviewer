@@ -137,6 +137,38 @@ describe('checkProtectedPhrases', () => {
     expect(checkProtectedPhrases(phrases, read, list).missing).toEqual([]);
   });
 
+  const useEntry: Entry[] = [
+    { id: 'p3', phrase: 'No measurements yet.', surfaces: ['ui'], constant: 'HINT' },
+  ];
+  const defFile = { 'src/ui/a.ts': "export const HINT = 'No measurements yet.';" };
+
+  it('does not count an import as a use', () => {
+    const { read, list } = fake({
+      ...defFile,
+      'src/ui/b.ts': "import {\n  OTHER,\n  HINT,\n} from './a';\nexport const b = OTHER;",
+      'src/ui/c.ts': "import { HINT } from './a';",
+    });
+    expect(checkProtectedPhrases(useEntry, read, list).missing).toEqual([{ id: 'p3', surface: 'use' }]);
+  });
+
+  it('does not count a re-export as a use', () => {
+    const { read, list } = fake({ ...defFile, 'src/ui/b.ts': "export { HINT } from './a';" });
+    expect(checkProtectedPhrases(useEntry, read, list).missing).toEqual([{ id: 'p3', surface: 'use' }]);
+  });
+
+  it('does not count the name inside a string as a use', () => {
+    const { read, list } = fake({ ...defFile, 'src/ui/b.ts': 'const s = "HINT";\nconst t = `HINT`;' });
+    expect(checkProtectedPhrases(useEntry, read, list).missing).toEqual([{ id: 'p3', surface: 'use' }]);
+  });
+
+  it('counts a template interpolation as a use', () => {
+    const { read, list } = fake({
+      ...defFile,
+      'src/ui/b.ts': "import { HINT } from './a';\nel.textContent = `Note: ${HINT}`;",
+    });
+    expect(checkProtectedPhrases(useEntry, read, list).missing).toEqual([]);
+  });
+
   it('skips the use rule for an entry marked knownUnused', () => {
     const phrases: Entry[] = [
       { id: 'p3', phrase: 'No measurements yet.', surfaces: ['ui'], constant: 'NO_MEASUREMENTS_HINT', knownUnused: true },
