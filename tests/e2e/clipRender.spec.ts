@@ -394,6 +394,7 @@ test('orbiting near the clipped area is not materially slower than without a cli
   await page.locator('.olv-mp-use-clip').click();
   await expect(page.locator('.olv-ss-clip')).toBeVisible();
   await api(page, (a) => a.setMeasureMode(false));
+  const chip = page.locator('.olv-ss-clip'); // the state strip's clip item
   const setClip = async (on: boolean): Promise<void> => {
     const enabled = (await api(page, (a) => a.getClipState())).clip?.enabled === true;
     if (enabled === on) return;
