@@ -3378,7 +3378,7 @@ export class AnalysePanel {
   /**
    * The verdict-led "Data Fitness" scorecard: ONE plain verdict + a six-row
    * traffic-light scorecard (friendly metaphor icon + shape-distinct tone glyph
-   * + plain summary) + the non-hideable caveats. Sourced from the same result
+   * + plain summary) + the caveats, shown open by default. Sourced from the same result
    * the panel already computes — no new analysis.
    */
   private _renderFitness(): void {
@@ -3496,10 +3496,11 @@ export class AnalysePanel {
     this._fitnessMore.append(checks);
 
     if (f.caveats.length > 0) {
-      // Collapsed by default: the caveats restate the checklist dimensions above
-      // in longer form, so they sit behind one disclosure instead of stacking a
-      // wall of repeated text under the list.
+      // Open by default: these notes carry the internal-consistency, datum and
+      // CRS statements, which would otherwise be visible nowhere at rest. The
+      // reader can still collapse the block.
       const notes = el('details', { className: 'olv-fit-caveats' });
+      notes.open = true;
       notes.append(
         el('summary', {
           className: 'olv-fit-caveats-summary',
