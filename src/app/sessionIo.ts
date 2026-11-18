@@ -670,6 +670,13 @@ export async function importSession(
         // Only for the scan it was applied to: the override acts on whichever scan is active.
         crsNotice = { text: ` ${appliedCrsSentence(appliedCrs)}`, action: { label: 'Keep', onClick: applySessionCrs } };
       }
+      // A local unit the session names but could not restore is said, not dropped in silence.
+      const droppedUnit = sessionCrs.kind === 'local' && !localUnit ? CRS_UNIT_WORDS[sessionCrs.linearUnit] : undefined;
+      if (droppedUnit !== undefined) {
+        const clause = ` This session's unit for local coordinates, ${droppedUnit}, was not restored because the factor saved with it ` +
+          `(${Number(sessionCrs.linearUnitToMetres.toPrecision(6))} m per unit) does not match that unit, so metric figures stay withheld.`;
+        crsNotice = crsNotice ? { ...crsNotice, text: `${crsNotice.text}${clause}` } : { text: clause };
+      }
     }
 
     // Import-side ownership resolution (#22). Work restored from a session must

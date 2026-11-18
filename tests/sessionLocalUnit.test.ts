@@ -130,9 +130,27 @@ describe('a local session CRS without a usable unit stays without one', () => {
     expect(r.crsService.context().metricClaimsPermitted).toBe(false);
   });
 
-  it('a unit whose factor does not match it', async () => {
+  it('a unit whose factor does not match it, and the toast says why', async () => {
     const r = await restore(null, local('us-survey-foot', 0.3048));
     expect(r.setCrsOverride.mock.calls[0][0].override).toEqual({ epsg: null, kind: 'local' });
     expect(r.crsService.current()!.linearUnit).toBe('unknown');
+    expect(r.toasts.some((t) => t.includes('This session\'s unit for local coordinates, US survey feet, was not restored because the factor saved with it (0.3048 m per unit) does not match that unit, so metric figures stay withheld.'))).toBe(true);
+  });
+
+  it('metres saved with a foot factor', async () => {
+    const r = await restore(null, local('metre', 0.3048));
+    expect(r.ok).toBe(true);
+    expect(r.crsService.current()!.linearUnit).toBe('unknown');
+    expect(r.crsService.context().metricClaimsPermitted).toBe(false);
+    const i = r.toasts.findIndex((t) => t.includes('was not restored because the factor saved with it'));
+    expect(r.toasts[i]).toContain('Session restored');
+    expect(r.toasts[i]).toContain('This session\'s unit for local coordinates, metres, was not restored because the factor saved with it (0.3048 m per unit) does not match that unit, so metric figures stay withheld.');
+    // Nothing to keep: no unit was applied.
+    expect(r.actions[i]).toBeUndefined();
+  });
+
+  it('no clause when the session declares no unit', async () => {
+    const r = await restore(null, local('unknown', 1));
+    expect(r.toasts.some((t) => t.includes('was not restored because the factor'))).toBe(false);
   });
 });
