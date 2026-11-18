@@ -288,9 +288,14 @@ export async function openIndexedDbStore(idb: IDBFactory): Promise<RecoveryStore
 }
 
 /**
- * Copy the localStorage fallback entries into `target`, oldest first, then
- * remove the fallback key. The key stays when any put rejects, so a failed
- * move loses nothing. Returns the number of entries moved.
+ * Copy the localStorage fallback entries into `target` without displacing
+ * anything it already holds. An entry is skipped when `target` has the same key
+ * with a savedAt at or after its own. The rest are put oldest first, with every
+ * key already in `target` and every key moved so far kept, so no existing entry
+ * is evicted; the first rejection (for example `held-full`) stops the move and
+ * propagates. The fallback key is then removed only if every fallback entry is
+ * present in `target`, as itself or as a newer copy of the same key. Returns the
+ * number of fallback entries confirmed present after that check.
  */
 export async function migrateLocalFallback(
   target: RecoveryStore,
@@ -298,9 +303,18 @@ export async function migrateLocalFallback(
   key = 'olv:recovery:journal',
 ): Promise<number> {
   const entries = (await createLocalStore(storage, key).list()).slice().reverse();
-  for (const e of entries) await target.put(e);
-  if (storage.getItem(key) !== null) storage.removeItem(key);
-  return entries.length;
+  const have = new Map((await target.list()).map((e) => [e.key, e.savedAt] as const));
+  const keep = [...have.keys()];
+  for (const e of entries) {
+    const present = have.get(e.key);
+    if (present !== undefined && present >= e.savedAt) continue;
+    await target.put(e, keep);
+    if (!keep.includes(e.key)) keep.push(e.key);
+  }
+  const after = new Map((await target.list()).map((e) => [e.key, e.savedAt] as const));
+  const confirmed = entries.filter((e) => (after.get(e.key) ?? -Infinity) >= e.savedAt).length;
+  if (confirmed === entries.length && storage.getItem(key) !== null) storage.removeItem(key);
+  return confirmed;
 }
 
 /**
