@@ -15,7 +15,7 @@ function geoKeys(keys: readonly (readonly [number, number])[]): Uint8Array {
 describe('a projected EPSG code with no unit key', () => {
   it('does not treat EPSG:2264 (NC ftUS) as metres', () => {
     const crs = crsFromGeoTiff(geoKeys([[1024, 1], [3072, 2264]]), null, null);
-    expect(crs.linearUnit).toBe('unknown');
+    expect(crs.linearUnit).toBe('us-survey-foot');
     expect(crs.linearUnit).not.toBe('metre');
   });
 
@@ -24,16 +24,16 @@ describe('a projected EPSG code with no unit key', () => {
     expect(crs.linearUnit).toBe('metre');
     expect(impliedProjectedLinearUnit(26917)).toBe('metre');
     expect(impliedProjectedLinearUnit(25836)).toBe('metre');
-    expect(impliedProjectedLinearUnit(2264)).toBe('unknown');
+    expect(impliedProjectedLinearUnit(2264)).toBe('us-survey-foot');
   });
 
-  it('crsFromEpsg (EPT codes) gives unknown for 2264, not metre', () => {
-    expect(crsFromEpsg(2264).linearUnit).toBe('unknown');
+  it('crsFromEpsg (EPT codes) gives US survey feet for 2264, not metre', () => {
+    expect(crsFromEpsg(2264).linearUnit).toBe('us-survey-foot');
     expect(crsFromEpsg(32615).linearUnit).toBe('metre');
   });
 });
 
-describe('the metre-family whitelist (each range checked against proj.db)', () => {
+describe('metre families (the ends of the former whitelist ranges, checked against proj.db)', () => {
   it.each([
     32601, 32660, 32701, 32760, 26901, 26923, 26701, 26722, 6330, 6348, 2955, 2962, 3154, 3160,
     25828, 25838, 3034, 3035, 28348, 28358, 7846, 7859, 3006, 3018, 31466, 31469, 31254, 31259,
@@ -45,8 +45,8 @@ describe('the metre-family whitelist (each range checked against proj.db)', () =
   // Foot-unit codes next to a range boundary: 32664 WGS 84 / BLM 14N (ftUS),
   // 2155 and 2194 American Samoa Lambert (ftUS), 2964 NAD27 / Alaska Albers
   // (ftUS), 26729 NAD27 / Alabama East (ftUS), 2263 New York Long Island (ftUS).
-  it.each([32664, 2155, 2194, 2964, 26729, 2263])('foot-unit EPSG:%i stays unknown', (code) => {
-    expect(impliedProjectedLinearUnit(code)).toBe('unknown');
+  it.each([32664, 2155, 2194, 2964, 26729, 2263])('foot-unit EPSG:%i reads as US survey feet', (code) => {
+    expect(impliedProjectedLinearUnit(code)).toBe('us-survey-foot');
   });
 });
 
@@ -82,7 +82,7 @@ describe('a vertical EPSG code with no vertical unit key', () => {
 
   it('EPT codes: horizontal 2264 + vertical 6360', () => {
     const crs = resolveEptCrs({ srs: undefined, srsCodes: { horizontalEpsg: 2264, verticalEpsg: 6360 } });
-    expect(crs?.linearUnit).toBe('unknown');
+    expect(crs?.linearUnit).toBe('us-survey-foot');
     expect(crs?.verticalLinearUnit).toBe('us-survey-foot');
     expect(crs?.verticalUnitToMetres).toBeCloseTo(FT_US, 12);
   });

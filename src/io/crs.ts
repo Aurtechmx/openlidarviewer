@@ -1245,8 +1245,7 @@ export function crsFromGeoTiff(
   //
   // With no key at all, the unit is the one the EPSG code defines, not an
   // assumed metre: EPSG:2264 is in US survey feet. impliedProjectedLinearUnit
-  // answers from the curated registry and a whitelist of metre families, and
-  // 'unknown' for any other code.
+  // answers from the EPSG table, and 'unknown' for a code it cannot vouch for.
   //
   // A 3076 that names another unit than the projected code defines is a
   // contradiction no reader can settle (3072=2229 with 3076=9001 is either a
@@ -1452,49 +1451,26 @@ function readGeoTiffCitation(
 // ─────────────────────────────────────────────────────────────────────────────
 
 /**
- * Projected EPSG ranges whose axes are metres by the EPSG definition. Every
- * range was checked against the EPSG dataset (proj.db): each code in it
- * exists and its first axis unit is EPSG 9001, metre. A range must never span
- * a code in feet, since that code would then be read 3.28x wrong in silence.
- * Anything outside these and outside the curated registry has no unit we can
- * vouch for.
- */
-const METRE_PROJECTED_RANGES: readonly (readonly [number, number])[] = [
-  [32601, 32660], // WGS 84 / UTM zones 1N-60N
-  [32701, 32760], // WGS 84 / UTM zones 1S-60S
-  [26901, 26923], // NAD83 / UTM zones 1N-23N
-  [26701, 26722], // NAD27 / UTM zones 1N-22N
-  [6330, 6348], // NAD83(2011) / UTM zones 1N-19N
-  [2955, 2962], // NAD83(CSRS) / UTM zones 11N-21N
-  [3154, 3160], // NAD83(CSRS) / UTM zones 7N-16N
-  [25828, 25838], // ETRS89 / UTM zones 28N-38N
-  [3034, 3035], // ETRS89-extended / LCC Europe, LAEA Europe
-  [28348, 28358], // GDA94 / MGA zones 48-58
-  [7846, 7859], // GDA2020 / MGA zones 46-59
-  [3006, 3018], // SWEREF99 TM and the SWEREF99 local zones
-  [31466, 31469], // DHDN / 3-degree Gauss-Kruger zones 2-5
-  [31254, 31259], // MGI / Austria GK West .. M34
-  [31284, 31287], // MGI / Austria M28, M31, M34, Lambert
-  [3857, 3857], // WGS 84 / Pseudo-Mercator
-  [27700, 27700], // OSGB36 / British National Grid
-  [28992, 28992], // Amersfoort / RD New
-  [2154, 2154], // RGF93 v1 / Lambert-93
-  [2193, 2193], // NZGD2000 / NZTM 2000
-];
-
-/**
  * The linear unit a projected EPSG code defines when the source states no unit
- * of its own: the curated registry's unit for a registered code (metre unless
- * the entry says otherwise), metre for the whitelisted metre families, and
- * 'unknown' for everything else. A code like 2264 (NAD83 / North Carolina ftUS)
- * is in US survey feet; assuming metres there was wrong by 3.28x, so an
- * unrecognised code is never presumed metric.
+ * of its own, read from the EPSG table (`epsgCrsKind`, the same table the
+ * override path reads): metre, international foot or US survey foot. A code
+ * in any other unit, a code that is not projected, and a code the table does
+ * not hold are 'unknown'. A code like 2264 (NAD83 / North Carolina ftUS) is
+ * in US survey feet; assuming metres there was wrong by 3.28x, so no code is
+ * presumed metric. Web Mercator (3857) is metres here; the measurement
+ * verdict refuses its grid metres separately.
  */
 export function impliedProjectedLinearUnit(epsg: number | undefined): CrsLinearUnit {
-  if (epsg === undefined) return 'unknown';
-  const entry = getCrsEntry(epsg);
-  if (entry && entry.kind !== 'geographic') return entry.linearUnit ?? 'metre';
-  return METRE_PROJECTED_RANGES.some(([lo, hi]) => epsg >= lo && epsg <= hi) ? 'metre' : 'unknown';
+  const code = epsgCrsKind(epsg);
+  if (code.kind !== 'projected') return 'unknown';
+  switch (code.unit) {
+    case 'metre':
+    case 'foot':
+    case 'us-survey-foot':
+      return code.unit;
+    default:
+      return 'unknown';
+  }
 }
 
 /** Map a metres-per-unit factor back to the unit token, or undefined if it is not one we name. */
