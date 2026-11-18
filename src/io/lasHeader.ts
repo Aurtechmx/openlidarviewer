@@ -158,8 +158,28 @@ function readAscii(view: DataView, offset: number, length: number): string {
   return s.trim();
 }
 
-/** Parse the public header block of a LAS file. */
+/** Parse the public header block of a LAS file, with its CRS from the VLRs. */
 export function parseLasHeader(buffer: ArrayBuffer): LasHeader {
+  const fields = parseLasHeaderFields(buffer);
+  // CRS / linear-unit detection — walk the LASF_Projection VLRs starting at
+  // the recorded header size. The buffer may be a head-slice that stopped
+  // before the VLRs (header-only fast path); `parseCrsFromVlrs` handles
+  // that by returning null, and we proceed with `crs = null`.
+  const headerSize = fields.headerSize ?? 0;
+  const vlrCount = fields.vlrCount ?? 0;
+  const crs = (headerSize > 0 && vlrCount > 0)
+    ? parseCrsFromVlrs(buffer, headerSize, vlrCount)
+    : null;
+  // `crs` keeps its place among the fields.
+  return { ...fields, crs };
+}
+
+/**
+ * Every field of the public header block except the CRS, which is `null`.
+ * For a reader that needs only the point layout: the CRS parse reads the EPSG
+ * tables, and the EPT tile decoder (which runs in a worker) has no use for it.
+ */
+export function parseLasHeaderFields(buffer: ArrayBuffer): LasHeader {
   const view = new DataView(buffer);
 
   // A buffer too short to hold the header would otherwise throw an opaque
@@ -278,15 +298,10 @@ export function parseLasHeader(buffer: ArrayBuffer): LasHeader {
     );
   }
 
-  // CRS / linear-unit detection — walk the LASF_Projection VLRs starting at
-  // the recorded header size. The buffer may be a head-slice that stopped
-  // before the VLRs (header-only fast path); `parseCrsFromVlrs` handles
-  // that by returning null, and we proceed with `crs = null`.
+  // Where the VLRs start and how many there are (the CRS walk in
+  // `parseLasHeader` reads them).
   const headerSize = view.getUint16(OFFSET_HEADER_SIZE, true);
   const numVlr = view.getUint32(OFFSET_NUM_VLR, true);
-  const crs = (headerSize > 0 && numVlr > 0)
-    ? parseCrsFromVlrs(buffer, headerSize, numVlr)
-    : null;
 
   const globalEncoding = view.getUint16(OFFSET_GLOBAL_ENCODING, true);
   const gpsTimeType =
@@ -319,7 +334,7 @@ export function parseLasHeader(buffer: ArrayBuffer): LasHeader {
     offset,
     min,
     max,
-    crs,
+    crs: null,
     versionMinor,
     pointFormat,
     offsetToPointData,
