@@ -423,6 +423,11 @@ export class Stage {
         aboutSummary.focus();
       }
     });
+    // The header's own z-index traps its children below the rails, so lift it
+    // while the menu is open (the same lift the Performance panel uses).
+    about.addEventListener('toggle', () => {
+      about.closest('.olv-topbar')?.classList.toggle('olv-topbar-popover-open', about.open);
+    });
     about.addEventListener('focusout', (e) => {
       const next = e.relatedTarget;
       if (about.open && !(next instanceof Node && about.contains(next))) about.open = false;
