@@ -17,7 +17,7 @@ contact:
     email: "info@aurtech.mx"
 
 version: "0.7.1"
-date-released: "2026-11-09"
+date-released: "2026-11-11"
 license: AGPL-3.0-only
 repository-code: "https://github.com/Aurtechmx/openlidarviewer"
 url: "https://openlidarviewer.org/"
