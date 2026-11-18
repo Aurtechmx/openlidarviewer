@@ -91,6 +91,34 @@ describe('Help actions', () => {
     ]);
   });
 
+  it('turning recovery off says the data was deleted only after the clear resolves', async () => {
+    let finish!: () => void;
+    chunks.clearJournal.mockImplementationOnce(() => new Promise<void>((r) => { finish = r; }));
+    const a = actions();
+    recovery.on = true;
+    a.run('help.session-recovery');
+    await settle();
+    expect(recovery.on).toBe(false);
+    expect(a.notify).not.toHaveBeenCalled();
+    finish();
+    await settle();
+    expect(a.notify.mock.calls.map((c) => c[0])).toEqual([
+      'Session recovery is off. Work saved for recovery in this browser was deleted.',
+    ]);
+  });
+
+  it('turning recovery off still turns it off and says so when the clear fails', async () => {
+    chunks.clearJournal.mockImplementationOnce(() => Promise.reject(new Error('blocked')));
+    const a = actions();
+    recovery.on = true;
+    a.run('help.session-recovery');
+    await settle();
+    expect(recovery.on).toBe(false);
+    expect(a.notify.mock.calls.map((c) => c[0])).toEqual([
+      'Session recovery is off. Could not clear recovery data. Reload the page and try again.',
+    ]);
+  });
+
   it('turns recovery off and on, and clears its data', async () => {
     const a = actions();
     recovery.on = true;
@@ -102,8 +130,8 @@ describe('Help actions', () => {
     await settle();
     expect(chunks.clearJournal).toHaveBeenCalledTimes(2);
     expect(a.notify.mock.calls.map((c) => c[0])).toEqual([
-      'Session recovery is off. Work saved for recovery in this browser was deleted.',
       'Session recovery is on. It starts after the next page load.',
+      'Session recovery is off. Work saved for recovery in this browser was deleted.',
       'Recovery data in this browser was deleted.',
     ]);
   });
