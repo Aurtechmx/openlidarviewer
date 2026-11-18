@@ -360,7 +360,8 @@ Two steps of the `verify` job keep the statements listed in
 keep showing or writing) in the app. `npm run check:protected-phrases` reads
 `src/**/*.ts` with comments removed. `npm run check:protected-phrases:built`
 runs the same rules plus `built` on the plain build that `npm run test:build`
-writes to `dist/`.
+writes to `dist/`. The release gate (`scripts/gates.json`) runs both, the
+built one between `test:build` and `build:live`.
 
 | Rule | Fails when |
 |------|------------|

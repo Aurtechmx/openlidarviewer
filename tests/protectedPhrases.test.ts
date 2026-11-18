@@ -13,6 +13,8 @@ import { resolve, dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 // @ts-expect-error — plain .mjs script, no types
 import { checkProtectedPhrases } from '../scripts/check-protected-phrases.mjs';
+// @ts-expect-error — plain .mjs script, no types
+import { loadGates, mustPrecede } from '../scripts/lib/gates.mjs';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 
@@ -248,5 +250,20 @@ describe('checkProtectedPhrases', () => {
     const phrases = JSON.parse(readFileSync(resolve(ROOT, 'scripts/protected-phrases.json'), 'utf8')) as Record<string, unknown>[];
     const allowed = new Set(['id', 'category', 'phrase', 'surfaces', 'constant', 'knownUnused']);
     for (const p of phrases) for (const k of Object.keys(p)) expect(allowed.has(k)).toBe(true);
+  });
+});
+
+describe('the release gate runs it', () => {
+  const step = (script: string) =>
+    (loadGates().steps as { script: string; group?: string; needs: string[] }[]).find((s) => s.script === script);
+
+  it('runs the source check with the static checks', () => {
+    expect(step('check:protected-phrases')?.group).toBe('static');
+  });
+
+  it('runs the built check on the plain build, before the live build replaces it', () => {
+    expect(step('check:protected-phrases:built')?.needs).toContain('test:build');
+    expect(mustPrecede('test:build', 'check:protected-phrases:built')).toBe(true);
+    expect(mustPrecede('check:protected-phrases:built', 'build:live')).toBe(true);
   });
 });
