@@ -845,6 +845,7 @@ export class Inspector {
       className: 'olv-slider',
       type: 'range',
       title: 'Drag to set the base on-screen size of each point',
+      ariaLabel: 'Point size',
     });
     slider.type = 'range';
     slider.min = '1';
