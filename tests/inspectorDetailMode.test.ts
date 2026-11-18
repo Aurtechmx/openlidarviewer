@@ -250,6 +250,11 @@ describe('Inspector Basic / Advanced', () => {
     // Only the RGB looks: EDL on/off is the Speed/Quality control's.
     expect(quick.children.slice(1)).toHaveLength(1);
     const [rgbRail] = quick.children.slice(1);
+    // No RGB: the heading goes with the rail, so nothing is left empty.
+    ins.setColorModes(['elevation'], 'elevation');
+    expect(quick.classList.contains('olv-hidden')).toBe(true);
+    ins.setColorModes(['rgb', 'elevation'], 'rgb');
+    expect(quick.classList.contains('olv-hidden')).toBe(false);
     // RGB looks appear only when the scan carries colour.
     ins.setColorModes(['elevation'], 'elevation');
     expect(rgbRail.classList.contains('olv-hidden')).toBe(true);

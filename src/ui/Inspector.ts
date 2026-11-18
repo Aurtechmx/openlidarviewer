@@ -559,6 +559,11 @@ export class Inspector {
   private readonly _visualsRgbNote = el('div', { className: 'olv-visuals-rgb-note olv-hidden', text: 'This scan has no RGB colours. These looks apply to scans that have them.' });
   /** Basic-only shortcuts onto a few of the same presets (same callbacks). */
   private readonly _quickRgbRail = el('div', { className: 'olv-chips olv-hidden' });
+  /** The Basic quick-appearance block; hidden, heading included, while no rail in it is shown. */
+  private readonly _quickSection = el('div', { className: 'olv-section olv-quick-appearance olv-hidden' }, [
+    el('div', { className: 'olv-visuals-group-label', text: 'Quick appearance' }),
+    this._quickRgbRail,
+  ]);
   private readonly _visualsSkyRail = el('div', { className: 'olv-chips' });
   /** Visuals Studio > Workflow preset rail (v0.4.5) + its "Custom" state chip. */
   private readonly _visualsWorkflowRail = el('div', { className: 'olv-chips' });
@@ -1370,10 +1375,7 @@ export class Inspector {
       this._detailMode.notices,
       this._colorBySection,
       // Basic-only shortcuts, beside (not inside) the full Visuals Studio rails.
-      this._detailMode.basicOnly(el('div', { className: 'olv-section olv-quick-appearance' }, [
-        el('div', { className: 'olv-visuals-group-label', text: 'Quick appearance' }),
-        this._quickRgbRail,
-      ])),
+      this._detailMode.basicOnly(this._quickSection),
       visualsStudioSection,
       this._renderingSection,
       ...(referencePlaneSection ? [referencePlaneSection] : []),
@@ -2090,7 +2092,9 @@ export class Inspector {
     this._activeMode = active;
     this._openingReason = openingReason ?? null;
     // RGB looks only mean something on a scan that carries colour.
-    this._quickRgbRail.classList.toggle('olv-hidden', !this._modes.includes('rgb'));
+    const hasRgb = this._modes.includes('rgb');
+    this._quickRgbRail.classList.toggle('olv-hidden', !hasRgb);
+    this._quickSection.classList.toggle('olv-hidden', !hasRgb);
     const noRgb = !this._modes.includes('rgb') && this._cb.anyScanHasRgb?.() !== true;
     for (const chip of this._visualsRgbRail.children) {
       (chip as HTMLButtonElement).disabled = noRgb;
