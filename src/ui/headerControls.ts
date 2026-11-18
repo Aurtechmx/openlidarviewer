@@ -22,6 +22,8 @@ export interface HeaderControlHost {
   mountHeaderControl(element: HTMLElement): boolean;
   /** Fill the slot reserved at first paint; optional so test hosts can omit it. */
   fillQualitySlot?(element: HTMLElement): boolean;
+  /** Run a cleanup when the host is disposed; optional so test hosts can omit it. */
+  addTeardown?(cleanup: () => void): void;
 }
 
 export interface HeaderControlOptions {
@@ -100,5 +102,7 @@ export function mountQualityControl(
   });
   if (host.fillQualitySlot) host.fillQualitySlot(control.element);
   else host.mountHeaderControl(control.element);
+  // Disposed with the host: its document listeners go, and an open panel releases the header lift.
+  host.addTeardown?.(() => control.dispose());
   return control;
 }
