@@ -4,6 +4,7 @@
  */
 import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { installLiveFakeDom, type FakeEl } from './helpers/liveFakeDom';
+import { withLiveRegion } from './helpers/politeLiveRegion';
 import { spatialContextFrom } from '../src/geo/SpatialContext';
 import { deriveScanFacts } from '../src/process/scanFacts';
 import { liveTasks, registerTask, resetTaskActivityForTests, subscribeTaskActivity } from '../src/process/taskActivity';
@@ -278,6 +279,102 @@ describe('strip UI', () => {
     off().fire('click');
     expect(clear).toHaveBeenCalledTimes(1);
     setClipTurnOff(null);
+  });
+
+  describe('clip announcements', () => {
+    /** Run `body` with the app's polite region installed and fake timers, then remove both. */
+    const withRegion = async (body: (history: string[]) => Promise<void>): Promise<void> => {
+      vi.useFakeTimers();
+      const { history } = withLiveRegion();
+      const doc = (globalThis as unknown as { document: Record<string, unknown> }).document;
+      // dispose() clears the strip height it publishes on the root element.
+      doc.documentElement = { style: { removeProperty: () => {} } };
+      try {
+        await body(history);
+      } finally {
+        vi.useRealTimers();
+        delete doc.querySelector;
+        delete doc.documentElement;
+      }
+    };
+    const on = (kept: number, total: number, mode: 'keep-inside' | 'keep-outside') =>
+      readStrip(reads({ clip: () => ({ kept, total, mode }), clipOn: () => mode }));
+    const streamed = (mode: 'keep-inside' | 'keep-outside' | null) => readStrip(reads({ clip: () => null, clipOn: () => mode }));
+
+    it('turning the clip on, changing side and turning it off each announce once, politely', async () => {
+      await withRegion(async (history) => {
+        const { createStateStrip } = await import('../src/ui/stateStrip');
+        const strip = createStateStrip({ open: vi.fn() });
+        const root = strip.element as unknown as FakeEl;
+        strip.render(readStrip(reads()));
+        expect(history).toEqual([]);
+        strip.render(on(5, 9, 'keep-inside'));
+        // A repaint, and a count change on the same side, say nothing new.
+        strip.render(on(5, 9, 'keep-inside'));
+        strip.render(on(6, 9, 'keep-inside'));
+        expect(history).toEqual(['Clipped: 5 of 9 points · Showing inside box']);
+        strip.render(on(3, 9, 'keep-outside'));
+        expect(history).toEqual(['Clipped: 5 of 9 points · Showing inside box', 'Clipped: 3 of 9 points · Showing outside box']);
+        strip.render(streamed(null));
+        strip.render(streamed(null));
+        vi.advanceTimersByTime(5000);
+        expect(history).toEqual([
+          'Clipped: 5 of 9 points · Showing inside box',
+          'Clipped: 3 of 9 points · Showing outside box',
+          'Clip off',
+        ]);
+        // Through the app's one polite region: the strip mints no live region of its own.
+        expect(root.findAll((n) => n.getAttribute('aria-live') !== null || n.getAttribute('role') === 'status')).toEqual([]);
+        strip.dispose();
+      });
+    });
+
+    it('waits briefly for the count of a clip just turned on, and says the side alone when no count comes', async () => {
+      await withRegion(async (history) => {
+        const { createStateStrip } = await import('../src/ui/stateStrip');
+        const strip = createStateStrip({ open: vi.fn() });
+        strip.render(readStrip(reads()));
+        // On, count pending: nothing yet; the count lands and is said with it, once.
+        strip.render(streamed('keep-inside'));
+        expect(history).toEqual([]);
+        strip.render(on(5, 9, 'keep-inside'));
+        vi.advanceTimersByTime(5000);
+        expect(history).toEqual(['Clipped: 5 of 9 points · Showing inside box']);
+        history.length = 0;
+        strip.render(streamed(null));
+        // A streamed scan has no count: the clip and its side are said on their own.
+        strip.render(streamed('keep-inside'));
+        vi.advanceTimersByTime(5000);
+        strip.render(streamed('keep-outside'));
+        vi.advanceTimersByTime(5000);
+        expect(history).toEqual(['Clip off', 'Clip on · Showing inside box', 'Clip on · Showing outside box']);
+        // On and off again before anything was said: nothing is said.
+        strip.render(streamed(null));
+        history.length = 0;
+        strip.render(streamed('keep-inside'));
+        strip.render(streamed(null));
+        vi.advanceTimersByTime(5000);
+        expect(history).toEqual([]);
+        strip.dispose();
+      });
+    });
+
+    it('closing the scan says nothing, and the next scan does not hear an old clip turned off', async () => {
+      await withRegion(async (history) => {
+        const { createStateStrip } = await import('../src/ui/stateStrip');
+        const strip = createStateStrip({ open: vi.fn() });
+        strip.render(on(5, 9, 'keep-inside'));
+        strip.render(null);
+        strip.render(readStrip(reads()));
+        vi.advanceTimersByTime(5000);
+        expect(history).toEqual(['Clipped: 5 of 9 points · Showing inside box']);
+        // A clip waiting for its count is dropped with the strip.
+        strip.render(streamed('keep-inside'));
+        strip.dispose();
+        vi.advanceTimersByTime(5000);
+        expect(history).toEqual(['Clipped: 5 of 9 points · Showing inside box']);
+      });
+    });
   });
 
   it('shows the elapsed time and the estimate in their own span, out of the accessible name and the button text', async () => {

@@ -11,6 +11,7 @@
 
 import './stateStrip.css';
 import { el } from './dom';
+import { announcePolite } from './politeAnnounce';
 import { fullFileAvailability, reloadAvailability, reviewSampleTip, sampleActionLinks } from '../app/fullFileActions';
 import { STATE_GLYPH, STATE_LABEL, type SciState } from './stateChip';
 import { linearUnitLabel } from '../io/crs';
@@ -60,6 +61,13 @@ const ITEM_TARGET: Readonly<Record<StripItemId, string>> = {
   processing: 'Opens Analyse',
   review: 'Opens the Analyse list of affected items',
 };
+
+/**
+ * How long a clip that has just turned on waits for its kept count before it
+ * is announced without one. The Clip panel counts 120 ms after a change
+ * (CLIP_COUNT_DEBOUNCE_MS); a streamed scan never has a count.
+ */
+export const CLIP_ANNOUNCE_WAIT_MS = 600;
 
 /** A caution worth a glyph on the strip: anything short of measured or info. */
 function caution(v: SciState): boolean {
@@ -134,6 +142,50 @@ export function createStateStrip(host: StateStripHost): StateStrip {
     if (b.getAttribute('aria-label') !== name) b.setAttribute('aria-label', name);
   };
 
+  // The strip is a row of buttons, not a live region, so clip changes are said
+  // through the app's one polite region: the clip turned on (with its count),
+  // a side change, the clip turned off. Each once; a new count on the same side
+  // is not said. A clip just turned on waits briefly for its count so the one
+  // announcement carries it. `spoken` is the state last said: 'off', a side,
+  // or 'on' when the side is not known.
+  let spoken = 'off';
+  let waiting: ReturnType<typeof setTimeout> | null = null;
+  let waitingKey = '';
+  let waitingText = '';
+  const stopWaiting = (): void => {
+    if (waiting !== null) clearTimeout(waiting);
+    waiting = null;
+  };
+  const say = (key: string, text: string): void => {
+    stopWaiting();
+    spoken = key;
+    announcePolite(text);
+  };
+  const announceClip = (key: string, text: string, counted: boolean): void => {
+    if (key === spoken) {
+      stopWaiting();
+      return;
+    }
+    if (key === 'off') {
+      say(key, 'Clip off');
+      return;
+    }
+    if (counted) {
+      say(key, text);
+      return;
+    }
+    // The latest text is said when the wait ends.
+    waitingKey = key;
+    waitingText = text;
+    if (waiting === null) {
+      waiting = setTimeout(() => {
+        waiting = null;
+        spoken = waitingKey;
+        announcePolite(waitingText);
+      }, CLIP_ANNOUNCE_WAIT_MS);
+    }
+  };
+
   // The phone strip wraps to a third row on the narrowest screens, so the
   // surfaces parked above it read its real height rather than the two-row
   // token. Written on change, a frame later: a same-frame write re-lays-out
@@ -159,6 +211,7 @@ export function createStateStrip(host: StateStripHost): StateStrip {
   return {
     element,
     dispose() {
+      stopWaiting();
       observer?.disconnect();
       observer = null;
       if (write) cancelAnimationFrame(write);
@@ -167,7 +220,12 @@ export function createStateStrip(host: StateStripHost): StateStrip {
     },
     render(s) {
       element.classList.toggle('olv-hidden', s === null);
-      if (!s) return;
+      if (!s) {
+        // The scan closed: its clip goes with it unsaid, and the next scan starts from off.
+        stopWaiting();
+        spoken = 'off';
+        return;
+      }
       paint('dataset', s.dataset.value, s.dataset.validity);
       const h = s.horizontal;
       paint(
@@ -193,8 +251,10 @@ export function createStateStrip(host: StateStripHost): StateStrip {
       const side = s.clip?.mode ?? s.clipOn ?? undefined;
       const phrase = side ? clipModePhrase({ kept: 0, total: 0, mode: side }) : '';
       const clipText = s.clip ? clipStatusText(s.clip) : s.clipOn ? 'Clip on' : null;
-      paint('clip', clipText === null ? null : `${clipText}${phrase ? ` · ${phrase}` : ''}`, clipText === null ? null : 'info');
+      const clipLine = clipText === null ? null : `${clipText}${phrase ? ` · ${phrase}` : ''}`;
+      paint('clip', clipLine, clipText === null ? null : 'info');
       clipOff.hidden = clipText === null;
+      announceClip(clipLine === null ? 'off' : side ?? 'on', clipLine ?? '', !!s.clip);
       const p = s.processing?.value;
       paint(
         'processing',
