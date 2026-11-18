@@ -1,6 +1,9 @@
 /**
  * opfsStoreJanitor.ts — sweep out-of-core stores a crashed session left behind.
  *
+ * Called from `main.ts` in an idle callback after startup (via
+ * {@link runStartupOocJanitor}), never on the critical boot path.
+ *
  * The out-of-core heavy-LAS store is temporary: a live session builds it,
  * streams from it, and removes it when the source closes. But a tab or worker
  * that dies mid-build, or one whose close-time removal fails, leaves an

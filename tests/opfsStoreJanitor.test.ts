@@ -20,6 +20,7 @@ import {
 } from '../src/io/heavy/opfsSpillStore';
 import {
   sweepAbandonedOocStores,
+  runStartupOocJanitor,
   sweepPromotedOrphans,
   selectOrphanPromoted,
   DEFAULT_STALE_MS,
@@ -86,6 +87,25 @@ describe('OOC startup janitor', () => {
     const removed = await sweepAbandonedOocStores(opfs.root, { now: NOW });
     expect(removed).toEqual([]);
     expect(opfs.topLevel()).toHaveLength(2);
+  });
+});
+
+describe('runStartupOocJanitor', () => {
+  it('runStartupOocJanitor removes a stale partial and keeps a fresh one from another tab', async () => {
+    const opfs = fakeOpfs();
+    const stale = 'ooc-old.las-100-aaaa.partial';
+    const fresh = 'ooc-other-tab.las-100-bbbb.partial';
+    await makeStore(opfs.root, stale, NOW - DEFAULT_STALE_MS - 60_000);
+    await makeStore(opfs.root, fresh, NOW - 60_000);
+
+    const removed = await runStartupOocJanitor({ getOpfsRoot: async () => opfs.root, now: NOW });
+
+    expect(removed).toEqual([stale]);
+    expect(opfs.topLevel()).toContain(fresh);
+  });
+
+  it('resolves to an empty list where the platform has no OPFS', async () => {
+    expect(await runStartupOocJanitor({ getOpfsRoot: async () => null, now: NOW })).toEqual([]);
   });
 });
 

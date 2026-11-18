@@ -3169,6 +3169,15 @@ function schedulePrewarm(): void {
   }
 }
 schedulePrewarm();
+// Sweep abandoned scan stores in an idle window; a store another tab holds a fresh lease on is kept.
+{
+  const sweepStores = (): void => {
+    void import('./io/heavy/opfsStoreJanitor').then((m) => m.runStartupOocJanitor()).catch(() => { /* swallow — the next start retries */ });
+  };
+  const rIC = (window as unknown as { requestIdleCallback?: (cb: () => void, opts?: { timeout?: number }) => number }).requestIdleCallback;
+  if (typeof rIC === 'function') rIC(sweepStores, { timeout: 10000 });
+  else setTimeout(sweepStores, 5000);
+}
 
 /**
  * Assemble + render a PDF report from the live state — a thin caller over the
