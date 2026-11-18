@@ -437,7 +437,7 @@ Fan-out is 95 for the shell, 73 for the renderer, across 1221 modules with no
 dependency cycles. Fan-out counts the distinct modules a file imports with a
 value import, source files and external packages alike; type-only and dynamic
 imports are not counted. The shell and the renderer figures are held
-shrink-only by `lint:module-graph`, which reads 1162 source files (every
+shrink-only by `lint:module-graph`, which reads 1221 source files (every
 non-test `.ts` file under `src/`). The Analyse panel is watched, not held: it
 has 29 now, against 26 in `docs/validation/module-graph-baseline.json`, and the
 watch allows a rise of 10 % (at least 3) over the banked figure before it
