@@ -10,7 +10,7 @@
  * tables do not hold keeps its source units with metric claims withheld.
  */
 import { describe, expect, it } from 'vitest';
-import { CrsService, datasetIdentity, type CrsOverridePort } from '../src/geo/CrsService';
+import { CrsService, OVERRIDE_IDENTITY_VERSION, datasetIdentity, type CrsOverridePort } from '../src/geo/CrsService';
 import type { CrsOverride } from '../src/geo/CrsOverrideStore';
 import type { PcStacItem } from '../src/io/catalog/planetaryComputer';
 import { recordCatalogueCrs } from '../src/app/pcCatalogueCrs';
@@ -187,5 +187,28 @@ describe('setOverride refuses a code outside the EPSG range', () => {
     svc.resolveForScan({ name: 'scan.laz', detected: undefined, source: 'las-vlr' });
     expect(svc.setOverride({ override: { epsg: 1024, kind: 'projected' }, detected: undefined, source: 'user-override' })).not.toBeNull();
     expect(svc.setOverride({ override: { epsg: 99999, kind: 'projected' }, detected: undefined, source: 'user-override' })).not.toBeNull();
+  });
+});
+
+describe('a code outside the EPSG range resolves to an unknown CRS on every override path', () => {
+  it('a catalogue record 163684 on a stream that declares no CRS', () => {
+    const { svc, crs } = catalogueResolve(163684);
+    expect(crs.source).toBe('catalog-tile');
+    expect(crs.kind).toBe('unknown');
+    expect(crs.epsg).toBeUndefined();
+    expect(svc.displayLabel()).toBe('CRS unknown');
+    expect(svc.context().metricClaimsPermitted).toBe(false);
+  });
+
+  it.each([163684, 100000, 1023, 3.5])('a stored override record %s', (epsg) => {
+    const identity = { pointCount: 1000, extent: [10, 10, 1] as const, min: [100, 200, 0] as const };
+    const port = memoryPort();
+    port.set('scan.laz', { epsg, kind: 'projected', detectedEpsgObserved: true, identity, identityVersion: OVERRIDE_IDENTITY_VERSION });
+    const svc = new CrsService(port);
+    const crs = svc.resolveForScan({ name: 'scan.laz', detected: undefined, source: 'las-vlr', identity });
+    expect(crs.source).toBe('user-override');
+    expect(crs.kind).toBe('unknown');
+    expect(crs.epsg).toBeUndefined();
+    expect(svc.context().metricClaimsPermitted).toBe(false);
   });
 });

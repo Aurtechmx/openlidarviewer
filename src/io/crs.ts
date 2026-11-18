@@ -595,10 +595,11 @@ function trimWkt(wkt: string): string {
  * compound's vertical clauses out of the horizontal read — the two failure
  * modes a flat regex cannot avoid.
  *
- * Resolution SEMANTICS are unchanged from the prior regex implementation: a
- * projected CRS with no UNIT clause defaults to metre (the WKT default), an
- * unrecognised linear-unit name resolves to `unknown` (fail-closed), and only
- * the horizontal slice of a compound CRS decides name / EPSG / unit.
+ * Resolution rules: a projected CRS with no UNIT clause of its own (a unit
+ * inside its base GEOGCS, projection or parameters does not count) takes the
+ * unit its EPSG code defines, or `unknown`, never an assumed metre; a unit is
+ * read from its factor, not its name; and only the horizontal slice of a
+ * compound CRS decides name / EPSG / unit.
  */
 export function crsFromWkt(wkt: string): CrsInfo {
   const text = trimWkt(wkt);

@@ -834,6 +834,23 @@ export class CrsService {
       ...(detected?.verticalLinearUnit !== undefined ? { verticalLinearUnit: detected.verticalLinearUnit } : {}),
       ...(detected?.verticalAxisDown ? { verticalAxisDown: true as const } : {}),
     };
+    /** An override this cannot resolve: no kind, unit or code is guessed. */
+    const unresolved = (name: string): ResolvedCrs => ({
+      kind: 'unknown',
+      name,
+      linearUnit: 'unknown',
+      linearUnitToMetres: 1,
+      source: 'user-override',
+      confidence: 'low',
+      userConfirmed: true,
+      ...vertical,
+    });
+    // A stored record or a catalogue record reaches here without passing
+    // `setOverride`, so the EPSG range is checked again. A code outside it
+    // names no EPSG CRS, and the code is not carried.
+    if (!isEpsgCodeInRange(override.epsg)) {
+      return unresolved(`EPSG:${override.epsg} (not an EPSG code from 1024 to 99999)`);
+    }
     // A registry entry whose kind differs from the override's is a
     // contradiction, whatever else describes the code: a session file or a
     // catalogue record can claim projected for EPSG:4326, which read degrees as
@@ -860,16 +877,7 @@ export class CrsService {
       // kind or unit is guessed, and the code is not carried, so no export
       // writes it as the claimed kind.
       const article = unit.contradicts === 'engineering' ? 'an' : 'a';
-      return {
-        kind: 'unknown',
-        name: `EPSG:${override.epsg} (the code is ${article} ${unit.contradicts} CRS, not ${override.kind})`,
-        linearUnit: 'unknown',
-        linearUnitToMetres: 1,
-        source: 'user-override',
-        confidence: 'low',
-        userConfirmed: true,
-        ...vertical,
-      };
+      return unresolved(`EPSG:${override.epsg} (the code is ${article} ${unit.contradicts} CRS, not ${override.kind})`);
     }
     const name =
       detected?.name && confirmsDetected
