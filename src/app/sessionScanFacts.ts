@@ -19,16 +19,33 @@ import { isZUpFormat } from '../io/sniffFormat';
 import type { SourceFormat } from '../io/sniffFormat';
 import type { CrsLinearUnit } from '../io/crs';
 import type { DeclaredSpatialFacts, ScanFacts, SessionSpatialClaims } from '../io/session';
-import type { ResolvedCrs } from '../geo/CoordinateTypes';
+import type { CrsKind, ResolvedCrs } from '../geo/CoordinateTypes';
 
-/** The CRS fields the scan facts read: identity, and the unit scales a session may not redefine. */
+/** The CRS fields the scan facts read: identity, kind, and the unit scales a session may not redefine. */
 export interface ScanUnitCrs {
   readonly name?: string;
   readonly epsg?: number;
+  readonly isGeographic?: boolean;
+  readonly geocentric?: boolean;
+  readonly localFrame?: true;
+  readonly horizontalUnresolved?: true;
   readonly linearUnit?: CrsLinearUnit;
   readonly linearUnitToMetres?: number;
   readonly linearUnitByFactor?: boolean;
   readonly verticalUnitToMetres?: number;
+}
+
+/**
+ * The kind of a scan's declared CRS, read the way `resolvedFromCrsInfo` reads
+ * it, or undefined when the record does not state whether it is geographic.
+ */
+function declaredKindOf(crs: ScanUnitCrs | null | undefined): CrsKind | undefined {
+  if (!crs) return undefined;
+  if (crs.horizontalUnresolved) return 'unknown';
+  if (crs.localFrame) return 'local';
+  if (crs.geocentric) return 'geocentric';
+  if (typeof crs.isGeographic !== 'boolean') return undefined;
+  return crs.isGeographic ? 'geographic' : 'projected';
 }
 
 /** The unit scales of a scan's declared CRS, for the session conflict check. */
@@ -146,22 +163,23 @@ export function scanFactsFromStatic(cloud: StaticScanCloud): ScanFacts {
 
 /**
  * The FILE's own spatial declaration from a streaming source — the source of
- * truth a restored session may not silently redefine (roadmap P1 #5). CRS code
- * and linear unit come off the source's `crs()`. Up-axis is intentionally left
+ * truth a restored session may not silently redefine (roadmap P1 #5). CRS code,
+ * kind and linear unit come off the source's `crs()`. Up-axis is intentionally left
  * unknown: COPC/EPT streaming sources don't surface a source format through the
  * `StreamingSource` seam, and they are z-up by construction, so there is nothing
  * to conflict against — the CRS and unit checks still run.
  */
 export function declaredSpatialFromStreaming(cloud: StreamingScanSource): DeclaredSpatialFacts {
   const crs = cloud.crs();
-  return { epsg: crs?.epsg, ...declaredUnitsOf(crs) };
+  const kind = declaredKindOf(crs);
+  return { epsg: crs?.epsg, ...(kind ? { kind } : {}), ...declaredUnitsOf(crs) };
 }
 
 /**
  * The FILE's own spatial declaration from a static cloud. Up-axis comes from the
  * source format the same way the renderer and session exporter derive it
- * (`isZUpFormat`), so the three can never disagree; CRS code and linear unit come
- * off the header metadata.
+ * (`isZUpFormat`), so the three can never disagree; CRS code, kind and linear
+ * unit come off the header metadata.
  */
 export function declaredSpatialFromStatic(cloud: StaticScanCloud): DeclaredSpatialFacts {
   const crs = cloud.metadata?.crs;
@@ -171,9 +189,11 @@ export function declaredSpatialFromStatic(cloud: StaticScanCloud): DeclaredSpati
   } else {
     upAxis = undefined;
   }
+  const kind = declaredKindOf(crs);
   return {
     upAxis,
     epsg: crs?.epsg,
+    ...(kind ? { kind } : {}),
     ...declaredUnitsOf(crs),
   };
 }
@@ -188,6 +208,7 @@ export function sessionSpatialClaimsOf(session: { readonly upAxis: 'y' | 'z'; re
   return {
     upAxis: session.upAxis,
     epsg: c?.epsg,
+    ...(c ? { kind: c.kind } : {}),
     linearUnit: c?.linearUnit,
     ...(c ? { linearUnitToMetres: c.linearUnitToMetres } : {}),
     ...(c?.linearUnitByFactor ? { linearUnitByFactor: true } : {}),

@@ -429,7 +429,10 @@ export async function importSession(
       // structurally usable override (local, or projected/geographic with a
       // finite EPSG) — and let a crs/unit conflict through. An UP-AXIS conflict is
       // a different, harder failure (a CRS picker never rotates geometry) and is
-      // NEVER waved through; every other case keeps the existing hard refusal.
+      // NEVER waved through; neither is a KIND conflict, a session naming a
+      // projected or geographic CRS over a file that declares another kind (a
+      // geocentric file would lose its elevation refusal). Every other case
+      // keeps the existing hard refusal.
       const persistedOverride =
         match?.verdict === 'strong' &&
         !!session.crs &&
@@ -439,8 +442,8 @@ export async function importSession(
           ((session.crs.kind === 'projected' || session.crs.kind === 'geographic') &&
             Number.isFinite(session.crs.epsg)));
       if (spatial.hasConflict) {
-        const axisConflict = spatial.conflicts.some((c) => c.field === 'axis');
-        if (!(persistedOverride && !axisConflict)) {
+        const hardConflict = spatial.conflicts.some((c) => c.field === 'axis' || c.field === 'kind');
+        if (!(persistedOverride && !hardConflict)) {
           const why = spatial.conflicts.map((c) => c.reason).join('; ');
           deps.showToast(
             `This session's spatial metadata conflicts with this scan (${why}) — it was not applied. ` +
@@ -581,13 +584,16 @@ export async function importSession(
       const appliedCrs = deps.setCrsOverride({ ...override, persist: false });
       // A local choice matches the file only when the file declares neither a
       // code nor a linear unit: a declared unit with no EPSG is still a
-      // coordinate system the session has replaced.
+      // coordinate system the session has replaced. A code matches only with
+      // its kind: the same code applied as another kind (a file whose GeoKeys
+      // contradict their code) is a changed CRS, and the user is told.
       const sameAsFile =
         sessionCrs.kind === 'local'
           ? declared.epsg === undefined
             && declared.linearUnitToMetres === undefined
             && (declared.linearUnit === undefined || declared.linearUnit === 'unknown')
           : declared.epsg === sessionCrs.epsg &&
+            (declared.kind === undefined || declared.kind === (appliedCrs?.kind ?? sessionCrs.kind)) &&
             (declared.linearUnitToMetres === undefined || declared.linearUnitToMetres === sessionCrs.linearUnitToMetres);
       if (!sameAsFile && appliedCrs) {
         crsNotice = {
