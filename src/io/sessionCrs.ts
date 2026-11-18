@@ -10,7 +10,7 @@
  * Pure: no DOM, no proj4.
  */
 
-import type { ResolvedCrs } from '../geo/CoordinateTypes';
+import { isEpsgCodeInRange, type ResolvedCrs } from '../geo/CoordinateTypes';
 
 /**
  * A resolved CRS as it is written into a session file. Structurally identical
@@ -74,7 +74,9 @@ export function parseResolvedCrs(v: unknown): SerializedResolvedCrs | null {
     ...(typeof v.assertedBy === 'string' && v.assertedBy.length > 0 ? { assertedBy: v.assertedBy } : {}),
     confidence: v.confidence as ResolvedCrs['confidence'],
     userConfirmed: v.userConfirmed,
-    ...(isFiniteNumber(v.epsg) ? { epsg: v.epsg } : {}),
+    // Only a whole number in the EPSG range. Any other value names no CRS, and
+    // without a code the session's projected or geographic claim is not restored.
+    ...(isEpsgCodeInRange(v.epsg) ? { epsg: v.epsg } : {}),
     ...(typeof v.wkt === 'string' && v.wkt.length > 0 ? { wkt: v.wkt } : {}),
     // The vertical + datum fields. The serializer has always written the whole
     // ResolvedCrs; only these were dropped on the way back in, so a

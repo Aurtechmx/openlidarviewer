@@ -195,6 +195,15 @@ export function isLinearUnitKnown(
   return crs?.linearUnitByFactor === true && f !== undefined && Number.isFinite(f) && f > 0;
 }
 
+/**
+ * Whether `v` is a whole number in the EPSG code range 1024 to 99999, the
+ * range the WKT reader accepts an authority code from (`io/crs.ts`). Codes
+ * outside it name no EPSG CRS, so a CRS record carrying one is not applied.
+ */
+export function isEpsgCodeInRange(v: unknown): v is number {
+  return typeof v === 'number' && Number.isInteger(v) && v >= 1024 && v <= 99999;
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Point shapes — every coordinate the platform talks about
 // ─────────────────────────────────────────────────────────────────────────────
