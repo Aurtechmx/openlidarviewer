@@ -33,11 +33,11 @@ The View panel in the right rail controls how the cloud looks:
 
 ## Rendering
 
-The Rendering section of the View panel tunes how the cloud is drawn:
+The Rendering section of the View panel and the Performance control in the header tune how the cloud is drawn:
 
-- Eye Dome Lighting toggles screen-space depth shading. It darkens depth discontinuities so edges and 3D structure stand out, and the strength slider sets how pronounced the effect is. It is on by default on desktop WebGPU, and off on the WebGL 2 fallback and on phones, where it can still be switched on.
+- Eye Dome Lighting is screen-space depth shading. It darkens depth discontinuities so edges and 3D structure stand out. It is switched on or off in the Performance control's Advanced panel, and the strength slider in the Rendering section, which shows while it is on, sets how pronounced the effect is. It is on by default on desktop WebGPU, and off on the WebGL 2 fallback and on phones, where it can still be switched on.
 - Point size mode switches between Adaptive (points scale with camera distance, clamped so far points stay visible and near ones do not bloat) and Fixed, a constant on-screen size. A cloud opens at the smallest size in Adaptive mode and the point-size slider sets the base size for both modes. A size or mode you choose is remembered for the next session.
-- Antialiasing toggles the smoothing of each point's round edge.
+- Antialiasing, the smoothing of each point's round edge, is switched on or off in the same Advanced panel.
 
 ## Reference plane
 

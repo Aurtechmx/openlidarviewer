@@ -62,7 +62,7 @@ Measurements are intended for visual inspection and documentation workflows unle
 
 ## Mobile rendering
 
-Eye Dome Lighting (the screen-space depth shading) is off by default on phones and on the WebGL 2 backend, so a scan opens at full speed on a weaker mobile GPU. It can still be switched on from the Rendering section of the View tab if your device handles it comfortably. Adaptive point sizing and round, antialiased points are on by default on mobile, the same as on desktop.
+Eye Dome Lighting (the screen-space depth shading) is off by default on phones and on the WebGL 2 backend, so a scan opens at full speed on a weaker mobile GPU. It can still be switched on from the Advanced panel of the Performance control in the header if your device handles it comfortably. Adaptive point sizing and round, antialiased points are on by default on mobile, the same as on desktop.
 
 ## Mobile performance tips
 
