@@ -425,9 +425,10 @@ function overrideCodeUnit(
   if (code.kind !== 'unknown' && (!horizontal || code.kind !== kind)) return { contradicts: code.kind };
   if (kind !== 'projected') return { linearUnit: 'unknown', linearUnitToMetres: 1 };
   switch (code.unit) {
-    case 'metre': return { linearUnit: 'metre', linearUnitToMetres: 1 };
-    case 'foot': return { linearUnit: 'foot', linearUnitToMetres: 0.3048 };
-    case 'us-survey-foot': return { linearUnit: 'us-survey-foot', linearUnitToMetres: 1200 / 3937 };
+    case 'metre':
+    case 'foot':
+    case 'us-survey-foot':
+      return { linearUnit: code.unit, linearUnitToMetres: metresPerLinearUnit(code.unit) };
     default: return { linearUnit: 'unknown', linearUnitToMetres: 1 };
   }
 }
