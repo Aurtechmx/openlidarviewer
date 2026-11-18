@@ -126,12 +126,14 @@ export class ClassLegendPanel {
   /** True when the shown classification was OLV-derived, not producer-carried. */
   private _derived = false;
 
-  /** "Counts from unique decoded nodes" caption (hidden unless streaming). */
-  private readonly _streamingNote: HTMLElement;
+  /**
+   * The one counts-basis caption: "unique decoded nodes" while streaming, "the
+   * loaded display sample" when the loader strided the cloud, both in one line
+   * when both hold. Hidden otherwise.
+   */
+  private readonly _countsNote: HTMLElement;
   private readonly _streamingEditNote: HTMLElement;
-
-  /** "Counts cover the loaded display sample" caption (hidden unless sampled). */
-  private readonly _sampleNote: HTMLElement;
+  private _streaming = false;
   private _sampled = false;
   /** Pre-reduction class counts; shares use them while the counts are unedited. */
   private _shareSample: ClassSample | undefined;
@@ -201,36 +203,24 @@ export class ClassLegendPanel {
     });
     this._provenance.setAttribute('role', 'note');
 
-    // Streaming caption — for a COPC/EPT scan the per-class counts are a
+    // Counts-basis caption. For a COPC/EPT scan the per-class counts are a
     // RUNNING TALLY over the UNIQUE nodes decoded so far (the host's session
     // ledger folds each node id in once), so they exceed the currently-resident
-    // point count and are not full-source totals. Naming that denominator is
-    // the point: it is neither the resident set nor the file, and a reviewer
-    // must not read "Building 7,833" as an authoritative whole-cloud figure.
-    // Distinct class from the "Derived (heuristic)" caption (olv-cl-derived) —
-    // they're independent captions that can show at the same time, and tests /
-    // styling must be able to target each on its own. Shares the caption CSS.
-    this._streamingNote = el('div', {
-      className: 'olv-cl-streamnote olv-hidden',
-      text: 'Counts from unique decoded nodes seen so far, not full-source totals.',
+    // point count and are not full-source totals. For a cloud the loader
+    // strided, they describe the display sample, not the survey. Naming that
+    // denominator is the point: a reviewer must not read "Building 7,833" as an
+    // authoritative whole-cloud figure. One line carries whichever applies
+    // (see `_syncCountsNote`); it shares the caption CSS with the "Derived
+    // (heuristic)" caption (olv-cl-derived), which stays its own element.
+    this._countsNote = el('div', {
+      className: 'olv-cl-samplenote olv-cl-streamnote olv-hidden',
     });
-    this._streamingNote.setAttribute('role', 'note');
+    this._countsNote.setAttribute('role', 'note');
     this._streamingEditNote = el('div', {
       className: 'olv-cl-streamnote olv-cl-editnote olv-hidden',
       text: 'Edit classes needs a fully loaded scan, so it is not offered while streaming. To edit classes, open a LAS copy of the data.',
     });
     this._streamingEditNote.setAttribute('role', 'note');
-
-    // Sampled caption — the loader strides a cloud too big to hold whole, so
-    // the per-class counts describe the display sample, not the survey. Shown
-    // only when the file declares more points than are loaded, so a fully
-    // resident scan carries no caveat that does not apply to it. Same wording
-    // basis as the Scan Report's "Loaded N (display sample)" row.
-    this._sampleNote = el('div', {
-      className: 'olv-cl-samplenote olv-hidden',
-      text: 'Counts, Solo and hide act on the loaded display sample — not the full cloud.',
-    });
-    this._sampleNote.setAttribute('role', 'note');
 
     // "Classification unavailable" caption. A failed or refused derive is a
     // fact about the scan the user must still be able to read a minute later,
@@ -289,9 +279,8 @@ export class ClassLegendPanel {
     this.element = el('aside', { className: 'olv-class-panel olv-hidden' }, [
       head,
       this._provenance,
-      this._streamingNote,
+      this._countsNote,
       this._streamingEditNote,
-      this._sampleNote,
       this._unavailableNote,
       this._banner,
       this._list,
@@ -478,8 +467,9 @@ export class ClassLegendPanel {
   }
 
   setStreamingMode(on: boolean): void {
-    this._streamingNote.classList.toggle('olv-hidden', !on);
+    this._streaming = on;
     this._streamingEditNote.classList.toggle('olv-hidden', !on);
+    this._syncCountsNote();
   }
 
   /**
@@ -501,7 +491,21 @@ export class ClassLegendPanel {
     this._shareSample = sample?.shares;
     this._heldDigest = sample?.heldDigest;
     this._scan = sample?.scan;
-    this._sampleNote.classList.toggle('olv-hidden', !sampled);
+    this._syncCountsNote();
+  }
+
+  /** Paint the one counts-basis caption from the streaming and sampled flags. */
+  private _syncCountsNote(): void {
+    const streaming = this._streaming;
+    const sampled = this._sampled;
+    this._countsNote.classList.toggle('olv-hidden', !streaming && !sampled);
+    this._countsNote.textContent = streaming && sampled
+      ? 'Counts from unique decoded nodes seen so far, and Solo and hide act on the loaded display sample — not full-source totals.'
+      : streaming
+        ? 'Counts from unique decoded nodes seen so far, not full-source totals.'
+        : sampled
+          ? 'Counts, Solo and hide act on the loaded display sample — not the full cloud.'
+          : '';
   }
 
   /** The derive-caption key for the held codes, or undefined when they are unknown. */

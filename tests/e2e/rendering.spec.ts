@@ -36,6 +36,23 @@ async function openRenderingSection(page: Page): Promise<void> {
   if (!isOpen) await renderingDetails.locator('summary').click();
 }
 
+/**
+ * The Speed/Quality control's checkbox for Eye Dome Lighting or Antialiasing.
+ * That control owns both settings; the Inspector's Rendering section keeps only
+ * the EDL strength slider, which follows it.
+ */
+async function qualityCheckbox(page: Page, label: string) {
+  const pop = page.locator('.olv-quality-pop');
+  if (!(await pop.isVisible())) await page.locator('.olv-quality-button').click();
+  const advanced = pop.locator('details.olv-section-collapsible', {
+    has: page.locator('summary', { hasText: 'Advanced' }),
+  });
+  if (!(await advanced.evaluate((d) => (d as HTMLDetailsElement).open))) {
+    await advanced.locator('summary').click();
+  }
+  return pop.locator('.olv-quality-check', { hasText: label }).locator('input');
+}
+
 test('toggling Eye Dome Lighting drives the post-processing pipeline cleanly', async ({
   page,
 }) => {
@@ -47,8 +64,10 @@ test('toggling Eye Dome Lighting drives the post-processing pipeline cleanly', a
 
   await loadSample(page);
 
-  // The EDL toggle lives in the Rendering section of the Scan Intelligence panel.
-  const edl = page.locator('.olv-chip', { hasText: 'Eye Dome Lighting' });
+  // EDL on/off lives in the Speed/Quality control; the Rendering section
+  // carries no second toggle, only the strength slider that follows it.
+  await expect(page.locator('.olv-chip', { hasText: 'Eye Dome Lighting' })).toHaveCount(0);
+  const edl = await qualityCheckbox(page, 'Eye Dome Lighting');
   await expect(edl).toBeVisible();
 
   // The STARTING state is not fixed, so do not assume it. `edlDefaultEnabled`
@@ -62,17 +81,17 @@ test('toggling Eye Dome Lighting drives the post-processing pipeline cleanly', a
   // What the spec actually cares about is the TRANSITION: driving the render
   // loop onto the post-processing pipeline and back off again, cleanly, in
   // whichever order this backend starts in.
-  const startedOn = await edl.evaluate((n) => n.classList.contains('olv-chip-active'));
+  const startedOn = await edl.isChecked();
 
   /** Flip EDL and assert both the chip and the strength row settle. */
   const toggleTo = async (on: boolean): Promise<void> => {
-    await edl.click();
+    await edl.setChecked(on);
     if (on) {
-      await expect(edl).toHaveClass(/olv-chip-active/);
+      await expect(edl).toBeChecked();
       // The strength slider is revealed once EDL is on.
       await expect(page.locator('.olv-render-row')).toBeVisible();
     } else {
-      await expect(edl).not.toHaveClass(/olv-chip-active/);
+      await expect(edl).not.toBeChecked();
       await expect(page.locator('.olv-render-row')).toBeHidden();
     }
   };
@@ -120,8 +139,10 @@ test('the Rendering panel switches point-size mode and antialiasing', async ({ p
   await adaptive.click();
   await expect(adaptive).toHaveClass(/olv-chip-active/);
 
-  // Antialiasing toggle.
-  await page.locator('.olv-chip', { hasText: 'Antialiasing' }).click();
+  // Antialiasing toggle, in the Speed/Quality control.
+  await expect(page.locator('.olv-chip', { hasText: 'Antialiasing' })).toHaveCount(0);
+  const aa = await qualityCheckbox(page, 'Antialiasing');
+  await aa.setChecked(!(await aa.isChecked()));
   await page.waitForTimeout(800);
 
   await expect(page.locator('.olv-canvas')).toBeVisible();

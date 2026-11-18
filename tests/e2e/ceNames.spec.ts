@@ -69,10 +69,11 @@ test('a dock tool reads pressed exactly while the rail shows its page', async ({
   await expect(dock(page, 'tool.annotate')).toHaveAttribute('aria-pressed', 'false');
   await expect(title).not.toHaveText('Annotate');
 
-  // Analyse: pressed while the rail shows Analyse, released on another mode.
+  // Analyse: opens the Analyse tab and is not a toggle, so it never reads pressed.
   await dock(page, 'tool.analyse').click();
   await expect(page.locator('.olv-ws-tab[data-mode="analyse"]')).toHaveAttribute('aria-selected', 'true');
-  await expect(dock(page, 'tool.analyse')).toHaveAttribute('aria-pressed', 'true');
+  await expect(dock(page, 'tool.analyse')).not.toHaveAttribute('aria-pressed', /.*/);
   await page.locator('.olv-ws-tab[data-mode="data"]').click();
-  await expect(dock(page, 'tool.analyse')).toHaveAttribute('aria-pressed', 'false');
+  await dock(page, 'tool.analyse').click();
+  await expect(page.locator('.olv-ws-tab[data-mode="analyse"]')).toHaveAttribute('aria-selected', 'true');
 });

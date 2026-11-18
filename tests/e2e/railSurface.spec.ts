@@ -169,17 +169,18 @@ test.describe('what the rail and the dock say after a terrain run', () => {
     await expect(page.locator('#olv-ws-mode-analyse .olv-ws-task-title')).toHaveText('Contours');
   });
 
-  test('the dock Analyse button follows the mode shown', async ({ page }) => {
+  test('the dock Analyse button opens the Analyse tab', async ({ page }) => {
     await loadAndRun(page, 'dark');
     const analyse = page.locator('.olv-tool-analyse');
     await openAnalysePage(page, 'terrain');
     await showWorkspaceMode(page, 'data');
-    await expect(analyse).toHaveAttribute('aria-pressed', 'false');
-    await expect(analyse).not.toHaveClass(/olv-tool-active/);
+    await expect(analyse).not.toHaveAttribute('aria-pressed', /.*/);
     // Pressing it from another mode opens Analyse rather than hiding a panel no one sees.
     await analyse.click();
     await expect(page.locator('.olv-ws-tab[data-mode="analyse"]')).toHaveAttribute('aria-selected', 'true');
-    await expect(analyse).toHaveAttribute('aria-pressed', 'true');
+    // Pressing it again keeps the tab open.
+    await analyse.click();
+    await expect(page.locator('.olv-ws-tab[data-mode="analyse"]')).toHaveAttribute('aria-selected', 'true');
   });
 
   test('the navigation cluster has no Frame control of its own; the dock\'s stays clear of the Orbit pad', async ({ page }) => {

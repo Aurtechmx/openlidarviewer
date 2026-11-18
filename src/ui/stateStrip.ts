@@ -178,7 +178,8 @@ export function createStateStrip(host: StateStripHost): StateStrip {
       const p = s.processing?.value;
       paint(
         'processing',
-        !p ? null : p.state === 'idle' ? 'Idle' : `${p.label || 'Working'}${p.progress != null ? ` ${Math.round(p.progress * 100)}%` : ''}${p.more > 0 ? ` +${p.more}` : ''}`,
+        // Nothing running shows nothing: an item that always reads "Idle" says no more than its absence.
+        !p || p.state === 'idle' ? null : `${p.label || 'Working'}${p.progress != null ? ` ${Math.round(p.progress * 100)}%` : ''}${p.more > 0 ? ` +${p.more}` : ''}`,
         null,
         undefined,
         p?.state === 'running' && p.elapsedMs >= WAIT_SHOWN_AFTER_MS ? formatWait(p) : undefined,

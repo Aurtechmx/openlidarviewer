@@ -105,12 +105,12 @@ test('RGB rail has six chips and clicking one flips .olv-chip-active', async ({ 
   await expect(drone).toHaveClass(/olv-chip-active/);
 });
 
-test('EDL rail has four chips including Off', async ({ page }) => {
+test('EDL rail has the three named presets and no Off, which is the Speed/Quality control\'s', async ({ page }) => {
   await loadSampleAndOpenVisuals(page);
   const rails = page.locator('.olv-visuals-body .olv-chips');
   const edlRail = rails.nth(2);
-  await expect(edlRail.locator('.olv-chip')).toHaveCount(4);
-  await expect(edlRail.locator('.olv-chip', { hasText: 'Off' })).toBeVisible();
+  await expect(edlRail.locator('.olv-chip')).toHaveCount(3);
+  await expect(edlRail.locator('.olv-chip', { hasText: 'Off' })).toHaveCount(0);
   await expect(edlRail.locator('.olv-chip', { hasText: 'Subtle' })).toBeVisible();
   await expect(edlRail.locator('.olv-chip', { hasText: 'Balanced' })).toBeVisible();
   await expect(edlRail.locator('.olv-chip', { hasText: 'Inspection' })).toBeVisible();

@@ -173,7 +173,8 @@ describe('strip UI', () => {
     expect(btn('vertical').getAttribute('aria-label')).toMatch(/^Vertical reference: Vertical: unknown \(Review\)\. Opens/);
     expect(btn('basis').textContent).toContain('Currently loaded points');
     expect(btn('review').textContent).toContain('2 to review');
-    expect(btn('processing').textContent).toBe('Idle');
+    // Nothing is running, so the item is hidden rather than reading "Idle".
+    expect(btn('processing').hidden).toBe(true);
     btn('crs').fire('click');
     expect(open).toHaveBeenCalledWith('crs');
   });

@@ -68,6 +68,21 @@ describe('Classes legend — counts name their basis', () => {
     expect(captionShown(panel)).toBe(false);
   });
 
+  it('a streamed and sampled scan carries one caption that names both denominators', () => {
+    const panel = new ClassLegendPanel();
+    panel.setClasses(COUNTS, { loaded: LOADED, declared: 47_900_000 });
+    panel.setStreamingMode(true);
+    const root = panel.element as unknown as FakeEl;
+    const notes = [...root.querySelectorAll('.olv-cl-samplenote'), ...root.querySelectorAll('.olv-cl-streamnote')]
+      .filter((n, i, all) => all.indexOf(n) === i && !n.classList.contains('olv-cl-editnote') && !n.classList.contains('olv-hidden'));
+    expect(notes).toHaveLength(1);
+    expect(notes[0].textContent).toMatch(/unique decoded nodes/);
+    expect(notes[0].textContent).toMatch(/loaded display sample/);
+    panel.setStreamingMode(false);
+    expect(captionShown(panel)).toBe(true);
+    expect(caption(panel)?.textContent ?? '').not.toMatch(/unique decoded nodes/);
+  });
+
   it('loading a resident scan after a sampled one clears the caveat', () => {
     const panel = new ClassLegendPanel();
     panel.setClasses(COUNTS, { loaded: LOADED, declared: 47_900_000 });

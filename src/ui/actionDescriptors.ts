@@ -45,7 +45,7 @@ export function actionTitle(id: NamedActionId): string {
  */
 export const SURFACE_DESCRIPTORS: readonly ActionDescriptor[] = [
   { id: 'tool.probe', title: ACTION_TITLES['tool.probe'], section: 'Tools', hint: 'Hover the scan to read each point live, with no click.' },
-  { id: 'tool.analyse', title: ACTION_TITLES['tool.analyse'], section: 'Analyse', hint: 'Show or hide the terrain analysis panel.' },
+  { id: 'tool.analyse', title: ACTION_TITLES['tool.analyse'], section: 'Analyse', hint: 'Open the Analyse tab.' },
   { id: 'palette.open', title: ACTION_TITLES['palette.open'], section: 'Help', hint: 'Search every action.' },
   { id: 'help.open', title: ACTION_TITLES['help.open'], section: 'Help', hint: 'Workflows, navigation and scientific states.' },
   { id: 'scan.close', title: ACTION_TITLES['scan.close'], section: 'Data', hint: 'Close the scan and return to the start.' },

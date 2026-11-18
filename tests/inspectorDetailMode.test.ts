@@ -244,11 +244,12 @@ describe('Inspector Basic / Advanced', () => {
 
   it('Basic offers quick appearance shortcuts through the existing preset callbacks', () => {
     const onRgb = vi.fn();
-    const onEdl = vi.fn();
-    const ins = new Inspector({ ...fakeCallbacks(), onRgbAppearancePreset: onRgb, onEdlPreset: onEdl });
+    const ins = new Inspector({ ...fakeCallbacks(), onRgbAppearancePreset: onRgb });
     const quick = byClass(root(ins), 'olv-quick-appearance')!;
     expect(quick.classList.contains('olv-tier-basic')).toBe(true);
-    const [rgbRail, edlRail] = quick.children.slice(1);
+    // Only the RGB looks: EDL on/off is the Speed/Quality control's.
+    expect(quick.children.slice(1)).toHaveLength(1);
+    const [rgbRail] = quick.children.slice(1);
     // RGB looks appear only when the scan carries colour.
     ins.setColorModes(['elevation'], 'elevation');
     expect(rgbRail.classList.contains('olv-hidden')).toBe(true);
@@ -257,12 +258,9 @@ describe('Inspector Basic / Advanced', () => {
     expect(rgbRail.children.map((c) => c.textContent)).toEqual(['Natural', 'Photoreal', 'Survey', 'High Contrast']);
     rgbRail.children[1].click();
     expect(onRgb).toHaveBeenCalledWith('photoreal-rgb');
-    edlRail.children[0].click();
-    expect(onEdl).toHaveBeenCalledWith(null);
     // Renderer sync lights the shortcut too.
     ins.syncVisuals({ rgbAppearancePresetId: 'survey', edlPresetId: null, skyPresetId: 'black', temperature: 0, tint: 0 } as never);
     expect(rgbRail.children[2].classList.contains('olv-chip-active')).toBe(true);
-    expect(edlRail.children[0].classList.contains('olv-chip-active')).toBe(true);
   });
 
   it('the Layers section reparented into the Data workspace is never hidden by the mode', () => {

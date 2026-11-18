@@ -96,10 +96,10 @@ describe('readActiveTool', () => {
     expect(readActiveTool({ viewer: v, clipEnabled: false }).mode?.finish).toBeTypeOf('function');
   });
 
-  it('keeps clipping as a chip, never as the active operation', () => {
+  it('does not repeat the clip state, which the state strip carries, and never makes it the active operation', () => {
     const s = readActiveTool({ viewer: fakeViewer(), clipEnabled: true });
     expect(s.mode).toBeNull();
-    expect(s.chips).toEqual(['Clip on']);
+    expect(s.chips).toEqual([]);
   });
 });
 
@@ -163,12 +163,12 @@ describe('active-tool pill', () => {
     expect(h.cancel().getAttribute('aria-label')).toBe('Cancel measuring distance (Esc)');
   });
 
-  it('shows the clip chip beside an active tool, never alone', () => {
+  it('shows no clip chip beside an active tool: the state strip carries the clip state', () => {
     const h = harness();
     h.setClip(true); h.w.refresh();
     expect(h.visible()).toBe(false);
     h.v.setMeasureMode(true); h.mutate();
-    expect(h.chips()).toEqual(['Clip on']);
+    expect(h.chips()).toEqual([]);
     expect(h.label()).toBe('Measuring distance');
   });
 

@@ -145,14 +145,14 @@ export interface InspectorCallbacks {
   onRenameView: (index: number, name: string) => void;
   /** Delete a saved viewpoint by index. */
   onDeleteView: (index: number) => void;
-  /** Toggle Eye Dome Lighting depth shading. */
-  onEdlToggle: (on: boolean) => void;
+  /** Not drawn here any more: EDL on/off is the Speed/Quality control's. Callers may still pass it. */
+  onEdlToggle?: (on: boolean) => void;
   /** Set the EDL strength. */
   onEdlStrength: (strength: number) => void;
   /** Switch between adaptive and fixed point sizing. */
   onPointSizeMode: (mode: PointSizeMode) => void;
-  /** Toggle point-edge antialiasing. */
-  onAntialiasing: (on: boolean) => void;
+  /** Not drawn here any more: antialiasing is the Speed/Quality control's. Callers may still pass it. */
+  onAntialiasing?: (on: boolean) => void;
   /**
    * Toggle the two-finger twist + pinch + pan recogniser. `on = true` →
    * standard (decomposition). `on = false` → advanced (3-finger zoom).
@@ -265,12 +265,11 @@ const VISUALS_RGB_CHIPS: ReadonlyArray<{ id: string; label: string }> = [
 /** The RGB looks offered as Basic quick shortcuts. */
 const QUICK_RGB_IDS: readonly string[] = ['natural', 'photoreal-rgb', 'survey', 'high-contrast'];
 
-/** The four EDL chips (Off + three named presets). */
+/** The three named EDL presets. Off is the Speed/Quality control's. */
 const VISUALS_EDL_CHIPS: ReadonlyArray<{
   id: EdlPresetSelection;
   label: string;
 }> = [
-  { id: null, label: 'Off' },
   { id: 'subtle', label: 'Subtle' },
   { id: 'balanced', label: 'Balanced' },
   { id: 'inspection', label: 'Inspection' },
@@ -570,7 +569,6 @@ export class Inspector {
   private readonly _visualsEdlRail = el('div', { className: 'olv-chips' });
   /** Basic-only shortcuts onto a few of the same presets (same callbacks). */
   private readonly _quickRgbRail = el('div', { className: 'olv-chips olv-hidden' });
-  private readonly _quickEdlRail = el('div', { className: 'olv-chips' });
   private readonly _visualsSkyRail = el('div', { className: 'olv-chips' });
   /** Visuals Studio > Workflow preset rail (v0.4.5) + its "Custom" state chip. */
   private readonly _visualsWorkflowRail = el('div', { className: 'olv-chips' });
@@ -763,10 +761,8 @@ export class Inspector {
   // ── Rendering controls ──
   private readonly _pointSizeSlider: HTMLInputElement;
   private readonly _pointSizeValue: HTMLElement;
-  private readonly _edlChip: HTMLButtonElement;
   private readonly _edlStrengthSlider: HTMLInputElement;
   private readonly _edlStrengthRow: HTMLElement;
-  private readonly _aaChip: HTMLButtonElement;
   private readonly _touchChip: HTMLButtonElement;
   private readonly _sizeModeChips: { mode: PointSizeMode; chip: HTMLButtonElement }[];
   // ── Navigation controls (orbit invert X / Y + preset) ──
@@ -900,20 +896,8 @@ export class Inspector {
     // Point size now lives inside the merged Rendering body below as
     // a sub-group. The chips + slider are pulled in by reference.
 
-    // ── Rendering: Eye Dome Lighting toggle + strength, antialiasing ──
-    this._edlChip = toggleChip(
-      'Eye Dome Lighting',
-      'Toggle Eye Dome Lighting — depth shading that makes 3D structure far more readable',
-      (on) => {
-        this._edlStrengthRow.classList.toggle('olv-hidden', !on);
-        this._cb.onEdlToggle(on);
-      },
-    );
-    this._aaChip = toggleChip(
-      'Antialiasing',
-      'Toggle antialiasing — smooths the edge of every point',
-      (on) => this._cb.onAntialiasing(on),
-    );
+    // ── Rendering: EDL and antialiasing on/off live in the Speed/Quality
+    // control; the strength slider below follows it. ──
     // Touch model chip — active state means "Twist" gesture is enabled
     // (the default v0.3.7 standard model). Tapping it off switches to
     // the advanced model where 3 fingers dolly and 2 fingers twist+pan.
@@ -1014,7 +998,7 @@ export class Inspector {
       this._cb.onEdlStrength(this._edlStrengthSlider.valueAsNumber),
     );
     this._edlStrengthRow = el('div', { className: 'olv-render-row olv-hidden' }, [
-      el('span', { className: 'olv-render-label', text: 'Strength' }),
+      el('span', { className: 'olv-render-label', text: 'EDL strength' }),
       this._edlStrengthSlider,
     ]);
     // Rendering is the "technician's tool" — raw sliders + toggles.
@@ -1031,8 +1015,7 @@ export class Inspector {
       slider,
       adv(el('div', { className: 'olv-render-sublabel', text: 'Point appearance' })),
       adv(this._visualsSplatRail),
-      el('div', { className: 'olv-render-sublabel', text: 'Eye Dome Lighting' }),
-      el('div', { className: 'olv-chips' }, [this._edlChip, this._aaChip, this._touchChip]),
+      el('div', { className: 'olv-chips' }, [this._touchChip]),
       adv(this._edlStrengthRow),
       adv(navigationGroup),
     ]);
@@ -1258,12 +1241,6 @@ export class Inspector {
       chip.addEventListener('click', () => this._cb.onRgbAppearancePreset(def.id));
       this._quickRgbRail.append(chip);
     }
-    for (const def of VISUALS_EDL_CHIPS) {
-      const chip = el('button', { className: 'olv-chip', text: def.label, title: def.id === null ? 'Disable Eye Dome Lighting' : `Apply the ${def.label} EDL preset` });
-      chip.dataset.presetId = def.id ?? 'off';
-      chip.addEventListener('click', () => this._cb.onEdlPreset(def.id));
-      this._quickEdlRail.append(chip);
-    }
     for (const def of VISUALS_RGB_CHIPS) {
       const chip = el('button', {
         className: 'olv-chip',
@@ -1278,10 +1255,7 @@ export class Inspector {
       const chip = el('button', {
         className: 'olv-chip',
         text: def.label,
-        title:
-          def.id === null
-            ? 'Disable Eye Dome Lighting'
-            : `Apply the ${def.label} EDL preset`,
+        title: `Apply the ${def.label} EDL preset`,
       });
       chip.dataset.presetId = def.id ?? 'off';
       chip.addEventListener('click', () => this._cb.onEdlPreset(def.id));
@@ -1421,7 +1395,6 @@ export class Inspector {
       this._detailMode.basicOnly(el('div', { className: 'olv-section olv-quick-appearance' }, [
         el('div', { className: 'olv-visuals-group-label', text: 'Quick appearance' }),
         this._quickRgbRail,
-        this._quickEdlRail,
       ])),
       visualsStudioSection,
       this._renderingSection,
@@ -2239,7 +2212,7 @@ export class Inspector {
       const id = (chip as HTMLElement).dataset?.presetId;
       chip.classList.toggle('olv-chip-active', id === state.rgbAppearancePresetId && !(chip as HTMLButtonElement).disabled);
     }
-    for (const chip of [...this._visualsEdlRail.children, ...this._quickEdlRail.children]) {
+    for (const chip of this._visualsEdlRail.children) {
       const id = (chip as HTMLElement).dataset?.presetId;
       const wanted = state.edlPresetId ?? 'off';
       chip.classList.toggle('olv-chip-active', id === wanted);
@@ -2279,10 +2252,8 @@ export class Inspector {
   syncRendering(state: RenderingState): void {
     this._pointSizeSlider.value = String(state.pointSize);
     this._pointSizeValue.textContent = `${state.pointSize.toFixed(1)} px`;
-    this._edlChip.classList.toggle('olv-chip-active', state.edlEnabled);
     this._edlStrengthRow.classList.toggle('olv-hidden', !state.edlEnabled);
     this._edlStrengthSlider.value = String(state.edlStrength);
-    this._aaChip.classList.toggle('olv-chip-active', state.antialiasing);
     this._touchChip.classList.toggle('olv-chip-active', state.twoFingerTwistEnabled);
     for (const c of this._sizeModeChips) {
       c.chip.classList.toggle('olv-chip-active', c.mode === state.pointSizeMode);

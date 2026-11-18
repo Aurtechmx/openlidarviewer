@@ -45,7 +45,7 @@ export interface ToolDockCallbacks {
   onProbeToggle: () => void;
   /** Toggle annotation mode. */
   onAnnotateToggle: () => void;
-  /** Toggle the Terrain analysis panel (re-open it if it was closed). */
+  /** Open the Analyse tab (re-open its panel if it was closed). */
   onAnalyseToggle: () => void;
   /** Open the help overlay. */
   onHelp: () => void;
@@ -201,18 +201,18 @@ export class ToolDock {
         blur: true,
         onClick: callbacks.onAnnotateToggle,
       },
-      // Analyse re-opens the Terrain analysis panel. The panel can be closed
-      // (e.g. selecting the Profile measurement tucks it away to free the
-      // canvas), so a dock toggle guarantees a one-click way back to it.
+      // Analyse opens the Analyse tab. The panel can be closed (e.g. selecting
+      // the Profile measurement tucks it away to free the canvas), so a dock
+      // button guarantees a one-click way back to it. Not a toggle: the tab
+      // itself shows which mode is open, and a press never hides it.
       {
         id: 'tool.analyse',
         label: 'Analyse',
         title: 'Load a scan to enable terrain analysis',
-        enabledTitle: 'Show or hide the terrain analysis panel',
+        enabledTitle: 'Open the Analyse tab',
         icon: ICON_ANALYSE,
         classes: ['olv-tool-analyse'],
         disabled: true,
-        toggle: true,
         blur: true,
         onClick: callbacks.onAnalyseToggle,
       },
