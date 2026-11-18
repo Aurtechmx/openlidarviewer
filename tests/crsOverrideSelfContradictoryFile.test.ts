@@ -133,3 +133,45 @@ describe('a consistent file with a wrong-kind pick still fails closed', () => {
     expect(svc.context().metricClaimsPermitted).toBe(false);
   });
 });
+
+describe('a unit key in the file still counts when the table settles the kind', () => {
+  it('model type 2 + 3072=32612 + 3076=9002 (feet) picked as projected withholds the unit', () => {
+    const file = crsFromGeoTiff(geoKeys([[1024, 2], [3072, 32612], [3076, 9002]]), null, null);
+    const svc = pick(file, 32612, 'projected');
+    const crs = svc.current()!;
+    expect(crs.kind).toBe('projected');
+    expect(crs.epsg).toBe(32612);
+    expect(crs.linearUnit).toBe('unknown');
+    expect(crs.linearUnitToMetres).toBe(1);
+    expect(crs.linearUnitNote).toBe('ProjLinearUnitsGeoKey (3076) in the file declares international feet, but EPSG:32612 is defined in metres; the linear unit is withheld');
+    expect(svc.context().metricClaimsPermitted).toBe(false);
+    expect(svc.validation().canSaveMeasurement).toBe(false);
+  });
+
+  it('model type 2 + 3072=2229 + 3076=9001 (metre) picked as projected withholds the unit', () => {
+    const file = crsFromGeoTiff(geoKeys([[1024, 2], [3072, 2229], [3076, 9001]]), null, null);
+    const svc = pick(file, 2229, 'projected', false);
+    const crs = svc.current()!;
+    expect(crs.kind).toBe('projected');
+    expect(crs.linearUnit).toBe('unknown');
+    expect(crs.linearUnitNote).toContain('declares metres, but EPSG:2229 is defined in US survey feet');
+    expect(svc.context().metricClaimsPermitted).toBe(false);
+  });
+
+  it('a 3076 that agrees with the code resolves the unit', () => {
+    const file = crsFromGeoTiff(geoKeys([[1024, 2], [3072, 32612], [3076, 9001]]), null, null);
+    const svc = pick(file, 32612, 'projected');
+    const crs = svc.current()!;
+    expect(crs.linearUnit).toBe('metre');
+    expect(crs.linearUnitToMetres).toBe(1);
+    expect(crs.linearUnitNote).toBeUndefined();
+    expect(svc.context().metricClaimsPermitted).toBe(true);
+  });
+
+  it('a geographic unit key (2052) does not count against the projected pick', () => {
+    const file = crsFromGeoTiff(geoKeys([[1024, 2], [2052, 9002], [3072, 32612]]), null, null);
+    const crs = pick(file, 32612, 'projected').current()!;
+    expect(crs.linearUnit).toBe('metre');
+    expect(crs.linearUnitNote).toBeUndefined();
+  });
+});

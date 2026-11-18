@@ -79,6 +79,14 @@ export interface CrsInfo {
   readonly linearUnitByFactor?: true;
   /** Set when the horizontal unit's name disagrees with its factor, or is not one of the named units. */
   readonly linearUnitNote?: string;
+  /**
+   * The unit GeoTIFF ProjLinearUnitsGeoKey (3076) declares, as the file states
+   * it ('unknown' for a unit code other than 9001, 9002 or 9003); absent when
+   * the file has no 3076. Kept apart from `linearUnit`, and from
+   * GeogLinearUnitsGeoKey (2052), so a CRS chosen for the file's code can be
+   * checked against the unit key the file carries.
+   */
+  readonly projLinearUnitsKey?: CrsLinearUnit;
   /** Whether the CRS is geographic (lat/lon in degrees) vs projected (metres on a plane). */
   readonly isGeographic: boolean;
   /**
@@ -1258,9 +1266,7 @@ export function crsFromGeoTiff(
   let linearUnitNote: string | undefined;
   if (mappedUnit !== undefined && codeUnit !== null && codeUnit !== mappedUnit) {
     linearUnit = 'unknown';
-    linearUnitNote =
-      `ProjLinearUnitsGeoKey (3076) declares ${UNIT_WORDS[mappedUnit]}, but EPSG:${epsg} is defined in ` +
-      `${UNIT_WORDS[codeUnit] ?? 'a unit other than metres or feet'}; the linear unit is withheld`;
+    linearUnitNote = unitKeyContradictionNote('ProjLinearUnitsGeoKey (3076)', mappedUnit, epsg, codeUnit);
   } else if (mappedUnit !== undefined) linearUnit = mappedUnit;
   else if (isGeographic || declaredButUnresolved) linearUnit = 'unknown';
   else linearUnit = impliedProjectedLinearUnit(epsg);
@@ -1331,6 +1337,7 @@ export function crsFromGeoTiff(
     linearUnit,
     linearUnitToMetres,
     ...(linearUnitNote ? { linearUnitNote } : {}),
+    ...(projLinearUnitCode !== undefined ? { projLinearUnitsKey: GEOTIFF_LINEAR_UNITS[projLinearUnitCode] ?? 'unknown' } : {}),
     isGeographic,
     verticalEpsg,
     verticalDatum,
@@ -1345,6 +1352,17 @@ const UNIT_WORDS: Readonly<Partial<Record<string, string>>> = {
   foot: 'international feet',
   'us-survey-foot': 'US survey feet',
 };
+
+/**
+ * The note for a unit key that names another unit than the EPSG code defines:
+ * `who` is the key as the note names it, `declared` its unit, `codeUnit` the
+ * unit the code is defined in ('unknown' or 'other' for any unit that is not
+ * metres or feet).
+ */
+export function unitKeyContradictionNote(who: string, declared: string, epsg: number | undefined, codeUnit: string): string {
+  const other = 'a unit other than metres or feet';
+  return `${who} declares ${UNIT_WORDS[declared] ?? other}, but EPSG:${epsg} is defined in ${UNIT_WORDS[codeUnit] ?? other}; the linear unit is withheld`;
+}
 
 /** Parameters for {@link crsFromEpsg}. */
 export interface EpsgCrsParams {

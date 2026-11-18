@@ -161,6 +161,8 @@ export interface ResolvedCrs {
   readonly verticalLinearUnit?: CrsLinearUnit;
   /** See `CrsInfo.linearUnitByFactor`: a valid non-named horizontal unit, converted by its factor. */
   readonly linearUnitByFactor?: true;
+  /** See `CrsInfo.linearUnitNote`: why the horizontal unit reads as it does, or why it is withheld. */
+  readonly linearUnitNote?: string;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -269,6 +271,7 @@ export function resolvedFromCrsInfo(
     linearUnit: info.linearUnit,
     linearUnitToMetres: info.linearUnitToMetres,
     ...(info.linearUnitByFactor ? { linearUnitByFactor: true as const } : {}),
+    ...(info.linearUnitNote ? { linearUnitNote: info.linearUnitNote } : {}),
     // A LAS CRS read from an EVLR is labelled as such, not as a header VLR,
     // and a catalogue assertion as the catalogue's, not the file's.
     source: info.catalogue ? 'catalog-tile' : source === 'las-vlr' && info.record === 'evlr' ? 'las-evlr' : source,

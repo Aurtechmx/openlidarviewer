@@ -37,7 +37,7 @@ import {
   resolvedFromCrsInfo,
   unknownCrs,
 } from './CoordinateTypes';
-import type { CrsInfo, CrsLinearUnit } from '../io/crs';
+import { unitKeyContradictionNote, type CrsInfo, type CrsLinearUnit } from '../io/crs';
 import { epsgCrsKind, type EpsgCrsKind } from '../convert/epsg';
 import {
   validateCrsForMeasurement,
@@ -862,8 +862,8 @@ export class CrsService {
       return unresolved(`EPSG:${override.epsg} (not an EPSG code from 1024 to 99999)`);
     }
     // A registry entry, or the file's own declaration of this code, naming a
-    // different kind than the override is settled by the EPSG table, the one
-    // R11 reads. A session file or a catalogue record can claim projected for
+    // different kind than the override is settled by the EPSG table (the one
+    // `overrideCodeUnit` reads). A session file or a catalogue record can claim projected for
     // EPSG:4326, which read degrees as metres; a file's GeoKeys can claim
     // projected (GTModelType 1) for the geographic code 4326. When the table
     // names the override's kind, the override resolves with the table's unit
@@ -888,12 +888,19 @@ export class CrsService {
       const declared = fileDisagrees
         ? ` (the file declares ${entry ? `EPSG:${override.epsg}` : 'it'} as ${epsgKindOf(detectedKind)}; the code is ${override.kind})`
         : '';
+      // A ProjLinearUnitsGeoKey the file carries still counts: the table
+      // settles the kind, not which of two contradicting units is right.
+      const unitKey = confirmsDetected && override.kind === 'projected' ? detected.projLinearUnitsKey : undefined;
+      const keyContradicts = unitKey !== undefined && unitKey !== tableUnit.linearUnit;
       return {
         kind: override.kind,
         name: `${entry?.label ?? `EPSG:${override.epsg}`}${declared}`,
         epsg: override.epsg,
-        linearUnit: tableUnit.linearUnit,
-        linearUnitToMetres: tableUnit.linearUnitToMetres,
+        linearUnit: keyContradicts ? 'unknown' : tableUnit.linearUnit,
+        linearUnitToMetres: keyContradicts ? 1 : tableUnit.linearUnitToMetres,
+        ...(keyContradicts
+          ? { linearUnitNote: unitKeyContradictionNote('ProjLinearUnitsGeoKey (3076) in the file', unitKey, override.epsg, tableUnit.linearUnit) }
+          : {}),
         // The file's own WKT and datum describe the kind it got wrong, so
         // neither is carried; `_resolveDatum` fills the registry datum.
         source: 'user-override',
@@ -934,6 +941,7 @@ export class CrsService {
       linearUnit: unit.linearUnit,
       linearUnitToMetres: unit.linearUnitToMetres,
       ...(confirmsDetected && detected.linearUnitByFactor ? { linearUnitByFactor: true as const } : {}),
+      ...(confirmsDetected && detected.linearUnitNote ? { linearUnitNote: detected.linearUnitNote } : {}),
       // Horizontal datum: borrow the detector's WKT datum only when it described
       // this exact EPSG (so an override to a DIFFERENT EPSG drops the now-wrong
       // WKT datum); the registry fallback for the chosen EPSG is then applied
