@@ -952,3 +952,6 @@ export const loadExportDigests = () => import('./export/exportDigests');
  * Drainage sheet button, so a session that never prints one never downloads it.
  */
 export const loadFlowDrainageSheet = () => import('./export/flowDrainageSheetPdf');
+
+/** The abandoned-scan-store janitor; main.ts runs it once from the idle prewarm, off the boot path. */
+export const loadStoreJanitor = () => import('./io/heavy/opfsStoreJanitor');
