@@ -103,6 +103,10 @@
   background: var(--panel); border: 0.5px solid var(--hairline);
   border-radius: var(--radius-md); box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
 }
+/* A closed <details> hides its content without removing its boxes (Chromium
+   uses content-visibility), so geometry still reported the closed panel's links
+   below the header, over the landing mark. Closed, the panel has no box. */
+.olv-about:not([open]) > .olv-about-panel { display: none; }
 .olv-about-link {
   display: flex; align-items: center; min-height: 32px; padding: 0 var(--space-md);
   font-size: var(--text-xs); color: var(--text-dim); text-decoration: none;
