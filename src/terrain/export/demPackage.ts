@@ -47,6 +47,7 @@ import { writeAsciiGrid } from './demAsciiGrid';
 import { crsFromWkt, rasterHorizontalWkt } from '../../io/crs';
 import { compoundWkt, wktForEpsg } from '../../io/epsgWkt';
 import {
+  isGeoTiffEpsgCode,
   verticalUnitGeoKeyCode,
   resolveVerticalGeoKeys,
   verticalUnitName,
@@ -289,6 +290,12 @@ export interface DemReadmeOptions {
    * {@link resolveVerticalGeoKeys}. Omitted or `none` prints no line.
    */
   readonly verticalGeoKeys?: VerticalGeoKeyResolution | null;
+  /**
+   * A horizontal EPSG code the GeoTIFF keys cannot hold (see
+   * {@link isGeoTiffEpsgCode}), and whether a .prj from the source WKT is
+   * written. Omitted or null prints no line.
+   */
+  readonly unstoredEpsg?: { readonly epsg: number; readonly inPrj: boolean } | null;
   /** The NoData value every raster in the package declares. Default -9999. */
   readonly noData?: number;
   /**
@@ -376,6 +383,19 @@ export function verticalCrsReadmeLines(res: VerticalGeoKeyResolution | null | un
     why = `The source gave ${vcrsLabel(res.requestedEpsg)} but no recognised height unit, so the code's own unit cannot be checked against the heights.`;
   }
   return [`  Vertical CRS   not written to the DTM and DSM GeoTIFFs.`, ...wrapReadme(`${why} ${tail}`, pad)];
+}
+
+/**
+ * The README line for a horizontal EPSG code the GeoTIFF keys cannot hold:
+ * the rasters carry no CRS key, and the CRS is in the .prj when the source WKT
+ * gave one.
+ */
+function unstoredEpsgReadmeLines(u: { readonly epsg: number; readonly inPrj: boolean } | null | undefined): string[] {
+  if (u == null) return [];
+  const pad = '                 ';
+  const where = u.inPrj ? 'the CRS is in the .prj only.' : 'the rasters carry no CRS.';
+  const lines = wrapReadme(`EPSG:${u.epsg} cannot be stored in GeoTIFF keys; ${where}`, pad);
+  return lines.map((l, i) => (i === 0 ? `  CRS            ${l.slice(pad.length)}` : l));
 }
 
 /** Wrap prose to README width under a fixed indent. */
@@ -600,7 +620,7 @@ export function buildDemReadme(opts: DemReadmeOptions): string {
     `  Coverage       ${pct(cov.measured)} measured, ${pct(cov.interp)} interpolated`,
     ...(opts.placed === false
       ? ['  Frame          local frame, not georeferenced; elevations recentred']
-      : []),
+      : unstoredEpsgReadmeLines(opts.unstoredEpsg)),
     opts.placed === false
       ? `  Bounds (local offsets in the project frame, ${hUnit})`
       : `  Bounds (CRS units, ${isGeographic ? 'lon/lat degrees' : 'projected'})`,
@@ -776,9 +796,12 @@ export function assembleDemPackage(
   const verticalGeoKeys = resolveVerticalGeoKeys(verticalEpsg, verticalUnitCode);
   const isGeographic = options.isGeographic ?? false;
 
+  // A code the GeoTIFF keys cannot hold is not written to the rasters, and no
+  // .prj is derived from it: only a source WKT can supply one.
+  const unstorableEpsg = epsg != null && !isGeoTiffEpsgCode(epsg);
   // ASCII Grid readers discover a .prj only under the raster's own stem.
   const horizontalWkt = placed
-    ? rasterHorizontalWkt(options.wkt ?? wktForEpsg(epsg))
+    ? rasterHorizontalWkt(options.wkt ?? (unstorableEpsg ? null : wktForEpsg(epsg)))
     : null;
   let elevationWkt = horizontalWkt;
   if (horizontalWkt && verticalGeoKeys.status === 'written') {
@@ -1014,6 +1037,7 @@ export function assembleDemPackage(
     placed,
     verticalUnitToMetres: options.verticalUnitToMetres ?? null,
     verticalGeoKeys,
+    unstoredEpsg: unstorableEpsg ? { epsg, inPrj: horizontalWkt != null || !!options.wkt } : null,
     noData: packageNoData,
     result,
     basename,
