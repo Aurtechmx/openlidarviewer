@@ -184,9 +184,12 @@ export function createStateStrip(host: StateStripHost): StateStrip {
         ? 'Only the points currently in memory, not the whole file.'
         : '';
       // The count wording is the shared one; the side kept is said beside it.
-      const phrase = s.clip ? clipModePhrase(s.clip) : '';
-      paint('clip', s.clip ? `${clipStatusText(s.clip)}${phrase ? ` · ${phrase}` : ''}` : null, s.clip ? 'info' : null);
-      clipOff.hidden = !s.clip;
+      // A scan with no count (a streamed one) still says the clip is on, and which side.
+      const side = s.clip?.mode ?? s.clipOn ?? undefined;
+      const phrase = side ? clipModePhrase({ kept: 0, total: 0, mode: side }) : '';
+      const clipText = s.clip ? clipStatusText(s.clip) : s.clipOn ? 'Clip on' : null;
+      paint('clip', clipText === null ? null : `${clipText}${phrase ? ` · ${phrase}` : ''}`, clipText === null ? null : 'info');
+      clipOff.hidden = clipText === null;
       const p = s.processing?.value;
       paint(
         'processing',

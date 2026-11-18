@@ -23,7 +23,7 @@
 import { el } from './dom';
 import type { ClipBox, ClipMode } from '../render/clip/clipBox';
 import type { BoxBounds } from '../render/measure/geometry';
-import { setClipScope, setClipTurnOff } from '../render/clip/clipScope';
+import { setClipOn, setClipScope, setClipTurnOff } from '../render/clip/clipScope';
 
 export { fitBoundsInProject } from '../render/clip/fitBoundsInProject';
 
@@ -320,6 +320,7 @@ export class ClipPanel {
       this._cb.onApply(null);
       this._cb.onOutline?.(null, false);
       setClipScope(null);
+      setClipOn(null);
       this._renderOff();
       this._emit();
     } else {
@@ -370,6 +371,7 @@ export class ClipPanel {
   /** Drop pending work; the panel stays usable but no queued count lands. */
   dispose(): void {
     this._cancelCount();
+    setClipTurnOff(null);
   }
 
   /**
@@ -399,6 +401,7 @@ export class ClipPanel {
     } else {
       this._renderOff();
       setClipScope(null);
+      setClipOn(null);
     }
     this._emit();
   }
@@ -640,12 +643,14 @@ export class ClipPanel {
     if (this._enabled) {
       // The clip scope keeps its last value until the new count lands, so its
       // consumers see one settled figure rather than a gap.
+      setClipOn(this._mode);
       this._markCounting();
       this._scheduleCount();
     } else {
       this._hasCount = false;
       this._renderOff();
       setClipScope(null);
+      setClipOn(null);
     }
   }
 
@@ -696,6 +701,8 @@ export class ClipPanel {
     this._hasCount = c !== null;
     this._syncTurnOff();
     setClipScope(c ? { kept: c.kept, total: c.total, mode: this._mode } : null);
+    // A streamed scan has no count, but the clip is on and the strip says so.
+    setClipOn(this._enabled ? this._mode : null);
   }
 }
 

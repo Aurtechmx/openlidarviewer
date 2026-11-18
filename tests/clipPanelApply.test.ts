@@ -13,7 +13,7 @@
 
 import { describe, it, expect, beforeAll, beforeEach, afterEach, vi } from 'vitest';
 import type { ClipBox } from '../src/render/clip/clipBox';
-import { clipScope } from '../src/render/clip/clipScope';
+import { clipOn, clipScope, clipTurnOff } from '../src/render/clip/clipScope';
 import { FakeEl, installFakeDom } from './support/measurePanelDom';
 
 beforeAll(() => {
@@ -127,6 +127,24 @@ describe('ClipPanel responsiveness (spec 6B)', () => {
       vi.advanceTimersByTime(t.wait * 2);
       expect(t.counts()).toBe(before);
     }
+  });
+
+  it('records that the clip is on and its side even before a count lands, and clears it when off', async () => {
+    const t = await make();
+    t.panel.adoptBounds(clip([0, 0, 0], [1, 1, 1], 'keep-outside'));
+    expect(clipOn()).toBe('keep-outside');
+    t.panel.clear();
+    expect(clipOn()).toBeNull();
+  });
+
+  it('registers the strip Turn off, and dispose clears the registration', async () => {
+    const t = await make();
+    t.panel.adoptBounds(clip([0, 0, 0], [1, 1, 1]));
+    expect(clipTurnOff()).toBeTypeOf('function');
+    clipTurnOff()!();
+    expect(t.panel.enabled).toBe(false);
+    t.panel.dispose();
+    expect(clipTurnOff()).toBeNull();
   });
 
   it('invalidateCount recounts against the new data', async () => {

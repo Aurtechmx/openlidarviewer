@@ -44,6 +44,19 @@ export function setClipScope(next: ClipScope | null): void {
   for (const fn of listeners) fn();
 }
 
+let clipOnMode: 'keep-inside' | 'keep-outside' | null = null;
+
+/** Which side a clip that is ON keeps, or null when no clip is on. Set whether or not a count exists. */
+export function clipOn(): 'keep-inside' | 'keep-outside' | null {
+  return clipOnMode;
+}
+
+export function setClipOn(mode: 'keep-inside' | 'keep-outside' | null): void {
+  if (mode === clipOnMode) return;
+  clipOnMode = mode;
+  for (const fn of listeners) fn();
+}
+
 export function subscribeClipScope(fn: () => void): () => void {
   listeners.add(fn);
   return () => listeners.delete(fn);

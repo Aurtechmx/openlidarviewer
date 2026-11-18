@@ -51,6 +51,8 @@
 .olv-ss-item:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
 .olv-ss-text { overflow: hidden; text-overflow: ellipsis; max-width: 36ch; }
 .olv-ss-dataset .olv-ss-text { color: var(--text); }
+/* The clip item carries the side kept after its count; that phrase must not be cut. */
+.olv-ss-clip .olv-ss-text { max-width: none; overflow: visible; text-overflow: clip; }
 .olv-ss-glyph { flex: none; }
 .olv-ss-wait { flex: none; font-variant-numeric: tabular-nums; }
 /* The elapsed time stays out of the button's text (stateStrip.ts). */

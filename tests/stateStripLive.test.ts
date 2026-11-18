@@ -194,6 +194,33 @@ describe('strip UI', () => {
     expect(open).toHaveBeenCalledWith('clip');
   });
 
+  it('shows the clip item with the side kept and Turn off when there is no count, and hides it when clip is off', async () => {
+    const { createStateStrip } = await import('../src/ui/stateStrip');
+    const strip = createStateStrip({ open: vi.fn() });
+    const root = strip.element as unknown as FakeEl;
+    const item = () => root.querySelector('.olv-ss-clip')!;
+    const off = () => root.querySelector('.olv-ss-clipoff')!;
+    // A streamed scan: clip on, no kept count.
+    strip.render(readStrip(reads({ clip: () => null, clipOn: () => 'keep-inside' })));
+    expect(item().hidden).toBe(false);
+    expect(item().textContent).toBe('Clip on · Showing inside box');
+    expect(off().hidden).toBe(false);
+    strip.render(readStrip(reads({ clip: () => null, clipOn: () => 'keep-outside' })));
+    expect(item().textContent).toBe('Clip on · Showing outside box');
+    // Counted: the protected phrase, then the side.
+    strip.render(readStrip(reads({ clip: () => ({ kept: 1234, total: 3600, mode: 'keep-inside' }), clipOn: () => 'keep-inside' })));
+    expect(item().textContent).toBe(`Clipped: ${(1234).toLocaleString()} of ${(3600).toLocaleString()} points · Showing inside box`);
+    // Off: both go.
+    strip.render(readStrip(reads({ clip: () => null, clipOn: () => null })));
+    expect(item().hidden).toBe(true);
+    expect(off().hidden).toBe(true);
+  });
+
+  it('does not cap the clip item text, so the side phrase is never cut', async () => {
+    const css = (await import('node:fs')).readFileSync(new URL('../src/ui/stateStrip.css', import.meta.url), 'utf8');
+    expect(css).toMatch(/\.olv-ss-clip \.olv-ss-text\s*\{[^}]*max-width:\s*none/);
+  });
+
   it('says which side of the box is kept, and offers Turn off beside the clip item', async () => {
     const { createStateStrip } = await import('../src/ui/stateStrip');
     const { setClipTurnOff } = await import('../src/render/clip/clipScope');
