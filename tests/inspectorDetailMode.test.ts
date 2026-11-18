@@ -268,6 +268,37 @@ describe('Inspector Basic / Advanced', () => {
     expect(rgbRail.children[2].classList.contains('olv-chip-active')).toBe(true);
   });
 
+  it('Basic shows the one EDL strength slider while EDL is on and hides it while EDL is off', () => {
+    const onStrength = vi.fn();
+    const ins = new Inspector({ ...fakeCallbacks(), onEdlStrength: onStrength });
+    const rendering = (edlEnabled: boolean) => ({
+      pointSize: 2, edlEnabled, edlStrength: 0.8, pointSizeMode: 'adaptive', antialiasing: true,
+      twoFingerTwistEnabled: true, splatMode: 'round',
+    }) as never;
+    const label = deepest(root(ins), 'EDL strength')!;
+    const row = label.parent!;
+    const sliders = root(ins).querySelectorAll('input').filter((n) => n.type === 'range' && n.title.includes('depth shading'));
+    // One control, not a Basic copy beside the Advanced one.
+    expect(sliders).toHaveLength(1);
+    expect(sliders[0].parent).toBe(row);
+    const shown = (): boolean => !tierHidden(ins, row) && !row.classList.contains('olv-hidden');
+    expect(ins.detailMode()).toBe('basic');
+    ins.syncRendering(rendering(true));
+    expect(shown()).toBe(true);
+    expect(sliders[0].value).toBe('0.8');
+    ins.syncRendering(rendering(false));
+    expect(shown()).toBe(false);
+    // The same slider in Advanced, following the same state.
+    ins.setDetailMode('advanced');
+    expect(shown()).toBe(false);
+    ins.syncRendering(rendering(true));
+    expect(shown()).toBe(true);
+    ins.setDetailMode('basic');
+    expect(shown()).toBe(true);
+    sliders[0].dispatchEvent({ type: 'input' });
+    expect(onStrength).toHaveBeenCalledTimes(1);
+  });
+
   it('the Layers section reparented into the Data workspace is never hidden by the mode', () => {
     const ins = new Inspector(fakeCallbacks());
     const { layers } = ins.workspaceDataElements();

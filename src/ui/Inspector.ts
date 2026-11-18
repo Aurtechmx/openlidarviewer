@@ -1011,7 +1011,8 @@ export class Inspector {
       adv(el('div', { className: 'olv-render-sublabel', text: 'Point appearance' })),
       adv(this._visualsSplatRail),
       el('div', { className: 'olv-chips' }, [this._touchChip]),
-      adv(this._edlStrengthRow),
+      // Basic and Advanced: the one EDL strength control, shown while EDL is on.
+      this._edlStrengthRow,
       adv(navigationGroup),
     ]);
 
