@@ -179,6 +179,24 @@ describe('strip UI', () => {
     expect(open).toHaveBeenCalledWith('crs');
   });
 
+  it('hides the processing item when the task leaves, with no task text left behind', async () => {
+    const { createStateStrip } = await import('../src/ui/stateStrip');
+    const strip = createStateStrip({ open: vi.fn() });
+    const root = strip.element as unknown as FakeEl;
+    const btn = () => root.querySelector('.olv-ss-processing')!;
+    strip.render(readStrip(reads({ tasks: () => [{ id: 1, label: 'Loading current view…', progress: 0.2, elapsedMs: 0, remainingMs: null }] })));
+    expect(btn().hidden).toBe(false);
+    expect(btn().textContent).toBe('Loading current view… 20%');
+    strip.render(readStrip(reads({ tasks: () => [] })));
+    expect(btn().hidden).toBe(true);
+    expect(btn().textContent).toBe('');
+    expect(btn().getAttribute('aria-label')).toBeNull();
+    // A task that starts again is painted afresh.
+    strip.render(readStrip(reads({ tasks: () => [{ id: 2, label: 'Exporting', progress: null, elapsedMs: 0, remainingMs: null }] })));
+    expect(btn().hidden).toBe(false);
+    expect(btn().textContent).toBe('Exporting');
+  });
+
   it('shows an active clip with its kept count, and hides the item when no clip is on', async () => {
     const { createStateStrip } = await import('../src/ui/stateStrip');
     const open = vi.fn();

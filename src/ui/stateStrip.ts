@@ -97,7 +97,12 @@ export function createStateStrip(host: StateStripHost): StateStrip {
     if (b.dataset.key === key) return;
     b.dataset.key = key;
     if (text === null) {
+      // A hidden item keeps no text: a task that has left must not stay in the
+      // DOM or in the accessible name under a hidden processing item.
       b.hidden = true;
+      b.replaceChildren();
+      b.removeAttribute('aria-label');
+      b.dataset.validity = '';
       return;
     }
     b.hidden = false;
