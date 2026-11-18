@@ -869,11 +869,17 @@ export class CrsService {
     // names the override's kind, the override resolves with the table's unit
     // and its label says the file's declaration contradicted it. Otherwise it
     // stays unresolved and its label names what disagrees with what.
+    // A code the table knows, of another kind than the override, never
+    // resolves, even when the file names the same wrong kind: a confirmed
+    // "projected 4269" read degrees as metres.
+    const tableKind = epsgCrsKind(override.epsg).kind;
+    if (tableKind !== 'unknown' && tableKind !== override.kind) {
+      return unresolved(`EPSG:${override.epsg} (the code is ${articleFor(tableKind)} ${tableKind} CRS, not ${override.kind})`);
+    }
     const detectedKind = confirmsDetected ? resolvedFromCrsInfo(detected, 'user-override')?.kind : undefined;
     const entryDisagrees = entry !== undefined && entry.kind !== override.kind;
     const fileDisagrees = detectedKind !== undefined && detectedKind !== override.kind;
     if (entryDisagrees || fileDisagrees) {
-      const tableKind = epsgCrsKind(override.epsg).kind;
       const tableUnit = (override.kind === 'projected' || override.kind === 'geographic') && tableKind === override.kind
         ? overrideCodeUnit(override.epsg, override.kind)
         : undefined;

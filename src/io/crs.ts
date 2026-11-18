@@ -1264,7 +1264,14 @@ export function crsFromGeoTiff(
   const codeUnit = code?.kind === 'projected' ? code.unit : null;
   let linearUnit: CrsLinearUnit;
   let linearUnitNote: string | undefined;
-  if (mappedUnit !== undefined && codeUnit !== null && codeUnit !== mappedUnit) {
+  // A 3072 that holds a code the table knows is not projected (4326, 4269,
+  // the vertical 5703) names no projected CRS, so no unit is read for it: a
+  // 3076=9001 beside it read degrees as metres.
+  const codeNotProjected = code !== undefined && projected !== undefined && code.kind !== 'unknown' && code.kind !== 'projected';
+  if (codeNotProjected) {
+    linearUnit = 'unknown';
+    linearUnitNote = `ProjectedCRSGeoKey (3072) holds EPSG:${epsg}, ${code.kind === 'engineering' ? 'an' : 'a'} ${code.kind} CRS, not a projected one; the linear unit is withheld`;
+  } else if (mappedUnit !== undefined && codeUnit !== null && codeUnit !== mappedUnit) {
     linearUnit = 'unknown';
     linearUnitNote = unitKeyContradictionNote('ProjLinearUnitsGeoKey (3076)', mappedUnit, epsg, codeUnit);
   } else if (mappedUnit !== undefined) linearUnit = mappedUnit;
