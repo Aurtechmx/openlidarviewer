@@ -1,6 +1,6 @@
 import { test, expect, type Page } from '@playwright/test';
 import { readFileSync } from 'node:fs';
-import { dropDenseGridPly, dropDenseGridUtmLas, openAnalysePage, openAnalysePanel } from './helpers';
+import { dropDenseGridPly, dropDenseGridUtmLas, openAnalysePage, openAnalysePanel, showWorkspaceMode } from './helpers';
 import { extractEntry } from '../helpers/zipReader';
 
 /**
@@ -56,8 +56,10 @@ test('the Analyse dock button re-opens the panel after it is closed', async ({ p
   const analyseBtn = page.locator('.olv-dock .olv-tool', { hasText: /^Analyse$/ });
   await expect(analyseBtn).toBeEnabled();
 
-  // Toggle it closed, then re-open it with the dock button — the recovery path.
-  await analyseBtn.click();
+  // Leave Analyse for another workspace tab, which hides the panel, then
+  // re-open it with the dock button — the recovery path. The dock button only
+  // opens; it is not a toggle.
+  await showWorkspaceMode(page, 'data');
   await expect(panel).toBeHidden();
   await analyseBtn.click();
   await expect(panel).toBeVisible();
