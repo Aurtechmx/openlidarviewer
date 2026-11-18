@@ -77,7 +77,16 @@ export interface CrsInfo {
    * unknown one whose `linearUnitToMetres` is only the inert placeholder 1.
    */
   readonly linearUnitByFactor?: true;
-  /** Set when the horizontal unit's name disagrees with its factor, or is not one of the named units. */
+  /**
+   * Why the horizontal unit reads as it does, or why it is withheld. Set when
+   * the unit's name disagrees with its factor, or is not one of the named
+   * units; and when GeoKeys contradict the CRS code: a ProjLinearUnitsGeoKey
+   * (3076) that names another unit than the EPSG code defines, or a
+   * ProjectedCRSGeoKey (3072) holding a code the EPSG table says is not
+   * projected. In those two cases `linearUnit` is 'unknown' with the
+   * placeholder factor 1, so metric claims are withheld. The Inspector shows
+   * the note.
+   */
   readonly linearUnitNote?: string;
   /**
    * The unit GeoTIFF ProjLinearUnitsGeoKey (3076) declares, as the file states
