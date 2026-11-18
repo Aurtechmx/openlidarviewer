@@ -35,6 +35,8 @@ interface Api {
 }
 const api = <T>(page: Page, fn: (a: Api) => T): Promise<T> =>
   page.evaluate(`(${fn.toString()})(window.__OLV_TEST_API__)`) as Promise<T>;
+/** A count as the page writes it (the browser's en-US default). */
+const fmt = (n: number): string => n.toLocaleString('en-US');
 
 async function openTower(page: Page, size = { width: 1100, height: 700 }): Promise<void> {
   await page.setViewportSize(size);
@@ -206,6 +208,8 @@ test('a box drawn on the ground isolates a 3D volume, not a slab, and the points
   expect(s.clip!.box.max[2]).toBeGreaterThanOrEqual(TOP);
   // Kept is the whole column: ground in the footprint AND the tower above it.
   expect(s.count).toEqual({ kept: want.inside, total: want.total });
+  // The strip states the same count and the side kept, word for word.
+  await expect(page.locator('.olv-ss-clip')).toHaveText(`Clipped: ${fmt(want.inside)} of ${fmt(want.total)} points · Showing inside box`);
   expect(want.inside).toBeGreaterThan(5000);
   expect(want.inside).toBeLessThan(want.total / 2);
 
@@ -257,6 +261,7 @@ test('Outside mode removes the volume; Fit to scan, a numeric edit and Clear all
   expect(out[3]).toBeGreaterThan(8);
   const st = await api(page, (a) => a.getClipState());
   expect(st.count).toEqual({ kept: want.total - want.inside, total: want.total });
+  await expect(page.locator('.olv-ss-clip')).toHaveText(`Clipped: ${fmt(want.total - want.inside)} of ${fmt(want.total)} points · Showing outside box`);
 
   // Back to Inside, then a numeric edit: pull the x maximum to the tower's west side.
   await clip.locator('.olv-bc-pill', { hasText: 'Inside' }).click();
@@ -272,6 +277,12 @@ test('Outside mode removes the volume; Fit to scan, a numeric edit and Clear all
   // Fit to scan: the box is the whole scan again, so everything draws.
   await clip.getByRole('button', { name: 'Fit to scan' }).click();
   await drawn(page, probe, allLit, 'Fit to scan draws everything again');
+  // A clip that keeps every point says so on screen, never "Clipped: n of n".
+  const keepsAll = page.locator('.olv-ss-clip');
+  await expect(keepsAll).toHaveText(`Clip on: keeps all ${fmt(want.total)} points · Showing inside box`);
+  await expect(keepsAll).toBeVisible();
+  await expect(keepsAll).toBeInViewport();
+  expect((await api(page, (a) => a.getClipState())).count).toEqual({ kept: want.total, total: want.total });
 
   // Turn off: off, everything draws.
   await clip.getByRole('button', { name: 'Turn off' }).click();

@@ -57,13 +57,12 @@ test('Clip page: Draw clipping box → Isolate this box → chip → Keep inside
   await card.getByRole('button', { name: /Isolate this box/ }).click();
 
   await expect(chip).toBeVisible();
-  await expect(chip).toContainText('Showing inside box');
+  await expect(chip).toHaveText(/^Clipped: [\d,]+ of 3,600 points · Showing inside box$/);
   await expect(card).toBeHidden();
-  await expect(page.locator('.olv-ss-clip')).toContainText(/Clipped: [\d,]+ of 3,600 points/);
 
   await openToolPage(page, 'Clip box');
   await clip.locator('.olv-bc-pill', { hasText: 'Outside' }).click();
-  await expect(chip).toContainText('Showing outside box');
+  await expect(chip).toHaveText(/^Clipped: [\d,]+ of 3,600 points · Showing outside box$/);
 
   await clip.locator('summary', { hasText: 'Advanced' }).click();
   const xMax = clip.locator('input.olv-clip-num').nth(1);
