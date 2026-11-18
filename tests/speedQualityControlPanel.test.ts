@@ -233,6 +233,25 @@ describe('Speed ↔ Quality control — live rendering state', () => {
   });
 });
 
+describe('Speed ↔ Quality control — header lift', () => {
+  it('releases the header lift when disposed while open, leaving no entry behind', async () => {
+    const { HEADER_LIFT_CLASS, setHeaderPopoverOpen } = await import('../src/ui/headerLift');
+    const header = new FakeEl('header');
+    header.className = 'olv-topbar';
+    const { control, root } = await makeControl();
+    header.append(root);
+    await control.open();
+    expect(header.classList.contains(HEADER_LIFT_CLASS)).toBe(true);
+    control.dispose();
+    expect(header.classList.contains(HEADER_LIFT_CLASS)).toBe(false);
+    const other = new FakeEl('details');
+    header.append(other);
+    setHeaderPopoverOpen(other as unknown as Element, true);
+    setHeaderPopoverOpen(other as unknown as Element, false);
+    expect(header.classList.contains(HEADER_LIFT_CLASS)).toBe(false);
+  });
+});
+
 describe('Speed ↔ Quality control — mounting', () => {
   it('applies once at construction, marked as not user-initiated', async () => {
     const { applied, persisted } = await makeControl();

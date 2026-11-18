@@ -208,6 +208,7 @@ export class QualityControl {
     if (this._precisionTimer !== null) clearInterval(this._precisionTimer);
     document.removeEventListener('pointerdown', this._onDocumentPointerDown, true);
     document.removeEventListener('keydown', this._onDocumentKeyDown);
+    setHeaderPopoverOpen(this.element, false);
   }
 
   /** Build the panel on first open; later opens reuse it. Busy + failure

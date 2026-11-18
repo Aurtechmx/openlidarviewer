@@ -430,6 +430,7 @@ export class Stage {
     about.addEventListener('toggle', () => {
       setHeaderPopoverOpen(about, about.open);
     });
+    this.addTeardown(() => setHeaderPopoverOpen(about, false));
     about.addEventListener('focusout', (e) => {
       const next = e.relatedTarget;
       if (about.open && !(next instanceof Node && about.contains(next))) about.open = false;

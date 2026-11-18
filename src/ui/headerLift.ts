@@ -14,12 +14,17 @@ export const HEADER_LIFT_CLASS = 'olv-topbar-popover-open';
 
 /**
  * Each open popover and the header it lifted. The header is remembered on open,
- * so a popover that closes after leaving the page still releases it.
+ * so a popover that closes after leaving the page still releases it. Owners
+ * close their popover here on dispose (Stage, QualityControl), so no entry
+ * outlives them.
  */
 const openPopovers = new Map<Element, Element>();
 
 /** Record that `popover` opened or closed, and lift its header while any of its popovers is open. */
 export function setHeaderPopoverOpen(popover: Element, isOpen: boolean): void {
+  // Closing a popover that is not open changes nothing (a repeated close, or a
+  // dispose after the popover already closed).
+  if (!isOpen && !openPopovers.has(popover)) return;
   const header = openPopovers.get(popover) ?? popover.closest('.olv-topbar');
   if (!header) return;
   if (isOpen) openPopovers.set(popover, header);
