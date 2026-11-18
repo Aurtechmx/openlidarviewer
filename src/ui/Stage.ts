@@ -3,6 +3,7 @@ import { SOURCE_FORMATS, XYZ_ALIAS_EXTENSIONS } from '../io/sniffFormat';
 import { openConfirm } from './Modal';
 import { FullscreenToggle } from './FullscreenToggle';
 import { announcePolite } from './politeAnnounce';
+import { setHeaderPopoverOpen } from './headerLift';
 import { UrlFieldMessage } from './urlFieldMessage';
 import { formatByteSize as formatBytes } from '../io/formatByteSize';
 import { isMobileDevice } from './isMobileDevice';
@@ -424,9 +425,10 @@ export class Stage {
       }
     });
     // The header's own z-index traps its children below the rails, so lift it
-    // while the menu is open (the same lift the Performance panel uses).
+    // while the menu is open. The Performance panel shares the lift, which stays
+    // while either is open (headerLift.ts).
     about.addEventListener('toggle', () => {
-      about.closest('.olv-topbar')?.classList.toggle('olv-topbar-popover-open', about.open);
+      setHeaderPopoverOpen(about, about.open);
     });
     about.addEventListener('focusout', (e) => {
       const next = e.relatedTarget;

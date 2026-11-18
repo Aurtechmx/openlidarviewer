@@ -18,6 +18,7 @@
  */
 
 import { el } from './dom';
+import { setHeaderPopoverOpen } from './headerLift';
 import { loadQualityPanel } from '../lazyChunks';
 import type { QualityPanel } from './QualityPanel';
 import type { PrecisionDeps } from '../app/precisionCheck';
@@ -264,8 +265,9 @@ export class QualityControl {
     // The header carries its own z-index, which makes it a stacking context: a
     // panel opened from inside it cannot paint above the rails however high its
     // own z-index reads, and this one opened underneath the right rail. Lift
-    // the header itself while the panel is open. The header stays
+    // the header itself while the panel is open; About shares the lift, which
+    // stays while either is open (headerLift.ts). The header stays
     // click-through, so nothing beneath it loses a click.
-    this.element.closest('.olv-topbar')?.classList.toggle('olv-topbar-popover-open', open);
+    setHeaderPopoverOpen(this.element, open);
   }
 }
