@@ -777,12 +777,14 @@ describe('a coordinate reference system that is absent or unresolvable', () => {
     expect(noUnitDeclared.linearUnit).toBe('metre');
     expect(noUnitDeclared.linearUnit).not.toBe(declaredUnknownUnit.linearUnit);
 
-    // The three codes we do resolve are unaffected.
-    for (const [code, unit] of [[9001, 'metre'], [9002, 'foot'], [9003, 'us-survey-foot']] as const) {
+    // The three codes we do resolve are unaffected, each with a projected code
+    // defined in that unit (27700 metres, 2222 feet, 2229 US survey feet). A
+    // unit code the EPSG code contradicts is withheld: 27700 is in metres.
+    for (const [epsg, code, unit] of [[27700, 9001, 'metre'], [2222, 9002, 'foot'], [2229, 9003, 'us-survey-foot'], [27700, 9002, 'unknown']] as const) {
       const crs = crsFromGeoTiff(
         geoKeyDirectory([
           [GEOKEY_MODEL_TYPE, 1],
-          [GEOKEY_PROJECTED_CRS, 27700],
+          [GEOKEY_PROJECTED_CRS, epsg],
           [GEOKEY_PROJ_LINEAR_UNITS, code],
         ]),
         null,

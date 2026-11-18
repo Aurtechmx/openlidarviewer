@@ -38,6 +38,7 @@ import {
   type WktNode,
 } from './wktParser';
 import { getCrsEntry } from '../geo/CrsRegistry';
+import { epsgCrsKind } from '../convert/epsg';
 import { knownVerticalCrs, resolveVerticalEpsg, sameDatumVariantInUnit } from '../geo/height';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -1122,7 +1123,8 @@ export function crsFromGeoTiff(
   let projectedCitationCount: number | undefined;
   let geodeticCitationOffset: number | undefined;
   let geodeticCitationCount: number | undefined;
-  let linearUnitCode: number | undefined;
+  let projLinearUnitCode: number | undefined;
+  let geogLinearUnitCode: number | undefined;
   let verticalCrs: number | undefined;
   let verticalUnitCode: number | undefined;
   let verticalCitationOffset: number | undefined;
@@ -1158,8 +1160,10 @@ export function crsFromGeoTiff(
         }
         break;
       case GEOKEY_PROJ_LINEAR_UNITS:
+        projLinearUnitCode = value;
+        break;
       case GEOKEY_GEOGRAPHIC_LINEAR_UNITS:
-        linearUnitCode = value;
+        geogLinearUnitCode = value;
         break;
       case GEOKEY_VERTICAL_CRS:
         verticalCrs = value;
@@ -1227,22 +1231,38 @@ export function crsFromGeoTiff(
     geodeticCitationCount,
   );
 
+  // GeogLinearUnitsGeoKey (2052) is the linear unit of a geographic or
+  // geocentric CRS. A projected CRS's unit is ProjLinearUnitsGeoKey (3076)
+  // alone: a 2229 file (US survey feet) with only 2052=9001 read as metres.
+  const linearUnitCode = isGeographic || geocentric ? projLinearUnitCode ?? geogLinearUnitCode : projLinearUnitCode;
   const mappedUnit = linearUnitCode !== undefined ? GEOTIFF_LINEAR_UNITS[linearUnitCode] : undefined;
   // Declaring nothing and declaring something we cannot resolve are different
-  // facts and must not resolve alike. With no ProjLinearUnitsGeoKey the
-  // GeoTIFF default applies and a projected CRS is metres. With a key present
-  // whose code is outside our table — 9095 British foot, say — the file has
-  // stated a unit we cannot honour, and answering 'metre' presented every
-  // length from it as metres and was wrong by the unit's own factor. 'unknown'
-  // is what the downstream `linearUnit !== 'unknown'` gates read to refuse.
+  // facts and must not resolve alike. With a key present whose code is
+  // outside our table — 9095 British foot, say — the file has stated a unit we
+  // cannot honour, and answering 'metre' presented every length from it as
+  // metres and was wrong by the unit's own factor. 'unknown' is what the
+  // downstream `linearUnit !== 'unknown'` gates read to refuse.
   //
   // With no key at all, the unit is the one the EPSG code defines, not an
   // assumed metre: EPSG:2264 is in US survey feet. impliedProjectedLinearUnit
   // answers from the curated registry and a whitelist of metre families, and
   // 'unknown' for any other code.
+  //
+  // A 3076 that names another unit than the projected code defines is a
+  // contradiction no reader can settle (3072=2229 with 3076=9001 is either a
+  // foot grid mislabelled metres or the reverse, 3.28x apart). The unit is
+  // withheld and the note says why.
   const declaredButUnresolved = linearUnitCode !== undefined && mappedUnit === undefined;
+  const code = isGeographic || geocentric ? undefined : epsgCrsKind(epsg);
+  const codeUnit = code?.kind === 'projected' ? code.unit : null;
   let linearUnit: CrsLinearUnit;
-  if (mappedUnit !== undefined) linearUnit = mappedUnit;
+  let linearUnitNote: string | undefined;
+  if (mappedUnit !== undefined && codeUnit !== null && codeUnit !== mappedUnit) {
+    linearUnit = 'unknown';
+    linearUnitNote =
+      `ProjLinearUnitsGeoKey (3076) declares ${UNIT_WORDS[mappedUnit]}, but EPSG:${epsg} is defined in ` +
+      `${UNIT_WORDS[codeUnit] ?? 'a unit other than metres or feet'}; the linear unit is withheld`;
+  } else if (mappedUnit !== undefined) linearUnit = mappedUnit;
   else if (isGeographic || declaredButUnresolved) linearUnit = 'unknown';
   else linearUnit = impliedProjectedLinearUnit(epsg);
   const linearUnitToMetres = metresPerLinearUnit(linearUnit);
@@ -1311,6 +1331,7 @@ export function crsFromGeoTiff(
     epsg,
     linearUnit,
     linearUnitToMetres,
+    ...(linearUnitNote ? { linearUnitNote } : {}),
     isGeographic,
     verticalEpsg,
     verticalDatum,
@@ -1318,6 +1339,13 @@ export function crsFromGeoTiff(
     ...(geocentric ? { geocentric: true } : {}),
   };
 }
+
+/** A named linear unit as a unit note names it. */
+const UNIT_WORDS: Readonly<Partial<Record<string, string>>> = {
+  metre: 'metres',
+  foot: 'international feet',
+  'us-survey-foot': 'US survey feet',
+};
 
 /** Parameters for {@link crsFromEpsg}. */
 export interface EpsgCrsParams {
