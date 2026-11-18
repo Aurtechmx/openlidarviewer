@@ -66,10 +66,17 @@ export interface CompassPlatform {
   readPref(): string | null;
   writePref(value: string): void;
   /**
-   * Whether the viewport is phone-sized. Not consulted for the default any
-   * more: the cube is off everywhere until the user turns it on. Optional.
+   * Whether the viewport is phone-sized. A phone keeps the cube off unless the
+   * user turned it on. Optional; absent means not a phone.
    */
   isPhone?(): boolean;
+  /**
+   * Whether the primary pointer is coarse (a tablet, given not a phone). Tablets
+   * keep the cube on by default; a desktop has the axis views in the nav row's
+   * More menu and Plan, so its cube is off until asked. Optional; absent means
+   * a fine pointer.
+   */
+  isCoarsePointer?(): boolean;
 }
 
 export interface CompassControllerOptions {
@@ -128,6 +135,7 @@ export function browserCompassPlatform(): CompassPlatform {
     readPref: () => storageGet(COMPASS_PREF_KEY),
     writePref: (value) => storageSet(COMPASS_PREF_KEY, value),
     isPhone: () => typeof matchMedia === 'function' && matchMedia('(max-width: 767px)').matches,
+    isCoarsePointer: () => typeof matchMedia === 'function' && matchMedia('(pointer: coarse)').matches,
   };
 }
 
@@ -149,10 +157,14 @@ export function createCompassController(opts: CompassControllerOptions): Compass
   let enabled = ((): boolean => {
     if (opts.urlParams.get('viewcube') === '0') return false;
     if (opts.urlParams.has('viewcube')) return true;
-    // Off until the user turns it on: the six axis views are in the nav row's
-    // More menu and Plan is the top-down control, so the cube repeats them.
-    // An explicit stored choice wins either way.
-    return platform.readPref() === 'on';
+    // An explicit stored choice wins either way. With none: off on a phone and
+    // on a desktop (the six axis views are in the nav row's More menu and Plan
+    // looks straight down, so the cube repeats them there); a tablet keeps it.
+    const pref = platform.readPref();
+    if (pref === 'on') return true;
+    if (pref === 'off') return false;
+    if (platform.isPhone?.() ?? false) return false;
+    return platform.isCoarsePointer?.() ?? false;
   })();
   let viewer: CompassViewer | null = null;
   let handle: ViewCubeHandle | null = null;

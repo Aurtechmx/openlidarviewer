@@ -11,25 +11,25 @@
   },
   "watch": {
     "src/ui/AnalysePanel.ts": {
-      "lines": 3622
+      "lines": 3511
     },
     "src/ui/Inspector.ts": {
-      "lines": 2857
+      "lines": 2779
     },
     "src/render/measure/MeasureController.ts": {
-      "lines": 3015
+      "lines": 2906
     },
     "src/ui/MeasurePanel.ts": {
-      "lines": 2537
+      "lines": 2418
     },
     "src/render/measure/profilePdf.ts": {
-      "lines": 2115
+      "lines": 2098
     },
     "src/render/streaming/StreamingScheduler.ts": {
-      "lines": 1934
+      "lines": 1867
     },
     "src/terrain/contour/analyseContours.ts": {
-      "lines": 1855
+      "lines": 1768
     }
   }
 }

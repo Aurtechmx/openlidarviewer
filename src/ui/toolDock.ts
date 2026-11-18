@@ -341,6 +341,8 @@ export class ToolDock {
     for (const cls of spec.classes ?? []) button.classList.add(cls);
     // The registry id the button runs, so a test can match its label to the name.
     if (!spec.custom) button.setAttribute('data-action', spec.id);
+    // The R key frames the scan; the Frame all button is the one control that names it.
+    if (spec.id === 'camera.frame-all') button.setAttribute('aria-keyshortcuts', 'R');
     // Toggle buttons must carry aria-pressed from creation — the attribute's
     // mere presence is what tells assistive tech "this is a toggle", so it
     // cannot wait for the first setActive() call.

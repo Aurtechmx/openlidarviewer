@@ -105,6 +105,10 @@ describe('ToolDock manifest', () => {
     ]);
   });
 
+  it('names the R key on Frame all, its only visible carrier', () => {
+    expect(buttons(makeDock())[0].getAttribute('aria-keyshortcuts')).toBe('R');
+  });
+
   it('carries every per-tool CSS class the mobile stylesheets key off', () => {
     const b = buttons(makeDock());
     expect(b[0].classList.contains('olv-tool-frame')).toBe(true);
