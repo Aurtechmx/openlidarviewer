@@ -278,6 +278,12 @@ export function reconstructDsmChm(
 export interface DemReadmeOptions {
   /** False when the rasters carry no world origin: no CRS is written and the README says so. Default true. */
   readonly placed?: boolean;
+  /**
+   * True when placed rasters carry no CRS: no EPSG code and no horizontal WKT
+   * resolved, so they sit at the scan's own source coordinates. The README then
+   * names that frame instead of a projected CRS. Default false.
+   */
+  readonly sourceCoordinates?: boolean;
   readonly result: AnalyseContoursResult;
   /** Source-file digest and CRS origin for the provenance block. */
   readonly digests?: ExportDigests | null;
@@ -618,12 +624,17 @@ export function buildDemReadme(opts: DemReadmeOptions): string {
     `  Cell size      ${dtm.cellSizeM} ${hUnit}`,
     `  NODATA value   ${opts.noData ?? DEFAULT_NO_DATA}`,
     `  Coverage       ${pct(cov.measured)} measured, ${pct(cov.interp)} interpolated`,
+    // The frame wording matches the flow package's `scan-source-coordinates`.
     ...(opts.placed === false
       ? ['  Frame          local frame, not georeferenced; elevations recentred']
-      : unstoredEpsgReadmeLines(opts.unstoredEpsg)),
+      : opts.sourceCoordinates
+        ? ['  Frame          scan source coordinates; no CRS resolved; rasters carry no CRS']
+        : unstoredEpsgReadmeLines(opts.unstoredEpsg)),
     opts.placed === false
       ? `  Bounds (local offsets in the project frame, ${hUnit})`
-      : `  Bounds (CRS units, ${isGeographic ? 'lon/lat degrees' : 'projected'})`,
+      : opts.sourceCoordinates
+        ? `  Bounds (scan source coordinates, ${hUnit})`
+        : `  Bounds (CRS units, ${isGeographic ? 'lon/lat degrees' : 'projected'})`,
     `    min X / min Y  ${coord(opts.boundsMinX)} / ${coord(opts.boundsMinY)}`,
     `    max X / max Y  ${coord(opts.boundsMaxX)} / ${coord(opts.boundsMaxY)}`,
     `  Elevation unit ${zUnit}`,
@@ -1035,6 +1046,7 @@ export function assembleDemPackage(
   }
   const readme = buildDemReadme({
     placed,
+    sourceCoordinates: placed && epsg == null && horizontalWkt == null,
     verticalUnitToMetres: options.verticalUnitToMetres ?? null,
     verticalGeoKeys,
     unstoredEpsg: unstorableEpsg ? { epsg, inPrj: horizontalWkt != null || !!options.wkt } : null,

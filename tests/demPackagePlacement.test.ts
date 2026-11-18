@@ -8,7 +8,8 @@ import { describe, expect, it } from 'vitest';
 import { compoundWkt, wktForEpsg } from '../src/io/epsgWkt';
 import { rasterHorizontalWkt } from '../src/io/crs';
 import { buildDemPackage } from '../src/terrain/export/demPackage';
-import { demResultFor, DEM_PKG_OPTS } from './helpers/demPackageFixture';
+import type { DtmGrid } from '../src/terrain/ground/cellConfidence';
+import { demResultAround, demResultFor, DEM_PKG_OPTS } from './helpers/demPackageFixture';
 import { extractEntry } from './helpers/zipReader';
 
 const grid = () => ({
@@ -94,4 +95,42 @@ describe('DEM package placement', () => {
     const placed = text(buildDemPackage(demResultFor(grid()), { ...DEM_PKG_OPTS, basename: 'site', isGeographic: true }), 'site-README.txt');
     expect(placed).toContain('Bounds (CRS units, lon/lat degrees)');
   });
+
+  it('placed with no CRS: README names scan source coordinates', () => {
+    // A scan with no CRS still has an origin, so the rasters sit at the scan's
+    // own source coordinates. No CRS is written, and the README must not name one.
+    const dtm = {
+      ...grid(),
+      crs: 'Local coordinates (no CRS)', horizontalEpsg: null, verticalDatum: null, verticalEpsg: null, verticalUnitToMetres: undefined,
+      coverageMode: 'full', sourcePointCount: 100, analyzedPointCount: 100, warnings: [],
+    } as unknown as DtmGrid;
+    const zip = buildDemPackage(demResultAround(dtm), {
+      basename: 's', worldOrigin: { x: 512.25, y: 1033.5, z: 0 }, linearUnit: 'unknown', isGeographic: false, wkt: null,
+      generationDateIso: '2026-01-01T00:00:00.000Z',
+    });
+    const readme = text(zip, 's-README.txt');
+    expect(readme).toContain('Frame          scan source coordinates; no CRS resolved; rasters carry no CRS');
+    expect(readme).toContain('Bounds (scan source coordinates, units)');
+    expect(readme).toContain('no CRS resolved');
+    expect(readme).not.toContain('CRS units, projected');
+    // Unchanged: a user-defined GeoTIFF at the scan's source coordinates, no .prj.
+    const tif = extractEntry(zip, 's-dtm.tif')!;
+    expect(geoKey(tif, 1024)).toBe(32767);
+    expect(tiepointXY(tif)).toEqual([522.25, 1055.5]);
+    expect(extractEntry(zip, 's-dtm.prj')).toBeNull();
+  });
 });
+
+/** ModelTiepoint X, Y of the first IFD. */
+function tiepointXY(bytes: Uint8Array): [number, number] {
+  const dv = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  const ifd = dv.getUint32(4, true);
+  const n = dv.getUint16(ifd, true);
+  for (let i = 0; i < n; i++) {
+    const p = ifd + 2 + i * 12;
+    if (dv.getUint16(p, true) !== 33922) continue;
+    const off = dv.getUint32(p + 8, true);
+    return [dv.getFloat64(off + 24, true), dv.getFloat64(off + 32, true)];
+  }
+  throw new Error('no ModelTiepoint');
+}
