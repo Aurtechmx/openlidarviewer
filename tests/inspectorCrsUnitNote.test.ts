@@ -22,9 +22,9 @@ function geoKeys(keys: readonly (readonly [number, number])[]): Uint8Array {
   return new Uint8Array(u.buffer);
 }
 
-/** The section's "Linear unit:" row, if any. */
+/** The section's unit-note row, if any. */
 const unitRow = (body: FakeEl): FakeEl | undefined =>
-  body.children.find((c) => c.textContent.startsWith('Linear unit:'));
+  body.children.find((c) => c.className.split(' ').includes('olv-crs-unit-note'));
 
 function render(keys: readonly (readonly [number, number])[]): FakeEl {
   const crs = resolvedFromCrsInfo(crsFromGeoTiff(geoKeys(keys), null, null), 'las-vlr')!;
@@ -40,8 +40,8 @@ describe('the Inspector shows the linear unit note', () => {
     const body = render([[1024, 1], [3072, 2229], [3076, 9001]]);
     const row = unitRow(body);
     expect(row).toBeDefined();
-    expect(row!.className).toBe('olv-crs-warning');
-    expect(row!.textContent).toBe('Linear unit: ProjLinearUnitsGeoKey (3076) declares metres, but EPSG:2229 is defined in US survey feet; the linear unit is withheld.');
+    expect(row!.className).toBe('olv-crs-warning olv-crs-unit-note');
+    expect(row!.textContent).toBe('ProjLinearUnitsGeoKey (3076) declares metres, but EPSG:2229 is defined in US survey feet; the linear unit is withheld.');
   });
 
   it('a 3072 that holds a geographic code', () => {
@@ -52,6 +52,6 @@ describe('the Inspector shows the linear unit note', () => {
   it('no row when the CRS carries no note', () => {
     const body = render([[1024, 1], [3072, 32612], [3076, 9001]]);
     expect(unitRow(body)).toBeUndefined();
-    expect(findContaining(body, 'Linear unit:')).toBeUndefined();
+    expect(findContaining(body, 'linear unit is withheld')).toBeUndefined();
   });
 });

@@ -138,7 +138,7 @@ describe('a user CRS of another kind restores the work under the scan\'s CRS', (
     expect(r.crsService.current()!.epsg).toBe(4326);
     expect(r.toasts.some((t) => REFUSAL.test(t))).toBe(false);
     const i = r.toasts.findIndex((t) => KIND_NOTICE.test(t));
-    expect(r.toasts[i]).toContain('The scan keeps its own coordinate system, WGS 84 (EPSG:4326) (geographic). This session\'s, EPSG:32612 (projected), is a different kind and was not applied.');
+    expect(r.toasts[i]).toContain('This session\'s coordinate system, EPSG:32612 (projected), was not applied because the scan declares a geographic one, WGS 84 (EPSG:4326), which stays in use.');
     expect(r.toasts[i]).not.toContain('load the session on its own scan');
     expect(r.actions[i]?.label).toBe('Use session CRS');
     r.actions[i]!.onClick();
@@ -156,8 +156,7 @@ describe('a user CRS of another kind restores the work under the scan\'s CRS', (
     expect(r.crsService.current()!.kind).toBe('projected');
     expect(r.crsService.current()!.epsg).toBe(32612);
     const i = r.toasts.findIndex((t) => KIND_NOTICE.test(t));
-    expect(r.toasts[i]).toContain('WGS 84 / UTM zone 12N (EPSG:32612) (projected)');
-    expect(r.toasts[i]).toContain('EPSG:4326 (geographic)');
+    expect(r.toasts[i]).toContain('This session\'s coordinate system, EPSG:4326 (geographic), was not applied because the scan declares a projected one, WGS 84 / UTM zone 12N (EPSG:32612), which stays in use.');
     r.actions[i]!.onClick();
     expect(r.crsService.current()!.kind).toBe('geographic');
     expect(r.crsService.current()!.epsg).toBe(4326);

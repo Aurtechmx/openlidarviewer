@@ -320,8 +320,8 @@ export function kindConflictSentence(
   session: ResolvedCrs,
 ): string {
   const scanKind = scan?.geocentric ? 'geocentric' : scan?.isGeographic ? 'geographic' : 'projected';
-  return `The scan keeps its own coordinate system, ${noticeCrsLabel(scan?.name, scan?.epsg)} (${scanKind}). ` +
-    `This session's, ${noticeCrsLabel(session.name, session.epsg)} (${session.kind}), is a different kind and was not applied.`;
+  return `This session's coordinate system, ${noticeCrsLabel(session.name, session.epsg)} (${session.kind}), was not applied ` +
+    `because the scan declares a ${scanKind} one, ${noticeCrsLabel(scan?.name, scan?.epsg)}, which stays in use.`;
 }
 
 /**

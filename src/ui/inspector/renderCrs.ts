@@ -99,7 +99,7 @@ export function renderCrs(
   }
   // Why the linear unit reads as it does, or why it is withheld.
   if (c.linearUnitNote) {
-    body.append(el('div', { className: 'olv-crs-warning', text: `Linear unit: ${c.linearUnitNote}.` }));
+    body.append(el('div', { className: 'olv-crs-warning olv-crs-unit-note', text: `${c.linearUnitNote}.` }));
   }
   if (c.userConfirmed && c.source === 'user-override') {
     body.append(
