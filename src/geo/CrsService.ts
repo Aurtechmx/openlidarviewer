@@ -432,6 +432,11 @@ function epsgKindOf(kind: CrsKind): EpsgCrsKind {
   return kind === 'local' ? 'engineering' : kind;
 }
 
+/** The indefinite article before a kind's name. */
+function articleFor(kind: EpsgCrsKind): 'a' | 'an' {
+  return kind === 'engineering' || kind === 'unknown' ? 'an' : 'a';
+}
+
 export class CrsService {
   private readonly _port: CrsOverridePort;
   private readonly _listeners: Set<CrsListener> = new Set();
@@ -856,38 +861,67 @@ export class CrsService {
     if (!isEpsgCodeInRange(override.epsg)) {
       return unresolved(`EPSG:${override.epsg} (not an EPSG code from 1024 to 99999)`);
     }
-    // A registry entry whose kind differs from the override's is a
-    // contradiction, whatever else describes the code: a session file or a
-    // catalogue record can claim projected for EPSG:4326, which read degrees as
-    // metres. The picker always sends the entry's own kind.
+    // A registry entry, or the file's own declaration of this code, naming a
+    // different kind than the override is settled by the EPSG table, the one
+    // R11 reads. A session file or a catalogue record can claim projected for
+    // EPSG:4326, which read degrees as metres; a file's GeoKeys can claim
+    // projected (GTModelType 1) for the geographic code 4326. When the table
+    // names the override's kind, the override resolves with the table's unit
+    // and its label says the file's declaration contradicted it. Otherwise it
+    // stays unresolved and its label names what disagrees with what.
+    const detectedKind = confirmsDetected ? resolvedFromCrsInfo(detected, 'user-override')?.kind : undefined;
+    const entryDisagrees = entry !== undefined && entry.kind !== override.kind;
+    const fileDisagrees = detectedKind !== undefined && detectedKind !== override.kind;
+    if (entryDisagrees || fileDisagrees) {
+      const tableKind = epsgCrsKind(override.epsg).kind;
+      const tableUnit = (override.kind === 'projected' || override.kind === 'geographic') && tableKind === override.kind
+        ? overrideCodeUnit(override.epsg, override.kind)
+        : undefined;
+      if (tableUnit === undefined || 'contradicts' in tableUnit) {
+        // No kind or unit is guessed, and the code is not carried, so no
+        // export writes it as the claimed kind.
+        const named: EpsgCrsKind = tableKind !== 'unknown' ? tableKind
+          : epsgKindOf(fileDisagrees ? detectedKind : entry?.kind ?? 'unknown');
+        const who = tableKind !== 'unknown' ? 'the code is' : fileDisagrees ? 'the file declares' : 'the registry lists';
+        return unresolved(`EPSG:${override.epsg} (${who} ${articleFor(named)} ${named} CRS, not ${override.kind})`);
+      }
+      const declared = fileDisagrees
+        ? ` (the file declares ${entry ? `EPSG:${override.epsg}` : 'it'} as ${epsgKindOf(detectedKind)}; the code is ${override.kind})`
+        : '';
+      return {
+        kind: override.kind,
+        name: `${entry?.label ?? `EPSG:${override.epsg}`}${declared}`,
+        epsg: override.epsg,
+        linearUnit: tableUnit.linearUnit,
+        linearUnitToMetres: tableUnit.linearUnitToMetres,
+        // The file's own WKT and datum describe the kind it got wrong, so
+        // neither is carried; `_resolveDatum` fills the registry datum.
+        source: 'user-override',
+        confidence: 'high',
+        userConfirmed: true,
+        ...vertical,
+      };
+    }
     // Otherwise the linear unit, in priority order: borrow the detector's when
     // it described this exact EPSG; else read the registry entry's unit (set
     // only for the non-metre entries; otherwise metres for a projected entry
     // and 'unknown' for a geographic one, which is angular); else the kind and
     // unit the EPSG code itself names. That last case is a code from a session
     // file, a catalogue record or an old stored record: the picker offers
-    // registry entries only. Confirming the file's own code confirms the
-    // file's kind too: a session saying projected for a geocentric or
-    // geographic file, or geographic for a projected one, contradicts it.
-    const detectedKind = confirmsDetected ? resolvedFromCrsInfo(detected, 'user-override')?.kind : undefined;
-    const unit = entry && entry.kind !== override.kind
-      ? { contradicts: entry.kind }
-      : detectedKind !== undefined && detectedKind !== override.kind
-        ? { contradicts: epsgKindOf(detectedKind) }
-      : confirmsDetected
-        ? { linearUnit: detected.linearUnit, linearUnitToMetres: detected.linearUnitToMetres }
-        : entry
-          ? {
-            linearUnit: entry.linearUnit ?? (override.kind === 'geographic' ? 'unknown' as const : 'metre' as const),
-            linearUnitToMetres: entry.linearUnitToMetres ?? 1,
-          }
-          : overrideCodeUnit(override.epsg, override.kind);
+    // registry entries only.
+    const unit = confirmsDetected
+      ? { linearUnit: detected.linearUnit, linearUnitToMetres: detected.linearUnitToMetres }
+      : entry
+        ? {
+          linearUnit: entry.linearUnit ?? (override.kind === 'geographic' ? 'unknown' as const : 'metre' as const),
+          linearUnitToMetres: entry.linearUnitToMetres ?? 1,
+        }
+        : overrideCodeUnit(override.epsg, override.kind);
     if ('contradicts' in unit) {
       // The code names a different kind of CRS than the override claims. No
       // kind or unit is guessed, and the code is not carried, so no export
       // writes it as the claimed kind.
-      const article = unit.contradicts === 'engineering' || unit.contradicts === 'unknown' ? 'an' : 'a';
-      return unresolved(`EPSG:${override.epsg} (the code is ${article} ${unit.contradicts} CRS, not ${override.kind})`);
+      return unresolved(`EPSG:${override.epsg} (the code is ${articleFor(unit.contradicts)} ${unit.contradicts} CRS, not ${override.kind})`);
     }
     const name =
       detected?.name && confirmsDetected
