@@ -1,10 +1,12 @@
 /**
- * XYZ / ASC export: a `.prj` beside a reprojected or assigned file.
+ * XYZ / ASC export: a `.prj` beside a reprojected or assigned file, from the
+ * export panel and from batch conversion alike.
  */
 
 import { describe, it, expect } from 'vitest';
 import { PointCloud } from '../src/model/PointCloud';
 import { convertCloud } from '../src/convert/convertCloud';
+import { runBatch, type DecodeFn } from '../src/convert/convertRunner';
 import { wktForEpsg } from '../src/io/epsgWkt';
 import type { CrsInfo } from '../src/io/crs';
 
@@ -83,5 +85,33 @@ describe('ASCII export .prj sidecar', () => {
   it('LAS output has no .prj', () => {
     const { file } = convertCloud(cloud(), { format: 'las', crsMode: 'assign', targetEpsg: 32613 });
     expect(file?.prj).toBeUndefined();
+  });
+});
+
+describe('batch conversion writes the converter\'s .prj', () => {
+  const input = [{ name: 'survey.las', sizeBytes: 8, bytes: async (): Promise<ArrayBuffer> => new ArrayBuffer(8) }];
+  const decode: DecodeFn = async () => cloud();
+
+  it('reproject to XYZ: the .prj is the target definition, named like the panel names it', async () => {
+    const [r] = await runBatch(input, { format: 'xyz', crsMode: 'reproject', targetEpsg: 26912 }, decode);
+    expect(r.file).not.toBeNull();
+    expect(r.sidecar?.filename).toBe(r.file!.filename.replace(/\.[^.]+$/, '.prj'));
+    expect(text(r.sidecar!.bytes)).toBe(wktForEpsg(26912));
+  });
+
+  it('keep mode: the .prj is the resolved source WKT', async () => {
+    const WKT_B = wktForEpsg(32613) as string;
+    const resolvedSourceCrs = { kind: 'projected', name: 'resolved', epsg: 32613, wkt: WKT_B } as unknown as CrsInfo;
+    const [r] = await runBatch(input, { format: 'xyz', crsMode: 'keep', resolvedSourceCrs }, decode);
+    expect(text(r.sidecar!.bytes)).toBe(WKT_B);
+  });
+
+  it('assign to a code with no definition: no .prj, and the report says so', async () => {
+    const [r] = await runBatch(input, { format: 'xyz', crsMode: 'assign', targetEpsg: 2229 }, decode);
+    expect(r.file).not.toBeNull();
+    expect(r.sidecar).toBeUndefined();
+    expect(r.report.log.map((l) => l.message)).toContain(
+      'EPSG:2229 recorded in the file header only; no .prj written (no definition available).',
+    );
   });
 });

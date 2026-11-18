@@ -87,7 +87,7 @@ export interface BatchItemResult {
   readonly source: string;
   readonly report: ConvertReport;
   readonly file: ConvertedFile | null;
-  /** A `.prj` CRS sidecar for ASCII outputs, when the source carried WKT. */
+  /** A `.prj` CRS sidecar for ASCII outputs, when the converter returned one. */
   readonly sidecar?: ConvertedFile;
 }
 
@@ -180,23 +180,14 @@ export async function runBatch(
       const finalFile = file
         ? { ...file, filename: dedupeName(file.filename, seen) }
         : null;
-      // ASCII outputs (XYZ/ASC) carry no CRS slot, so a kept georeferenced
-      // file gets a `.prj` sidecar with the source WKT — the GIS-standard way
-      // to keep the projection alongside a text point list.
+      // ASCII outputs (XYZ/ASC) carry no CRS slot, so the converter returns the
+      // `.prj` WKT for every CRS mode: the resolved source WKT on keep, the
+      // target definition on assign and reproject. It is named as the export
+      // panel names it, beside its point file.
       let sidecar: ConvertedFile | undefined;
-      const isAscii = options.format === 'xyz' || options.format === 'asc';
-      // The RESOLVED WKT (override applied) for the keep-mode ASCII .prj sidecar,
-      // mirroring convertCloud's source-CRS pick: a wired resolver is
-      // authoritative — a Local / rejected override yields a null WKT and thus NO
-      // sidecar, never the file's declared WKT. The pure path (resolvedSourceCrs
-      // undefined) keeps the source WKT, byte-identical to before.
-      const wkt =
-        options.resolvedSourceCrs !== undefined
-          ? (options.resolvedSourceCrs?.wkt ?? null)
-          : (cloud.metadata?.crs?.wkt ?? null);
-      if (finalFile && isAscii && (options.crsMode ?? 'keep') === 'keep' && wkt) {
+      if (finalFile?.prj) {
         const prjName = dedupeName(finalFile.filename.replace(/\.[^.]+$/, '.prj'), seen);
-        sidecar = { filename: prjName, mime: 'text/plain', bytes: new TextEncoder().encode(wkt) };
+        sidecar = { filename: prjName, mime: 'text/plain', bytes: new TextEncoder().encode(finalFile.prj) };
       }
       results.push({ source: input.name, report, file: finalFile, sidecar });
       emit(file ? 'done' : 'error');
