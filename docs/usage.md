@@ -11,7 +11,7 @@ Open the app in a modern WebGL/WebGPU-capable browser (Chrome or Edge work well)
 
 For LAS and LAZ files a short preload summary appears first: the format, the source point count, and how the file will be loaded. A status toast then tracks the load through its stages (reading, decoding, optimizing) and a very large file shows a live point counter and a progress bar. A Cancel control on the toast stops a load in progress; nothing is added to the scene if you cancel.
 
-A "Project ready" card then summarises the file: its format, point count, bounding box and detected attributes, with a suggested navigation mode and a performance estimate. It dismisses on its own.
+A "Project ready" card then summarises the file: its format, point count, bounding box and detected attributes. It dismisses on its own.
 
 Supported imports are `LAS`, `LAZ`, `E57`, `PLY`, `OBJ`, `GLB`, `GLTF`, `XYZ`, `CSV`, `ASC`, `TXT`, `PCD`, `PTS`, `PTX`, and 3D Tiles (a single `.pnts` tile or a whole tileset). An `ASC` file that is an ESRI ASCII raster grid (`ncols`/`nrows` with `cellsize` or `dx`/`dy` and a corner key, in any order) or a GRASS ASCII raster grid (`north:`/`south:`/`east:`/`west:` with `rows:`/`cols:`) is refused, because it holds a raster, not a list of points. Large hierarchical-streaming formats, `COPC` (`.copc.laz`) and `EPT` (Entwine Point Tile, via an `ept.json` URL), open progressively through their octree hierarchies; see [`streaming.md`](streaming.md). Nothing is uploaded. The file is read and rendered entirely in your browser.
 
