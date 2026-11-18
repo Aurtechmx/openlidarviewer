@@ -176,9 +176,11 @@ export function createStateStrip(host: StateStripHost): StateStrip {
   // through the app's one polite region: the clip turned on (with its count),
   // a side change, the clip turned off. Each once; a new count on the same side
   // is not said. A clip just turned on waits briefly for its count so the one
-  // announcement carries it. `spoken` is the state last said: 'off', a side,
-  // or 'on' when the side is not known.
+  // announcement carries it; a count that lands after the wait is said once
+  // more. `spoken` is the state last said: 'off', a side, or 'on' when the side
+  // is not known; `spokenCounted` is whether that line carried a count.
   let spoken = 'off';
+  let spokenCounted = false;
   let waiting: ReturnType<typeof setTimeout> | null = null;
   let waitingKey = '';
   let waitingText = '';
@@ -186,22 +188,25 @@ export function createStateStrip(host: StateStripHost): StateStrip {
     if (waiting !== null) clearTimeout(waiting);
     waiting = null;
   };
-  const say = (key: string, text: string): void => {
+  const say = (key: string, text: string, counted: boolean): void => {
     stopWaiting();
     spoken = key;
+    spokenCounted = counted;
     announcePolite(text);
   };
   const announceClip = (key: string, text: string, counted: boolean): void => {
     if (key === spoken) {
       stopWaiting();
+      // Said without a count while waiting for one, and the count is here now.
+      if (key !== 'off' && counted && !spokenCounted) say(key, text, true);
       return;
     }
     if (key === 'off') {
-      say(key, 'Clip off');
+      say(key, 'Clip off', false);
       return;
     }
     if (counted) {
-      say(key, text);
+      say(key, text, true);
       return;
     }
     // The latest text is said when the wait ends.
@@ -210,8 +215,7 @@ export function createStateStrip(host: StateStripHost): StateStrip {
     if (waiting === null) {
       waiting = setTimeout(() => {
         waiting = null;
-        spoken = waitingKey;
-        announcePolite(waitingText);
+        say(waitingKey, waitingText, false);
       }, CLIP_ANNOUNCE_WAIT_MS);
     }
   };
@@ -254,6 +258,7 @@ export function createStateStrip(host: StateStripHost): StateStrip {
         // The scan closed: its clip goes with it unsaid, and the next scan starts from off.
         stopWaiting();
         spoken = 'off';
+        spokenCounted = false;
         return;
       }
       paint('dataset', s.dataset.value, s.dataset.validity);

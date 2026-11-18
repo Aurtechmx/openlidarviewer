@@ -361,6 +361,25 @@ describe('strip UI', () => {
       });
     });
 
+    it('a count that lands after the wait is said once, after the line without it', async () => {
+      await withRegion(async (history) => {
+        const { createStateStrip } = await import('../src/ui/stateStrip');
+        const strip = createStateStrip({ open: vi.fn() });
+        strip.render(readStrip(reads()));
+        strip.render(streamed('keep-inside'));
+        vi.advanceTimersByTime(700);
+        expect(history).toEqual(['Clip on, Showing inside box']);
+        strip.render(on(5, 9, 'keep-inside'));
+        expect(history).toEqual(['Clip on, Showing inside box', 'Clipped: 5 of 9 points, Showing inside box']);
+        // A repaint, and a later count on the same side, add nothing.
+        strip.render(on(5, 9, 'keep-inside'));
+        strip.render(on(6, 9, 'keep-inside'));
+        vi.advanceTimersByTime(5000);
+        expect(history).toHaveLength(2);
+        strip.dispose();
+      });
+    });
+
     it('closing the scan says nothing, and the next scan does not hear an old clip turned off', async () => {
       await withRegion(async (history) => {
         const { createStateStrip } = await import('../src/ui/stateStrip');
