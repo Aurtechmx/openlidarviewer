@@ -202,6 +202,8 @@ export interface ConvertedFile {
   readonly mime: string;
   /** The file bytes (binary formats) or UTF-8 text encoded to bytes. */
   readonly bytes: Uint8Array;
+  /** XYZ / ASC only: WKT for a `.prj` sidecar, when a definition is known. */
+  readonly prj?: string;
 }
 
 /** Severity of a line in the conversion log. */

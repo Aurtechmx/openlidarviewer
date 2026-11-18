@@ -1684,16 +1684,10 @@ export class ExportPanel {
           return;
         }
         downloadBytes(out.filename, out.bytes, out.mime);
-        // ASCII keep-mode: also emit a `.prj` sidecar. It carries the RESOLVED
-        // WKT from the same request-time snapshot the converted data used, so the
-        // sidecar and the data can never name different frames. A wired resolver
-        // returning null (Local/no-CRS) yields no `.prj`, never the rejected
-        // source WKT; only an unwired resolver falls back to declared metadata.
-        const activeWkt = resolvedCrsGetter !== undefined
-          ? (resolvedSourceCrs?.wkt ?? null)
-          : (cloud.metadata?.crs?.wkt ?? null);
-        if ((format === 'xyz' || format === 'asc') && crsMode === 'keep' && activeWkt) {
-          downloadBytes(file.filename.replace(/\.[^.]+$/, '.prj'), new TextEncoder().encode(activeWkt), 'text/plain');
+        // ASCII: also emit the `.prj` sidecar the converter built from the same
+        // request-time snapshot, so the sidecar and the data never name different frames.
+        if ((format === 'xyz' || format === 'asc') && file.prj) {
+          downloadBytes(file.filename.replace(/\.[^.]+$/, '.prj'), new TextEncoder().encode(file.prj), 'text/plain');
         }
         const sampleNote = displaySample ? displaySampleStatus(displaySample) : '';
         const clipNote = scopeNote ? ` · ${scopeNote}` : '';

@@ -25,10 +25,17 @@ vi.mock('../src/io/download', async (orig) => ({
 vi.mock('../src/lazyChunks', async (orig) => ({
   ...(await orig<Record<string, unknown>>()),
   loadConvertEngine: async () => ({
-    convertCloud: (_cloud: unknown, options: { resolvedSourceCrs?: unknown }) => {
+    convertCloud: (
+      cloud: { metadata?: { crs?: { wkt?: string } } },
+      options: { resolvedSourceCrs?: { wkt?: string } | null; crsMode?: string },
+    ) => {
       rec.convertResolvedCrs.push(options.resolvedSourceCrs);
+      // Mirrors the converter: keep mode hands back the resolved source WKT as
+      // `prj` (declared metadata only when no resolver is wired).
+      const source = options.resolvedSourceCrs !== undefined ? options.resolvedSourceCrs : (cloud.metadata?.crs ?? null);
+      const prj = (options.crsMode ?? 'keep') === 'keep' ? source?.wkt : undefined;
       return {
-        file: { filename: 'scan.xyz', mime: 'text/plain', bytes: new Uint8Array([1]) },
+        file: { filename: 'scan.xyz', mime: 'text/plain', bytes: new Uint8Array([1]), ...(prj ? { prj } : {}) },
         report: { source: 'scan', ok: true, pointCount: 1, crsNote: '—', log: [] },
       };
     },
