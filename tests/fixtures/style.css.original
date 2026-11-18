@@ -1051,7 +1051,7 @@ button:disabled { cursor: not-allowed; }
   position: absolute; top: calc(100% + var(--space-xs)); right: 0; z-index: 30;
   display: flex; flex-direction: column; min-width: 96px; padding: var(--space-xs);
   background: var(--panel); border: 0.5px solid var(--hairline);
-  border-radius: var(--radius-md); box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
+  border-radius: var(--radius-md); box-shadow: var(--shadow-floating);
 }
 /* A closed <details> hides its content without removing its boxes (Chromium
    uses content-visibility), so geometry still reported the closed panel's links
