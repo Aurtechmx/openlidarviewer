@@ -726,7 +726,7 @@ export class MeasureController {
     this._unitsBtn.addEventListener('click', () => {
       this._unitsBtn.blur();
       this.setUnitSystem(this._units === 'metric' ? 'imperial' : 'metric');
-      if (this._unitUnverified()) this.onNotice?.(`${this._units === 'metric' ? 'Metric' : 'Imperial'} saved. This scan's units are unverified, so its figures stay in source units until you set a CRS.`);
+      if (this._unitUnverified()) this.onNotice?.(`${this._units === 'metric' ? 'Metric' : 'Imperial'} saved. This scan's units are unverified, so its figures stay in source units until you set a CRS or a local unit in the Inspector.`);
     });
     // Snap toggle — cycles Off → Point → Geometry. "Point" snaps a placed
     // vertex to the nearest real return; "Geometry" also snaps to existing

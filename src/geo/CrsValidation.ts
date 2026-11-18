@@ -16,7 +16,8 @@
  *   `safe-explicit-local`
  *       Local-coordinate dataset (phone scans, raw scanner output,
  *       LOCAL_CS / ENGCRS frames), with no projection claim. A frame that
- *       declares its linear unit is converted by it; one that declares
+ *       declares its linear unit (in the file, or by the user's local
+ *       choice in the Inspector) is converted by it; one that declares
  *       none withholds every metric figure, since metres would be an
  *       assumption.
  *
@@ -122,7 +123,7 @@ function localUnitWords(crs: ResolvedCrs): string {
     case 'metre': return 'metres';
     case 'foot': return 'international feet';
     case 'us-survey-foot': return 'US survey feet';
-    case 'unknown': return `a unit of ${crs.linearUnitToMetres} m`;
+    case 'unknown': return `a unit of ${Number(crs.linearUnitToMetres.toPrecision(6))} m`;
   }
 }
 
@@ -205,15 +206,17 @@ export function validateCrsForMeasurement(
       // A local or engineering frame with no declared unit gives no metres:
       // reading its numbers as metres would be an assumption, so no metric
       // figure is shown or saved. A declared unit converts as usual.
+      // Its severity matches a projected frame with no unit: every metric
+      // figure is withheld.
       if (!isLinearUnitKnown(crs)) {
         return {
           validity: 'safe-explicit-local',
-          severity: 'caution',
+          severity: 'warn',
           canDisplayMetric: false,
           canSaveMeasurement: false,
           reason: 'Local coordinates with no declared unit; metric measurements are withheld.',
           suggestion:
-            'Pick the correct projected CRS in the Inspector and confirm its units to enable metric measurements. Accuracy also depends on the source data.',
+            'If you know the unit, choose Local coordinates in metres or feet in the Inspector; otherwise pick the correct CRS. Accuracy also depends on the source data.',
         };
       }
       return {

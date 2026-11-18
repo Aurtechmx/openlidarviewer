@@ -63,7 +63,7 @@ describe('validateCrsForMeasurement — local coordinates', () => {
       }),
     );
     expect(r.validity).toBe('safe-explicit-local');
-    expect(r.severity).toBe('caution');
+    expect(r.severity).toBe('warn');
     // No declared unit: metres would be an assumption, so none are shown or saved.
     expect(r.canDisplayMetric).toBe(false);
     expect(r.canSaveMeasurement).toBe(false);

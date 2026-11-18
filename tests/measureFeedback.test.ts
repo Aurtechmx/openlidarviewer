@@ -107,7 +107,7 @@ describe('units toggle', () => {
     measure.onNotice = notice;
     const unverified = vi.spyOn(inner, '_unitUnverified').mockReturnValue(true);
     inner._unitsBtn.click();
-    expect(notice).toHaveBeenCalledWith("Imperial saved. This scan's units are unverified, so its figures stay in source units until you set a CRS.");
+    expect(notice).toHaveBeenCalledWith("Imperial saved. This scan's units are unverified, so its figures stay in source units until you set a CRS or a local unit in the Inspector.");
     notice.mockClear();
     unverified.mockReturnValue(false);
     inner._unitsBtn.click();

@@ -35,6 +35,9 @@ describe('a local frame with no declared unit withholds the volume', () => {
     expect(verdict.canSaveMeasurement).toBe(false);
     expect(verdict.reason).toBe('Local coordinates with no declared unit; metric measurements are withheld.');
     expect(verdict.reason).not.toMatch(/assume/i);
+    // Every metric figure is withheld, as for a projected frame with no unit.
+    expect(verdict.severity).toBe('warn');
+    expect(verdict.suggestion).toBe('If you know the unit, choose Local coordinates in metres or feet in the Inspector; otherwise pick the correct CRS. Accuracy also depends on the source data.');
     const refusal = volumeClaimRefusal(spatialContextFrom(crs), verdict);
     expect(refusal).not.toBeNull();
     expect(refusal).toContain('no declared unit');
@@ -78,5 +81,13 @@ describe('a local frame with a declared unit keeps working, converted', () => {
     expect(verdict.canDisplayMetric).toBe(true);
     expect(verdict.reason).toBe('Local coordinates in a unit of 0.01 m; measurements are converted from the declared unit.');
     expect(volumeClaimRefusal(spatialContextFrom(crs), verdict)).toBeNull();
+  });
+
+  it('prints a declared factor to at most 6 significant digits', () => {
+    const crs: ResolvedCrs = {
+      kind: 'local', name: 'Site grid', linearUnit: 'unknown', linearUnitToMetres: 0.30480060960121924, linearUnitByFactor: true,
+      source: 'las-vlr', confidence: 'high', userConfirmed: false,
+    };
+    expect(validateCrsForMeasurement(crs).reason).toBe('Local coordinates in a unit of 0.304801 m; measurements are converted from the declared unit.');
   });
 });
