@@ -40,7 +40,7 @@ const CACHE_PREFIX = 'olv-shell-';
 // release verifier can machine-check the version by grep. Must stay prefixed
 // with CACHE_PREFIX's value; `lint:release-sync` enforces the version part on
 // release.
-const VERSION = 'olv-shell-0.7.1';
+const VERSION = 'olv-shell-0.7.2-alpha.1';
 const SHELL = [
   './',
   './index.html',
@@ -59,8 +59,8 @@ const SHELL = [
 // persisted opt-in: a worker cannot read the page's localStorage, so an
 // updated worker re-precaches on activate when any OLV offline cache exists.
 const OFFLINE_SUFFIX = '-offline';
-// Cache names end with '@' and the scope path: 'olv-shell-0.7.1@/a/' and
-// 'olv-shell-0.7.1@/a/-offline'. Names without '@' come from workers before
+// Cache names end with '@' and the scope path: 'olv-shell-0.7.2-alpha.1@/a/' and
+// 'olv-shell-0.7.2-alpha.1@/a/-offline'. Names without '@' come from workers before
 // this scheme; any scope may read them as a fallback and retire them.
 const SCOPE_TAG = '@' + scopeRoot();
 const SHELL_CACHE = VERSION + SCOPE_TAG;
