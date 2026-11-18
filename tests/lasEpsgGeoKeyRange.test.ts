@@ -94,3 +94,23 @@ describe('convertCloud LAS 1.2 export of an out-of-range code', () => {
     });
   }
 });
+
+describe('vertical GeoKey range', () => {
+  const base = { epsg: 32612, isGeographic: false, linearUnitCode: 9001 } as const;
+  it('writes no 4096 key for vertical code 40000, keeps the unit', () => {
+    const k = geoKeys(writeLas(g(), { ...base, verticalEpsg: 40000, verticalUnitCode: 9001 }));
+    expect(k?.has(4096) ?? false).toBe(false);
+    expect(k?.get(4099)).toBe(9001);
+    expect(k?.get(3072)).toBe(32612);
+  });
+  it('writes no 4096 key for 32767 or a non-integer code', () => {
+    for (const v of [32767, 5703.5]) {
+      const k = geoKeys(writeLas(g(), { ...base, verticalEpsg: v, verticalUnitCode: 9001 }));
+      expect(k?.has(4096) ?? false).toBe(false);
+    }
+  });
+  it('leaves a valid vertical code unchanged', () => {
+    const k = geoKeys(writeLas(g(), { ...base, verticalEpsg: 5703, verticalUnitCode: 9001 }));
+    expect(k?.get(4096)).toBe(5703);
+  });
+});
