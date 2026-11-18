@@ -5,7 +5,7 @@
  */
 import { describe, it, expect } from 'vitest';
 import { writeLas, writeLas14 } from '../src/convert/writeLas';
-import { isGeoTiffEpsgCode } from '../src/convert/geoTiffEpsg';
+import { isGeoTiffEpsgCode } from '../src/convert/epsg';
 import { convertCloud } from '../src/convert/convertCloud';
 import { wktForEpsg } from '../src/io/epsgWkt';
 import { PointCloud } from '../src/model/PointCloud';

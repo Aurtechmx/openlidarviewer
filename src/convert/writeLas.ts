@@ -42,8 +42,7 @@ import {
 import { BUILD_IDENTITY, type BuildIdentity } from '../build/buildIdentity';
 import { SCAN_ANGLE_EXTENDED_UNIT_DEG } from '../io/lasDecodeShared';
 import { compoundWkt, isUsableWkt, wktForEpsg } from '../io/epsgWkt';
-import { epsgCrsKind } from './epsg';
-import { isGeoTiffEpsgCode } from './geoTiffEpsg';
+import { epsgCrsKind, isGeoTiffEpsgCode } from './epsg';
 
 const HEADER_SIZE = 227; // LAS 1.2 public header block
 const HEADER_SIZE_14 = 375; // LAS 1.4 public header block (R15)

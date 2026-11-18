@@ -9,7 +9,6 @@
  * `reproject.ts`; everything else is dependency-free.
  */
 
-import { isGeoTiffEpsgCode } from './geoTiffEpsg';
 import { exportDigestLines } from '../science/exportDigestRecord';
 import { DISPLAY_SAMPLE_SUFFIX, displaySampleLine, pointBasisLine } from '../export/exportSummary';
 import { truncationOf } from '../io/truncation';
@@ -94,6 +93,7 @@ import {
   epsgDatumFamily,
   isGeocentricEpsg,
   GEOCENTRIC_REPROJECT_REFUSAL,
+  isGeoTiffEpsgCode,
 } from './epsg';
 import {
   CONVERT_FORMATS,
