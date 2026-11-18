@@ -1,7 +1,7 @@
 {
   "files": {
     "src/main.ts": {
-      "lines": 4161,
+      "lines": 4156,
       "goal": 2500
     },
     "src/render/Viewer.ts": {
@@ -11,25 +11,25 @@
   },
   "watch": {
     "src/ui/AnalysePanel.ts": {
-      "lines": 3511
+      "lines": 3622
     },
     "src/ui/Inspector.ts": {
-      "lines": 2779
+      "lines": 2857
     },
     "src/render/measure/MeasureController.ts": {
-      "lines": 2906
+      "lines": 3015
     },
     "src/ui/MeasurePanel.ts": {
-      "lines": 2418
+      "lines": 2537
     },
     "src/render/measure/profilePdf.ts": {
-      "lines": 2098
+      "lines": 2115
     },
     "src/render/streaming/StreamingScheduler.ts": {
-      "lines": 1867
+      "lines": 1934
     },
     "src/terrain/contour/analyseContours.ts": {
-      "lines": 1768
+      "lines": 1855
     }
   }
 }

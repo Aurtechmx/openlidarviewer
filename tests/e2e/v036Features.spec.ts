@@ -101,8 +101,9 @@ test('empty state shows three capture-kind chips with their labels', async ({
   await page.goto('/');
   await expect(page.locator('.olv-empty-title')).toBeVisible();
 
-  // Three chips, visible on the page: Drone LiDAR · Phone scans ·
-  // Terrestrial laser.
+  // Three chips inside the "Compatible data" disclosure: Drone LiDAR ·
+  // Phone scans · Terrestrial laser.
+  await page.locator('.olv-empty-formats-summary', { hasText: 'Compatible data' }).click();
   await expect(page.locator('.olv-capture-chip')).toHaveCount(3);
   await expect(
     page.locator('.olv-capture-chip', { hasText: 'Drone LiDAR' }),

@@ -1042,6 +1042,25 @@ button:disabled { cursor: not-allowed; }
 .olv-github-source { width: 60px; }
 .olv-github:hover { color: var(--text); background: var(--hover-wash); }
 
+/* One About menu holds the GitHub and Guide links. The summary reuses the
+   ghost-link box; the panel drops below it, right-aligned to the header. */
+.olv-about { position: relative; }
+.olv-about-summary { width: 54px; cursor: pointer; list-style: none; }
+.olv-about-summary::-webkit-details-marker { display: none; }
+.olv-about-panel {
+  position: absolute; top: calc(100% + var(--space-xs)); right: 0; z-index: 30;
+  display: flex; flex-direction: column; min-width: 96px; padding: var(--space-xs);
+  background: var(--panel); border: 0.5px solid var(--hairline);
+  border-radius: var(--radius-md); box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
+}
+.olv-about-link {
+  display: flex; align-items: center; min-height: 32px; padding: 0 var(--space-md);
+  font-size: var(--text-xs); color: var(--text-dim); text-decoration: none;
+  border-radius: var(--radius-sm); white-space: nowrap;
+}
+.olv-about-link:hover { color: var(--text); background: var(--hover-wash); }
+.olv-about-link:focus-visible, .olv-about-summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
 /* ── Speed ↔ Quality performance control ────────────────────────────────────
    A header ghost button (same vocabulary as .olv-recenter) plus a panel
    anchored under it. The wrapper is the positioning context; the panel is
@@ -8290,7 +8309,7 @@ body:not(.olv-has-scan) .olv-touch-hint { display: none !important; }
   /* Topbar density on phones: drop the GitHub ghost link and shrink the
      wordmark so the brand mark + trust badge stay uncrowded. Brand mark
      (.olv-wordmark-mark) stays visible. */
-  .olv-github { display: none; }
+  .olv-github, .olv-about { display: none; }
   .olv-wordmark { font-size: var(--text-md); gap: var(--space-sm); }
   /* ── The header must not force a horizontal overflow ─────────────────────
      Even with the ghost links dropped, the header wanted 476 px at a 390 px

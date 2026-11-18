@@ -153,6 +153,7 @@ test.describe('batch converter — focus containment', () => {
   async function open(page: Page): Promise<void> {
     await suppressOnboardingTour(page);
     await page.goto('/');
+    await page.locator('.olv-empty-formats-summary', { hasText: 'Compatible data' }).click();
     await page.locator('.olv-convert-chip').click();
     await expect(page.locator('.olv-bc-dialog')).toBeVisible();
   }

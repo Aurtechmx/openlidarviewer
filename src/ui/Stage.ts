@@ -9,7 +9,7 @@ import { isMobileDevice } from './isMobileDevice';
 
 /** A built-in sample scan offered on the empty state. */
 export interface Sample {
-  /** Stable short id. `?autoload=sample:<id>` opens it when the list holds it. */
+  /** Stable short id. */
   id: string;
   label: string;
   detail: string;
@@ -26,15 +26,13 @@ export interface Sample {
 export interface StageOptions {
   /** Embed mode (`?embed=1`) strips the top bar and dock. */
   embed?: boolean;
-  /** Built-in sample scans for the empty state. */
-  samples?: Sample[];
   /** Called when a sample is chosen. */
   onSample?: (url: string, name: string) => void;
   /**
    * One curated streaming dataset surfaced as the "Try a sample scan"
    * ghost button directly under the primary CTA — the one-click demo for
-   * a visitor with no LiDAR file on hand. Uses the same approval gate and
-   * `onSample` path as the sample list.
+   * a visitor with no LiDAR file on hand. Goes through the approval gate and
+   * `onSample`.
    */
   demoSample?: Sample;
   /**
@@ -385,11 +383,11 @@ export class Stage {
       className: 'olv-badge',
       title: 'Scans you open stay on your device. Remote datasets are downloaded from their hosts.',
     }, ['Private', el('span', { className: 'olv-badge-detail', text: ' · on your device' })]);
-    // GitHub link demoted to a ghost link (item 9) — text + arrow, no pill
-    // background — so the "Private · on your device" trust signal stays the
-    // dominant header element on mobile.
+    // One About menu holds the two off-site destinations (source and user
+    // guide), so the header carries one control for them instead of two.
+    // A <details> gives open/close and keyboard support without a script.
     const github = el('a', {
-      className: 'olv-github olv-github-source',
+      className: 'olv-about-link olv-github-source',
       text: 'GitHub',
       href: 'https://github.com/aurtechmx/openlidarviewer',
       ariaLabel: 'OpenLiDARViewer on GitHub',
@@ -398,10 +396,8 @@ export class Stage {
     github.target = '_blank';
     github.rel = 'noreferrer';
 
-    // User guide — same ghost treatment as GitHub, sitting beside it so the
-    // two off-site destinations read as one group.
     const guide = el('a', {
-      className: 'olv-github olv-github-guide',
+      className: 'olv-about-link olv-github-guide',
       text: 'Guide',
       href: 'https://openlidarviewer.org/guide/',
       ariaLabel: 'OpenLiDARViewer user guide',
@@ -409,6 +405,28 @@ export class Stage {
     });
     guide.target = '_blank';
     guide.rel = 'noreferrer';
+
+    const aboutSummary = el('summary', {
+      className: 'olv-github olv-about-summary',
+      text: 'About',
+      tip: 'Source code and user guide',
+    });
+    const about = el('details', { className: 'olv-about' }, [
+      aboutSummary,
+      el('div', { className: 'olv-about-panel' }, [guide, github]),
+    ]);
+    // Closes on Escape and when focus leaves the menu. The listeners sit on
+    // the menu itself, so nothing is attached to the window or document.
+    about.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape' && about.open) {
+        about.open = false;
+        aboutSummary.focus();
+      }
+    });
+    about.addEventListener('focusout', (e) => {
+      const next = e.relatedTarget;
+      if (about.open && !(next instanceof Node && about.contains(next))) about.open = false;
+    });
 
     // Data sources & credits — a quiet ghost link, same treatment as GitHub.
     // Keeps attribution for the streamed public datasets one click away from
@@ -444,13 +462,12 @@ export class Stage {
       fullscreen.element,
       fullscreen.status,
       credits,
-      guide,
       slot,
-      github,
+      about,
     ]);
     this._qualitySlot = slot;
     this._topBarRight = right;
-    this._githubLink = github;
+    this._githubLink = about;
     return el('header', { className: 'olv-topbar' }, [wordmark, right]);
   }
 
@@ -574,8 +591,7 @@ export class Stage {
     // one click streams a real dataset and shows the product working. Reuses
     // the first streaming sample (and its approval gate) so there is exactly
     // one consent path for remote data.
-    const demoSample =
-      options.demoSample ?? (options.samples ?? []).find((s) => s.url.startsWith('http'));
+    const demoSample = options.demoSample;
     const tryButton = demoSample
       ? el('button', {
           className: 'olv-try-sample',
@@ -618,7 +634,6 @@ export class Stage {
         ` · ${xyzAliases} (read as .xyz)` +
         ' · .copc.laz (streamed) · EPT via ept.json (streamed)',
     });
-    formats.append(formatsSummary, formatsFull);
     // Three capture-type chips with monoline icons. Visual-hierarchy
     // upgrade: the previous version was a 11 px faint period-separated
     // sentence that read as quaternary fine-print despite carrying
@@ -681,27 +696,6 @@ export class Stage {
     // dropdown, the location search (inside the catalog panel), and the
     // streaming demo: all paths to "open a known public dataset". Gestalt
     // common region — one card, one heading — so the three read as siblings.
-    const samples = el('div', { className: 'olv-samples' });
-    for (const s of options.samples ?? []) {
-      // De-jargoned detail line — readable to first-time users without
-      // requiring knowledge of "COPC" or "streamed".
-      const detail = s.detail;
-      const btn = el('button', {
-        className: 'olv-sample',
-        type: 'button',
-        title:
-          s.url.startsWith('http')
-            ? `Open ${s.label}. Streams over your network, nothing uploaded.`
-            : `Open ${s.label}. Bundled fixture.`,
-      }, [
-        el('span', { className: 'olv-sample-label', text: s.label }),
-        el('span', { className: 'olv-sample-detail', text: detail }),
-      ]);
-      btn.addEventListener('click', () => {
-        void this._approveSample(s).then((ok) => { if (ok) options.onSample?.(s.url, s.name); });
-      });
-      samples.append(btn);
-    }
 
     // ── Section: Open from URL (visible, the second real entry path) ─────
     // After merging the catalog into Quick demos, URL is the only
@@ -709,37 +703,6 @@ export class Stage {
     // The PC STAC "Search by location" lives inside the catalog panel
     // so it clusters with the curated dropdown.
     const urlRow = this._buildUrlRow(options);
-
-    // ── Workflow rail ────────────────────────────────────────────────────
-    // The four-step "Get started" stepper is now a compact one-line rail:
-    // small numerals, short labels, a hairline connector, no interaction.
-    // The old vertical timeline read as a tutorial and owned the space
-    // between the headline and the CTA; worse, its "interactive" first step
-    // focused the remote-URL input — the wrong target for "Open a scan".
-    // The rail states the shape of the work and then gets out of the way.
-    const RAIL_STEPS: ReadonlyArray<string> = [
-      'Open a scan',
-      'Move around',
-      'Inspect or measure',
-      'Export or share',
-    ];
-    const stepsList = el('ol', { className: 'olv-rail' });
-    for (let i = 0; i < RAIL_STEPS.length; i++) {
-      const li = el('li', { className: 'olv-rail-step' });
-      if (i === 0) {
-        li.classList.add('olv-rail-step-active');
-        li.setAttribute('aria-current', 'step');
-      }
-      li.append(
-        el('span', { className: 'olv-rail-num', text: String(i + 1).padStart(2, '0') }),
-        el('span', { className: 'olv-rail-label', text: RAIL_STEPS[i] }),
-      );
-      stepsList.append(li);
-    }
-    const getStarted = el('nav', {
-      className: 'olv-getstarted',
-      ariaLabel: 'Workflow: open, move, measure, export',
-    }, [stepsList]);
 
     // Convert: a small peer chip beside the primary "Open scan"
     // button (promoted from a buried text link). Clicking it opens the batch
@@ -751,6 +714,10 @@ export class Stage {
       title: 'Convert point-cloud files between formats. No scan needs to be loaded.',
     });
     convertChip.addEventListener('click', () => options.onBatchConvert?.());
+    // The capture-type chips and the converter live inside the one
+    // "Compatible data" disclosure: all three describe what the viewer opens.
+    formats.append(formatsSummary, formatsFull, captureKinds);
+    if (options.onBatchConvert) formats.append(convertChip);
 
     // The consolidated "Explore public LiDAR" card (one common region).
     const exploreCard = el('section', {
@@ -760,7 +727,6 @@ export class Stage {
       el('div', { className: 'olv-empty-section-label', text: 'Explore public LiDAR' }),
     ]);
     if (options.catalogPanel) exploreCard.append(options.catalogPanel);
-    exploreCard.append(samples);
 
     // The tour is offered, never imposed: it used to auto-open on first
     // visit, covering the product with a modal before the visitor had seen
@@ -778,12 +744,12 @@ export class Stage {
     // One line for the claims the product actually stakes its identity on.
     const trustStrip = el('div', {
       className: 'olv-trust-strip',
-      text: 'Local processing · No account · WebGPU / WebGL 2 · Open source',
+      text: 'No account · WebGPU / WebGL 2 · Open source',
     });
 
     // Order is the hierarchy: identity → primary action → workflow shape →
     // trust → compatibility disclosures → alternative data sources.
-    // Sample and tour share one row; Convert lives inside the
+    // Sample and tour share one row; Convert and the capture chips live inside the
     // compatible-data disclosure with the other file utilities. Both moves
     // exist to keep the first screen to one column of short lines.
     const secondary =
@@ -802,8 +768,7 @@ export class Stage {
       openButton,
     ];
     if (secondary) children.push(secondary);
-    children.push(fileInput, getStarted, trustStrip, formats, captureKinds);
-    if (options.onBatchConvert) children.push(convertChip);
+    children.push(fileInput, trustStrip, formats);
     children.push(
       exploreCard,
       // Open-from-URL stays at the bottom as its own distinct entry path.
@@ -842,7 +807,7 @@ export class Stage {
       type: 'url',
       ariaLabel: 'Remote dataset URL',
     });
-    input.placeholder = 'https://host/scan.copc.laz, ept.json or tileset.json';
+    input.placeholder = 'https://host/dataset-url';
     this._urlInput = input;
 
     // Inline validation on blur (E3) — soft warning, not a blocker.

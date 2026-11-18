@@ -176,7 +176,9 @@ test.describe('control explanations', () => {
   test('the header Guide link explains itself with a styled tip', async ({ page }) => {
     await suppressOnboardingTour(page);
     await page.goto('/');
-    const guide = page.locator('a.olv-github', { hasText: 'Guide' });
+    // Guide lives in the About menu; open it so the link has a box.
+    await page.locator('.olv-about-summary').click();
+    const guide = page.locator('a.olv-about-link', { hasText: 'Guide' });
     await expect(guide).toHaveAttribute('data-tip', /./);
     const guideTip = (await guide.getAttribute('data-tip')) ?? '';
     const tipLayer = page.locator('.olv-tip-layer');

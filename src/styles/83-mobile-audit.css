@@ -422,7 +422,7 @@ body:not(.olv-has-scan) .olv-touch-hint { display: none !important; }
   /* Topbar density on phones: drop the GitHub ghost link and shrink the
      wordmark so the brand mark + trust badge stay uncrowded. Brand mark
      (.olv-wordmark-mark) stays visible. */
-  .olv-github { display: none; }
+  .olv-github, .olv-about { display: none; }
   .olv-wordmark { font-size: var(--text-md); gap: var(--space-sm); }
   /* ── The header must not force a horizontal overflow ─────────────────────
      Even with the ghost links dropped, the header wanted 476 px at a 390 px
