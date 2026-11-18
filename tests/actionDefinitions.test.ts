@@ -424,7 +424,7 @@ describe('buildActionRegistry — camera', () => {
     h.run('camera.top');
     expect(h.viewer.setCameraPreset).toHaveBeenLastCalledWith('top');
     expect(h.capture).toHaveBeenCalledWith({ type: 'camera-preset', name: 'top' });
-    expect(h.toast).toHaveBeenCalledWith('Camera · Top (angled) view.');
+    expect(h.toast).toHaveBeenCalledWith('Camera · Top view.');
   });
 
   it('records nothing when the preset was refused', () => {

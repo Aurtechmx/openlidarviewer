@@ -120,7 +120,7 @@ test.describe('command palette filtering + ranking', () => {
     await openPalette(page);
     await page.locator('.olv-palette-input').fill('top');
     const firstRow = page.locator('.olv-palette-row').first();
-    await expect(firstRow).toContainText(/Top (\(angled\) )?view/);
+    await expect(firstRow).toContainText('Top view');
   });
 
   test('typing "theme" lists every theme action', async ({ page }) => {
