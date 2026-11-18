@@ -84,9 +84,9 @@ describe('the NavBar', () => {
     return bar.element as unknown as FakeEl;
   }
 
-  it('names the frame button with the registry name', async () => {
+  it('draws no second Frame all button in the navigation row', async () => {
     const root = await navbar();
-    expect(root.byClass('olv-mode-reset')[0].getAttribute('aria-label')).toBe(ACTION_TITLES['camera.frame-all']);
+    expect(root.byClass('olv-mode-reset')).toHaveLength(0);
   });
 
   it('names every camera chip with its registry name, and shows a leading part of it', async () => {

@@ -348,24 +348,6 @@ export class NavBar {
       this._panBtn = button;
       segments.push(button);
     }
-    // Frame all — a compact icon button beside the selector.
-    const resetBtn = el('button', {
-      className: 'olv-mode-reset',
-      title: 'Frame all (R): fit the camera to the entire scan',
-      ariaLabel: 'Frame all', // registry name, held by actionNames.test.ts
-    });
-    resetBtn.setAttribute('aria-keyshortcuts', 'R');
-    resetBtn.innerHTML = `<svg viewBox="0 0 24 24" aria-hidden="true" xmlns="http://www.w3.org/2000/svg">
-<circle cx="12" cy="12" r="7" fill="none" stroke="currentColor" stroke-width="1.5"/>
-<circle cx="12" cy="12" r="2" fill="currentColor"/>
-<line x1="12" y1="2" x2="12" y2="6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
-<line x1="12" y1="18" x2="12" y2="22" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
-<line x1="2" y1="12" x2="6" y2="12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
-<line x1="18" y1="12" x2="22" y2="12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>`;
-    resetBtn.addEventListener('click', () => {
-      resetBtn.blur();
-      this._cb.onReset();
-    });
     const switcher = el('div', { className: 'olv-modes olv-modes-segmented' }, segments);
     switcher.setAttribute('role', 'group');
     switcher.setAttribute('aria-label', 'Navigation mode: Orbit, Walk, Fly or Pan');
@@ -415,7 +397,6 @@ export class NavBar {
       panChip,
     ]);
     const metaGroup = el('div', { className: 'olv-legend-group' }, [
-      legendItem(['R'], 'Reset'),
       legendItem(['F'], 'Focus'),
       legendItem(['H'], 'Toggle this'),
     ]);
@@ -635,7 +616,7 @@ export class NavBar {
       this._moreToggle.focus();
     });
     const more = el('div', { className: 'olv-nav-more-wrap' }, [this._moreToggle, this._moreMenu]);
-    this._navRow = el('div', { className: 'olv-nav-row' }, [switcher, resetBtn, more, this._panelToggle, this._speed]);
+    this._navRow = el('div', { className: 'olv-nav-row' }, [switcher, more, this._panelToggle, this._speed]);
     this.element = el('div', { className: 'olv-navbar' }, [this._hud, this._navRow]);
     // Layout clearance for the bottom toast lane: how far above the viewport's
     // bottom edge the mode row's top sits, plus a gap, published as

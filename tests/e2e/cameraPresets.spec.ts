@@ -37,13 +37,13 @@ async function loadSample(page: Page): Promise<void> {
 
 /** The presets that still own a bare-key shortcut (Iso lost `I` in v0.4.4). */
 const KEYED_PRESETS = [
-  { name: 'Top', key: 'T' },
+  { name: 'Top (angled)', key: 'T' },
   { name: 'Oblique', key: 'O' },
   { name: 'Planar', key: 'P' },
 ] as const;
 
 /** Every preset chip in display order — Iso is click/palette-only. */
-const ALL_PRESET_NAMES = ['Top', 'Iso', 'Oblique', 'Planar'] as const;
+const ALL_PRESET_NAMES = ['Top (angled)', 'Iso', 'Oblique', 'Planar'] as const;
 
 test.describe('camera presets — NavBar chip rail', () => {
   test('the rail mounts a chip for every preset; only T/O/P carry a key hint', async ({
@@ -128,7 +128,7 @@ test.describe('camera presets — keyboard shortcuts', () => {
     // (main.ts: `Camera · <Name> view.`) and consumes the keystroke.
     const toast = page.locator('.olv-lasso-toast');
     await page.keyboard.press('T');
-    await expect(toast).toHaveText('Camera · Top view.');
+    await expect(toast).toHaveText('Camera · Top (angled) view.');
     await page.keyboard.press('O');
     await expect(toast).toHaveText('Camera · Oblique view.');
     await page.keyboard.press('P');

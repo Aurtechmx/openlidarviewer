@@ -1,7 +1,7 @@
 /**
  * navBarCompact.test.ts — the compact navigation row.
  *
- * Orbit | Walk | Fly | Pan is one segmented control; Frame all sits beside it;
+ * Orbit | Walk | Fly | Pan is one segmented control; Frame all is left to the dock;
  * the six axis views live in a "More" disclosure that only a click opens and
  * that is never persisted. The one-time desktop hint shows once ever, and the
  * prompt carries the existing hold-Space sentence while a modal tool is armed.
@@ -46,10 +46,10 @@ describe('the compact mode selector', () => {
     expect(root.byClass('olv-modes-triangle')).toHaveLength(0);
   });
 
-  it('keeps Frame all beside the selector and Pan capability gating', async () => {
+  it('leaves Frame all to the dock and keeps Pan capability gating', async () => {
     const { root, bar } = await navbar();
     const row = root.byClass('olv-nav-row')[0];
-    expect(row.byClass('olv-mode-reset')).toHaveLength(1);
+    expect(row.byClass('olv-mode-reset')).toHaveLength(0);
     bar.setPanAvailable(false);
     expect(root.byClass('olv-mode-pan')[0].classList.contains('olv-hidden')).toBe(true);
   });

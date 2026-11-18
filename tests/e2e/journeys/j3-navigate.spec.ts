@@ -116,7 +116,7 @@ test.describe('J3 navigate (mouse and keyboard)', () => {
       await page.setViewportSize({ width: vp.width, height: vp.height });
       const j = startJourney(page, info, 'j3');
       await j.step('open the scan', () => openTerrain(page));
-      for (const view of ['Top view', 'Iso view', 'Front view (axis aligned)', 'Right view (axis aligned)']) {
+      for (const view of ['Top (angled) view', 'Iso view', 'Front view (axis aligned)', 'Right view (axis aligned)']) {
         await j.step(`${view} frames every point`, async () => {
           // The axis views sit in the nav row's "More" disclosure.
           const more = page.locator('.olv-nav-more');
@@ -197,7 +197,7 @@ test.describe('J3 navigate (mouse and keyboard)', () => {
     const j = startJourney(page, info, 'j3');
     await j.step('open the scan', () => openTerrain(page));
     await j.step('Top view settles within 200 ms', async () => {
-      await page.getByRole('button', { name: 'Top view', exact: true }).click();
+      await page.getByRole('button', { name: 'Top (angled) view', exact: true }).click();
       await page.waitForTimeout(200);
       const early = await cameraPose(page);
       await page.waitForTimeout(1200);

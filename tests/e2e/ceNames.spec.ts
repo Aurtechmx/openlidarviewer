@@ -36,7 +36,7 @@ test('the dock, the palette and the launcher use the same names', async ({ page 
   for (const [id, name] of Object.entries(names)) {
     await expect(dock(page, id)).toHaveAccessibleName(name);
   }
-  await expect(page.locator('.olv-navbar .olv-mode-reset')).toHaveAccessibleName('Frame all');
+  await expect(page.locator('.olv-navbar .olv-mode-reset')).toHaveCount(0);
 
   await page.keyboard.press('ControlOrMeta+KeyK');
   await expect(page.locator('.olv-palette-row').first()).toBeVisible();

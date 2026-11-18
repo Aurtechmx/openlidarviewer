@@ -58,7 +58,6 @@ test.describe('targets at desktop size', { tag: '@desktop-only' }, () => {
     await openScan(page);
     await expect(page.locator('.olv-dock [data-action="tool.measure"]')).toBeEnabled({ timeout: 20_000 });
     expectAtLeast(await sizes(page.locator('.olv-dock [data-action]')), AA, 'dock buttons');
-    expectAtLeast(await sizes(page.locator('.olv-navbar .olv-mode-reset')), AA, 'NavBar Frame all');
     expectAtLeast(await sizes(page.locator('.olv-navbar .olv-cam-chip')), AA, 'NavBar camera chips');
 
     const canvas = page.locator('canvas').first();

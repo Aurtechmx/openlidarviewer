@@ -7,7 +7,7 @@
    its rule above; this block only pools the states so the families stay in
    sync. Placed last so source order wins over the per-family declarations.
 
-   NOTE: the positioned dock controls (.olv-mode*, .olv-mode-reset) are
+   NOTE: the positioned dock controls (.olv-mode*) are
    deliberately excluded — they own bespoke transforms (translateX/translate)
    that a blanket scale() press would clobber.
    ─────────────────────────────────────────────────────────────────────────── */

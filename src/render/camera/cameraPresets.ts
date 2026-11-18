@@ -64,7 +64,7 @@ export const CAMERA_PRESET_ORDER: readonly CameraPresetName[] = [
 
 /** Short display label used by the UI chips and command palette. */
 export const CAMERA_PRESET_LABEL: Readonly<Record<CameraPresetName, string>> = {
-  top: 'Top',
+  top: 'Top (angled)',
   iso: 'Iso',
   oblique: 'Oblique',
   planar: 'Planar',

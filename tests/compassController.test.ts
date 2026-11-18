@@ -98,13 +98,13 @@ function build(
 }
 
 describe('compass preference', () => {
-  it('is on by default and respects an explicit stored choice either way', () => {
-    expect(build(null).c.isEnabled()).toBe(true);
+  it('is off by default and respects an explicit stored choice either way', () => {
+    expect(build(null).c.isEnabled()).toBe(false);
     expect(build('off').c.isEnabled()).toBe(false);
     expect(build('on').c.isEnabled()).toBe(true);
   });
 
-  it('stays off by default on a phone, but a stored ON or ?viewcube=1 still wins', () => {
+  it('stays off by default on a phone too, but a stored ON or ?viewcube=1 still wins', () => {
     const phone = (pref: string | null, search = ''): boolean => {
       const h = harness(pref, true);
       return createCompassController({ host, urlParams: new URLSearchParams(search), platform: h.platform, loadCube: fakeCube().loadCube }).isEnabled();

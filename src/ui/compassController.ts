@@ -66,10 +66,8 @@ export interface CompassPlatform {
   readPref(): string | null;
   writePref(value: string): void;
   /**
-   * Whether the viewport is phone-sized. A phone keeps the cube off unless the
-   * user turned it on: at 390 px the top-right corner holds the header
-   * controls and the project card, and a touch-sized cube (156 px) would cover
-   * a fifth of the scan. Optional; absent means not a phone.
+   * Whether the viewport is phone-sized. Not consulted for the default any
+   * more: the cube is off everywhere until the user turns it on. Optional.
    */
   isPhone?(): boolean;
 }
@@ -151,13 +149,10 @@ export function createCompassController(opts: CompassControllerOptions): Compass
   let enabled = ((): boolean => {
     if (opts.urlParams.get('viewcube') === '0') return false;
     if (opts.urlParams.has('viewcube')) return true;
-    // On by default for everyone who has not turned it off; a phone keeps it
-    // off until asked (see CompassPlatform.isPhone). An explicit stored choice
-    // wins either way.
-    const pref = platform.readPref();
-    if (pref === 'on') return true;
-    if (pref === 'off') return false;
-    return !(platform.isPhone?.() ?? false);
+    // Off until the user turns it on: the six axis views are in the nav row's
+    // More menu and Plan is the top-down control, so the cube repeats them.
+    // An explicit stored choice wins either way.
+    return platform.readPref() === 'on';
   })();
   let viewer: CompassViewer | null = null;
   let handle: ViewCubeHandle | null = null;

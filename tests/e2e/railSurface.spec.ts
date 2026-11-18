@@ -182,10 +182,12 @@ test.describe('what the rail and the dock say after a terrain run', () => {
     await expect(analyse).toHaveAttribute('aria-pressed', 'true');
   });
 
-  test('the navigation cluster has one Frame control, clear of the Orbit pad', async ({ page }) => {
+  test('the navigation cluster has no Frame control of its own; the dock\'s stays clear of the Orbit pad', async ({ page }) => {
     await loadAndRun(page, 'dark');
-    await expect(page.locator('.olv-mode-reset')).toHaveCount(1);
-    const reset = (await page.locator('.olv-mode-reset').boundingBox())!;
+    await expect(page.locator('.olv-mode-reset')).toHaveCount(0);
+    const frame = page.locator('.olv-dock [data-action="camera.frame-all"]');
+    await expect(frame).toHaveCount(1);
+    const reset = (await frame.boundingBox())!;
     const orbit = (await page.locator('.olv-mode-orbit').boundingBox())!;
     expect(intersects(reset, orbit)).toBe(false);
   });

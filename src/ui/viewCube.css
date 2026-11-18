@@ -20,11 +20,7 @@
   transition:opacity 120ms ease-out,transform 120ms ease-out}
 .olv-viewcube-spot:hover::after,.olv-viewcube-spot:focus-visible::after{opacity:1;background:var(--accent);transform:scale(1.5)}
 .olv-viewcube-spot[hidden]{display:none}
-.olv-viewcube-home{position:absolute;left:50%;bottom:0;transform:translateX(-50%);width:24px;height:24px;margin:0;padding:0;border:1px solid var(--hairline);
-  border-radius:50%;background:var(--panel-raised);color:var(--text);cursor:pointer;pointer-events:auto;display:flex;align-items:center;justify-content:center}
-.olv-viewcube-home:hover,.olv-viewcube-home:focus-visible{color:var(--accent);border-color:var(--accent);outline:none}
-.olv-viewcube-home svg{width:13px;height:13px}
-@media (pointer:coarse){.olv-viewcube-face{font-size:var(--text-sm)}.olv-viewcube-home{width:44px;height:44px}.olv-viewcube-home svg{width:18px;height:18px}}
+@media (pointer:coarse){.olv-viewcube-face{font-size:var(--text-sm)}}
 @media (prefers-reduced-motion:reduce){.olv-viewcube-face,.olv-viewcube-spot::after{transition:none}}
 /* Keyboard focus on a target hidden for pointers: an outline at its projected place, never pressable. */
 .olv-viewcube-face.is-kbd-only{background:transparent;box-shadow:none;border:2px dashed var(--accent);color:transparent;pointer-events:none}

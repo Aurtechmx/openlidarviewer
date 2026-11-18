@@ -2,15 +2,20 @@ import { test, expect } from '@playwright/test';
 import { dropDenseGridPly, closeScanFromDock } from './helpers';
 
 /**
- * The on-canvas ViewCube on the served build: on by default once a scan is
- * open, honest labels on a local scan, every face / edge / corner target
+ * The on-canvas ViewCube on the served build: off by default, shown with
+ * `?viewcube=1` or a stored ON once a scan is open, honest labels on a local scan, every face / edge / corner target
  * present, an explicit stored OFF (or `?viewcube=0`) respected, and nothing on
  * the empty startup screen. The geometry is covered by the viewCubeMath unit
  * tests; the full interaction journey by viewCubeJourney.spec.ts.
  */
 
-test('the cube is on by default with a scan open, and not on the empty screen', async ({ page }) => {
+test('the cube is off by default, and ?viewcube=1 shows it with a scan open and not on the empty screen', async ({ page }) => {
   await page.goto('/?test=1');
+  await dropDenseGridPly(page);
+  await expect(page.locator('.olv-empty')).toBeHidden({ timeout: 20_000 });
+  await page.waitForTimeout(500);
+  await expect(page.locator('.olv-viewcube')).toHaveCount(0);
+  await page.goto('/?test=1&viewcube=1');
   await page.waitForTimeout(500);
   await expect(page.locator('.olv-viewcube')).toHaveCount(0);
   await dropDenseGridPly(page);
@@ -27,7 +32,7 @@ test('the cube is on by default with a scan open, and not on the empty screen', 
   await expect(cube.locator('.olv-viewcube-face', { hasText: /^[NESW]$/ })).toHaveCount(0);
   // Twelve edges and eight corners exist; only the near side is shown.
   await expect(cube.locator('.olv-viewcube-spot')).toHaveCount(20);
-  await expect(cube.locator('[data-testid="viewcube-home"]')).toBeVisible();
+  await expect(cube.locator('[data-testid="viewcube-home"]')).toHaveCount(0);
 });
 
 test('?viewcube=0 keeps it off', async ({ page }) => {
@@ -51,7 +56,7 @@ test('an explicit stored OFF is respected', async ({ page }) => {
 });
 
 test('closing the scan takes the cube down; reopening mounts exactly one', async ({ page }) => {
-  await page.goto('/?test=1');
+  await page.goto('/?test=1&viewcube=1');
   await dropDenseGridPly(page);
   await expect(page.locator('.olv-viewcube')).toBeVisible({ timeout: 20_000 });
   await closeScanFromDock(page);

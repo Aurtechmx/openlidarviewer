@@ -24,7 +24,7 @@ test('every cube view is reachable and usable from the keyboard', async ({ page 
   test.setTimeout(90_000);
   await page.emulateMedia({ reducedMotion: 'reduce' });
   await page.setViewportSize({ width: 1440, height: 900 });
-  await page.goto('/?test=1');
+  await page.goto('/?test=1&viewcube=1');
   await dropDenseGridPly(page);
   await expect(page.locator('.olv-empty')).toBeHidden({ timeout: 20_000 });
   const cube = page.locator('.olv-viewcube');

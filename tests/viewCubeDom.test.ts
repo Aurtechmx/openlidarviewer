@@ -103,7 +103,6 @@ async function mount(opts: {
     isGeographic: opts.geographic,
     onView: (v, o) => calls.views.push([v, o]),
     onOrient: (t, o) => calls.orients.push([t, o]),
-    onHome: () => { calls.homes += 1; },
     obstacles: () => (opts.obstacles ?? []).map((el) => ({ el: el as unknown as Element })),
   });
   const root = host.children[0];
@@ -112,15 +111,15 @@ async function mount(opts: {
 }
 
 describe('ViewCube DOM', () => {
-  it('mounts one widget with 6 faces, 20 edge/corner spots and a Home control', async () => {
+  it('mounts one widget with 6 faces, 20 edge/corner spots and no Home control', async () => {
     const { host, root } = await mount();
     expect(host.children).toHaveLength(1);
     expect(root.all().filter((e) => e.className === 'olv-viewcube-face')).toHaveLength(6);
     expect(root.all().filter((e) => e.className === 'olv-viewcube-spot')).toHaveLength(20);
-    expect(root.byTestId('viewcube-home').attrs['aria-label']).toBe('View cube home: frame all');
+    expect(root.all().filter((e) => e.attrs['data-testid'] === 'viewcube-home')).toHaveLength(0);
   });
 
-  it('the 26 targets are one roving tab stop in a toolbar; Home is its own stop', async () => {
+  it('the 26 targets are one roving tab stop in a toolbar', async () => {
     const { root } = await mount();
     const stage = root.all().find((e) => e.className === 'olv-viewcube-stage')!;
     expect(stage.attrs.role).toBe('toolbar');
@@ -128,7 +127,6 @@ describe('ViewCube DOM', () => {
     expect(targets).toHaveLength(26);
     for (const t of targets) expect(t.tag).toBe('button');
     expect(targets.filter((t) => t.tabIndex === 0).map((t) => t.attrs['data-testid'])).toEqual(['viewcube-top']);
-    expect(root.byTestId('viewcube-home').tabIndex).toBe(0);
   });
 
   it('arrow keys reach every target, a hidden one is shown for focus only, and Enter chooses it', async () => {
@@ -174,7 +172,7 @@ describe('ViewCube DOM', () => {
     expect(prevented).toBe(false);
   });
 
-  it('routes a face to onView with its orientation, an edge or corner to onOrient, Home to onHome', async () => {
+  it('routes a face to onView with its orientation, an edge or corner to onOrient', async () => {
     const { root, calls } = await mount();
     root.byTestId('viewcube-top').click();
     expect(calls.views.map(([v]) => v)).toEqual(['top']);
@@ -183,8 +181,6 @@ describe('ViewCube DOM', () => {
     root.byTestId('viewcube-south-west').click();
     expect(calls.orients.map(([t]) => t.id)).toEqual(['top-north-east', 'south-west']);
     expect(calls.orients[0][1].dir.every((c) => c > 0)).toBe(true);
-    root.byTestId('viewcube-home').click();
-    expect(calls.homes).toBe(1);
   });
 
   it('turns with the camera, writes nothing when it did not turn, and holds on a null orientation', async () => {
