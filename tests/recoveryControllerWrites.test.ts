@@ -606,6 +606,18 @@ describe('Clear recovery data with no recovery session running', () => {
     expect(storage.has(FALLBACK_KEY)).toBe(false);
   });
 
+  it('rejects when the store cannot be cleared, and still removes the fallback key', async () => {
+    const s = fakeStore([entryFor(session(2, OTHER))]);
+    s.store.clear = () => Promise.reject(new Error('blocked'));
+    fake.store = s.store;
+    storage.set(FALLBACK_KEY, JSON.stringify([entryFor(session(3, OTHER))]));
+    const clear = await freshClear();
+
+    await expect(clear()).rejects.toThrow();
+
+    expect(storage.has(FALLBACK_KEY)).toBe(false);
+  });
+
   it('still clears the store when there is no fallback key', async () => {
     const s = fakeStore([entryFor(session(2, OTHER))]);
     fake.store = s.store;

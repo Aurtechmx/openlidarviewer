@@ -442,14 +442,19 @@ export function startRecovery(deps: RecoveryDeps): RecoveryHandle {
   return activeHandle;
 }
 
-/** Delete every journal entry, whatever store holds them. Used by Clear recovery data and when the user turns recovery off. */
+/**
+ * Delete every journal entry, whatever store holds them. Used by Clear recovery data and when the user turns recovery off.
+ * Every clear is attempted; rejects if any of them failed.
+ */
 export async function clearRecoveryJournal(): Promise<void> {
+  let failed = false;
   activeHandle?.clear();
-  await activeWipe?.()?.catch(() => {});
+  await activeWipe?.()?.catch(() => { failed = true; });
   removeLocalFallback((() => { try { return localStorage; } catch { return undefined; } })());
   const store = await openRecoveryStore({
     indexedDB: typeof indexedDB === 'undefined' ? undefined : indexedDB,
     localStorage: (() => { try { return localStorage; } catch { return undefined; } })(),
   }).catch(() => null);
-  await store?.clear().catch(() => {});
+  await store?.clear().catch(() => { failed = true; });
+  if (failed) throw new Error('recovery-clear-failed');
 }

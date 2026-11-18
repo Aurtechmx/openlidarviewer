@@ -81,6 +81,16 @@ describe('Help actions', () => {
     ]);
   });
 
+  it('does not claim deletion when clearing recovery data fails', async () => {
+    chunks.clearJournal.mockImplementationOnce(() => Promise.reject(new Error('blocked')));
+    const a = actions();
+    a.run('help.session-recovery-clear');
+    await settle();
+    expect(a.notify.mock.calls.map((c) => c[0])).toEqual([
+      'Could not clear recovery data. Reload the page and try again.',
+    ]);
+  });
+
   it('turns recovery off and on, and clears its data', async () => {
     const a = actions();
     recovery.on = true;
