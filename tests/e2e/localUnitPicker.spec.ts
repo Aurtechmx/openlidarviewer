@@ -32,6 +32,9 @@ test('a GLB\'s collapsed Coordinate system section opens with a click and takes 
   await expect(page.locator('.olv-empty')).toBeHidden({ timeout: 20_000 });
   await showWorkspaceMode(page, 'data');
 
+  // The display profile is applied once its provenance headline is in the
+  // Inspector; the section's collapsed state is set in the same step.
+  await expect(page.locator('.olv-declared-prov-headline').first()).toContainText('local coordinates', { timeout: 20_000 });
   const summary = page.locator('summary', { hasText: 'Coordinate system' }).first();
   await expect(summary).toBeVisible();
   // Collapsed, not hidden.
