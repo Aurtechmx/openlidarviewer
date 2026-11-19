@@ -165,6 +165,17 @@ export interface SettledStreamingFacts {
   residentAtDepth(depth: number): boolean;
 }
 
+/** What a space or object report is measured from. */
+interface ReportInputs {
+  /** The coordinator's own copy of the routed points, in the scan's source units. */
+  readonly points: Float32Array;
+  readonly shape: ScanShape;
+  readonly spaceKind: 'interior' | 'object';
+  readonly hasRgb: boolean;
+  readonly totalPoints: number;
+  readonly residentOnly: boolean;
+}
+
 export interface ScanRouteCoordinatorDeps {
   readonly routing: ScanRouteService;
   readonly geometry: ScanRouteGeometryPort;
@@ -194,6 +205,13 @@ export interface ScanRouteCoordinator {
   onStreamingSettled(facts: SettledStreamingFacts): void;
   /** The scan closed: cancel and forget everything per-scan. */
   reset(): void;
+  /**
+   * The active scan's CRS changed: measure the on-screen space or object
+   * report again from the points it was routed on, under the new unit frame,
+   * and restamp its export context. The route itself does not move. A report
+   * for another scan, or one already measured under this frame, is left alone.
+   */
+  remeasureForFrame(): void;
   spaceExport(): SpaceExportContext | null;
   /** True once a settled auto-mode verdict soft-committed the control. */
   detectionCommitted(): boolean;
@@ -227,6 +245,9 @@ export function createScanRouteCoordinator(deps: ScanRouteCoordinatorDeps): Scan
   let lastSettleUndecided = false;
   let scanDetectionCommitted = false;
   let lastSpaceExport: SpaceExportContext | null = null;
+  // The routed inputs behind the on-screen report, so a CRS change can measure
+  // the same points again.
+  let lastReportInputs: ReportInputs | null = null;
 
   const clearPerScan = (): void => {
     streamingSettledRouted = false;
@@ -235,6 +256,55 @@ export function createScanRouteCoordinator(deps: ScanRouteCoordinatorDeps): Scan
     lastSettleUndecided = false;
     scanDetectionCommitted = false;
   };
+
+  /**
+   * Measure the routed points under the CURRENT unit frame, show the space or
+   * object report and record its export context. A route and a CRS change on
+   * the routed scan both come through here, so they cannot measure differently.
+   */
+  function measureReport(inputs: ReportInputs): void {
+    const { points, shape, spaceKind } = inputs;
+    const unitToMetres = frame.linearUnitToMetres();
+    const verticalUnitToMetres = frame.verticalUnitToMetres();
+    const unitKnown = frame.linearUnitKnown();
+    const space = spaceMetrics(points, {
+      upAxis: shape.up,
+      spaceKind,
+      unitToMetres,
+      verticalUnitToMetres,
+      unitKnown,
+      hasRgb: inputs.hasRgb,
+      sourcePointCount: inputs.totalPoints,
+      residentOnly: inputs.residentOnly,
+    });
+    const object =
+      spaceKind === 'object'
+        ? objectMetrics(
+            positionsInMetres(points, resolveLinearUnitScale(unitToMetres, unitKnown), {
+              metresPerUnit: verticalUnitToMetres,
+              axis: UP_AXIS_INDEX[shape.up],
+            }),
+            { sourcePointCount: inputs.totalPoints },
+          )
+        : null;
+    if (spaceKind === 'interior') view.showSpace(space, shape);
+    else view.showObject(object, space, shape);
+    lastReportInputs = inputs;
+    lastSpaceExport = {
+      positions: points,
+      space,
+      object,
+      spaceKind,
+      targetId: frame.exportTargetId(),
+      crsRevision: frame.crsRevision(),
+      unitToMetres,
+      verticalUnitToMetres,
+      unitKnown,
+      upAxis: shape.up,
+      basename: frame.basename() || 'scan',
+      ...((t) => (t ? { coverageNote: truncationText(t) } : {}))(truncationOf({ metadata: { truncation: frame.truncation?.() ?? undefined } })),
+    };
+  }
 
   function applyRoute(initial: boolean, settled = false): boolean {
     // A pinned route (manual override or "run anyway") never moves for a
@@ -297,56 +367,26 @@ export function createScanRouteCoordinator(deps: ScanRouteCoordinatorDeps): Scan
     verdict.set(effective);
 
     if (plan.showObjectPanel && shape && gathered && routePositions) {
-      const unitToMetres = frame.linearUnitToMetres();
-      const verticalUnitToMetres = frame.verticalUnitToMetres();
-      const unitKnown = frame.linearUnitKnown();
-      const spaceKind: 'interior' | 'object' = effective === 'interior' ? 'interior' : 'object';
-      const space = spaceMetrics(routePositions, {
-        upAxis: shape.up,
-        spaceKind,
-        unitToMetres,
-        verticalUnitToMetres,
-        unitKnown,
+      measureReport({
+        // Copied, so a later streaming buffer reuse cannot corrupt the report's inputs.
+        points: Float32Array.from(routePositions),
+        shape,
+        spaceKind: effective === 'interior' ? 'interior' : 'object',
         hasRgb: geometry.hasRgb(),
-        sourcePointCount: gathered.totalPoints,
+        totalPoints: gathered.totalPoints,
         residentOnly: gathered.residentOnly,
       });
-      const object =
-        spaceKind === 'object'
-          ? objectMetrics(
-              positionsInMetres(routePositions, resolveLinearUnitScale(unitToMetres, unitKnown), {
-                metresPerUnit: verticalUnitToMetres,
-                axis: UP_AXIS_INDEX[shape.up],
-              }),
-              { sourcePointCount: gathered.totalPoints },
-            )
-          : null;
-      if (spaceKind === 'interior') view.showSpace(space, shape);
-      else view.showObject(object, space, shape);
-      // Copied, so a later streaming buffer reuse cannot corrupt the report's inputs.
-      lastSpaceExport = {
-        positions: Float32Array.from(routePositions),
-        space,
-        object,
-        spaceKind,
-        targetId: frame.exportTargetId(),
-        crsRevision: frame.crsRevision(),
-        unitToMetres,
-        verticalUnitToMetres,
-        unitKnown,
-        upAxis: shape.up,
-        basename: frame.basename() || 'scan',
-        ...((t) => (t ? { coverageNote: truncationText(t) } : {}))(truncationOf({ metadata: { truncation: frame.truncation?.() ?? undefined } })),
-      };
     } else if (plan.showObjectPanel) {
       // A forced non-terrain route with no usable geometry right now: the
       // panel stays alive with its empty state, which still carries the
       // "Treat as" control and the run-anyway hatch.
       lastSpaceExport = null;
+      lastReportInputs = null;
       if (effective === 'interior') view.showSpace(null, null);
       else view.showObject(null, null, null);
     } else {
       lastSpaceExport = null;
+      lastReportInputs = null;
     }
     view.setObjectVisible(plan.showObjectPanel);
     view.setAnalyseVisible(plan.showAnalysePanel);
@@ -402,7 +442,16 @@ export function createScanRouteCoordinator(deps: ScanRouteCoordinatorDeps): Scan
       clearPerScan();
       lastRouteResident = 0;
       lastSpaceExport = null;
+      lastReportInputs = null;
       verdict.set(null);
+    },
+    remeasureForFrame() {
+      const last = lastSpaceExport;
+      const inputs = lastReportInputs;
+      if (!last || !inputs) return;
+      // A report for another scan, or one already measured under this frame.
+      if (last.targetId !== frame.exportTargetId() || last.crsRevision === frame.crsRevision()) return;
+      measureReport(inputs);
     },
     spaceExport: () => lastSpaceExport,
     detectionCommitted: () => scanDetectionCommitted,

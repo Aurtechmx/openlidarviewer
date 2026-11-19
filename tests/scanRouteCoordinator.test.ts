@@ -10,6 +10,8 @@
  * one over a bare context, with its timer replaced by a queue the test drains.
  * Nothing here touches a panel or the Viewer. A view spy per port method
  * records what the route asked for. Each case reads the last call it cares about.
+ * The last block pins that a CRS change on the routed scan measures the same
+ * routed points again under the new unit frame.
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import {
@@ -54,7 +56,7 @@ interface Harness {
   verdict: { value: SpaceKind | null };
   detect: { value: SpaceKind | null; throws?: boolean };
   geometry: { resident: number; gathered: RouteGeometry | null };
-  frame: { unit: number; vert: number; known: boolean };
+  frame: { unit: number; vert: number; known: boolean; rev: number; target: string | null };
   scheduled: Array<() => void>;
   log: string[];
 }
@@ -71,7 +73,7 @@ function harness(over: Partial<{ detect: SpaceKind | null; unit: number; vert: n
     resident: 1000,
     gathered: { positions: box(), residentOnly: over.residentOnly ?? false, totalPoints: 1000 } as RouteGeometry | null,
   };
-  const frame = { unit: over.unit ?? 1, vert: over.vert ?? over.unit ?? 1, known: over.known ?? true };
+  const frame = { unit: over.unit ?? 1, vert: over.vert ?? over.unit ?? 1, known: over.known ?? true, rev: 3, target: 'scan-1' as string | null };
   const view = {
     setObjectScanType: vi.fn(), setAnalyseScanType: vi.fn(), showSpace: vi.fn(), showObject: vi.fn(),
     setObjectVisible: vi.fn(), setAnalyseVisible: vi.fn(), setDockAnalyse: vi.fn(), expandAnalyseAndRunTerrain: vi.fn(),
@@ -88,8 +90,8 @@ function harness(over: Partial<{ detect: SpaceKind | null; unit: number; vert: n
       linearUnitToMetres: () => frame.unit,
       verticalUnitToMetres: () => frame.vert,
       linearUnitKnown: () => frame.known,
-      exportTargetId: () => 'scan-1',
-      crsRevision: () => 3,
+      exportTargetId: () => frame.target,
+      crsRevision: () => frame.rev,
       basename: () => 'tile',
     },
     verdict: { get: () => verdict.value, set: (v) => { verdict.value = v; } },
@@ -330,5 +332,101 @@ describe('scan route coordinator', () => {
     expect(treatAsDisabledFor('terrain')).toBeUndefined();
     expect(treatAsDisabledFor(null)).toBeUndefined();
     expect(treatAsDisabledFor('object')!.terrain).toMatch(/compact object.*Run terrain contours anyway/);
+  });
+});
+
+describe('the space or object report follows a CRS change on the routed scan', () => {
+  const UNVERIFIED = 'Coordinate units are unverified';
+  const lastObject = (h: Harness) => h.view.showObject.mock.calls.at(-1)! as [
+    { obb: { lengthM: number } } | null,
+    { linearUnit: { known: boolean }; reasons: string[] } | null,
+    ScanShape | null,
+  ];
+
+  it('an object report moves from source units to metres and back with the CRS', () => {
+    const h = harness({ detect: 'object', unit: 1, known: false });
+    const c = createScanRouteCoordinator(h.deps);
+    c.beginScan(true);
+    expect(lastObject(h)[1]!.linearUnit.known).toBe(false);
+    expect(lastObject(h)[1]!.reasons.join(' ')).toContain(UNVERIFIED);
+
+    // A metre CRS is chosen in the Inspector.
+    h.frame.known = true;
+    h.frame.rev = 4;
+    c.remeasureForFrame();
+    expect(h.view.showObject).toHaveBeenCalledTimes(2);
+    expect(lastObject(h)[1]!.linearUnit.known).toBe(true);
+    expect(lastObject(h)[1]!.reasons.join(' ')).not.toContain(UNVERIFIED);
+    expect(lastObject(h)[2]).not.toBeNull();
+    expect(c.spaceExport()!.crsRevision).toBe(4);
+    expect(c.spaceExport()!.unitKnown).toBe(true);
+
+    // "Use detected" puts the unknown frame back.
+    h.frame.known = false;
+    h.frame.rev = 5;
+    c.remeasureForFrame();
+    expect(lastObject(h)[1]!.linearUnit.known).toBe(false);
+    expect(lastObject(h)[1]!.reasons.join(' ')).toContain(UNVERIFIED);
+    expect(c.spaceExport()!.crsRevision).toBe(5);
+    expect(c.spaceExport()!.unitKnown).toBe(false);
+  });
+
+  it('the figures scale with the new unit, measured on the points the route read', () => {
+    const h = harness({ detect: 'object', unit: 1, known: true });
+    const gather = vi.fn(() => h.geometry.gathered);
+    h.deps = { ...h.deps, geometry: { ...h.deps.geometry, gatherForRouting: gather } };
+    const c = createScanRouteCoordinator(h.deps);
+    c.beginScan(true);
+    const metres = c.spaceExport()!.object!.obb.lengthM;
+    h.frame.unit = 0.3048;
+    h.frame.vert = 0.3048;
+    h.frame.rev = 4;
+    c.remeasureForFrame();
+    expect(gather).toHaveBeenCalledTimes(1);
+    expect(c.spaceExport()!.unitToMetres).toBeCloseTo(0.3048, 6);
+    expect(c.spaceExport()!.object!.obb.lengthM).toBeCloseTo(metres * 0.3048, 3);
+  });
+
+  it('an interior report re-measures through showSpace', () => {
+    const h = harness({ detect: 'interior', unit: 1, known: false });
+    const c = createScanRouteCoordinator(h.deps);
+    c.beginScan(true);
+    h.frame.known = true;
+    h.frame.rev = 4;
+    c.remeasureForFrame();
+    expect(h.view.showSpace).toHaveBeenCalledTimes(2);
+    expect((h.view.showSpace.mock.calls.at(-1)![0] as { linearUnit: { known: boolean } }).linearUnit.known).toBe(true);
+    expect(h.view.showObject).not.toHaveBeenCalled();
+  });
+
+  it('a report for another scan, or one already measured under this frame, is left alone', () => {
+    const h = harness({ detect: 'object', known: false });
+    const c = createScanRouteCoordinator(h.deps);
+    c.beginScan(true);
+    c.remeasureForFrame(); // same revision
+    expect(h.view.showObject).toHaveBeenCalledTimes(1);
+    h.frame.target = 'scan-2';
+    h.frame.known = true;
+    h.frame.rev = 4;
+    c.remeasureForFrame();
+    expect(h.view.showObject).toHaveBeenCalledTimes(1);
+    expect(c.spaceExport()!.crsRevision).toBe(3);
+  });
+
+  it('a terrain route and a closed scan have no report to re-measure', () => {
+    const h = harness({ detect: 'terrain' });
+    const c = createScanRouteCoordinator(h.deps);
+    c.beginScan(true);
+    h.frame.rev = 4;
+    c.remeasureForFrame();
+    expect(h.view.showObject).not.toHaveBeenCalled();
+    expect(h.view.showSpace).not.toHaveBeenCalled();
+    const o = harness({ detect: 'object' });
+    const co = createScanRouteCoordinator(o.deps);
+    co.beginScan(true);
+    co.reset();
+    o.frame.rev = 4;
+    co.remeasureForFrame();
+    expect(o.view.showObject).toHaveBeenCalledTimes(1);
   });
 });
