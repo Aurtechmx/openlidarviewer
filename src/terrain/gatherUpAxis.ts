@@ -55,19 +55,31 @@ export type TerrainGatherFrame =
 
 export { hasHorizontalCrs };
 
+/** How every decline below opens: the gather declines on behalf of terrain analysis. */
+export const TERRAIN_DECLINE_LEAD = 'Terrain analysis did not run. ';
+
+/**
+ * A decline's cause without the terrain lead, for a surface that is not terrain
+ * analysis (the space and object report reads the same gather). Text with no
+ * lead is returned as it is.
+ */
+export function gatherDeclineCause(reason: string): string {
+  return reason.startsWith(TERRAIN_DECLINE_LEAD) ? reason.slice(TERRAIN_DECLINE_LEAD.length) : reason;
+}
+
 /** The decline for a glTF or GLB source under a CRS. */
 export function gltfUnderCrsReason(label: string): string {
-  return `Terrain analysis did not run. ${gltfUnderCrsAxisReason(label)}`;
+  return `${TERRAIN_DECLINE_LEAD}${gltfUnderCrsAxisReason(label)}`;
 }
 
 /** The decline for a local mesh that reads as Y-up beside Z-up layers. */
 export const MIXED_FRAME_REASON =
-  'Terrain analysis did not run. A mesh layer with no coordinate system reads as Y-up from its point layout, ' +
+  TERRAIN_DECLINE_LEAD + 'A mesh layer with no coordinate system reads as Y-up from its point layout, ' +
   'and the other visible layers are Z-up, so together they describe no single surface. Hide or lock one side, then run.';
 
 /** The decline for a glTF or GLB layer, Y-up by specification, beside Z-up layers. */
 export const MIXED_GLTF_FRAME_REASON =
-  'Terrain analysis did not run. A glTF or GLB layer is Y-up by specification, and the other visible layers are Z-up, ' +
+  TERRAIN_DECLINE_LEAD + 'A glTF or GLB layer is Y-up by specification, and the other visible layers are Z-up, ' +
   'so together they describe no single surface. Hide or lock one side, then run.';
 
 /**
@@ -101,7 +113,7 @@ export function settleTerrainGatherFrame(
       ? (classifyScanShape(own && own.length > 0 ? own : positions).up === 'y' ? 'y' : 'z')
       : undefined;
     const f = resolveLayerUpFrame({ format: s.format, crs: s.crs, ...(detected ? { detected } : {}) });
-    if (!f.ok) return { ok: false, reason: `Terrain analysis did not run. ${f.reason}` };
+    if (!f.ok) return { ok: false, reason: `${TERRAIN_DECLINE_LEAD}${f.reason}` };
     if (f.basis === 'detected') anyDetected = true;
     if (f.basis === 'crs') anyCrs = true;
     if (f.axis === 'z') hasZ = true;

@@ -449,6 +449,7 @@ describe('the space or object report follows a CRS change on the routed scan', (
   }
   function gatherAs(h: Harness, format: 'glb' | 'ply'): void {
     const stored = yUpRoom();
+    let decline: string | null = null;
     h.deps = {
       ...h.deps,
       geometry: {
@@ -456,8 +457,10 @@ describe('the space or object report follows a CRS change on the routed scan', (
         gatherForRouting: () => {
           const p = Float32Array.from(stored);
           const f = settleTerrainGatherFrame([{ format, crs: h.frame.horizontal ? UTM : null, layerPoints: p }], false, p);
+          decline = f && !f.ok ? f.reason : null;
           return f?.ok ? { positions: p, residentOnly: false, totalPoints: p.length / 3 } : null;
         },
+        declineReason: () => decline,
       },
     };
   }
@@ -473,7 +476,7 @@ describe('the space or object report follows a CRS change on the routed scan', (
     h.frame.horizontal = true;
     h.frame.rev = 4;
     c.remeasureForFrame();
-    expect(h.view.showObject).toHaveBeenLastCalledWith(null, null, null);
+    expect(h.view.showObject.mock.calls.at(-1)!.slice(0, 3)).toEqual([null, null, null]);
     expect(c.spaceExport()).toBeNull();
 
     // "Use detected" brings the figures back.
@@ -547,5 +550,30 @@ describe('the space or object report follows a CRS change on the routed scan', (
     expect(spaceContextStillCurrent(c.spaceExport()!, live)).toBe(true);
     expect(lastObject(h)[0]).toBe(c.spaceExport()!.object);
     expect(lastObject(h)[1]).toBe(c.spaceExport()!.space);
+  });
+
+  it('a declined gather states its reason on the empty report, without the terrain wording', () => {
+    const h = harness({ detect: 'object', known: false });
+    gatherAs(h, 'glb');
+    const c = createScanRouteCoordinator(h.deps);
+    c.beginScan(true);
+    h.frame.known = true;
+    h.frame.horizontal = true;
+    h.frame.rev = 4;
+    c.remeasureForFrame();
+    const [object, space, shape, reason] = h.view.showObject.mock.calls.at(-1)!;
+    expect([object, space, shape]).toEqual([null, null, null]);
+    expect(reason).toMatch(/^glTF stores Y as the up axis by specification/);
+    expect(reason).not.toMatch(/Terrain analysis/);
+  });
+
+  it('a forced object route whose gather declines states the reason too', () => {
+    const h = harness({ detect: null });
+    h.geometry.gathered = null;
+    h.deps = { ...h.deps, geometry: { ...h.deps.geometry, declineReason: () => 'Terrain analysis did not run. The axes disagree.' } };
+    const c = createScanRouteCoordinator(h.deps);
+    c.beginScan(true);
+    c.setTypeOverride('object');
+    expect(h.view.showObject).toHaveBeenLastCalledWith(null, null, null, 'The axes disagree.');
   });
 });

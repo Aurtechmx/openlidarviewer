@@ -124,3 +124,32 @@ describe('ObjectPanel: an export outlives a re-render of the report', () => {
     expect(reportButton(root)!.textContent).toBe('Report PDF');
   });
 });
+
+describe('ObjectPanel: an empty report says why when the points could not be measured', () => {
+  const REASON = 'glTF stores Y as the up axis by specification, so its coordinates cannot be read as easting, northing and height under EPSG:32612.';
+
+  it('object: the reason replaces the loading sentence', async () => {
+    const { ObjectPanel } = await import('../src/ui/ObjectPanel');
+    const panel = new ObjectPanel();
+    panel.showObject(null, null, null, REASON);
+    const root = panel.element as unknown as FakeEl;
+    expect(root.findByText(`This object was not measured. ${REASON}`)).toHaveLength(1);
+    expect(root.textContent).not.toContain('They appear once the scan points are loaded');
+  });
+
+  it('interior: the reason replaces the loading sentence', async () => {
+    const { ObjectPanel } = await import('../src/ui/ObjectPanel');
+    const panel = new ObjectPanel();
+    panel.showSpace(null, null, REASON);
+    const root = panel.element as unknown as FakeEl;
+    expect(root.findByText(`This space was not measured. ${REASON}`)).toHaveLength(1);
+  });
+
+  it('with no reason the loading sentence stays', async () => {
+    const { ObjectPanel } = await import('../src/ui/ObjectPanel');
+    const panel = new ObjectPanel();
+    panel.showObject(null, null, null);
+    const root = panel.element as unknown as FakeEl;
+    expect(root.findByText('No object measurements yet. They appear once the scan points are loaded.')).toHaveLength(1);
+  });
+});

@@ -568,12 +568,21 @@ export class ObjectPanel {
     this._body.append(this._scanTypeControl.element);
   }
 
-  /** Render the INTERIOR (room) report. */
-  showSpace(space: SpaceMetrics | null, shape: ScanShape | null): void {
+  /**
+   * Render the INTERIOR (room) report. With no figures, `unmeasured` is why
+   * the points could not be measured (the gather declined their frame); without
+   * one the points are still arriving.
+   */
+  showSpace(space: SpaceMetrics | null, shape: ScanShape | null, unmeasured?: string): void {
     this._title.textContent = 'Space scan';
     this._body.replaceChildren();
     if (!space) {
-      this._body.append(el('div', { className: 'olv-object-note', text: 'No space measurements yet. They appear once the scan points are loaded.' }));
+      this._body.append(el('div', {
+        className: 'olv-object-note',
+        text: unmeasured
+          ? `This space was not measured. ${unmeasured}`
+          : 'No space measurements yet. They appear once the scan points are loaded.',
+      }));
       this._scanTypeRow();
       return;
     }
@@ -617,12 +626,17 @@ export class ObjectPanel {
     this._scanTypeRow();
   }
 
-  /** Render the OBJECT measurements (with optional capture quality). */
-  showObject(metrics: ObjectMetrics | null, space: SpaceMetrics | null, shape: ScanShape | null): void {
+  /** Render the OBJECT measurements (with optional capture quality). `unmeasured` as for {@link showSpace}. */
+  showObject(metrics: ObjectMetrics | null, space: SpaceMetrics | null, shape: ScanShape | null, unmeasured?: string): void {
     this._title.textContent = 'Object scan';
     this._body.replaceChildren();
     if (!metrics) {
-      this._body.append(el('div', { className: 'olv-object-note', text: 'No object measurements yet. They appear once the scan points are loaded.' }));
+      this._body.append(el('div', {
+        className: 'olv-object-note',
+        text: unmeasured
+          ? `This object was not measured. ${unmeasured}`
+          : 'No object measurements yet. They appear once the scan points are loaded.',
+      }));
       this._scanTypeRow();
       return;
     }

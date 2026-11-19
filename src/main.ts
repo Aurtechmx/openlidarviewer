@@ -2459,7 +2459,7 @@ let toolLauncherFilling = false; async function fillToolLauncher(): Promise<void
 const routeCoordinator = createScanRouteCoordinator({
   routing,
   geometry: {
-    gatherForRouting: (maxPoints) => viewer.gatherTerrainPositions(maxPoints),
+    gatherForRouting: (maxPoints) => viewer.gatherTerrainPositions(maxPoints), declineReason: () => viewer.terrainGatherDecline, // why the gather declined the frame, for an empty report
     residentPointTotal: () => viewer.residentPointTotal(),
     // A STREAMING COPC/EPT carries its colours in the streamed nodes, not the
     // static `activeCloud.colors`; ask the streaming cloud first.
@@ -2488,13 +2488,13 @@ const routeCoordinator = createScanRouteCoordinator({
       analysePanel?.setScanType(...analyseScanTypeArgs);
       if (analysePanel) terrainRunner.refreshDatasetStory(analysePanel);
     },
-    showSpace: (space, shape) => {
-      objectContent = { kind: 'space', args: [space, shape] };
-      objectPanel?.showSpace(space, shape);
+    showSpace: (...args) => {
+      objectContent = { kind: 'space', args };
+      objectPanel?.showSpace(...args);
     },
-    showObject: (object, space, shape) => {
-      objectContent = { kind: 'object', args: [object, space, shape] };
-      objectPanel?.showObject(object, space, shape);
+    showObject: (...args) => {
+      objectContent = { kind: 'object', args };
+      objectPanel?.showObject(...args);
     },
     setObjectVisible: (visible) => { objectDesiredVisible = visible; objectPanel?.setVisible(visible); },
     setAnalyseVisible: (visible) => {

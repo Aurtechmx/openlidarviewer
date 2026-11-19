@@ -37,6 +37,7 @@ import {
 } from '../terrain/spaceMetrics';
 import type { ScanRouteService } from './ScanRouteService';
 import { hasHorizontalCrs, layerCrsFromContext } from '../geo/frame/layerUpFrame';
+import { gatherDeclineCause } from '../terrain/gatherUpAxis';
 import type { ScanTypeDisabledReasons } from '../ui/scanTypeControl';
 
 /** Re-route only after the resident cloud grows by this factor (cheap gate). */
@@ -61,6 +62,11 @@ export interface ScanRouteGeometryPort {
   residentPointTotal(): number;
   /** Whether the scan carries RGB, asked of the streaming cloud first. */
   hasRgb(): boolean;
+  /**
+   * Why the last gather declined the scan's frame (the Viewer's
+   * `terrainGatherDecline`), or null. Absent reads as no reason.
+   */
+  declineReason?(): string | null;
 }
 
 /**
@@ -134,8 +140,9 @@ export type ScanTypeArgs = readonly [ScanTypeOverride, SpaceKind | null, ScanTyp
 export interface ScanRouteViewPort {
   setObjectScanType(args: ScanTypeArgs): void;
   setAnalyseScanType(args: ScanTypeArgs): void;
-  showSpace(space: SpaceMetrics | null, shape: ScanShape | null): void;
-  showObject(object: ObjectMetrics | null, space: SpaceMetrics | null, shape: ScanShape | null): void;
+  /** `unmeasured` is why an empty report has no figures, when the gather said why. */
+  showSpace(space: SpaceMetrics | null, shape: ScanShape | null, unmeasured?: string): void;
+  showObject(object: ObjectMetrics | null, space: SpaceMetrics | null, shape: ScanShape | null, unmeasured?: string): void;
   setObjectVisible(visible: boolean): void;
   /** Also drops any pending panel-visibility restore: the route owns panel state. */
   setAnalyseVisible(visible: boolean): void;
@@ -397,8 +404,12 @@ export function createScanRouteCoordinator(deps: ScanRouteCoordinatorDeps): Scan
     }
     lastSpaceExport = null;
     shownReport = { spaceKind, targetId: frame.exportTargetId(), crsRevision: frame.crsRevision(), measured: null };
-    if (spaceKind === 'interior') view.showSpace(null, null);
-    else view.showObject(null, null, null);
+    // A gather that declined the frame says why. The reason is worded for
+    // terrain analysis, so the report states only its cause.
+    const declined = gathered ? null : geometry.declineReason?.();
+    const why: [] | [string] = declined ? [gatherDeclineCause(declined)] : [];
+    if (spaceKind === 'interior') view.showSpace(null, null, ...why);
+    else view.showObject(null, null, null, ...why);
   }
 
   function applyRoute(initial: boolean, settled = false): boolean {
