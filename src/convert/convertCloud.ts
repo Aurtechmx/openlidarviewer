@@ -645,12 +645,14 @@ export function convertCloud(
 
   log.push({ level: 'info', message: `Wrote ${g.count.toLocaleString()} points as ${spec.label}.` });
   // XYZ / ASC carry the CRS only as a header comment, so a `.prj` sidecar is the
-  // machine-readable record. Keep mode uses the resolved source WKT; assign and
-  // reproject name the target EPSG's definition.
+  // machine-readable record. Keep mode uses the source WKT when it has one, and
+  // otherwise the stored definition of its EPSG code (a file that carries only
+  // GeoKeys); assign and reproject name the target EPSG's definition.
   let prj: string | undefined;
   if (opts.format === 'xyz' || opts.format === 'asc') {
-    if (mode === 'keep') {
-      prj = sourceCrs?.wkt || undefined;
+    const keptWkt = mode === 'keep' ? sourceCrs?.wkt || undefined : undefined;
+    if (keptWkt) {
+      prj = keptWkt;
     } else if (outEpsg != null) {
       prj = wktForEpsg(outEpsg) ?? undefined;
       if (prj === undefined) {

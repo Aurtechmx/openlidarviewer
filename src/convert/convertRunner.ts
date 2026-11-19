@@ -181,8 +181,9 @@ export async function runBatch(
         ? { ...file, filename: dedupeName(file.filename, seen) }
         : null;
       // ASCII outputs (XYZ/ASC) carry no CRS slot, so the converter returns the
-      // `.prj` WKT for every CRS mode: the resolved source WKT on keep, the
-      // target definition on assign and reproject. It is named as the export
+      // `.prj` WKT for every CRS mode: the source WKT on keep (the EPSG
+      // definition when the file carries only a code), the target definition on
+      // assign and reproject. It is named as the export
       // panel names it, beside its point file.
       let sidecar: ConvertedFile | undefined;
       if (finalFile?.prj) {

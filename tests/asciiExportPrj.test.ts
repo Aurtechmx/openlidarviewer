@@ -74,11 +74,35 @@ describe('ASCII export .prj sidecar', () => {
       expect(file?.prj).not.toBe(SOURCE_WKT);
     });
 
-    it('keep mode writes no .prj when the resolved CRS has no WKT', () => {
-      const { file } = convertCloud(cloud(), {
-        format: 'xyz', crsMode: 'keep', resolvedSourceCrs: resolved({ epsg: 32613 }),
+    it('keep mode with a code and no WKT (GeoKeys only) writes the EPSG definition', () => {
+      for (const format of ['xyz', 'asc'] as const) {
+        const { file } = convertCloud(cloud(), {
+          format, crsMode: 'keep', resolvedSourceCrs: resolved({ epsg: 32613 }),
+        });
+        expect(file?.prj).toBe(wktForEpsg(32613));
+        expect(file?.prj).toBeTruthy();
+      }
+    });
+
+    it('keep mode with an unknown code and no WKT writes no .prj and says why', () => {
+      const { file, report } = convertCloud(cloud(), {
+        format: 'xyz', crsMode: 'keep', resolvedSourceCrs: resolved({ epsg: 2229 }),
       });
+      expect(file).not.toBeNull();
       expect(file?.prj).toBeUndefined();
+      expect(report.log.map((l) => l.message)).toContain(
+        'EPSG:2229 recorded in the file header only; no .prj written (no definition available).',
+      );
+    });
+
+    it('keep mode with a code and no WKT: the batch .prj is the EPSG definition', async () => {
+      const input = [{ name: 'survey.las', sizeBytes: 8, bytes: async (): Promise<ArrayBuffer> => new ArrayBuffer(8) }];
+      const [r] = await runBatch(
+        input,
+        { format: 'xyz', crsMode: 'keep', resolvedSourceCrs: resolved({ epsg: 32613 }) },
+        async () => cloud(),
+      );
+      expect(text(r.sidecar!.bytes)).toBe(wktForEpsg(32613));
     });
   });
 
