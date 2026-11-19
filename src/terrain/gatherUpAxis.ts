@@ -58,13 +58,28 @@ export { hasHorizontalCrs };
 /** How every decline below opens: the gather declines on behalf of terrain analysis. */
 export const TERRAIN_DECLINE_LEAD = 'Terrain analysis did not run. ';
 
+/** The two mixed-frame declines share their opening clause with the report's wording. */
+const MIXED_MESH_HEAD =
+  'A mesh layer with no coordinate system reads as Y-up from its point layout, and the other visible layers are Z-up';
+const MIXED_GLTF_HEAD = 'A glTF or GLB layer is Y-up by specification, and the other visible layers are Z-up';
+/** How terrain analysis ends a mixed-frame decline. */
+const TERRAIN_MIXED_TAIL = ', so together they describe no single surface. Hide or lock one side, then run.';
 /**
- * A decline's cause without the terrain lead, for a surface that is not terrain
- * analysis (the space and object report reads the same gather). Text with no
- * lead is returned as it is.
+ * How the space and object report ends it. The report has no surface and no
+ * run; choosing an option under "Treat scan as" routes the scan again, which
+ * gathers afresh, so that is the step after hiding or locking a layer.
+ */
+const REPORT_MIXED_TAIL =
+  ', so they are not in one frame. Hide or lock one side, then choose an option under "Treat scan as" again.';
+
+/**
+ * A decline's cause as the space and object report states it: without the
+ * terrain lead, and with a mixed-frame decline's terrain ending replaced by
+ * the report's. Text with neither is returned as it is.
  */
 export function gatherDeclineCause(reason: string): string {
-  return reason.startsWith(TERRAIN_DECLINE_LEAD) ? reason.slice(TERRAIN_DECLINE_LEAD.length) : reason;
+  const cause = reason.startsWith(TERRAIN_DECLINE_LEAD) ? reason.slice(TERRAIN_DECLINE_LEAD.length) : reason;
+  return cause.endsWith(TERRAIN_MIXED_TAIL) ? cause.slice(0, -TERRAIN_MIXED_TAIL.length) + REPORT_MIXED_TAIL : cause;
 }
 
 /** The decline for a glTF or GLB source under a CRS. */
@@ -73,14 +88,10 @@ export function gltfUnderCrsReason(label: string): string {
 }
 
 /** The decline for a local mesh that reads as Y-up beside Z-up layers. */
-export const MIXED_FRAME_REASON =
-  TERRAIN_DECLINE_LEAD + 'A mesh layer with no coordinate system reads as Y-up from its point layout, ' +
-  'and the other visible layers are Z-up, so together they describe no single surface. Hide or lock one side, then run.';
+export const MIXED_FRAME_REASON = TERRAIN_DECLINE_LEAD + MIXED_MESH_HEAD + TERRAIN_MIXED_TAIL;
 
 /** The decline for a glTF or GLB layer, Y-up by specification, beside Z-up layers. */
-export const MIXED_GLTF_FRAME_REASON =
-  TERRAIN_DECLINE_LEAD + 'A glTF or GLB layer is Y-up by specification, and the other visible layers are Z-up, ' +
-  'so together they describe no single surface. Hide or lock one side, then run.';
+export const MIXED_GLTF_FRAME_REASON = TERRAIN_DECLINE_LEAD + MIXED_GLTF_HEAD + TERRAIN_MIXED_TAIL;
 
 /**
  * Settle the up axis of a gathered sample and normalise it to Z-up in place.

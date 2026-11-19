@@ -25,7 +25,7 @@ import {
 import { createScanRouteService } from '../src/app/ScanRouteService';
 import type { AppContext } from '../src/app/appContext';
 import type { ScanShape, SpaceKind } from '../src/terrain/scanShape';
-import { settleTerrainGatherFrame } from '../src/terrain/gatherUpAxis';
+import { settleTerrainGatherFrame, MIXED_FRAME_REASON, MIXED_GLTF_FRAME_REASON } from '../src/terrain/gatherUpAxis';
 import { spaceContextStillCurrent } from '../src/export/exportScanIdentity';
 import { CrsService } from '../src/geo/CrsService';
 import { routeUnitFrame } from '../src/app/scanRouteCoordinator';
@@ -619,5 +619,39 @@ describe('the space or object report follows a CRS change on the routed scan', (
     c.remeasureForFrame();
     expect(gather).toHaveBeenCalledTimes(3);
     expect(c.spaceExport()!.space.dims).toEqual(asDeclared);
+  });
+
+  describe('a mixed-layer decline is worded for the report, not for terrain analysis', () => {
+    const cases = [
+      ['a local mesh beside Z-up layers', MIXED_FRAME_REASON,
+        'A mesh layer with no coordinate system reads as Y-up from its point layout, and the other visible layers are Z-up, so they are not in one frame. Hide or lock one side, then choose an option under "Treat scan as" again.'],
+      ['a glTF beside Z-up layers', MIXED_GLTF_FRAME_REASON,
+        'A glTF or GLB layer is Y-up by specification, and the other visible layers are Z-up, so they are not in one frame. Hide or lock one side, then choose an option under "Treat scan as" again.'],
+    ] as const;
+
+    for (const [name, reason, cause] of cases) {
+      it(`${name}: the report states its own cause, and choosing a type again re-gathers`, () => {
+        const h = harness({ detect: null });
+        h.geometry.gathered = null;
+        h.deps = { ...h.deps, geometry: { ...h.deps.geometry, declineReason: () => (h.geometry.gathered ? null : reason) } };
+        const c = createScanRouteCoordinator(h.deps);
+        c.beginScan(true);
+        c.setTypeOverride('object');
+        expect(h.view.showObject).toHaveBeenLastCalledWith(null, null, null, cause);
+        // The other side is hidden: choosing the type again gathers afresh.
+        h.geometry.gathered = { positions: box(), residentOnly: false, totalPoints: 400 };
+        h.detect.value = 'object';
+        c.setTypeOverride('object');
+        expect(lastObject(h)[0]).not.toBeNull();
+        expect(c.spaceExport()).not.toBeNull();
+      });
+    }
+
+    it('the Analyse panel keeps its terrain wording', () => {
+      expect(MIXED_FRAME_REASON).toBe(
+        'Terrain analysis did not run. A mesh layer with no coordinate system reads as Y-up from its point layout, and the other visible layers are Z-up, so together they describe no single surface. Hide or lock one side, then run.');
+      expect(MIXED_GLTF_FRAME_REASON).toBe(
+        'Terrain analysis did not run. A glTF or GLB layer is Y-up by specification, and the other visible layers are Z-up, so together they describe no single surface. Hide or lock one side, then run.');
+    });
   });
 });
