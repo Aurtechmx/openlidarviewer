@@ -257,8 +257,10 @@ export function validateCrsForMeasurement(
         canDisplayMetric: false,
         canSaveMeasurement: false,
         reason: 'No CRS metadata was detected for this scan.',
+        // A phone scan (glTF, PLY) is the usual case, and its remedy is the
+        // local-unit choice, so both remedies are named.
         suggestion:
-          'Pick a CRS in the Inspector override panel before measuring.',
+          "Pick the scan's CRS in the Inspector, or, if its coordinates are local in a known unit, choose Local coordinates in metres or feet.",
       };
   }
 }
