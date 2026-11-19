@@ -178,7 +178,7 @@ describe('the notice follows the CRS that was active before the restore', () => 
     ({ kind: 'projected', name, epsg, linearUnit: 'metre', linearUnitToMetres: 1, source: 'user-override', confidence: 'high', userConfirmed: true });
   const notice = (toasts: readonly string[]) => toasts.find((t) => SET.test(t));
 
-  describe.each([[false, 'the declaration standing in'], [true, 'crsService.current()']] as const)('with %s (%s)', (withCurrent) => {
+  describe.each([[false, 'the declaration standing in'], [true, 'crsService.current()']] as const)('with %s (%s)', (withCurrent, _basis) => {
     it('a plain local session on a GLB says the unit went away', async () => {
       const r = await restore(formatSpecificationCrs('glTF'), local('unknown', 1), 1000, {}, withCurrent);
       expect(r.crsService.current()!.linearUnit).toBe('unknown');
