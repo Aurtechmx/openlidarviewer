@@ -439,7 +439,10 @@ export class ObjectPanel {
       btn.textContent = failed ? 'Failed' : label;
       if (failed) setTimeout(() => { if (btn.textContent === 'Failed') btn.textContent = label; }, 2000);
     };
-    void action().then(
+    // Started now, as before, but a throw before the action returns a promise
+    // becomes a rejection, so the export always settles and the button is not
+    // left busy.
+    void new Promise<void>((resolve) => resolve(action())).then(
       () => settle(false),
       (err) => {
         // eslint-disable-next-line no-console

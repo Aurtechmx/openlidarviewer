@@ -123,6 +123,21 @@ describe('ObjectPanel: an export outlives a re-render of the report', () => {
     await settle();
     expect(reportButton(root)!.textContent).toBe('Report PDF');
   });
+
+  it('an action that throws before returning a promise still settles the button', async () => {
+    const { ObjectPanel } = await import('../src/ui/ObjectPanel');
+    const { objectMetrics } = await import('../src/terrain/objectMetrics');
+    let calls = 0;
+    const panel = new ObjectPanel({ onExportReport: (() => { calls++; throw new Error('sync'); }) as never });
+    panel.showObject(objectMetrics(cubeShell()), null, null);
+    const root = panel.element as unknown as FakeEl;
+    expect(() => (reportButton(root) as unknown as { click(): void }).click()).not.toThrow();
+    await settle();
+    expect(reportButton(root)!.textContent).toBe('Failed');
+    expect(reportButton(root)!.disabled).toBe(false);
+    (reportButton(root) as unknown as { click(): void }).click();
+    expect(calls).toBe(2);
+  });
 });
 
 describe('ObjectPanel: an empty report says why when the points could not be measured', () => {
