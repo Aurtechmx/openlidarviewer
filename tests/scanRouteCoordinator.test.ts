@@ -10,8 +10,9 @@
  * one over a bare context, with its timer replaced by a queue the test drains.
  * Nothing here touches a panel or the Viewer. A view spy per port method
  * records what the route asked for. Each case reads the last call it cares about.
- * The last block pins that a CRS change on the routed scan measures the same
- * routed points again under the new unit frame.
+ * The last block pins that a CRS change on the routed scan gathers and
+ * measures again under the new frame, as a reopen would, and only when the
+ * frame's units or its horizontal reference moved.
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import {
@@ -24,6 +25,8 @@ import {
 import { createScanRouteService } from '../src/app/ScanRouteService';
 import type { AppContext } from '../src/app/appContext';
 import type { ScanShape, SpaceKind } from '../src/terrain/scanShape';
+import { settleTerrainGatherFrame } from '../src/terrain/gatherUpAxis';
+import { spaceContextStillCurrent } from '../src/export/exportScanIdentity';
 
 function box(n = 400): Float32Array {
   const p = new Float32Array(n * 3);
@@ -56,7 +59,7 @@ interface Harness {
   verdict: { value: SpaceKind | null };
   detect: { value: SpaceKind | null; throws?: boolean };
   geometry: { resident: number; gathered: RouteGeometry | null };
-  frame: { unit: number; vert: number; known: boolean; rev: number; target: string | null };
+  frame: { unit: number; vert: number; known: boolean; horizontal: boolean; rev: number; target: string | null };
   scheduled: Array<() => void>;
   log: string[];
 }
@@ -73,7 +76,7 @@ function harness(over: Partial<{ detect: SpaceKind | null; unit: number; vert: n
     resident: 1000,
     gathered: { positions: box(), residentOnly: over.residentOnly ?? false, totalPoints: 1000 } as RouteGeometry | null,
   };
-  const frame = { unit: over.unit ?? 1, vert: over.vert ?? over.unit ?? 1, known: over.known ?? true, rev: 3, target: 'scan-1' as string | null };
+  const frame = { unit: over.unit ?? 1, vert: over.vert ?? over.unit ?? 1, known: over.known ?? true, horizontal: false, rev: 3, target: 'scan-1' as string | null };
   const view = {
     setObjectScanType: vi.fn(), setAnalyseScanType: vi.fn(), showSpace: vi.fn(), showObject: vi.fn(),
     setObjectVisible: vi.fn(), setAnalyseVisible: vi.fn(), setDockAnalyse: vi.fn(), expandAnalyseAndRunTerrain: vi.fn(),
@@ -90,6 +93,7 @@ function harness(over: Partial<{ detect: SpaceKind | null; unit: number; vert: n
       linearUnitToMetres: () => frame.unit,
       verticalUnitToMetres: () => frame.vert,
       linearUnitKnown: () => frame.known,
+      horizontalCrs: () => frame.horizontal,
       exportTargetId: () => frame.target,
       crsRevision: () => frame.rev,
       basename: () => 'tile',
@@ -371,7 +375,7 @@ describe('the space or object report follows a CRS change on the routed scan', (
     expect(c.spaceExport()!.unitKnown).toBe(false);
   });
 
-  it('the figures scale with the new unit, measured on the points the route read', () => {
+  it('the figures scale with the new unit, on a fresh routing gather', () => {
     const h = harness({ detect: 'object', unit: 1, known: true });
     const gather = vi.fn(() => h.geometry.gathered);
     h.deps = { ...h.deps, geometry: { ...h.deps.geometry, gatherForRouting: gather } };
@@ -382,7 +386,8 @@ describe('the space or object report follows a CRS change on the routed scan', (
     h.frame.vert = 0.3048;
     h.frame.rev = 4;
     c.remeasureForFrame();
-    expect(gather).toHaveBeenCalledTimes(1);
+    expect(gather).toHaveBeenCalledTimes(2);
+    expect(gather).toHaveBeenLastCalledWith(60_000);
     expect(c.spaceExport()!.unitToMetres).toBeCloseTo(0.3048, 6);
     expect(c.spaceExport()!.object!.obb.lengthM).toBeCloseTo(metres * 0.3048, 3);
   });
@@ -428,5 +433,119 @@ describe('the space or object report follows a CRS change on the routed scan', (
     o.frame.rev = 4;
     co.remeasureForFrame();
     expect(o.view.showObject).toHaveBeenCalledTimes(1);
+  });
+
+  // The viewer's gather settles the up axis from the format and the resolved
+  // CRS (gatherUpAxis.ts), so the harness gathers through that same rule.
+  const UTM = { kind: 'projected', epsg: 32612, name: 'WGS 84 / UTM zone 12N', linearUnit: 'metre', linearUnitToMetres: 1 } as never;
+  /** A 6 x 8 m room, 3 m high, stored Y-up: floor and ceiling are planes in Y. */
+  function yUpRoom(W = 6, D = 8, H = 3, step = 0.25): Float32Array {
+    const t: number[] = [];
+    const push = (x: number, up: number, z: number): void => { t.push(x, up, z); };
+    for (let x = 0; x <= W; x += step) for (let z = 0; z <= D; z += step) { push(x, 0, z); push(x, H, z); }
+    for (let u = 0; u <= H; u += step) for (let x = 0; x <= W; x += step) { push(x, u, 0); push(x, u, D); }
+    for (let u = 0; u <= H; u += step) for (let z = 0; z <= D; z += step) { push(0, u, z); push(W, u, z); }
+    return Float32Array.from(t);
+  }
+  function gatherAs(h: Harness, format: 'glb' | 'ply'): void {
+    const stored = yUpRoom();
+    h.deps = {
+      ...h.deps,
+      geometry: {
+        ...h.deps.geometry,
+        gatherForRouting: () => {
+          const p = Float32Array.from(stored);
+          const f = settleTerrainGatherFrame([{ format, crs: h.frame.horizontal ? UTM : null, layerPoints: p }], false, p);
+          return f?.ok ? { positions: p, residentOnly: false, totalPoints: p.length / 3 } : null;
+        },
+      },
+    };
+  }
+
+  it('a glTF that the gather declines under the new CRS shows the empty report and no export', () => {
+    const h = harness({ detect: 'object', known: false });
+    gatherAs(h, 'glb');
+    const c = createScanRouteCoordinator(h.deps);
+    c.beginScan(true);
+    expect(c.spaceExport()).not.toBeNull();
+
+    h.frame.known = true;
+    h.frame.horizontal = true;
+    h.frame.rev = 4;
+    c.remeasureForFrame();
+    expect(h.view.showObject).toHaveBeenLastCalledWith(null, null, null);
+    expect(c.spaceExport()).toBeNull();
+
+    // "Use detected" brings the figures back.
+    h.frame.known = false;
+    h.frame.horizontal = false;
+    h.frame.rev = 5;
+    c.remeasureForFrame();
+    expect(lastObject(h)[0]).not.toBeNull();
+    expect(c.spaceExport()!.crsRevision).toBe(5);
+  });
+
+  it('a PLY whose up axis depends on the CRS measures as a reopen under that CRS would', () => {
+    const h = harness({ detect: 'interior', known: false });
+    gatherAs(h, 'ply');
+    const c = createScanRouteCoordinator(h.deps);
+    c.beginScan(true);
+    const before = c.spaceExport()!.space.dims;
+
+    h.frame.known = true;
+    h.frame.horizontal = true;
+    h.frame.rev = 4;
+    c.remeasureForFrame();
+    const reopened = createScanRouteCoordinator(h.deps);
+    reopened.beginScan(true);
+    const after = c.spaceExport()!.space.dims;
+    expect(after).toEqual(reopened.spaceExport()!.space.dims);
+    // Rotated before, read as stored now: the height is a different axis.
+    expect(after.heightM).not.toBeCloseTo(before.heightM, 3);
+  });
+
+  it('the same units and horizontal frame only restamp the export, with no new render', () => {
+    const h = harness({ detect: 'object', known: true });
+    const gather = vi.fn(() => h.geometry.gathered);
+    h.deps = { ...h.deps, geometry: { ...h.deps.geometry, gatherForRouting: gather } };
+    const c = createScanRouteCoordinator(h.deps);
+    c.beginScan(true);
+    const first = c.spaceExport()!;
+    // A layer round trip: another layer, then this one again, each a new revision.
+    h.frame.target = 'scan-2';
+    h.frame.rev = 4;
+    c.remeasureForFrame();
+    h.frame.target = 'scan-1';
+    h.frame.rev = 5;
+    c.remeasureForFrame();
+    expect(h.view.showObject).toHaveBeenCalledTimes(1);
+    expect(gather).toHaveBeenCalledTimes(1);
+    expect(c.spaceExport()!.crsRevision).toBe(5);
+    expect(c.spaceExport()!.object).toBe(first.object);
+  });
+
+  it('a geographic pick keeps the unit factors but changes the horizontal frame, so it re-measures', () => {
+    const h = harness({ detect: 'object', known: false });
+    const c = createScanRouteCoordinator(h.deps);
+    c.beginScan(true);
+    h.frame.horizontal = true;
+    h.frame.rev = 4;
+    c.remeasureForFrame();
+    expect(h.view.showObject).toHaveBeenCalledTimes(2);
+  });
+
+  it('an export captured before the change is refused; the panel and the new context share one measurement', () => {
+    const h = harness({ detect: 'object', known: false });
+    const c = createScanRouteCoordinator(h.deps);
+    c.beginScan(true);
+    const captured = c.spaceExport()!;
+    h.frame.known = true;
+    h.frame.rev = 4;
+    c.remeasureForFrame();
+    const live = { targetId: h.frame.target, crsRevision: h.frame.rev };
+    expect(spaceContextStillCurrent(captured, live)).toBe(false);
+    expect(spaceContextStillCurrent(c.spaceExport()!, live)).toBe(true);
+    expect(lastObject(h)[0]).toBe(c.spaceExport()!.object);
+    expect(lastObject(h)[1]).toBe(c.spaceExport()!.space);
   });
 });

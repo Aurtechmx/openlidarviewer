@@ -36,6 +36,7 @@ import {
   type SpaceMetrics,
 } from '../terrain/spaceMetrics';
 import type { ScanRouteService } from './ScanRouteService';
+import { hasHorizontalCrs, layerCrsFromContext } from '../geo/frame/layerUpFrame';
 import type { ScanTypeDisabledReasons } from '../ui/scanTypeControl';
 
 /** Re-route only after the resident cloud grows by this factor (cheap gate). */
@@ -74,7 +75,7 @@ export interface ScanRouteGeometryPort {
  */
 export function routeUnitFrame(
   context: () => SpatialContext,
-): Pick<ScanRouteFramePort, 'linearUnitToMetres' | 'verticalUnitToMetres' | 'linearUnitKnown'> {
+): Pick<ScanRouteFramePort, 'linearUnitToMetres' | 'verticalUnitToMetres' | 'linearUnitKnown' | 'horizontalCrs'> {
   return {
     linearUnitToMetres: () => context().linearUnitToMetres,
     verticalUnitToMetres: () => {
@@ -85,6 +86,7 @@ export function routeUnitFrame(
       const c = context();
       return c.linearUnitKnown && c.verticalScaleState !== 'invalid';
     },
+    horizontalCrs: () => hasHorizontalCrs(layerCrsFromContext(context())),
   };
 }
 
@@ -100,6 +102,14 @@ export interface ScanRouteFramePort {
    */
   verticalUnitToMetres(): number;
   linearUnitKnown(): boolean;
+  /**
+   * Whether the resolved CRS fixes a horizontal reference. The routing gather
+   * settles its up axis by the same rule (`gatherUpAxis.ts`): under one, a glTF
+   * is declined and a local PLY or OBJ is read as stored instead of rotated, so
+   * the routed points can change while the unit factors do not. Absent reads as
+   * no horizontal reference.
+   */
+  horizontalCrs?(): boolean;
   exportTargetId(): string | null;
   crsRevision(): number;
   /** The export basename for the current scan. */
@@ -176,6 +186,30 @@ interface ReportInputs {
   readonly residentOnly: boolean;
 }
 
+/** The frame facts a report's figures depend on. */
+interface ReportFrame {
+  readonly unitToMetres: number;
+  readonly verticalUnitToMetres: number;
+  readonly unitKnown: boolean;
+  readonly horizontal: boolean;
+}
+
+/** The report the Object panel shows: its kind, its scan, the CRS revision and frame it was measured under. */
+interface ShownReport {
+  readonly spaceKind: 'interior' | 'object';
+  readonly targetId: string | null;
+  readonly crsRevision: number;
+  /** Null for the empty state: nothing was measured. */
+  readonly measured: ReportFrame | null;
+}
+
+/** The routing sample: the gather, its points and the shape read from them. */
+interface RouteSample {
+  readonly gathered: RouteGeometry | null;
+  readonly points: Float32Array | null;
+  readonly shape: ScanShape | null;
+}
+
 export interface ScanRouteCoordinatorDeps {
   readonly routing: ScanRouteService;
   readonly geometry: ScanRouteGeometryPort;
@@ -206,10 +240,13 @@ export interface ScanRouteCoordinator {
   /** The scan closed: cancel and forget everything per-scan. */
   reset(): void;
   /**
-   * The active scan's CRS changed: measure the on-screen space or object
-   * report again from the points it was routed on, under the new unit frame,
-   * and restamp its export context. The route itself does not move. A report
-   * for another scan, or one already measured under this frame, is left alone.
+   * The active scan's CRS changed. When the unit factors, the unit-known flag
+   * or the horizontal reference moved, gather and measure the on-screen space
+   * or object report again as a reopen would, keeping the route's kind; a
+   * gather the new frame declines shows the empty report and drops the export
+   * context. Otherwise the figures stand and only the export stamp moves. A
+   * report for another scan, or one already stamped with this revision, is
+   * left alone.
    */
   remeasureForFrame(): void;
   spaceExport(): SpaceExportContext | null;
@@ -245,9 +282,19 @@ export function createScanRouteCoordinator(deps: ScanRouteCoordinatorDeps): Scan
   let lastSettleUndecided = false;
   let scanDetectionCommitted = false;
   let lastSpaceExport: SpaceExportContext | null = null;
-  // The routed inputs behind the on-screen report, so a CRS change can measure
-  // the same points again.
-  let lastReportInputs: ReportInputs | null = null;
+  // The report on screen, so a CRS change can tell whether it must be gathered
+  // and measured again (see `remeasureForFrame`).
+  let shownReport: ShownReport | null = null;
+
+  const currentFrame = (): ReportFrame => ({
+    unitToMetres: frame.linearUnitToMetres(),
+    verticalUnitToMetres: frame.verticalUnitToMetres(),
+    unitKnown: frame.linearUnitKnown(),
+    horizontal: frame.horizontalCrs?.() ?? false,
+  });
+  const sameFrame = (a: ReportFrame, b: ReportFrame): boolean =>
+    a.unitToMetres === b.unitToMetres && a.verticalUnitToMetres === b.verticalUnitToMetres
+    && a.unitKnown === b.unitKnown && a.horizontal === b.horizontal;
 
   const clearPerScan = (): void => {
     streamingSettledRouted = false;
@@ -267,6 +314,7 @@ export function createScanRouteCoordinator(deps: ScanRouteCoordinatorDeps): Scan
     const unitToMetres = frame.linearUnitToMetres();
     const verticalUnitToMetres = frame.verticalUnitToMetres();
     const unitKnown = frame.linearUnitKnown();
+    const measured: ReportFrame = { unitToMetres, verticalUnitToMetres, unitKnown, horizontal: frame.horizontalCrs?.() ?? false };
     const space = spaceMetrics(points, {
       upAxis: shape.up,
       spaceKind,
@@ -289,7 +337,7 @@ export function createScanRouteCoordinator(deps: ScanRouteCoordinatorDeps): Scan
         : null;
     if (spaceKind === 'interior') view.showSpace(space, shape);
     else view.showObject(object, space, shape);
-    lastReportInputs = inputs;
+    shownReport = { spaceKind, targetId: frame.exportTargetId(), crsRevision: frame.crsRevision(), measured };
     lastSpaceExport = {
       positions: points,
       space,
@@ -306,19 +354,17 @@ export function createScanRouteCoordinator(deps: ScanRouteCoordinatorDeps): Scan
     };
   }
 
-  function applyRoute(initial: boolean, settled = false): boolean {
-    // A pinned route (manual override or "run anyway") never moves for a
-    // streaming re-evaluation; the one-shot is spent.
-    if (!initial && routing.pinned) return true;
+  /** Gather the routing sample and read its shape. Both are best effort. */
+  function routeSample(): RouteSample {
     let shape: ScanShape | null = null;
     let gathered: RouteGeometry | null = null;
     // One transport read of the gathered array serves the whole route.
-    let routePositions: Float32Array | null = null;
+    let points: Float32Array | null = null;
     try {
       gathered = geometry.gatherForRouting(ROUTE_GATHER_POINTS);
       if (gathered) {
         const { positions } = gathered;
-        routePositions = positions;
+        points = positions;
         shape = classify(positions, {
           classification: gathered.classification,
           verticalAxis: gathered.verticalAxisHint,
@@ -327,6 +373,41 @@ export function createScanRouteCoordinator(deps: ScanRouteCoordinatorDeps): Scan
     } catch {
       shape = null; // classification is best effort; terrain analysis is the fallback
     }
+    return { gathered, points, shape };
+  }
+
+  /**
+   * Show the `spaceKind` report from a routing sample: measured when the sample
+   * has points and a shape, else the empty state, which still carries the
+   * "Treat as" control and the run-anyway hatch, with no export context.
+   */
+  function showReport(spaceKind: 'interior' | 'object', sample: RouteSample): void {
+    const { gathered, points, shape } = sample;
+    if (gathered && points && shape) {
+      measureReport({
+        // Copied, so a later streaming buffer reuse cannot corrupt the report's inputs.
+        points: Float32Array.from(points),
+        shape,
+        spaceKind,
+        hasRgb: geometry.hasRgb(),
+        totalPoints: gathered.totalPoints,
+        residentOnly: gathered.residentOnly,
+      });
+      return;
+    }
+    lastSpaceExport = null;
+    shownReport = { spaceKind, targetId: frame.exportTargetId(), crsRevision: frame.crsRevision(), measured: null };
+    if (spaceKind === 'interior') view.showSpace(null, null);
+    else view.showObject(null, null, null);
+  }
+
+  function applyRoute(initial: boolean, settled = false): boolean {
+    // A pinned route (manual override or "run anyway") never moves for a
+    // streaming re-evaluation; the one-shot is spent.
+    if (!initial && routing.pinned) return true;
+    const sample = routeSample();
+    const { shape } = sample;
+    const routePositions = sample.points;
     if (deps.log && shape) {
       deps.log(
         `[scan-type] ${initial ? 'open' : 're-route'} verdict=${shape.nonTerrain ? shape.spaceKind : 'terrain'} ` +
@@ -366,27 +447,13 @@ export function createScanRouteCoordinator(deps: ScanRouteCoordinatorDeps): Scan
     const effective = plan.effective;
     verdict.set(effective);
 
-    if (plan.showObjectPanel && shape && gathered && routePositions) {
-      measureReport({
-        // Copied, so a later streaming buffer reuse cannot corrupt the report's inputs.
-        points: Float32Array.from(routePositions),
-        shape,
-        spaceKind: effective === 'interior' ? 'interior' : 'object',
-        hasRgb: geometry.hasRgb(),
-        totalPoints: gathered.totalPoints,
-        residentOnly: gathered.residentOnly,
-      });
-    } else if (plan.showObjectPanel) {
-      // A forced non-terrain route with no usable geometry right now: the
-      // panel stays alive with its empty state, which still carries the
-      // "Treat as" control and the run-anyway hatch.
-      lastSpaceExport = null;
-      lastReportInputs = null;
-      if (effective === 'interior') view.showSpace(null, null);
-      else view.showObject(null, null, null);
+    if (plan.showObjectPanel) {
+      // A forced non-terrain route with no usable geometry right now shows the
+      // empty state (see `showReport`).
+      showReport(effective === 'interior' ? 'interior' : 'object', sample);
     } else {
       lastSpaceExport = null;
-      lastReportInputs = null;
+      shownReport = null;
     }
     view.setObjectVisible(plan.showObjectPanel);
     view.setAnalyseVisible(plan.showAnalysePanel);
@@ -442,16 +509,27 @@ export function createScanRouteCoordinator(deps: ScanRouteCoordinatorDeps): Scan
       clearPerScan();
       lastRouteResident = 0;
       lastSpaceExport = null;
-      lastReportInputs = null;
+      shownReport = null;
       verdict.set(null);
     },
     remeasureForFrame() {
+      const shown = shownReport;
+      // A report for another scan, or one already stamped with this revision.
+      if (!shown || shown.targetId !== frame.exportTargetId()) return;
+      const revision = frame.crsRevision();
+      if (shown.crsRevision === revision) return;
       const last = lastSpaceExport;
-      const inputs = lastReportInputs;
-      if (!last || !inputs) return;
-      // A report for another scan, or one already measured under this frame.
-      if (last.targetId !== frame.exportTargetId() || last.crsRevision === frame.crsRevision()) return;
-      measureReport(inputs);
+      if (last && shown.measured && sameFrame(shown.measured, currentFrame())) {
+        // The same units and horizontal reference (a layer round trip, or a
+        // pick with the same factors): the figures stand, so the panel is not
+        // rebuilt and only the stamp moves.
+        shownReport = { ...shown, crsRevision: revision };
+        lastSpaceExport = { ...last, crsRevision: revision };
+        return;
+      }
+      // The frame decides the gather as well as the units, so gather again as
+      // a reopen would. The route itself does not move.
+      showReport(shown.spaceKind, routeSample());
     },
     spaceExport: () => lastSpaceExport,
     detectionCommitted: () => scanDetectionCommitted,
