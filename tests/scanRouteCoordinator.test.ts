@@ -25,7 +25,7 @@ import {
 import { createScanRouteService } from '../src/app/ScanRouteService';
 import type { AppContext } from '../src/app/appContext';
 import type { ScanShape, SpaceKind } from '../src/terrain/scanShape';
-import { settleTerrainGatherFrame, MIXED_FRAME_REASON, MIXED_GLTF_FRAME_REASON } from '../src/terrain/gatherUpAxis';
+import { settleTerrainGatherFrame, MIXED_FRAME_REASON, MIXED_GLTF_FRAME_REASON, UNPROVEN_FRAME_REASON } from '../src/terrain/gatherUpAxis';
 import { spaceContextStillCurrent } from '../src/export/exportScanIdentity';
 import { CrsService } from '../src/geo/CrsService';
 import { routeUnitFrame } from '../src/app/scanRouteCoordinator';
@@ -627,6 +627,8 @@ describe('the space or object report follows a CRS change on the routed scan', (
         'A mesh layer with no coordinate system reads as Y-up from its point layout, and the other visible layers are Z-up, so they are not in one frame. Hide or lock one side, then choose an option under "Treat scan as" again.'],
       ['a glTF beside Z-up layers', MIXED_GLTF_FRAME_REASON,
         'A glTF or GLB layer is Y-up by specification, and the other visible layers are Z-up, so they are not in one frame. Hide or lock one side, then choose an option under "Treat scan as" again.'],
+      ['layers with no proven shared frame', UNPROVEN_FRAME_REASON,
+        'The visible layers have not proven they share a frame, so they are not measured together. Hide or lock all but one layer, then choose an option under "Treat scan as" again.'],
     ] as const;
 
     for (const [name, reason, cause] of cases) {

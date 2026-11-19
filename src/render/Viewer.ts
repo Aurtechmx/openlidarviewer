@@ -79,7 +79,7 @@ import {
 import { computeExportFrontier, type FrontierNode } from './streaming/exportFrontier';
 import { intensityFilterUniform } from './intensityFilterUniform';
 import { sceneUpOf } from '../io/sniffFormat';
-import { settleTerrainGatherFrame, type TerrainGatherSource, type TerrainUpAxisBasis } from '../terrain/gatherUpAxis';
+import { settleTerrainGatherFrame, UNPROVEN_FRAME_REASON, type TerrainGatherSource, type TerrainUpAxisBasis } from '../terrain/gatherUpAxis';
 import type { SourceFormat } from '../io/sniffFormat';
 import { colorForMode, defaultMode, refreshClassificationColours } from './colorModes';
 import type { ColorMode, CoverageColorGrid } from './colorModes';
@@ -179,7 +179,7 @@ import {
 } from './measure/profileSectionSeam';
 import { gatherVolumeBuffers, samplePolygonVolume, cloudReduction, CUT_FILL_VOLUME_METHOD, type VolumeResult } from './measure/polygonVolumeSample';
 import {
-  integrableClouds, sharedDatumRefusal, integrableEntries, streamingMayCombine, producerClassifiesGround,
+  integrableClouds, sharedDatumRefusal, noLayerCombines, integrableEntries, streamingMayCombine, producerClassifiesGround,
   analysisClassification,
 } from './integrableClouds';
 import type { LayerCompatibility } from '../model/layerCompatibility';
@@ -2104,7 +2104,7 @@ export class Viewer {
       }
     }
     const totalPoints = staticPoints + streamingPoints;
-    if (totalPoints === 0) return null;
+    if (totalPoints === 0) { if (noLayerCombines(this._clouds.values())) this.terrainGatherDecline = UNPROVEN_FRAME_REASON; return null; }
 
     // Subsample deterministically: static clouds keep their stable Map order and
     // streaming nodes are ordered by octree key, so the same resident set yields

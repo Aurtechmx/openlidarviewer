@@ -23,7 +23,7 @@ import { ProcessService } from '../process/ProcessService';
 import type { ProductId, ScanFacts } from '../process/ProcessPlan';
 import type { AuthorizationCheck } from '../process/ProcessService';
 import { yUpOriginToCanonicalZUp } from '../terrain/canonicalFrame';
-import { gatherUpAxisNote } from '../terrain/gatherUpAxis';
+import { gatherUpAxisNote, UNPROVEN_FRAME_REASON } from '../terrain/gatherUpAxis';
 import type { AnalysePanel } from '../ui/AnalysePanel';
 // Shell-resident already (ExportPanel renders Export Health, main builds the
 // story inputs), so reading the Dataset Story here adds no chunk weight.
@@ -854,7 +854,7 @@ export function createTerrainAnalysisRunner(
       // layers have not proven they share a frame.
       analysePanel.setStatus(
         viewer.terrainGatherDecline ?? (viewer.clouds().length > 1
-          ? 'Terrain analysis combines every visible, unlocked layer, and these layers have not proven they share a frame. Hide or lock all but one layer, then run.'
+          ? UNPROVEN_FRAME_REASON
           : 'Load a scan first, then run terrain analysis.'),
       );
       return;

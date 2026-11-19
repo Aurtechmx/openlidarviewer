@@ -73,11 +73,22 @@ const REPORT_MIXED_TAIL =
   ', so they are not in one frame. Hide or lock one side, then choose an option under "Treat scan as" again.';
 
 /**
+ * The decline when several visible, unlocked layers would be combined and none
+ * of them has proven it shares a frame with the others, so nothing gathers.
+ */
+export const UNPROVEN_FRAME_REASON =
+  'Terrain analysis combines every visible, unlocked layer, and these layers have not proven they share a frame. Hide or lock all but one layer, then run.';
+/** How the space and object report states {@link UNPROVEN_FRAME_REASON}. */
+const REPORT_UNPROVEN_FRAME =
+  'The visible layers have not proven they share a frame, so they are not measured together. Hide or lock all but one layer, then choose an option under "Treat scan as" again.';
+
+/**
  * A decline's cause as the space and object report states it: without the
- * terrain lead, and with a mixed-frame decline's terrain ending replaced by
- * the report's. Text with neither is returned as it is.
+ * terrain lead, and with a mixed-frame or unproven-frame decline's terrain
+ * ending replaced by the report's. Other text is returned as it is.
  */
 export function gatherDeclineCause(reason: string): string {
+  if (reason === UNPROVEN_FRAME_REASON) return REPORT_UNPROVEN_FRAME;
   const cause = reason.startsWith(TERRAIN_DECLINE_LEAD) ? reason.slice(TERRAIN_DECLINE_LEAD.length) : reason;
   return cause.endsWith(TERRAIN_MIXED_TAIL) ? cause.slice(0, -TERRAIN_MIXED_TAIL.length) + REPORT_MIXED_TAIL : cause;
 }
