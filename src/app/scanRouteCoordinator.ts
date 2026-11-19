@@ -409,6 +409,11 @@ export function createScanRouteCoordinator(deps: ScanRouteCoordinatorDeps): Scan
       });
       return;
     }
+    showEmpty(spaceKind, gathered);
+  }
+
+  /** The empty `spaceKind` report, with the gather's reason when it declined. */
+  function showEmpty(spaceKind: 'interior' | 'object', gathered: RouteGeometry | null): void {
     lastSpaceExport = null;
     shownReport = { spaceKind, targetId: frame.exportTargetId(), crsRevision: frame.crsRevision(), measured: null };
     // A gather that declined the frame says why. The reason is worded for
@@ -470,6 +475,9 @@ export function createScanRouteCoordinator(deps: ScanRouteCoordinatorDeps): Scan
       // empty state (see `showReport`).
       showReport(effective === 'interior' ? 'interior' : 'object', sample);
     } else {
+      // A report from an earlier route must not stay behind in the hidden
+      // panel, where reopening it would show figures for another scan.
+      if (shownReport) showEmpty(shownReport.spaceKind, sample.gathered);
       lastSpaceExport = null;
       shownReport = null;
     }

@@ -649,6 +649,30 @@ describe('the space or object report follows a CRS change on the routed scan', (
       });
     }
 
+    it('a new scan that does not route to Object clears the report left from the last one', () => {
+      const h = harness({ detect: 'object' });
+      h.deps = { ...h.deps, geometry: { ...h.deps.geometry, declineReason: () => (h.geometry.gathered ? null : UNPROVEN_FRAME_REASON) } };
+      const c = createScanRouteCoordinator(h.deps);
+      c.beginScan(true);
+      expect(lastObject(h)[0]).not.toBeNull();
+      // A second layer opens and the two have not proven a shared frame.
+      h.geometry.gathered = null;
+      h.detect.value = null;
+      c.beginScan(true);
+      expect(h.view.setObjectVisible).toHaveBeenLastCalledWith(false);
+      expect(h.view.showObject).toHaveBeenLastCalledWith(null, null, null,
+        'The visible layers have not proven they share a frame, so they are not measured together. Hide or lock all but one layer, then choose an option under "Treat scan as" again.');
+      expect(c.spaceExport()).toBeNull();
+    });
+
+    it('a terrain route with no report on screen leaves the Object panel alone', () => {
+      const h = harness({ detect: 'terrain' });
+      const c = createScanRouteCoordinator(h.deps);
+      c.beginScan(true);
+      expect(h.view.showObject).not.toHaveBeenCalled();
+      expect(h.view.showSpace).not.toHaveBeenCalled();
+    });
+
     it('the Analyse panel keeps its terrain wording', () => {
       expect(MIXED_FRAME_REASON).toBe(
         'Terrain analysis did not run. A mesh layer with no coordinate system reads as Y-up from its point layout, and the other visible layers are Z-up, so together they describe no single surface. Hide or lock one side, then run.');
