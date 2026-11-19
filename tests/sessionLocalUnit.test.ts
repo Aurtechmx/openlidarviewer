@@ -22,6 +22,7 @@ import type { ResolvedCrs } from '../src/geo/CoordinateTypes';
 import { CrsService, type CrsOverridePort } from '../src/geo/CrsService';
 import type { CrsInfo } from '../src/io/crs';
 import { formatSpecificationCrs } from '../src/geo/CoordinateTypes';
+import { crsFromWkt } from '../src/io/crs';
 import type { Viewer } from '../src/render/Viewer';
 
 beforeAll(() => {
@@ -39,7 +40,7 @@ const sessionModule: SessionModule = { parseSession, rebaseSessionGeometry, matc
 const asFile = (text: string): File => ({ text: async () => text }) as unknown as File;
 
 /** Restore a session carrying `crs` onto a streamed scan that declares `declared`. */
-async function restore(declared: CrsInfo | null, crs: ResolvedCrs, sourcePoints = 1000, opts: { skipScanConfirm?: boolean } = {}) {
+async function restore(declared: CrsInfo | null, crs: ResolvedCrs, sourcePoints = 1000, opts: { skipScanConfirm?: boolean } = {}, withCurrent = false) {
   const store = new Map<string, unknown>();
   const crsService = new CrsService({
     get: (k) => store.get(k) as never,
@@ -79,6 +80,7 @@ async function restore(declared: CrsInfo | null, crs: ResolvedCrs, sourcePoints 
     refreshAnnotationPanel: vi.fn(),
     applyViewState: vi.fn(),
     setCrsOverride,
+    ...(withCurrent ? { currentCrs: () => crsService.current() } : {}),
     showToast,
     setDropError: vi.fn(),
   };
@@ -167,5 +169,33 @@ describe('a GLB states no unit a session could contradict', () => {
     expect(r.ok).toBe(true);
     expect(r.toasts.some((t) => /conflicts with this scan/.test(t))).toBe(false);
     expect(r.crsService.current()!.linearUnit).toBe(unit);
+  });
+});
+
+describe('the notice follows the CRS that was active before the restore', () => {
+  const UTM = 'PROJCS["WGS 84 / UTM zone 12N",GEOGCS["WGS 84",DATUM["WGS_1984",SPHEROID["WGS 84",6378137,298.257223563]],UNIT["degree",0.0174532925199433]],PROJECTION["Transverse_Mercator"],UNIT["metre",1],AUTHORITY["EPSG","32612"]]';
+  const projected = (epsg: number, name: string): ResolvedCrs =>
+    ({ kind: 'projected', name, epsg, linearUnit: 'metre', linearUnitToMetres: 1, source: 'user-override', confidence: 'high', userConfirmed: true });
+  const notice = (toasts: readonly string[]) => toasts.find((t) => SET.test(t));
+
+  describe.each([[false, 'the declaration standing in'], [true, 'crsService.current()']] as const)('with %s (%s)', (withCurrent) => {
+    it('a plain local session on a GLB says the unit went away', async () => {
+      const r = await restore(formatSpecificationCrs('glTF'), local('unknown', 1), 1000, {}, withCurrent);
+      expect(r.crsService.current()!.linearUnit).toBe('unknown');
+      expect(notice(r.toasts)).toContain('This session set the coordinate system to Local coordinates (no CRS) (no EPSG code; linear unit not declared).');
+    });
+
+    it('a local metres session on a GLB changes nothing and stays quiet', async () => {
+      const r = await restore(formatSpecificationCrs('glTF'), local('metre', 1, 'Local coordinates in metres (no CRS)'), 1000, {}, withCurrent);
+      expect(r.crsService.current()!.linearUnit).toBe('metre');
+      expect(notice(r.toasts)).toBeUndefined();
+    });
+
+    it('a LAS file: the same CRS stays quiet, another CRS is named', async () => {
+      const same = await restore(crsFromWkt(UTM), projected(32612, 'WGS 84 / UTM zone 12N'), 1000, {}, withCurrent);
+      expect(notice(same.toasts)).toBeUndefined();
+      const other = await restore(crsFromWkt(UTM), projected(32613, 'WGS 84 / UTM zone 13N'), 1000, {}, withCurrent);
+      expect(notice(other.toasts)).toContain('This session set the coordinate system to WGS 84 / UTM zone 13N [EPSG:32613] (metres).');
+    });
   });
 });

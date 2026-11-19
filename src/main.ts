@@ -3430,7 +3430,7 @@ const sessionIoDeps: SessionIoDeps = {
   refreshAnnotationPanel,
   applyViewState,
   restoreReferencePlane: (settings) => void inspector.referencePlane?.restore(settings),
-  setCrsOverride: (args) => crsService.setOverride(args),
+  setCrsOverride: (args) => crsService.setOverride(args), currentCrs: () => crsService.current(),
   showToast: showLassoToast,
   setDropError: (message) => dropZone.setError(message), confirmReplace: (req) => requestReplace(req), currentViews: () => viewBookmarks.savedViews,
 };

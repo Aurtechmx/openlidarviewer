@@ -26,7 +26,7 @@ import type { WorkplaneSettings } from '../model/workplaneSettings';
 import type { PointCloud } from '../model/PointCloud';
 import type { ViewBookmarksService } from './viewBookmarks';
 import type { CrsService } from '../geo/CrsService';
-import type { ResolvedCrs } from '../geo/CoordinateTypes';
+import { isLinearUnitKnown, resolvedFromCrsInfo, type ResolvedCrs } from '../geo/CoordinateTypes';
 import { isLocalLinearUnit, type LocalLinearUnit } from '../geo/CrsOverrideStore';
 import { metresPerLinearUnit } from '../io/crs';
 import { epsgCrsKind, type EpsgCrsKind } from '../convert/epsg';
@@ -176,6 +176,12 @@ export interface SessionIoDeps {
   /** Restore the author's CRS override (`crsService.setOverride`). */
   setCrsOverride: (args: Parameters<CrsService['setOverride']>[0]) => ResolvedCrs | null;
   /**
+   * The active scan's CRS before the restore (`crsService.current()`). The
+   * notice says when the restore changed it. Absent: the scan's own declared
+   * CRS stands in for it when the record is complete.
+   */
+  currentCrs?: () => ResolvedCrs | null;
+  /**
    * Ask before the file replaces measurements, annotations or saved views that
    * are already open. Absent: nothing is asked.
    */
@@ -302,6 +308,17 @@ export function appliedCrsSentence(crs: ResolvedCrs): string {
 function sessionLocalUnit(crs: ResolvedCrs): LocalLinearUnit | undefined {
   const u = crs.linearUnit;
   return isLocalLinearUnit(u) && Math.abs(metresPerLinearUnit(u) - crs.linearUnitToMetres) < 1e-12 ? u : undefined;
+}
+
+/**
+ * Whether two resolved CRSs mean the same coordinates: kind, code and linear
+ * unit. The source and the name may differ (a format specification's metres
+ * and the user's local metres are one frame).
+ */
+function sameActiveCrs(a: ResolvedCrs | null, b: ResolvedCrs): boolean {
+  if (!a) return false;
+  const unit = (c: ResolvedCrs): string => (isLinearUnitKnown(c) ? `${c.linearUnit}:${c.linearUnitToMetres}` : 'none');
+  return a.kind === b.kind && a.epsg === b.epsg && unit(a) === unit(b);
 }
 
 /** A CRS named for a notice: its name, capped, with its EPSG code when the name lacks it. */
@@ -651,6 +668,11 @@ export async function importSession(
       }
       // What the service actually applied, not what the file claims: the notice
       // names this, and nothing is claimed when nothing was applied (null).
+      // The CRS in use before the restore, so the notice can say whether the
+      // restore changed it.
+      const before = deps.currentCrs
+        ? deps.currentCrs()
+        : typeof override.detected?.isGeographic === 'boolean' ? resolvedFromCrsInfo(override.detected, 'las-vlr') : undefined;
       const appliedCrs = kindConflict ? null : deps.setCrsOverride({ ...override, persist: false });
       // A local choice matches the file only when the file declares neither a
       // code nor a linear unit: a declared unit with no EPSG is still a
@@ -666,7 +688,12 @@ export async function importSession(
           : declared.epsg === sessionCrs.epsg &&
             (declared.kind === undefined || declared.kind === (appliedCrs?.kind ?? sessionCrs.kind)) &&
             (declared.linearUnitToMetres === undefined || declared.linearUnitToMetres === sessionCrs.linearUnitToMetres);
-      if (!sameAsFile && appliedCrs) {
+      // Against the CRS in use before, when it is known: a restore that changes
+      // the active CRS says so, and one that changes nothing stays quiet (a
+      // GLB's specification metres and a session's local metres are the same).
+      // The file's declaration decides only when that CRS is not known.
+      const unchanged = before !== undefined && appliedCrs ? sameActiveCrs(before, appliedCrs) : sameAsFile;
+      if (!unchanged && appliedCrs) {
         // Only for the scan it was applied to: the override acts on whichever scan is active.
         crsNotice = { text: ` ${appliedCrsSentence(appliedCrs)}`, action: { label: 'Keep', onClick: applySessionCrs } };
       }
