@@ -555,6 +555,28 @@ describe('a frame change reaches every scan summary', () => {
     expect(seen).toEqual(['card', 'report', 'project']);
   });
 
+  it('with two visible layers, the summaries run after the override has re-judged the layer flags', () => {
+    // A second layer is in EPSG:32612. Whether the two share a frame, and so
+    // both feed the gather a summary takes, is decided by onOverrideApplied
+    // (the shell's refreshCrsFlags). A summary run before it reads stale flags.
+    const otherLayerEpsg = 32612;
+    let shareFrame = false;
+    const seen: boolean[] = [];
+    const h = harness({
+      activeId: 'cloud-1',
+      onOverrideApplied: () => { shareFrame = h.service.current()?.epsg === otherLayerEpsg; },
+      onFrameChange: () => { seen.push(shareFrame); },
+    });
+    const opened = { name: 'scan/phone.ply', metadata: { crs: null }, ...FACTS };
+    h.viewer.getCloud.mockReturnValue(opened);
+    h.coordinator.refreshCrsForStaticCloud(opened);
+    expect(seen).toEqual([false]);
+    h.coordinator.handleCrsOverride({ epsg: 32612, kind: 'projected' });
+    expect(seen).toEqual([false, true]);
+    h.coordinator.handleCrsOverride({ epsg: null, kind: 'detected' });
+    expect(seen).toEqual([false, true, false]);
+  });
+
   describe('the three real summaries, wired as the shell wires them', () => {
     beforeAll(() => { installManualTimerDom(); });
 

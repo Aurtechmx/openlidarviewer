@@ -161,22 +161,33 @@ export function createCrsCoordinator(deps: CrsCoordinatorDeps): CrsCoordinator {
   // One subscription for everything computed from the active scan under its
   // frame. The service broadcasts on every resolution; only a revision change
   // is a new frame (see `wireFrameChange`, which gates the same way).
-  const onFrameChange = deps.onFrameChange;
-  if (onFrameChange && onFrameChange.length > 0) {
+  const onFrameChange = deps.onFrameChange ?? [];
+  // While a user override is being applied: the service broadcasts from inside
+  // `setOverride`, before `onOverrideApplied` re-judges which layers share a
+  // frame, and a summary that gathers would read the old flags. The change is
+  // held and handed on once the override is applied in full.
+  let overriding = false;
+  let heldFrameChange = false;
+  function runFrameHandlers(): void {
+    const source = currentSource;
+    if (!source || !crsService.current()) return;
+    for (const handler of onFrameChange) {
+      try {
+        handler(source);
+      } catch (err) {
+        if (debug) console.warn('[crs] a scan summary did not follow the frame change', err);
+      }
+    }
+  }
+  if (onFrameChange.length > 0) {
     let seen = crsService.crsRevision();
     crsService.subscribe((resolved) => {
       const rev = crsService.crsRevision();
       if (rev === seen) return;
       seen = rev;
-      const source = currentSource;
-      if (!resolved || !source) return;
-      for (const handler of onFrameChange) {
-        try {
-          handler(source);
-        } catch (err) {
-          if (debug) console.warn('[crs] a scan summary did not follow the frame change', err);
-        }
-      }
+      if (!resolved || !currentSource) return;
+      if (overriding) heldFrameChange = true;
+      else runFrameHandlers();
     });
   }
 
@@ -332,6 +343,22 @@ export function createCrsCoordinator(deps: CrsCoordinatorDeps): CrsCoordinator {
     localUnit?: LocalLinearUnit;
   }): void {
     if (!currentCrsDatasetKey) return;
+    overriding = true;
+    try {
+      applyOverride(override);
+    } finally {
+      overriding = false;
+      if (heldFrameChange) {
+        heldFrameChange = false;
+        runFrameHandlers();
+      }
+    }
+  }
+
+  function applyOverride(override: {
+    epsg: number | null;
+    kind: 'projected' | 'geographic' | 'local' | 'detected';
+  }): void {
     // ONE writer: the override goes through `crsService.setOverride`, which
     // persists it, records the file's own declaration (`detectedEpsg`, the
     // guard that keeps a stored choice with its file), handles the
