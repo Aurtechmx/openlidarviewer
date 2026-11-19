@@ -38,7 +38,8 @@ export interface CrsOriginInput {
 export function declaredCrsOrigin(
   crs: { readonly source: string; readonly name: string; readonly epsg?: number; readonly verticalEpsg?: number; readonly verticalDatum?: string } | null | undefined,
 ): CrsOriginInput | null {
-  if (!crs) return null;
+  // Local metres a format specification states is not a CRS the file declared.
+  if (!crs || crs.source === 'format-specification') return null;
   return {
     source: `file-${crs.source}`,
     name: crs.name,

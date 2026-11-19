@@ -29,6 +29,7 @@ export interface ScanUnitCrs {
   readonly geocentric?: boolean;
   readonly localFrame?: true;
   readonly horizontalUnresolved?: true;
+  readonly formatSpecification?: string;
   readonly linearUnit?: CrsLinearUnit;
   readonly linearUnitToMetres?: number;
   readonly linearUnitByFactor?: boolean;
@@ -46,6 +47,15 @@ function declaredKindOf(crs: ScanUnitCrs | null | undefined): CrsKind | undefine
   if (crs.geocentric) return 'geocentric';
   if (typeof crs.isGeographic !== 'boolean') return undefined;
   return crs.isGeographic ? 'geographic' : 'projected';
+}
+
+/**
+ * The CRS the file itself declares, or null. The local metres a format
+ * specification states (a glTF or E57 with no CRS) is the app's reading, not
+ * a declaration: the file states nothing a session could contradict.
+ */
+function fileDeclaredCrs<T extends ScanUnitCrs>(crs: T | null | undefined): T | null {
+  return crs && !crs.formatSpecification ? crs : null;
 }
 
 /** The unit scales of a scan's declared CRS, for the session conflict check. */
@@ -155,8 +165,8 @@ export function scanFactsFromStatic(cloud: StaticScanCloud): ScanFacts {
     width: b.max[0] - b.min[0],
     depth: b.max[1] - b.min[1],
     height: b.max[2] - b.min[2],
-    crs: cloud.metadata?.crs?.name,
-    epsg: cloud.metadata?.crs?.epsg,
+    crs: fileDeclaredCrs(cloud.metadata?.crs)?.name,
+    epsg: fileDeclaredCrs(cloud.metadata?.crs)?.epsg,
     ...(o ? { origin: [o[0], o[1], o[2]] as const, boundsMin: [o[0] + b.min[0], o[1] + b.min[1], o[2] + b.min[2]] as const } : {}),
   };
 }
@@ -170,7 +180,7 @@ export function scanFactsFromStatic(cloud: StaticScanCloud): ScanFacts {
  * to conflict against — the CRS and unit checks still run.
  */
 export function declaredSpatialFromStreaming(cloud: StreamingScanSource): DeclaredSpatialFacts {
-  const crs = cloud.crs();
+  const crs = fileDeclaredCrs(cloud.crs());
   const kind = declaredKindOf(crs);
   return { epsg: crs?.epsg, ...(kind ? { kind } : {}), ...declaredUnitsOf(crs) };
 }
@@ -182,7 +192,7 @@ export function declaredSpatialFromStreaming(cloud: StreamingScanSource): Declar
  * unit come off the header metadata.
  */
 export function declaredSpatialFromStatic(cloud: StaticScanCloud): DeclaredSpatialFacts {
-  const crs = cloud.metadata?.crs;
+  const crs = fileDeclaredCrs(cloud.metadata?.crs);
   let upAxis: 'y' | 'z' | undefined;
   if (cloud.sourceFormat) {
     upAxis = isZUpFormat(cloud.sourceFormat) ? 'z' : 'y';

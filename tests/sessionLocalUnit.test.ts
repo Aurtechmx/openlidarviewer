@@ -21,6 +21,7 @@ import {
 import type { ResolvedCrs } from '../src/geo/CoordinateTypes';
 import { CrsService, type CrsOverridePort } from '../src/geo/CrsService';
 import type { CrsInfo } from '../src/io/crs';
+import { formatSpecificationCrs } from '../src/geo/CoordinateTypes';
 import type { Viewer } from '../src/render/Viewer';
 
 beforeAll(() => {
@@ -38,7 +39,7 @@ const sessionModule: SessionModule = { parseSession, rebaseSessionGeometry, matc
 const asFile = (text: string): File => ({ text: async () => text }) as unknown as File;
 
 /** Restore a session carrying `crs` onto a streamed scan that declares `declared`. */
-async function restore(declared: CrsInfo | null, crs: ResolvedCrs) {
+async function restore(declared: CrsInfo | null, crs: ResolvedCrs, sourcePoints = 1000, opts: { skipScanConfirm?: boolean } = {}) {
   const store = new Map<string, unknown>();
   const crsService = new CrsService({
     get: (k) => store.get(k) as never,
@@ -90,9 +91,9 @@ async function restore(declared: CrsInfo | null, crs: ResolvedCrs) {
     annotations: [],
     software: '0.6.3',
     crs,
-    scanSummary: { fileName: 'loaded.laz', sourcePoints: 1000, width: 10, depth: 10, height: 3 },
+    scanSummary: { fileName: 'loaded.laz', sourcePoints, width: 10, depth: 10, height: 3 },
   } as never));
-  const ok = await importSession(file, {}, deps);
+  const ok = await importSession(file, opts, deps);
   const toasts = showToast.mock.calls.map((c) => c[0] as string);
   const actions = showToast.mock.calls.map((c) => c[1] as { label: string; onClick: () => void } | undefined);
   return { ok, crsService, store, setCrsOverride, loadMeasurements, toasts, actions };
@@ -152,5 +153,19 @@ describe('a local session CRS without a usable unit stays without one', () => {
   it('no clause when the session declares no unit', async () => {
     const r = await restore(null, local('unknown', 1));
     expect(r.toasts.some((t) => t.includes('was not restored because the factor'))).toBe(false);
+  });
+});
+
+describe('a GLB states no unit a session could contradict', () => {
+  // The metres a format specification gives are the app's reading of a file
+  // that states nothing, so a session in feet is not a unit conflict with it.
+  it.each([
+    ['local feet', local('foot', 0.3048, 'Local coordinates in international feet (no CRS)'), 'foot'],
+    ['EPSG:2229', { kind: 'projected', name: 'NAD83 / California zone 5 (ftUS)', epsg: 2229, linearUnit: 'us-survey-foot', linearUnitToMetres: FT_US, source: 'user-override', confidence: 'high', userConfirmed: true } as ResolvedCrs, 'us-survey-foot'],
+  ] as const)('%s on a partial match restores after Apply anyway', async (_label, crs, unit) => {
+    const r = await restore(formatSpecificationCrs('glTF'), crs, 1010, { skipScanConfirm: true });
+    expect(r.ok).toBe(true);
+    expect(r.toasts.some((t) => /conflicts with this scan/.test(t))).toBe(false);
+    expect(r.crsService.current()!.linearUnit).toBe(unit);
   });
 });

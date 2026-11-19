@@ -17,6 +17,7 @@
 import type { DeclaredMetadataField } from '../model/PointCloud';
 import type { CapabilityDescriptor, ScanProvenance, SourceFormat } from './displayProfile';
 import { profileHeadline, isReferenceGradeProvenance } from './displayProfile';
+import { hasHorizontalCrs, type LayerCrs } from '../geo/frame/layerUpFrame';
 
 /** Source-format strings `displayProfile` understands. */
 const KNOWN_FORMATS: ReadonlySet<string> = new Set<SourceFormat>([
@@ -92,7 +93,11 @@ export interface ScanCapabilityInput {
   readonly hasClassification: boolean;
   readonly hasNormals: boolean;
   readonly hasGpsTime: boolean;
-  /** A resolved CRS makes the scan georeferenced; null/undefined = local frame. */
+  /**
+   * The scan's CRS. It is georeferenced only with a horizontal CRS (see
+   * `hasHorizontalCrs`): none, a local frame the user picked, or the local
+   * metres a format specification states, is a local frame.
+   */
   readonly crs?: unknown;
   readonly isMesh?: boolean;
   readonly hasTexture?: boolean;
@@ -178,7 +183,7 @@ export function buildCapabilityDescriptor(input: ScanCapabilityInput): Capabilit
     hasClassification: input.hasClassification,
     hasNormals: input.hasNormals,
     hasGpsTime: input.hasGpsTime,
-    isGeoreferenced: input.crs != null,
+    isGeoreferenced: hasHorizontalCrs(input.crs as LayerCrs | null | undefined),
     isMesh: input.isMesh === true,
     ...(input.hasTexture !== undefined ? { hasTexture: input.hasTexture } : {}),
     ...(input.extentMetres ? { extentMetres: input.extentMetres } : {}),

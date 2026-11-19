@@ -23,14 +23,15 @@ import { profileFor, sectionVisible } from './displayProfile';
  */
 export interface DisplayProfileTarget {
   setDeclaredProvenance(model: ProvenanceCardModel | null): void;
-  setCrsSectionVisible(visible: boolean): void;
+  setCrsSectionCollapsed(collapsed: boolean): void;
 }
 
 /**
  * Derive the display profile from a freshly-loaded scan and apply it to the
  * Inspector: surface the declared-by-the-file provenance card (E57 `olv:` block
- * + profile headline) and hide the Coordinate-system section for local-frame
- * profiles (a bare E57 / handheld / mesh scan has no geodetic CRS to show).
+ * + profile headline) and collapse the Coordinate-system section for
+ * local-frame profiles (a bare E57 / handheld / mesh scan has no geodetic CRS
+ * to show). The section stays present: its picker sets a local unit or a CRS.
  */
 export function applyDisplayProfile(cloud: PointCloud, target: DisplayProfileTarget): void {
   const descriptor = buildCapabilityDescriptor({
@@ -51,5 +52,5 @@ export function applyDisplayProfile(cloud: PointCloud, target: DisplayProfileTar
     extensionFields: cloud.metadata?.sourceMetadata?.extensions,
   });
   target.setDeclaredProvenance(provenanceCardModel(descriptor));
-  target.setCrsSectionVisible(sectionVisible(profileFor(descriptor), 'crsDatum'));
+  target.setCrsSectionCollapsed(!sectionVisible(profileFor(descriptor), 'crsDatum'));
 }

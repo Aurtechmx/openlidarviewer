@@ -224,7 +224,9 @@ export function validateCrsForMeasurement(
         severity: 'caution',
         canDisplayMetric: true,
         canSaveMeasurement: true,
-        reason: `Local coordinates in ${localUnitWords(crs)}; measurements are converted from the declared unit.`,
+        reason: crs.source === 'format-specification' && crs.formatSpecification
+          ? `Local coordinates in metres, as the ${crs.formatSpecification} specification defines them.`
+          : `Local coordinates in ${localUnitWords(crs)}; measurements are converted from the declared unit.`,
         suggestion: 'Accuracy also depends on the source data.',
       };
 

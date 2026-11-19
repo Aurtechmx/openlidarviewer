@@ -457,6 +457,18 @@ const UNSUPPORTED_GLTF_VERSION_MESSAGE =
 
 const DRACO_EXTENSION = 'KHR_draco_mesh_compression';
 
+/** glTF extensions that place positions on the Earth rather than in a local frame. */
+const GEOSPATIAL_EXTENSIONS: ReadonlySet<string> = new Set(['CESIUM_RTC']);
+
+/** Whether the glTF names a geospatial extension in `extensionsUsed` or its root `extensions`. */
+function usesGeospatialExtension(document: unknown): boolean {
+  const doc = document as { extensionsUsed?: unknown; extensions?: unknown } | null;
+  if (!doc || typeof doc !== 'object') return false;
+  const used = Array.isArray(doc.extensionsUsed) ? doc.extensionsUsed : [];
+  const root = doc.extensions && typeof doc.extensions === 'object' ? Object.keys(doc.extensions) : [];
+  return [...used, ...root].some((x) => typeof x === 'string' && GEOSPATIAL_EXTENSIONS.has(x));
+}
+
 const MESHOPT_EXTENSIONS: ReadonlySet<string> = new Set(['EXT_meshopt_compression', 'KHR_meshopt_compression']);
 
 const MESHOPT_MESSAGE =
@@ -805,9 +817,12 @@ export async function loadGltf(
   });
 
   // A standalone glTF declares no CRS, and glTF 2.0 states "The units for all
-  // linear distances are meters": local coordinates in metres.
+  // linear distances are meters": local coordinates in metres. A geospatial
+  // extension (CESIUM_RTC: positions relative to an Earth-centred point) says
+  // the positions are not a local frame, so no frame is given and the CRS
+  // stays unknown.
   const declared = {
-    crs: formatSpecificationCrs('glTF'),
+    ...(usesGeospatialExtension(document) ? {} : { crs: formatSpecificationCrs('glTF') }),
     ...(generator ? { sourceSoftware: generator } : {}),
     ...(hasTexture ? { hasTexture: true } : {}),
   };
