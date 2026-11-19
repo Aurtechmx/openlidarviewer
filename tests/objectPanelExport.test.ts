@@ -4,7 +4,9 @@
  * The non-terrain export row: a "Report PDF" button is present for BOTH object
  * and interior scans; a "Floor plan preview" button is present ONLY for interior scans.
  * Runs in the node environment via the same recording DOM stub as
- * objectPanelSpace.test.ts.
+ * objectPanelSpace.test.ts. The last block pins that an export's busy and
+ * failed states belong to the panel: a re-render during the export (a CRS
+ * change re-measures the report) must not hide them on a detached button.
  */
 
 import { describe, it, expect, beforeAll } from 'vitest';
@@ -70,5 +72,55 @@ describe('ObjectPanel — export row gating', () => {
     const root = panel.element as unknown as FakeEl;
     expect(root.findByText('Report PDF')).toHaveLength(1);
     expect(root.findByText('Floor plan preview')).toHaveLength(0);
+  });
+});
+
+describe('ObjectPanel: an export outlives a re-render of the report', () => {
+  /** An export the test settles by hand. */
+  function deferred() {
+    let resolve!: () => void;
+    let reject!: (e: Error) => void;
+    const promise = new Promise<void>((res, rej) => { resolve = res; reject = rej; });
+    return { promise, resolve, reject };
+  }
+  const reportButton = (root: FakeEl): FakeEl | undefined =>
+    root.findByText('Report PDF')[0] ?? root.findByText('…')[0] ?? root.findByText('Failed')[0];
+  const settle = () => new Promise((r) => setTimeout(r, 0));
+
+  async function mount() {
+    const { ObjectPanel } = await import('../src/ui/ObjectPanel');
+    const { objectMetrics } = await import('../src/terrain/objectMetrics');
+    const run = deferred();
+    let calls = 0;
+    const panel = new ObjectPanel({ onExportReport: () => { calls++; return run.promise; } });
+    const metrics = objectMetrics(cubeShell());
+    panel.showObject(metrics, null, null);
+    const root = panel.element as unknown as FakeEl;
+    return { panel, metrics, run, root, calls: () => calls };
+  }
+
+  it('a failure after a re-render shows on the button now in the panel', async () => {
+    const { panel, metrics, run, root } = await mount();
+    (reportButton(root) as unknown as { click(): void }).click();
+    panel.showObject(metrics, null, null); // the report re-measures mid-export
+    const shown = reportButton(root)!;
+    expect(shown.textContent).toBe('…');
+    expect(shown.disabled).toBe(true);
+    run.reject(new Error('moved'));
+    await settle();
+    expect(reportButton(root)).toBe(shown);
+    expect(shown.textContent).toBe('Failed');
+    expect(shown.disabled).toBe(false);
+  });
+
+  it('the re-rendered button does not start a second export while the first runs', async () => {
+    const { panel, metrics, run, root, calls } = await mount();
+    (reportButton(root) as unknown as { click(): void }).click();
+    panel.showObject(metrics, null, null);
+    (reportButton(root) as unknown as { click(): void }).click();
+    expect(calls()).toBe(1);
+    run.resolve();
+    await settle();
+    expect(reportButton(root)!.textContent).toBe('Report PDF');
   });
 });

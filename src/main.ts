@@ -2063,7 +2063,7 @@ function newObjectPanel(
       // system, exactly like the standalone SVG sheet below.
       unitSystem: viewer.measure.unitSystem,
     });
-    downloadFileBytes(`${ctx.basename}-space-report.pdf`, bytes, 'application/pdf');
+    if (!spaceCtxCurrent(ctx)) throw new Error(SPACE_CONTEXT_MOVED); downloadFileBytes(`${ctx.basename}-space-report.pdf`, bytes, 'application/pdf'); // the build is an await too: a CRS change during it re-measured the panel
   },
   // Build + download the interior-only floor plan as a standalone SVG sheet.
   // v0.4.5: real wall-extraction pipeline (wall-band slice → density mask →
