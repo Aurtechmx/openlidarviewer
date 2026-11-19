@@ -36,7 +36,7 @@ import {
   type SpaceMetrics,
 } from '../terrain/spaceMetrics';
 import type { ScanRouteService } from './ScanRouteService';
-import { hasHorizontalCrs, layerCrsFromContext } from '../geo/frame/layerUpFrame';
+import { hasHorizontalCrs, type LayerCrs } from '../geo/frame/layerUpFrame';
 import { gatherDeclineCause } from '../terrain/gatherUpAxis';
 import type { ScanTypeDisabledReasons } from '../ui/scanTypeControl';
 
@@ -81,6 +81,13 @@ export interface ScanRouteGeometryPort {
  */
 export function routeUnitFrame(
   context: () => SpatialContext,
+  /**
+   * The active scan's resolved CRS, the record the routing gather settles its
+   * up axis from. Read whole: the spatial context does not carry the WKT, and a
+   * CRS whose horizontal part did not resolve still counts as a horizontal
+   * reference there by its WKT. Omitted, no `horizontalCrs` is offered.
+   */
+  resolved?: () => LayerCrs | null | undefined,
 ): Pick<ScanRouteFramePort, 'linearUnitToMetres' | 'verticalUnitToMetres' | 'linearUnitKnown' | 'horizontalCrs'> {
   return {
     linearUnitToMetres: () => context().linearUnitToMetres,
@@ -92,7 +99,7 @@ export function routeUnitFrame(
       const c = context();
       return c.linearUnitKnown && c.verticalScaleState !== 'invalid';
     },
-    horizontalCrs: () => hasHorizontalCrs(layerCrsFromContext(context())),
+    ...(resolved ? { horizontalCrs: () => hasHorizontalCrs(resolved()) } : {}),
   };
 }
 

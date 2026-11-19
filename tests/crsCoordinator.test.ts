@@ -579,7 +579,7 @@ describe('a frame change reaches every scan summary', () => {
       const route = createScanRouteCoordinator({
         routing,
         geometry: { gatherForRouting: () => ({ positions: box, residentOnly: false, totalPoints: 1000 }), residentPointTotal: () => 1000, hasRgb: () => false },
-        frame: { ...routeUnitFrame(() => service.context()), exportTargetId: () => 'cloud-1', crsRevision: () => service.crsRevision(), basename: () => 'phone' },
+        frame: { ...routeUnitFrame(() => service.context(), () => service.current()), exportTargetId: () => 'cloud-1', crsRevision: () => service.crsRevision(), basename: () => 'phone' },
         verdict: { get: () => null, set: () => {} },
         view: {
           setObjectScanType: vi.fn(), setAnalyseScanType: vi.fn(), showSpace: vi.fn(),

@@ -27,6 +27,9 @@ import type { AppContext } from '../src/app/appContext';
 import type { ScanShape, SpaceKind } from '../src/terrain/scanShape';
 import { settleTerrainGatherFrame } from '../src/terrain/gatherUpAxis';
 import { spaceContextStillCurrent } from '../src/export/exportScanIdentity';
+import { CrsService } from '../src/geo/CrsService';
+import { routeUnitFrame } from '../src/app/scanRouteCoordinator';
+import type { CrsInfo } from '../src/io/crs';
 
 function box(n = 400): Float32Array {
   const p = new Float32Array(n * 3);
@@ -575,5 +578,46 @@ describe('the space or object report follows a CRS change on the routed scan', (
     c.beginScan(true);
     c.setTypeOverride('object');
     expect(h.view.showObject).toHaveBeenLastCalledWith(null, null, null, 'The axes disagree.');
+  });
+
+  it('a WKT-only CRS the gather treats as horizontal is re-measured after Local, then "Use detected"', () => {
+    // The file declares a WKT whose horizontal part did not resolve: its kind
+    // is unknown, but the gather still reads it as a horizontal reference.
+    const declared: CrsInfo = {
+      source: 'wkt', wkt: 'COMPD_CS["custom"]', name: 'custom', linearUnit: 'unknown', linearUnitToMetres: 1,
+      isGeographic: false, horizontalUnresolved: true,
+    } as CrsInfo;
+    const store = new Map<string, never>();
+    const service = new CrsService({
+      get: (k) => store.get(k),
+      set: (k, o) => { store.set(k, { ...o, updatedAt: 1 } as never); },
+      clear: (k) => { store.delete(k); },
+    });
+    service.resolveForScan({ name: 'room.ply', detected: declared, source: 'las-vlr' });
+    expect(service.current()?.kind).toBe('unknown');
+    const stored = yUpRoom();
+    const gather = vi.fn(() => {
+      const p = Float32Array.from(stored);
+      const f = settleTerrainGatherFrame([{ format: 'ply', crs: service.current(), layerPoints: p }], false, p);
+      return f?.ok ? { positions: p, residentOnly: false, totalPoints: p.length / 3 } : null;
+    });
+    const h = harness({ detect: 'interior' });
+    const deps = {
+      ...h.deps,
+      geometry: { ...h.deps.geometry, gatherForRouting: gather },
+      frame: { ...h.deps.frame, ...routeUnitFrame(() => service.context(), () => service.current()), crsRevision: () => service.crsRevision() },
+    };
+    const c = createScanRouteCoordinator(deps);
+    c.beginScan(true);
+    const asDeclared = c.spaceExport()!.space.dims;
+
+    service.setOverride({ override: { epsg: null, kind: 'local' }, detected: declared, source: 'las-vlr' });
+    c.remeasureForFrame();
+    expect(c.spaceExport()!.space.dims).not.toEqual(asDeclared); // rotated by its point layout
+
+    service.setOverride({ override: { epsg: null, kind: 'detected' }, detected: declared, source: 'las-vlr' });
+    c.remeasureForFrame();
+    expect(gather).toHaveBeenCalledTimes(3);
+    expect(c.spaceExport()!.space.dims).toEqual(asDeclared);
   });
 });

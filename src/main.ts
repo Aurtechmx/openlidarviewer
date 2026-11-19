@@ -2471,7 +2471,7 @@ const routeCoordinator = createScanRouteCoordinator({
     },
   },
   frame: {
-    ...routeUnitFrame(() => crsService.context()),
+    ...routeUnitFrame(() => crsService.context(), () => crsService.current()),
     exportTargetId: () => scans.activeExportTargetId(), crsRevision: () => crsService.crsRevision(),
     basename: activeScanName, truncation: () => scans.activeCloud()?.metadata?.truncation ?? null,
   },
