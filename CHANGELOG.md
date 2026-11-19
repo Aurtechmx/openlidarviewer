@@ -4,6 +4,11 @@ The format is based on Keep a Changelog and the project follows Semantic Version
 
 ## [Unreleased]
 
+## [0.7.2-alpha.1] - 2026-11-17
+
+A development cut on the way to v0.7.2. It carries no DOI, and its test figures
+are not release-authoritative. v0.7.1 is the current published release.
+
 ## [0.7.1] - 2026-11-11
 
 The walkthrough of every workflow in the packaged build was done on the public
