@@ -137,6 +137,8 @@ jobs:
         run: npm run lint:claims-language
       - name: Archive-vocab lint (shipped files stay in a product-facing voice)
         run: npm run lint:archive-vocab
+      - name: Protected statements (each required phrase is still in src/, and its constant still used)
+        run: npm run check:protected-phrases
       # 6 s measured, so it rides this job instead of paying npm ci and runner
       # setup again in one of its own. Running only on a tag is how 22 files of
       # `.agents/` plugin scaffolding merged through a green pull request and
@@ -170,6 +172,11 @@ jobs:
       # plain-build isolation rule against the shipped artifact.
       - name: Chunk-isolation contract (plain build)
         run: npm run test:build
+      # Reads the plain build test:build just wrote, before build:live replaces
+      # it. The live build's string array keeps the text of a function the
+      # bundler dropped, so a check of that build can miss the loss.
+      - name: Protected statements in the plain build (each phrase is in code the bundler kept)
+        run: npm run check:protected-phrases:built
       - name: Live-shell bundle budget (obfuscated build that ships)
         run: npm run build:live && npm run check:bundle
       - name: No test seam in the shipped build

@@ -353,6 +353,40 @@ Firefox, WebKit and Windows legs. Its `ci-at-tag` job checks through the GitHub
 API that a CI run at the tagged commit completed with `ci-green` and every job
 it needs at `success`, and `release-ready` depends on that job.
 
+### Protected statements
+
+Two steps of the `verify` job keep the statements listed in
+`scripts/protected-phrases.json` (caveats, limits and method IDs the app must
+keep showing or writing) in the app. `npm run check:protected-phrases` reads
+`src/**/*.ts` with comments removed. `npm run check:protected-phrases:built`
+runs the same rules plus `built` on the plain build that `npm run test:build`
+writes to `dist/`. The release gate (`scripts/gates.json`) runs both, the
+built one between `test:build` and `build:live`.
+
+| Rule | Fails when |
+|------|------------|
+| `ui` | the phrase is no longer anywhere in `src/` |
+| `export` | an export phrase is left only in UI code other than `src/ui/ExportPanel.ts` |
+| `use` | an entry's `constant` is referenced nowhere but its definition, an import or a re-export |
+| `built` | a `ui` or `export` phrase is in no JavaScript or HTML file under `dist/`, because the bundler kept no code that holds it |
+
+`built` catches text whose last caller was removed: when no display calls the
+function that formats a status line any more, its text leaves the build. It
+needs the plain build. The live build's string-array pass keeps the text of a
+dropped function in the module's string array, so there the rule can pass
+text that nothing shows.
+
+None of the rules checks that a statement is shown. A phrase passes while any
+code the bundler keeps holds it, on screen or not, so these leave every rule
+green:
+
+- one display site removed while another still shows the same text;
+- a caption that is still built but no longer appended to its panel;
+- on-screen text removed while an export still writes it.
+
+Most entries name no `constant`, so `use` does not apply to them. DOM tests
+that read the text from the rendered element remain the guard for display.
+
 ---
 
 ## 11. Coding standards

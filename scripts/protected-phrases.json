@@ -1,0 +1,2044 @@
+[
+  {
+    "id": "evidence-label-e0",
+    "category": "evidence-level",
+    "phrase": "Implemented — not assessed",
+    "surfaces": [
+      "ui",
+      "export"
+    ]
+  },
+  {
+    "id": "evidence-label-e1",
+    "category": "evidence-level",
+    "phrase": "Unit verified",
+    "surfaces": [
+      "ui",
+      "export"
+    ]
+  },
+  {
+    "id": "evidence-label-e2",
+    "category": "evidence-level",
+    "phrase": "Analytically verified",
+    "surfaces": [
+      "ui",
+      "export"
+    ]
+  },
+  {
+    "id": "evidence-label-e3",
+    "category": "evidence-level",
+    "phrase": "Synthetically validated",
+    "surfaces": [
+      "ui",
+      "export"
+    ]
+  },
+  {
+    "id": "evidence-label-e4",
+    "category": "evidence-level",
+    "phrase": "Cross-implementation validated",
+    "surfaces": [
+      "ui",
+      "export"
+    ]
+  },
+  {
+    "id": "evidence-label-e5",
+    "category": "evidence-level",
+    "phrase": "Externally validated",
+    "surfaces": [
+      "ui",
+      "export"
+    ]
+  },
+  {
+    "id": "evidence-label-e6",
+    "category": "evidence-level",
+    "phrase": "Independently reproduced",
+    "surfaces": [
+      "ui",
+      "export"
+    ]
+  },
+  {
+    "id": "evidence-below-required",
+    "category": "evidence-level",
+    "phrase": "exportable only as an exploratory artifact",
+    "surfaces": [
+      "export"
+    ]
+  },
+  {
+    "id": "evidence-export-disabled",
+    "category": "evidence-level",
+    "phrase": "Export is disabled for this product in the claim register.",
+    "surfaces": [
+      "export"
+    ]
+  },
+  {
+    "id": "evidence-gate-note-meets",
+    "category": "evidence-level",
+    "phrase": "Evidence: meets the required validation level for this product.",
+    "surfaces": [
+      "export"
+    ]
+  },
+  {
+    "id": "evidence-gate-note-synthetic",
+    "category": "evidence-level",
+    "phrase": "Terrain products are validated only against synthetic known-truth",
+    "surfaces": [
+      "export"
+    ]
+  },
+  {
+    "id": "evidence-gate-note-not-validated",
+    "category": "evidence-level",
+    "phrase": "Do not present as a validated deliverable.",
+    "surfaces": [
+      "export"
+    ]
+  },
+  {
+    "id": "mapsheet-evidence-exploratory",
+    "category": "evidence-level",
+    "phrase": "Evidence: exploratory export - below required evidence level.",
+    "surfaces": [
+      "export"
+    ]
+  },
+  {
+    "id": "mapsheet-evidence-refused",
+    "category": "evidence-level",
+    "phrase": "Evidence: export not permitted at current evidence level.",
+    "surfaces": [
+      "export"
+    ]
+  },
+  {
+    "id": "mapsheet-evidence-validated",
+    "category": "evidence-level",
+    "phrase": "meets its required evidence level (not survey-grade)",
+    "surfaces": [
+      "export"
+    ]
+  },
+  {
+    "id": "mapsheet-evidence-contour",
+    "category": "evidence-level",
+    "phrase": "contour geometry validated at its required level",
+    "surfaces": [
+      "export"
+    ]
+  },
+  {
+    "id": "manifest-below-evidence",
+    "category": "evidence-level",
+    "phrase": "The product has not reached its required evidence level.",
+    "surfaces": [
+      "export"
+    ]
+  },
+  {
+    "id": "manifest-prereq-incomplete",
+    "category": "evidence-level",
+    "phrase": "One or more scientific prerequisites are incomplete.",
+    "surfaces": [
+      "export"
+    ]
+  },
+  {
+    "id": "readiness-export-label",
+    "category": "readiness",
+    "phrase": "Export readiness",
+    "surfaces": [
+      "ui"
+    ]
+  },
+  {
+    "id": "readiness-dem-verdict",
+    "category": "readiness",
+    "phrase": "; export readiness: ",
+    "surfaces": [
+      "ui"
+    ]
+  },
+  {
+    "id": "readiness-gap-crs",
+    "category": "readiness",
+    "phrase": "CRS unknown",
+    "surfaces": [
+      "ui",
+      "export"
+    ],
+    "constant": "TERRAIN_UNKNOWN_CRS_MESSAGE"
+  },
+  {
+    "id": "readiness-gap-datum",
+    "category": "readiness",
+    "phrase": "vertical datum unknown",
+    "surfaces": [
+      "ui",
+      "export"
+    ]
+  },
+  {
+    "id": "readiness-surface-below",
+    "category": "readiness",
+    "phrase": "surface quality is below export grade",
+    "surfaces": [
+      "ui",
+      "export"
+    ]
+  },
+  {
+    "id": "readiness-validate-handoff",
+    "category": "readiness",
+    "phrase": "validate before hand-off",
+    "surfaces": [
+      "ui",
+      "export"
+    ]
+  },
+  {
+    "id": "readiness-georef-incomplete",
+    "category": "readiness",
+    "phrase": "georeferencing incomplete",
+    "surfaces": [
+      "ui",
+      "export"
+    ]
+  },
+  {
+    "id": "readiness-preview-only",
+    "category": "readiness",
+    "phrase": "preview only — additional validation recommended",
+    "surfaces": [
+      "ui",
+      "export"
+    ]
+  },
+  {
+    "id": "readiness-gate-stopped",
+    "category": "readiness",
+    "phrase": "quality gate stopped this surface",
+    "surfaces": [
+      "ui",
+      "export"
+    ]
+  },
+  {
+    "id": "readiness-note-ready",
+    "category": "readiness",
+    "phrase": "not field accuracy, not a survey certification",
+    "surfaces": [
+      "export"
+    ]
+  },
+  {
+    "id": "readiness-note-preview",
+    "category": "readiness",
+    "phrase": "PREVIEW - not survey-grade until validated against control.",
+    "surfaces": [
+      "export"
+    ]
+  },
+  {
+    "id": "readiness-idle-clause",
+    "category": "readiness",
+    "phrase": "to check whether this scan can support a terrain surface",
+    "surfaces": [
+      "ui"
+    ],
+    "constant": "IDLE_STATUS"
+  },
+  {
+    "id": "readiness-dem-preliminary",
+    "category": "readiness",
+    "phrase": "Preliminary DEM — ",
+    "surfaces": [
+      "ui"
+    ]
+  },
+  {
+    "id": "readiness-dem-not-reliable",
+    "category": "readiness",
+    "phrase": "for reliable terrain products",
+    "surfaces": [
+      "ui"
+    ]
+  },
+  {
+    "id": "readiness-dem-readme",
+    "category": "readiness",
+    "phrase": "the README carries the caveat",
+    "surfaces": [
+      "ui"
+    ]
+  },
+  {
+    "id": "readiness-provisional",
+    "category": "readiness",
+    "phrase": "Provisional: scored on",
+    "surfaces": [
+      "ui"
+    ]
+  },
+  {
+    "id": "readiness-nothing-to-review",
+    "category": "readiness",
+    "phrase": "Nothing to review",
+    "surfaces": [
+      "ui"
+    ]
+  },
+  {
+    "id": "readiness-confidence-consistent",
+    "category": "readiness",
+    "phrase": "Confidence ordering is consistent with held-out error.",
+    "surfaces": [
+      "ui"
+    ]
+  },
+  {
+    "id": "readiness-confidence-warning",
+    "category": "readiness",
+    "phrase": "Warning: confidence does not track error here.",
+    "surfaces": [
+      "ui"
+    ]
+  },
+  {
+    "id": "readiness-confidence-na",
+    "category": "readiness",
+    "phrase": "Confidence ordering not assessable on this scan.",
+    "surfaces": [
+      "ui"
+    ]
+  },
+  {
+    "id": "readiness-rmse-line",
+    "category": "readiness",
+    "phrase": "Vertical RMSE: ",
+    "surfaces": [
+      "ui"
+    ]
+  },
+  {
+    "id": "readiness-map-sheet-permit",
+    "category": "readiness",
+    "phrase": "It needs an evidence permit, which Contour Studio grants.",
+    "surfaces": [
+      "ui"
+    ],
+    "constant": "MAP_SHEET_NO_PERMIT"
+  },
+  {
+    "id": "nsg-standing-note",
+    "category": "not-survey-grade",
+    "phrase": "not survey-grade unless validated against ground-truth control",
+    "surfaces": [
+      "ui",
+      "export"
+    ],
+    "constant": "NOT_SURVEY_GRADE_NOTE"
+  },
+  {
+    "id": "nsg-derived-class",
+    "category": "not-survey-grade",
+    "phrase": "Derived (heuristic) — not survey-grade",
+    "surfaces": [
+      "ui",
+      "export"
+    ]
+  },
+  {
+    "id": "nsg-derived-validate",
+    "category": "not-survey-grade",
+    "phrase": "Validate before relying on it.",
+    "surfaces": [
+      "ui"
+    ]
+  },
+  {
+    "id": "nsg-heuristic-paren",
+    "category": "not-survey-grade",
+    "phrase": "heuristic, not survey-grade",
+    "surfaces": [
+      "ui"
+    ]
+  },
+  {
+    "id": "nsg-kml",
+    "category": "not-survey-grade",
+    "phrase": "Estimates only — not survey-grade.",
+    "surfaces": [
+      "export"
+    ],
+    "constant": "NOT_SURVEY_GRADE"
+  },
+  {
+    "id": "nsg-xyz-header",
+    "category": "not-survey-grade",
+    "phrase": "not survey-grade; validate before relying on it)",
+    "surfaces": [
+      "export"
+    ]
+  },
+  {
+    "id": "nsg-derive-producer",
+    "category": "not-survey-grade",
+    "phrase": "Not a survey-grade or producer classification",
+    "surfaces": [
+      "ui",
+      "export"
+    ]
+  },
+  {
+    "id": "nsg-export-summary-derived",
+    "category": "not-survey-grade",
+    "phrase": "This writes the DERIVED (heuristic) classification — not survey-grade.",
+    "surfaces": [
+      "ui"
+    ]
+  },
+  {
+    "id": "nsg-contour-review",
+    "category": "not-survey-grade",
+    "phrase": "Internal spatial validation; not survey-grade.",
+    "surfaces": [
+      "export"
+    ]
+  },
+  {
+    "id": "nsg-contour-package",
+    "category": "not-survey-grade",
+    "phrase": "provided. These outputs are not survey-grade.",
+    "surfaces": [
+      "export"
+    ]
+  },
+  {
+    "id": "nsg-contour-json",
+    "category": "not-survey-grade",
+    "phrase": "no independent field checkpoints. Not survey-grade.",
+    "surfaces": [
+      "export"
+    ]
+  },
+  {
+    "id": "nsg-report-quality",
+    "category": "not-survey-grade",
+    "phrase": "not a survey-grade acceptance certificate",
+    "surfaces": [
+      "export"
+    ]
+  },
+  {
+    "id": "nsg-observatory",
+    "category": "not-survey-grade",
+    "phrase": "not survey-grade accuracy",
+    "surfaces": [
+      "export"
+    ]
+  },
+  {
+    "id": "nsg-datum-shift",
+    "category": "not-survey-grade",
+    "phrase": "(datum-shift estimate, not survey-grade)",
+    "surfaces": [
+      "export"
+    ]
+  },
+  {
+    "id": "nsg-simulated",
+    "category": "not-survey-grade",
+    "phrase": "Simulated result; not survey-grade.",
+    "surfaces": [
+      "export"
+    ]
+  },
+  {
+    "id": "nsg-dem-previews",
+    "category": "not-survey-grade",
+    "phrase": "Contour and DEM exports are previews — not survey-grade",
+    "surfaces": [
+      "ui"
+    ]
+  },
+  {
+    "id": "nsg-preview-export-note",
+    "category": "not-survey-grade",
+    "phrase": "Preview export — not survey-grade",
+    "surfaces": [
+      "ui"
+    ]
+  },
+  {
+    "id": "nsg-ground-control-scanstory",
+    "category": "not-survey-grade",
+    "phrase": "Validate against ground control before any survey-grade use.",
+    "surfaces": [
+      "ui"
+    ]
+  },
+  {
+    "id": "raster-not-georeferenced",
+    "category": "not-georeferenced-raster",
+    "phrase": "Not a georeferenced raster.",
+    "surfaces": [
+      "ui"
+    ]
+  },
+  {
+    "id": "calibrated-against-nothing",
+    "category": "uncertainty",
+    "phrase": "calibrated against nothing",
+    "surfaces": [
+      "ui"
+    ],
+    "constant": "CONFIDENCE_CAPTION"
+  },
+  {
+    "id": "confidence-measured-holdout",
+    "category": "uncertainty",
+    "phrase": "cells carry empirical hold-out reliability",
+    "surfaces": [
+      "ui"
+    ],
+    "constant": "CONFIDENCE_CAPTION"
+  },
+  {
+    "id": "accuracy-basis-holdout",
+    "category": "uncertainty",
+    "phrase": "not independent survey checkpoints",
+    "surfaces": [
+      "export"
+    ],
+    "constant": "ACCURACY_BASIS_NOTE"
+  },
+  {
+    "id": "accuracy-basis-not-asprs",
+    "category": "uncertainty",
+    "phrase": "This is not an ASPRS conformance ",
+    "surfaces": [
+      "export"
+    ],
+    "constant": "ACCURACY_BASIS_NOTE"
+  },
+  {
+    "id": "approximate",
+    "category": "approximate",
+    "phrase": "Approximate.",
+    "surfaces": [
+      "ui"
+    ],
+    "constant": "COVERAGE_CAPTION"
+  },
+  {
+    "id": "coverage-legend-names",
+    "category": "approximate",
+    "phrase": "the legend names each grade",
+    "surfaces": [
+      "ui"
+    ],
+    "constant": "COVERAGE_CAPTION"
+  },
+  {
+    "id": "grade-solid",
+    "category": "grade-definition",
+    "phrase": "high-confidence terrain (firm line)",
+    "surfaces": [
+      "ui",
+      "export"
+    ]
+  },
+  {
+    "id": "grade-dashed",
+    "category": "grade-definition",
+    "phrase": "lower-confidence terrain (dashed)",
+    "surfaces": [
+      "ui",
+      "export"
+    ]
+  },
+  {
+    "id": "grade-gap",
+    "category": "grade-definition",
+    "phrase": "no reliable data — shown as a break",
+    "surfaces": [
+      "ui",
+      "export"
+    ]
+  },
+  {
+    "id": "grade-sparse-ground",
+    "category": "grade-definition",
+    "phrase": "Sparse ground: measured, but with fewer ground returns than a typical cell.",
+    "surfaces": [
+      "ui"
+    ]
+  },
+  {
+    "id": "grade-interpolated",
+    "category": "grade-definition",
+    "phrase": "Interpolated: filled from nearby ground.",
+    "surfaces": [
+      "ui"
+    ]
+  },
+  {
+    "id": "grade-gap-support",
+    "category": "grade-definition",
+    "phrase": "Gap: too little support to trust.",
+    "surfaces": [
+      "ui"
+    ]
+  },
+  {
+    "id": "grade-extrapolated",
+    "category": "grade-definition",
+    "phrase": "extrapolated / gap",
+    "surfaces": [
+      "ui"
+    ]
+  },
+  {
+    "id": "sample-hint-tiles",
+    "category": "sample-basis",
+    "phrase": "Click the map to sample a point.",
+    "surfaces": [
+      "ui"
+    ],
+    "constant": "SAMPLE_HINT"
+  },
+  {
+    "id": "sample-sampled-analysis",
+    "category": "sample-basis",
+    "phrase": "Sampled analysis: figures describe a sample of the points",
+    "surfaces": [
+      "ui",
+      "export"
+    ]
+  },
+  {
+    "id": "sample-display-sample-file",
+    "category": "sample-basis",
+    "phrase": "Display sample: figures describe a sample of the file",
+    "surfaces": [
+      "ui"
+    ]
+  },
+  {
+    "id": "sample-scope-display",
+    "category": "sample-basis",
+    "phrase": "Display sample: tick Convert at full resolution to write every point.",
+    "surfaces": [
+      "ui"
+    ]
+  },
+  {
+    "id": "sample-scope-streamed",
+    "category": "sample-basis",
+    "phrase": "Streamed-in part only: let the full cloud stream in before hand-off.",
+    "surfaces": [
+      "ui"
+    ]
+  },
+  {
+    "id": "sample-class-counts",
+    "category": "sample-basis",
+    "phrase": "Counts, Solo and hide act on the loaded display sample",
+    "surfaces": [
+      "ui"
+    ]
+  },
+  {
+    "id": "sample-class-stream",
+    "category": "sample-basis",
+    "phrase": "Counts from unique decoded nodes seen so far, not full-source totals.",
+    "surfaces": [
+      "ui"
+    ]
+  },
+  {
+    "id": "sample-analysis-input",
+    "category": "sample-basis",
+    "phrase": "analysis input: sampled",
+    "surfaces": [
+      "ui"
+    ]
+  },
+  {
+    "id": "sample-mapsheet",
+    "category": "sample-basis",
+    "phrase": "Figures are from a sample of the points",
+    "surfaces": [
+      "export"
+    ]
+  },
+  {
+    "id": "sample-profile-pdf",
+    "category": "sample-basis",
+    "phrase": "The profile is sampled from the points read, not the whole file.",
+    "surfaces": [
+      "export"
+    ]
+  },
+  {
+    "id": "sample-profile-image",
+    "category": "sample-basis",
+    "phrase": "a decimated sample of the section, not every accepted return",
+    "surfaces": [
+      "export"
+    ]
+  },
+  {
+    "id": "sample-whole-dataset",
+    "category": "sample-basis",
+    "phrase": "Only a sample of the scan was analysed, so whole-dataset support is not claimed.",
+    "surfaces": [
+      "ui",
+      "export"
+    ]
+  },
+  {
+    "id": "sample-still-sample",
+    "category": "sample-basis",
+    "phrase": "It is still a sample of the points, not every point.",
+    "surfaces": [
+      "ui",
+      "export"
+    ],
+    "constant": "WITHHELD_RECOVERY_STATUS"
+  },
+  {
+    "id": "sample-terrain-built",
+    "category": "sample-basis",
+    "phrase": "Terrain was built from a sample of the points, not every point",
+    "surfaces": [
+      "ui"
+    ]
+  },
+  {
+    "id": "sample-dataset-intel",
+    "category": "sample-basis",
+    "phrase": "Figures describe the sample, not every point.",
+    "surfaces": [
+      "ui"
+    ]
+  },
+  {
+    "id": "sample-full-file",
+    "category": "sample-basis",
+    "phrase": "analyses still read the sample",
+    "surfaces": [
+      "ui"
+    ]
+  },
+  {
+    "id": "sample-measurement-report",
+    "category": "sample-basis",
+    "phrase": "Sampled from streaming resident points only",
+    "surfaces": [
+      "export"
+    ]
+  },
+  {
+    "id": "sample-object-population",
+    "category": "sample-basis",
+    "phrase": "the loaded population they were sampled from",
+    "surfaces": [
+      "ui"
+    ]
+  },
+  {
+    "id": "sample-tool-preflight",
+    "category": "sample-basis",
+    "phrase": "so the figure describes that sample rather than the whole scan",
+    "surfaces": [
+      "ui"
+    ]
+  },
+  {
+    "id": "watermark-exploratory",
+    "category": "watermark",
+    "phrase": "EXPLORATORY",
+    "surfaces": [
+      "export"
+    ],
+    "constant": "EXPLORATORY_WATERMARK"
+  },
+  {
+    "id": "watermark-package",
+    "category": "watermark",
+    "phrase": "EXPLORATORY DELIVERABLE.",
+    "surfaces": [
+      "export"
+    ]
+  },
+  {
+    "id": "watermark-package-inspection",
+    "category": "watermark",
+    "phrase": "these outputs are watermarked and are for inspection, not for validated use.",
+    "surfaces": [
+      "export"
+    ]
+  },
+  {
+    "id": "watermark-launch",
+    "category": "watermark",
+    "phrase": "they will be watermarked and ",
+    "surfaces": [
+      "ui"
+    ]
+  },
+  {
+    "id": "exploratory-layer-tag",
+    "category": "watermark",
+    "phrase": " · exploratory",
+    "surfaces": [
+      "ui"
+    ]
+  },
+  {
+    "id": "display-only",
+    "category": "display-only",
+    "phrase": "(display only)",
+    "surfaces": [
+      "ui"
+    ]
+  },
+  {
+    "id": "scale-approx",
+    "category": "scale-ratio",
+    "phrase": "Approx. scale",
+    "surfaces": [
+      "export"
+    ]
+  },
+  {
+    "id": "scale-units-unknown",
+    "category": "scale-ratio",
+    "phrase": "units unknown",
+    "surfaces": [
+      "export"
+    ]
+  },
+  {
+    "id": "scale-printed-page",
+    "category": "scale-ratio",
+    "phrase": " on the printed page.",
+    "surfaces": [
+      "export"
+    ]
+  },
+  {
+    "id": "scale-vex",
+    "category": "scale-ratio",
+    "phrase": "Vertical exaggeration ",
+    "surfaces": [
+      "export"
+    ]
+  },
+  {
+    "id": "scale-compression",
+    "category": "scale-ratio",
+    "phrase": "slopes look flatter than they are",
+    "surfaces": [
+      "export"
+    ]
+  },
+  {
+    "id": "scale-vex-cannot",
+    "category": "scale-ratio",
+    "phrase": "a vertical exaggeration cannot be stated for these units",
+    "surfaces": [
+      "export"
+    ]
+  },
+  {
+    "id": "scale-vex-none",
+    "category": "scale-ratio",
+    "phrase": "no vertical exaggeration is stated",
+    "surfaces": [
+      "export"
+    ]
+  },
+  {
+    "id": "scale-floorplan-nominal",
+    "category": "scale-ratio",
+    "phrase": "Scale ~1:",
+    "surfaces": [
+      "export"
+    ]
+  },
+  {
+    "id": "scale-schematic",
+    "category": "scale-ratio",
+    "phrase": "vertical scale auto-fit (exaggerated), not to scale",
+    "surfaces": [
+      "export"
+    ]
+  },
+  {
+    "id": "crs-height-datum-unknown",
+    "category": "datum-crs",
+    "phrase": "Height (datum unknown)",
+    "surfaces": [
+      "ui",
+      "export"
+    ]
+  },
+  {
+    "id": "crs-datum-not-tied",
+    "category": "datum-crs",
+    "phrase": "Vertical datum unknown: heights are not tied to a datum.",
+    "surfaces": [
+      "ui"
+    ]
+  },
+  {
+    "id": "crs-datum-not-declared",
+    "category": "datum-crs",
+    "phrase": "vertical datum not declared",
+    "surfaces": [
+      "ui",
+      "export"
+    ]
+  },
+  {
+    "id": "crs-height-not-tied",
+    "category": "datum-crs",
+    "phrase": "so this height is not tied to a known reference",
+    "surfaces": [
+      "ui"
+    ]
+  },
+  {
+    "id": "crs-local-heights",
+    "category": "datum-crs",
+    "phrase": "Local heights, not elevations",
+    "surfaces": [
+      "ui",
+      "export"
+    ],
+    "constant": "DATUM_CONFLICT_MEASURE_NOTICE"
+  },
+  {
+    "id": "crs-no-crs-recorded",
+    "category": "datum-crs",
+    "phrase": "No CRS recorded in the file.",
+    "surfaces": [
+      "ui"
+    ]
+  },
+  {
+    "id": "crs-unknown-source-units",
+    "category": "datum-crs",
+    "phrase": "CRS unknown. Coordinates are shown in source units only.",
+    "surfaces": [
+      "ui"
+    ]
+  },
+  {
+    "id": "crs-vertical-comparison",
+    "category": "datum-crs",
+    "phrase": "Vertical datum unknown — vertical comparison disabled",
+    "surfaces": [
+      "ui"
+    ]
+  },
+  {
+    "id": "crs-unit-unverified",
+    "category": "datum-crs",
+    "phrase": "unit unverified (source units, not metres)",
+    "surfaces": [
+      "ui"
+    ],
+    "constant": "UNIT_UNVERIFIED_MEASURE_NOTICE"
+  },
+  {
+    "id": "crs-vertical-datum-row",
+    "category": "datum-crs",
+    "phrase": "Vertical datum: ",
+    "surfaces": [
+      "export"
+    ]
+  },
+  {
+    "id": "crs-horizontal-row",
+    "category": "datum-crs",
+    "phrase": "Horizontal CRS: ",
+    "surfaces": [
+      "export"
+    ]
+  },
+  {
+    "id": "crs-not-georeferenced",
+    "category": "datum-crs",
+    "phrase": "not georeferenced",
+    "surfaces": [
+      "ui",
+      "export"
+    ]
+  },
+  {
+    "id": "crs-coordinate-system-sheet",
+    "category": "datum-crs",
+    "phrase": "Coordinate system: ",
+    "surfaces": [
+      "export"
+    ]
+  },
+  {
+    "id": "crs-instant-answer",
+    "category": "datum-crs",
+    "phrase": "CRS unknown: results in source units.",
+    "surfaces": [
+      "ui"
+    ],
+    "constant": "TERRAIN_UNKNOWN_CRS_MESSAGE"
+  },
+  {
+    "id": "crs-footprint-refusal",
+    "category": "datum-crs",
+    "phrase": "so its outline cannot be placed on a map",
+    "surfaces": [
+      "ui"
+    ]
+  },
+  {
+    "id": "crs-footprint-geocentric",
+    "category": "datum-crs",
+    "phrase": "which has no ground plane to draw an outline on",
+    "surfaces": [
+      "ui"
+    ]
+  },
+  {
+    "id": "crs-kml-lonlat",
+    "category": "datum-crs",
+    "phrase": "the bounding rectangle of the scan, as a lon/lat polygon",
+    "surfaces": [
+      "ui"
+    ]
+  },
+  {
+    "id": "crs-pgw-prj",
+    "category": "datum-crs",
+    "phrase": ".pgw/.prj sidecars",
+    "surfaces": [
+      "ui"
+    ]
+  },
+  {
+    "id": "geo-not-ground-metres",
+    "category": "geographic-crs",
+    "phrase": "X/Y are not ground metres, so lengths, ",
+    "surfaces": [
+      "ui"
+    ],
+    "constant": "GEOGRAPHIC_CRS_MEASURE_NOTICE"
+  },
+  {
+    "id": "geo-not-reliable",
+    "category": "geographic-crs",
+    "phrase": "are NOT reliable distances",
+    "surfaces": [
+      "ui"
+    ],
+    "constant": "GEOGRAPHIC_CRS_MEASURE_NOTICE"
+  },
+  {
+    "id": "geo-export-left-empty",
+    "category": "geographic-crs",
+    "phrase": "not ground metres, so lengths, areas, grades, angles, profiles and volumes ",
+    "surfaces": [
+      "export"
+    ]
+  },
+  {
+    "id": "geo-trust-caption",
+    "category": "geographic-crs",
+    "phrase": "Unverified — degrees are not distances (geographic CRS)",
+    "surfaces": [
+      "ui"
+    ]
+  },
+  {
+    "id": "geo-meaningless",
+    "category": "geographic-crs",
+    "phrase": "Distance and volume in degrees are meaningless.",
+    "surfaces": [
+      "ui"
+    ]
+  },
+  {
+    "id": "geo-spacing",
+    "category": "geographic-crs",
+    "phrase": "Spacing is not a linear distance for a geographic (degrees) CRS.",
+    "surfaces": [
+      "ui"
+    ]
+  },
+  {
+    "id": "geo-metric-contour",
+    "category": "geographic-crs",
+    "phrase": "Metric contour support is not claimed (unknown vertical unit or geographic CRS).",
+    "surfaces": [
+      "export"
+    ]
+  },
+  {
+    "id": "geo-cutfill",
+    "category": "geographic-crs",
+    "phrase": "Cut/fill volumes: not computable on a geographic (degree) grid",
+    "surfaces": [
+      "export"
+    ]
+  },
+  {
+    "id": "clip-scope-inside-outside",
+    "category": "clip-scope",
+    "phrase": "inside and outside the box",
+    "surfaces": [
+      "ui"
+    ],
+    "constant": "CLIP_SCOPE_NOTE"
+  },
+  {
+    "id": "clip-scope-not-limited",
+    "category": "clip-scope",
+    "phrase": "are not limited to the box",
+    "surfaces": [
+      "ui"
+    ],
+    "constant": "CLIP_SCOPE_NOTE"
+  },
+  {
+    "id": "clip-scope-sample",
+    "category": "clip-scope",
+    "phrase": "on a large or streaming scan they cover a sample of the file",
+    "surfaces": [
+      "ui"
+    ],
+    "constant": "CLIP_SCOPE_NOTE"
+  },
+  {
+    "id": "clip-keeps-all",
+    "category": "clip-count",
+    "phrase": "Clip on: keeps all ",
+    "surfaces": [
+      "ui"
+    ]
+  },
+  {
+    "id": "clip-clipped",
+    "category": "clip-count",
+    "phrase": "Clipped: ",
+    "surfaces": [
+      "ui"
+    ]
+  },
+  {
+    "id": "laz-not-available-yet",
+    "category": "laz-refusal",
+    "phrase": "LAZ is not available yet",
+    "surfaces": [
+      "ui"
+    ],
+    "constant": "LAZ_UNAVAILABLE"
+  },
+  {
+    "id": "laz-cannot-write",
+    "category": "laz-refusal",
+    "phrase": "this browser build cannot write LAZ compression",
+    "surfaces": [
+      "ui"
+    ],
+    "constant": "LAZ_UNAVAILABLE"
+  },
+  {
+    "id": "las12-refused",
+    "category": "legacy-las-refusal",
+    "phrase": "Unticked, such a file is refused.",
+    "surfaces": [
+      "ui"
+    ]
+  },
+  {
+    "id": "las12-acquisition-refused",
+    "category": "legacy-las-refusal",
+    "phrase": "Unticked, a file that would lose either is refused.",
+    "surfaces": [
+      "ui"
+    ],
+    "constant": "LEGACY_ACQUISITION_LOSS_HINT"
+  },
+  {
+    "id": "las12-class-wrap",
+    "category": "legacy-las-refusal",
+    "phrase": "so 33 is written as 1 and 64 as 0",
+    "surfaces": [
+      "ui"
+    ]
+  },
+  {
+    "id": "las12-return-clamp",
+    "category": "legacy-las-refusal",
+    "phrase": "so return 8 of 12 is written as 7 of 7",
+    "surfaces": [
+      "ui"
+    ],
+    "constant": "LEGACY_RETURN_CLAMP_HINT"
+  },
+  {
+    "id": "las12-reinterpretation",
+    "category": "legacy-las-refusal",
+    "phrase": "so class 10 (Rail) is read as reserved",
+    "surfaces": [
+      "ui"
+    ],
+    "constant": "LEGACY_CLASS_REINTERPRETATION_HINT"
+  },
+  {
+    "id": "las12-overlap",
+    "category": "legacy-las-refusal",
+    "phrase": "The base class is written and the flag is lost.",
+    "surfaces": [
+      "ui"
+    ],
+    "constant": "LEGACY_OVERLAP_DROP_HINT"
+  },
+  {
+    "id": "las12-acquisition",
+    "category": "legacy-las-refusal",
+    "phrase": "keeps scan angles from -90 to 90 degrees and has no scanner channel",
+    "surfaces": [
+      "ui"
+    ],
+    "constant": "LEGACY_ACQUISITION_LOSS_HINT"
+  },
+  {
+    "id": "digest-cannot-prove-who",
+    "category": "integrity",
+    "phrase": "The digest alone cannot prove who made the file",
+    "surfaces": [
+      "ui"
+    ]
+  },
+  {
+    "id": "signature-not-who",
+    "category": "integrity",
+    "phrase": "It does not show who that person is.",
+    "surfaces": [
+      "ui"
+    ],
+    "constant": "KEY_CREATION_EXPLANATION"
+  },
+  {
+    "id": "digest-verify-not-who",
+    "category": "integrity",
+    "phrase": "so it does not show who made the report",
+    "surfaces": [
+      "ui"
+    ]
+  },
+  {
+    "id": "key-private-stays",
+    "category": "integrity",
+    "phrase": "The private key cannot be exported and stays on this device.",
+    "surfaces": [
+      "ui"
+    ],
+    "constant": "KEY_CREATION_EXPLANATION"
+  },
+  {
+    "id": "key-id-line",
+    "category": "integrity",
+    "phrase": "Key id: ",
+    "surfaces": [
+      "ui"
+    ]
+  },
+  {
+    "id": "key-delete-still-verify",
+    "category": "integrity",
+    "phrase": "Reports signed with it still verify",
+    "surfaces": [
+      "ui"
+    ]
+  },
+  {
+    "id": "verdict-sig-fails",
+    "category": "integrity",
+    "phrase": "Signature does not verify",
+    "surfaces": [
+      "ui"
+    ]
+  },
+  {
+    "id": "verdict-unverified",
+    "category": "integrity",
+    "phrase": "Signed, signer unverified",
+    "surfaces": [
+      "ui"
+    ]
+  },
+  {
+    "id": "verdict-different-key",
+    "category": "integrity",
+    "phrase": "Signed by a different key than the one you supplied",
+    "surfaces": [
+      "ui"
+    ]
+  },
+  {
+    "id": "verdict-modified",
+    "category": "integrity",
+    "phrase": "Report has been modified",
+    "surfaces": [
+      "ui"
+    ]
+  },
+  {
+    "id": "verdict-weak-checksum",
+    "category": "integrity",
+    "phrase": "Checksum matches (weaker FNV-1a check)",
+    "surfaces": [
+      "ui"
+    ]
+  },
+  {
+    "id": "terrain-misleading",
+    "category": "caveat",
+    "phrase": "would be misleading here",
+    "surfaces": [
+      "ui"
+    ]
+  },
+  {
+    "id": "scan-type-manual",
+    "category": "caveat",
+    "phrase": "(manual)",
+    "surfaces": [
+      "ui"
+    ]
+  },
+  {
+    "id": "no-measurements",
+    "category": "caveat",
+    "phrase": "Unavailable: no measurements yet.",
+    "surfaces": [
+      "ui"
+    ],
+    "constant": "NO_MEASUREMENTS_HINT"
+  },
+  {
+    "id": "ortho-unaffected",
+    "category": "caveat",
+    "phrase": "Measurements use the 3D points and are unaffected.",
+    "surfaces": [
+      "ui"
+    ]
+  },
+  {
+    "id": "workflow-never-scan-data",
+    "category": "caveat",
+    "phrase": "never scan data",
+    "surfaces": [
+      "ui"
+    ]
+  },
+  {
+    "id": "workflow-not-recorded",
+    "category": "caveat",
+    "phrase": "Orbiting and the six views are not recorded.",
+    "surfaces": [
+      "ui"
+    ]
+  },
+  {
+    "id": "endpoint-gap",
+    "category": "caveat",
+    "phrase": " missing station",
+    "surfaces": [
+      "ui",
+      "export"
+    ]
+  },
+  {
+    "id": "privacy-remote-stream",
+    "category": "caveat",
+    "phrase": "remote datasets stream only when selected",
+    "surfaces": [
+      "ui"
+    ]
+  },
+  {
+    "id": "privacy-remote-hosts",
+    "category": "caveat",
+    "phrase": "Remote datasets are downloaded from their hosts.",
+    "surfaces": [
+      "ui"
+    ]
+  },
+  {
+    "id": "url-cors",
+    "category": "caveat",
+    "phrase": "Server must allow CORS range requests",
+    "surfaces": [
+      "ui"
+    ]
+  },
+  {
+    "id": "url-local-network",
+    "category": "caveat",
+    "phrase": "Hosts on a local or private network are refused",
+    "surfaces": [
+      "ui"
+    ]
+  },
+  {
+    "id": "formats-xyz",
+    "category": "caveat",
+    "phrase": " (read as .xyz)",
+    "surfaces": [
+      "ui"
+    ]
+  },
+  {
+    "id": "formats-streamed",
+    "category": "caveat",
+    "phrase": ".copc.laz (streamed) · EPT via ept.json (streamed)",
+    "surfaces": [
+      "ui"
+    ]
+  },
+  {
+    "id": "volume-estimate",
+    "category": "volume",
+    "phrase": "Estimate from the point cloud, not survey-grade",
+    "surfaces": [
+      "ui",
+      "export"
+    ],
+    "constant": "VOLUME_ESTIMATE_NOTICE"
+  },
+  {
+    "id": "volume-quantities-payment",
+    "category": "volume",
+    "phrase": "before relying on it for quantities or payment",
+    "surfaces": [
+      "ui",
+      "export"
+    ],
+    "constant": "VOLUME_ESTIMATE_NOTICE"
+  },
+  {
+    "id": "volume-resident-only",
+    "category": "volume",
+    "phrase": "Resident-node analysis only — cut / fill may refine as streaming loads.",
+    "surfaces": [
+      "ui"
+    ]
+  },
+  {
+    "id": "volume-indicative",
+    "category": "volume",
+    "phrase": "the volume is indicative, not measured",
+    "surfaces": [
+      "ui",
+      "export"
+    ]
+  },
+  {
+    "id": "volume-wide-band",
+    "category": "volume",
+    "phrase": "treat the volume as an estimate and validate against ground control",
+    "surfaces": [
+      "ui",
+      "export"
+    ]
+  },
+  {
+    "id": "volume-base-inferred",
+    "category": "volume",
+    "phrase": "set an explicit base if you have a surveyed datum",
+    "surfaces": [
+      "ui",
+      "export"
+    ]
+  },
+  {
+    "id": "volume-not-tin",
+    "category": "volume",
+    "phrase": "not a triangulated surface-to-surface volume",
+    "surfaces": [
+      "ui",
+      "export"
+    ]
+  },
+  {
+    "id": "volume-noise-independent",
+    "category": "volume",
+    "phrase": "Surface noise is assumed spatially independent",
+    "surfaces": [
+      "ui",
+      "export"
+    ]
+  },
+  {
+    "id": "volume-units-unverified",
+    "category": "volume",
+    "phrase": "the volume, footprint and thickness assume metres",
+    "surfaces": [
+      "ui",
+      "export"
+    ],
+    "constant": "UNIT_UNVERIFIED_CAVEAT"
+  },
+  {
+    "id": "volume-reduced-sample",
+    "category": "volume",
+    "phrase": "the inside points are a representative sample of a denser survey",
+    "surfaces": [
+      "ui",
+      "export"
+    ]
+  },
+  {
+    "id": "volume-uncertainty-unquantified",
+    "category": "volume",
+    "phrase": "Volume uncertainty: not quantified",
+    "surfaces": [
+      "export"
+    ]
+  },
+  {
+    "id": "volume-below-noise",
+    "category": "volume",
+    "phrase": "not distinguishable from noise",
+    "surfaces": [
+      "export"
+    ]
+  },
+  {
+    "id": "volume-envelope",
+    "category": "volume",
+    "phrase": "enclosed volume is a bounding-box envelope, not a solid measurement",
+    "surfaces": [
+      "ui",
+      "export"
+    ]
+  },
+  {
+    "id": "volume-ceiling",
+    "category": "volume",
+    "phrase": "ceiling height and enclosed volume are approximate",
+    "surfaces": [
+      "ui",
+      "export"
+    ]
+  },
+  {
+    "id": "credit-swisstopo",
+    "category": "attribution",
+    "phrase": "© swisstopo",
+    "surfaces": [
+      "ui"
+    ]
+  },
+  {
+    "id": "credit-gurs",
+    "category": "attribution",
+    "phrase": "© GURS",
+    "surfaces": [
+      "ui"
+    ]
+  },
+  {
+    "id": "credit-usgs",
+    "category": "attribution",
+    "phrase": "Data available from U.S. Geological Survey, National Geospatial Program.",
+    "surfaces": [
+      "ui"
+    ]
+  },
+  {
+    "id": "credit-flai",
+    "category": "attribution",
+    "phrase": "FLAI Open LiDAR Data",
+    "surfaces": [
+      "ui"
+    ]
+  },
+  {
+    "id": "credit-aws",
+    "category": "attribution",
+    "phrase": "AWS Registry of Open Data",
+    "surfaces": [
+      "ui"
+    ]
+  },
+  {
+    "id": "credit-launch-sample",
+    "category": "attribution",
+    "phrase": "Launch a sample: ",
+    "surfaces": [
+      "ui"
+    ]
+  },
+  {
+    "id": "credit-page-link",
+    "category": "attribution",
+    "phrase": "Data sources and credits",
+    "surfaces": [
+      "ui"
+    ]
+  },
+  {
+    "id": "credit-page-href",
+    "category": "attribution",
+    "phrase": "credits.html",
+    "surfaces": [
+      "ui"
+    ]
+  },
+  {
+    "id": "method-ground-smrf",
+    "category": "method-id",
+    "phrase": "olv.ground.smrf",
+    "surfaces": [
+      "export"
+    ]
+  },
+  {
+    "id": "method-class-derived-heuristic",
+    "category": "method-id",
+    "phrase": "olv.class.derived-heuristic",
+    "surfaces": [
+      "export"
+    ]
+  },
+  {
+    "id": "method-terrain-slope-horn",
+    "category": "method-id",
+    "phrase": "olv.terrain.slope-horn",
+    "surfaces": [
+      "export"
+    ]
+  },
+  {
+    "id": "method-terrain-vrm",
+    "category": "method-id",
+    "phrase": "olv.terrain.vrm",
+    "surfaces": [
+      "export"
+    ]
+  },
+  {
+    "id": "method-terrain-tpi",
+    "category": "method-id",
+    "phrase": "olv.terrain.tpi",
+    "surfaces": [
+      "export"
+    ]
+  },
+  {
+    "id": "method-dtm-geodesic-fill",
+    "category": "method-id",
+    "phrase": "olv.dtm.geodesic-fill",
+    "surfaces": [
+      "export"
+    ]
+  },
+  {
+    "id": "method-dtm-idw-fill",
+    "category": "method-id",
+    "phrase": "olv.dtm.idw-fill",
+    "surfaces": [
+      "export"
+    ]
+  },
+  {
+    "id": "method-terrain-evidence-support",
+    "category": "method-id",
+    "phrase": "olv.terrain.evidence.support",
+    "surfaces": [
+      "export"
+    ]
+  },
+  {
+    "id": "method-terrain-evidence-sensitivity",
+    "category": "method-id",
+    "phrase": "olv.terrain.evidence.sensitivity",
+    "surfaces": [
+      "export"
+    ]
+  },
+  {
+    "id": "method-terrain-evidence-residual",
+    "category": "method-id",
+    "phrase": "olv.terrain.evidence.residual",
+    "surfaces": [
+      "export"
+    ]
+  },
+  {
+    "id": "method-terrain-evidence-attention",
+    "category": "method-id",
+    "phrase": "olv.terrain.evidence.attention",
+    "surfaces": [
+      "export"
+    ]
+  },
+  {
+    "id": "method-validation-holdout-rmse",
+    "category": "method-id",
+    "phrase": "olv.validation.holdout-rmse",
+    "surfaces": [
+      "export"
+    ]
+  },
+  {
+    "id": "method-validation-spatial-block",
+    "category": "method-id",
+    "phrase": "olv.validation.spatial-block",
+    "surfaces": [
+      "export"
+    ]
+  },
+  {
+    "id": "method-validation-reliability-wilson",
+    "category": "method-id",
+    "phrase": "olv.validation.reliability-wilson",
+    "surfaces": [
+      "export"
+    ]
+  },
+  {
+    "id": "method-registration-icp-planar",
+    "category": "method-id",
+    "phrase": "olv.registration.icp-planar",
+    "surfaces": [
+      "export"
+    ]
+  },
+  {
+    "id": "method-registration-epoch-horizontal-icp",
+    "category": "method-id",
+    "phrase": "olv.registration.epoch-horizontal-icp",
+    "surfaces": [
+      "export"
+    ]
+  },
+  {
+    "id": "method-volume-stockpile",
+    "category": "method-id",
+    "phrase": "olv.volume.stockpile",
+    "surfaces": [
+      "export"
+    ]
+  },
+  {
+    "id": "method-volume-stockpile-area-grid",
+    "category": "method-id",
+    "phrase": "olv.volume.stockpile-area-grid",
+    "surfaces": [
+      "export"
+    ]
+  },
+  {
+    "id": "method-change-dtm-difference",
+    "category": "method-id",
+    "phrase": "olv.change.dtm-difference",
+    "surfaces": [
+      "export"
+    ]
+  },
+  {
+    "id": "method-change-dtm-difference-raw-net",
+    "category": "method-id",
+    "phrase": "olv.change.dtm-difference.raw-net",
+    "surfaces": [
+      "export"
+    ]
+  },
+  {
+    "id": "method-render-draw-precision-bound",
+    "category": "method-id",
+    "phrase": "olv.render.draw-precision-bound",
+    "surfaces": [
+      "export"
+    ]
+  },
+  {
+    "id": "method-render-draw-precision-lod",
+    "category": "method-id",
+    "phrase": "olv.render.draw-precision-lod",
+    "surfaces": [
+      "export"
+    ]
+  },
+  {
+    "id": "method-topology-linkage-record",
+    "category": "method-id",
+    "phrase": "olv.topology.linkage-record",
+    "surfaces": [
+      "export"
+    ]
+  },
+  {
+    "id": "method-provenance-source-interpretation",
+    "category": "method-id",
+    "phrase": "olv.provenance.source-interpretation",
+    "surfaces": [
+      "export"
+    ]
+  },
+  {
+    "id": "method-feature-building-footprint",
+    "category": "method-id",
+    "phrase": "olv.feature.building-footprint",
+    "surfaces": [
+      "export"
+    ]
+  },
+  {
+    "id": "method-feature-conductor-fit",
+    "category": "method-id",
+    "phrase": "olv.feature.conductor-fit",
+    "surfaces": [
+      "export"
+    ]
+  },
+  {
+    "id": "method-contour-analytical",
+    "category": "method-id",
+    "phrase": "olv.contour.analytical",
+    "surfaces": [
+      "export"
+    ]
+  },
+  {
+    "id": "method-contour-generalize-dp",
+    "category": "method-id",
+    "phrase": "olv.contour.generalize.dp",
+    "surfaces": [
+      "export"
+    ]
+  },
+  {
+    "id": "method-contour-generalize",
+    "category": "method-id",
+    "phrase": "olv.contour.generalize",
+    "surfaces": [
+      "export"
+    ]
+  },
+  {
+    "id": "method-contour-generalize-terrain-adaptive",
+    "category": "method-id",
+    "phrase": "olv.contour.generalize.terrain-adaptive",
+    "surfaces": [
+      "export"
+    ]
+  },
+  {
+    "id": "method-density-scan-report",
+    "category": "method-id",
+    "phrase": "olv.density.scan-report",
+    "surfaces": [
+      "export"
+    ]
+  },
+  {
+    "id": "method-storage-grid-history",
+    "category": "method-id",
+    "phrase": "olv.storage.grid-history",
+    "surfaces": [
+      "export"
+    ]
+  },
+  {
+    "id": "method-profile-corridor-percentile",
+    "category": "method-id",
+    "phrase": "olv.profile.corridor-percentile",
+    "surfaces": [
+      "export"
+    ]
+  },
+  {
+    "id": "method-simulation-terrain-flow-d8",
+    "category": "method-id",
+    "phrase": "olv.simulation.terrain-flow.d8",
+    "surfaces": [
+      "export"
+    ]
+  },
+  {
+    "id": "method-simulation-terrain-flow-priority-flood",
+    "category": "method-id",
+    "phrase": "olv.simulation.terrain-flow.priority-flood",
+    "surfaces": [
+      "export"
+    ]
+  },
+  {
+    "id": "method-simulation-terrain-flow-priority-flood-gap-outlet",
+    "category": "method-id",
+    "phrase": "olv.simulation.terrain-flow.priority-flood.gap-outlet",
+    "surfaces": [
+      "export"
+    ]
+  },
+  {
+    "id": "method-simulation-terrain-flow-accumulation",
+    "category": "method-id",
+    "phrase": "olv.simulation.terrain-flow.accumulation",
+    "surfaces": [
+      "export"
+    ]
+  },
+  {
+    "id": "method-simulation-terrain-flow-catchment",
+    "category": "method-id",
+    "phrase": "olv.simulation.terrain-flow.catchment",
+    "surfaces": [
+      "export"
+    ]
+  },
+  {
+    "id": "method-simulation-terrain-flow-depression-inventory",
+    "category": "method-id",
+    "phrase": "olv.simulation.terrain-flow.depression-inventory",
+    "surfaces": [
+      "export"
+    ]
+  },
+  {
+    "id": "method-simulation-terrain-flow-rational-peak",
+    "category": "method-id",
+    "phrase": "olv.simulation.terrain-flow.rational-peak",
+    "surfaces": [
+      "export"
+    ]
+  },
+  {
+    "id": "method-simulation-terrain-flow-edge-contamination",
+    "category": "method-id",
+    "phrase": "olv.simulation.terrain-flow.edge-contamination",
+    "surfaces": [
+      "export"
+    ]
+  },
+  {
+    "id": "method-simulation-terrain-flow-flow-length",
+    "category": "method-id",
+    "phrase": "olv.simulation.terrain-flow.flow-length",
+    "surfaces": [
+      "export"
+    ]
+  },
+  {
+    "id": "method-simulation-terrain-flow-pour-point-snap",
+    "category": "method-id",
+    "phrase": "olv.simulation.terrain-flow.pour-point-snap",
+    "surfaces": [
+      "export"
+    ]
+  },
+  {
+    "id": "method-simulation-terrain-access-local-step",
+    "category": "method-id",
+    "phrase": "olv.simulation.terrain-access.local-step",
+    "surfaces": [
+      "export"
+    ]
+  },
+  {
+    "id": "method-simulation-terrain-access-directional-grade",
+    "category": "method-id",
+    "phrase": "olv.simulation.terrain-access.directional-grade",
+    "surfaces": [
+      "export"
+    ]
+  },
+  {
+    "id": "method-simulation-terrain-access-cost-map",
+    "category": "method-id",
+    "phrase": "olv.simulation.terrain-access.cost-map",
+    "surfaces": [
+      "export"
+    ]
+  },
+  {
+    "id": "method-simulation-terrain-access-astar",
+    "category": "method-id",
+    "phrase": "olv.simulation.terrain-access.astar",
+    "surfaces": [
+      "export"
+    ]
+  },
+  {
+    "id": "method-observation-rays",
+    "category": "method-id",
+    "phrase": "olv.observation.rays",
+    "surfaces": [
+      "export"
+    ]
+  },
+  {
+    "id": "method-observation-ledger",
+    "category": "method-id",
+    "phrase": "olv.observation.ledger",
+    "surfaces": [
+      "export"
+    ]
+  },
+  {
+    "id": "method-observation-states",
+    "category": "method-id",
+    "phrase": "olv.observation.states",
+    "surfaces": [
+      "export"
+    ]
+  },
+  {
+    "id": "method-observation-strength",
+    "category": "method-id",
+    "phrase": "olv.observation.strength",
+    "surfaces": [
+      "export"
+    ]
+  },
+  {
+    "id": "method-observation-shadow-frontier",
+    "category": "method-id",
+    "phrase": "olv.observation.shadow-frontier",
+    "surfaces": [
+      "export"
+    ]
+  },
+  {
+    "id": "method-observation-coverage-gain",
+    "category": "method-id",
+    "phrase": "olv.observation.coverage-gain",
+    "surfaces": [
+      "export"
+    ]
+  },
+  {
+    "id": "method-observation-station-suggestion",
+    "category": "method-id",
+    "phrase": "olv.observation.station-suggestion",
+    "surfaces": [
+      "export"
+    ]
+  }
+]

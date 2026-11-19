@@ -262,6 +262,10 @@
       "group": "static"
     },
     {
+      "script": "check:protected-phrases",
+      "group": "static"
+    },
+    {
       "script": "lint:sbom",
       "group": "static"
     },
@@ -284,9 +288,19 @@
       ]
     },
     {
-      "script": "build:live",
+      "script": "check:protected-phrases:built",
       "after": [
         "test:build"
+      ],
+      "needs": [
+        "test:build"
+      ]
+    },
+    {
+      "script": "build:live",
+      "after": [
+        "test:build",
+        "check:protected-phrases:built"
       ]
     },
     {
