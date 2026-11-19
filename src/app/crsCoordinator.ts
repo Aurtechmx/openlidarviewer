@@ -73,8 +73,10 @@ export interface CrsCoordinatorDeps {
    * opener passed it to `refreshCrsForStaticCloud` / `refreshCrsForStreamingCloud`.
    * A summary computed from that cloud under the old frame recomputes; one built
    * from another scan sees it is not its own. Not called when the scan closes.
+   * One handler per summary, each run on its own: a handler that throws does
+   * not stop the rest.
    */
-  onFrameChange?: (source: object) => void;
+  onFrameChange?: ReadonlyArray<(source: object) => void>;
 }
 
 /** What the persistent suggestion surface can do with the pending suggestion. */
@@ -160,13 +162,21 @@ export function createCrsCoordinator(deps: CrsCoordinatorDeps): CrsCoordinator {
   // frame. The service broadcasts on every resolution; only a revision change
   // is a new frame (see `wireFrameChange`, which gates the same way).
   const onFrameChange = deps.onFrameChange;
-  if (onFrameChange) {
+  if (onFrameChange && onFrameChange.length > 0) {
     let seen = crsService.crsRevision();
     crsService.subscribe((resolved) => {
       const rev = crsService.crsRevision();
       if (rev === seen) return;
       seen = rev;
-      if (resolved && currentSource) onFrameChange(currentSource);
+      const source = currentSource;
+      if (!resolved || !source) return;
+      for (const handler of onFrameChange) {
+        try {
+          handler(source);
+        } catch (err) {
+          if (debug) console.warn('[crs] a scan summary did not follow the frame change', err);
+        }
+      }
     });
   }
 

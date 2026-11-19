@@ -1149,7 +1149,7 @@ const crsCoordinator = createCrsCoordinator({
   getViewer: () => viewer,
   isViewerReady: () => viewerReady,
   getActiveId: () => scans.activeId,
-  debug, onOverrideApplied: () => { layerService.refreshCrsFlags(); layerService.applyVisibility(); }, notify: (m, a) => appToast().show(m, a), showSuggestion: (s, a) => inspector.setCrsSuggestion(s, a), onFrameChange: (src) => { inspectorCards.refreshDatasetIntelligenceForFrame(src); routeCoordinator.remeasureForFrame(); projectCard.remeasure(src); }, // a new CRS on the scan re-measures the summaries built under the old one
+  debug, onOverrideApplied: () => { layerService.refreshCrsFlags(); layerService.applyVisibility(); }, notify: (m, a) => appToast().show(m, a), showSuggestion: (s, a) => inspector.setCrsSuggestion(s, a), onFrameChange: [(src) => inspectorCards.refreshDatasetIntelligenceForFrame(src), () => routeCoordinator.remeasureForFrame(), (src) => projectCard.remeasure(src)], // a new CRS on the scan re-measures the summaries built under the old one, each on its own
 });
 
 // v0.3.9 — workflow recorder. The host owns the controller so it can
