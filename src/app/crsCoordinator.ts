@@ -66,6 +66,15 @@ export interface CrsCoordinatorDeps {
    * with null once it is applied, dismissed, or the scan closes.
    */
   showSuggestion?: (suggestion: OverrideSuggestion | null, actions: CrsSuggestionActions) => void;
+  /**
+   * The resolved frame changed: an override or "Use detected" on the active
+   * scan, or another scan resolving. Called once per change of
+   * `crsService.crsRevision()`, with the cloud the frame now belongs to, as its
+   * opener passed it to `refreshCrsForStaticCloud` / `refreshCrsForStreamingCloud`.
+   * A summary computed from that cloud under the old frame recomputes; one built
+   * from another scan sees it is not its own. Not called when the scan closes.
+   */
+  onFrameChange?: (source: object) => void;
 }
 
 /** What the persistent suggestion surface can do with the pending suggestion. */
@@ -139,6 +148,27 @@ export function createCrsCoordinator(deps: CrsCoordinatorDeps): CrsCoordinator {
 
   /** The dataset key (per-scan key for the CRS override store) currently in scope. */
   let currentCrsDatasetKey: string | undefined;
+  /**
+   * The cloud the service's current CRS was resolved for, as the open or the
+   * layer switch passed it. The override path re-resolves through the viewer's
+   * copy and leaves this alone: the scan did not change, and the summaries were
+   * built from the opener's object.
+   */
+  let currentSource: object | null = null;
+
+  // One subscription for everything computed from the active scan under its
+  // frame. The service broadcasts on every resolution; only a revision change
+  // is a new frame (see `wireFrameChange`, which gates the same way).
+  const onFrameChange = deps.onFrameChange;
+  if (onFrameChange) {
+    let seen = crsService.crsRevision();
+    crsService.subscribe((resolved) => {
+      const rev = crsService.crsRevision();
+      if (rev === seen) return;
+      seen = rev;
+      if (resolved && currentSource) onFrameChange(currentSource);
+    });
+  }
 
   /**
    * Remember which dataset the override panel is editing. The CRS itself is
@@ -201,7 +231,17 @@ export function createCrsCoordinator(deps: CrsCoordinatorDeps): CrsCoordinator {
     );
   }
 
-  function refreshCrsForStaticCloud(cloud: {
+  function refreshCrsForStaticCloud(cloud: Parameters<CrsCoordinator['refreshCrsForStaticCloud']>[0]): void {
+    currentSource = cloud;
+    resolveStatic(cloud);
+  }
+
+  function refreshCrsForStreamingCloud(cloud: Parameters<CrsCoordinator['refreshCrsForStreamingCloud']>[0]): void {
+    currentSource = cloud;
+    resolveStreaming(cloud);
+  }
+
+  function resolveStatic(cloud: {
     readonly name: string;
     readonly origin?: readonly [number, number, number];
     readonly sourceOrigin?: readonly [number, number, number];
@@ -240,7 +280,7 @@ export function createCrsCoordinator(deps: CrsCoordinatorDeps): CrsCoordinator {
     }
   }
 
-  function refreshCrsForStreamingCloud(cloud: {
+  function resolveStreaming(cloud: {
     readonly name: string;
     readonly kind: StreamingSourceKind;
     readonly renderOrigin?: readonly [number, number, number];
@@ -316,7 +356,7 @@ export function createCrsCoordinator(deps: CrsCoordinatorDeps): CrsCoordinator {
     const staticCloud = activeId ? viewer.getCloud(activeId) : undefined;
     const streamingCloud = viewer.streamingCloud;
     if (streamingCloud) {
-      refreshCrsForStreamingCloud(
+      resolveStreaming(
         streamingCloud as {
           readonly name: string;
           readonly kind: StreamingSourceKind;
@@ -324,13 +364,14 @@ export function createCrsCoordinator(deps: CrsCoordinatorDeps): CrsCoordinator {
         },
       );
     } else if (staticCloud) {
-      refreshCrsForStaticCloud(staticCloud);
+      resolveStatic(staticCloud);
     }
     deps.onOverrideApplied?.();
   }
 
   function clearDatasetKey(): void {
     currentCrsDatasetKey = undefined;
+    currentSource = null;
     deps.showSuggestion?.(null, { apply: () => {}, dismiss: () => {} });
   }
 

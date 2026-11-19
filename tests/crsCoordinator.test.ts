@@ -16,8 +16,13 @@
 //    viewer chunk resolves (or from a viewer that throws) breaks the load.
 //  - The static path preferring `origin` over the file's own `sourceOrigin`
 //    for the inspector's coordinate context.
+//  - A CRS change that the scan summaries never hear about, so the Dataset
+//    Intelligence density, the Project card size and the object report keep
+//    the old frame's units after an override or "Use detected".
 
 import { describe, it, expect, vi } from 'vitest';
+import { readFileSync } from 'node:fs';
+import { createInspectorCardRefreshers } from '../src/app/inspectorCardRefreshers';
 import { createCrsCoordinator } from '../src/app/crsCoordinator';
 import { CrsService, type CrsOverridePort } from '../src/geo/CrsService';
 import { keyForDataset, type CrsOverride } from '../src/geo/CrsOverrideStore';
@@ -76,7 +81,7 @@ interface Harness {
   coordinator: ReturnType<typeof createCrsCoordinator>;
 }
 
-function harness(opts: { viewerReady?: boolean; activeId?: string | null; onOverrideApplied?: () => void } = {}): Harness {
+function harness(opts: { viewerReady?: boolean; activeId?: string | null; onOverrideApplied?: () => void; onFrameChange?: (source: object) => void } = {}): Harness {
   const port = memoryPort();
   const service = new CrsService(port);
   const setInspectCoordinateContext = vi.fn();
@@ -92,6 +97,7 @@ function harness(opts: { viewerReady?: boolean; activeId?: string | null; onOver
     getActiveId: () => opts.activeId ?? null,
     debug: false,
     onOverrideApplied: opts.onOverrideApplied,
+    onFrameChange: opts.onFrameChange,
   });
   return { service, port, setInspectCoordinateContext, viewer, coordinator };
 }
@@ -438,5 +444,110 @@ describe('refreshCrsForStreamingCloud — a persisted override needs dataset ide
     expect(h.service.current()?.epsg).toBeUndefined();
     expect(h.service.overrideSuggestion()).toMatchObject({ epsg: 32612, reason: 'identity-missing' });
     expect(h.port.entries.has('survey.copc.laz')).toBe(true);
+  });
+});
+
+describe('onFrameChange: the scan summaries hear about a new frame', () => {
+  /** A phone scan: no CRS of its own, and enough facts to verify an override. */
+  const phone = () => ({ name: 'scan/phone.glb', metadata: { crs: null }, ...FACTS });
+
+  it('fires once per frame change, naming the cloud the opener passed', () => {
+    const onFrameChange = vi.fn();
+    const h = harness({ activeId: 'cloud-1', onFrameChange });
+    const opened = phone();
+    // The viewer hands back an equal but distinct object, as a GPU-budget
+    // downsample does; the summaries were built from the opener's object.
+    h.viewer.getCloud.mockReturnValue(phone());
+    h.coordinator.refreshCrsForStaticCloud(opened);
+    expect(onFrameChange).toHaveBeenCalledTimes(1);
+    expect(onFrameChange.mock.calls.at(-1)![0]).toBe(opened);
+
+    h.coordinator.handleCrsOverride({ epsg: 32612, kind: 'projected' });
+    expect(onFrameChange).toHaveBeenCalledTimes(2);
+    expect(onFrameChange.mock.calls.at(-1)![0]).toBe(opened);
+
+    h.coordinator.handleCrsOverride({ epsg: null, kind: 'detected' });
+    expect(onFrameChange).toHaveBeenCalledTimes(3);
+    expect(onFrameChange.mock.calls.at(-1)![0]).toBe(opened);
+
+    h.coordinator.handleCrsOverride({ epsg: 32612, kind: 'projected' });
+    expect(onFrameChange).toHaveBeenCalledTimes(4);
+    expect(onFrameChange.mock.calls.at(-1)![0]).toBe(opened);
+  });
+
+  it('stays quiet when the frame does not move, and when the scan closes', () => {
+    const onFrameChange = vi.fn();
+    const h = harness({ activeId: 'cloud-1', onFrameChange });
+    const opened = phone();
+    h.coordinator.refreshCrsForStaticCloud(opened);
+    h.coordinator.refreshCrsForStaticCloud(opened); // the same frame again
+    expect(onFrameChange).toHaveBeenCalledTimes(1);
+    h.coordinator.clearDatasetKey();
+    h.service.clear();
+    expect(onFrameChange).toHaveBeenCalledTimes(1);
+  });
+
+  it('names the new scan when another scan resolves, so the old one is not re-measured', () => {
+    const onFrameChange = vi.fn();
+    const h = harness({ activeId: 'cloud-1', onFrameChange });
+    const first = phone();
+    h.coordinator.refreshCrsForStaticCloud(first);
+    const stream = { name: 'remote/scan.copc.laz', kind: 'copc' as const, crs: () => UTM12N, ...STREAM_FACTS };
+    h.coordinator.refreshCrsForStreamingCloud(stream);
+    expect(onFrameChange.mock.calls.at(-1)![0]).toBe(stream);
+  });
+
+  it('does not subscribe at all without the hook', () => {
+    const h = harness();
+    expect(h.service.subscriberCount()).toBe(0);
+  });
+
+  it('carries a metre pick to the Dataset Intelligence density, and "Use detected" back', () => {
+    const port = memoryPort();
+    const service = new CrsService(port);
+    const opened = phone();
+    const pushed: Array<{ bboxVolume?: number }> = [];
+    const inspector = {
+      setDatasetIntelligence: (s: { bboxVolume?: number }) => pushed.push(s),
+      clearDatasetIntelligence: vi.fn(),
+      setProvenance: vi.fn(),
+    } as never;
+    const cards = createInspectorCardRefreshers(inspector, () => service.context());
+    const coordinator = createCrsCoordinator({
+      crsService: service,
+      getViewer: () => ({ streamingCloud: null, getCloud: () => opened, setInspectCoordinateContext: vi.fn() }) as unknown as Viewer,
+      isViewerReady: () => true,
+      getActiveId: () => 'cloud-1',
+      debug: false,
+      onFrameChange: (src) => cards.refreshDatasetIntelligenceForFrame(src),
+    });
+    // The open: CRS first, then the card, as openScan orders them.
+    coordinator.refreshCrsForStaticCloud(opened);
+    cards.refreshDatasetIntelligenceFromStaticCloud(opened as never);
+    expect(pushed.at(-1)!.bboxVolume).toBeUndefined();
+
+    coordinator.handleCrsOverride({ epsg: 32612, kind: 'projected' });
+    expect(pushed.at(-1)!.bboxVolume).toBeCloseTo(100, 6); // 10 m x 10 m x 1 m
+
+    coordinator.handleCrsOverride({ epsg: null, kind: 'detected' });
+    expect(pushed.at(-1)!.bboxVolume).toBeUndefined();
+  });
+});
+
+describe('main.ts hands a frame change to the three scan summaries', () => {
+  const main = readFileSync(new URL('../src/main.ts', import.meta.url), 'utf8');
+
+  it('the CRS coordinator is built with a frame-change hook that reaches all three', () => {
+    const hook = /onFrameChange: \(src\) => \{([^}]*)\}/.exec(main);
+    expect(hook, 'createCrsCoordinator gets an onFrameChange hook').not.toBeNull();
+    expect(hook![1]).toContain('inspectorCards.refreshDatasetIntelligenceForFrame(src)');
+    expect(hook![1]).toContain('routeCoordinator.remeasureForFrame()');
+    expect(hook![1]).toContain('projectCard.remeasure(src)');
+  });
+
+  it('the Project card is shown with its scan and a way to re-derive its size', () => {
+    const body = main.slice(main.indexOf('function showProjectCard('), main.indexOf('async function loadFromUrl('));
+    expect(body).toContain('source: cloud');
+    expect(body).toMatch(/remeasure: \(\) => \w+\(crsService\.context\(\)\)/);
   });
 });

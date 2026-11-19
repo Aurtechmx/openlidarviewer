@@ -242,7 +242,7 @@ import { CatalogPanel, buildCuratedDemoSample } from './ui/CatalogPanel';
 // streaming clouds expose `.crs()` returning the same shape.
 import type { StreamingReportCloud } from './app/streamingScanReport'; import { runStreamingModules, preloadStreamingReport } from './app/streamingReportSeam';
 import { CrsService, datasetIdentity } from './geo/CrsService';
-import { groundMetresPermitted, resolvedHorizontalUnitToMetres, verticalMetresPerUnit, volumeClaimRefusal, volumeUnitCaveat } from './geo/SpatialContext';
+import { groundMetresPermitted, resolvedHorizontalUnitToMetres, verticalMetresPerUnit, volumeClaimRefusal, volumeUnitCaveat, type SpatialContext } from './geo/SpatialContext';
 import { prepareEpochFrames, epochUnitMismatchLines, compareSuggestionAllowed } from './app/epochFramePrep';
 // Shared vertical-unit labeller (already eager via terrainAnalysisRunner) —
 // feeds the colorbar legend's elevation unit from the resolved CRS.
@@ -1149,7 +1149,7 @@ const crsCoordinator = createCrsCoordinator({
   getViewer: () => viewer,
   isViewerReady: () => viewerReady,
   getActiveId: () => scans.activeId,
-  debug, onOverrideApplied: () => { layerService.refreshCrsFlags(); layerService.applyVisibility(); }, notify: (m, a) => appToast().show(m, a), showSuggestion: (s, a) => inspector.setCrsSuggestion(s, a),
+  debug, onOverrideApplied: () => { layerService.refreshCrsFlags(); layerService.applyVisibility(); }, notify: (m, a) => appToast().show(m, a), showSuggestion: (s, a) => inspector.setCrsSuggestion(s, a), onFrameChange: (src) => { inspectorCards.refreshDatasetIntelligenceForFrame(src); routeCoordinator.remeasureForFrame(); projectCard.remeasure(src); }, // a new CRS on the scan re-measures the summaries built under the old one
 });
 
 // v0.3.9 — workflow recorder. The host owns the controller so it can
@@ -3828,7 +3828,7 @@ streamingUi.onTick(({ cloud, scheduler, counts, diagnostics: diag }) => {
 
 /** Reveal the "Project ready" summary card for a freshly opened scan. */
 function showProjectCard(cloud: PointCloud, totalCount: number): void {
-  const b = cloud.bounds();
+  const b = cloud.bounds(); const sizeIn = (f: SpatialContext) => describeProjectSize(b.min, b.max, { upAxis: f.upAxis, linearUnitKnown: groundMetresPermitted(f), linearUnitToMetres: f.linearUnitToMetres, verticalUnitToMetres: verticalMetresPerUnit(f, 'horizontal') ?? undefined, verticalUnitInvalid: f.verticalScaleState === 'invalid' });
   const c = crsService.context();
   // Suggest the camera preset best suited to the scan: a dismissible chip,
   // accepted in one click or ignored (it auto-hides). It shares the top-centre
@@ -3844,7 +3844,7 @@ function showProjectCard(cloud: PointCloud, totalCount: number): void {
     format: cloud.sourceFormat, interpretationLevel: cloud.metadata?.interpretationLevel, truncation: cloud.metadata?.truncation,
     shownCount: cloud.pointCount,
     totalCount,
-    ...describeProjectSize(b.min, b.max, { upAxis: c.upAxis, linearUnitKnown: groundMetresPermitted(c), linearUnitToMetres: c.linearUnitToMetres, verticalUnitToMetres: verticalMetresPerUnit(c, 'horizontal') ?? undefined, verticalUnitInvalid: c.verticalScaleState === 'invalid' }),
+    ...sizeIn(c), source: cloud, remeasure: () => sizeIn(crsService.context()), // the Size row follows a CRS change while the card is up
     hasRgb: cloud.colors !== undefined,
     hasIntensity: cloud.intensity !== undefined,
     hasClassification: cloud.classification !== undefined,
