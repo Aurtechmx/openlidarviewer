@@ -11,26 +11,9 @@
  * declaration was contradictory. A pick the table contradicts stays unknown.
  */
 import { describe, expect, it } from 'vitest';
-import { CrsService, type CrsOverridePort } from '../src/geo/CrsService';
-import type { CrsOverride } from '../src/geo/CrsOverrideStore';
+import { CrsService } from '../src/geo/CrsService';
+import { geoKeyPayload as geoKeys, memoryPort } from './helpers/crsTestKit';
 import { crsFromGeoTiff, crsFromWkt, type CrsInfo } from '../src/io/crs';
-
-function memoryPort(): CrsOverridePort {
-  const entries = new Map<string, CrsOverride>();
-  return {
-    get: (key) => entries.get(key),
-    set: (key, value) => { entries.set(key, { ...value, updatedAt: 1 }); },
-    clear: (key) => { entries.delete(key); },
-  };
-}
-
-/** A GeoKeyDirectory payload from [key, value] pairs (all inline shorts). */
-function geoKeys(keys: readonly (readonly [number, number])[]): Uint8Array {
-  const u = new Uint16Array(4 + keys.length * 4);
-  u.set([1, 1, 0, keys.length]);
-  keys.forEach(([k, v], i) => u.set([k, 0, 1, v], 4 + i * 4));
-  return new Uint8Array(u.buffer);
-}
 
 /** Model type 1 (projected) with the geographic code 4326 in key 2048. */
 const PROJECTED_TYPE_GEOGRAPHIC_CODE = crsFromGeoTiff(geoKeys([[1024, 1], [2048, 4326]]), null, null);

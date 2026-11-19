@@ -13,26 +13,9 @@
  * the 3076 is an explicit declaration there.
  */
 import { describe, expect, it } from 'vitest';
-import { CrsService, type CrsOverridePort } from '../src/geo/CrsService';
-import type { CrsOverride } from '../src/geo/CrsOverrideStore';
+import { CrsService } from '../src/geo/CrsService';
+import { geoKeyPayload as geoKeys, memoryPort } from './helpers/crsTestKit';
 import { crsFromEpsg, crsFromGeoTiff, type CrsInfo } from '../src/io/crs';
-
-function memoryPort(): CrsOverridePort {
-  const entries = new Map<string, CrsOverride>();
-  return {
-    get: (key) => entries.get(key),
-    set: (key, value) => { entries.set(key, { ...value, updatedAt: 1 }); },
-    clear: (key) => { entries.delete(key); },
-  };
-}
-
-/** A GeoKeyDirectory payload from [key, value] pairs (all inline shorts). */
-function geoKeys(keys: readonly (readonly [number, number])[]): Uint8Array {
-  const u = new Uint16Array(4 + keys.length * 4);
-  u.set([1, 1, 0, keys.length]);
-  keys.forEach(([k, v], i) => u.set([k, 0, 1, v], 4 + i * 4));
-  return new Uint8Array(u.buffer);
-}
 
 const read = (keys: readonly (readonly [number, number])[]) => crsFromGeoTiff(geoKeys(keys), null, null);
 

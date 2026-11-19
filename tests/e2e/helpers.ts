@@ -352,6 +352,21 @@ export async function dropTinyPly(page: Page): Promise<void> {
   await page.dispatchEvent('body', 'drop', { dataTransfer });
 }
 
+/** Drop any file from `tests/fixtures` by name onto the page. */
+export async function dropFixtureFile(page: Page, name: string): Promise<void> {
+  const bytes = readFileSync(fileURLToPath(new URL(`../fixtures/${name}`, import.meta.url)));
+  const dataTransfer = await page.evaluateHandle(
+    ([b, n]) => {
+      const dt = new DataTransfer();
+      dt.items.add(new File([new Uint8Array(b as number[])], n as string));
+      return dt;
+    },
+    [[...bytes], name] as const,
+  );
+  await waitForLoadIdle(page);
+  await page.dispatchEvent('body', 'drop', { dataTransfer });
+}
+
 /**
  * Drop the bundled `tiny.las` fixture — same as `dropTinyPly` but
  * exercises the LAS decoder path instead of PLY.

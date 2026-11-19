@@ -16,26 +16,7 @@ import { buildDemPackage } from '../src/terrain/export/demPackage';
 import type { DtmGrid } from '../src/terrain/ground/cellConfidence';
 import { demResultAround } from './helpers/demPackageFixture';
 import { extractEntry } from './helpers/zipReader';
-
-const GEO_KEY_DIRECTORY = 34735;
-
-/** The GeoKey directory of the first IFD as a key -> value map. */
-function geoKeys(bytes: Uint8Array): Map<number, number> {
-  const dv = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
-  const ifd = dv.getUint32(4, true);
-  const n = dv.getUint16(ifd, true);
-  for (let i = 0; i < n; i++) {
-    const p = ifd + 2 + i * 12;
-    if (dv.getUint16(p, true) !== GEO_KEY_DIRECTORY) continue;
-    const count = dv.getUint32(p + 4, true);
-    const off = dv.getUint32(p + 8, true);
-    const u16 = Array.from({ length: count }, (_, k) => dv.getUint16(off + k * 2, true));
-    const keys = new Map<number, number>();
-    for (let k = 0; k < u16[3]; k++) keys.set(u16[4 + k * 4], u16[7 + k * 4]);
-    return keys;
-  }
-  throw new Error('no GeoKey directory');
-}
+import { tiffGeoKeys as geoKeys } from './helpers/crsTestKit';
 
 const LINES = [
   '  GeoTIFF CRS    No .tif file here carries a horizontal CRS key. Assign every',

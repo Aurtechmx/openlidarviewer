@@ -1,7 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { readFileSync } from 'node:fs';
-import { fileURLToPath } from 'node:url';
-import { showWorkspaceMode, suppressOnboardingTour, waitForLoadIdle } from './helpers';
+import { dropFixtureFile, showWorkspaceMode, suppressOnboardingTour } from './helpers';
 
 /**
  * localUnitPicker.spec.ts
@@ -18,17 +16,7 @@ test('a GLB\'s collapsed Coordinate system section opens with a click and takes 
   await suppressOnboardingTour(page);
   await page.goto('/');
   await expect(page.locator('.olv-empty')).toBeVisible();
-  const bytes = readFileSync(fileURLToPath(new URL(`../fixtures/${FIXTURE}`, import.meta.url)));
-  const dataTransfer = await page.evaluateHandle(
-    ([b, n]) => {
-      const dt = new DataTransfer();
-      dt.items.add(new File([new Uint8Array(b as number[])], n as string));
-      return dt;
-    },
-    [[...bytes], FIXTURE] as const,
-  );
-  await waitForLoadIdle(page);
-  await page.dispatchEvent('body', 'drop', { dataTransfer });
+  await dropFixtureFile(page, FIXTURE);
   await expect(page.locator('.olv-empty')).toBeHidden({ timeout: 20_000 });
   await showWorkspaceMode(page, 'data');
 
