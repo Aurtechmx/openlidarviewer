@@ -58,7 +58,7 @@ const GEOTIFF_LINEAR_UNITS: Readonly<Record<number, CrsLinearUnit>> = {
 /** What we extract from the VLRs. All fields optional — a header may carry one and not others. */
 export interface CrsInfo {
   /** Where the metadata came from — diagnostic, surfaced in the Scan Report. */
-  readonly source: 'wkt' | 'geotiff' | 'epsg';
+  readonly source: 'wkt' | 'geotiff' | 'epsg' | 'format-specification';
   /** Raw WKT string (when source is `wkt`) — kept so the UI can show it on request. */
   readonly wkt?: string;
   /** Best-effort human label, e.g. "WGS 84 / UTM zone 12N" or "EPSG:32612". */
@@ -96,6 +96,12 @@ export interface CrsInfo {
    * checked against the unit key the file carries.
    */
   readonly projLinearUnitsKey?: CrsLinearUnit;
+  /**
+   * Set when the file declares no CRS and its format specification gives the
+   * unit: local coordinates in metres (see `formatSpecificationCrs`). Not a
+   * georeference, and not a named local frame.
+   */
+  readonly formatSpecification?: 'glTF' | 'E57';
   /** Whether the CRS is geographic (lat/lon in degrees) vs projected (metres on a plane). */
   readonly isGeographic: boolean;
   /**

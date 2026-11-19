@@ -12,6 +12,7 @@ import { GLTFLoader, postProcessGLTF } from '@loaders.gl/gltf';
 import { LOCAL_ONLY_LOADER_OPTIONS } from './loaderConfig';
 import { Matrix4, Quaternion, Vector3 } from 'three';
 import { PointCloud } from '../model/PointCloud';
+import { formatSpecificationCrs } from '../geo/CoordinateTypes';
 import { sanitizeLocalCloud, withLoadWarning } from './sanitizeCloud';
 import { authoredNormals } from './authoredNormals';
 import type { SourceFormat } from './sniffFormat';
@@ -803,13 +804,13 @@ export async function loadGltf(
     normals: out.nrm ?? undefined,
   });
 
-  const declared =
-    generator || hasTexture
-      ? {
-          ...(generator ? { sourceSoftware: generator } : {}),
-          ...(hasTexture ? { hasTexture: true } : {}),
-        }
-      : undefined;
+  // A standalone glTF declares no CRS, and glTF 2.0 states "The units for all
+  // linear distances are meters": local coordinates in metres.
+  const declared = {
+    crs: formatSpecificationCrs('glTF'),
+    ...(generator ? { sourceSoftware: generator } : {}),
+    ...(hasTexture ? { hasTexture: true } : {}),
+  };
 
   return new PointCloud({
     positions: clean.positions,

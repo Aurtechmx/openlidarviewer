@@ -12,6 +12,7 @@
  */
 
 import type { CrsInfo, CrsLinearUnit } from '../io/crs';
+import { LOCAL_UNIT_NAMES } from './CrsOverrideStore';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // CRS classification
@@ -49,6 +50,10 @@ export type CrsKind = 'local' | 'projected' | 'geographic' | 'geocentric' | 'unk
  * `catalog-tile` — the frame a catalogue source's product specification
  *                   states, for a tile that carries no CRS record.
  * `user-override` — User explicitly chose a CRS in the override panel.
+ * `format-specification` — The file declares no CRS, and its format
+ *                           specification fixes the unit: glTF 2.0 and ASTM
+ *                           E2807 (E57) give coordinates in metres. A local
+ *                           frame in metres, with no georeference.
  * `default-assumption` — None of the above; the viewer is operating
  *                         on the documented default for the source
  *                         format (rare, last-resort path).
@@ -64,6 +69,7 @@ export type CrsSource =
   | 'tileset-region'
   | 'catalog-tile'
   | 'user-override'
+  | 'format-specification'
   | 'default-assumption';
 
 /**
@@ -163,6 +169,29 @@ export interface ResolvedCrs {
   readonly linearUnitByFactor?: true;
   /** See `CrsInfo.linearUnitNote`: why the horizontal unit reads as it does, or why it is withheld. */
   readonly linearUnitNote?: string;
+  /** With source `format-specification`: the format whose specification gives the metres. */
+  readonly formatSpecification?: MetreFormatSpecification;
+}
+
+/** The formats whose specification gives coordinates in metres. */
+export type MetreFormatSpecification = 'glTF' | 'E57';
+
+/**
+ * The CRS of a glTF/GLB or E57 file that declares none: local coordinates in
+ * metres, as the format specification states (glTF 2.0: "The units for all
+ * linear distances are meters"; ASTM E2807 defines Cartesian coordinates in
+ * metres). No code, no WKT and no georeference; the user can pick another.
+ */
+export function formatSpecificationCrs(format: MetreFormatSpecification): CrsInfo {
+  return {
+    source: 'format-specification',
+    name: LOCAL_UNIT_NAMES.metre,
+    linearUnit: 'metre',
+    linearUnitToMetres: 1,
+    isGeographic: false,
+    localFrame: true,
+    formatSpecification: format,
+  };
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -256,8 +285,12 @@ export function resolvedFromCrsInfo(
   if (info.horizontalUnresolved) kind = 'unknown';
   // Confidence: EPSG + WKT = high, EPSG OR a recognisable name = medium.
   // The CrsInfo always has a `name`, so the discriminator is EPSG.
+  // A unit a format specification gives is stated, not read from the file,
+  // and a writer can break the specification: medium, not high.
   let confidence: CrsConfidence;
-  if (typeof info.epsg === 'number' && info.wkt) {
+  if (info.formatSpecification) {
+    confidence = 'medium';
+  } else if (typeof info.epsg === 'number' && info.wkt) {
     confidence = 'high';
   } else if (typeof info.epsg === 'number' || info.name.startsWith('EPSG:')) {
     confidence = 'medium';
@@ -274,7 +307,7 @@ export function resolvedFromCrsInfo(
     ...(info.linearUnitNote ? { linearUnitNote: info.linearUnitNote } : {}),
     // A LAS CRS read from an EVLR is labelled as such, not as a header VLR,
     // and a catalogue assertion as the catalogue's, not the file's.
-    source: info.catalogue ? 'catalog-tile' : source === 'las-vlr' && info.record === 'evlr' ? 'las-evlr' : source,
+    source: info.formatSpecification ? 'format-specification' : info.catalogue ? 'catalog-tile' : source === 'las-vlr' && info.record === 'evlr' ? 'las-evlr' : source,
     assertedBy: info.catalogue,
     confidence,
     userConfirmed: false,
@@ -288,7 +321,10 @@ export function resolvedFromCrsInfo(
     // registry fallback by EPSG when this is absent — kept out of here to avoid
     // a CoordinateTypes → CrsRegistry import cycle.
     horizontalDatum: info.horizontalDatum,
-    ...(info.localFrame ? { localFrameName: info.name } : {}),
+    // A frame a format specification states is not a named frame: two phone
+    // scans in it are not thereby in one frame.
+    ...(info.localFrame && !info.formatSpecification ? { localFrameName: info.name } : {}),
+    ...(info.formatSpecification ? { formatSpecification: info.formatSpecification } : {}),
   };
 }
 

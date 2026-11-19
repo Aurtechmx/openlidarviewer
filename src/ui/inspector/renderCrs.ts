@@ -65,12 +65,19 @@ export function renderCrs(
     'tileset-region': '3D Tiles region bounding volume',
     'catalog-tile': 'Public-catalog tile',
     'user-override': 'User override',
+    'format-specification': 'Format specification (metres)',
     'default-assumption': 'No metadata',
   };
+  // The file declares no CRS; its format specification gives the metres.
+  const sourceText = c.assertedBy
+    ? `catalogue (${c.assertedBy}), not the file`
+    : c.source === 'format-specification' && c.formatSpecification
+      ? `${c.formatSpecification} specification (metres)`
+      : sourceLabel[c.source];
   body.append(
     el('div', { className: 'olv-crs-meta' }, [
       el('span', { className: 'olv-crs-meta-row', text: `Confidence: ${confidenceLabel[c.confidence]}` }),
-      el('span', { className: 'olv-crs-meta-row', text: `Source: ${c.assertedBy ? `catalogue (${c.assertedBy}), not the file` : sourceLabel[c.source]}` }),
+      el('span', { className: 'olv-crs-meta-row', text: `Source: ${sourceText}` }),
     ]),
   );
 

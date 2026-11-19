@@ -28,6 +28,7 @@ const CRS_SOURCES = [
   'ept-srs',
   'catalog-tile',
   'user-override',
+  'format-specification',
   'default-assumption',
 ] as const;
 const CRS_CONFIDENCES = ['high', 'medium', 'low', 'none'] as const;
@@ -97,6 +98,10 @@ export function parseResolvedCrs(v: unknown): SerializedResolvedCrs | null {
       : {}),
     ...(typeof v.horizontalDatum === 'string' && v.horizontalDatum.length > 0
       ? { horizontalDatum: v.horizontalDatum }
+      : {}),
+    // Which specification gives the metres of a `format-specification` frame.
+    ...(v.source === 'format-specification' && (v.formatSpecification === 'glTF' || v.formatSpecification === 'E57')
+      ? { formatSpecification: v.formatSpecification }
       : {}),
   };
   return out;

@@ -133,6 +133,7 @@ const CRS_SOURCE_LABELS: Readonly<Record<string, string>> = {
   'catalog-tile': 'catalog',
   'user-override': 'user override',
   override: 'user override',
+  'format-specification': 'format specification, metres',
   'default-assumption': 'assumed default',
 };
 
