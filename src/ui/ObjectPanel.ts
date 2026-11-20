@@ -80,6 +80,9 @@ const WALL_SEGMENTS: ReadonlyArray<{
   { mode: 'off', label: 'As-is', title: 'Leave wall directions exactly as traced — no axis snapping.' },
 ];
 
+/** The panel's two downloads: the report PDF and the interior floor-plan preview. */
+type ExportAction = 'report' | 'plan';
+
 export interface ObjectPanelCallbacks {
   /** Reveal + run the terrain pipeline despite the non-terrain verdict. */
   onRunTerrainAnyway?: () => void;
@@ -209,6 +212,9 @@ export class ObjectPanel {
    * on each body rebuild, so a re-render clears a stale summary.
    */
   private _floorPlanSummaryEl: HTMLElement | null = null;
+  /** Exports still running, and the export buttons the body shows now. */
+  private readonly _exportBusy = new Set<ExportAction>();
+  private _exportBtns: Partial<Record<ExportAction, HTMLButtonElement>> = {};
 
   constructor(cb: ObjectPanelCallbacks = {}) {
     this._cb = cb;
@@ -368,49 +374,25 @@ export class ObjectPanel {
    */
   private _exportRow(withFloorPlan: boolean): void {
     const row = el('div', { className: 'olv-object-export' });
-
-    const runAction = (
-      btn: HTMLButtonElement,
-      label: string,
-      action: (() => Promise<void>) | undefined,
-    ): void => {
-      if (!action) return;
-      btn.disabled = true;
-      const prev = btn.textContent ?? label;
-      btn.textContent = '…';
-      void action()
-        .catch((err) => {
-          // eslint-disable-next-line no-console
-          console.error('OpenLiDARViewer: space/object export failed.', err);
-          btn.textContent = 'Failed';
-        })
-        .finally(() => {
-          btn.disabled = false;
-          if (btn.textContent === '…') btn.textContent = prev;
-          else if (btn.textContent === 'Failed') {
-            setTimeout(() => { btn.textContent = label; }, 2000);
-          }
-        });
+    // Rebuilt with the body on every render; the busy state is the panel's, so
+    // a button drawn while its export runs is drawn busy.
+    this._exportBtns = {};
+    const button = (key: ExportAction, label: string, className: string, title: string): HTMLButtonElement => {
+      const busy = this._exportBusy.has(key);
+      const btn = el('button', { className, text: busy ? '…' : label, title }) as HTMLButtonElement;
+      btn.type = 'button';
+      btn.disabled = busy;
+      btn.addEventListener('click', () => this._runExport(key, label));
+      this._exportBtns[key] = btn;
+      return btn;
     };
 
-    const reportBtn = el('button', {
-      className: 'olv-object-dl is-primary',
-      text: 'Report PDF',
-      title: 'Download this scan’s measurements as a one-page report (PDF).',
-    }) as HTMLButtonElement;
-    reportBtn.type = 'button';
-    reportBtn.addEventListener('click', () => runAction(reportBtn, 'Report PDF', this._cb.onExportReport));
-    row.append(reportBtn);
+    row.append(button('report', 'Report PDF', 'olv-object-dl is-primary',
+      'Download this scan’s measurements as a one-page report (PDF).'));
 
     if (withFloorPlan) {
-      const planBtn = el('button', {
-        className: 'olv-object-dl',
-        text: 'Floor plan preview',
-        title: 'Download an approximate top-down wall-trace sketch (SVG) — not a measured floor plan.',
-      }) as HTMLButtonElement;
-      planBtn.type = 'button';
-      planBtn.addEventListener('click', () => runAction(planBtn, 'Floor plan preview', this._cb.onExportFloorPlan));
-      row.append(planBtn);
+      row.append(button('plan', 'Floor plan preview', 'olv-object-dl',
+        'Download an approximate top-down wall-trace sketch (SVG) — not a measured floor plan.'));
     }
 
     this._body.append(row);
@@ -431,6 +413,43 @@ export class ObjectPanel {
     } else {
       this._floorPlanSummaryEl = null;
     }
+  }
+
+  /**
+   * Run one export with a busy state, and show its outcome on the button the
+   * panel shows WHEN it settles. The body is rebuilt on every render (a CRS
+   * change re-measures the report mid-export), so the button that was clicked
+   * may be gone by then; a failure painted on it would never be seen. A second
+   * press while the export runs starts nothing.
+   */
+  private _runExport(key: ExportAction, label: string): void {
+    const action = key === 'report' ? this._cb.onExportReport : this._cb.onExportFloorPlan;
+    if (!action || this._exportBusy.has(key)) return;
+    this._exportBusy.add(key);
+    const busy = this._exportBtns[key];
+    if (busy) {
+      busy.disabled = true;
+      busy.textContent = '…';
+    }
+    const settle = (failed: boolean): void => {
+      this._exportBusy.delete(key);
+      const btn = this._exportBtns[key];
+      if (!btn) return;
+      btn.disabled = false;
+      btn.textContent = failed ? 'Failed' : label;
+      if (failed) setTimeout(() => { if (btn.textContent === 'Failed') btn.textContent = label; }, 2000);
+    };
+    // Started now, as before, but a throw before the action returns a promise
+    // becomes a rejection, so the export always settles and the button is not
+    // left busy.
+    void new Promise<void>((resolve) => resolve(action())).then(
+      () => settle(false),
+      (err) => {
+        // eslint-disable-next-line no-console
+        console.error('OpenLiDARViewer: space/object export failed.', err);
+        settle(true);
+      },
+    );
   }
 
   /**
@@ -552,12 +571,21 @@ export class ObjectPanel {
     this._body.append(this._scanTypeControl.element);
   }
 
-  /** Render the INTERIOR (room) report. */
-  showSpace(space: SpaceMetrics | null, shape: ScanShape | null): void {
+  /**
+   * Render the INTERIOR (room) report. With no figures, `unmeasured` is why
+   * the points could not be measured (the gather declined their frame); without
+   * one the points are still arriving.
+   */
+  showSpace(space: SpaceMetrics | null, shape: ScanShape | null, unmeasured?: string): void {
     this._title.textContent = 'Space scan';
     this._body.replaceChildren();
     if (!space) {
-      this._body.append(el('div', { className: 'olv-object-note', text: 'No space measurements yet. They appear once the scan points are loaded.' }));
+      this._body.append(el('div', {
+        className: 'olv-object-note',
+        text: unmeasured
+          ? `This space was not measured. ${unmeasured}`
+          : 'No space measurements yet. They appear once the scan points are loaded.',
+      }));
       this._scanTypeRow();
       return;
     }
@@ -601,12 +629,17 @@ export class ObjectPanel {
     this._scanTypeRow();
   }
 
-  /** Render the OBJECT measurements (with optional capture quality). */
-  showObject(metrics: ObjectMetrics | null, space: SpaceMetrics | null, shape: ScanShape | null): void {
+  /** Render the OBJECT measurements (with optional capture quality). `unmeasured` as for {@link showSpace}. */
+  showObject(metrics: ObjectMetrics | null, space: SpaceMetrics | null, shape: ScanShape | null, unmeasured?: string): void {
     this._title.textContent = 'Object scan';
     this._body.replaceChildren();
     if (!metrics) {
-      this._body.append(el('div', { className: 'olv-object-note', text: 'No object measurements yet. They appear once the scan points are loaded.' }));
+      this._body.append(el('div', {
+        className: 'olv-object-note',
+        text: unmeasured
+          ? `This object was not measured. ${unmeasured}`
+          : 'No object measurements yet. They appear once the scan points are loaded.',
+      }));
       this._scanTypeRow();
       return;
     }

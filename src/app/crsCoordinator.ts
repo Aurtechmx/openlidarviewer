@@ -66,6 +66,17 @@ export interface CrsCoordinatorDeps {
    * with null once it is applied, dismissed, or the scan closes.
    */
   showSuggestion?: (suggestion: OverrideSuggestion | null, actions: CrsSuggestionActions) => void;
+  /**
+   * The resolved frame changed: an override or "Use detected" on the active
+   * scan, or another scan resolving. Called once per change of
+   * `crsService.crsRevision()`, with the cloud the frame now belongs to, as its
+   * opener passed it to `refreshCrsForStaticCloud` / `refreshCrsForStreamingCloud`.
+   * A summary computed from that cloud under the old frame recomputes; one built
+   * from another scan sees it is not its own. Not called when the scan closes.
+   * One handler per summary, each run on its own: a handler that throws does
+   * not stop the rest.
+   */
+  onFrameChange?: ReadonlyArray<(source: object) => void>;
 }
 
 /** What the persistent suggestion surface can do with the pending suggestion. */
@@ -139,6 +150,46 @@ export function createCrsCoordinator(deps: CrsCoordinatorDeps): CrsCoordinator {
 
   /** The dataset key (per-scan key for the CRS override store) currently in scope. */
   let currentCrsDatasetKey: string | undefined;
+  /**
+   * The cloud the service's current CRS was resolved for, as the open or the
+   * layer switch passed it. The override path re-resolves through the viewer's
+   * copy and leaves this alone: the scan did not change, and the summaries were
+   * built from the opener's object.
+   */
+  let currentSource: object | null = null;
+
+  // One subscription for everything computed from the active scan under its
+  // frame. The service broadcasts on every resolution; only a revision change
+  // is a new frame (see `wireFrameChange`, which gates the same way).
+  const onFrameChange = deps.onFrameChange ?? [];
+  // While a user override is being applied: the service broadcasts from inside
+  // `setOverride`, before `onOverrideApplied` re-judges which layers share a
+  // frame, and a summary that gathers would read the old flags. The change is
+  // held and handed on once the override is applied in full.
+  let overriding = false;
+  let heldFrameChange = false;
+  function runFrameHandlers(): void {
+    const source = currentSource;
+    if (!source || !crsService.current()) return;
+    for (const handler of onFrameChange) {
+      try {
+        handler(source);
+      } catch (err) {
+        if (debug) console.warn('[crs] a scan summary did not follow the frame change', err);
+      }
+    }
+  }
+  if (onFrameChange.length > 0) {
+    let seen = crsService.crsRevision();
+    crsService.subscribe((resolved) => {
+      const rev = crsService.crsRevision();
+      if (rev === seen) return;
+      seen = rev;
+      if (!resolved || !currentSource) return;
+      if (overriding) heldFrameChange = true;
+      else runFrameHandlers();
+    });
+  }
 
   /**
    * Remember which dataset the override panel is editing. The CRS itself is
@@ -201,7 +252,17 @@ export function createCrsCoordinator(deps: CrsCoordinatorDeps): CrsCoordinator {
     );
   }
 
-  function refreshCrsForStaticCloud(cloud: {
+  function refreshCrsForStaticCloud(cloud: Parameters<CrsCoordinator['refreshCrsForStaticCloud']>[0]): void {
+    currentSource = cloud;
+    resolveStatic(cloud);
+  }
+
+  function refreshCrsForStreamingCloud(cloud: Parameters<CrsCoordinator['refreshCrsForStreamingCloud']>[0]): void {
+    currentSource = cloud;
+    resolveStreaming(cloud);
+  }
+
+  function resolveStatic(cloud: {
     readonly name: string;
     readonly origin?: readonly [number, number, number];
     readonly sourceOrigin?: readonly [number, number, number];
@@ -240,7 +301,7 @@ export function createCrsCoordinator(deps: CrsCoordinatorDeps): CrsCoordinator {
     }
   }
 
-  function refreshCrsForStreamingCloud(cloud: {
+  function resolveStreaming(cloud: {
     readonly name: string;
     readonly kind: StreamingSourceKind;
     readonly renderOrigin?: readonly [number, number, number];
@@ -282,6 +343,22 @@ export function createCrsCoordinator(deps: CrsCoordinatorDeps): CrsCoordinator {
     localUnit?: LocalLinearUnit;
   }): void {
     if (!currentCrsDatasetKey) return;
+    overriding = true;
+    try {
+      applyOverride(override);
+    } finally {
+      overriding = false;
+      if (heldFrameChange) {
+        heldFrameChange = false;
+        runFrameHandlers();
+      }
+    }
+  }
+
+  function applyOverride(override: {
+    epsg: number | null;
+    kind: 'projected' | 'geographic' | 'local' | 'detected';
+  }): void {
     // ONE writer: the override goes through `crsService.setOverride`, which
     // persists it, records the file's own declaration (`detectedEpsg`, the
     // guard that keeps a stored choice with its file), handles the
@@ -316,7 +393,7 @@ export function createCrsCoordinator(deps: CrsCoordinatorDeps): CrsCoordinator {
     const staticCloud = activeId ? viewer.getCloud(activeId) : undefined;
     const streamingCloud = viewer.streamingCloud;
     if (streamingCloud) {
-      refreshCrsForStreamingCloud(
+      resolveStreaming(
         streamingCloud as {
           readonly name: string;
           readonly kind: StreamingSourceKind;
@@ -324,13 +401,14 @@ export function createCrsCoordinator(deps: CrsCoordinatorDeps): CrsCoordinator {
         },
       );
     } else if (staticCloud) {
-      refreshCrsForStaticCloud(staticCloud);
+      resolveStatic(staticCloud);
     }
     deps.onOverrideApplied?.();
   }
 
   function clearDatasetKey(): void {
     currentCrsDatasetKey = undefined;
+    currentSource = null;
     deps.showSuggestion?.(null, { apply: () => {}, dismiss: () => {} });
   }
 

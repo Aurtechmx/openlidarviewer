@@ -62,6 +62,15 @@ export interface ProjectInfo {
   hasRgb: boolean;
   hasIntensity: boolean;
   hasClassification: boolean;
+  /** The scan the card describes, so a CRS change on another scan leaves it alone. */
+  source?: object;
+  /**
+   * The extents again under the scan's CURRENT frame. Read by
+   * {@link ProjectCard.remeasure} when the scan's CRS changes while the card is
+   * up, so the Size row follows the frame instead of keeping the one the scan
+   * opened in.
+   */
+  remeasure?: () => ProjectSizeFacts;
   /**
    * Fired once when the card gives the top-centre lane back: its own timer
    * expiring, or the user pressing ×. NOT fired when something else takes the
@@ -74,6 +83,9 @@ export interface ProjectInfo {
    */
   onDismiss?: () => void;
 }
+
+/** The size facts the Size and Suggested rows read. */
+export type ProjectSizeFacts = Pick<ProjectInfo, 'width' | 'depth' | 'height' | 'sizeUnit' | 'maxPhysicalDimM'>;
 
 /** How long the card lingers before fading out on its own. */
 const DISMISS_MS = 7000;
@@ -113,6 +125,28 @@ function row(label: string, value: string): HTMLElement {
   ]);
 }
 
+/** The label/value grid: format, points, size, attributes, suggested mode, performance. */
+function summaryGrid(info: ProjectInfo): HTMLElement {
+  const attrs = [
+    info.hasRgb && 'RGB',
+    info.hasIntensity && 'Intensity',
+    info.hasClassification && 'Classification',
+  ].filter(Boolean) as string[];
+
+  const points = info.shownCount === info.totalCount
+    ? formatCount(info.totalCount)
+    : `${formatCount(info.shownCount)} / ${formatCount(info.totalCount)}`;
+
+  return el('div', { className: 'olv-pc-grid' }, [
+    row('Format', info.format.toUpperCase()),
+    row('Points', points),
+    row('Size', `${info.width.toFixed(1)} × ${info.depth.toFixed(1)} × ${info.height.toFixed(1)} ${info.sizeUnit}`),
+    row('Attributes', attrs.length ? attrs.join(', ') : 'positions only'),
+    ...(info.maxPhysicalDimM != null ? [row('Suggested', suggestMode(info.maxPhysicalDimM))] : []),
+    row('Performance', performance(info.totalCount)),
+  ]);
+}
+
 /**
  * The "Project ready" card — a brief summary of a freshly opened
  * scan. It overlays the viewer (so the scan is visible underneath at once)
@@ -123,6 +157,9 @@ export class ProjectCard {
   private _timer: number | null = null;
   /** The pending lane successor, dropped by `hide()` and consumed by `_dismiss()`. */
   private _onDismiss: (() => void) | null = null;
+  /** What the visible card shows and its grid, so a CRS change can redraw the size. Dropped by `hide()`. */
+  private _info: ProjectInfo | null = null;
+  private _grid: HTMLElement | null = null;
 
   constructor() {
     this.element = el('div', { className: 'olv-project-card' });
@@ -130,16 +167,6 @@ export class ProjectCard {
 
   /** Populate and reveal the card for a freshly opened scan. */
   show(info: ProjectInfo): void {
-    const attrs = [
-      info.hasRgb && 'RGB',
-      info.hasIntensity && 'Intensity',
-      info.hasClassification && 'Classification',
-    ].filter(Boolean) as string[];
-
-    const points = info.shownCount === info.totalCount
-      ? formatCount(info.totalCount)
-      : `${formatCount(info.shownCount)} / ${formatCount(info.totalCount)}`;
-
     const notice = info.truncation ? truncationText(info.truncation) : info.interpretationLevel === 'PROBABLE'
       ? `Opened as ${info.format.toUpperCase()} text from its content. Check the columns and units.`
       : null;
@@ -152,6 +179,8 @@ export class ProjectCard {
     });
     dismiss.addEventListener('click', () => this._dismiss());
 
+    this._info = info;
+    this._grid = summaryGrid(info);
     this.element.replaceChildren(
       el('div', { className: 'olv-pc-head' }, [
         el('span', { className: 'olv-pc-title', text: 'Project ready' }),
@@ -159,14 +188,7 @@ export class ProjectCard {
       ]),
       el('div', { className: 'olv-pc-name', text: info.name }),
       ...(notice ? [el('div', { className: 'olv-pc-notice olv-stats-note', text: notice })] : []),
-      el('div', { className: 'olv-pc-grid' }, [
-        row('Format', info.format.toUpperCase()),
-        row('Points', points),
-        row('Size', `${info.width.toFixed(1)} × ${info.depth.toFixed(1)} × ${info.height.toFixed(1)} ${info.sizeUnit}`),
-        row('Attributes', attrs.length ? attrs.join(', ') : 'positions only'),
-        ...(info.maxPhysicalDimM != null ? [row('Suggested', suggestMode(info.maxPhysicalDimM))] : []),
-        row('Performance', performance(info.totalCount)),
-      ]),
+      this._grid,
       el('div', { className: 'olv-pc-countdown' }),
     );
 
@@ -197,6 +219,25 @@ export class ProjectCard {
     }, { first: true });
   }
 
+  /**
+   * The scan's CRS changed while the card is up: redraw the Size and Suggested
+   * rows from `info.remeasure` under the new frame. Only the grid is replaced;
+   * the card is not announced again and its timer and countdown keep running.
+   * A hidden card, or one describing another scan, is left alone (the next
+   * `show` measures afresh).
+   */
+  remeasure(source: object): void {
+    const info = this._info;
+    const grid = this._grid;
+    if (!info?.remeasure || !grid || info.source !== source) return;
+    if (!this.element.classList.contains('olv-visible')) return;
+    const next = { ...info, ...info.remeasure() };
+    const fresh = summaryGrid(next);
+    grid.replaceWith(fresh);
+    this._info = next;
+    this._grid = fresh;
+  }
+
   /** The touch listener that dismisses the card on a phone. */
   private _gesture: ((e: Event) => void) | null = null;
 
@@ -212,6 +253,9 @@ export class ProjectCard {
       this._timer = null;
     }
     this._onDismiss = null;
+    // A hidden card holds no scan, so a closed scan's cloud is not kept alive here.
+    this._info = null;
+    this._grid = null;
     this.element.classList.remove('olv-visible');
     if (this._gesture) this._dropGesture();
     appTransientLane().release(this.element);

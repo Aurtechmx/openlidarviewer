@@ -242,7 +242,7 @@ import { CatalogPanel, buildCuratedDemoSample } from './ui/CatalogPanel';
 // streaming clouds expose `.crs()` returning the same shape.
 import type { StreamingReportCloud } from './app/streamingScanReport'; import { runStreamingModules, preloadStreamingReport } from './app/streamingReportSeam';
 import { CrsService, datasetIdentity } from './geo/CrsService';
-import { groundMetresPermitted, resolvedHorizontalUnitToMetres, verticalMetresPerUnit, volumeClaimRefusal, volumeUnitCaveat } from './geo/SpatialContext';
+import { groundMetresPermitted, resolvedHorizontalUnitToMetres, verticalMetresPerUnit, volumeClaimRefusal, volumeUnitCaveat, type SpatialContext } from './geo/SpatialContext';
 import { prepareEpochFrames, epochUnitMismatchLines, compareSuggestionAllowed } from './app/epochFramePrep';
 // Shared vertical-unit labeller (already eager via terrainAnalysisRunner) —
 // feeds the colorbar legend's elevation unit from the resolved CRS.
@@ -1149,7 +1149,7 @@ const crsCoordinator = createCrsCoordinator({
   getViewer: () => viewer,
   isViewerReady: () => viewerReady,
   getActiveId: () => scans.activeId,
-  debug, onOverrideApplied: () => { layerService.refreshCrsFlags(); layerService.applyVisibility(); }, notify: (m, a) => appToast().show(m, a), showSuggestion: (s, a) => inspector.setCrsSuggestion(s, a),
+  debug, onOverrideApplied: () => { layerService.refreshCrsFlags(); layerService.applyVisibility(); }, notify: (m, a) => appToast().show(m, a), showSuggestion: (s, a) => inspector.setCrsSuggestion(s, a), onFrameChange: [(src) => inspectorCards.refreshDatasetIntelligenceForFrame(src), () => routeCoordinator.remeasureForFrame(), (src) => projectCard.remeasure(src)], // a new CRS on the scan re-measures the summaries built under the old one, each on its own
 });
 
 // v0.3.9 — workflow recorder. The host owns the controller so it can
@@ -2063,7 +2063,7 @@ function newObjectPanel(
       // system, exactly like the standalone SVG sheet below.
       unitSystem: viewer.measure.unitSystem,
     });
-    downloadFileBytes(`${ctx.basename}-space-report.pdf`, bytes, 'application/pdf');
+    if (!spaceCtxCurrent(ctx)) throw new Error(SPACE_CONTEXT_MOVED); downloadFileBytes(`${ctx.basename}-space-report.pdf`, bytes, 'application/pdf'); // the build is an await too: a CRS change during it re-measured the panel
   },
   // Build + download the interior-only floor plan as a standalone SVG sheet.
   // v0.4.5: real wall-extraction pipeline (wall-band slice → density mask →
@@ -2459,7 +2459,7 @@ let toolLauncherFilling = false; async function fillToolLauncher(): Promise<void
 const routeCoordinator = createScanRouteCoordinator({
   routing,
   geometry: {
-    gatherForRouting: (maxPoints) => viewer.gatherTerrainPositions(maxPoints),
+    gatherForRouting: (maxPoints) => viewer.gatherTerrainPositions(maxPoints), declineReason: () => viewer.terrainGatherDecline, // why the gather declined the frame, for an empty report
     residentPointTotal: () => viewer.residentPointTotal(),
     // A STREAMING COPC/EPT carries its colours in the streamed nodes, not the
     // static `activeCloud.colors`; ask the streaming cloud first.
@@ -2471,7 +2471,7 @@ const routeCoordinator = createScanRouteCoordinator({
     },
   },
   frame: {
-    ...routeUnitFrame(() => crsService.context()),
+    ...routeUnitFrame(() => crsService.context(), () => crsService.current()),
     exportTargetId: () => scans.activeExportTargetId(), crsRevision: () => crsService.crsRevision(),
     basename: activeScanName, truncation: () => scans.activeCloud()?.metadata?.truncation ?? null,
   },
@@ -2488,13 +2488,13 @@ const routeCoordinator = createScanRouteCoordinator({
       analysePanel?.setScanType(...analyseScanTypeArgs);
       if (analysePanel) terrainRunner.refreshDatasetStory(analysePanel);
     },
-    showSpace: (space, shape) => {
-      objectContent = { kind: 'space', args: [space, shape] };
-      objectPanel?.showSpace(space, shape);
+    showSpace: (...args) => {
+      objectContent = { kind: 'space', args };
+      objectPanel?.showSpace(...args);
     },
-    showObject: (object, space, shape) => {
-      objectContent = { kind: 'object', args: [object, space, shape] };
-      objectPanel?.showObject(object, space, shape);
+    showObject: (...args) => {
+      objectContent = { kind: 'object', args };
+      objectPanel?.showObject(...args);
     },
     setObjectVisible: (visible) => { objectDesiredVisible = visible; objectPanel?.setVisible(visible); },
     setAnalyseVisible: (visible) => {
@@ -3828,7 +3828,7 @@ streamingUi.onTick(({ cloud, scheduler, counts, diagnostics: diag }) => {
 
 /** Reveal the "Project ready" summary card for a freshly opened scan. */
 function showProjectCard(cloud: PointCloud, totalCount: number): void {
-  const b = cloud.bounds();
+  const b = cloud.bounds(); const sizeIn = (f: SpatialContext) => describeProjectSize(b.min, b.max, { upAxis: f.upAxis, linearUnitKnown: groundMetresPermitted(f), linearUnitToMetres: f.linearUnitToMetres, verticalUnitToMetres: verticalMetresPerUnit(f, 'horizontal') ?? undefined, verticalUnitInvalid: f.verticalScaleState === 'invalid' });
   const c = crsService.context();
   // Suggest the camera preset best suited to the scan: a dismissible chip,
   // accepted in one click or ignored (it auto-hides). It shares the top-centre
@@ -3844,7 +3844,7 @@ function showProjectCard(cloud: PointCloud, totalCount: number): void {
     format: cloud.sourceFormat, interpretationLevel: cloud.metadata?.interpretationLevel, truncation: cloud.metadata?.truncation,
     shownCount: cloud.pointCount,
     totalCount,
-    ...describeProjectSize(b.min, b.max, { upAxis: c.upAxis, linearUnitKnown: groundMetresPermitted(c), linearUnitToMetres: c.linearUnitToMetres, verticalUnitToMetres: verticalMetresPerUnit(c, 'horizontal') ?? undefined, verticalUnitInvalid: c.verticalScaleState === 'invalid' }),
+    ...sizeIn(c), source: cloud, remeasure: () => sizeIn(crsService.context()), // the Size row follows a CRS change while the card is up
     hasRgb: cloud.colors !== undefined,
     hasIntensity: cloud.intensity !== undefined,
     hasClassification: cloud.classification !== undefined,

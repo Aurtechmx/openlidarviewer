@@ -6,6 +6,8 @@
 // already in hand (header / source kind). They iterate no points and run no
 // engine analysis; the engine-only rows stay "—" until terrain analysis runs
 // (whose finished result the two `note*` folders merge back in afterwards).
+// A CRS change on the same scan converts the cached extent again, so the
+// density follows the new frame (`refreshDatasetIntelligenceForFrame`).
 //
 // Each refresher depends only on the `Inspector` instance plus the pure
 // provenance/dataset-intelligence helpers, so they extract cleanly behind a
@@ -88,6 +90,14 @@ export interface InspectorCardRefreshers {
     };
     crs?(): { linearUnit?: string; linearUnitToMetres?: number; verticalUnitToMetres?: number } | null;
   }): void;
+  /**
+   * The active scan's resolved CRS changed (an override, or "Use detected").
+   * When `source` is the cloud the card's summary was built from, convert its
+   * extent again under the new frame and put the metre spans and volume the
+   * density reads onto the card, keeping what a terrain run folded in. A frame
+   * change for another scan leaves the card alone.
+   */
+  refreshDatasetIntelligenceForFrame(source: object): void;
   /**
    * Fold a real analysed-point count from a finished terrain run into the
    * card, static or streaming. The streaming attach-time summary writes
@@ -176,6 +186,19 @@ function metresCubedBbox(
 }
 
 /**
+ * The two unit-dependent figures of a header summary: the bbox spans and volume
+ * in metres, both undefined when the unit is not confirmed. The attach-time
+ * refreshers and a later CRS change all convert through here.
+ */
+function metresFigures(
+  extent: readonly [number, number, number],
+  crs: UnitCrs,
+): { bboxSpansM: [number, number, number] | undefined; bboxVolume: number | undefined } {
+  const [dx, dy, dz] = extent;
+  return { bboxSpansM: metresBboxSpans(dx, dy, dz, crs), bboxVolume: metresCubedBbox(dx, dy, dz, crs) };
+}
+
+/**
  * Build the Inspector card refreshers bound to a single `Inspector`.
  * The behaviour of each returned function is identical to the original
  * top-level functions in main.ts — only the `inspector` binding moved here.
@@ -204,6 +227,11 @@ export function createInspectorCardRefreshers(
   // (`noteTerrainComplexity`) without re-deriving the header facts. Reset by
   // every attach-time refresh, so derived numbers never survive a scan swap.
   let lastSummary: Parameters<Inspector['setDatasetIntelligence']>[0] | null = null;
+  // The source-unit extent behind the last header summary, keyed by the cloud
+  // it was read from, so a CRS change on that scan can convert it again. Weak,
+  // so a closed scan's cloud is not kept alive here. Replaced by every
+  // attach-time refresh, like `lastSummary`.
+  let lastExtent = new WeakMap<object, readonly [number, number, number]>();
 
   // The panel renders whatever the shared store says, including a verdict that
   // arrives after the refresher below already ran: the shape router only decides
@@ -297,9 +325,8 @@ export function createInspectorCardRefreshers(
       // (feet³, degrees³) into the per-m³ bucketing and mis-tier the density.
       // When the unit is unconfirmed, both the volume and the spans are left
       // undefined and the density row renders "—" rather than a wrong tier.
-      const crsForUnits = resolvedCrs ? resolvedCrs() : cloud.metadata?.crs;
-      const bboxSpansM = metresBboxSpans(dx, dy, dz, crsForUnits);
-      const bboxVolume = metresCubedBbox(dx, dy, dz, crsForUnits);
+      const extent = [dx, dy, dz] as const;
+      const { bboxSpansM, bboxVolume } = metresFigures(extent, resolvedCrs ? resolvedCrs() : cloud.metadata?.crs);
       // Density numerator is the file's declared total, back-scaled when the
       // loader strided for display — matching the Scan Report, not the smaller
       // in-memory sample that would under-report the tier.
@@ -346,10 +373,12 @@ export function createInspectorCardRefreshers(
         metricVersion: TERRAIN_METRIC_VERSION,
       };
       lastSummary = summary;
+      lastExtent = new WeakMap([[cloud, extent]]);
       inspector.setDatasetIntelligence(summary);
     } catch {
       // A cheap summary failure must never block load completion.
       lastSummary = null;
+      lastExtent = new WeakMap();
       inspector.clearDatasetIntelligence();
     }
   }
@@ -370,6 +399,7 @@ export function createInspectorCardRefreshers(
       const hMax = cloud.metadata?.header?.max;
       let bboxVolume: number | undefined;
       let bboxSpansM: [number, number, number] | undefined;
+      let extent: readonly [number, number, number] | null = null;
       if (hMin && hMax && hMin.length >= 3 && hMax.length >= 3) {
         const dx = hMax[0] - hMin[0];
         const dy = hMax[1] - hMin[1];
@@ -381,9 +411,8 @@ export function createInspectorCardRefreshers(
         // on the unit exactly as the static path does — an unknown-unit CRS
         // leaves the volume and the spans undefined rather than feeding raw
         // feet³ / degrees³ into the bucketing.
-        const crsForUnits = resolvedCrs ? resolvedCrs() : (cloud.crs?.() ?? null);
-        bboxSpansM = metresBboxSpans(dx, dy, dz, crsForUnits);
-        bboxVolume = metresCubedBbox(dx, dy, dz, crsForUnits);
+        extent = [dx, dy, dz];
+        ({ bboxSpansM, bboxVolume } = metresFigures(extent, resolvedCrs ? resolvedCrs() : (cloud.crs?.() ?? null)));
       }
       const summary = {
         pointCount: sourcePoints,
@@ -411,12 +440,30 @@ export function createInspectorCardRefreshers(
       };
       lastStreamingSummary = summary;
       lastSummary = summary;
+      // A header with no extent has no volume in any frame: nothing to follow.
+      lastExtent = extent ? new WeakMap([[cloud, extent]]) : new WeakMap();
       inspector.setDatasetIntelligence(summary);
     } catch {
       lastStreamingSummary = null;
       lastSummary = null;
+      lastExtent = new WeakMap();
       inspector.clearDatasetIntelligence();
     }
+  }
+
+  function refreshDatasetIntelligenceForFrame(source: object): void {
+    const extent = lastExtent.get(source);
+    const base = lastSummary;
+    // Nothing to follow without a resolved frame (the pure factory reads the
+    // file's fixed declaration), without a summary, or for another scan.
+    if (!resolvedCrs || !extent || !base) return;
+    // Only the unit-dependent figures move. What a finished terrain run folded
+    // in (analysed points, coverage, confidence, ground share, complexity)
+    // stays on the card.
+    const updated = { ...base, ...metresFigures(extent, resolvedCrs()) };
+    lastSummary = updated;
+    if (lastStreamingSummary) lastStreamingSummary = updated;
+    inspector.setDatasetIntelligence(updated);
   }
 
   /** Merge run-fed fields onto the CURRENT summary (static or streaming). */
@@ -480,6 +527,7 @@ export function createInspectorCardRefreshers(
     refreshProvenanceFromStreaming,
     refreshDatasetIntelligenceFromStaticCloud,
     refreshDatasetIntelligenceFromStreamingCloud,
+    refreshDatasetIntelligenceForFrame,
     noteAnalyzedPointCount,
     noteTerrainRun,
     noteTerrainComplexity,

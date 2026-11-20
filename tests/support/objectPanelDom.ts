@@ -32,7 +32,10 @@ export class FakeEl {
     for (const c of this.children) out.push(...c.findByText(label));
     return out;
   }
-  addEventListener(): void { /* no-op */ }
+  private readonly _clicks: Array<() => void> = [];
+  /** Click listeners are kept so a test can press a button; others are ignored. */
+  addEventListener(type: string, fn: () => void): void { if (type === 'click') this._clicks.push(fn); }
+  click(): void { for (const fn of this._clicks) fn(); }
 }
 
 /** Every title/hint string in the rendered tree, joined. */

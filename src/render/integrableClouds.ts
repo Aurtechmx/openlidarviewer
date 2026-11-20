@@ -79,6 +79,12 @@ export function integrableClouds<T extends IntegrableEntry>(entries: Iterable<T>
   );
 }
 
+/** Whether several layers are shown and none may be combined, so a gather over them is empty by that rule. */
+export function noLayerCombines<T extends IntegrableEntry>(entries: Iterable<T>): boolean {
+  const all = [...entries];
+  return all.filter((e) => e.mesh.visible && !e.locked).length > 1 && integrableClouds(all).length === 0;
+}
+
 /** Why a profile has no chart when several scans are shown and none can be merged; null otherwise. */
 export function sharedDatumRefusal<T extends IntegrableEntry>(entries: Iterable<T>): string | null {
   const all = [...entries];

@@ -55,20 +55,54 @@ export type TerrainGatherFrame =
 
 export { hasHorizontalCrs };
 
+/** How every decline below opens: the gather declines on behalf of terrain analysis. */
+export const TERRAIN_DECLINE_LEAD = 'Terrain analysis did not run. ';
+
+/** The two mixed-frame declines share their opening clause with the report's wording. */
+const MIXED_MESH_HEAD =
+  'A mesh layer with no coordinate system reads as Y-up from its point layout, and the other visible layers are Z-up';
+const MIXED_GLTF_HEAD = 'A glTF or GLB layer is Y-up by specification, and the other visible layers are Z-up';
+/** How terrain analysis ends a mixed-frame decline. */
+const TERRAIN_MIXED_TAIL = ', so together they describe no single surface. Hide or lock one side, then run.';
+/**
+ * How the space and object report ends it. The report has no surface and no
+ * run; choosing an option under "Treat scan as" routes the scan again, which
+ * gathers afresh, so that is the step after hiding or locking a layer.
+ */
+const REPORT_MIXED_TAIL =
+  ', so they are not in one frame. Hide or lock one side, then choose an option under "Treat scan as" again.';
+
+/**
+ * The decline when several visible, unlocked layers would be combined and none
+ * of them has proven it shares a frame with the others, so nothing gathers.
+ */
+export const UNPROVEN_FRAME_REASON =
+  'Terrain analysis combines every visible, unlocked layer, and these layers have not proven they share a frame. Hide or lock all but one layer, then run.';
+/** How the space and object report states {@link UNPROVEN_FRAME_REASON}. */
+const REPORT_UNPROVEN_FRAME =
+  'The visible layers have not proven they share a frame, so they are not measured together. Hide or lock all but one layer, then choose an option under "Treat scan as" again.';
+
+/**
+ * A decline's cause as the space and object report states it: without the
+ * terrain lead, and with a mixed-frame or unproven-frame decline's terrain
+ * ending replaced by the report's. Other text is returned as it is.
+ */
+export function gatherDeclineCause(reason: string): string {
+  if (reason === UNPROVEN_FRAME_REASON) return REPORT_UNPROVEN_FRAME;
+  const cause = reason.startsWith(TERRAIN_DECLINE_LEAD) ? reason.slice(TERRAIN_DECLINE_LEAD.length) : reason;
+  return cause.endsWith(TERRAIN_MIXED_TAIL) ? cause.slice(0, -TERRAIN_MIXED_TAIL.length) + REPORT_MIXED_TAIL : cause;
+}
+
 /** The decline for a glTF or GLB source under a CRS. */
 export function gltfUnderCrsReason(label: string): string {
-  return `Terrain analysis did not run. ${gltfUnderCrsAxisReason(label)}`;
+  return `${TERRAIN_DECLINE_LEAD}${gltfUnderCrsAxisReason(label)}`;
 }
 
 /** The decline for a local mesh that reads as Y-up beside Z-up layers. */
-export const MIXED_FRAME_REASON =
-  'Terrain analysis did not run. A mesh layer with no coordinate system reads as Y-up from its point layout, ' +
-  'and the other visible layers are Z-up, so together they describe no single surface. Hide or lock one side, then run.';
+export const MIXED_FRAME_REASON = TERRAIN_DECLINE_LEAD + MIXED_MESH_HEAD + TERRAIN_MIXED_TAIL;
 
 /** The decline for a glTF or GLB layer, Y-up by specification, beside Z-up layers. */
-export const MIXED_GLTF_FRAME_REASON =
-  'Terrain analysis did not run. A glTF or GLB layer is Y-up by specification, and the other visible layers are Z-up, ' +
-  'so together they describe no single surface. Hide or lock one side, then run.';
+export const MIXED_GLTF_FRAME_REASON = TERRAIN_DECLINE_LEAD + MIXED_GLTF_HEAD + TERRAIN_MIXED_TAIL;
 
 /**
  * Settle the up axis of a gathered sample and normalise it to Z-up in place.
@@ -101,7 +135,7 @@ export function settleTerrainGatherFrame(
       ? (classifyScanShape(own && own.length > 0 ? own : positions).up === 'y' ? 'y' : 'z')
       : undefined;
     const f = resolveLayerUpFrame({ format: s.format, crs: s.crs, ...(detected ? { detected } : {}) });
-    if (!f.ok) return { ok: false, reason: `Terrain analysis did not run. ${f.reason}` };
+    if (!f.ok) return { ok: false, reason: `${TERRAIN_DECLINE_LEAD}${f.reason}` };
     if (f.basis === 'detected') anyDetected = true;
     if (f.basis === 'crs') anyCrs = true;
     if (f.axis === 'z') hasZ = true;

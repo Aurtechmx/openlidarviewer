@@ -22,7 +22,7 @@ import type { SourceFormat } from '../src/io/sniffFormat';
 import type { CrsInfo } from '../src/io/crs';
 import { resolveLayerUpFrame } from '../src/geo/frame/layerUpFrame';
 import { classifyScanShape } from '../src/terrain/scanShape';
-import { MIXED_FRAME_REASON, MIXED_GLTF_FRAME_REASON } from '../src/terrain/gatherUpAxis';
+import { MIXED_FRAME_REASON, MIXED_GLTF_FRAME_REASON, UNPROVEN_FRAME_REASON } from '../src/terrain/gatherUpAxis';
 
 /** A deterministic pseudo-random sequence, so the fixtures never change. */
 function rng(seed: number): () => number {
@@ -101,12 +101,17 @@ function gltfBytes(points: Float32Array, format: 'gltf' | 'glb', node: Record<st
 interface Layer {
   cloud: PointCloud;
   visible?: boolean;
+  /** Absent reads as verified, as in the app. */
+  compatibility?: 'unknown';
 }
 
 /** The shipped gather over a fake `this` holding real clouds, none with an app-resolved CRS. */
 function viewerOver(layers: Layer[]): { v: Viewer; clouds: Map<string, unknown> } {
   const clouds = new Map<string, unknown>(
-    layers.map((l, i) => [String(i), { cloud: l.cloud, mesh: { visible: l.visible ?? true }, locked: false }]),
+    layers.map((l, i) => [String(i), {
+      cloud: l.cloud, mesh: { visible: l.visible ?? true }, locked: false,
+      ...(l.compatibility ? { compatibility: l.compatibility } : {}),
+    }]),
   );
   const v = Object.assign(Object.create(Viewer.prototype) as object, {
     _clouds: clouds,
@@ -223,6 +228,26 @@ describe('a glTF or GLB with no CRS, through the real loader and the shipped gat
     const first = Float32Array.from(v.gatherTerrainPositions()!.positions);
     const second = v.gatherTerrainPositions()!.positions;
     expect(second).toEqual(first);
+  });
+});
+
+describe('several layers that have not proven a shared frame', () => {
+  it('declines with the shared-frame reason, and gathers once one layer is hidden', async () => {
+    const a = await loadGltf(gltfBytes(meshPoints('floor'), 'glb'), 'glb');
+    const b = await loadGltf(gltfBytes(meshPoints('floor'), 'glb'), 'glb');
+    const both = viewerOver([{ cloud: a, compatibility: 'unknown' }, { cloud: b, compatibility: 'unknown' }]);
+    expect(both.v.gatherTerrainPositions()).toBeNull();
+    expect(both.v.terrainGatherDecline).toBe(UNPROVEN_FRAME_REASON);
+
+    const one = viewerOver([{ cloud: a, compatibility: 'unknown' }, { cloud: b, compatibility: 'unknown', visible: false }]);
+    expect(one.v.gatherTerrainPositions()).not.toBeNull();
+    expect(one.v.terrainGatherDecline).toBeNull();
+  });
+
+  it('gives no reason when nothing is loaded', () => {
+    const { v } = viewerOver([]);
+    expect(v.gatherTerrainPositions()).toBeNull();
+    expect(v.terrainGatherDecline).toBeNull();
   });
 });
 

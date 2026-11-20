@@ -58,7 +58,7 @@
     },
     {
       "file": "src/app/scanRouteCoordinator.ts",
-      "symbol": "createScanRouteCoordinator.applyRoute",
+      "symbol": "createScanRouteCoordinator.routeSample",
       "frame": "source-local",
       "reads": 1,
       "why": "The routing gather hands back one scan's own buffer; space and object metrics are scale-converted from it and never composed with another layer, so no placement is folded in."

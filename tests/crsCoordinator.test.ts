@@ -16,8 +16,14 @@
 //    viewer chunk resolves (or from a viewer that throws) breaks the load.
 //  - The static path preferring `origin` over the file's own `sourceOrigin`
 //    for the inspector's coordinate context.
+//  - A CRS change that the scan summaries never hear about, so the Dataset
+//    Intelligence density, the Project card size and the object report keep
+//    the old frame's units after an override or "Use detected".
 
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, beforeAll } from 'vitest';
+import { installManualTimerDom } from './helpers/manualTimerDom';
+import { readFileSync } from 'node:fs';
+import { createInspectorCardRefreshers } from '../src/app/inspectorCardRefreshers';
 import { createCrsCoordinator } from '../src/app/crsCoordinator';
 import { CrsService, type CrsOverridePort } from '../src/geo/CrsService';
 import { keyForDataset, type CrsOverride } from '../src/geo/CrsOverrideStore';
@@ -76,7 +82,7 @@ interface Harness {
   coordinator: ReturnType<typeof createCrsCoordinator>;
 }
 
-function harness(opts: { viewerReady?: boolean; activeId?: string | null; onOverrideApplied?: () => void } = {}): Harness {
+function harness(opts: { viewerReady?: boolean; activeId?: string | null; onOverrideApplied?: () => void; onFrameChange?: (source: object) => void } = {}): Harness {
   const port = memoryPort();
   const service = new CrsService(port);
   const setInspectCoordinateContext = vi.fn();
@@ -92,6 +98,7 @@ function harness(opts: { viewerReady?: boolean; activeId?: string | null; onOver
     getActiveId: () => opts.activeId ?? null,
     debug: false,
     onOverrideApplied: opts.onOverrideApplied,
+    onFrameChange: opts.onFrameChange ? [opts.onFrameChange] : undefined,
   });
   return { service, port, setInspectCoordinateContext, viewer, coordinator };
 }
@@ -438,5 +445,218 @@ describe('refreshCrsForStreamingCloud — a persisted override needs dataset ide
     expect(h.service.current()?.epsg).toBeUndefined();
     expect(h.service.overrideSuggestion()).toMatchObject({ epsg: 32612, reason: 'identity-missing' });
     expect(h.port.entries.has('survey.copc.laz')).toBe(true);
+  });
+});
+
+describe('onFrameChange: the scan summaries hear about a new frame', () => {
+  /** A phone scan: no CRS of its own, and enough facts to verify an override. */
+  const phone = () => ({ name: 'scan/phone.glb', metadata: { crs: null }, ...FACTS });
+
+  it('fires once per frame change, naming the cloud the opener passed', () => {
+    const onFrameChange = vi.fn();
+    const h = harness({ activeId: 'cloud-1', onFrameChange });
+    const opened = phone();
+    // The viewer hands back an equal but distinct object, as a GPU-budget
+    // downsample does; the summaries were built from the opener's object.
+    h.viewer.getCloud.mockReturnValue(phone());
+    h.coordinator.refreshCrsForStaticCloud(opened);
+    expect(onFrameChange).toHaveBeenCalledTimes(1);
+    expect(onFrameChange.mock.calls.at(-1)![0]).toBe(opened);
+
+    h.coordinator.handleCrsOverride({ epsg: 32612, kind: 'projected' });
+    expect(onFrameChange).toHaveBeenCalledTimes(2);
+    expect(onFrameChange.mock.calls.at(-1)![0]).toBe(opened);
+
+    h.coordinator.handleCrsOverride({ epsg: null, kind: 'detected' });
+    expect(onFrameChange).toHaveBeenCalledTimes(3);
+    expect(onFrameChange.mock.calls.at(-1)![0]).toBe(opened);
+
+    h.coordinator.handleCrsOverride({ epsg: 32612, kind: 'projected' });
+    expect(onFrameChange).toHaveBeenCalledTimes(4);
+    expect(onFrameChange.mock.calls.at(-1)![0]).toBe(opened);
+  });
+
+  it('stays quiet when the frame does not move, and when the scan closes', () => {
+    const onFrameChange = vi.fn();
+    const h = harness({ activeId: 'cloud-1', onFrameChange });
+    const opened = phone();
+    h.coordinator.refreshCrsForStaticCloud(opened);
+    h.coordinator.refreshCrsForStaticCloud(opened); // the same frame again
+    expect(onFrameChange).toHaveBeenCalledTimes(1);
+    h.coordinator.clearDatasetKey();
+    h.service.clear();
+    expect(onFrameChange).toHaveBeenCalledTimes(1);
+  });
+
+  it('names the new scan when another scan resolves, so the old one is not re-measured', () => {
+    const onFrameChange = vi.fn();
+    const h = harness({ activeId: 'cloud-1', onFrameChange });
+    const first = phone();
+    h.coordinator.refreshCrsForStaticCloud(first);
+    const stream = { name: 'remote/scan.copc.laz', kind: 'copc' as const, crs: () => UTM12N, ...STREAM_FACTS };
+    h.coordinator.refreshCrsForStreamingCloud(stream);
+    expect(onFrameChange.mock.calls.at(-1)![0]).toBe(stream);
+  });
+
+  it('does not subscribe at all without the hook', () => {
+    const h = harness();
+    expect(h.service.subscriberCount()).toBe(0);
+  });
+
+  it('carries a metre pick to the Dataset Intelligence density, and "Use detected" back', () => {
+    const port = memoryPort();
+    const service = new CrsService(port);
+    const opened = phone();
+    const pushed: Array<{ bboxVolume?: number }> = [];
+    const inspector = {
+      setDatasetIntelligence: (s: { bboxVolume?: number }) => pushed.push(s),
+      clearDatasetIntelligence: vi.fn(),
+      setProvenance: vi.fn(),
+    } as never;
+    const cards = createInspectorCardRefreshers(inspector, () => service.context());
+    const coordinator = createCrsCoordinator({
+      crsService: service,
+      getViewer: () => ({ streamingCloud: null, getCloud: () => opened, setInspectCoordinateContext: vi.fn() }) as unknown as Viewer,
+      isViewerReady: () => true,
+      getActiveId: () => 'cloud-1',
+      debug: false,
+      onFrameChange: [(src) => cards.refreshDatasetIntelligenceForFrame(src)],
+    });
+    // The open: CRS first, then the card, as openScan orders them.
+    coordinator.refreshCrsForStaticCloud(opened);
+    cards.refreshDatasetIntelligenceFromStaticCloud(opened as never);
+    expect(pushed.at(-1)!.bboxVolume).toBeUndefined();
+
+    coordinator.handleCrsOverride({ epsg: 32612, kind: 'projected' });
+    expect(pushed.at(-1)!.bboxVolume).toBeCloseTo(100, 6); // 10 m x 10 m x 1 m
+
+    coordinator.handleCrsOverride({ epsg: null, kind: 'detected' });
+    expect(pushed.at(-1)!.bboxVolume).toBeUndefined();
+  });
+});
+
+describe('a frame change reaches every scan summary', () => {
+  it('a summary that throws does not stop the others', () => {
+    const seen: string[] = [];
+    const h = harness({ activeId: 'cloud-1' });
+    const service = h.service;
+    createCrsCoordinator({
+      crsService: service,
+      getViewer: () => h.viewer as unknown as Viewer,
+      isViewerReady: () => true,
+      getActiveId: () => 'cloud-1',
+      debug: false,
+      onFrameChange: [
+        () => { seen.push('card'); throw new Error('card failed'); },
+        () => { seen.push('report'); throw new Error('report failed'); },
+        () => { seen.push('project'); },
+      ],
+    }).refreshCrsForStaticCloud({ name: 'scan/phone.glb', metadata: { crs: null }, ...FACTS });
+    expect(seen).toEqual(['card', 'report', 'project']);
+  });
+
+  it('with two visible layers, the summaries run after the override has re-judged the layer flags', () => {
+    // A second layer is in EPSG:32612. Whether the two share a frame, and so
+    // both feed the gather a summary takes, is decided by onOverrideApplied
+    // (the shell's refreshCrsFlags). A summary run before it reads stale flags.
+    const otherLayerEpsg = 32612;
+    let shareFrame = false;
+    const seen: boolean[] = [];
+    const h = harness({
+      activeId: 'cloud-1',
+      onOverrideApplied: () => { shareFrame = h.service.current()?.epsg === otherLayerEpsg; },
+      onFrameChange: () => { seen.push(shareFrame); },
+    });
+    const opened = { name: 'scan/phone.ply', metadata: { crs: null }, ...FACTS };
+    h.viewer.getCloud.mockReturnValue(opened);
+    h.coordinator.refreshCrsForStaticCloud(opened);
+    expect(seen).toEqual([false]);
+    h.coordinator.handleCrsOverride({ epsg: 32612, kind: 'projected' });
+    expect(seen).toEqual([false, true]);
+    h.coordinator.handleCrsOverride({ epsg: null, kind: 'detected' });
+    expect(seen).toEqual([false, true, false]);
+  });
+
+  describe('the three real summaries, wired as the shell wires them', () => {
+    beforeAll(() => { installManualTimerDom(); });
+
+    it('a metre pick reaches the density, the object report and the Project card, and "Use detected" undoes all three', async () => {
+      const { ProjectCard } = await import('../src/ui/ProjectCard');
+      const { describeProjectSize } = await import('../src/render/camera/recommendView');
+      const { groundMetresPermitted } = await import('../src/geo/SpatialContext');
+      const { createScanRouteCoordinator, routeUnitFrame } = await import('../src/app/scanRouteCoordinator');
+      const { createScanRouteService } = await import('../src/app/ScanRouteService');
+
+      const service = new CrsService(memoryPort());
+      const opened = { name: 'scan/phone.glb', metadata: { crs: null }, ...FACTS };
+      const pushed: Array<{ bboxVolume?: number }> = [];
+      const cards = createInspectorCardRefreshers({
+        setDatasetIntelligence: (s: { bboxVolume?: number }) => pushed.push(s),
+        clearDatasetIntelligence: vi.fn(),
+        setProvenance: vi.fn(),
+      } as never, () => service.context());
+      const shownObjects: Array<[unknown, { linearUnit: { known: boolean } } | null]> = [];
+      const routing = createScanRouteService({ scanRoute: { overridden: false, typeOverride: 'auto' } } as never);
+      const box = new Float32Array(3000).map((_, i) => ((i * 7919) % 1000) / 1000);
+      const route = createScanRouteCoordinator({
+        routing,
+        geometry: { gatherForRouting: () => ({ positions: box, residentOnly: false, totalPoints: 1000 }), residentPointTotal: () => 1000, hasRgb: () => false },
+        frame: { ...routeUnitFrame(() => service.context(), () => service.current()), exportTargetId: () => 'cloud-1', crsRevision: () => service.crsRevision(), basename: () => 'phone' },
+        verdict: { get: () => null, set: () => {} },
+        view: {
+          setObjectScanType: vi.fn(), setAnalyseScanType: vi.fn(), showSpace: vi.fn(),
+          showObject: (o, s) => { shownObjects.push([o, s as never]); },
+          setObjectVisible: vi.fn(), setAnalyseVisible: vi.fn(), setDockAnalyse: vi.fn(), expandAnalyseAndRunTerrain: vi.fn(),
+        },
+        classify: () => ({ nonTerrain: true, spaceKind: 'object', up: 'z', aspect: 1, overhangFraction: 0, wallCoverage: 0, floorCoverage: 0, ceilingCoverage: 0, topVegFraction: 0, reasons: [] }) as never,
+      });
+      const card = new ProjectCard();
+      const b = opened.bounds() as { min: [number, number, number]; max: [number, number, number] };
+      const sizeIn = () => {
+        const f = service.context();
+        return describeProjectSize(b.min, b.max, { upAxis: f.upAxis, linearUnitKnown: groundMetresPermitted(f), linearUnitToMetres: f.linearUnitToMetres });
+      };
+      const coordinator = createCrsCoordinator({
+        crsService: service,
+        getViewer: () => ({ streamingCloud: null, getCloud: () => opened, setInspectCoordinateContext: vi.fn() }) as unknown as Viewer,
+        isViewerReady: () => true,
+        getActiveId: () => 'cloud-1',
+        debug: false,
+        onFrameChange: [(src) => cards.refreshDatasetIntelligenceForFrame(src), () => route.remeasureForFrame(), (src) => card.remeasure(src)],
+      });
+
+      coordinator.refreshCrsForStaticCloud(opened);
+      cards.refreshDatasetIntelligenceFromStaticCloud(opened as never);
+      route.beginScan(true);
+      card.show({ name: opened.name, format: 'glb', shownCount: 1000, totalCount: 1000, ...sizeIn(), hasRgb: false, hasIntensity: false, hasClassification: false, source: opened, remeasure: sizeIn });
+      const size = () => (card.element as unknown as { textContent: string }).textContent;
+      expect(pushed.at(-1)!.bboxVolume).toBeUndefined();
+      expect(shownObjects.at(-1)![1]!.linearUnit.known).toBe(false);
+      expect(size()).toContain('source units');
+
+      coordinator.handleCrsOverride({ epsg: 32612, kind: 'projected' });
+      expect(pushed.at(-1)!.bboxVolume).toBeCloseTo(100, 6);
+      expect(shownObjects.at(-1)![1]!.linearUnit.known).toBe(true);
+      expect(size()).toContain('10.0 × 10.0 × 1.0 m');
+
+      coordinator.handleCrsOverride({ epsg: null, kind: 'detected' });
+      expect(pushed.at(-1)!.bboxVolume).toBeUndefined();
+      expect(shownObjects.at(-1)![1]!.linearUnit.known).toBe(false);
+      expect(size()).toContain('source units');
+    });
+  });
+});
+
+describe('main.ts hands every frame change to the three scan summaries', () => {
+  // main.ts cannot be loaded in Node, so this one fact is read from its text:
+  // the coordinator's handler list names each summary once.
+  const main = readFileSync(new URL('../src/main.ts', import.meta.url), 'utf8');
+
+  it('the coordinator gets one handler per summary', () => {
+    const list = /onFrameChange: \[([^\]]*)\]/.exec(main);
+    expect(list, 'createCrsCoordinator gets an onFrameChange list').not.toBeNull();
+    expect(list![1]).toContain('inspectorCards.refreshDatasetIntelligenceForFrame(src)');
+    expect(list![1]).toContain('routeCoordinator.remeasureForFrame()');
+    expect(list![1]).toContain('projectCard.remeasure(src)');
   });
 });
