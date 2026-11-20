@@ -49,6 +49,8 @@ export interface AxisPlanInput {
  */
 export function hasEstablishedCrs(crs: CrsInfo | ResolvedCrs | null | undefined): boolean {
   if (crs == null) return false;
+  // Local metres a format specification states (a glTF or E57 with no CRS).
+  if (crs.formatSpecification) return false;
   if (crs.epsg != null || crs.verticalEpsg != null) return true;
   if (typeof crs.wkt === 'string' && crs.wkt.trim() !== '') return true;
   if ('kind' in crs) return crs.kind === 'projected' || crs.kind === 'geographic' || crs.kind === 'geocentric';

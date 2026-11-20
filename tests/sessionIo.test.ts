@@ -755,6 +755,13 @@ describe('importSession — persisted user CRS override round-trip (FIX 2)', () 
     expect(detected?.epsg).toBe(32614);
   });
 
+  it('Test 9 — a confirmed override whose EPSG is out of range is not restored', async () => {
+    const { deps, calls } = makeDeps({ streaming: loaded() });
+    await importSession(asFile(sessionJson({ crs: userOverride({ epsg: 163684 }), scanSummary: strongSummary() })), {}, deps);
+    expect(calls.loadMeasurements).toHaveBeenCalled();
+    expect(calls.setCrsOverride).not.toHaveBeenCalled();
+  });
+
   describe('a CRS the session names but the user did not confirm', () => {
     const foot = (over: Partial<ResolvedCrs> = {}): ResolvedCrs =>
       baseCrs({ epsg: 2225, name: 'NAD83 / California zone 1 (ftUS)', linearUnit: 'us-survey-foot', linearUnitToMetres: 0.3048006096012192, ...over });

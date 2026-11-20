@@ -38,6 +38,7 @@ import {
   type WktNode,
 } from './wktParser';
 import { getCrsEntry } from '../geo/CrsRegistry';
+import { epsgCrsKind } from '../convert/epsg';
 import { knownVerticalCrs, resolveVerticalEpsg, sameDatumVariantInUnit } from '../geo/height';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -57,7 +58,7 @@ const GEOTIFF_LINEAR_UNITS: Readonly<Record<number, CrsLinearUnit>> = {
 /** What we extract from the VLRs. All fields optional — a header may carry one and not others. */
 export interface CrsInfo {
   /** Where the metadata came from — diagnostic, surfaced in the Scan Report. */
-  readonly source: 'wkt' | 'geotiff' | 'epsg';
+  readonly source: 'wkt' | 'geotiff' | 'epsg' | 'format-specification';
   /** Raw WKT string (when source is `wkt`) — kept so the UI can show it on request. */
   readonly wkt?: string;
   /** Best-effort human label, e.g. "WGS 84 / UTM zone 12N" or "EPSG:32612". */
@@ -76,8 +77,31 @@ export interface CrsInfo {
    * unknown one whose `linearUnitToMetres` is only the inert placeholder 1.
    */
   readonly linearUnitByFactor?: true;
-  /** Set when the horizontal unit's name disagrees with its factor, or is not one of the named units. */
+  /**
+   * Why the horizontal unit reads as it does, or why it is withheld. Set when
+   * the unit's name disagrees with its factor, or is not one of the named
+   * units; and when GeoKeys contradict the CRS code: a ProjLinearUnitsGeoKey
+   * (3076) that names another unit than the EPSG code defines, or a
+   * ProjectedCRSGeoKey (3072) holding a code the EPSG table says is not
+   * projected. In those two cases `linearUnit` is 'unknown' with the
+   * placeholder factor 1, so metric claims are withheld. The Inspector shows
+   * the note.
+   */
   readonly linearUnitNote?: string;
+  /**
+   * The unit GeoTIFF ProjLinearUnitsGeoKey (3076) declares, as the file states
+   * it ('unknown' for a unit code other than 9001, 9002 or 9003); absent when
+   * the file has no 3076. Kept apart from `linearUnit`, and from
+   * GeogLinearUnitsGeoKey (2052), so a CRS chosen for the file's code can be
+   * checked against the unit key the file carries.
+   */
+  readonly projLinearUnitsKey?: CrsLinearUnit;
+  /**
+   * Set when the file declares no CRS and its format specification gives the
+   * unit: local coordinates in metres (see `formatSpecificationCrs`). Not a
+   * georeference, and not a named local frame.
+   */
+  readonly formatSpecification?: 'glTF' | 'E57';
   /** Whether the CRS is geographic (lat/lon in degrees) vs projected (metres on a plane). */
   readonly isGeographic: boolean;
   /**
@@ -595,10 +619,11 @@ function trimWkt(wkt: string): string {
  * compound's vertical clauses out of the horizontal read — the two failure
  * modes a flat regex cannot avoid.
  *
- * Resolution SEMANTICS are unchanged from the prior regex implementation: a
- * projected CRS with no UNIT clause defaults to metre (the WKT default), an
- * unrecognised linear-unit name resolves to `unknown` (fail-closed), and only
- * the horizontal slice of a compound CRS decides name / EPSG / unit.
+ * Resolution rules: a projected CRS with no UNIT clause of its own (a unit
+ * inside its base GEOGCS, projection or parameters does not count) takes the
+ * unit its EPSG code defines, or `unknown`, never an assumed metre; a unit is
+ * read from its factor, not its name; and only the horizontal slice of a
+ * compound CRS decides name / EPSG / unit.
  */
 export function crsFromWkt(wkt: string): CrsInfo {
   const text = trimWkt(wkt);
@@ -658,7 +683,8 @@ export function crsFromWkt(wkt: string): CrsInfo {
   // Linear units. A projected WKT typically contains TWO UNIT clauses:
   // an angular one inside the nested GEOGCS (e.g. degrees), then the
   // projected linear one at the top level (metres / feet / etc.). We need
-  // the LAST one in the horizontal slice for projected CRSs. For geographic
+  // the LAST one in the horizontal slice that is not inside the base GEOGCS,
+  // the projection or its parameters (see lastLinearUnit). For geographic
   // CRSs the unit is degrees and the "linear" field falls back to 'unknown'.
   const projectedPresent = horizNodes.some((n) => isProjectedKeyword(n.keyword));
   // A geodetic root is geocentric (Cartesian X/Y/Z from the Earth's centre) or,
@@ -1002,13 +1028,27 @@ function firstNumericArg(node: WktNode): number | undefined {
 }
 
 /**
+ * Clauses whose units are not the projected CRS's own: the base geographic CRS
+ * (its angular unit, its ellipsoid's length unit), and the projection and its
+ * parameters (a false easting in metres on a foot grid).
+ */
+const FOREIGN_UNIT_SCOPES: ReadonlySet<string> = new Set([
+  'GEOGCS', 'GEOGCRS', 'GEOGRAPHICCRS', 'BASEGEOGCRS', 'BASEGEODCRS', 'PARAMETER', 'CONVERSION', 'PROJECTION',
+]);
+
+/**
  * The LAST linear unit clause among `candidates` (document order), returning
  * its name + scale. WKT1 `UNIT` and WKT2 `LENGTHUNIT` are read; `ANGLEUNIT` is
  * not. A node qualifies only when it has a quoted name and a numeric scale.
  * The caller passes the horizontal slice of a tree whose BOUNDCRS wrappers were
  * already reduced to their source CRS, so a target CRS's unit is never seen.
+ * A unit inside a {@link FOREIGN_UNIT_SCOPES} clause is skipped: a WKT1 PROJCS
+ * with no UNIT of its own otherwise took its GEOGCS degree as a linear unit.
  */
 function lastLinearUnit(candidates: readonly WktNode[]): { name: string; scale: number } | undefined {
+  const scopes = candidates.filter((n) => FOREIGN_UNIT_SCOPES.has(n.keyword));
+  const inForeignScope = (n: WktNode): boolean =>
+    scopes.some((s) => s.start < n.start && n.start < (s.end ?? Infinity));
   let result: { name: string; scale: number } | undefined;
   for (const n of candidates) {
     // WKT1 spells the unit `UNIT[...]`; WKT2 (ISO 19162, emitted by modern
@@ -1016,6 +1056,7 @@ function lastLinearUnit(candidates: readonly WktNode[]): { name: string; scale: 
     // only `UNIT` silently dropped a declared foot unit and defaulted to metre,
     // reporting every distance 3.28x too small on a WKT2 foot-CRS file.
     if (n.keyword !== 'UNIT' && n.keyword !== 'LENGTHUNIT') continue;
+    if (inForeignScope(n)) continue;
     const name = wktNodeName(n);
     if (name === undefined) continue;
     const scale = wktFirstNumber(n);
@@ -1105,7 +1146,8 @@ export function crsFromGeoTiff(
   let projectedCitationCount: number | undefined;
   let geodeticCitationOffset: number | undefined;
   let geodeticCitationCount: number | undefined;
-  let linearUnitCode: number | undefined;
+  let projLinearUnitCode: number | undefined;
+  let geogLinearUnitCode: number | undefined;
   let verticalCrs: number | undefined;
   let verticalUnitCode: number | undefined;
   let verticalCitationOffset: number | undefined;
@@ -1141,8 +1183,10 @@ export function crsFromGeoTiff(
         }
         break;
       case GEOKEY_PROJ_LINEAR_UNITS:
+        projLinearUnitCode = value;
+        break;
       case GEOKEY_GEOGRAPHIC_LINEAR_UNITS:
-        linearUnitCode = value;
+        geogLinearUnitCode = value;
         break;
       case GEOKEY_VERTICAL_CRS:
         verticalCrs = value;
@@ -1210,22 +1254,42 @@ export function crsFromGeoTiff(
     geodeticCitationCount,
   );
 
+  // GeogLinearUnitsGeoKey (2052) is the linear unit of a geographic or
+  // geocentric CRS. A projected CRS's unit is ProjLinearUnitsGeoKey (3076)
+  // alone: a 2229 file (US survey feet) with only 2052=9001 read as metres.
+  const linearUnitCode = isGeographic || geocentric ? projLinearUnitCode ?? geogLinearUnitCode : projLinearUnitCode;
   const mappedUnit = linearUnitCode !== undefined ? GEOTIFF_LINEAR_UNITS[linearUnitCode] : undefined;
   // Declaring nothing and declaring something we cannot resolve are different
-  // facts and must not resolve alike. With no ProjLinearUnitsGeoKey the
-  // GeoTIFF default applies and a projected CRS is metres. With a key present
-  // whose code is outside our table — 9095 British foot, say — the file has
-  // stated a unit we cannot honour, and answering 'metre' presented every
-  // length from it as metres and was wrong by the unit's own factor. 'unknown'
-  // is what the downstream `linearUnit !== 'unknown'` gates read to refuse.
+  // facts and must not resolve alike. With a key present whose code is
+  // outside our table — 9095 British foot, say — the file has stated a unit we
+  // cannot honour, and answering 'metre' presented every length from it as
+  // metres and was wrong by the unit's own factor. 'unknown' is what the
+  // downstream `linearUnit !== 'unknown'` gates read to refuse.
   //
   // With no key at all, the unit is the one the EPSG code defines, not an
   // assumed metre: EPSG:2264 is in US survey feet. impliedProjectedLinearUnit
-  // answers from the curated registry and a whitelist of metre families, and
-  // 'unknown' for any other code.
+  // answers from the EPSG table, and 'unknown' for a code it cannot vouch for.
+  //
+  // A 3076 that names another unit than the projected code defines is a
+  // contradiction no reader can settle (3072=2229 with 3076=9001 is either a
+  // foot grid mislabelled metres or the reverse, 3.28x apart). The unit is
+  // withheld and the note says why.
   const declaredButUnresolved = linearUnitCode !== undefined && mappedUnit === undefined;
+  const code = isGeographic || geocentric ? undefined : epsgCrsKind(epsg);
+  const codeUnit = code?.kind === 'projected' ? code.unit : null;
   let linearUnit: CrsLinearUnit;
-  if (mappedUnit !== undefined) linearUnit = mappedUnit;
+  let linearUnitNote: string | undefined;
+  // A 3072 that holds a code the table knows is not projected (4326, 4269,
+  // the vertical 5703) names no projected CRS, so no unit is read for it: a
+  // 3076=9001 beside it read degrees as metres.
+  const codeNotProjected = code !== undefined && projected !== undefined && code.kind !== 'unknown' && code.kind !== 'projected';
+  if (codeNotProjected) {
+    linearUnit = 'unknown';
+    linearUnitNote = `ProjectedCRSGeoKey (3072) holds EPSG:${epsg}, ${code.kind === 'engineering' ? 'an' : 'a'} ${code.kind} CRS, not a projected one; the linear unit is withheld`;
+  } else if (mappedUnit !== undefined && codeUnit !== null && codeUnit !== mappedUnit) {
+    linearUnit = 'unknown';
+    linearUnitNote = unitKeyContradictionNote('ProjLinearUnitsGeoKey (3076)', mappedUnit, epsg, codeUnit);
+  } else if (mappedUnit !== undefined) linearUnit = mappedUnit;
   else if (isGeographic || declaredButUnresolved) linearUnit = 'unknown';
   else linearUnit = impliedProjectedLinearUnit(epsg);
   const linearUnitToMetres = metresPerLinearUnit(linearUnit);
@@ -1294,12 +1358,32 @@ export function crsFromGeoTiff(
     epsg,
     linearUnit,
     linearUnitToMetres,
+    ...(linearUnitNote ? { linearUnitNote } : {}),
+    ...(projLinearUnitCode !== undefined ? { projLinearUnitsKey: GEOTIFF_LINEAR_UNITS[projLinearUnitCode] ?? 'unknown' } : {}),
     isGeographic,
     verticalEpsg,
     verticalDatum,
     ...verticalUnitFields(vUnit),
     ...(geocentric ? { geocentric: true } : {}),
   };
+}
+
+/** A named linear unit as a unit note names it. */
+const UNIT_WORDS: Readonly<Partial<Record<string, string>>> = {
+  metre: 'metres',
+  foot: 'international feet',
+  'us-survey-foot': 'US survey feet',
+};
+
+/**
+ * The note for a unit key that names another unit than the EPSG code defines:
+ * `who` is the key as the note names it, `declared` its unit, `codeUnit` the
+ * unit the code is defined in ('unknown' or 'other' for any unit that is not
+ * metres or feet).
+ */
+export function unitKeyContradictionNote(who: string, declared: string, epsg: number | undefined, codeUnit: string): string {
+  const other = 'a unit other than metres or feet';
+  return `${who} declares ${UNIT_WORDS[declared] ?? other}, but EPSG:${epsg} is defined in ${UNIT_WORDS[codeUnit] ?? other}; the linear unit is withheld`;
 }
 
 /** Parameters for {@link crsFromEpsg}. */
@@ -1407,49 +1491,26 @@ function readGeoTiffCitation(
 // ─────────────────────────────────────────────────────────────────────────────
 
 /**
- * Projected EPSG ranges whose axes are metres by the EPSG definition. Every
- * range was checked against the EPSG dataset (proj.db): each code in it
- * exists and its first axis unit is EPSG 9001, metre. A range must never span
- * a code in feet, since that code would then be read 3.28x wrong in silence.
- * Anything outside these and outside the curated registry has no unit we can
- * vouch for.
- */
-const METRE_PROJECTED_RANGES: readonly (readonly [number, number])[] = [
-  [32601, 32660], // WGS 84 / UTM zones 1N-60N
-  [32701, 32760], // WGS 84 / UTM zones 1S-60S
-  [26901, 26923], // NAD83 / UTM zones 1N-23N
-  [26701, 26722], // NAD27 / UTM zones 1N-22N
-  [6330, 6348], // NAD83(2011) / UTM zones 1N-19N
-  [2955, 2962], // NAD83(CSRS) / UTM zones 11N-21N
-  [3154, 3160], // NAD83(CSRS) / UTM zones 7N-16N
-  [25828, 25838], // ETRS89 / UTM zones 28N-38N
-  [3034, 3035], // ETRS89-extended / LCC Europe, LAEA Europe
-  [28348, 28358], // GDA94 / MGA zones 48-58
-  [7846, 7859], // GDA2020 / MGA zones 46-59
-  [3006, 3018], // SWEREF99 TM and the SWEREF99 local zones
-  [31466, 31469], // DHDN / 3-degree Gauss-Kruger zones 2-5
-  [31254, 31259], // MGI / Austria GK West .. M34
-  [31284, 31287], // MGI / Austria M28, M31, M34, Lambert
-  [3857, 3857], // WGS 84 / Pseudo-Mercator
-  [27700, 27700], // OSGB36 / British National Grid
-  [28992, 28992], // Amersfoort / RD New
-  [2154, 2154], // RGF93 v1 / Lambert-93
-  [2193, 2193], // NZGD2000 / NZTM 2000
-];
-
-/**
  * The linear unit a projected EPSG code defines when the source states no unit
- * of its own: the curated registry's unit for a registered code (metre unless
- * the entry says otherwise), metre for the whitelisted metre families, and
- * 'unknown' for everything else. A code like 2264 (NAD83 / North Carolina ftUS)
- * is in US survey feet; assuming metres there was wrong by 3.28x, so an
- * unrecognised code is never presumed metric.
+ * of its own, read from the EPSG table (`epsgCrsKind`, the same table the
+ * override path reads): metre, international foot or US survey foot. A code
+ * in any other unit, a code that is not projected, and a code the table does
+ * not hold are 'unknown'. A code like 2264 (NAD83 / North Carolina ftUS) is
+ * in US survey feet; assuming metres there was wrong by 3.28x, so no code is
+ * presumed metric. Web Mercator (3857) is metres here; the measurement
+ * verdict refuses its grid metres separately.
  */
 export function impliedProjectedLinearUnit(epsg: number | undefined): CrsLinearUnit {
-  if (epsg === undefined) return 'unknown';
-  const entry = getCrsEntry(epsg);
-  if (entry && entry.kind !== 'geographic') return entry.linearUnit ?? 'metre';
-  return METRE_PROJECTED_RANGES.some(([lo, hi]) => epsg >= lo && epsg <= hi) ? 'metre' : 'unknown';
+  const code = epsgCrsKind(epsg);
+  if (code.kind !== 'projected') return 'unknown';
+  switch (code.unit) {
+    case 'metre':
+    case 'foot':
+    case 'us-survey-foot':
+      return code.unit;
+    default:
+      return 'unknown';
+  }
 }
 
 /** Map a metres-per-unit factor back to the unit token, or undefined if it is not one we name. */

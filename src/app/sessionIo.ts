@@ -26,7 +26,10 @@ import type { WorkplaneSettings } from '../model/workplaneSettings';
 import type { PointCloud } from '../model/PointCloud';
 import type { ViewBookmarksService } from './viewBookmarks';
 import type { CrsService } from '../geo/CrsService';
-import type { ResolvedCrs } from '../geo/CoordinateTypes';
+import { isLinearUnitKnown, resolvedFromCrsInfo, type ResolvedCrs } from '../geo/CoordinateTypes';
+import { isLocalLinearUnit, type LocalLinearUnit } from '../geo/CrsOverrideStore';
+import { metresPerLinearUnit } from '../io/crs';
+import { epsgCrsKind, type EpsgCrsKind } from '../convert/epsg';
 import type { ViewStateBundle } from '../io/viewState';
 import { buildViewState } from '../io/viewState';
 import { isExportStale, staleExportReason } from '../export/exportStaleness';
@@ -173,6 +176,12 @@ export interface SessionIoDeps {
   /** Restore the author's CRS override (`crsService.setOverride`). */
   setCrsOverride: (args: Parameters<CrsService['setOverride']>[0]) => ResolvedCrs | null;
   /**
+   * The active scan's CRS before the restore (`crsService.current()`). The
+   * notice says when the restore changed it. Absent: the scan's own declared
+   * CRS stands in for it when the record is complete.
+   */
+  currentCrs?: () => ResolvedCrs | null;
+  /**
    * Ask before the file replaces measurements, annotations or saved views that
    * are already open. Absent: nothing is asked.
    */
@@ -280,10 +289,65 @@ export function appliedCrsSentence(crs: ResolvedCrs): string {
   const raw = (crs.name ?? '').replace(/\s+/g, ' ').trim();
   const name = raw.length > CRS_NOTICE_NAME_MAX ? `${raw.slice(0, CRS_NOTICE_NAME_MAX - 1)}…` : raw;
   const unit = CRS_UNIT_WORDS[crs.linearUnit] ?? 'linear unit not declared';
-  const label = crs.kind === 'local'
+  // A local choice in a declared unit already names it ("Local coordinates in
+  // metres (no CRS)").
+  const label = crs.kind === 'local' && CRS_UNIT_WORDS[crs.linearUnit] !== undefined && name.includes(unit)
+    ? name
+    : crs.kind === 'local'
     ? `${name || 'Local coordinates'} (no EPSG code; ${unit})`
     : `${name || (crs.epsg != null ? `EPSG:${crs.epsg}` : 'an unnamed coordinate system')}${crs.epsg != null && !name.includes(String(crs.epsg)) ? ` [EPSG:${crs.epsg}]` : ''} (${unit})`;
   return `This session set the coordinate system to ${label}. It applies to this scan for now and is not saved on this device.`;
+}
+
+/**
+ * The unit of a session's local CRS to restore: one of the three units the
+ * picker offers, and only when the factor recorded with it is that unit's. A
+ * local frame without one, or with a factor that does not match its unit,
+ * restores without a unit, so its metric figures stay withheld.
+ */
+function sessionLocalUnit(crs: ResolvedCrs): LocalLinearUnit | undefined {
+  const u = crs.linearUnit;
+  return isLocalLinearUnit(u) && Math.abs(metresPerLinearUnit(u) - crs.linearUnitToMetres) < 1e-12 ? u : undefined;
+}
+
+/**
+ * Whether two resolved CRSs mean the same coordinates: kind, code and linear
+ * unit. The source and the name may differ (a format specification's metres
+ * and the user's local metres are one frame).
+ */
+function sameActiveCrs(a: ResolvedCrs | null, b: ResolvedCrs): boolean {
+  if (!a) return false;
+  const unit = (c: ResolvedCrs): string => (isLinearUnitKnown(c) ? `${c.linearUnit}:${c.linearUnitToMetres}` : 'none');
+  return a.kind === b.kind && a.epsg === b.epsg && unit(a) === unit(b);
+}
+
+/** A CRS named for a notice: its name, capped, with its EPSG code when the name lacks it. */
+function noticeCrsLabel(name: string | undefined, epsg: number | undefined): string {
+  const raw = (name ?? '').replace(/\s+/g, ' ').trim();
+  const capped = raw.length > CRS_NOTICE_NAME_MAX ? `${raw.slice(0, CRS_NOTICE_NAME_MAX - 1)}…` : raw;
+  if (!capped) return epsg != null ? `EPSG:${epsg}` : 'an unnamed coordinate system';
+  return epsg != null && !capped.includes(String(epsg)) ? `${capped} [EPSG:${epsg}]` : capped;
+}
+
+/**
+ * The sentence for a session CRS of another kind than the scan's declared
+ * CRS: both are named, and the scan's is the one in use.
+ */
+export function kindConflictSentence(
+  scan: { readonly name?: string; readonly epsg?: number; readonly isGeographic?: boolean; readonly geocentric?: boolean } | undefined,
+  session: ResolvedCrs,
+  /** The kind the EPSG table gives the session's code. */
+  tableKind: EpsgCrsKind,
+): string {
+  const scanKind = scan?.geocentric ? 'geocentric' : scan?.isGeographic ? 'geographic' : 'projected';
+  const lead = `This session's coordinate system, ${noticeCrsLabel(session.name, session.epsg)} (${session.kind}), was not applied ` +
+    `because the scan declares a ${scanKind} one, ${noticeCrsLabel(scan?.name, scan?.epsg)}, which stays in use.`;
+  if (tableKind === session.kind) return lead;
+  // Why no action is offered: the code is not of the kind the session names.
+  if (tableKind === 'unknown') {
+    return `${lead} EPSG:${session.epsg} is not in the EPSG tables this app holds, so its kind cannot be checked.`;
+  }
+  return `${lead} EPSG:${session.epsg} is ${tableKind === 'engineering' ? 'an' : 'a'} ${tableKind} CRS, not a ${session.kind} one.`;
 }
 
 /**
@@ -304,7 +368,7 @@ export async function importSession(
   // The coordinate-system disclosure, held until the final toast: the toast host
   // shows one message at a time, so a notice shown earlier is replaced by the
   // restore toast before it can be read.
-  let crsNotice: { readonly text: string; readonly action: { readonly label: string; readonly onClick: () => void } } | null = null;
+  let crsNotice: { readonly text: string; readonly action?: { readonly label: string; readonly onClick: () => void } } | null = null;
   try {
     // A shared `.olvsession` is untrusted; reject an over-large file up front,
     // before it is read, so `JSON.parse` of the whole text can't exhaust memory.
@@ -344,6 +408,10 @@ export async function importSession(
     // is nothing to rebase against; keep the verbatim geometry (the missing-
     // scan toast below already tells the user to drop the scan).
     const haveCloud = viewer.clouds().length > 0 || viewer.hasStreamingCloud;
+    // A session CRS of another kind than the scan's own declared CRS. It
+    // refuses the session's CRS, never its work: the work restores under the
+    // scan's CRS and the notice offers the session's.
+    let kindConflict = false;
     // Capture the scan this import matches against, re-checked before we attach
     // state. A session restore routes ahead of the loading guard, so a scan
     // swapped in mid-import must not inherit another scan's measurements.
@@ -429,7 +497,11 @@ export async function importSession(
       // structurally usable override (local, or projected/geographic with a
       // finite EPSG) — and let a crs/unit conflict through. An UP-AXIS conflict is
       // a different, harder failure (a CRS picker never rotates geometry) and is
-      // NEVER waved through; every other case keeps the existing hard refusal.
+      // NEVER waved through. A KIND conflict (the user's projected or
+      // geographic CRS over a file that declares another kind) is not a
+      // refusal of the session: its CRS is not applied, the work is, and the
+      // notice offers the session's CRS. Every other case keeps the existing
+      // hard refusal.
       const persistedOverride =
         match?.verdict === 'strong' &&
         !!session.crs &&
@@ -438,7 +510,8 @@ export async function importSession(
         (session.crs.kind === 'local' ||
           ((session.crs.kind === 'projected' || session.crs.kind === 'geographic') &&
             Number.isFinite(session.crs.epsg)));
-      if (spatial.hasConflict) {
+      kindConflict = spatial.conflicts.some((c) => c.field === 'kind');
+      if (spatial.conflicts.some((c) => c.field !== 'kind')) {
         const axisConflict = spatial.conflicts.some((c) => c.field === 'axis');
         if (!(persistedOverride && !axisConflict)) {
           const why = spatial.conflicts.map((c) => c.reason).join('; ');
@@ -566,8 +639,9 @@ export async function importSession(
     ) {
       const activeStreaming = viewer.streamingCloud;
       const activeStaticId = deps.getActiveScanId();
+      const localUnit = sessionCrs.kind === 'local' ? sessionLocalUnit(sessionCrs) : undefined;
       const override = {
-        override: { epsg: sessionCrs.epsg ?? null, kind: sessionCrs.kind },
+        override: { epsg: sessionCrs.epsg ?? null, kind: sessionCrs.kind, ...(localUnit ? { localUnit } : {}) },
         detected: activeStreaming
           ? activeStreaming.crs() ?? undefined
           : activeStaticId
@@ -576,32 +650,59 @@ export async function importSession(
         source: 'user-override' as const,
       };
       const declared = declaredSpatialForActiveScan(viewer, deps);
+      // The action applies the session's CRS the way an Inspector pick does.
+      const applySessionCrs = (): void => {
+        if (viewer.streamingCloud === activeStreaming && deps.getActiveScanId() === activeStaticId) {
+          deps.setCrsOverride({ ...override, persist: true });
+        }
+      };
+      if (kindConflict) {
+        // The action is offered only when the EPSG table gives the code the
+        // session's kind: applied otherwise, it would store an unknown CRS for
+        // the scan, which every later open would then show.
+        const tableKind = epsgCrsKind(sessionCrs.epsg).kind;
+        crsNotice = {
+          text: ` ${kindConflictSentence(override.detected, sessionCrs, tableKind)}`,
+          ...(tableKind === sessionCrs.kind ? { action: { label: 'Use session CRS', onClick: applySessionCrs } } : {}),
+        };
+      }
       // What the service actually applied, not what the file claims: the notice
       // names this, and nothing is claimed when nothing was applied (null).
-      const appliedCrs = deps.setCrsOverride({ ...override, persist: false });
+      // The CRS in use before the restore, so the notice can say whether the
+      // restore changed it.
+      const before = deps.currentCrs
+        ? deps.currentCrs()
+        : typeof override.detected?.isGeographic === 'boolean' ? resolvedFromCrsInfo(override.detected, 'las-vlr') : undefined;
+      const appliedCrs = kindConflict ? null : deps.setCrsOverride({ ...override, persist: false });
       // A local choice matches the file only when the file declares neither a
       // code nor a linear unit: a declared unit with no EPSG is still a
-      // coordinate system the session has replaced.
+      // coordinate system the session has replaced. A code matches only with
+      // its kind: the same code applied as another kind (a file whose GeoKeys
+      // contradict their code) is a changed CRS, and the user is told.
       const sameAsFile =
         sessionCrs.kind === 'local'
-          ? declared.epsg === undefined
-            && declared.linearUnitToMetres === undefined
-            && (declared.linearUnit === undefined || declared.linearUnit === 'unknown')
+          ? declared.epsg === undefined && (localUnit
+            ? declared.linearUnit === localUnit && declared.linearUnitToMetres === metresPerLinearUnit(localUnit)
+            : declared.linearUnitToMetres === undefined
+              && (declared.linearUnit === undefined || declared.linearUnit === 'unknown'))
           : declared.epsg === sessionCrs.epsg &&
+            (declared.kind === undefined || declared.kind === (appliedCrs?.kind ?? sessionCrs.kind)) &&
             (declared.linearUnitToMetres === undefined || declared.linearUnitToMetres === sessionCrs.linearUnitToMetres);
-      if (!sameAsFile && appliedCrs) {
-        crsNotice = {
-          text: ` ${appliedCrsSentence(appliedCrs)}`,
-          action: {
-            label: 'Keep',
-            // Only for the scan it was applied to: the override acts on whichever scan is active.
-            onClick: () => {
-              if (viewer.streamingCloud === activeStreaming && deps.getActiveScanId() === activeStaticId) {
-                deps.setCrsOverride({ ...override, persist: true });
-              }
-            },
-          },
-        };
+      // Against the CRS in use before, when it is known: a restore that changes
+      // the active CRS says so, and one that changes nothing stays quiet (a
+      // GLB's specification metres and a session's local metres are the same).
+      // The file's declaration decides only when that CRS is not known.
+      const unchanged = before !== undefined && appliedCrs ? sameActiveCrs(before, appliedCrs) : sameAsFile;
+      if (!unchanged && appliedCrs) {
+        // Only for the scan it was applied to: the override acts on whichever scan is active.
+        crsNotice = { text: ` ${appliedCrsSentence(appliedCrs)}`, action: { label: 'Keep', onClick: applySessionCrs } };
+      }
+      // A local unit the session names but could not restore is said, not dropped in silence.
+      const droppedUnit = sessionCrs.kind === 'local' && !localUnit ? CRS_UNIT_WORDS[sessionCrs.linearUnit] : undefined;
+      if (droppedUnit !== undefined) {
+        const clause = ` This session's unit for local coordinates, ${droppedUnit}, was not restored because the factor saved with it ` +
+          `(${Number(sessionCrs.linearUnitToMetres.toPrecision(6))} m per unit) does not match that unit, so metric figures stay withheld.`;
+        crsNotice = crsNotice ? { ...crsNotice, text: `${crsNotice.text}${clause}` } : { text: clause };
       }
     }
 

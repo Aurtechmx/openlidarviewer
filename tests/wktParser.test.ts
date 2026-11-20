@@ -184,9 +184,9 @@ const cases: Case[] = [
     epsg: 32612, isGeographic: false, linearUnit: 'metre',
   },
   {
-    title: 'missing UNIT on an unrecognised projected code is unknown (EPSG:2264 is ftUS)',
+    title: 'missing UNIT takes the unit the EPSG table gives the code (EPSG:2264 is ftUS)',
     wkt: 'PROJCS["NAD83 / North Carolina (ftUS)",AUTHORITY["EPSG","2264"]]',
-    epsg: 2264, isGeographic: false, linearUnit: 'unknown',
+    epsg: 2264, isGeographic: false, linearUnit: 'us-survey-foot',
   },
   {
     title: 'unknown unit NAME resolves to unknown (fail-closed), scale kept',

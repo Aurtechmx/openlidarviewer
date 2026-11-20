@@ -68,6 +68,7 @@ const CRS_SOURCE: Readonly<Record<string, string>> = {
   'tileset-region': 'from the tileset region',
   'catalog-tile': 'asserted by the catalogue',
   'user-override': 'set by you',
+  'format-specification': 'from the format specification',
   'default-assumption': 'assumed',
 };
 
@@ -99,7 +100,11 @@ export function crsText(c: ResolvedCrs | null): string {
   if (!c) return 'No coordinate reference system';
   const code = c.epsg != null ? `EPSG:${c.epsg}` : null;
   const name = code && !c.name.includes(code) ? `${c.name} (${code})` : c.name;
-  const src = c.source === 'catalog-tile' && c.assertedBy ? `asserted by ${c.assertedBy}` : CRS_SOURCE[c.source] ?? c.source;
+  const src = c.source === 'catalog-tile' && c.assertedBy
+    ? `asserted by ${c.assertedBy}`
+    : c.source === 'format-specification' && c.formatSpecification
+      ? `from the ${c.formatSpecification} specification`
+      : CRS_SOURCE[c.source] ?? c.source;
   return `${name}, ${src}${c.userConfirmed && c.source !== 'user-override' ? ', confirmed' : ''}`;
 }
 

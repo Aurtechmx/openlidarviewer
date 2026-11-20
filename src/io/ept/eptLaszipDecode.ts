@@ -41,7 +41,7 @@
  * promise (cached after the first call across the entire session).
  */
 
-import { parseLasHeader } from '../lasHeader';
+import { parseLasHeaderFields } from '../lasHeader';
 import { getLazPerf } from '../loadLas';
 import {
   validateDeclaredPointCount,
@@ -129,9 +129,12 @@ export function decodedBytesPerPoint(ctx: TileDecodeContext, pointSemantics: boo
   return rawPointsBytesPerPoint(ctx.pdrf, { pointSemantics });
 }
 
-/** Build the per-tile decode context from a parsed header. */
+/**
+ * Build the per-tile decode context from a parsed header. The point layout
+ * is all it reads, so the header's CRS is not parsed.
+ */
 export function buildContext(buffer: ArrayBuffer): TileDecodeContext {
-  const header = parseLasHeader(buffer);
+  const header = parseLasHeaderFields(buffer);
   const pdrf = header.pointFormat;
   if (![0, 1, 2, 3, 6, 7, 8].includes(pdrf)) {
     throw new Error(

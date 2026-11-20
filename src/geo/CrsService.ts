@@ -28,14 +28,17 @@
  */
 
 import type {
+  CrsKind,
   CrsSource,
   ResolvedCrs,
 } from './CoordinateTypes';
 import {
+  isEpsgCodeInRange,
   resolvedFromCrsInfo,
   unknownCrs,
 } from './CoordinateTypes';
-import type { CrsInfo } from '../io/crs';
+import { metresPerLinearUnit, unitKeyContradictionNote, type CrsInfo, type CrsLinearUnit } from '../io/crs';
+import { epsgCrsKind, type EpsgCrsKind } from '../convert/epsg';
 import {
   validateCrsForMeasurement,
   type CrsValidationResult,
@@ -50,9 +53,12 @@ import { getCrsEntry, resolveHorizontalDatum } from './CrsRegistry';
 import {
   clearOverride as defaultClearOverride,
   getOverride as defaultGetOverride,
+  isLocalLinearUnit,
   keyForDataset,
+  LOCAL_UNIT_NAMES,
   setOverride as defaultSetOverride,
   type CrsOverride,
+  type LocalLinearUnit,
 } from './CrsOverrideStore';
 
 /** The port the service uses to read + write user overrides. */
@@ -277,6 +283,8 @@ export interface OverrideSuggestion {
   readonly epsg: number | null;
   /** The kinds `setOverride` can re-apply; any other stored kind is not offered. */
   readonly kind: 'projected' | 'geographic' | 'local';
+  /** The unit of a remembered local choice, when it declared one. */
+  readonly localUnit?: LocalLinearUnit;
   readonly reason: OverrideSuggestionReason;
 }
 
@@ -395,6 +403,46 @@ function sameResolvedCrs(a: ResolvedCrs, b: ResolvedCrs): boolean {
   return true;
 }
 
+/**
+ * The linear unit of an override code that neither the file nor the registry
+ * describes, read from the EPSG code itself (`epsgCrsKind`: the built-in proj4
+ * definitions, then the shipped EPSG tables). Or, when the code names a
+ * different kind of CRS than the override claims, that kind.
+ *
+ * A projected code is in metres, international feet or US survey feet as the
+ * code defines; any other unit, or a code the tables do not hold, is
+ * 'unknown' with the placeholder factor 1, so `isLinearUnitKnown` is false and
+ * metric claims are withheld. A geographic override is angular: 'unknown'.
+ * A geocentric, compound, vertical or engineering code is never a projected
+ * or geographic CRS.
+ */
+function overrideCodeUnit(
+  epsg: number,
+  kind: CrsKind,
+): { readonly linearUnit: CrsLinearUnit; readonly linearUnitToMetres: number } | { readonly contradicts: EpsgCrsKind } {
+  const code = epsgCrsKind(epsg);
+  const horizontal = code.kind === 'projected' || code.kind === 'geographic';
+  if (code.kind !== 'unknown' && (!horizontal || code.kind !== kind)) return { contradicts: code.kind };
+  if (kind !== 'projected') return { linearUnit: 'unknown', linearUnitToMetres: 1 };
+  switch (code.unit) {
+    case 'metre':
+    case 'foot':
+    case 'us-survey-foot':
+      return { linearUnit: code.unit, linearUnitToMetres: metresPerLinearUnit(code.unit) };
+    default: return { linearUnit: 'unknown', linearUnitToMetres: 1 };
+  }
+}
+
+/** A resolved kind named as the EPSG tables name it: a local frame is an engineering CRS. */
+function epsgKindOf(kind: CrsKind): EpsgCrsKind {
+  return kind === 'local' ? 'engineering' : kind;
+}
+
+/** The indefinite article before a kind's name. */
+function articleFor(kind: EpsgCrsKind): 'a' | 'an' {
+  return kind === 'engineering' || kind === 'unknown' ? 'an' : 'a';
+}
+
 export class CrsService {
   private readonly _port: CrsOverridePort;
   private readonly _listeners: Set<CrsListener> = new Set();
@@ -497,7 +545,7 @@ export class CrsService {
     const s = this._suggestion;
     if (!s || s.datasetKey !== this._currentDatasetKey) return null;
     return this.setOverride({
-      override: { epsg: s.epsg, kind: s.kind },
+      override: { epsg: s.epsg, kind: s.kind, ...(s.localUnit ? { localUnit: s.localUnit } : {}) },
       detected: this._currentDetected,
       source: this._currentSource,
     });
@@ -556,7 +604,7 @@ export class CrsService {
     const k = override?.kind;
     const suggestion = override && match?.kind === 'candidate' && !redundant
       && (k === 'projected' || k === 'geographic' || k === 'local')
-      ? { datasetKey, epsg: override.epsg, kind: k, reason: match.reason }
+      ? { datasetKey, epsg: override.epsg, kind: k, ...(k === 'local' && override.localUnit ? { localUnit: override.localUnit } : {}), reason: match.reason }
       : null;
     return { resolved, suggestion };
   }
@@ -564,7 +612,8 @@ export class CrsService {
   /**
    * Apply a user override to the active scan. Persists via the
    * configured port, re-resolves immediately, and broadcasts the new
-   * CRS to listeners. No-op when there's no active scan.
+   * CRS to listeners. No-op (returns null) when there's no active scan, or
+   * when the EPSG is not a whole number from 1024 to 99999.
    *
    * `kind === 'detected'` is the "use detected" command — clear the persisted
    * override and fall back to whatever the loader supplied. It is DISTINCT from
@@ -577,6 +626,8 @@ export class CrsService {
     readonly override: {
       readonly epsg: number | null;
       readonly kind: 'projected' | 'geographic' | 'local' | 'detected';
+      /** With `kind: 'local'`: the unit the user declared. Any other value is ignored. */
+      readonly localUnit?: LocalLinearUnit;
     };
     /**
      * The detected CRS for the active dataset, so the service can
@@ -593,6 +644,11 @@ export class CrsService {
     readonly persist?: boolean;
   }): ResolvedCrs | null {
     if (!this._currentDatasetKey) return null;
+    // A code that is not a whole number in the EPSG range names no CRS. Nothing
+    // is applied or stored, and the active CRS is left as it was.
+    if (args.override.kind !== 'detected' && args.override.epsg !== null && !isEpsgCodeInRange(args.override.epsg)) {
+      return null;
+    }
     this._suggestion = null;
     if (args.override.kind === 'detected') {
       this._sessionOverrides.delete(this._currentDatasetKey);
@@ -603,9 +659,11 @@ export class CrsService {
       this._setCurrent(resolved);
       return resolved;
     }
+    const localUnit = args.override.kind === 'local' && isLocalLinearUnit(args.override.localUnit) ? args.override.localUnit : undefined;
     const record = {
       epsg: args.override.epsg,
       kind: args.override.kind,
+      ...(localUnit ? { localUnit } : {}),
       // What this file declared when the choice was made — see resolveForScan.
       // Without it the entry cannot be told apart from one belonging to an
       // unrelated file that happens to share a name.
@@ -770,49 +828,145 @@ export class CrsService {
     detected: CrsInfo | undefined,
   ): ResolvedCrs {
     if (override.kind === 'local' || override.epsg === null) {
+      // A unit the user declared for local coordinates converts like any other
+      // known unit; without one the frame withholds metric figures.
+      const unit = override.kind === 'local' && isLocalLinearUnit(override.localUnit) ? override.localUnit : undefined;
       return {
         kind: 'local',
-        name: 'Local coordinates (no CRS)',
-        linearUnit: 'unknown',
-        linearUnitToMetres: 1,
+        name: unit ? LOCAL_UNIT_NAMES[unit] : 'Local coordinates (no CRS)',
+        linearUnit: unit ?? 'unknown',
+        linearUnitToMetres: unit ? metresPerLinearUnit(unit) : 1,
         source: 'user-override',
         confidence: 'high',
         userConfirmed: true,
       };
     }
     const entry = getCrsEntry(override.epsg);
+    const confirmsDetected = detected?.epsg === override.epsg;
+    // Vertical component is independent of a HORIZONTAL override — a compound
+    // CRS keeps its height datum/unit when the user corrects the horizontal
+    // EPSG (and a same-EPSG confirmation must not lose it at all). Preserve the
+    // detected vertical fields unconditionally; without this even confirming
+    // the detected EPSG stripped valid vertical metadata (the C2 defect). The
+    // depth axis is one of them: a horizontal override cannot flip it, and
+    // dropping it let depths under an unlisted datum pass as heights.
+    const vertical = {
+      verticalEpsg: detected?.verticalEpsg,
+      verticalDatum: detected?.verticalDatum,
+      verticalUnitToMetres: detected?.verticalUnitToMetres,
+      ...(detected?.verticalLinearUnit !== undefined ? { verticalLinearUnit: detected.verticalLinearUnit } : {}),
+      ...(detected?.verticalAxisDown ? { verticalAxisDown: true as const } : {}),
+    };
+    /** An override this cannot resolve: no kind, unit or code is guessed. */
+    const unresolved = (name: string): ResolvedCrs => ({
+      kind: 'unknown',
+      name,
+      linearUnit: 'unknown',
+      linearUnitToMetres: 1,
+      source: 'user-override',
+      confidence: 'low',
+      userConfirmed: true,
+      ...vertical,
+    });
+    // A stored record or a catalogue record reaches here without passing
+    // `setOverride`, so the EPSG range is checked again. A code outside it
+    // names no EPSG CRS, and the code is not carried.
+    if (!isEpsgCodeInRange(override.epsg)) {
+      return unresolved(`EPSG:${override.epsg} (not an EPSG code from 1024 to 99999)`);
+    }
+    // A registry entry, or the file's own declaration of this code, naming a
+    // different kind than the override is settled by the EPSG table (the one
+    // `overrideCodeUnit` reads). A session file or a catalogue record can claim projected for
+    // EPSG:4326, which read degrees as metres; a file's GeoKeys can claim
+    // projected (GTModelType 1) for the geographic code 4326. When the table
+    // names the override's kind, the override resolves with the table's unit
+    // and its label says the file's declaration contradicted it. Otherwise it
+    // stays unresolved and its label names what disagrees with what.
+    // A code the table knows, of another kind than the override, never
+    // resolves, even when the file names the same wrong kind: a confirmed
+    // "projected 4269" read degrees as metres.
+    const tableKind = epsgCrsKind(override.epsg).kind;
+    if (tableKind !== 'unknown' && tableKind !== override.kind) {
+      return unresolved(`EPSG:${override.epsg} (the code is ${articleFor(tableKind)} ${tableKind} CRS, not ${override.kind})`);
+    }
+    const detectedKind = confirmsDetected ? resolvedFromCrsInfo(detected, 'user-override')?.kind : undefined;
+    const entryDisagrees = entry !== undefined && entry.kind !== override.kind;
+    const fileDisagrees = detectedKind !== undefined && detectedKind !== override.kind;
+    if (entryDisagrees || fileDisagrees) {
+      const tableUnit = (override.kind === 'projected' || override.kind === 'geographic') && tableKind === override.kind
+        ? overrideCodeUnit(override.epsg, override.kind)
+        : undefined;
+      if (tableUnit === undefined || 'contradicts' in tableUnit) {
+        // No kind or unit is guessed, and the code is not carried, so no
+        // export writes it as the claimed kind.
+        const named: EpsgCrsKind = tableKind !== 'unknown' ? tableKind
+          : epsgKindOf(fileDisagrees ? detectedKind : entry?.kind ?? 'unknown');
+        const who = tableKind !== 'unknown' ? 'the code is' : fileDisagrees ? 'the file declares' : 'the registry lists';
+        return unresolved(`EPSG:${override.epsg} (${who} ${articleFor(named)} ${named} CRS, not ${override.kind})`);
+      }
+      const declared = fileDisagrees
+        ? ` (the file declares ${entry ? `EPSG:${override.epsg}` : 'it'} as ${epsgKindOf(detectedKind)}; the code is ${override.kind})`
+        : '';
+      // A ProjLinearUnitsGeoKey the file carries still counts: the table
+      // settles the kind, not which of two contradicting units is right.
+      const unitKey = confirmsDetected && override.kind === 'projected' ? detected.projLinearUnitsKey : undefined;
+      const keyContradicts = unitKey !== undefined && unitKey !== tableUnit.linearUnit;
+      return {
+        kind: override.kind,
+        name: `${entry?.label ?? `EPSG:${override.epsg}`}${declared}`,
+        epsg: override.epsg,
+        linearUnit: keyContradicts ? 'unknown' : tableUnit.linearUnit,
+        linearUnitToMetres: keyContradicts ? 1 : tableUnit.linearUnitToMetres,
+        ...(keyContradicts
+          ? { linearUnitNote: unitKeyContradictionNote('ProjLinearUnitsGeoKey (3076) in the file', unitKey, override.epsg, tableUnit.linearUnit) }
+          : {}),
+        // The file's own WKT and datum describe the kind it got wrong, so
+        // neither is carried; `_resolveDatum` fills the registry datum.
+        source: 'user-override',
+        confidence: 'high',
+        userConfirmed: true,
+        ...vertical,
+      };
+    }
+    // Otherwise the linear unit, in priority order: borrow the detector's when
+    // it described this exact EPSG; else read the registry entry's unit (set
+    // only for the non-metre entries; otherwise metres for a projected entry
+    // and 'unknown' for a geographic one, which is angular); else the kind and
+    // unit the EPSG code itself names. That last case is a code from a session
+    // file, a catalogue record or an old stored record: the picker offers
+    // registry entries only.
+    const unit = confirmsDetected
+      ? { linearUnit: detected.linearUnit, linearUnitToMetres: detected.linearUnitToMetres }
+      : entry
+        ? {
+          linearUnit: entry.linearUnit ?? (override.kind === 'geographic' ? 'unknown' as const : 'metre' as const),
+          linearUnitToMetres: entry.linearUnitToMetres ?? 1,
+        }
+        : overrideCodeUnit(override.epsg, override.kind);
+    if ('contradicts' in unit) {
+      // The code names a different kind of CRS than the override claims. No
+      // kind or unit is guessed, and the code is not carried, so no export
+      // writes it as the claimed kind.
+      return unresolved(`EPSG:${override.epsg} (the code is ${articleFor(unit.contradicts)} ${unit.contradicts} CRS, not ${override.kind})`);
+    }
     const name =
-      detected?.name && detected.epsg === override.epsg
+      detected?.name && confirmsDetected
         ? detected.name
         : (entry?.label ?? `EPSG:${override.epsg}`);
-    const fallbackLinearUnit = override.kind === 'geographic' ? 'unknown' : 'metre';
     return {
       kind: override.kind,
       name,
       epsg: override.epsg,
-      // Linear unit, in priority order: borrow the detector's when it described
-      // this exact EPSG; else read the registry entry's unit (set only for the
-      // non-metre entries); else fall back — geographic is angular ('unknown'),
-      // a projected entry defaults to metres. Metres is the correct default
-      // here, not an assumption: every projected CRS this app can resolve
-      // (epsgToProj4) is metre-based, and `getCrsEntry` enumerates only the
-      // curated picker list (not parametric UTM), so a UTM override is
-      // legitimately absent from it yet still metres.
-      linearUnit:
-        detected?.epsg === override.epsg
-          ? detected.linearUnit
-          : (entry?.linearUnit ?? fallbackLinearUnit),
-      linearUnitToMetres:
-        detected?.epsg === override.epsg
-          ? detected.linearUnitToMetres
-          : (entry?.linearUnitToMetres ?? 1),
-      ...(detected?.epsg === override.epsg && detected.linearUnitByFactor ? { linearUnitByFactor: true as const } : {}),
+      linearUnit: unit.linearUnit,
+      linearUnitToMetres: unit.linearUnitToMetres,
+      ...(confirmsDetected && detected.linearUnitByFactor ? { linearUnitByFactor: true as const } : {}),
+      ...(confirmsDetected && detected.linearUnitNote ? { linearUnitNote: detected.linearUnitNote } : {}),
       // Horizontal datum: borrow the detector's WKT datum only when it described
       // this exact EPSG (so an override to a DIFFERENT EPSG drops the now-wrong
       // WKT datum); the registry fallback for the chosen EPSG is then applied
       // uniformly by `_resolveDatum`. Mirrors the name / unit precedence above.
       horizontalDatum:
-        detected?.epsg === override.epsg ? detected?.horizontalDatum : undefined,
+        confirmsDetected ? detected?.horizontalDatum : undefined,
       source: 'user-override',
       confidence: 'high',
       userConfirmed: true,
@@ -822,16 +976,8 @@ export class CrsService {
       // chosen one. Keep it ONLY when the override confirms the detected EPSG;
       // otherwise drop it (same gate as name / unit / datum above). Was
       // unconditional `detected?.wkt` — the C1 contradiction.
-      wkt: detected?.epsg === override.epsg ? detected?.wkt : undefined,
-      // Vertical component is independent of a HORIZONTAL override — a compound
-      // CRS keeps its height datum/unit when the user corrects the horizontal
-      // EPSG (and a same-EPSG confirmation must not lose it at all). Preserve the
-      // detected vertical fields unconditionally; without this even confirming
-      // the detected EPSG stripped valid vertical metadata (the C2 defect).
-      verticalEpsg: detected?.verticalEpsg,
-      verticalDatum: detected?.verticalDatum,
-      verticalUnitToMetres: detected?.verticalUnitToMetres,
-      ...(detected?.verticalLinearUnit !== undefined ? { verticalLinearUnit: detected.verticalLinearUnit } : {}),
+      wkt: confirmsDetected ? detected?.wkt : undefined,
+      ...vertical,
     };
   }
 

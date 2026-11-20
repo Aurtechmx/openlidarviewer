@@ -2575,6 +2575,17 @@ export class Inspector {
   }
 
   /**
+   * Show the Coordinate-system section, closed when `collapsed`. Local-frame
+   * profiles collapse it rather than hide it: its picker is where a local
+   * unit or a CRS is set, and `focusCrsOverride` must be able to open it.
+   */
+  setCrsSectionCollapsed(collapsed: boolean): void {
+    if (!this._crsSection) return;
+    this._crsSection.classList.remove('olv-hidden');
+    if (collapsed && 'open' in this._crsSection) (this._crsSection as HTMLDetailsElement).open = false;
+  }
+
+  /**
    * Render the declared-by-the-file profile / provenance card (v0.5.7), or hide
    * it when `model` is null (the unchanged geo path with no declared metadata).
    * Every value is shown verbatim under a "declared, not verified" qualifier —

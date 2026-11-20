@@ -35,7 +35,8 @@ import { freshAnnotationId, isAnnotationType } from '../render/annotate/types';
 import { parseIssueDetails } from '../render/annotate/issueWorkflow';
 import type { ColorMode } from '../render/colorModes';
 import type { PointSizeMode } from '../render/pointStyle';
-import type { ResolvedCrs } from '../geo/CoordinateTypes';
+import type { CrsKind, ResolvedCrs } from '../geo/CoordinateTypes';
+import { epsgCrsKind } from '../convert/epsg';
 import type { CrsLinearUnit } from './crs';
 import { UNIT_FACTORS } from '../units/units';
 import { sessionContentFingerprint, sessionContentsDiffer } from './sourceFingerprint';
@@ -1184,6 +1185,8 @@ export interface SessionSpatialClaims {
   readonly upAxis: 'y' | 'z';
   /** Horizontal EPSG the session declares, when it carried a resolved CRS. */
   readonly epsg?: number;
+  /** Kind of the session's resolved CRS, when it carried one. */
+  readonly kind?: CrsKind;
   /** Linear unit the session's CRS declares; `'unknown'`/absent ⇒ no unit claim unless {@link linearUnitByFactor}. */
   readonly linearUnit?: CrsLinearUnit;
   /** Metres per horizontal unit the session's CRS records. */
@@ -1205,6 +1208,8 @@ export interface DeclaredSpatialFacts {
   readonly upAxis?: 'y' | 'z' | 'unknown';
   /** The file's horizontal EPSG, when it declares one. */
   readonly epsg?: number;
+  /** Kind of the file's declared CRS; absent ⇒ the file states none. */
+  readonly kind?: CrsKind;
   /** The file's linear unit; `'unknown'`/absent ⇒ the file makes no unit claim unless {@link linearUnitByFactor}. */
   readonly linearUnit?: CrsLinearUnit;
   /** Metres per horizontal unit the file declares. */
@@ -1216,7 +1221,7 @@ export interface DeclaredSpatialFacts {
 }
 
 /** Which spatial claim a {@link SpatialClaimConflict} concerns. */
-export type SpatialClaimField = 'crs' | 'axis' | 'unit';
+export type SpatialClaimField = 'crs' | 'kind' | 'axis' | 'unit';
 
 /** One proven divergence between the session's spatial claim and the file's. */
 export interface SpatialClaimConflict {
@@ -1231,6 +1236,21 @@ export interface SessionSpatialVerdict {
   readonly hasConflict: boolean;
   /** Every proven contradiction, most-load-bearing (CRS) first; empty on a clean match. */
   readonly conflicts: readonly SpatialClaimConflict[];
+}
+
+/**
+ * The georeferenced kind the file's declaration claims, or undefined: a local
+ * or unknown frame claims none, and neither does a declaration whose kind the
+ * EPSG table contradicts for its own code.
+ */
+function declaredKindClaim(declared: DeclaredSpatialFacts): 'projected' | 'geographic' | 'geocentric' | undefined {
+  const kind = declared.kind;
+  if (kind !== 'projected' && kind !== 'geographic' && kind !== 'geocentric') return undefined;
+  if (isFiniteNumber(declared.epsg)) {
+    const table = epsgCrsKind(declared.epsg).kind;
+    if ((table === 'projected' || table === 'geographic' || table === 'geocentric') && table !== kind) return undefined;
+  }
+  return kind;
 }
 
 /** A linear unit that positively names a real metric length (not the inert placeholder). */
@@ -1320,6 +1340,26 @@ export function detectSessionSpatialConflict(
     conflicts.push({
       field: 'crs',
       reason: `the session's CRS (EPSG:${claims.epsg}) disagrees with the scan's declared EPSG:${declared.epsg}`,
+    });
+  }
+
+  // Kind — a session naming a projected or geographic CRS over a file that
+  // declares a georeferenced CRS of another kind. The code may match: a
+  // session's "projected EPSG:4978" over a geocentric 4978 file reads Earth-
+  // centred X/Y/Z as a ground plane. A file whose declared kind contradicts
+  // the EPSG table for its own code (GeoKeys with model type 2 and the
+  // projected code 32612) makes no kind claim: the table settles that code's
+  // kind when the session is applied. A local session claims no kind, and the
+  // restore refuses only the session's CRS on a kind conflict, not its work.
+  const fileKind = declaredKindClaim(declared);
+  if (
+    fileKind !== undefined &&
+    (claims.kind === 'projected' || claims.kind === 'geographic') &&
+    claims.kind !== fileKind
+  ) {
+    conflicts.push({
+      field: 'kind',
+      reason: `the session's CRS is ${claims.kind}${isFiniteNumber(claims.epsg) ? ` EPSG:${claims.epsg}` : ''} but the scan declares ${isFiniteNumber(declared.epsg) ? `${fileKind} EPSG:${declared.epsg}` : `a ${fileKind} CRS`}`,
     });
   }
 

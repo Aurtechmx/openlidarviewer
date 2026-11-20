@@ -47,6 +47,7 @@ import { writeAsciiGrid } from './demAsciiGrid';
 import { crsFromWkt, rasterHorizontalWkt } from '../../io/crs';
 import { compoundWkt, wktForEpsg } from '../../io/epsgWkt';
 import {
+  isGeoTiffEpsgCode,
   verticalUnitGeoKeyCode,
   resolveVerticalGeoKeys,
   verticalUnitName,
@@ -277,6 +278,13 @@ export function reconstructDsmChm(
 export interface DemReadmeOptions {
   /** False when the rasters carry no world origin: no CRS is written and the README says so. Default true. */
   readonly placed?: boolean;
+  /**
+   * True when placed rasters carry no CRS: no EPSG code the GeoTIFF keys can
+   * hold and no horizontal WKT, so they sit at the scan's own source
+   * coordinates. The README then names that frame instead of a projected CRS.
+   * Default false.
+   */
+  readonly sourceCoordinates?: boolean;
   readonly result: AnalyseContoursResult;
   /** Source-file digest and CRS origin for the provenance block. */
   readonly digests?: ExportDigests | null;
@@ -289,6 +297,17 @@ export interface DemReadmeOptions {
    * {@link resolveVerticalGeoKeys}. Omitted or `none` prints no line.
    */
   readonly verticalGeoKeys?: VerticalGeoKeyResolution | null;
+  /**
+   * A horizontal EPSG code the GeoTIFF keys cannot hold (see
+   * {@link isGeoTiffEpsgCode}), and whether a .prj from the source WKT is
+   * written. Omitted or null prints no line.
+   */
+  readonly unstoredEpsg?: { readonly epsg: number; readonly inPrj: boolean } | null;
+  /**
+   * True when the GeoTIFFs carry no CRS key but each raster's .prj holds the
+   * CRS: a GIS reading the GeoTIFF alone finds none. Default false.
+   */
+  readonly crsInPrjOnly?: boolean;
   /** The NoData value every raster in the package declares. Default -9999. */
   readonly noData?: number;
   /**
@@ -376,6 +395,25 @@ export function verticalCrsReadmeLines(res: VerticalGeoKeyResolution | null | un
     why = `The source gave ${vcrsLabel(res.requestedEpsg)} but no recognised height unit, so the code's own unit cannot be checked against the heights.`;
   }
   return [`  Vertical CRS   not written to the DTM and DSM GeoTIFFs.`, ...wrapReadme(`${why} ${tail}`, pad)];
+}
+
+/**
+ * The README line for a horizontal EPSG code the GeoTIFF keys cannot hold:
+ * the rasters carry no CRS key, and the CRS is in the .prj when the source WKT
+ * gave one.
+ */
+function unstoredEpsgReadmeLines(u: { readonly epsg: number; readonly inPrj: boolean } | null | undefined): string[] {
+  if (u == null) return [];
+  const pad = '                 ';
+  const where = u.inPrj ? 'the CRS is in the .prj only.' : 'the rasters carry no CRS.';
+  const lines = wrapReadme(`EPSG:${u.epsg} cannot be stored in GeoTIFF keys; ${where}`, pad);
+  return lines.map((l, i) => (i === 0 ? `  CRS            ${l.slice(pad.length)}` : l));
+}
+
+/** Prose under a README label in the Raster block's column, wrapped. */
+function labelledReadmeLines(label: string, text: string): string[] {
+  const pad = '                 ';
+  return wrapReadme(text, pad).map((l, i) => (i === 0 ? `  ${label.padEnd(pad.length - 2)}${l.slice(pad.length)}` : l));
 }
 
 /** Wrap prose to README width under a fixed indent. */
@@ -598,12 +636,27 @@ export function buildDemReadme(opts: DemReadmeOptions): string {
     `  Cell size      ${dtm.cellSizeM} ${hUnit}`,
     `  NODATA value   ${opts.noData ?? DEFAULT_NO_DATA}`,
     `  Coverage       ${pct(cov.measured)} measured, ${pct(cov.interp)} interpolated`,
+    // The frame wording matches the flow package's `scan-source-coordinates`.
+    // A resolved code the keys cannot hold is named by its own line instead,
+    // since a CRS was resolved; the bounds below still name the source frame.
     ...(opts.placed === false
       ? ['  Frame          local frame, not georeferenced; elevations recentred']
+      : opts.unstoredEpsg
+        ? unstoredEpsgReadmeLines(opts.unstoredEpsg)
+        : opts.sourceCoordinates
+          ? ['  Frame          scan source coordinates; no CRS resolved; rasters carry no CRS']
+          : []),
+    // GDAL's GeoTIFF driver does not read a .prj beside a .tif, and the
+    // evidence raster has no .prj of its own: the CHM's holds the horizontal CRS.
+    // A stored vertical code still gives the DTM and DSM their vertical keys.
+    ...(opts.placed !== false && opts.crsInPrjOnly
+      ? labelledReadmeLines('GeoTIFF CRS', `No .tif file here carries a horizontal CRS key. Assign every GeoTIFF in this folder the horizontal CRS in ${basename}-chm.prj.`)
       : []),
     opts.placed === false
       ? `  Bounds (local offsets in the project frame, ${hUnit})`
-      : `  Bounds (CRS units, ${isGeographic ? 'lon/lat degrees' : 'projected'})`,
+      : opts.sourceCoordinates
+        ? `  Bounds (scan source coordinates, ${hUnit})`
+        : `  Bounds (CRS units, ${isGeographic ? 'lon/lat degrees' : 'projected'})`,
     `    min X / min Y  ${coord(opts.boundsMinX)} / ${coord(opts.boundsMinY)}`,
     `    max X / max Y  ${coord(opts.boundsMaxX)} / ${coord(opts.boundsMaxY)}`,
     `  Elevation unit ${zUnit}`,
@@ -776,9 +829,12 @@ export function assembleDemPackage(
   const verticalGeoKeys = resolveVerticalGeoKeys(verticalEpsg, verticalUnitCode);
   const isGeographic = options.isGeographic ?? false;
 
+  // A code the GeoTIFF keys cannot hold is not written to the rasters, and no
+  // .prj is derived from it: only a source WKT can supply one.
+  const unstorableEpsg = epsg != null && !isGeoTiffEpsgCode(epsg);
   // ASCII Grid readers discover a .prj only under the raster's own stem.
   const horizontalWkt = placed
-    ? rasterHorizontalWkt(options.wkt ?? wktForEpsg(epsg))
+    ? rasterHorizontalWkt(options.wkt ?? (unstorableEpsg ? null : wktForEpsg(epsg)))
     : null;
   let elevationWkt = horizontalWkt;
   if (horizontalWkt && verticalGeoKeys.status === 'written') {
@@ -1012,8 +1068,11 @@ export function assembleDemPackage(
   }
   const readme = buildDemReadme({
     placed,
+    sourceCoordinates: placed && !isGeoTiffEpsgCode(epsg) && horizontalWkt == null,
     verticalUnitToMetres: options.verticalUnitToMetres ?? null,
     verticalGeoKeys,
+    unstoredEpsg: unstorableEpsg ? { epsg, inPrj: horizontalWkt != null || !!options.wkt } : null,
+    crsInPrjOnly: placed && !isGeoTiffEpsgCode(epsg) && horizontalWkt != null,
     noData: packageNoData,
     result,
     basename,

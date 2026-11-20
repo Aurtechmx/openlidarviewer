@@ -22,6 +22,7 @@ import { LoadError } from './loadErrors';
 import { ATTR_COLOUR_INVALID, ATTR_INTENSITY_INVALID, PointCloud } from '../model/PointCloud';
 import type { CloudMetadata, IntensityScanMapping } from '../model/PointCloud';
 import { declaredCaptureFromSourceMetadata } from '../diagnostics/declaredCapture';
+import { formatSpecificationCrs } from '../geo/CoordinateTypes';
 import { sanitizeAndRecenter } from './sanitizeCloud';
 import { remapFrames } from './organizedRangeRemap';
 import { E57GridBuilder } from './e57/structuredFrames';
@@ -203,6 +204,11 @@ function e57Metadata(
   warnings: readonly string[],
 ): CloudMetadata | undefined {
   const out: CloudMetadata = {};
+  // ASTM E2807 defines Cartesian coordinates in metres. A file that declares
+  // coordinate metadata (a CRS of its own) keeps no CRS here, as before; one
+  // that declares none is local coordinates in metres.
+  const declaresCrs = sourceMetadata?.standard.some((f) => f.name === 'coordinateMetadata' && f.value.trim().length > 0) ?? false;
+  if (!declaresCrs) out.crs = formatSpecificationCrs('E57');
   if (meta.library) out.sourceSoftware = meta.library;
   if (mergedScanCount > 1) out.captureSensor = `${sourceMetadata?.standard.find((f) => (f.name === 'sensorModel' || f.name.endsWith(' sensorModel')) && f.value.trim().length > 0)?.value.trim() ?? 'sensor not declared'} (${mergedScanCount} merged scans)`;
   if (warnings.length > 0) out.loadWarnings = [...warnings];

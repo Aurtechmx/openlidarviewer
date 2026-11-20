@@ -85,6 +85,8 @@ export interface LayerUpFrameInput {
  */
 export function hasHorizontalCrs(crs: LayerCrs | null | undefined): boolean {
   if (crs == null) return false;
+  // Local metres a format specification states (a glTF or E57 with no CRS).
+  if (crs.formatSpecification) return false;
   if ('kind' in crs) {
     if (crs.kind === 'local') return false;
     if (crs.kind === 'projected' || crs.kind === 'geographic' || crs.kind === 'geocentric') return true;

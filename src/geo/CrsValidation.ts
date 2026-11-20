@@ -14,10 +14,12 @@
  *       metres-per-unit ratio. Measurements display real cubic metres.
  *
  *   `safe-explicit-local`
- *       Local-coordinate dataset (phone scans, raw scanner output).
- *       Measurements display in source units, with no projection
- *       claim. The empty-state copy is "units assumed metres" — not
- *       "trust this for surveying".
+ *       Local-coordinate dataset (phone scans, raw scanner output,
+ *       LOCAL_CS / ENGCRS frames), with no projection claim. A frame that
+ *       declares its linear unit (in the file, or by the user's local
+ *       choice in the Inspector) is converted by it; one that declares
+ *       none withholds every metric figure, since metres would be an
+ *       assumption.
  *
  *   `requires-projection`
  *       Geographic (lat/lon in degrees). Distance and volume in
@@ -26,7 +28,8 @@
  *       claim a metric value without an explicit projection step.
  *
  *   `unknown-needs-confirmation`
- *       Confidence is `'none'` OR the kind is `'unknown'`. Block the
+ *       Confidence is `'none'`, the kind is `'unknown'`, or the kind is
+ *       `'projected'` with no known linear unit. Block the
  *       cubic-metre headline; show the value as "—" with a "confirm CRS
  *       to measure" prompt.
  *
@@ -52,7 +55,7 @@
  * with no DOM / proj4 stubbing.
  */
 
-import type { ResolvedCrs } from './CoordinateTypes';
+import { isLinearUnitKnown, type ResolvedCrs } from './CoordinateTypes';
 
 /** The verdict tags the inspector branches on. */
 export type CrsValidity =
@@ -114,13 +117,24 @@ export interface CrsValidationResult {
   readonly suggestion: string;
 }
 
+/** A local frame's declared linear unit, in words. */
+function localUnitWords(crs: ResolvedCrs): string {
+  switch (crs.linearUnit) {
+    case 'metre': return 'metres';
+    case 'foot': return 'international feet';
+    case 'us-survey-foot': return 'US survey feet';
+    case 'unknown': return `a unit of ${Number(crs.linearUnitToMetres.toPrecision(6))} m`;
+  }
+}
+
 /**
  * Classify a `ResolvedCrs` for measurement safety.
  *
  * The function intentionally does NOT consult `userConfirmed`. A user
  * who explicitly chose "treat as local" gets the `safe-explicit-local`
  * branch via `kind === 'local'`; a user who chose a projected CRS
- * gets `safe-metric` via `kind === 'projected'`. The override flag
+ * gets `safe-metric` via `kind === 'projected'` when its linear unit is
+ * known (`isLinearUnitKnown`). The override flag
  * matters for round-tripping in sessions, not for measurement gating.
  */
 export function validateCrsForMeasurement(
@@ -166,6 +180,19 @@ export function validateCrsForMeasurement(
           suggestion: 'Reproject to a conformal local CRS (UTM, state plane) before measuring.',
         };
       }
+      // A projected kind is not a unit. With no known linear unit (the
+      // placeholder factor 1) the metres would be source units relabelled, so
+      // this verdict agrees with the context's unit gate and withholds them.
+      if (!isLinearUnitKnown(crs)) {
+        return {
+          validity: 'unknown-needs-confirmation',
+          severity: 'warn',
+          canDisplayMetric: false,
+          canSaveMeasurement: false,
+          reason: 'Projected CRS with no known linear unit; metric measurements are withheld.',
+          suggestion: 'Pick a CRS whose unit is known in the Inspector before measuring.',
+        };
+      }
       return {
         validity: 'safe-metric',
         severity: 'ok',
@@ -176,15 +203,31 @@ export function validateCrsForMeasurement(
       };
 
     case 'local':
+      // A local or engineering frame with no declared unit gives no metres:
+      // reading its numbers as metres would be an assumption, so no metric
+      // figure is shown or saved. A declared unit converts as usual.
+      // Its severity matches a projected frame with no unit: every metric
+      // figure is withheld.
+      if (!isLinearUnitKnown(crs)) {
+        return {
+          validity: 'safe-explicit-local',
+          severity: 'warn',
+          canDisplayMetric: false,
+          canSaveMeasurement: false,
+          reason: 'Local coordinates with no declared unit; metric measurements are withheld.',
+          suggestion:
+            'If you know the unit, choose Local coordinates in metres or feet in the Inspector; otherwise pick the correct CRS. Accuracy also depends on the source data.',
+        };
+      }
       return {
         validity: 'safe-explicit-local',
         severity: 'caution',
         canDisplayMetric: true,
         canSaveMeasurement: true,
-        reason:
-          'Local coordinates — measurements assume the source units are metres.',
-        suggestion:
-          'Pick the correct projected CRS in the Inspector and confirm its units to enable metric measurements. Accuracy also depends on the source data.',
+        reason: crs.source === 'format-specification' && crs.formatSpecification
+          ? `Local coordinates in metres, as the ${crs.formatSpecification} specification defines them.`
+          : `Local coordinates in ${localUnitWords(crs)}; measurements are converted from the declared unit.`,
+        suggestion: 'Accuracy also depends on the source data.',
       };
 
     case 'geographic':
@@ -216,8 +259,10 @@ export function validateCrsForMeasurement(
         canDisplayMetric: false,
         canSaveMeasurement: false,
         reason: 'No CRS metadata was detected for this scan.',
+        // A phone scan (glTF, PLY) is the usual case, and its remedy is the
+        // local-unit choice, so both remedies are named.
         suggestion:
-          'Pick a CRS in the Inspector override panel before measuring.',
+          "Pick the scan's CRS in the Inspector, or, if its coordinates are local in a known unit, choose Local coordinates in metres or feet.",
       };
   }
 }

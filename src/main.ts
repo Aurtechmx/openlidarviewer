@@ -584,8 +584,8 @@ const lassoVolumeTool = new LassoVolumeTool(stage.canvas, {
     const budgetCaption = (out.budget.downsample ? ` · sampled ${(out.budget.coverageFraction * 100).toFixed(0)}%` : '') + (out.selectionRestrictedByVisibility ? ' · visible points only' : '');
     // CRS gate — a geographic or unknown CRS makes a cubic-metre headline
     // misleading: replace the metrics line with the caveat and refuse a Save
-    // button (project / confirm a CRS first). safe-explicit-local keeps the
-    // metrics in source units with a softer "units assumed metres" line.
+    // button (project / confirm a CRS first). A local frame converts by its
+    // declared unit, and with no declared unit its volume is refused too.
     const crsVerdict = crsService.validation(), volumeRefused = volumeClaimRefusal(ctx, crsVerdict);
     if (volumeRefused) {
       showLassoToast(
@@ -595,7 +595,7 @@ const lassoVolumeTool = new LassoVolumeTool(stage.canvas, {
       pendingLassoSave = null;
       return;
     }
-    const crsCaveat = volumeUnitCaveat(ctx, crsVerdict.validity);
+    const crsCaveat = volumeUnitCaveat(ctx);
     showLassoToast(
       `${stock?.headline ?? `Volume · net ${formatVolumeNumber(out.result.net * vol)} m³`} · ` +
         `footprint ${areaM2} m² · ${out.selectedCount.toLocaleString()} points${budgetCaption}${crsCaveat} · ${out.selectionBasis.clause}.${stock?.suffix ?? ''} Estimate from the point cloud, not survey-grade.`,
@@ -3430,7 +3430,7 @@ const sessionIoDeps: SessionIoDeps = {
   refreshAnnotationPanel,
   applyViewState,
   restoreReferencePlane: (settings) => void inspector.referencePlane?.restore(settings),
-  setCrsOverride: (args) => crsService.setOverride(args),
+  setCrsOverride: (args) => crsService.setOverride(args), currentCrs: () => crsService.current(),
   showToast: showLassoToast,
   setDropError: (message) => dropZone.setError(message), confirmReplace: (req) => requestReplace(req), currentViews: () => viewBookmarks.savedViews,
 };

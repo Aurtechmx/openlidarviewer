@@ -47,7 +47,11 @@ export interface DemGeoTiffInput {
    * refused with {@link NoDataCollisionError}, in every band.
    */
   readonly noData?: number;
-  /** Horizontal CRS EPSG code, or null when unknown. */
+  /**
+   * Horizontal CRS EPSG code, or null when unknown. Written only when
+   * {@link isGeoTiffEpsgCode}; any other code writes GTModelType 32767 and no
+   * CRS key.
+   */
   readonly epsg?: number | null;
   /** True for a geographic (lat/lon) CRS, false/omitted for projected. */
   readonly isGeographic?: boolean;
@@ -227,6 +231,18 @@ const VERTICAL_DATUM_FAMILY: Readonly<Record<number, string>> = {
   5102: 'ngvd29-height',
   5100: 'msl-height',
 };
+
+/**
+ * Whether `code` is an EPSG code a GeoTIFF CRS key can hold: a whole number
+ * from 1024 to 32766. OGC 19-008r4 (GeoTIFF 1.1) requirements 12.4, 13.4 and
+ * 14.4 give that range to EPSG codes in ProjectedCRSGeoKey (3072),
+ * GeodeticCRSGeoKey (2048) and VerticalGeoKey (4096); 32767 is user-defined,
+ * 32768-65535 are private, and 1-1023 are reserved. The keys are 16-bit, so a
+ * larger code would be stored as its low 16 bits, which name another CRS.
+ */
+export function isGeoTiffEpsgCode(code: number | null | undefined): code is number {
+  return code != null && Number.isInteger(code) && code >= 1024 && code <= 32766;
+}
 
 /** What the writer does with a vertical CRS code and a height unit. */
 export type VerticalGeoKeyResolution =
@@ -423,11 +439,16 @@ export function writeGeoTiff(input: DemGeoTiffInput): Uint8Array {
   const nBands = bands.length;
   const bitsPerSample = SAMPLE_BITS[sampleType];
   const bytesPerSample = bitsPerSample / 8;
-  const epsg = input.epsg ?? null;
-  const vertical = resolveVerticalGeoKeys(input.verticalEpsg, input.verticalUnitCode);
-  if (vertical.status === 'conflict') {
-    throw new GeoTiffVerticalCrsConflictError(vertical.requestedEpsg, vertical.unitCode, vertical.codeUnitCode);
+  // A code the 16-bit key cannot hold as an EPSG code is not written: its low
+  // 16 bits would name another CRS. The raster is then user-defined (32767).
+  const epsg = isGeoTiffEpsgCode(input.epsg) ? input.epsg : null;
+  const resolved = resolveVerticalGeoKeys(input.verticalEpsg, input.verticalUnitCode);
+  if (resolved.status === 'conflict') {
+    throw new GeoTiffVerticalCrsConflictError(resolved.requestedEpsg, resolved.unitCode, resolved.codeUnitCode);
   }
+  const vertical: VerticalGeoKeyResolution = resolved.status === 'written' && !isGeoTiffEpsgCode(resolved.epsg)
+    ? { status: 'omitted', requestedEpsg: resolved.requestedEpsg, unitCode: resolved.unitCode, reason: 'unverified-code' }
+    : resolved;
   // With no vertical CRS written, a known height unit still reaches the reader
   // as the band unit, on bands that do not name one already.
   if (vertical.status !== 'written') {

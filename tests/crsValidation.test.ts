@@ -8,6 +8,7 @@
 
 import { describe, it, expect } from 'vitest';
 import type { ResolvedCrs } from '../src/geo/CoordinateTypes';
+import { spatialContextFrom, volumeClaimRefusal } from '../src/geo/SpatialContext';
 import {
   crsCaveatLine,
   shouldBlockMetricHeadline,
@@ -63,16 +64,17 @@ describe('validateCrsForMeasurement — local coordinates', () => {
       }),
     );
     expect(r.validity).toBe('safe-explicit-local');
-    expect(r.severity).toBe('caution');
-    expect(r.canDisplayMetric).toBe(true);
-    expect(r.canSaveMeasurement).toBe(true);
+    expect(r.severity).toBe('warn');
+    // No declared unit: metres would be an assumption, so none are shown or saved.
+    expect(r.canDisplayMetric).toBe(false);
+    expect(r.canSaveMeasurement).toBe(false);
   });
 
-  it('surfaces a "assume metres" caveat for local', () => {
+  it('says a local frame with no declared unit withholds metric measurements', () => {
     const r = validateCrsForMeasurement(
       make({ kind: 'local', linearUnit: 'unknown', linearUnitToMetres: 1 }),
     );
-    expect(crsCaveatLine(r)).toMatch(/metres/i);
+    expect(crsCaveatLine(r)).toBe('Local coordinates with no declared unit; metric measurements are withheld.');
   });
 });
 
@@ -107,6 +109,16 @@ describe('validateCrsForMeasurement — unknown CRS', () => {
     );
     expect(r.validity).toBe('unknown-needs-confirmation');
     expect(r.canSaveMeasurement).toBe(false);
+  });
+
+  it('names both remedies: the scan\'s CRS, or a local frame in a known unit', () => {
+    // A phone scan (glTF, PLY) opens with no CRS at all; its usual remedy is
+    // the local-unit choice, not a projected CRS.
+    const r = validateCrsForMeasurement(make({ kind: 'unknown', name: 'CRS unknown', confidence: 'none' }));
+    expect(r.reason).toBe('No CRS metadata was detected for this scan.');
+    expect(r.suggestion).toBe('Pick the scan\'s CRS in the Inspector, or, if its coordinates are local in a known unit, choose Local coordinates in metres or feet.');
+    const ctx = spatialContextFrom(make({ kind: 'unknown', name: 'CRS unknown', confidence: 'none' }));
+    expect(volumeClaimRefusal(ctx, r)).toBe('No CRS metadata was detected for this scan. Pick the scan\'s CRS in the Inspector, or, if its coordinates are local in a known unit, choose Local coordinates in metres or feet.');
   });
 
   it('returns unknown-needs-confirmation when crs is null', () => {
