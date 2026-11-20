@@ -421,7 +421,7 @@ self.addEventListener('fetch', (event) => {
           }
           return res;
         })
-        .catch(offlineShell),
+        .catch(async () => (await offlineShell()) || Response.error()),
     );
     return;
   }
@@ -444,7 +444,9 @@ self.addEventListener('fetch', (event) => {
           }
           return res;
         })
-        .catch(() => cached);
+        // Offline with no copy: a network error, never undefined. WebKit
+        // raises a page error when respondWith settles to undefined.
+        .catch(() => cached || Response.error());
       return cached || network;
     }),
   );
