@@ -36,11 +36,13 @@ jobs:
       # fails here. Needs the installed tree, so it follows `npm ci`.
       # Up to five attempts, waiting 30, 60, 90 and 120 s between them: a
       # missing registry key response (EMISSINGSIGNATUREKEY) is retried, and
-      # five failures still fail the job.
+      # five failures still fail the job. Each attempt reads the registry keys
+      # and attestations into an empty cache: the npm cache restored for this
+      # lockfile can hold copies that fail the check (EMISSINGSIGNATUREKEY).
       - name: Registry signatures verify
         run: |
           for attempt in 1 2 3 4 5; do
-            npm audit signatures && exit 0
+            npm audit signatures --cache "$(mktemp -d)" && exit 0
             echo "npm audit signatures failed (attempt $attempt of 5)"
             [ "$attempt" -lt 5 ] && sleep $((attempt * 30))
           done
