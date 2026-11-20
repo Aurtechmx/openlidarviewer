@@ -68,15 +68,15 @@ Build, test, docs, and mutation tooling. None reaches the deployed app.
 |---|---|---|---|
 | @axe-core/playwright | 4.14.0 | 4.14.0 | MPL-2.0 |
 | @loaders.gl/las | ^4.5.4 | 4.5.4 | MIT |
-| @playwright/test | ^1.63.0 | 1.63.0 | Apache-2.0 |
+| @playwright/test | ^1.65.0 | 1.65.0 | Apache-2.0 |
 | @stryker-mutator/core | ^10.1.1 | 10.1.1 | Apache-2.0 |
 | @stryker-mutator/vitest-runner | ^10.1.1 | 10.1.1 | Apache-2.0 |
 | @types/proj4 | ^2.19.0 | 2.19.0 | MIT |
 | @types/three | ^0.186.0 | 0.186.0 | MIT |
 | @vitest/coverage-v8 | ^5.0.5 | 5.0.5 | MIT |
-| rollup-plugin-visualizer | ^7.1.1 | 7.1.1 | MIT |
+| rollup-plugin-visualizer | ^7.1.3 | 7.1.3 | MIT |
 | typescript | ~7.0.2 | 7.0.2 | Apache-2.0 |
-| vite | ^8.3.5 | 8.3.5 | MIT |
+| vite | ^8.3.8 | 8.3.8 | MIT |
 | vite-plugin-javascript-obfuscator | ^3.1.0 | 3.1.0 | MIT |
 | vitepress | 1.6.4 | 1.6.4 | MIT |
 | vitest | ^5.0.5 | 5.0.5 | MIT |
