@@ -244,6 +244,8 @@ export class MobileSheet {
     this._body = body;
 
     this.element = el('div', { className: 'olv-mobile-sheet' }, [head, body]);
+    // A labelled region: ARIA does not allow a name on a plain div.
+    this.element.setAttribute('role', 'region');
     this.element.setAttribute('aria-label', 'Panels');
 
     this._syncTabs();

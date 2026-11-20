@@ -24,6 +24,12 @@ async function makeSheet(opts = {}) {
 }
 
 describe('MobileSheet', () => {
+  it('is a region named Panels, since ARIA allows no name on a plain div', async () => {
+    const { root } = await makeSheet();
+    expect(root.attrs['role']).toBe('region');
+    expect(root.attrs['aria-label']).toBe('Panels');
+  });
+
   it('renders the four modes plus View as tabs and slots', async () => {
     const { root } = await makeSheet();
     expect(root.hasClass('olv-mobile-sheet')).toBe(true);
