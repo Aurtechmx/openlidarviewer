@@ -3,9 +3,8 @@
  *
  * The "Project ready" card states the scan's size. A phone scan opens with no
  * CRS, so the Size row reads in source units. When the user picks a metre CRS
- * while the card is still up, the row must restate the size in metres (and
- * gain the Suggested row that only a physical size allows), and go back to
- * source units after "Use detected". The card is not announced again and its
+ * while the card is still up, the row must restate the size in metres and go
+ * back to source units after "Use detected". The card is not announced again and its
  * timer keeps running: only the size rows change.
  */
 
@@ -61,7 +60,7 @@ describe('the Project card size follows a CRS change while it is up', () => {
     frame = METRES;
     card.remeasure(scan);
     expect(rowValue(el, 'Size')).toBe('0.6 × 0.4 × 0.5 m');
-    expect(rowValue(el, 'Suggested')).toBe('Orbit — object scale');
+    expect(rowValue(el, 'Suggested')).toBeNull();
     // The rest of the card is untouched.
     expect(rowValue(el, 'Format')).toBe('GLB');
     expect(rowValue(el, 'Attributes')).toBe('RGB');
