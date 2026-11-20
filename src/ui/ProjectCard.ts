@@ -84,7 +84,7 @@ export interface ProjectInfo {
   onDismiss?: () => void;
 }
 
-/** The size facts the Size and Suggested rows read. */
+/** The size facts the Size row reads. */
 export type ProjectSizeFacts = Pick<ProjectInfo, 'width' | 'depth' | 'height' | 'sizeUnit' | 'maxPhysicalDimM'>;
 
 /** How long the card lingers before fading out on its own. */
@@ -98,25 +98,6 @@ const FADE_WAIT_POLL_MS = 60;
 /** Longest the successor waits for a fade before taking the lane regardless. */
 const FADE_WAIT_CEILING_MS = 2000;
 
-/**
- * A suggested navigation mode from the scan's PHYSICAL size (metres). Only shown
- * when the size is physical: an unknown-unit scan cannot be mapped onto these
- * metre thresholds without risking a wrong recommendation, so the caller omits
- * the row in that case.
- */
-function suggestMode(maxDimM: number): string {
-  if (maxDimM > 150) return 'Fly — large outdoor scan';
-  if (maxDimM > 15) return 'Walk — building / interior scale';
-  return 'Orbit — object scale';
-}
-
-/** A rough performance class from the decoded point count. */
-function performance(total: number): string {
-  if (total < 1_000_000) return 'Light';
-  if (total < 6_000_000) return 'Balanced';
-  return 'Heavy';
-}
-
 /** A label/value row in the card grid. */
 function row(label: string, value: string): HTMLElement {
   return el('div', { className: 'olv-pc-row' }, [
@@ -125,7 +106,7 @@ function row(label: string, value: string): HTMLElement {
   ]);
 }
 
-/** The label/value grid: format, points, size, attributes, suggested mode, performance. */
+/** The label/value grid: format, points, size, attributes. */
 function summaryGrid(info: ProjectInfo): HTMLElement {
   const attrs = [
     info.hasRgb && 'RGB',
@@ -142,8 +123,6 @@ function summaryGrid(info: ProjectInfo): HTMLElement {
     row('Points', points),
     row('Size', `${info.width.toFixed(1)} × ${info.depth.toFixed(1)} × ${info.height.toFixed(1)} ${info.sizeUnit}`),
     row('Attributes', attrs.length ? attrs.join(', ') : 'positions only'),
-    ...(info.maxPhysicalDimM != null ? [row('Suggested', suggestMode(info.maxPhysicalDimM))] : []),
-    row('Performance', performance(info.totalCount)),
   ]);
 }
 
@@ -220,8 +199,8 @@ export class ProjectCard {
   }
 
   /**
-   * The scan's CRS changed while the card is up: redraw the Size and Suggested
-   * rows from `info.remeasure` under the new frame. Only the grid is replaced;
+   * The scan's CRS changed while the card is up: redraw the Size
+   * row from `info.remeasure` under the new frame. Only the grid is replaced;
    * the card is not announced again and its timer and countdown keep running.
    * A hidden card, or one describing another scan, is left alone (the next
    * `show` measures afresh).

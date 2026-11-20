@@ -55,10 +55,10 @@ describe('tablet touch targets', () => {
     expect(body).toMatch(/min-width: 48px; min-height: 48px/);
   });
 
-  it('gives the mode segments, Frame all and More 44 px targets', () => {
+  it('gives the mode segments, the embed Frame all and More 44 px targets', () => {
     const body = mediaBody(CSS);
     expect(body).toContain('.olv-modes-segmented .olv-mode { height: 44px; min-width: 44px; }');
-    expect(body).toContain('.olv-mode-reset, .olv-nav-more { width: 44px; height: 44px; }');
+    expect(body).toContain('.olv-nav-more, .olv-nav-frame-all { width: 44px; height: 44px; }');
   });
 
   it('sizes the navigation card, empty state, palette and tour controls at 44 px', () => {
@@ -69,7 +69,7 @@ describe('tablet touch targets', () => {
     expect(body).toMatch(/min-height: 44px; min-width: 44px;/);
   });
 
-  it('sizes the view cube for touch: 44 px edge and corner targets, a 44 px Home, the cube inside its box', () => {
+  it('sizes the view cube for touch: 44 px edge and corner targets, the cube inside its box', () => {
     // The cube owns its touch geometry (its lazy viewCube.css, plus script-set sizes),
     // so the tablet stylesheet no longer carries cube rules.
     expect(mediaBody(CSS)).not.toMatch(/\.olv-viewcube[^-]/);
@@ -82,7 +82,7 @@ describe('tablet touch targets', () => {
     // The cube's widest silhouette (a corner-on view) is its space diagonal.
     expect(2 * half * Math.sqrt(3)).toBeLessThanOrEqual(box);
     const css = readFileSync(fileURLToPath(new URL('../src/ui/viewCube.css', import.meta.url)), 'utf8');
-    expect(css).toMatch(/@media \(pointer:coarse\)\{[^\n]*\.olv-viewcube-home\{width:44px;height:44px\}/);
+    expect(css).not.toContain('olv-viewcube-home');
   });
 
   it('wraps the class visibility checkbox in a label that is a 44 px box under the query only', () => {

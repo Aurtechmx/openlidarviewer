@@ -8,8 +8,11 @@ import { test, expect } from '@playwright/test';
 
 test('the empty state offers a Batch convert entry that opens the modal', async ({ page }) => {
   await page.goto('/');
+  const summary = page.locator('.olv-empty-formats-summary', { hasText: 'Compatible data' });
+  await expect(summary).toBeVisible({ timeout: 20_000 });
+  await summary.click();
   const link = page.locator('.olv-convert-chip');
-  await expect(link).toBeVisible({ timeout: 20_000 });
+  await expect(link).toBeVisible();
   await link.click();
 
   const dialog = page.locator('.olv-bc-dialog');
@@ -19,6 +22,7 @@ test('the empty state offers a Batch convert entry that opens the modal', async 
 
 test('format pills: LAS selectable, LAZ honestly disabled; convert gated until files added', async ({ page }) => {
   await page.goto('/');
+  await page.locator('.olv-empty-formats-summary', { hasText: 'Compatible data' }).click();
   await page.locator('.olv-convert-chip').click();
   // Scope to the modal — the in-project Export panel reuses the same classes.
   const dialog = page.locator('.olv-bc-dialog');
@@ -40,6 +44,7 @@ test('format pills: LAS selectable, LAZ honestly disabled; convert gated until f
 
 test('the modal closes via the backdrop and the ✕ button', async ({ page }) => {
   await page.goto('/');
+  await page.locator('.olv-empty-formats-summary', { hasText: 'Compatible data' }).click();
   await page.locator('.olv-convert-chip').click();
   await expect(page.locator('.olv-bc-dialog')).toBeVisible();
   await page.locator('.olv-bc-close').click();
@@ -48,6 +53,7 @@ test('the modal closes via the backdrop and the ✕ button', async ({ page }) =>
 
 test('a queued file whose name truncates carries a title so the full name is recoverable', async ({ page }) => {
   await page.goto('/');
+  await page.locator('.olv-empty-formats-summary', { hasText: 'Compatible data' }).click();
   await page.locator('.olv-convert-chip').click();
   const dialog = page.locator('.olv-bc-dialog');
   await expect(dialog).toBeVisible();
@@ -93,6 +99,7 @@ test('LAS 1.2 refuses classes above 31 with the reason, and writes them wrapped 
   });
 
   await page.goto('/');
+  await page.locator('.olv-empty-formats-summary', { hasText: 'Compatible data' }).click();
   await page.locator('.olv-convert-chip').click();
   const dialog = page.locator('.olv-bc-dialog');
   await expect(dialog).toBeVisible();
@@ -155,6 +162,7 @@ for (const c of [
     });
 
     await page.goto('/');
+    await page.locator('.olv-empty-formats-summary', { hasText: 'Compatible data' }).click();
     await page.locator('.olv-convert-chip').click();
     const dialog = page.locator('.olv-bc-dialog');
     await expect(dialog).toBeVisible();
@@ -191,6 +199,7 @@ test('the Y-up to Z-up option is offered in Keep only, and rotates a local Y-up 
   ].join('\n');
 
   await page.goto('/');
+  await page.locator('.olv-empty-formats-summary', { hasText: 'Compatible data' }).click();
   await page.locator('.olv-convert-chip').click();
   const dialog = page.locator('.olv-bc-dialog');
   await expect(dialog).toBeVisible();
@@ -234,6 +243,7 @@ test('the Y-up to Z-up option is offered in Keep only, and rotates a local Y-up 
 
 test('assigning a code LAS 1.4 cannot describe selects LAS 1.2 and says why before Convert is pressed', async ({ page }) => {
   await page.goto('/');
+  await page.locator('.olv-empty-formats-summary', { hasText: 'Compatible data' }).click();
   await page.locator('.olv-convert-chip').click();
   const dialog = page.locator('.olv-bc-dialog');
   await expect(dialog).toBeVisible();

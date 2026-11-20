@@ -49,8 +49,8 @@
 
   /* The mode segments, Frame all and More grow to 44 px targets. */
   .olv-modes-segmented .olv-mode { height: 44px; min-width: 44px; }
-  .olv-mode-reset, .olv-nav-more { width: 44px; height: 44px; }
-  .olv-nav-more { width: auto; min-width: 44px; }
+  .olv-nav-more, .olv-nav-frame-all { width: 44px; height: 44px; }
+  .olv-nav-more, .olv-nav-frame-all { width: auto; min-width: 44px; }
   .olv-speed-slider { height: 44px; }
 
   /* Camera chips and mode pads keep their row; the chip text stays on one line. */
@@ -73,7 +73,7 @@
   /* The ViewCube sizes its own faces, spots and Home control for coarse
      pointers (viewCube.ts: 156 px cube, 44 px hit areas). */
   /* Clip flow and result card. */
-  .olv-result-btn, .olv-clip-ind-clear, .olv-clip-draw, .olv-clip-clear,
+  .olv-result-btn, .olv-clip-draw, .olv-clip-clear,
   .olv-clip-advanced-summary, .olv-result-dismiss, .olv-clip-enable {
     min-height: 44px; min-width: 44px;
     display: inline-flex; align-items: center; justify-content: center;
@@ -82,11 +82,3 @@
   .olv-clip-num { min-height: 44px; }
 }
 
-
-/* Portrait tablets narrower than 820 px (a small tablet is 768 px): with every
-   header control at 44 px the right cluster is 589 px wide and the GitHub
-   link sat past the right edge. It goes here; the Credits page in the same
-   header links the source. 820 px and wider keep all three links. */
-@media (pointer: coarse) and (hover: none) and (min-width: 768px) and (max-width: 819px) and (min-height: 600px) {
-  .olv-github-source { display: none; }
-}

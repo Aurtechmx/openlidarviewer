@@ -244,11 +244,17 @@ describe('Inspector Basic / Advanced', () => {
 
   it('Basic offers quick appearance shortcuts through the existing preset callbacks', () => {
     const onRgb = vi.fn();
-    const onEdl = vi.fn();
-    const ins = new Inspector({ ...fakeCallbacks(), onRgbAppearancePreset: onRgb, onEdlPreset: onEdl });
+    const ins = new Inspector({ ...fakeCallbacks(), onRgbAppearancePreset: onRgb });
     const quick = byClass(root(ins), 'olv-quick-appearance')!;
     expect(quick.classList.contains('olv-tier-basic')).toBe(true);
-    const [rgbRail, edlRail] = quick.children.slice(1);
+    // Only the RGB looks: EDL on/off is the Speed/Quality control's.
+    expect(quick.children.slice(1)).toHaveLength(1);
+    const [rgbRail] = quick.children.slice(1);
+    // No RGB: the heading goes with the rail, so nothing is left empty.
+    ins.setColorModes(['elevation'], 'elevation');
+    expect(quick.classList.contains('olv-hidden')).toBe(true);
+    ins.setColorModes(['rgb', 'elevation'], 'rgb');
+    expect(quick.classList.contains('olv-hidden')).toBe(false);
     // RGB looks appear only when the scan carries colour.
     ins.setColorModes(['elevation'], 'elevation');
     expect(rgbRail.classList.contains('olv-hidden')).toBe(true);
@@ -257,12 +263,47 @@ describe('Inspector Basic / Advanced', () => {
     expect(rgbRail.children.map((c) => c.textContent)).toEqual(['Natural', 'Photoreal', 'Survey', 'High Contrast']);
     rgbRail.children[1].click();
     expect(onRgb).toHaveBeenCalledWith('photoreal-rgb');
-    edlRail.children[0].click();
-    expect(onEdl).toHaveBeenCalledWith(null);
     // Renderer sync lights the shortcut too.
     ins.syncVisuals({ rgbAppearancePresetId: 'survey', edlPresetId: null, skyPresetId: 'black', temperature: 0, tint: 0 } as never);
     expect(rgbRail.children[2].classList.contains('olv-chip-active')).toBe(true);
-    expect(edlRail.children[0].classList.contains('olv-chip-active')).toBe(true);
+  });
+
+  it('Basic shows the one EDL strength slider while EDL is on and hides it while EDL is off', () => {
+    const onStrength = vi.fn();
+    const ins = new Inspector({ ...fakeCallbacks(), onEdlStrength: onStrength });
+    const rendering = (edlEnabled: boolean) => ({
+      pointSize: 2, edlEnabled, edlStrength: 0.8, pointSizeMode: 'adaptive', antialiasing: true,
+      twoFingerTwistEnabled: true, splatMode: 'round',
+    }) as never;
+    const label = deepest(root(ins), 'EDL strength')!;
+    const row = label.parent!;
+    const sliders = root(ins).querySelectorAll('input').filter((n) => n.type === 'range' && n.title.includes('depth shading'));
+    // One control, not a Basic copy beside the Advanced one.
+    expect(sliders).toHaveLength(1);
+    expect(sliders[0].parent).toBe(row);
+    // Each Rendering slider is named by its visible label, not by its tooltip;
+    // value text as the point-size slider has it.
+    expect(sliders[0].getAttribute('aria-label')).toBe('EDL strength');
+    const pointSize = root(ins).querySelectorAll('input').find((n) => n.type === 'range' && n.title.includes('size of each point'))!;
+    expect(pointSize.getAttribute('aria-label')).toBe('Point size');
+    expect(deepest(root(ins), 'Point size')!.textContent).toBe('Point size');
+    expect(sliders[0].getAttribute('aria-valuetext')).toBe(pointSize.getAttribute('aria-valuetext'));
+    const shown = (): boolean => !tierHidden(ins, row) && !row.classList.contains('olv-hidden');
+    expect(ins.detailMode()).toBe('basic');
+    ins.syncRendering(rendering(true));
+    expect(shown()).toBe(true);
+    expect(sliders[0].value).toBe('0.8');
+    ins.syncRendering(rendering(false));
+    expect(shown()).toBe(false);
+    // The same slider in Advanced, following the same state.
+    ins.setDetailMode('advanced');
+    expect(shown()).toBe(false);
+    ins.syncRendering(rendering(true));
+    expect(shown()).toBe(true);
+    ins.setDetailMode('basic');
+    expect(shown()).toBe(true);
+    sliders[0].dispatchEvent({ type: 'input' });
+    expect(onStrength).toHaveBeenCalledTimes(1);
   });
 
   it('the Layers section reparented into the Data workspace is never hidden by the mode', () => {

@@ -8,9 +8,10 @@
  * claimed.
  *
  * Controls covered (C1): the dock buttons, whose labels now come from the
- * action registry; the NavBar frame button and camera chips, whose names now
- * come from the registry; the canvas menu rows; the empty state's Open scan
- * and the Measure panel's Save session.
+ * action registry, Frame all among them; the NavBar camera chips, whose names
+ * now come from the registry; the NavBar Frame all of the bare layouts
+ * (`?embed=1`, `?ui=minimal`), which have no dock; the canvas menu rows; the
+ * empty state's Open scan and the Measure panel's Save session.
  */
 import { test, expect, type Locator, type Page } from '@playwright/test';
 import { dropDenseGridPly, pinNavigationPanel, placeTestDistance } from './helpers';
@@ -58,7 +59,9 @@ test.describe('targets at desktop size', { tag: '@desktop-only' }, () => {
     await openScan(page);
     await expect(page.locator('.olv-dock [data-action="tool.measure"]')).toBeEnabled({ timeout: 20_000 });
     expectAtLeast(await sizes(page.locator('.olv-dock [data-action]')), AA, 'dock buttons');
-    expectAtLeast(await sizes(page.locator('.olv-navbar .olv-mode-reset')), AA, 'NavBar Frame all');
+    expectAtLeast(await sizes(page.locator('.olv-dock [data-action="camera.frame-all"]')), AA, 'dock Frame all');
+    // Frame all shows once, on the dock: the nav row carries it only in the bare layouts.
+    await expect(page.locator('.olv-navbar .olv-nav-frame-all')).toHaveCount(0);
     expectAtLeast(await sizes(page.locator('.olv-navbar .olv-cam-chip')), AA, 'NavBar camera chips');
 
     const canvas = page.locator('canvas').first();
@@ -67,6 +70,17 @@ test.describe('targets at desktop size', { tag: '@desktop-only' }, () => {
     await expect(page.locator('.olv-ctxmenu')).toBeVisible();
     expectAtLeast(await sizes(page.locator('.olv-ctxmenu-item')), AA, 'canvas menu rows');
     await page.keyboard.press('Escape');
+  });
+
+  test('embed mode shows Frame all in the nav row, at target size', async ({ page }) => {
+    await page.goto('/?test=1&embed=1');
+    await dropDenseGridPly(page);
+    await expect(page.locator('.olv-empty')).toBeHidden({ timeout: 20_000 });
+    const frameAll = page.locator('.olv-navbar .olv-nav-frame-all');
+    await expect(frameAll).toBeVisible();
+    await expect(frameAll).toHaveAccessibleName('Frame all');
+    await expect(page.locator('.olv-dock')).toBeHidden();
+    expectAtLeast(await sizes(frameAll), AA, 'NavBar Frame all (embed)');
   });
 
   test('Measure panel Save session', async ({ page }) => {

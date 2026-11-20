@@ -2,8 +2,8 @@
  * viewCube.ts — the lazy-loaded on-canvas ViewCube.
  *
  * A small CSS-3D cube that turns with the camera (pitch, yaw and roll), with
- * six labelled faces, twelve edges and eight corners to click, and a Home
- * control that refits the scan. Lazy on purpose: it is only mounted when
+ * six labelled faces, twelve edges and eight corners to click. Frame all is
+ * the dock's button and the R key, not a second control here. Lazy on purpose: it is only mounted when
  * enabled and a scan is open, so none of this ships in the startup shell. Its
  * stylesheet (`viewCube.css`) is split into the lazy chunk with it, themed
  * through the app's custom properties, so the eager stylesheet does not grow.
@@ -60,8 +60,8 @@ export interface ViewCubeOptions {
   readonly onView: (view: StandardView, orientation: CubeOrientation) => void;
   /** An edge or corner was chosen. */
   readonly onOrient: (target: CubeTarget, orientation: CubeOrientation) => void;
-  /** The Home control: refit the whole scan (the existing Frame all). */
-  readonly onHome: () => void;
+  /** Not drawn any more: Frame all lives on the dock. Callers may still pass it. */
+  readonly onHome?: () => void;
   /**
    * Elements the cube must stay clear of. Defaults to the rails, the header,
    * the colour key, the measure bar and the active-tool pill.
@@ -94,24 +94,6 @@ function matches(query: string): boolean {
 
 
 
-/** The Home glyph, built as DOM (no markup strings): a roof over a box. */
-function homeIcon(): Element | null {
-  if (typeof document.createElementNS !== 'function') return null;
-  const ns = 'http://www.w3.org/2000/svg';
-  const svg = document.createElementNS(ns, 'svg');
-  svg.setAttribute('viewBox', '0 0 16 16');
-  svg.setAttribute('aria-hidden', 'true');
-  for (const [k, v] of [['fill', 'none'], ['stroke', 'currentColor'], ['stroke-width', '1.5'], ['stroke-linecap', 'round'], ['stroke-linejoin', 'round']]) {
-    svg.setAttribute(k, v);
-  }
-  for (const d of ['M2.5 7.5 8 3l5.5 4.5', 'M4 6.5V13h8V6.5']) {
-    const path = document.createElementNS(ns, 'path');
-    path.setAttribute('d', d);
-    svg.appendChild(path);
-  }
-  return svg;
-}
-
 /** The default obstacles: everything the cube must not cover on the stage. */
 function defaultObstacles(): CubeObstacle[] {
   if (typeof document === 'undefined' || typeof document.querySelectorAll !== 'function') return [];
@@ -130,9 +112,8 @@ const OBSTACLE_SELECTOR = [
   '.olv-navbar',
   '.olv-nav-prompt-tool',
   '.olv-dock',
-  // The clip flow's result card and active-clip chip. Hidden ones have no box and are skipped in place().
+  // The clip flow's result card. A hidden one has no box and is skipped in place().
   '.olv-result-card',
-  '.olv-clip-indicator',
 ].join(', ');
 
 function cubeTargetForViewId(view: StandardView): string {
@@ -153,10 +134,7 @@ export function mountViewCube(opts: ViewCubeOptions): ViewCubeHandle {
   root.setAttribute('role', 'group');
   root.setAttribute('aria-label', 'View cube');
   root.setAttribute('data-testid', 'viewcube');
-  // The stage is the cube's square; Home sits in a strip below it, so it never
-  // covers an edge or corner target.
-  const height = geo.box + geo.home + 4;
-  root.style.cssText = `width:${geo.box}px;height:${height}px;top:14px;right:14px;`;
+  root.style.cssText = `width:${geo.box}px;height:${geo.box}px;top:14px;right:14px;`;
 
   const stage = document.createElement('div');
   stage.className = 'olv-viewcube-stage';
@@ -276,22 +254,6 @@ export function mountViewCube(opts: ViewCubeOptions): ViewCubeHandle {
     }, 0);
   });
 
-  // ── Home ──────────────────────────────────────────────────────────────
-  const home = document.createElement('button');
-  home.type = 'button';
-  home.className = 'olv-viewcube-home';
-  home.setAttribute('data-testid', 'viewcube-home');
-  home.setAttribute('aria-label', 'View cube home: frame all');
-  home.title = 'Frame all (R): fit the camera to the entire scan';
-  const icon = homeIcon();
-  if (icon) home.appendChild(icon);
-  home.addEventListener('click', (e) => {
-    e.stopPropagation();
-    home.blur();
-    opts.onHome();
-  });
-  root.appendChild(home);
-
   // ── Labels (only rewritten when the frame's geographic state flips) ───
   let lastGeographic: boolean | null = null;
   const applyLabels = (geographic: boolean): void => {
@@ -333,7 +295,7 @@ export function mountViewCube(opts: ViewCubeOptions): ViewCubeHandle {
       if (r.right <= h.left || r.left >= h.right || r.bottom <= h.top || r.top >= h.bottom) continue;
       rects.push({ left: r.left - h.left, top: r.top - h.top, right: r.right - h.left, bottom: r.bottom - h.top });
     }
-    const p = placeCube({ width: h.width, height: h.height }, { width: geo.box, height }, rects);
+    const p = placeCube({ width: h.width, height: h.height }, { width: geo.box, height: geo.box }, rects);
     // Nowhere clear to stand: hide the cube rather than draw it over a control.
     // Its views stay in the More menu and the command palette.
     const next = p === null ? 'hidden' : `left:${p.left}px;top:${p.top}px`;

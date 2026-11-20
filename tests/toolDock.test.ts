@@ -105,6 +105,10 @@ describe('ToolDock manifest', () => {
     ]);
   });
 
+  it('names the R key on Frame all, its only visible carrier', () => {
+    expect(buttons(makeDock())[0].getAttribute('aria-keyshortcuts')).toBe('R');
+  });
+
   it('carries every per-tool CSS class the mobile stylesheets key off', () => {
     const b = buttons(makeDock());
     expect(b[0].classList.contains('olv-tool-frame')).toBe(true);
@@ -134,13 +138,13 @@ describe('ToolDock manifest', () => {
     expect(dock.getAttribute('aria-label')).toBe('Tools');
   });
 
-  it('gives the five toggles aria-pressed="false" at creation', () => {
+  it('gives the four toggles aria-pressed="false" at creation', () => {
     const b = buttons(makeDock());
-    for (const i of [2, 3, 4, 5, 6]) {
+    for (const i of [2, 3, 4, 5]) {
       expect(b[i].getAttribute('aria-pressed')).toBe('false');
     }
-    // Non-toggles (incl. Close) never get aria-pressed.
-    for (const i of [0, 1, 7, 8, 9, 10, 11]) {
+    // Non-toggles (incl. Analyse, which opens a tab, and Close) never get aria-pressed.
+    for (const i of [0, 1, 6, 7, 8, 9, 10, 11]) {
       expect(b[i].hasAttribute('aria-pressed')).toBe(false);
     }
   });
@@ -222,9 +226,10 @@ describe('ToolDock manifest', () => {
     expect(annotate.classList.contains('olv-tool-active')).toBe(true);
 
     dock.setAnalyseEnabled(true);
-    expect(analyse.title).toBe('Show or hide the terrain analysis panel');
+    expect(analyse.title).toBe('Open the Analyse tab');
+    // Not a toggle: the workspace tab shows the mode, so the button is never pressed.
     dock.setAnalyseActive(true);
-    expect(analyse.getAttribute('aria-pressed')).toBe('true');
+    expect(analyse.getAttribute('aria-pressed')).toBeNull();
 
     dock.setCloseEnabled(true);
     expect(close.disabled).toBe(false);

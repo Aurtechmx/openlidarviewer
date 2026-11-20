@@ -61,7 +61,7 @@ test.describe('view cube target size', () => {
 
   test('every shown target is 24px or has the spacing exemption, at default and glancing orientations', async ({ page }) => {
     test.setTimeout(120_000);
-    await page.goto('/?test=1');
+    await page.goto('/?test=1&viewcube=1');
     await dropDenseGridPly(page);
     await expect(page.locator('.olv-viewcube')).toBeVisible({ timeout: 20_000 });
     await waitForCameraSettled(page);

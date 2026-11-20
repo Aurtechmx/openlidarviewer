@@ -91,6 +91,9 @@ test('header links do not move when fonts arrive late', async ({ page }) => {
   await expect(page.getByRole('button', { name: 'Performance settings' })).toBeVisible({ timeout: 15_000 });
   await page.waitForTimeout(300);
   const before = await measureHeader(page);
+  // GitHub and Guide sit in the closed About menu: its summary is what the
+  // header shows, so it is what is measured.
+  expect(before).toHaveProperty('About');
 
   release = true;
   for (const go of held.splice(0)) await go();

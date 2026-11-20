@@ -87,9 +87,6 @@ for (const phone of PHONES) {
           }),
         ).toBeVisible();
       }
-      await expect(
-        page.locator('.olv-visuals-group-label', { hasText: 'Depth (EDL)' }),
-      ).toBeVisible();
     });
 
     test('Visuals Studio chips meet 44 px touch-target minimum', async ({

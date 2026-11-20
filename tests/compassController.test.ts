@@ -53,12 +53,13 @@ interface Harness {
   stored(): string | null;
 }
 
-function harness(initialPref: string | null = null, phone = false): Harness {
+function harness(initialPref: string | null = null, phone = false, coarse = false): Harness {
   let pref = initialPref;
   const platform: CompassPlatform = {
     readPref: () => pref,
     writePref: (value) => { pref = value; },
     isPhone: () => phone,
+    isCoarsePointer: () => coarse,
   };
   return { platform, stored: () => pref };
 }
@@ -98,13 +99,24 @@ function build(
 }
 
 describe('compass preference', () => {
-  it('is on by default and respects an explicit stored choice either way', () => {
-    expect(build(null).c.isEnabled()).toBe(true);
+  it('is off by default and respects an explicit stored choice either way', () => {
+    expect(build(null).c.isEnabled()).toBe(false);
     expect(build('off').c.isEnabled()).toBe(false);
     expect(build('on').c.isEnabled()).toBe(true);
   });
 
-  it('stays off by default on a phone, but a stored ON or ?viewcube=1 still wins', () => {
+  it('stays on by default on a tablet (coarse pointer), off on a desktop', () => {
+    const tablet = (pref: string | null, search = ''): boolean => {
+      const h = harness(pref, false, true);
+      return createCompassController({ host, urlParams: new URLSearchParams(search), platform: h.platform, loadCube: fakeCube().loadCube }).isEnabled();
+    };
+    expect(tablet(null)).toBe(true);
+    expect(tablet('off')).toBe(false);
+    expect(tablet(null, '?viewcube=0')).toBe(false);
+    expect(build(null).c.isEnabled()).toBe(false);
+  });
+
+  it('stays off by default on a phone too, but a stored ON or ?viewcube=1 still wins', () => {
     const phone = (pref: string | null, search = ''): boolean => {
       const h = harness(pref, true);
       return createCompassController({ host, urlParams: new URLSearchParams(search), platform: h.platform, loadCube: fakeCube().loadCube }).isEnabled();

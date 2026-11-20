@@ -35,6 +35,8 @@ interface Api {
 }
 const api = <T>(page: Page, fn: (a: Api) => T): Promise<T> =>
   page.evaluate(`(${fn.toString()})(window.__OLV_TEST_API__)`) as Promise<T>;
+/** A count as the page writes it (the browser's en-US default). */
+const fmt = (n: number): string => n.toLocaleString('en-US');
 
 async function openTower(page: Page, size = { width: 1100, height: 700 }): Promise<void> {
   await page.setViewportSize(size);
@@ -196,7 +198,7 @@ test('a box drawn on the ground isolates a 3D volume, not a slab, and the points
   await openToolPage(page, 'Measure');
   await drawGroundBox(page);
   await page.locator('.olv-mp-use-clip').click();
-  await expect(page.locator('.olv-clip-indicator')).toBeVisible();
+  await expect(page.locator('.olv-ss-clip')).toBeVisible();
 
   const s = await api(page, (a) => a.getClipState());
   const want = expectedInsideColumn();
@@ -206,6 +208,8 @@ test('a box drawn on the ground isolates a 3D volume, not a slab, and the points
   expect(s.clip!.box.max[2]).toBeGreaterThanOrEqual(TOP);
   // Kept is the whole column: ground in the footprint AND the tower above it.
   expect(s.count).toEqual({ kept: want.inside, total: want.total });
+  // The strip states the same count and the side kept, word for word.
+  await expect(page.locator('.olv-ss-clip')).toHaveText(`Clipped: ${fmt(want.inside)} of ${fmt(want.total)} points · Showing inside box`);
   expect(want.inside).toBeGreaterThan(5000);
   expect(want.inside).toBeLessThan(want.total / 2);
 
@@ -241,7 +245,7 @@ test('Outside mode removes the volume; Fit to scan, a numeric edit and Clear all
   await openToolPage(page, 'Measure');
   await drawGroundBox(page);
   await page.locator('.olv-mp-use-clip').click();
-  await expect(page.locator('.olv-clip-indicator')).toBeVisible();
+  await expect(page.locator('.olv-ss-clip')).toBeVisible();
   await backToView(page, pose0);
   const clip = page.locator('.olv-clip-panel');
   const probe: Array<[number, number, number]> = [ROOF, WALL, GROUND_IN_BOX, GROUND_FAR];
@@ -257,6 +261,7 @@ test('Outside mode removes the volume; Fit to scan, a numeric edit and Clear all
   expect(out[3]).toBeGreaterThan(8);
   const st = await api(page, (a) => a.getClipState());
   expect(st.count).toEqual({ kept: want.total - want.inside, total: want.total });
+  await expect(page.locator('.olv-ss-clip')).toHaveText(`Clipped: ${fmt(want.total - want.inside)} of ${fmt(want.total)} points · Showing outside box`);
 
   // Back to Inside, then a numeric edit: pull the x maximum to the tower's west side.
   await clip.locator('.olv-bc-pill', { hasText: 'Inside' }).click();
@@ -272,6 +277,12 @@ test('Outside mode removes the volume; Fit to scan, a numeric edit and Clear all
   // Fit to scan: the box is the whole scan again, so everything draws.
   await clip.getByRole('button', { name: 'Fit to scan' }).click();
   await drawn(page, probe, allLit, 'Fit to scan draws everything again');
+  // A clip that keeps every point says so on screen, never "Clipped: n of n".
+  const keepsAll = page.locator('.olv-ss-clip');
+  await expect(keepsAll).toHaveText(`Clip on: keeps all ${fmt(want.total)} points · Showing inside box`);
+  await expect(keepsAll).toBeVisible();
+  await expect(keepsAll).toBeInViewport();
+  expect((await api(page, (a) => a.getClipState())).count).toEqual({ kept: want.total, total: want.total });
 
   // Turn off: off, everything draws.
   await clip.getByRole('button', { name: 'Turn off' }).click();
@@ -287,13 +298,13 @@ test('Draw clipping box and the Box row action build the same clip', async ({ pa
   await expect(page.locator('.olv-measure-bar')).toBeVisible();
   await drawGroundBox(page);
   await page.getByRole('button', { name: /Isolate this box/ }).click();
-  await expect(page.locator('.olv-clip-indicator')).toBeVisible();
+  await expect(page.locator('.olv-ss-clip')).toBeVisible();
   const viaCard = (await api(page, (a) => a.getClipState())).clip!;
 
-  await page.locator('.olv-clip-indicator').getByRole('button', { name: 'Turn off clipping' }).click();
+  await page.getByRole('button', { name: 'Turn off clipping' }).click();
   await openToolPage(page, 'Measure');
   await page.locator('.olv-mp-use-clip').click();
-  await expect(page.locator('.olv-clip-indicator')).toBeVisible();
+  await expect(page.locator('.olv-ss-clip')).toBeVisible();
   const viaRow = (await api(page, (a) => a.getClipState())).clip!;
 
   expect(viaRow).toEqual(viaCard);
@@ -316,7 +327,7 @@ test('a clipped-away point cannot be picked, and double-click focus lands on wha
   await openToolPage(page, 'Measure');
   await drawGroundBox(page);
   await page.locator('.olv-mp-use-clip').click();
-  await expect(page.locator('.olv-clip-indicator')).toBeVisible();
+  await expect(page.locator('.olv-ss-clip')).toBeVisible();
   await api(page, (a) => a.setMeasureMode(false));
   await backToView(page, pose0);
   farScreen = (await api(page, (a) => a.projectToClient({ x: 35, y: 25, z: 1 })))!;
@@ -392,14 +403,13 @@ test('orbiting near the clipped area is not materially slower than without a cli
   await drawGroundBox(page);
   // Isolate and clear once so the clip exists, then switch it with the panel.
   await page.locator('.olv-mp-use-clip').click();
-  await expect(page.locator('.olv-clip-indicator')).toBeVisible();
+  await expect(page.locator('.olv-ss-clip')).toBeVisible();
   await api(page, (a) => a.setMeasureMode(false));
-  const chip = page.locator('.olv-clip-indicator');
   const setClip = async (on: boolean): Promise<void> => {
     const enabled = (await api(page, (a) => a.getClipState())).clip?.enabled === true;
     if (enabled === on) return;
     if (on) await page.locator('.olv-clip-panel .olv-clip-enable input').check();
-    else await chip.getByRole('button', { name: 'Turn off clipping' }).click();
+    else await page.getByRole('button', { name: 'Turn off clipping' }).click();
     await page.waitForTimeout(600);
   };
   const phase = async (label: string): Promise<{ off: number[]; on: number[] }> => {

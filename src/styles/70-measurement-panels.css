@@ -425,7 +425,7 @@
   body:has(.olv-measure-bar:not(.olv-hidden)) .olv-flow-lane { left: 88px; }
 }
 .olv-flow-lane > * { pointer-events: auto; max-width: 100%; box-sizing: border-box; }
-.olv-result-card, .olv-clip-indicator, .olv-empty-view {
+.olv-result-card, .olv-empty-view {
   background: var(--panel); border: 0.5px solid var(--hairline); border-radius: var(--radius-lg);
   -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px);
   box-shadow: var(--shadow-floating); color: var(--text); font-size: var(--text-sm);
@@ -451,19 +451,7 @@
 .olv-result-btn:hover:not(:disabled) { border-color: var(--accent); color: var(--text); }
 .olv-result-btn:disabled { opacity: 0.45; cursor: not-allowed; }
 .olv-result-clip { border-color: var(--accent); color: var(--text); background: var(--accent-soft); }
-.olv-result-btn:focus-visible, .olv-result-dismiss:focus-visible, .olv-clip-ind-clear:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
-.olv-clip-indicator {
-  display: inline-flex; align-items: center; gap: var(--space-lg);
-  padding: var(--space-sm) var(--space-sm) var(--space-sm) var(--space-xl); border-radius: var(--radius-pill);
-  font-size: var(--text-xs);
-}
-.olv-clip-ind-text { white-space: nowrap; }
+.olv-result-btn:focus-visible, .olv-result-dismiss:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 /* Nothing drawn: what is on, and the fixes that apply. */
 .olv-empty-view { display: flex; flex-direction: column; gap: var(--space-sm); padding: var(--space-lg) var(--space-xl); max-width: 360px; }
 .olv-empty-view-text { margin: 0; line-height: 1.4; }
-.olv-clip-ind-clear {
-  font: inherit; font-size: var(--text-xs); cursor: pointer; color: var(--text-dim);
-  padding: var(--space-xs) var(--space-lg); border-radius: var(--radius-pill);
-  border: 0.5px solid var(--hairline); background: transparent;
-}
-.olv-clip-ind-clear:hover { border-color: var(--accent); color: var(--text); }

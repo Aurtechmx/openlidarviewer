@@ -11,10 +11,12 @@
 
 import './stateStrip.css';
 import { el } from './dom';
+import { announcePolite } from './politeAnnounce';
+import { MOBILE_LANDSCAPE_MAX_HEIGHT, MOBILE_MAX_WIDTH } from './isMobileDevice';
 import { fullFileAvailability, reloadAvailability, reviewSampleTip, sampleActionLinks } from '../app/fullFileActions';
 import { STATE_GLYPH, STATE_LABEL, type SciState } from './stateChip';
 import { linearUnitLabel } from '../io/crs';
-import { clipStatusText } from '../render/clip/clipScope';
+import { clipModePhrase, clipStatusText, clipTurnOff } from '../render/clip/clipScope';
 import type { StripSnapshot } from '../app/stateStrip/stripReads';
 import type { Coverage } from '../process/ProcessPlan';
 import { formatWait, WAIT_SHOWN_AFTER_MS } from '../process/waitClock';
@@ -24,6 +26,8 @@ export type StripItemId = 'dataset' | 'crs' | 'vertical' | 'basis' | 'clip' | 'p
 export interface StateStripHost {
   /** Open the place that explains the item. */
   open(item: StripItemId): void;
+  /** True while the Clip panel's own polite readout is on screen; the strip then leaves clip changes to it. */
+  clipReadoutShown?(): boolean;
 }
 
 export interface StateStrip {
@@ -61,6 +65,20 @@ const ITEM_TARGET: Readonly<Record<StripItemId, string>> = {
   review: 'Opens the Analyse list of affected items',
 };
 
+/**
+ * How long a clip that has just turned on waits for its kept count before it
+ * is announced without one. The Clip panel counts 120 ms after a change
+ * (CLIP_COUNT_DEBOUNCE_MS); a streamed scan never has a count.
+ */
+export const CLIP_ANNOUNCE_WAIT_MS = 600;
+
+/**
+ * The touch-phone layout, where the strip keeps one row and scrolls sideways
+ * (the matching rule in stateStrip.css).
+ */
+export const STRIP_SCROLL_QUERY =
+  `(pointer: coarse) and (max-width: ${MOBILE_MAX_WIDTH}px), (pointer: coarse) and (max-height: ${MOBILE_LANDSCAPE_MAX_HEIGHT}px)`;
+
 /** A caution worth a glyph on the strip: anything short of measured or info. */
 function caution(v: SciState): boolean {
   return v !== 'measured' && v !== 'info';
@@ -72,6 +90,14 @@ export function createStateStrip(host: StateStripHost): StateStrip {
   // The "Export all N points" action sits beside a sampled basis.
   const fullFileSlot = el('span', { className: 'olv-ss-fullfile' });
   let fullFileKey = '';
+  // Turn off sits beside the clip item (a button cannot nest in a button) and
+  // shows with it, so the clip is never more than one click from off.
+  const clipOff = el('button', {
+    className: 'olv-ss-item olv-ss-clipoff', type: 'button', text: 'Turn off',
+    ariaLabel: 'Turn off clipping', tip: 'Turn the clip off and show the whole scan',
+  });
+  clipOff.hidden = true;
+  clipOff.addEventListener('click', () => clipTurnOff()?.());
   const ids: StripItemId[] = ['dataset', 'crs', 'vertical', 'basis', 'clip', 'processing', 'review'];
   for (const id of ids) {
     const b = el('button', { className: `olv-ss-item olv-ss-${id}`, type: 'button', tip: ITEM_TARGET[id] });
@@ -80,16 +106,26 @@ export function createStateStrip(host: StateStripHost): StateStrip {
     buttons.set(id, b);
     element.append(b);
     if (id === 'basis') element.append(fullFileSlot);
+    if (id === 'clip') element.append(clipOff);
   }
 
-  const paint = (id: StripItemId, text: string | null, validity: SciState | null, short?: string, wait?: string): void => {
+  /**
+   * Repaint one item; true when anything about it changed. `spoken` is the
+   * text for the accessible name when it differs from the shown text.
+   */
+  const paint = (id: StripItemId, text: string | null, validity: SciState | null, short?: string, wait?: string, spoken?: string): boolean => {
     const b = buttons.get(id)!;
-    const key = `${text}|${validity}|${short}|${wait}`;
-    if (b.dataset.key === key) return;
+    const key = `${text}|${validity}|${short}|${wait}|${spoken}`;
+    if (b.dataset.key === key) return false;
     b.dataset.key = key;
     if (text === null) {
+      // A hidden item keeps no text: a task that has left must not stay in the
+      // DOM or in the accessible name under a hidden processing item.
       b.hidden = true;
-      return;
+      b.replaceChildren();
+      b.removeAttribute('aria-label');
+      b.dataset.validity = '';
+      return true;
     }
     b.hidden = false;
     const parts: Node[] = [];
@@ -116,8 +152,78 @@ export function createStateStrip(host: StateStripHost): StateStrip {
     b.replaceChildren(...parts);
     b.dataset.validity = validity ?? '';
     const state = validity && caution(validity) ? ` (${STATE_LABEL[validity]})` : '';
-    const name = `${ITEM_NAME[id]}: ${text}${state}. ${ITEM_TARGET[id]}`;
+    const name = `${ITEM_NAME[id]}: ${spoken ?? text}${state}. ${ITEM_TARGET[id]}`;
     if (b.getAttribute('aria-label') !== name) b.setAttribute('aria-label', name);
+    return true;
+  };
+
+  // On a touch phone the strip is one row that scrolls sideways and the clip
+  // item sits fifth, so it can rest off-screen. When it appears or its text
+  // changes, the strip itself is scrolled (never the page, which
+  // scrollIntoView can move) until the item and Turn off beside it clear the
+  // fade at the row's end; an item wider than the row shows its start.
+  const revealClip = (): void => {
+    if (typeof matchMedia !== 'function' || !matchMedia(STRIP_SCROLL_QUERY).matches) return;
+    const item = buttons.get('clip')!;
+    const cs = typeof getComputedStyle === 'function' ? getComputedStyle(element) : null;
+    const padStart = parseFloat(cs?.paddingLeft ?? '') || 0;
+    const fade = parseFloat(cs?.paddingRight ?? '') || 0;
+    const start = item.offsetLeft - padStart;
+    const end = clipOff.hidden ? item.offsetLeft + item.offsetWidth : clipOff.offsetLeft + clipOff.offsetWidth;
+    const room = element.clientWidth - fade;
+    let next = element.scrollLeft;
+    if (end > next + room) next = end - room;
+    if (start < next) next = Math.max(0, start);
+    if (next !== element.scrollLeft) element.scrollLeft = next;
+  };
+
+  // The strip is a row of buttons, not a live region, so clip changes are said
+  // through the app's one polite region: the clip turned on (with its count),
+  // a side change, the clip turned off. Each once; a new count on the same side
+  // is not said. A clip just turned on waits briefly for its count so the one
+  // announcement carries it; a count that lands after the wait is said once
+  // more. `spoken` is the state last said: 'off', a side, or 'on' when the side
+  // is not known; `spokenCounted` is whether that line carried a count.
+  let spoken = 'off';
+  let spokenCounted = false;
+  let waiting: ReturnType<typeof setTimeout> | null = null;
+  let waitingKey = '';
+  let waitingText = '';
+  const stopWaiting = (): void => {
+    if (waiting !== null) clearTimeout(waiting);
+    waiting = null;
+  };
+  const say = (key: string, text: string, counted: boolean): void => {
+    stopWaiting();
+    spoken = key;
+    spokenCounted = counted;
+    // Recorded either way, so a state the readout already spoke is not said again once it closes.
+    if (!host.clipReadoutShown?.()) announcePolite(text);
+  };
+  const announceClip = (key: string, text: string, counted: boolean): void => {
+    if (key === spoken) {
+      stopWaiting();
+      // Said without a count while waiting for one, and the count is here now.
+      if (key !== 'off' && counted && !spokenCounted) say(key, text, true);
+      return;
+    }
+    if (key === 'off') {
+      say(key, 'Clip off', false);
+      return;
+    }
+    if (counted) {
+      say(key, text, true);
+      return;
+    }
+    // The latest text is said when the wait ends.
+    waitingKey = key;
+    waitingText = text;
+    if (waiting === null) {
+      waiting = setTimeout(() => {
+        waiting = null;
+        say(waitingKey, waitingText, false);
+      }, CLIP_ANNOUNCE_WAIT_MS);
+    }
   };
 
   // The phone strip wraps to a third row on the narrowest screens, so the
@@ -145,6 +251,7 @@ export function createStateStrip(host: StateStripHost): StateStrip {
   return {
     element,
     dispose() {
+      stopWaiting();
       observer?.disconnect();
       observer = null;
       if (write) cancelAnimationFrame(write);
@@ -153,7 +260,13 @@ export function createStateStrip(host: StateStripHost): StateStrip {
     },
     render(s) {
       element.classList.toggle('olv-hidden', s === null);
-      if (!s) return;
+      if (!s) {
+        // The scan closed: its clip goes with it unsaid, and the next scan starts from off.
+        stopWaiting();
+        spoken = 'off';
+        spokenCounted = false;
+        return;
+      }
       paint('dataset', s.dataset.value, s.dataset.validity);
       const h = s.horizontal;
       paint(
@@ -174,11 +287,24 @@ export function createStateStrip(host: StateStripHost): StateStrip {
       buttons.get('basis')!.title = s.basis?.value === 'resident-only'
         ? 'Only the points currently in memory, not the whole file.'
         : '';
-      paint('clip', s.clip ? clipStatusText(s.clip) : null, s.clip ? 'info' : null);
+      // The count wording is the shared one; the side kept is said beside it.
+      // A scan with no count (a streamed one) still says the clip is on, and which side.
+      const side = s.clip?.mode ?? s.clipOn ?? undefined;
+      const phrase = side ? clipModePhrase({ kept: 0, total: 0, mode: side }) : '';
+      const clipText = s.clip ? clipStatusText(s.clip) : s.clipOn ? 'Clip on' : null;
+      const clipLine = clipText === null ? null : `${clipText}${phrase ? ` · ${phrase}` : ''}`;
+      // Spoken (announcement and accessible name) with a comma: some screen
+      // readers read "·" aloud as "middle dot". The shown text keeps the dot.
+      const spokenLine = clipText === null ? '' : `${clipText}${phrase ? `, ${phrase}` : ''}`;
+      const clipChanged = paint('clip', clipLine, clipText === null ? null : 'info', undefined, undefined, spokenLine);
+      clipOff.hidden = clipText === null;
+      if (clipChanged && clipLine !== null) revealClip();
+      announceClip(clipLine === null ? 'off' : side ?? 'on', spokenLine, !!s.clip);
       const p = s.processing?.value;
       paint(
         'processing',
-        !p ? null : p.state === 'idle' ? 'Idle' : `${p.label || 'Working'}${p.progress != null ? ` ${Math.round(p.progress * 100)}%` : ''}${p.more > 0 ? ` +${p.more}` : ''}`,
+        // Nothing running shows nothing: an item that always reads "Idle" says no more than its absence.
+        !p || p.state === 'idle' ? null : `${p.label || 'Working'}${p.progress != null ? ` ${Math.round(p.progress * 100)}%` : ''}${p.more > 0 ? ` +${p.more}` : ''}`,
         null,
         undefined,
         p?.state === 'running' && p.elapsedMs >= WAIT_SHOWN_AFTER_MS ? formatWait(p) : undefined,

@@ -3,7 +3,7 @@ import { el } from './dom';
 import { storageGet, storageSet } from './safeStorage';
 import { appTransientLane } from './transientLane';
 import { seatClear, watchSeat } from './hudSeat';
-import { NAVIGATION_PANEL } from './actionNames';
+import { FRAME_ALL, NAVIGATION_PANEL } from './actionNames';
 import type { NavMode } from '../render/NavController';
 import {
   CAMERA_PRESET_KEY,
@@ -49,6 +49,15 @@ export interface NavBarCallbacks {
    * back through {@link NavBar.setPlanActive}.
    */
   onPlanView: () => void;
+}
+
+export interface NavBarOptions {
+  /**
+   * Put Frame all in the nav row. For the bare layouts (`?embed=1`,
+   * `?ui=minimal`), which mount no dock, so the row is the only place a touch
+   * user can reset the view. Off elsewhere: the dock carries Frame all once.
+   */
+  readonly frameAllButton?: boolean;
 }
 
 interface ModeDef {
@@ -290,7 +299,7 @@ export class NavBar {
   /** Pending post-gesture hide of the touch hint; see `_yieldTouchHint`. */
   private _touchYieldTimer: number | null = null;
 
-  constructor(callbacks: NavBarCallbacks) {
+  constructor(callbacks: NavBarCallbacks, options: NavBarOptions = {}) {
     this._cb = callbacks;
 
     // ── Mode selector ─────────────────────────────────────────────────────
@@ -348,24 +357,6 @@ export class NavBar {
       this._panBtn = button;
       segments.push(button);
     }
-    // Frame all — a compact icon button beside the selector.
-    const resetBtn = el('button', {
-      className: 'olv-mode-reset',
-      title: 'Frame all (R): fit the camera to the entire scan',
-      ariaLabel: 'Frame all', // registry name, held by actionNames.test.ts
-    });
-    resetBtn.setAttribute('aria-keyshortcuts', 'R');
-    resetBtn.innerHTML = `<svg viewBox="0 0 24 24" aria-hidden="true" xmlns="http://www.w3.org/2000/svg">
-<circle cx="12" cy="12" r="7" fill="none" stroke="currentColor" stroke-width="1.5"/>
-<circle cx="12" cy="12" r="2" fill="currentColor"/>
-<line x1="12" y1="2" x2="12" y2="6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
-<line x1="12" y1="18" x2="12" y2="22" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
-<line x1="2" y1="12" x2="6" y2="12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
-<line x1="18" y1="12" x2="22" y2="12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>`;
-    resetBtn.addEventListener('click', () => {
-      resetBtn.blur();
-      this._cb.onReset();
-    });
     const switcher = el('div', { className: 'olv-modes olv-modes-segmented' }, segments);
     switcher.setAttribute('role', 'group');
     switcher.setAttribute('aria-label', 'Navigation mode: Orbit, Walk, Fly or Pan');
@@ -415,7 +406,6 @@ export class NavBar {
       panChip,
     ]);
     const metaGroup = el('div', { className: 'olv-legend-group' }, [
-      legendItem(['R'], 'Reset'),
       legendItem(['F'], 'Focus'),
       legendItem(['H'], 'Toggle this'),
     ]);
@@ -635,7 +625,24 @@ export class NavBar {
       this._moreToggle.focus();
     });
     const more = el('div', { className: 'olv-nav-more-wrap' }, [this._moreToggle, this._moreMenu]);
-    this._navRow = el('div', { className: 'olv-nav-row' }, [switcher, resetBtn, more, this._panelToggle, this._speed]);
+    // Frame all beside the selector, in the bare layouts only (see NavBarOptions).
+    const frameAll: HTMLButtonElement[] = [];
+    if (options.frameAllButton === true) {
+      const btn = el('button', {
+        className: 'olv-nav-frame-all',
+        type: 'button',
+        text: FRAME_ALL,
+        title: `${FRAME_ALL} (R): fit the camera to the entire scan`,
+        ariaLabel: FRAME_ALL,
+      });
+      btn.setAttribute('aria-keyshortcuts', 'R');
+      btn.addEventListener('click', () => {
+        btn.blur();
+        this._cb.onReset();
+      });
+      frameAll.push(btn);
+    }
+    this._navRow = el('div', { className: 'olv-nav-row' }, [switcher, ...frameAll, more, this._panelToggle, this._speed]);
     this.element = el('div', { className: 'olv-navbar' }, [this._hud, this._navRow]);
     // Layout clearance for the bottom toast lane: how far above the viewport's
     // bottom edge the mode row's top sits, plus a gap, published as

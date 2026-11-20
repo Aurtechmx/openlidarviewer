@@ -49,6 +49,8 @@ export interface StripLiveReads {
   tasks(): readonly TaskActivity[];
   /** The clip box's kept count, or null when no clip is on. */
   clip?(): ClipScope | null;
+  /** The side a clip that is on keeps, or null; known even when no count exists (a streamed scan). */
+  clipOn?(): 'keep-inside' | 'keep-outside' | null;
 }
 
 export interface StripSnapshot {
@@ -57,6 +59,7 @@ export interface StripSnapshot {
   readonly vertical: StripFact<VerticalRef> | null;
   readonly basis: StripFact<Coverage> | null;
   readonly clip?: ClipScope | null;
+  readonly clipOn?: 'keep-inside' | 'keep-outside' | null;
   readonly processing: StripFact<Processing> | null;
   readonly review: StripFact<ReviewSummary> | null;
 }
@@ -84,6 +87,7 @@ export function readStrip(r: StripLiveReads): StripSnapshot | null {
     vertical: context ? verticalReferenceProvider(context) : null,
     basis: safely(() => layerBasisProvider(r.scanFacts()), null),
     clip: safely(() => r.clip?.() ?? null, null),
+    clipOn: safely(() => r.clipOn?.() ?? null, null),
     processing: safely(() => processingProvider(r.tasks()), null),
     review: safely(() => reviewStateProvider(r.analysisRows(), r.results()), null),
   };

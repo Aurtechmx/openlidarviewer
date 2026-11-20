@@ -45,6 +45,65 @@ function captionShown(panel: ClassLegendPanel): boolean {
   return node !== null && !node.classList.contains('olv-hidden');
 }
 
+/** The visible counts-basis captions (the edit note is a different statement). */
+function countsCaptions(panel: ClassLegendPanel): FakeEl[] {
+  const root = panel.element as unknown as FakeEl;
+  return [...root.querySelectorAll('.olv-cl-samplenote'), ...root.querySelectorAll('.olv-cl-streamnote')]
+    .filter((n, i, all) => all.indexOf(n) === i && !n.classList.contains('olv-cl-editnote') && !n.classList.contains('olv-hidden'));
+}
+
+/**
+ * The protected statements (scripts/protected-phrases.json, ids
+ * sample-class-stream and sample-class-counts) and the denominator each names.
+ * Each must render word for word whenever it applies, merged caption or not.
+ */
+const STREAM_STATEMENT = 'Counts from unique decoded nodes seen so far, not full-source totals.';
+const SAMPLE_STATEMENT = 'Counts, Solo and hide act on the loaded display sample';
+const STREAM_DENOMINATOR = 'not full-source totals';
+const SAMPLE_DENOMINATOR = 'not the full cloud';
+
+describe('Classes legend — the protected count statements render exactly', () => {
+  const streamed = (): ClassLegendPanel => {
+    const panel = new ClassLegendPanel();
+    panel.setClasses(COUNTS, { loaded: LOADED, declared: LOADED });
+    panel.setStreamingMode(true);
+    return panel;
+  };
+  const sampled = (): ClassLegendPanel => {
+    const panel = new ClassLegendPanel();
+    panel.setClasses(COUNTS, { loaded: LOADED, declared: 47_900_000 });
+    return panel;
+  };
+
+  it('streaming only: the streaming statement, with its denominator, and no sample statement', () => {
+    const notes = countsCaptions(streamed());
+    expect(notes).toHaveLength(1);
+    expect(notes[0].textContent).toContain(STREAM_STATEMENT);
+    expect(notes[0].textContent).toContain(STREAM_DENOMINATOR);
+    expect(notes[0].textContent).not.toContain(SAMPLE_STATEMENT);
+  });
+
+  it('display sample only: the sample statement, with its denominator, and no streaming statement', () => {
+    const notes = countsCaptions(sampled());
+    expect(notes).toHaveLength(1);
+    expect(notes[0].textContent).toContain(SAMPLE_STATEMENT);
+    expect(notes[0].textContent).toContain(SAMPLE_DENOMINATOR);
+    expect(notes[0].textContent).not.toContain(STREAM_STATEMENT);
+  });
+
+  it('both: one caption carrying each statement word for word and both denominators', () => {
+    const panel = sampled();
+    panel.setStreamingMode(true);
+    const notes = countsCaptions(panel);
+    expect(notes).toHaveLength(1);
+    const text = notes[0].textContent;
+    expect(text).toContain(STREAM_STATEMENT);
+    expect(text).toContain(SAMPLE_STATEMENT);
+    expect(text).toContain(STREAM_DENOMINATOR);
+    expect(text).toContain(SAMPLE_DENOMINATOR);
+  });
+});
+
 describe('Classes legend — counts name their basis', () => {
   it('a sampled scan labels its class counts as the loaded sample', () => {
     const panel = new ClassLegendPanel();
@@ -66,6 +125,18 @@ describe('Classes legend — counts name their basis', () => {
     expect(captionShown(panel)).toBe(false);
     panel.setClasses(COUNTS);
     expect(captionShown(panel)).toBe(false);
+  });
+
+  it('a streamed and sampled scan carries one caption that names both denominators', () => {
+    const panel = new ClassLegendPanel();
+    panel.setClasses(COUNTS, { loaded: LOADED, declared: 47_900_000 });
+    panel.setStreamingMode(true);
+    expect(countsCaptions(panel)).toHaveLength(1);
+    expect(countsCaptions(panel)[0].textContent).toMatch(/unique decoded nodes/);
+    expect(countsCaptions(panel)[0].textContent).toMatch(/loaded display sample/);
+    panel.setStreamingMode(false);
+    expect(captionShown(panel)).toBe(true);
+    expect(caption(panel)?.textContent ?? '').not.toMatch(/unique decoded nodes/);
   });
 
   it('loading a resident scan after a sampled one clears the caveat', () => {

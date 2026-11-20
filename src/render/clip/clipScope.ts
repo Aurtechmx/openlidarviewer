@@ -9,6 +9,43 @@
 export interface ClipScope {
   readonly kept: number;
   readonly total: number;
+  /** Which side of the box is kept; the state strip says it beside the count. */
+  readonly mode?: 'keep-inside' | 'keep-outside';
+}
+
+let turnOff: (() => void) | null = null;
+
+/** The Clip panel registers its own clear here, so the state strip can offer Turn off. */
+export function setClipTurnOff(fn: (() => void) | null): void {
+  turnOff = fn;
+}
+
+export function clipTurnOff(): (() => void) | null {
+  return turnOff;
+}
+
+let readoutShown: (() => boolean) | null = null;
+
+/**
+ * The Clip panel registers whether its own polite readout is on screen. While
+ * it is, that readout already speaks each clip change, so the state strip
+ * stays quiet rather than say it twice.
+ */
+export function setClipReadoutShown(fn: (() => boolean) | null): void {
+  readoutShown = fn;
+}
+
+export function clipReadoutShown(): boolean {
+  try {
+    return readoutShown?.() ?? false;
+  } catch {
+    return false;
+  }
+}
+
+/** "Showing inside box" / "Showing outside box"; empty when the mode is unknown. */
+export function clipModePhrase(s: ClipScope): string {
+  return s.mode === undefined ? '' : `Showing ${s.mode === 'keep-inside' ? 'inside' : 'outside'} box`;
 }
 
 let current: ClipScope | null = null;
@@ -23,6 +60,19 @@ export function setClipScope(next: ClipScope | null): void {
   // Clip panel clears the scope at boot, before any scan or viewer exists).
   if (next === null && current === null) return;
   current = next;
+  for (const fn of listeners) fn();
+}
+
+let clipOnMode: 'keep-inside' | 'keep-outside' | null = null;
+
+/** Which side a clip that is ON keeps, or null when no clip is on. Set whether or not a count exists. */
+export function clipOn(): 'keep-inside' | 'keep-outside' | null {
+  return clipOnMode;
+}
+
+export function setClipOn(mode: 'keep-inside' | 'keep-outside' | null): void {
+  if (mode === clipOnMode) return;
+  clipOnMode = mode;
   for (const fn of listeners) fn();
 }
 

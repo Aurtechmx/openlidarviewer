@@ -18,6 +18,7 @@
  */
 
 import { el } from './dom';
+import { setHeaderPopoverOpen } from './headerLift';
 import { loadQualityPanel } from '../lazyChunks';
 import type { QualityPanel } from './QualityPanel';
 import type { PrecisionDeps } from '../app/precisionCheck';
@@ -60,6 +61,13 @@ export interface QualityControlOptions {
    * different preset from the one in force.
    */
   liveStreamingQuality?(): StreamingQuality;
+  /**
+   * Eye Dome Lighting and antialiasing as the renderer has them now. Anything
+   * can turn them on (a Visuals preset, a saved view, the renderer's own
+   * default), so on open the control adopts a differing value as a pinned
+   * Advanced field, and its checkboxes never show a state the scene is not in.
+   */
+  liveRendering?(): { readonly edlEnabled?: boolean; readonly antialiasing?: boolean };
   /**
    * Where a chunk-load failure is reported, with a "Try again" action. Without
    * one (a bare test mount) a failure goes to `console.error`.
@@ -167,6 +175,16 @@ export class QualityControl {
         overrides: { ...this._preference.overrides, streamingQuality: live },
       };
     }
+    const render = this._options.liveRendering?.();
+    if (render) {
+      const settings = this.settings();
+      const adopt: { edlEnabled?: boolean; antialiasing?: boolean } = {};
+      if (render.edlEnabled !== undefined && render.edlEnabled !== settings.edlEnabled) adopt.edlEnabled = render.edlEnabled;
+      if (render.antialiasing !== undefined && render.antialiasing !== settings.antialiasing) adopt.antialiasing = render.antialiasing;
+      if (Object.keys(adopt).length > 0) {
+        this._preference = { ...this._preference, overrides: { ...this._preference.overrides, ...adopt } };
+      }
+    }
     panel.render(this._preference, this.settings());
     panel.refreshPrecision();
     panel.element.hidden = false;
@@ -190,6 +208,7 @@ export class QualityControl {
     if (this._precisionTimer !== null) clearInterval(this._precisionTimer);
     document.removeEventListener('pointerdown', this._onDocumentPointerDown, true);
     document.removeEventListener('keydown', this._onDocumentKeyDown);
+    setHeaderPopoverOpen(this.element, false);
   }
 
   /** Build the panel on first open; later opens reuse it. Busy + failure
@@ -247,8 +266,9 @@ export class QualityControl {
     // The header carries its own z-index, which makes it a stacking context: a
     // panel opened from inside it cannot paint above the rails however high its
     // own z-index reads, and this one opened underneath the right rail. Lift
-    // the header itself while the panel is open. The header stays
+    // the header itself while the panel is open; About shares the lift, which
+    // stays while either is open (headerLift.ts). The header stays
     // click-through, so nothing beneath it loses a click.
-    this.element.closest('.olv-topbar')?.classList.toggle('olv-topbar-popover-open', open);
+    setHeaderPopoverOpen(this.element, open);
   }
 }

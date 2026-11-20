@@ -32,7 +32,7 @@ test('cube, compact navigation and first-use guidance, end to end', async ({ pag
     localStorage.removeItem('olv.compass');
   });
   await page.setViewportSize({ width: 1440, height: 900 });
-  await page.goto('/?test=1');
+  await page.goto('/?test=1&viewcube=1');
   await dropDenseGridPly(page);
   await expect(page.locator('.olv-empty')).toBeHidden({ timeout: 20_000 });
   await waitForCameraSettled(page);

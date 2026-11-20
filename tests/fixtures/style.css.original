@@ -1042,6 +1042,29 @@ button:disabled { cursor: not-allowed; }
 .olv-github-source { width: 60px; }
 .olv-github:hover { color: var(--text); background: var(--hover-wash); }
 
+/* One About menu holds the GitHub and Guide links. The summary reuses the
+   ghost-link box; the panel drops below it, right-aligned to the header. */
+.olv-about { position: relative; }
+.olv-about-summary { width: 54px; cursor: pointer; list-style: none; }
+.olv-about-summary::-webkit-details-marker { display: none; }
+.olv-about-panel {
+  position: absolute; top: calc(100% + var(--space-xs)); right: 0; z-index: 30;
+  display: flex; flex-direction: column; min-width: 96px; padding: var(--space-xs);
+  background: var(--panel); border: 0.5px solid var(--hairline);
+  border-radius: var(--radius-md); box-shadow: var(--shadow-floating);
+}
+/* A closed <details> hides its content without removing its boxes (Chromium
+   uses content-visibility), so geometry still reported the closed panel's links
+   below the header, over the landing mark. Closed, the panel has no box. */
+.olv-about:not([open]) > .olv-about-panel { display: none; }
+.olv-about-link {
+  display: flex; align-items: center; min-height: 32px; padding: 0 var(--space-md);
+  font-size: var(--text-xs); color: var(--text-dim); text-decoration: none;
+  border-radius: var(--radius-sm); white-space: nowrap;
+}
+.olv-about-link:hover { color: var(--text); background: var(--hover-wash); }
+.olv-about-link:focus-visible, .olv-about-summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
 /* ── Speed ↔ Quality performance control ────────────────────────────────────
    A header ghost button (same vocabulary as .olv-recenter) plus a panel
    anchored under it. The wrapper is the positioning context; the panel is
@@ -1229,15 +1252,13 @@ button:disabled { cursor: not-allowed; }
 .olv-getstarted,
 .olv-trust-strip { animation: olv-splash-enter 480ms var(--ease-standard) 360ms backwards; }
 .olv-empty-formats,
-.olv-empty-capture-kinds,
-.olv-convert-chip,
 .olv-explore-card,
 .olv-empty-url { animation: olv-splash-enter 480ms var(--ease-standard) 420ms backwards; }
 @media (prefers-reduced-motion: reduce) {
   .olv-empty-hero, .olv-empty-eyebrow, .olv-empty-title, .olv-empty-sub,
   .olv-open-btn, .olv-empty-secondary, .olv-getstarted,
-  .olv-trust-strip, .olv-empty-formats, .olv-empty-capture-kinds,
-  .olv-convert-chip, .olv-explore-card, .olv-empty-url { animation: none; }
+  .olv-trust-strip, .olv-empty-formats,
+  .olv-explore-card, .olv-empty-url { animation: none; }
 }
 
 /* Sample + tour on one row — two quiet choices beside each other instead
@@ -2668,33 +2689,18 @@ body:has(.olv-measure-bar:not(.olv-hidden)) .olv-toast.is-finishing { visibility
 .olv-mode-icon svg { width: 100%; height: 100%; display: block; }
 .olv-mode-label { font-size: var(--text-xs); letter-spacing: 0.01em; }
 
-/* Frame all — a compact icon button beside the selector. */
-.olv-mode-reset {
-  display: inline-flex; align-items: center; justify-content: center;
-  width: 36px; height: 36px; padding: 0;
-  background: var(--panel); border: 0.5px solid var(--hairline);
-  border-radius: var(--radius-md); color: var(--accent); cursor: pointer;
-  -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px);
-  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.28);
-  transition: border-color var(--dur-fast) var(--ease-standard), background var(--dur-fast) var(--ease-standard),
-              transform 90ms var(--ease-standard);
-}
-.olv-mode-reset:hover { border-color: var(--accent); background: var(--accent-soft); }
-.olv-mode-reset:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
-.olv-mode-reset:active { transform: scale(0.94); }
-.olv-mode-reset svg { width: 18px; height: 18px; display: block; }
-
 /* "More" — the six axis views, in a popover above the row. */
 .olv-nav-more-wrap { position: relative; display: inline-flex; }
-.olv-nav-more {
+.olv-nav-more,
+.olv-nav-frame-all {
   height: 36px; padding: 0 var(--space-lg);
   font-family: var(--font); font-size: var(--text-xs);
   background: var(--panel); border: 0.5px solid var(--hairline);
   border-radius: var(--radius-md); color: var(--text-dim); cursor: pointer;
   -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px);
 }
-.olv-nav-more:hover, .olv-nav-more[aria-expanded="true"] { color: var(--text); border-color: var(--accent); }
-.olv-nav-more:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.olv-nav-more:hover, .olv-nav-more[aria-expanded="true"], .olv-nav-frame-all:hover { color: var(--text); border-color: var(--accent); }
+.olv-nav-more:focus-visible, .olv-nav-frame-all:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .olv-nav-more-menu {
   position: absolute; bottom: calc(100% + var(--space-sm)); left: 50%; transform: translateX(-50%);
   padding: var(--space-md); width: max-content; max-width: 260px;
@@ -4970,7 +4976,7 @@ body:has(.olv-colorbar.olv-colorbar-floating) .olv-project-card {
   body:has(.olv-measure-bar:not(.olv-hidden)) .olv-flow-lane { left: 88px; }
 }
 .olv-flow-lane > * { pointer-events: auto; max-width: 100%; box-sizing: border-box; }
-.olv-result-card, .olv-clip-indicator, .olv-empty-view {
+.olv-result-card, .olv-empty-view {
   background: var(--panel); border: 0.5px solid var(--hairline); border-radius: var(--radius-lg);
   -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px);
   box-shadow: var(--shadow-floating); color: var(--text); font-size: var(--text-sm);
@@ -4996,22 +5002,10 @@ body:has(.olv-colorbar.olv-colorbar-floating) .olv-project-card {
 .olv-result-btn:hover:not(:disabled) { border-color: var(--accent); color: var(--text); }
 .olv-result-btn:disabled { opacity: 0.45; cursor: not-allowed; }
 .olv-result-clip { border-color: var(--accent); color: var(--text); background: var(--accent-soft); }
-.olv-result-btn:focus-visible, .olv-result-dismiss:focus-visible, .olv-clip-ind-clear:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
-.olv-clip-indicator {
-  display: inline-flex; align-items: center; gap: var(--space-lg);
-  padding: var(--space-sm) var(--space-sm) var(--space-sm) var(--space-xl); border-radius: var(--radius-pill);
-  font-size: var(--text-xs);
-}
-.olv-clip-ind-text { white-space: nowrap; }
+.olv-result-btn:focus-visible, .olv-result-dismiss:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 /* Nothing drawn: what is on, and the fixes that apply. */
 .olv-empty-view { display: flex; flex-direction: column; gap: var(--space-sm); padding: var(--space-lg) var(--space-xl); max-width: 360px; }
 .olv-empty-view-text { margin: 0; line-height: 1.4; }
-.olv-clip-ind-clear {
-  font: inherit; font-size: var(--text-xs); cursor: pointer; color: var(--text-dim);
-  padding: var(--space-xs) var(--space-lg); border-radius: var(--radius-pill);
-  border: 0.5px solid var(--hairline); background: transparent;
-}
-.olv-clip-ind-clear:hover { border-color: var(--accent); color: var(--text); }
 /* ── P11 · premium left rail — dock clearance, one-tap collapse, even sizing ─────
    Desktop/tablet only (mobile bottom-sheet owns small screens). Token-driven so
    sizes stay even by system; one spring curve for the slide; reduced-motion fades. */
@@ -8290,7 +8284,7 @@ body:not(.olv-has-scan) .olv-touch-hint { display: none !important; }
   /* Topbar density on phones: drop the GitHub ghost link and shrink the
      wordmark so the brand mark + trust badge stay uncrowded. Brand mark
      (.olv-wordmark-mark) stays visible. */
-  .olv-github { display: none; }
+  .olv-github, .olv-about { display: none; }
   .olv-wordmark { font-size: var(--text-md); gap: var(--space-sm); }
   /* ── The header must not force a horizontal overflow ─────────────────────
      Even with the ghost links dropped, the header wanted 476 px at a 390 px
@@ -10144,7 +10138,7 @@ details[open] > :is(.olv-why-summary, .olv-fit-caveats-summary, .olv-analyse-wor
    its rule above; this block only pools the states so the families stay in
    sync. Placed last so source order wins over the per-family declarations.
 
-   NOTE: the positioned dock controls (.olv-mode*, .olv-mode-reset) are
+   NOTE: the positioned dock controls (.olv-mode*) are
    deliberately excluded — they own bespoke transforms (translateX/translate)
    that a blanket scale() press would clobber.
    ─────────────────────────────────────────────────────────────────────────── */
@@ -12646,7 +12640,7 @@ body.olv-cvd .olv-layerhealth-report-line[data-status="warn"] { color: #e69f00; 
 
 /* Clip flow and result card on a phone: 44 px touch targets. */
 @media (pointer: coarse) and (max-width: 767px) {
-  .olv-result-btn, .olv-clip-ind-clear, .olv-clip-draw, .olv-clip-clear,
+  .olv-result-btn, .olv-clip-draw, .olv-clip-clear,
   .olv-clip-advanced-summary, .olv-result-dismiss, .olv-clip-enable {
     min-height: 44px; min-width: 44px;
     display: inline-flex; align-items: center; justify-content: center;
@@ -13247,8 +13241,8 @@ body.olv-cvd .olv-layerhealth-report-line[data-status="warn"] { color: #e69f00; 
 
   /* The mode segments, Frame all and More grow to 44 px targets. */
   .olv-modes-segmented .olv-mode { height: 44px; min-width: 44px; }
-  .olv-mode-reset, .olv-nav-more { width: 44px; height: 44px; }
-  .olv-nav-more { width: auto; min-width: 44px; }
+  .olv-nav-more, .olv-nav-frame-all { width: 44px; height: 44px; }
+  .olv-nav-more, .olv-nav-frame-all { width: auto; min-width: 44px; }
   .olv-speed-slider { height: 44px; }
 
   /* Camera chips and mode pads keep their row; the chip text stays on one line. */
@@ -13271,7 +13265,7 @@ body.olv-cvd .olv-layerhealth-report-line[data-status="warn"] { color: #e69f00; 
   /* The ViewCube sizes its own faces, spots and Home control for coarse
      pointers (viewCube.ts: 156 px cube, 44 px hit areas). */
   /* Clip flow and result card. */
-  .olv-result-btn, .olv-clip-ind-clear, .olv-clip-draw, .olv-clip-clear,
+  .olv-result-btn, .olv-clip-draw, .olv-clip-clear,
   .olv-clip-advanced-summary, .olv-result-dismiss, .olv-clip-enable {
     min-height: 44px; min-width: 44px;
     display: inline-flex; align-items: center; justify-content: center;
@@ -13280,14 +13274,6 @@ body.olv-cvd .olv-layerhealth-report-line[data-status="warn"] { color: #e69f00; 
   .olv-clip-num { min-height: 44px; }
 }
 
-
-/* Portrait tablets narrower than 820 px (a small tablet is 768 px): with every
-   header control at 44 px the right cluster is 589 px wide and the GitHub
-   link sat past the right edge. It goes here; the Credits page in the same
-   header links the source. 820 px and wider keep all three links. */
-@media (pointer: coarse) and (hover: none) and (min-width: 768px) and (max-width: 819px) and (min-height: 600px) {
-  .olv-github-source { display: none; }
-}
 /* Active-tool pill: the pointer tool that owns the clicks, its Finish and
    Cancel, and persistent display state as a quieter chip. Bottom-centre, just
    above the navigation widget (app/activeToolStatus.ts measures it). */

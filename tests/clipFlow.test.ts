@@ -213,12 +213,11 @@ describe('Isolate this box', () => {
     expect(t.state.ms).toHaveLength(1);
   });
 
-  it('isolating closes the card and the chip takes over', async () => {
+  it('isolating closes the card', async () => {
     const t = await make();
     t.complete(summary({ id: 'b1', kind: 'box' }), box('b1', [0, 0, 0], [4, 4, 4]));
     t.btn('Use as clipping region').click();
     expect(t.card.classList.contains('olv-hidden')).toBe(true);
-    expect((t.flow.indicator.element as unknown as FakeEl).classList.contains('olv-hidden')).toBe(false);
   });
 
   it('refusals share one set of messages across both entry points and keep the card', async () => {
@@ -320,40 +319,6 @@ describe('result card', () => {
     t.state.sums = [summary({ id: 'a' }), summary({ id: 'b' }), summary({ id: 'c' })];
     t.flow.onMeasurementsChanged();
     expect(t.card.classList.contains('olv-hidden')).toBe(true);
-  });
-});
-
-describe('active-clip chip', () => {
-  const chip = (t: Awaited<ReturnType<typeof make>>) => t.flow.indicator.element as unknown as FakeEl;
-
-  it('is hidden with no clip, shows the mode when on and follows Inside/Outside', async () => {
-    const t = await make();
-    expect(chip(t).classList.contains('olv-hidden')).toBe(true);
-    t.panel.enabled = true; t.panel.emit();
-    expect(chip(t).classList.contains('olv-hidden')).toBe(false);
-    expect(chip(t).textContent).toContain('Clipping on · Showing inside box');
-    t.panel.mode = 'keep-outside'; t.panel.emit();
-    expect(chip(t).textContent).toContain('Clipping on · Showing outside box');
-  });
-
-  it('is a polite status, and its Turn off turns the clip off and hides the chip', async () => {
-    const t = await make();
-    t.panel.enabled = true; t.panel.emit();
-    const status = chip(t).querySelectorAll('span')[0];
-    expect(status.getAttribute('role')).toBe('status');
-    expect(status.getAttribute('aria-live')).toBe('polite');
-    chip(t).querySelectorAll('button')[0].click();
-    expect(t.panel.enabled).toBe(false);
-    expect(chip(t).classList.contains('olv-hidden')).toBe(true);
-    expect(chip(t).textContent).not.toContain('Clipping on');
-  });
-
-  it('is one instance with one panel subscription, released on dispose', async () => {
-    const t = await make();
-    expect(t.overlay.querySelectorAll('.olv-clip-indicator')).toHaveLength(1);
-    expect(t.panel.listeners).toBe(1);
-    t.flow.dispose();
-    expect(t.panel.listeners).toBe(0);
   });
 });
 

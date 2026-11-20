@@ -23,7 +23,7 @@
 import { el } from './dom';
 import type { ClipBox, ClipMode } from '../render/clip/clipBox';
 import type { BoxBounds } from '../render/measure/geometry';
-import { setClipScope } from '../render/clip/clipScope';
+import { setClipOn, setClipReadoutShown, setClipScope, setClipTurnOff } from '../render/clip/clipScope';
 
 export { fitBoundsInProject } from '../render/clip/fitBoundsInProject';
 
@@ -175,6 +175,8 @@ export class ClipPanel {
       title: 'Turn the clip off and show the whole scan. The box and its bounds stay.',
     }) as HTMLButtonElement;
     this._turnOff.addEventListener('click', () => this.clear());
+    // The state strip's Turn off runs the same clear.
+    setClipTurnOff(() => this.clear());
     const actions = el('div', { className: 'olv-bc-pills olv-clip-actions' }, [fit, this._turnOff]);
 
     this._draw = el('button', {
@@ -189,6 +191,8 @@ export class ClipPanel {
     this._readout = el('p', { className: 'olv-export-fullres-hint olv-clip-readout', text: '' });
     this._readout.setAttribute('role', 'status');
     this._readout.setAttribute('aria-live', 'polite');
+    // While this readout is on screen it speaks each clip change; the state strip then stays quiet.
+    setClipReadoutShown(() => rendered(this._readout));
     this._error = el('p', { className: 'olv-flow-selection-error olv-clip-error', text: '' });
     this._error.setAttribute('role', 'alert');
     this._frame = el('p', { className: 'olv-clip-frame', text: '' });
@@ -318,6 +322,7 @@ export class ClipPanel {
       this._cb.onApply(null);
       this._cb.onOutline?.(null, false);
       setClipScope(null);
+      setClipOn(null);
       this._renderOff();
       this._emit();
     } else {
@@ -368,6 +373,8 @@ export class ClipPanel {
   /** Drop pending work; the panel stays usable but no queued count lands. */
   dispose(): void {
     this._cancelCount();
+    setClipTurnOff(null);
+    setClipReadoutShown(null);
   }
 
   /**
@@ -397,6 +404,7 @@ export class ClipPanel {
     } else {
       this._renderOff();
       setClipScope(null);
+      setClipOn(null);
     }
     this._emit();
   }
@@ -638,12 +646,14 @@ export class ClipPanel {
     if (this._enabled) {
       // The clip scope keeps its last value until the new count lands, so its
       // consumers see one settled figure rather than a gap.
+      setClipOn(this._mode);
       this._markCounting();
       this._scheduleCount();
     } else {
       this._hasCount = false;
       this._renderOff();
       setClipScope(null);
+      setClipOn(null);
     }
   }
 
@@ -693,12 +703,21 @@ export class ClipPanel {
     this._readout.textContent = clipReadoutText(c, this._mode);
     this._hasCount = c !== null;
     this._syncTurnOff();
-    setClipScope(c ? { kept: c.kept, total: c.total } : null);
+    setClipScope(c ? { kept: c.kept, total: c.total, mode: this._mode } : null);
+    // A streamed scan has no count, but the clip is on and the strip says so.
+    setClipOn(this._enabled ? this._mode : null);
   }
 }
 
 /** Trailing quiet period before the kept-point count runs. */
 export const CLIP_COUNT_DEBOUNCE_MS = 120;
+
+/** Whether a node is rendered, so a screen reader hears a live region in it. */
+function rendered(node: Element): boolean {
+  if (!node.isConnected) return false;
+  const check = (node as Element & { checkVisibility?: (o?: { visibilityProperty?: boolean }) => boolean }).checkVisibility;
+  return typeof check === 'function' ? check.call(node, { visibilityProperty: true }) : node.getClientRects().length > 0;
+}
 
 /** Wheel travel (in pixels of deltaY) per step on a focused field. */
 const WHEEL_STEP_TRAVEL = 50;

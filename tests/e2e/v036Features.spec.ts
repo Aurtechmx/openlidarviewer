@@ -13,7 +13,7 @@ test.beforeEach(async ({ page }) => useAdvancedInspector(page));
  *
  *   1. Verified public LiDAR dataset picker  — `.olv-catalog-select`
  *   2. Capture-kind chips                    — `.olv-capture-chip`
- *   3. Triangular NavWidget + Reset button   — `.olv-mode-reset`
+ *   3. Segmented mode selector              — `.olv-modes-segmented`
  *   4. Inspector "Provenance" section        — `.olv-provenance`
  *   5. Mobile-collapsible side panels        — chevron toggles
  *
@@ -101,8 +101,9 @@ test('empty state shows three capture-kind chips with their labels', async ({
   await page.goto('/');
   await expect(page.locator('.olv-empty-title')).toBeVisible();
 
-  // Three chips, visible on the page: Drone LiDAR · Phone scans ·
-  // Terrestrial laser.
+  // Three chips inside the "Compatible data" disclosure: Drone LiDAR ·
+  // Phone scans · Terrestrial laser.
+  await page.locator('.olv-empty-formats-summary', { hasText: 'Compatible data' }).click();
   await expect(page.locator('.olv-capture-chip')).toHaveCount(3);
   await expect(
     page.locator('.olv-capture-chip', { hasText: 'Drone LiDAR' }),
@@ -117,7 +118,7 @@ test('empty state shows three capture-kind chips with their labels', async ({
 
 // ── 3. Segmented mode selector + Frame all ─────────────────────────────────
 
-test('the nav row renders the Orbit | Walk | Fly | Pan selector and a Frame all', async ({
+test('the nav row renders the Orbit | Walk | Fly | Pan selector and leaves Frame all to the dock', async ({
   page,
 }) => {
   await page.goto('/');
@@ -125,22 +126,22 @@ test('the nav row renders the Orbit | Walk | Fly | Pan selector and a Frame all'
   await expect(page.locator('.olv-empty')).toBeHidden({ timeout: 20_000 });
 
   // One segmented control of four modes (Pan is the v0.5.5 hand tool, default-on
-  // `?handPan` flag) with Frame all beside it; the triangle is gone.
+  // `?handPan` flag); the triangle and the second Frame all button are gone.
   await expect(page.locator('.olv-modes-segmented')).toBeVisible();
   await expect(page.locator('.olv-modes-tri-bg')).toHaveCount(0);
   await expect(page.locator('.olv-mode')).toHaveCount(4);
   await expect(page.locator('.olv-mode-pan')).toBeVisible();
-  await expect(page.locator('.olv-mode-reset')).toBeVisible();
+  await expect(page.locator('.olv-mode-reset')).toHaveCount(0);
 });
 
-test('clicking the Reset button re-frames the camera', async ({ page }) => {
+test('clicking the dock Frame all button re-frames the camera', async ({ page }) => {
   await page.goto('/');
   await dropTinyPly(page);
   await expect(page.locator('.olv-empty')).toBeHidden({ timeout: 20_000 });
   await page.waitForTimeout(800);
 
   // Reset re-runs the frame-all logic — accessibility label confirmed.
-  const reset = page.locator('.olv-mode-reset');
+  const reset = page.locator('.olv-dock [data-action="camera.frame-all"]');
   await expect(reset).toHaveAttribute('aria-label', /frame/i);
   // The click is a pure UI action with no toast. The contract under test
   // is that pressing it does NOT throw a page-level error.

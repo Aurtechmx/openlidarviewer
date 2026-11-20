@@ -17,7 +17,7 @@ test.beforeEach(async ({ page }) => useAdvancedInspector(page));
  *     button (the syncVisuals round-trip)
  *
  * Rail order inside `.olv-visuals-body` (mount order in Inspector.ts):
- * nth(0) Workflow · nth(1) RGB · nth(2) EDL · nth(3) Background.
+ * nth(0) Workflow · nth(1) RGB · nth(2) Background.
  *
  * Reconstruction maths is unit-tested at the data layer
  * (`tests/rgbAppearance.test.ts`, `tests/edlPresets.test.ts`,
@@ -45,7 +45,7 @@ async function loadSampleAndOpenVisuals(page: Page): Promise<void> {
 
 /**
  * Workflow, RGB and Background are collapsible sub-groups inside the Studio
- * and start closed; Depth (EDL) stays a bare rail. Open one by label.
+ * and start closed. Open one by label.
  */
 async function expandVisualsGroup(page: Page, label: string): Promise<void> {
   const group = page.locator('.olv-visuals-body > details.olv-section-collapsible', {
@@ -55,9 +55,9 @@ async function expandVisualsGroup(page: Page, label: string): Promise<void> {
   if (!isOpen) await group.locator('summary').first().click();
 }
 
-test('Visuals Studio surfaces all four chip rails', async ({ page }) => {
+test('Visuals Studio surfaces its three chip rails', async ({ page }) => {
   await loadSampleAndOpenVisuals(page);
-  // Three collapsible groups plus the always-visible Depth (EDL) rail.
+  // Three collapsible groups.
   for (const label of ['Workflow', 'RGB', 'Background']) {
     await expect(
       page.locator('.olv-visuals-body > details.olv-section-collapsible > summary', {
@@ -65,9 +65,6 @@ test('Visuals Studio surfaces all four chip rails', async ({ page }) => {
       }),
     ).toBeVisible();
   }
-  await expect(
-    page.locator('.olv-visuals-group-label', { hasText: 'Depth (EDL)' }),
-  ).toBeVisible();
 });
 
 test('Workflow rail has six presets plus the inert Custom chip', async ({ page }) => {
@@ -105,22 +102,17 @@ test('RGB rail has six chips and clicking one flips .olv-chip-active', async ({ 
   await expect(drone).toHaveClass(/olv-chip-active/);
 });
 
-test('EDL rail has four chips including Off', async ({ page }) => {
+test('the Studio has no EDL rail: Eye Dome Lighting is the Speed/Quality control\'s', async ({ page }) => {
   await loadSampleAndOpenVisuals(page);
-  const rails = page.locator('.olv-visuals-body .olv-chips');
-  const edlRail = rails.nth(2);
-  await expect(edlRail.locator('.olv-chip')).toHaveCount(4);
-  await expect(edlRail.locator('.olv-chip', { hasText: 'Off' })).toBeVisible();
-  await expect(edlRail.locator('.olv-chip', { hasText: 'Subtle' })).toBeVisible();
-  await expect(edlRail.locator('.olv-chip', { hasText: 'Balanced' })).toBeVisible();
-  await expect(edlRail.locator('.olv-chip', { hasText: 'Inspection' })).toBeVisible();
+  await expect(page.locator('.olv-visuals-group-label', { hasText: 'Depth (EDL)' })).toHaveCount(0);
+  await expect(page.locator('.olv-visuals-body .olv-chips')).toHaveCount(3);
 });
 
 test('Background rail has five chips and Black is selectable', async ({ page }) => {
   await loadSampleAndOpenVisuals(page);
   await expandVisualsGroup(page, 'Background');
   const rails = page.locator('.olv-visuals-body .olv-chips');
-  const skyRail = rails.nth(3);
+  const skyRail = rails.nth(2);
   await expect(skyRail.locator('.olv-chip')).toHaveCount(5);
   const black = skyRail.locator('.olv-chip', { hasText: 'Black' });
   await black.click();
@@ -134,7 +126,7 @@ test('Desktop applies the rich radial gradient on the canvas parent', async ({ p
   await loadSampleAndOpenVisuals(page);
   await expandVisualsGroup(page, 'Background');
   const rails = page.locator('.olv-visuals-body .olv-chips');
-  await rails.nth(3).locator('.olv-chip', { hasText: 'Studio Dark' }).click();
+  await rails.nth(2).locator('.olv-chip', { hasText: 'Studio Dark' }).click();
   await page.waitForTimeout(120);
   const bgImage = await page
     .locator('.olv-canvas')
@@ -175,7 +167,7 @@ test('Phone uses the flat fallback colour (no gradient bleed under chrome)', asy
 
   await expandVisualsGroup(page, 'Background');
   const rails = page.locator('.olv-visuals-body .olv-chips');
-  await rails.nth(3).locator('.olv-chip', { hasText: 'Studio Dark' }).click();
+  await rails.nth(2).locator('.olv-chip', { hasText: 'Studio Dark' }).click();
   await page.waitForTimeout(120);
   const bgImage = await page
     .locator('.olv-canvas')
@@ -201,7 +193,7 @@ test('Background chip click actually updates the canvas container background', a
   await loadSampleAndOpenVisuals(page);
   await expandVisualsGroup(page, 'Background');
   const rails = page.locator('.olv-visuals-body .olv-chips');
-  const skyRail = rails.nth(3);
+  const skyRail = rails.nth(2);
 
   // Click Black — fallback colour is #000000.
   await skyRail.locator('.olv-chip', { hasText: 'Black' }).click();

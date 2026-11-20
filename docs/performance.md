@@ -40,7 +40,7 @@ The device-pixel-ratio is capped at 2, which bounds the render cost on high-dens
 
 ## Eye Dome Lighting
 
-Eye Dome Lighting adds a single full-screen post-processing pass that samples scene depth: a small, fixed cost independent of point count, and cheap next to drawing the cloud itself. It is on by default on desktop WebGPU and off by default on the WebGL 2 fallback and on phones, so a weaker device is never dropped below interactive on load. It can be toggled, and its strength tuned, from the Rendering section of the panel. Turning it off restores the direct render path with no post-processing overhead.
+Eye Dome Lighting adds a single full-screen post-processing pass that samples scene depth: a small, fixed cost independent of point count, and cheap next to drawing the cloud itself. It is on by default on desktop WebGPU and off by default on the WebGL 2 fallback and on phones, so a weaker device is never dropped below interactive on load. It can be toggled from the Performance control in the header (Advanced), and its strength tuned with the Rendering section's slider, which shows in Basic and Advanced view while it is on. Turning it off restores the direct render path with no post-processing overhead.
 
 ## Browser settings
 

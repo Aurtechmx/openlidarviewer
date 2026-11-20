@@ -6,13 +6,15 @@ import type { Page } from '@playwright/test';
  * load and fonts arriving late), so the two cannot disagree about what a
  * shift is.
  *
- * Every visible link and button in the header, keyed by its accessible name
- * (text for an unnamed one). A comparison covers the keys both sides have:
+ * Every visible link, button and menu summary in the header, keyed by its
+ * accessible name (text for an unnamed one). The links inside a closed menu
+ * (the About menu's GitHub and Guide) are not on screen, so the menu's summary
+ * is measured in their place. A comparison covers the keys both sides have:
  * controls that mount later, such as the Speed/Quality button that replaces
  * its placeholder, have no earlier box to compare with.
  */
 
-export const HEADER_CONTROLS = 'header.olv-topbar a, header.olv-topbar button';
+export const HEADER_CONTROLS = 'header.olv-topbar a, header.olv-topbar button, header.olv-topbar summary';
 
 /**
  * Thresholds, one set for both specs.
@@ -41,6 +43,9 @@ export function installMeasureInPage(selector: string): void {
   (window as unknown as { __olvMeasureHeader: () => HeaderBoxes }).__olvMeasureHeader = () => {
     const out: Record<string, { x: number; y: number; w: number; h: number }> = {};
     for (const n of Array.from(document.querySelectorAll<HTMLElement>(selector))) {
+      // A closed menu shows only its summary; the items behind it are skipped.
+      const closed = n.closest('details:not([open])');
+      if (closed && !(n.tagName === 'SUMMARY' && n.parentElement === closed)) continue;
       const r = n.getBoundingClientRect();
       if (n.offsetParent === null || (r.width === 0 && r.height === 0)) continue;
       const key = n.getAttribute('aria-label') || (n.textContent ?? '').trim() || n.className;

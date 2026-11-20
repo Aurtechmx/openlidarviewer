@@ -180,6 +180,7 @@ interface Applied {
 async function makeControl(
   preference: QualityPreference = DEFAULT_QUALITY_PREFERENCE,
   liveStreamingQuality?: () => 'low' | 'balanced' | 'high',
+  liveRendering?: () => { edlEnabled?: boolean; antialiasing?: boolean },
 ) {
   const { QualityControl } = await import('../src/ui/qualityControl');
   const applied: Applied[] = [];
@@ -190,6 +191,7 @@ async function makeControl(
     onApply: (settings, userInitiated) => { applied.push({ settings, userInitiated }); },
     onPersist: (p) => { persisted.push(p); },
     ...(liveStreamingQuality ? { liveStreamingQuality } : {}),
+    ...(liveRendering ? { liveRendering } : {}),
   });
   const root = control.element as unknown as FakeEl;
   return { control, root, applied, persisted };
@@ -204,6 +206,51 @@ async function openPanel(
   await made.control.open();
   return { ...made, panel: made.root.one('olv-quality-pop') };
 }
+
+describe('Speed ↔ Quality control — live rendering state', () => {
+  it('shows EDL and antialiasing checked when the renderer has them on at a low stop', async () => {
+    const { control, root } = await makeControl(
+      { ...DEFAULT_QUALITY_PREFERENCE, auto: false, position: QUALITY_MIN, overrides: {} },
+      undefined,
+      () => ({ edlEnabled: true, antialiasing: true }),
+    );
+    expect(control.settings().edlEnabled).toBe(false);
+    await control.open();
+    const checks = root.one('olv-quality-advanced').findByClass('olv-quality-check');
+    expect(checks[0].byTag('input')[0].checked).toBe(true);
+    expect(checks[1].byTag('input')[0].checked).toBe(true);
+  });
+
+  it('leaves the policy alone when the renderer agrees with it', async () => {
+    const { control, root } = await makeControl(
+      { ...DEFAULT_QUALITY_PREFERENCE, auto: false, position: QUALITY_MIN, overrides: {} },
+      undefined,
+      () => ({ edlEnabled: false, antialiasing: false }),
+    );
+    await control.open();
+    expect(control.preference.overrides).toEqual({});
+    expect(root.one('olv-quality-advanced').findByClass('olv-quality-check')[0].byTag('input')[0].checked).toBe(false);
+  });
+});
+
+describe('Speed ↔ Quality control — header lift', () => {
+  it('releases the header lift when disposed while open, leaving no entry behind', async () => {
+    const { HEADER_LIFT_CLASS, setHeaderPopoverOpen } = await import('../src/ui/headerLift');
+    const header = new FakeEl('header');
+    header.className = 'olv-topbar';
+    const { control, root } = await makeControl();
+    header.append(root);
+    await control.open();
+    expect(header.classList.contains(HEADER_LIFT_CLASS)).toBe(true);
+    control.dispose();
+    expect(header.classList.contains(HEADER_LIFT_CLASS)).toBe(false);
+    const other = new FakeEl('details');
+    header.append(other);
+    setHeaderPopoverOpen(other as unknown as Element, true);
+    setHeaderPopoverOpen(other as unknown as Element, false);
+    expect(header.classList.contains(HEADER_LIFT_CLASS)).toBe(false);
+  });
+});
 
 describe('Speed ↔ Quality control — mounting', () => {
   it('applies once at construction, marked as not user-initiated', async () => {

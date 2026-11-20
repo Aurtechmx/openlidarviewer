@@ -150,14 +150,8 @@ const ALLOWLIST: readonly string[] = [
  * one-to-one matching. Every entry below was hand-verified on
  * 2026-06-10:
  *
- * - src/ui/NavBar.ts — `resetBtn.innerHTML`: the centre-Reset crosshair
- *   icon, a zero-interpolation template literal of SVG embedded in the
- *   source (NavBar.ts:180). Static by construction; prefer routing new
- *   markup through `el(..., { unsafeHtml })` so it lands on the main
- *   allowlist instead.
  */
 const RAW_INNERHTML_ALLOWLIST: readonly string[] = [
-  'src/ui/NavBar.ts::resetBtn.innerHTML',
   // src/ui/FullscreenToggle.ts — the enter/exit glyph swap in `_sync()` assigns
   // one of two module-level literal SVG constants (ICON_ENTER / ICON_EXIT).
   // Zero interpolation, no user data. (hand-verified 2026-06-14)

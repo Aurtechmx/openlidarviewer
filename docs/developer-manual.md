@@ -43,7 +43,7 @@ Scan Intelligence report describes the dataset, and the result can be exported.
 | FR-15 | Support an embed mode (`?embed=1`) that strips the chrome for `<iframe>` use. |
 | FR-16 | Inspect a picked point: show its real-world coordinates and attributes, with one-click copy to the clipboard. |
 | FR-17 | Close the current scan: clear every loaded cloud and return to the empty state, ready for another file. |
-| FR-18 | Render with Eye Dome Lighting depth shading, adaptive or fixed point sizing, and antialiased round points: all tunable from the Rendering panel. |
+| FR-18 | Render with Eye Dome Lighting depth shading, adaptive or fixed point sizing, and antialiased round points: with Eye Dome Lighting and antialiasing set in the Performance control's Advanced panel, and point size and EDL strength in the Rendering panel. |
 | FR-19 | Plan a LAS/LAZ load from its header: fast-load huge clouds by stride decoding, guard against out-of-memory, report staged progress, and allow the load to be cancelled mid-flight. |
 | FR-20 | Stream hierarchical point-cloud datasets (`COPC` `.copc.laz` and `EPT` `ept.json`) (local or remote) through a view-dependent scheduler with bounded residency. |
 | FR-21 | Generate multi-page PDF technical reports: three built-in templates (Survey Summary, Technical Report, Scan QA), cover + dataset summary + image exports + annotations + measurements + technical notes, with branding (accent + logo) and metric/imperial unit awareness. |

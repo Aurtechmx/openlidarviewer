@@ -21,9 +21,10 @@
  * are about registration and teardown, never layout.
  */
 
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { Stage } from '../src/ui/Stage';
+import { HEADER_LIFT_CLASS, setHeaderPopoverOpen } from '../src/ui/headerLift';
 
 interface Registration {
   type: string;
@@ -90,6 +91,7 @@ function makeNode(tag: string): NodeStub {
       for (const k of kids) if (typeof k === 'object' && k !== null) children.push(k as NodeStub);
     },
     insertBefore: (child: NodeStub) => void children.push(child),
+    replaceWith: () => {},
     replaceChildren: () => void children.splice(0, children.length),
     remove: () => {},
     click: () => {},
@@ -196,6 +198,44 @@ describe('Stage teardown', () => {
     stage.dispose();
     stage.dispose();
     expect(runs).toBe(1);
+  });
+
+  it('releases the header lift of an About menu left open at dispose', () => {
+    const header = byClass('olv-topbar')[0];
+    const about = byClass('olv-about')[0] as NodeStub & { open: boolean; closest: (s: string) => unknown };
+    about.closest = (sel: string) => (sel === '.olv-topbar' ? header : null);
+    const toggle = about.added.find((r) => r.type === 'toggle')!.handler as () => void;
+    about.open = true;
+    toggle();
+    expect(header.classes.has(HEADER_LIFT_CLASS)).toBe(true);
+    stage.dispose();
+    expect(header.classes.has(HEADER_LIFT_CLASS)).toBe(false);
+    // No entry is left behind: another popover's open and close leave the header down.
+    const other = { closest: (sel: string) => (sel === '.olv-topbar' ? header : null) } as unknown as Element;
+    setHeaderPopoverOpen(other, true);
+    setHeaderPopoverOpen(other, false);
+    expect(header.classes.has(HEADER_LIFT_CLASS)).toBe(false);
+  });
+
+  it('disposes the Speed/Quality control mounted into its header', async () => {
+    const { mountQualityControl } = await import('../src/ui/headerControls');
+    const { QualityControl } = await import('../src/ui/qualityControl');
+    const disposed = vi.spyOn(QualityControl.prototype, 'dispose');
+    try {
+      const viewer = { setEdlEnabled: () => {}, setAntialiasing: () => {}, setStreamingQuality: () => {}, requestFrame: () => {} };
+      mountQualityControl(stage, {
+        getViewer: () => viewer,
+        device: () => ({ tier: 'high', isMobile: false, backend: 'webgpu' }),
+        getStreamingQuality: () => 'balanced',
+        onStreamingQuality: () => {},
+        onUserChange: () => {},
+      });
+      expect(disposed).not.toHaveBeenCalled();
+      stage.dispose();
+      expect(disposed).toHaveBeenCalledTimes(1);
+    } finally {
+      disposed.mockRestore();
+    }
   });
 
   it('still removes its own online/offline listeners', () => {

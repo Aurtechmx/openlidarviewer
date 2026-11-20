@@ -6,7 +6,6 @@ import type { Viewer } from './render/Viewer';
 import { floorPlanPositions } from './app/floorPlanPositions';
 import { isMobileDevice, isTouchFirstDevice } from './ui/isMobileDevice';
 import { Stage, UrlFieldMessage } from './ui/Stage';
-import type { Sample } from './ui/Stage';
 import { DropZone } from './ui/DropZone';
 import { Inspector } from './ui/Inspector';
 import { ThemeToggle } from './ui/ThemeToggle';
@@ -356,7 +355,6 @@ const testApi = urlParams.has('test');
 // field. Each curated record carries its publisher and licence identity, and
 // says `unknown` where this tree records none. The previous Entwine "Public
 // streaming demo" pointed at a bucket with no stated licence, so it was removed.
-const SAMPLES: Sample[] = [];
 
 // The "Try a sample scan" ghost button under the primary CTA — one
 // curated location built from its catalog record and exposed as the
@@ -434,7 +432,6 @@ const tour: TourHandle = createTourLauncher(loadTour, { show: (message, action) 
 const runtime = createAppRuntime();
 const stage = new Stage(app, {
   embed,
-  samples: SAMPLES,
   demoSample: DEMO_SAMPLE,
   onSample: loadFromUrl,
   onStartTour: () => tour.start(),
@@ -1516,7 +1513,7 @@ dock.setEmpty(true);
 inspector.setEmpty(true);
 
 // Navigation bar; the opening fit keeps the scan above its mode triangle.
-const navBar = new NavBar(navWiring.callbacks);
+const navBar = new NavBar(navWiring.callbacks, { frameAllButton: bareMode });
 void viewerLoaded.then((v) => v.setFramingReserve(() => navBar.framingReservePx()));
 const projectCard = new ProjectCard();
 
@@ -2896,10 +2893,8 @@ if (embed) {
   }, m.embedBridgeOptionsFromUrl(window.location.search))).catch((e: unknown) => console.warn(e));
 }
 
-// `?autoload=sample:<id>` — open a built-in sample on startup (embed demos).
-const autoloadEntry = SAMPLES.find((s) => s.id === embedConfig.autoloadSample);
-if (autoloadEntry) void loadFromUrl(autoloadEntry.url, autoloadEntry.name);
-const autoloadRefused = autoloadEntry ? null : autoloadRefusal(window.location.search, SAMPLES.map((s) => s.id));
+// `?autoload=sample:<id>` — no built-in sample ships, so the request is refused.
+const autoloadRefused = autoloadRefusal(window.location.search, []);
 if (autoloadRefused) dropZone.setError(autoloadRefused);
 
 // `?copc=<url>` deep link (COPC / EPT / 3D Tiles). The lazy gate validates it

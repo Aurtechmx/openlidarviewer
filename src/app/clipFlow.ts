@@ -23,7 +23,6 @@
 import { useBoxAsClip, type BoxToClipDeps } from './boxToClip';
 import { buildResultModel } from './measureResultModel';
 import { MeasureResultCard } from '../ui/MeasureResultCard';
-import { ClipIndicator, type ClipIndicatorSource } from '../ui/ClipIndicator';
 import { el } from '../ui/dom';
 import { seatClear, seatFit, watchSeat } from '../ui/hudSeat';
 import { copyToClipboard } from '../ui/clipboard';
@@ -35,8 +34,7 @@ import type { Viewer } from '../render/Viewer';
 import type { MeasurePanel } from '../ui/MeasurePanel';
 
 /** The clip panel as the flow sees it. */
-export interface ClipFlowPanel extends ClipIndicatorSource {
-  subscribe(fn: () => void): () => void;
+export interface ClipFlowPanel {
   /** The Box tool's corner hint on the Clip page while a clipping box is drawn; null hides it. */
   setDrawHint?(text: string | null): void;
 }
@@ -75,7 +73,6 @@ export interface ClipFlowDeps {
 export interface ClipFlow {
   readonly lane: HTMLElement;
   readonly card: MeasureResultCard;
-  readonly indicator: ClipIndicator;
   /** Clip page entry point: arm the Box tool and remember why. */
   drawClippingBox(): void;
   /** The one conversion both "Isolate this box" and the row action run. */
@@ -143,10 +140,8 @@ export function createClipFlow(deps: ClipFlowDeps): ClipFlow {
     // The card described a measurement that is gone; the list's Undo toast takes over.
     onDelete: (id) => { card.hide(); deps.deleteMeasurement(id); },
   });
-  const indicator = new ClipIndicator(deps.clipPanel);
-  const lane = el('div', { className: 'olv-flow-lane' }, [card.element, indicator.element]);
+  const lane = el('div', { className: 'olv-flow-lane' }, [card.element]);
   deps.overlay.append(lane);
-  const unsubscribe = deps.clipPanel.subscribe(() => indicator.sync());
 
   // The lane drops below whatever shares its column at the top of the stage:
   // the measurement toolbar, a progress toast, the project card. Each changes
@@ -167,7 +162,7 @@ export function createClipFlow(deps: ClipFlowDeps): ClipFlow {
   };
 
   return {
-    lane, card, indicator,
+    lane, card,
     drawClippingBox() {
       // The Clip page stays: the tool is armed in place, never toggled off.
       if (!deps.measureOn()) deps.armMeasureTool();
@@ -210,7 +205,6 @@ export function createClipFlow(deps: ClipFlowDeps): ClipFlow {
     },
     dispose() {
       endDraw();
-      unsubscribe();
       unwatch();
       card.hide();
       lane.remove();

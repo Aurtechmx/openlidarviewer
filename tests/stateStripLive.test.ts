@@ -4,6 +4,7 @@
  */
 import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { installLiveFakeDom, type FakeEl } from './helpers/liveFakeDom';
+import { withLiveRegion } from './helpers/politeLiveRegion';
 import { spatialContextFrom } from '../src/geo/SpatialContext';
 import { deriveScanFacts } from '../src/process/scanFacts';
 import { liveTasks, registerTask, resetTaskActivityForTests, subscribeTaskActivity } from '../src/process/taskActivity';
@@ -173,9 +174,28 @@ describe('strip UI', () => {
     expect(btn('vertical').getAttribute('aria-label')).toMatch(/^Vertical reference: Vertical: unknown \(Review\)\. Opens/);
     expect(btn('basis').textContent).toContain('Currently loaded points');
     expect(btn('review').textContent).toContain('2 to review');
-    expect(btn('processing').textContent).toBe('Idle');
+    // Nothing is running, so the item is hidden rather than reading "Idle".
+    expect(btn('processing').hidden).toBe(true);
     btn('crs').fire('click');
     expect(open).toHaveBeenCalledWith('crs');
+  });
+
+  it('hides the processing item when the task leaves, with no task text left behind', async () => {
+    const { createStateStrip } = await import('../src/ui/stateStrip');
+    const strip = createStateStrip({ open: vi.fn() });
+    const root = strip.element as unknown as FakeEl;
+    const btn = () => root.querySelector('.olv-ss-processing')!;
+    strip.render(readStrip(reads({ tasks: () => [{ id: 1, label: 'Loading current view…', progress: 0.2, elapsedMs: 0, remainingMs: null }] })));
+    expect(btn().hidden).toBe(false);
+    expect(btn().textContent).toBe('Loading current view… 20%');
+    strip.render(readStrip(reads({ tasks: () => [] })));
+    expect(btn().hidden).toBe(true);
+    expect(btn().textContent).toBe('');
+    expect(btn().getAttribute('aria-label')).toBeNull();
+    // A task that starts again is painted afresh.
+    strip.render(readStrip(reads({ tasks: () => [{ id: 2, label: 'Exporting', progress: null, elapsedMs: 0, remainingMs: null }] })));
+    expect(btn().hidden).toBe(false);
+    expect(btn().textContent).toBe('Exporting');
   });
 
   it('shows an active clip with its kept count, and hides the item when no clip is on', async () => {
@@ -191,6 +211,359 @@ describe('strip UI', () => {
     expect(btn().textContent).toContain(`Clipped: ${(16739).toLocaleString()} of ${(31839).toLocaleString()} points`);
     btn().fire('click');
     expect(open).toHaveBeenCalledWith('clip');
+  });
+
+  it('shows the clip item with the side kept and Turn off when there is no count, and hides it when clip is off', async () => {
+    const { createStateStrip } = await import('../src/ui/stateStrip');
+    const strip = createStateStrip({ open: vi.fn() });
+    const root = strip.element as unknown as FakeEl;
+    const item = () => root.querySelector('.olv-ss-clip')!;
+    const off = () => root.querySelector('.olv-ss-clipoff')!;
+    // A streamed scan: clip on, no kept count.
+    strip.render(readStrip(reads({ clip: () => null, clipOn: () => 'keep-inside' })));
+    expect(item().hidden).toBe(false);
+    expect(item().textContent).toBe('Clip on · Showing inside box');
+    expect(off().hidden).toBe(false);
+    strip.render(readStrip(reads({ clip: () => null, clipOn: () => 'keep-outside' })));
+    expect(item().textContent).toBe('Clip on · Showing outside box');
+    // Counted: the protected phrase, then the side.
+    strip.render(readStrip(reads({ clip: () => ({ kept: 1234, total: 3600, mode: 'keep-inside' }), clipOn: () => 'keep-inside' })));
+    expect(item().textContent).toBe(`Clipped: ${(1234).toLocaleString()} of ${(3600).toLocaleString()} points · Showing inside box`);
+    // Off: both go.
+    strip.render(readStrip(reads({ clip: () => null, clipOn: () => null })));
+    expect(item().hidden).toBe(true);
+    expect(off().hidden).toBe(true);
+  });
+
+  it('keeps the clip item itself at full width: no shrink, no cap, outranking the phone item rule', async () => {
+    // A text-level check only: it reads the rules, it does not lay the strip out.
+    // Real overlap is for the packaged-build walkthrough to confirm.
+    const css = (await import('node:fs')).readFileSync(new URL('../src/ui/stateStrip.css', import.meta.url), 'utf8');
+    const rule = /(^|\n)\s*([^{}@]*\.olv-ss-clip(?![\w-])[^{}]*)\{([^}]*)\}/g;
+    let clipItem: { selector: string; body: string } | null = null;
+    for (const m of css.matchAll(rule)) {
+      const selector = m[2].trim();
+      if (!/\.olv-ss-text/.test(selector)) clipItem = { selector, body: m[3] };
+    }
+    expect(clipItem, 'no rule for the clip item itself').not.toBeNull();
+    expect(clipItem!.body).toMatch(/flex-shrink:\s*0/);
+    expect(clipItem!.body).toMatch(/max-width:\s*none/);
+    // Class count stands in for specificity: these selectors hold classes only.
+    const classes = (sel: string): number => (sel.match(/\.[\w-]+/g) ?? []).length;
+    const phone = /@media[^{]*\{[\s\S]*?\n\s*(\.olv-ss-item)\s*\{[^}]*max-width:\s*100%/.exec(css);
+    expect(phone, 'the phone .olv-ss-item max-width rule moved').not.toBeNull();
+    expect(classes(clipItem!.selector)).toBeGreaterThan(classes(phone![1]));
+  });
+
+  it('does not cap the clip item text, so the side phrase is never cut', async () => {
+    const css = (await import('node:fs')).readFileSync(new URL('../src/ui/stateStrip.css', import.meta.url), 'utf8');
+    expect(css).toMatch(/\.olv-ss-clip \.olv-ss-text\s*\{[^}]*max-width:\s*none/);
+  });
+
+  it('names the clip item with a comma where its text shows a middle dot', async () => {
+    const { createStateStrip } = await import('../src/ui/stateStrip');
+    const strip = createStateStrip({ open: vi.fn() });
+    const item = () => (strip.element as unknown as FakeEl).querySelector('.olv-ss-clip')!;
+    strip.render(readStrip(reads({ clip: () => ({ kept: 5, total: 9, mode: 'keep-inside' }), clipOn: () => 'keep-inside' })));
+    expect(item().textContent).toBe('Clipped: 5 of 9 points · Showing inside box');
+    expect(item().getAttribute('aria-label')).toBe('Clip box: Clipped: 5 of 9 points, Showing inside box. Opens the Clip box');
+    strip.render(readStrip(reads({ clip: () => null, clipOn: () => 'keep-outside' })));
+    expect(item().textContent).toBe('Clip on · Showing outside box');
+    expect(item().getAttribute('aria-label')).toBe('Clip box: Clip on, Showing outside box. Opens the Clip box');
+    // An item with no side phrase keeps its name as it was.
+    strip.render(readStrip(reads({ clip: () => ({ kept: 9, total: 9 }) })));
+    expect(item().getAttribute('aria-label')).toBe('Clip box: Clip on: keeps all 9 points. Opens the Clip box');
+  });
+
+  it('says which side of the box is kept, and offers Turn off beside the clip item', async () => {
+    const { createStateStrip } = await import('../src/ui/stateStrip');
+    const { setClipTurnOff } = await import('../src/render/clip/clipScope');
+    const strip = createStateStrip({ open: vi.fn() });
+    const root = strip.element as unknown as FakeEl;
+    const off = () => root.querySelector('.olv-ss-clipoff')!;
+    strip.render(readStrip(reads()));
+    expect(off().hidden).toBe(true);
+    strip.render(readStrip(reads({ clip: () => ({ kept: 5, total: 9, mode: 'keep-inside' }) })));
+    expect(root.querySelector('.olv-ss-clip')!.textContent).toBe('Clipped: 5 of 9 points · Showing inside box');
+    strip.render(readStrip(reads({ clip: () => ({ kept: 9, total: 9, mode: 'keep-outside' }) })));
+    expect(root.querySelector('.olv-ss-clip')!.textContent).toBe('Clip on: keeps all 9 points · Showing outside box');
+    expect(off().hidden).toBe(false);
+    expect(off().getAttribute('aria-label')).toBe('Turn off clipping');
+    const clear = vi.fn();
+    setClipTurnOff(clear);
+    off().fire('click');
+    expect(clear).toHaveBeenCalledTimes(1);
+    setClipTurnOff(null);
+  });
+
+  describe('clip announcements', () => {
+    /** Run `body` with the app's polite region installed and fake timers, then remove both. */
+    const withRegion = async (body: (history: string[]) => Promise<void>): Promise<void> => {
+      vi.useFakeTimers();
+      const { history } = withLiveRegion();
+      const doc = (globalThis as unknown as { document: Record<string, unknown> }).document;
+      // dispose() clears the strip height it publishes on the root element.
+      doc.documentElement = { style: { removeProperty: () => {} } };
+      try {
+        await body(history);
+      } finally {
+        vi.useRealTimers();
+        delete doc.querySelector;
+        delete doc.documentElement;
+      }
+    };
+    const on = (kept: number, total: number, mode: 'keep-inside' | 'keep-outside') =>
+      readStrip(reads({ clip: () => ({ kept, total, mode }), clipOn: () => mode }));
+    const streamed = (mode: 'keep-inside' | 'keep-outside' | null) => readStrip(reads({ clip: () => null, clipOn: () => mode }));
+
+    it('turning the clip on, changing side and turning it off each announce once, politely', async () => {
+      await withRegion(async (history) => {
+        const { createStateStrip } = await import('../src/ui/stateStrip');
+        const strip = createStateStrip({ open: vi.fn() });
+        const root = strip.element as unknown as FakeEl;
+        strip.render(readStrip(reads()));
+        expect(history).toEqual([]);
+        strip.render(on(5, 9, 'keep-inside'));
+        // Spoken with a comma; the strip itself still shows the middle dot.
+        expect(root.querySelector('.olv-ss-clip')!.textContent).toBe('Clipped: 5 of 9 points · Showing inside box');
+        // A repaint, and a count change on the same side, say nothing new.
+        strip.render(on(5, 9, 'keep-inside'));
+        strip.render(on(6, 9, 'keep-inside'));
+        expect(history).toEqual(['Clipped: 5 of 9 points, Showing inside box']);
+        strip.render(on(3, 9, 'keep-outside'));
+        expect(history).toEqual(['Clipped: 5 of 9 points, Showing inside box', 'Clipped: 3 of 9 points, Showing outside box']);
+        strip.render(streamed(null));
+        strip.render(streamed(null));
+        vi.advanceTimersByTime(5000);
+        expect(history).toEqual([
+          'Clipped: 5 of 9 points, Showing inside box',
+          'Clipped: 3 of 9 points, Showing outside box',
+          'Clip off',
+        ]);
+        // Through the app's one polite region: the strip mints no live region of its own.
+        expect(root.findAll((n) => n.getAttribute('aria-live') !== null || n.getAttribute('role') === 'status')).toEqual([]);
+        strip.dispose();
+      });
+    });
+
+    it('waits briefly for the count of a clip just turned on, and says the side alone when no count comes', async () => {
+      await withRegion(async (history) => {
+        const { createStateStrip } = await import('../src/ui/stateStrip');
+        const strip = createStateStrip({ open: vi.fn() });
+        strip.render(readStrip(reads()));
+        // On, count pending: nothing yet; the count lands and is said with it, once.
+        strip.render(streamed('keep-inside'));
+        expect(history).toEqual([]);
+        strip.render(on(5, 9, 'keep-inside'));
+        vi.advanceTimersByTime(5000);
+        expect(history).toEqual(['Clipped: 5 of 9 points, Showing inside box']);
+        history.length = 0;
+        strip.render(streamed(null));
+        // A streamed scan has no count: the clip and its side are said on their own.
+        strip.render(streamed('keep-inside'));
+        vi.advanceTimersByTime(5000);
+        strip.render(streamed('keep-outside'));
+        vi.advanceTimersByTime(5000);
+        expect(history).toEqual(['Clip off', 'Clip on, Showing inside box', 'Clip on, Showing outside box']);
+        // On and off again before anything was said: nothing is said.
+        strip.render(streamed(null));
+        history.length = 0;
+        strip.render(streamed('keep-inside'));
+        strip.render(streamed(null));
+        vi.advanceTimersByTime(5000);
+        expect(history).toEqual([]);
+        strip.dispose();
+      });
+    });
+
+    it('a count that lands after the wait is said once, after the line without it', async () => {
+      await withRegion(async (history) => {
+        const { createStateStrip } = await import('../src/ui/stateStrip');
+        const strip = createStateStrip({ open: vi.fn() });
+        strip.render(readStrip(reads()));
+        strip.render(streamed('keep-inside'));
+        vi.advanceTimersByTime(700);
+        expect(history).toEqual(['Clip on, Showing inside box']);
+        strip.render(on(5, 9, 'keep-inside'));
+        expect(history).toEqual(['Clip on, Showing inside box', 'Clipped: 5 of 9 points, Showing inside box']);
+        // A repaint, and a later count on the same side, add nothing.
+        strip.render(on(5, 9, 'keep-inside'));
+        strip.render(on(6, 9, 'keep-inside'));
+        vi.advanceTimersByTime(5000);
+        expect(history).toHaveLength(2);
+        strip.dispose();
+      });
+    });
+
+    it('leaves clip changes to the Clip panel readout while it is on screen, and does not repeat them when it closes', async () => {
+      await withRegion(async (history) => {
+        const { createStateStrip } = await import('../src/ui/stateStrip');
+        let readout = true;
+        const strip = createStateStrip({ open: vi.fn(), clipReadoutShown: () => readout });
+        strip.render(readStrip(reads()));
+        // The panel's own polite readout says these; the strip says nothing.
+        strip.render(on(5, 9, 'keep-inside'));
+        strip.render(on(3, 9, 'keep-outside'));
+        strip.render(streamed(null));
+        strip.render(streamed('keep-inside'));
+        vi.advanceTimersByTime(5000);
+        expect(history).toEqual([]);
+        // The panel closes: the state it already heard is not said again.
+        readout = false;
+        strip.render(streamed('keep-inside'));
+        vi.advanceTimersByTime(5000);
+        expect(history).toEqual([]);
+        // The strip's own Turn off, with the panel closed, is said.
+        strip.render(streamed(null));
+        expect(history).toEqual(['Clip off']);
+        strip.dispose();
+      });
+    });
+
+    it('speaks every clip change while the Clip panel readout is not on screen', async () => {
+      await withRegion(async (history) => {
+        const { createStateStrip } = await import('../src/ui/stateStrip');
+        const strip = createStateStrip({ open: vi.fn(), clipReadoutShown: () => false });
+        strip.render(readStrip(reads()));
+        strip.render(on(5, 9, 'keep-inside'));
+        strip.render(on(3, 9, 'keep-outside'));
+        strip.render(streamed(null));
+        expect(history).toEqual([
+          'Clipped: 5 of 9 points, Showing inside box',
+          'Clipped: 3 of 9 points, Showing outside box',
+          'Clip off',
+        ]);
+        strip.dispose();
+      });
+    });
+
+    it('the mounted strip asks the Clip panel whether its readout is on screen', async () => {
+      await withRegion(async (history) => {
+        const { mountStateStrip } = await import('../src/app/stateStrip/stateStripMount');
+        const { setClipOn, setClipReadoutShown, setClipScope } = await import('../src/render/clip/clipScope');
+        const doc = (globalThis as unknown as { document: Record<string, unknown> }).document;
+        doc.querySelectorAll = () => [];
+        let readout = true;
+        setClipReadoutShown(() => readout);
+        const mounted = mountStateStrip({
+          crs: { current: () => null, context: () => spatialContextFrom(null), subscribe: () => () => {} },
+          streamingName: () => null,
+          activeCloudName: () => 'site.las',
+          onActiveChange: () => () => {},
+          studio: { state: () => ({ facts: null }), subscribe: () => () => {} },
+          results: null,
+          hasScan: () => true,
+          open: vi.fn(),
+        });
+        try {
+          setClipScope({ kept: 5, total: 9, mode: 'keep-inside' });
+          setClipOn('keep-inside');
+          expect(history).toEqual([]);
+          readout = false;
+          setClipScope(null);
+          setClipOn(null);
+          expect(history).toEqual(['Clip off']);
+        } finally {
+          mounted.dispose();
+          setClipReadoutShown(null);
+          setClipScope(null);
+          setClipOn(null);
+          delete doc.querySelectorAll;
+        }
+      });
+    });
+
+    it('closing the scan says nothing, and the next scan does not hear an old clip turned off', async () => {
+      await withRegion(async (history) => {
+        const { createStateStrip } = await import('../src/ui/stateStrip');
+        const strip = createStateStrip({ open: vi.fn() });
+        strip.render(on(5, 9, 'keep-inside'));
+        strip.render(null);
+        strip.render(readStrip(reads()));
+        vi.advanceTimersByTime(5000);
+        expect(history).toEqual(['Clipped: 5 of 9 points, Showing inside box']);
+        // A clip waiting for its count is dropped with the strip.
+        strip.render(streamed('keep-inside'));
+        strip.dispose();
+        vi.advanceTimersByTime(5000);
+        expect(history).toEqual(['Clipped: 5 of 9 points, Showing inside box']);
+      });
+    });
+  });
+
+  describe('the clip item on a touch phone', () => {
+    /** Layout numbers the fake DOM does not compute. */
+    type Box = { offsetLeft: number; offsetWidth: number; clientWidth: number; scrollLeft: number };
+    const setBox = (n: FakeEl, b: Partial<Box>): void => { Object.assign(n, b); };
+    const box = (n: FakeEl): Box => n as unknown as Box;
+
+    /** A strip whose row runs past a 300 px screen: the clip item at 400..600, Turn off at 600..660. */
+    const make = async (phone: boolean) => {
+      const { createStateStrip, STRIP_SCROLL_QUERY } = await import('../src/ui/stateStrip');
+      vi.stubGlobal('matchMedia', (q: string) => ({ matches: phone && q === STRIP_SCROLL_QUERY }));
+      vi.stubGlobal('getComputedStyle', () => ({ paddingLeft: '4px', paddingRight: '32px' }));
+      const strip = createStateStrip({ open: vi.fn() });
+      const root = strip.element as unknown as FakeEl;
+      const item = root.querySelector('.olv-ss-clip')!;
+      const off = root.querySelector('.olv-ss-clipoff')!;
+      const scrolled = vi.fn();
+      (item as unknown as { scrollIntoView: () => void }).scrollIntoView = scrolled;
+      setBox(root, { clientWidth: 300, scrollLeft: 0 });
+      setBox(item, { offsetLeft: 400, offsetWidth: 200 });
+      setBox(off, { offsetLeft: 600, offsetWidth: 60 });
+      return { strip, root, scrolled };
+    };
+    const clipOn = (kept: number) => readStrip(reads({ clip: () => ({ kept, total: 9, mode: 'keep-inside' }), clipOn: () => 'keep-inside' }));
+
+    it('scrolls the strip, and only the strip, to show the clip item and Turn off when it appears', async () => {
+      try {
+        const { strip, root, scrolled } = await make(true);
+        strip.render(readStrip(reads()));
+        expect(box(root).scrollLeft).toBe(0);
+        strip.render(clipOn(5));
+        // Turn off's right edge (660) clears the 32 px fade at the strip's end.
+        expect(box(root).scrollLeft).toBe(660 - (300 - 32));
+        expect(scrolled).not.toHaveBeenCalled();
+      } finally {
+        vi.unstubAllGlobals();
+      }
+    });
+
+    it('brings it back when its text changes, and leaves the strip where the user put it otherwise', async () => {
+      try {
+        const { strip, root } = await make(true);
+        strip.render(clipOn(5));
+        box(root).scrollLeft = 0;
+        // The same facts again: the user's scroll stays.
+        strip.render(clipOn(5));
+        expect(box(root).scrollLeft).toBe(0);
+        strip.render(clipOn(6));
+        expect(box(root).scrollLeft).toBe(392);
+        // Scrolled past it: the item's start comes back into view.
+        box(root).scrollLeft = 500;
+        strip.render(clipOn(7));
+        expect(box(root).scrollLeft).toBe(400 - 4);
+      } finally {
+        vi.unstubAllGlobals();
+      }
+    });
+
+    it('does not scroll outside the touch-phone layout', async () => {
+      try {
+        const { strip, root } = await make(false);
+        strip.render(clipOn(5));
+        expect(box(root).scrollLeft).toBe(0);
+      } finally {
+        vi.unstubAllGlobals();
+      }
+    });
+
+    it('uses the same media condition as the stylesheet rule that makes the strip scroll', async () => {
+      const { STRIP_SCROLL_QUERY } = await import('../src/ui/stateStrip');
+      const css = (await import('node:fs')).readFileSync(new URL('../src/ui/stateStrip.css', import.meta.url), 'utf8');
+      const rule = new RegExp(`@media ${STRIP_SCROLL_QUERY.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')} \\{\\s*\\.olv-state-strip \\{[^}]*overflow-x: auto`);
+      expect(css).toMatch(rule);
+    });
   });
 
   it('shows the elapsed time and the estimate in their own span, out of the accessible name and the button text', async () => {

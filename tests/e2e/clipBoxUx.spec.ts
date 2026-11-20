@@ -134,7 +134,7 @@ test('Draw clipping box stays on the page, clips the full height, and leaves the
     a.placeMeasurementPoint({ x: b0[0], y: b0[1], z: b0[2] });
   }, [p, q]);
   await page.getByRole('button', { name: /Isolate this box/ }).click();
-  await expect(page.locator('.olv-clip-indicator')).toBeVisible();
+  await expect(page.locator('.olv-ss-clip')).toBeVisible();
 
   const box = (await state(page)).clip!.box;
   for (const i of across) {
@@ -221,7 +221,7 @@ test('a clip that keeps no points: Export says so and stays off', async ({ page 
   await expect(exp.locator('.olv-bc-convert')).toBeDisabled();
 
   // Turning the clip off brings Export back.
-  await page.locator('.olv-clip-indicator').getByRole('button', { name: 'Turn off clipping' }).click();
+  await page.getByRole('button', { name: 'Turn off clipping' }).click();
   await expect(exp.locator('.olv-bc-convert')).toBeEnabled();
   await expect(exp.locator('.olv-export-summary')).toContainText('3,600 points');
 });

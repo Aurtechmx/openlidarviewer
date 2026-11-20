@@ -63,14 +63,18 @@ async function loaded(page: Page): Promise<void> {
   await expect(strip(page)).toBeVisible({ timeout: 15_000 });
 }
 
-/** Every item reads as text on the strip, with no hover. */
+/**
+ * Every fact reads as text on the strip, with no hover. The processing item
+ * is shown only while a task runs, so once the open has settled it is hidden.
+ */
 async function expectAllFacts(page: Page): Promise<void> {
-  for (const id of ['dataset', 'crs', 'vertical', 'basis', 'processing', 'review']) {
+  for (const id of ['dataset', 'crs', 'vertical', 'basis', 'review']) {
     const b = item(page, id);
     await expect(b).toBeVisible();
     await expect(b).toHaveAttribute('aria-label', /\S+: \S/);
     expect((await b.innerText()).trim().length).toBeGreaterThan(0);
   }
+  await expect(item(page, 'processing')).toBeHidden({ timeout: 30_000 });
 }
 
 async function shoot(page: Page, name: string): Promise<void> {
@@ -172,9 +176,12 @@ test.describe('state strip', () => {
     await page.locator('.olv-streaming-phase').evaluate((e) => e.parentElement!.classList.add('olv-hidden'));
     await expect(page.locator('.olv-streaming-phase')).toBeHidden();
     await page.waitForTimeout(2_000);
+    await expect(processing).toBeVisible();
     await expect(processing).toContainText('Loading current view');
     release();
-    await expect(processing).toHaveText(/Idle/, { timeout: 30_000 });
+    // Once the task settles the item hides, with no task text left behind.
+    await expect(processing).toBeHidden({ timeout: 30_000 });
+    await expect(processing).toHaveText('');
   });
 
   test('phone: a task in a lowered sheet is listed during an EPT open', async ({ page }) => {
@@ -189,8 +196,10 @@ test.describe('state strip', () => {
     const processing = item(page, 'processing');
     await expect(processing).toContainText('Loading current view', { timeout: 20_000 });
     await page.waitForTimeout(2_000);
+    await expect(processing).toBeVisible();
     await expect(processing).toContainText('Loading current view');
     release();
-    await expect(processing).toHaveText(/Idle/, { timeout: 30_000 });
+    await expect(processing).toBeHidden({ timeout: 30_000 });
+    await expect(processing).toHaveText('');
   });
 });
