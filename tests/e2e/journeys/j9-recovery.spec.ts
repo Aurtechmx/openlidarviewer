@@ -88,6 +88,7 @@ test('P1: after going offline the loaded scan still exports and the report lane 
   // part that could not load says so and can be retried.
   const j = startJourney(page, info, 'j9', [
     { pattern: /ERR_INTERNET_DISCONNECTED|NetworkError|Load failed|Failed to fetch|Failed to load resource/i, reason: 'this test turns the network off on purpose; the request failures are expected, an uncaught error is not' },
+    { pattern: /^Response served by service worker is an error$|^Cannot load \S*\.$/, reason: 'WebKit 27 words the same offline module-load failure this way' },
   ]);
   const survey = await buildSurveyLas14();
   // The service worker is skipped under ?test=1 and under automation, so this

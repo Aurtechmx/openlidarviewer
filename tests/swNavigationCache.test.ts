@@ -275,6 +275,15 @@ describe('sw.js — navigation handler must not poison the cached app shell', ()
     const out = await sw.navigate('https://viewer.example/');
     expect(out?.marker).toBe('precached:./index.html');
   });
+
+  it('offline with nothing cached, an asset answers with a network error, not null', async () => {
+    // WebKit raises a page error when respondWith settles to undefined.
+    const sw = await bootWorker();
+    sw.setFetch(() => Promise.reject(new Error('offline')));
+    const out = (await sw.asset('https://viewer.example/assets/never-cached-Ab12Cd34.js')) as unknown as Response | undefined;
+    expect(out).toBeInstanceOf(Response);
+    expect(out?.type).toBe('error');
+  });
 });
 
 describe('sw.js — asset cache stores ONLY content-hashed app bundles, never datasets', () => {

@@ -29,10 +29,17 @@ function removeCapabilities(spec: Array<[string, string[]]>): void {
   for (const [rootName, keys] of spec) {
     const root = roots[rootName];
     for (const key of keys) {
+      // WebKit 27 adds a deleted DOM prototype member back once the page has
+      // loaded, so on Element and Document prototypes the member is pinned to
+      // undefined instead. The app tests these with typeof, so it reads absent.
+      const pin = rootName === 'element' || rootName === 'document';
       let obj: unknown = root;
       while (obj && obj !== Object.prototype) {
         if (Object.prototype.hasOwnProperty.call(obj, key)) {
           try { delete (obj as Record<string, unknown>)[key]; } catch { /* non-configurable */ }
+          if (pin) {
+            try { Object.defineProperty(obj, key, { value: undefined, writable: false, configurable: false }); } catch { /* ignore */ }
+          }
         }
         obj = Object.getPrototypeOf(obj);
       }
