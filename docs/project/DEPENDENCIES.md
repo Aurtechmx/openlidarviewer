@@ -114,7 +114,7 @@ zero.
 
 ## Resolved by override
 
-Six advisories that previously sat here are closed. `package.json` pins them
+Seven advisories that previously sat here are closed. `package.json` pins them
 through `overrides` rather than waiting on the packages that depend on them:
 
 | Package | Was | Now | Advisory |
@@ -125,6 +125,7 @@ through `overrides` rather than waiting on the packages that depend on them:
 | qs (under typed-rest-client) | 6.15.1 | 6.16.0 | `qs.stringify` denial of service; array-limit bypass and `isBuffer` denial of service |
 | brace-expansion (under minimatch 3) | 1.1.15 | 1.1.21 | CVE-2026-13149, exponential-time expansion; GHSA-mh99-v99m-4gvg, unbounded expansion |
 | brace-expansion (under minimatch 10) | 5.0.8 | 5.0.12 | GHSA-mh99-v99m-4gvg, unbounded expansion; resolved inside the existing range, no override needed |
+| minimatch (under @stryker-mutator/core) | 10.2.5 | 11.0.9 | GHSA-g3hv-75wg-m249, denial of service through globparts amplification; Stryker 10.1.1 pins `~10.2.4`, so the override holds until a Stryker release accepts 11 |
 
 Three further development-tree advisories were closed inside the existing
 version ranges, with a lockfile refresh and no override. All three sit under
