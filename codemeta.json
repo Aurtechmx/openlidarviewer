@@ -169,7 +169,7 @@
       "@type": "SoftwareApplication",
       "identifier": "proj4",
       "name": "proj4",
-      "version": "^2.22.0",
+      "version": "^2.23.0",
       "provider": {
         "@type": "Organization",
         "name": "npm",
