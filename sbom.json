@@ -701,8 +701,8 @@
     {
       "type": "library",
       "name": "proj4",
-      "version": "2.22.0",
-      "bom-ref": "openlidarviewer@0.7.2-alpha.1|proj4@2.22.0",
+      "version": "2.23.0",
+      "bom-ref": "openlidarviewer@0.7.2-alpha.1|proj4@2.23.0",
       "description": "Proj4js is a JavaScript library to transform point coordinates from one coordinate system to another, including datum transformations.",
       "licenses": [
         {
@@ -712,7 +712,7 @@
           }
         }
       ],
-      "purl": "pkg:npm/proj4@2.22.0",
+      "purl": "pkg:npm/proj4@2.23.0",
       "externalReferences": [
         {
           "url": "git+https://github.com/proj4js/proj4js.git",
@@ -730,12 +730,12 @@
           "comment": "as detected from PackageJson property \"bugs.url\""
         },
         {
-          "url": "https://registry.npmjs.org/proj4/-/proj4-2.22.0.tgz",
+          "url": "https://registry.npmjs.org/proj4/-/proj4-2.23.0.tgz",
           "type": "distribution",
           "hashes": [
             {
               "alg": "SHA-512",
-              "content": "315bc7d3d42b626dc0db7e6b717dfd58388229a9eb0626e5bb6f25d0a6089ff0760e87e6621bcffcb2d2e37904eba8cd0dfc7f3f597f9da877266b00abc5206d"
+              "content": "bdbd59fdd3b3b44c97839242d8b80a736c9efa6778a947701ff44b4b411450c2b3a08b000b63d3d4818a3c80eff6a839d69eee38d9fddea4e1f60b5f87e1a639"
             }
           ],
           "comment": "as detected from npm-ls property \"resolved\" and property \"integrity\""
@@ -1464,8 +1464,8 @@
     {
       "type": "library",
       "name": "wkt-parser",
-      "version": "1.5.5",
-      "bom-ref": "openlidarviewer@0.7.2-alpha.1|wkt-parser@1.5.5",
+      "version": "1.9.0",
+      "bom-ref": "openlidarviewer@0.7.2-alpha.1|wkt-parser@1.9.0",
       "description": "wkt-parser ===",
       "licenses": [
         {
@@ -1475,7 +1475,7 @@
           }
         }
       ],
-      "purl": "pkg:npm/wkt-parser@1.5.5",
+      "purl": "pkg:npm/wkt-parser@1.9.0",
       "externalReferences": [
         {
           "url": "git+https://github.com/proj4js/wkt-parser.git",
@@ -1493,12 +1493,12 @@
           "comment": "as detected from PackageJson property \"bugs.url\""
         },
         {
-          "url": "https://registry.npmjs.org/wkt-parser/-/wkt-parser-1.5.5.tgz",
+          "url": "https://registry.npmjs.org/wkt-parser/-/wkt-parser-1.9.0.tgz",
           "type": "distribution",
           "hashes": [
             {
               "alg": "SHA-512",
-              "content": "ff33188bde3fec3edfc5c3929559969fabe738c8f71aae5dd71bd58da60e4bd9fa874a8e27823b61857105661c1f5beaf7eb2e86acd7927d39631e3bcd035420"
+              "content": "d26b81ca4081a5b52030faa61fedab96f165170c07d6476020c6b461b690fc9640972582bfc15ae071526c4bd9b3681845aa893ffd03f31488d46ed9e2d9f4bf"
             }
           ],
           "comment": "as detected from npm-ls property \"resolved\" and property \"integrity\""
@@ -2136,7 +2136,7 @@
         "openlidarviewer@0.7.2-alpha.1|laz-perf@0.0.7",
         "openlidarviewer@0.7.2-alpha.1|@pdf-lib/fontkit@1.1.1",
         "openlidarviewer@0.7.2-alpha.1|pdf-lib@1.17.1",
-        "openlidarviewer@0.7.2-alpha.1|proj4@2.22.0",
+        "openlidarviewer@0.7.2-alpha.1|proj4@2.23.0",
         "openlidarviewer@0.7.2-alpha.1|three@0.186.1"
       ]
     },
@@ -2206,10 +2206,10 @@
       "ref": "openlidarviewer@0.7.2-alpha.1|pdf-lib@1.17.1|tslib@1.14.1"
     },
     {
-      "ref": "openlidarviewer@0.7.2-alpha.1|proj4@2.22.0",
+      "ref": "openlidarviewer@0.7.2-alpha.1|proj4@2.23.0",
       "dependsOn": [
         "openlidarviewer@0.7.2-alpha.1|mgrs@1.0.0",
-        "openlidarviewer@0.7.2-alpha.1|wkt-parser@1.5.5"
+        "openlidarviewer@0.7.2-alpha.1|wkt-parser@1.9.0"
       ]
     },
     {
@@ -2314,7 +2314,7 @@
       "ref": "openlidarviewer@0.7.2-alpha.1|mgrs@1.0.0"
     },
     {
-      "ref": "openlidarviewer@0.7.2-alpha.1|wkt-parser@1.5.5"
+      "ref": "openlidarviewer@0.7.2-alpha.1|wkt-parser@1.9.0"
     },
     {
       "ref": "openlidarviewer@0.7.2-alpha.1|@probe.gl/stats@4.1.2"

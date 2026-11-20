@@ -34,7 +34,7 @@ only the direct entry points.
 | laz-perf | ^0.0.7 | 0.0.7 | Apache-2.0 | https://github.com/hobuinc/laz-perf |
 | pdf-lib | ^1.17.1 | 1.17.1 | MIT | https://github.com/Hopding/pdf-lib |
 | @pdf-lib/fontkit | 1.1.1 | 1.1.1 | MIT | https://github.com/Hopding/fontkit |
-| proj4 | ^2.22.0 | 2.22.0 | MIT | https://github.com/proj4js/proj4js |
+| proj4 | ^2.23.0 | 2.23.0 | MIT | https://github.com/proj4js/proj4js |
 | @fontsource-variable/inter | ^5.3.0 | 5.3.0 | OFL-1.1 | https://github.com/rsms/inter |
 | @fontsource/jetbrains-mono | ^5.3.0 | 5.3.0 | OFL-1.1 | https://github.com/JetBrains/JetBrainsMono |
 
@@ -841,7 +841,7 @@ Licence: MIT. Text: T16.
 
 - Copyright (c) 2019 Andrew Dillon
 
-#### proj4 2.22.0
+#### proj4 2.23.0
 
 Licence: MIT. Text: T17.
 
@@ -865,7 +865,7 @@ Licence: MIT. Text: T20.
 
 - Copyright (c) Matteo Collina and Undici contributors
 
-#### wkt-parser 1.5.5
+#### wkt-parser 1.9.0
 
 Licence: MIT. Text: T17.
 
@@ -1763,7 +1763,7 @@ SOFTWARE.
 
 #### T17: MIT
 
-Applies to: proj4 2.22.0, wkt-parser 1.5.5.
+Applies to: proj4 2.23.0, wkt-parser 1.9.0.
 
 ```
 ## Proj4js -- Javascript reprojection library.

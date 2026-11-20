@@ -57,7 +57,7 @@ These ship in the deploy archive.
 | @pdf-lib/fontkit | 1.1.1 | 1.1.1 | MIT |
 | laz-perf | ^0.0.7 | 0.0.7 | Apache-2.0 |
 | pdf-lib | ^1.17.1 | 1.17.1 | MIT |
-| proj4 | ^2.22.0 | 2.22.0 | MIT |
+| proj4 | ^2.23.0 | 2.23.0 | MIT |
 | three | ^0.186.1 | 0.186.1 | MIT |
 
 ## Direct development dependencies
