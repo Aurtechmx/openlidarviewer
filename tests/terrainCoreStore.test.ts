@@ -12,7 +12,7 @@ import { fakeOpfsDir } from './support/fakeOpfs';
 import type { OpfsDirHandle } from '../src/io/heavy/opfsSpillStore';
 import { computeTerrainCore } from '../src/terrain/contour/analyseContours';
 import type { TerrainCore } from '../src/terrain/contour/analyseContours';
-import { createTerrainCoreStore, TERRAIN_CORE_STORE_DIR, TERRAIN_CORE_INDEX_FILE } from '../src/terrain/contour/terrainCoreStore';
+import { createTerrainCoreStore, TERRAIN_CORE_STORE_DIR, TERRAIN_CORE_INDEX_FILE, TERRAIN_CORE_MAX_AGE_MS } from '../src/terrain/contour/terrainCoreStore';
 import { encodeTerrainCore } from '../src/terrain/contour/terrainCorePayload';
 import { integrityDigest } from '../src/terrain/contour/persistentCoreKey';
 import { smallCloud, SMALL_PARAMS, sameCore } from './terrainCorePayload.test';
@@ -234,5 +234,25 @@ describe('terrain core store and the evidence raster', () => {
     const restored = (found as { core: TerrainCore }).core;
     expect(restored.dtm.verticalDispersion).toBeInstanceOf(Float32Array);
     expect(evidence(restored)).toBe(evidence(fresh));
+  });
+});
+
+describe('terrain core store expiry', () => {
+  it('drops entries unused for more than 30 days and keeps recent ones', async () => {
+    const DAY = 24 * 60 * 60 * 1000;
+    expect(TERRAIN_CORE_MAX_AGE_MS).toBe(30 * DAY);
+    const root = fakeOpfsDir();
+    let t = 1_000_000_000_000;
+    const store = createTerrainCoreStore(root, { generation: 'g1', now: () => t });
+    const params = (cellSizeM: number) => ({ ...SMALL_PARAMS, cellSizeM });
+    await store.persist(positions, params(1), core, EXPENSIVE);
+    t += 20 * DAY;
+    await store.persist(positions, params(2), core, EXPENSIVE);
+    t += 15 * DAY; // the first entry is now 35 days idle, the second 15
+    await store.persist(positions, params(3), core, EXPENSIVE);
+    const cells = (await readIndex(root)).entries.length;
+    expect(cells).toBe(2);
+    expect(await store.lookup(positions, params(1))).toEqual({ miss: 'parameter-mismatch' });
+    expect('core' in (await store.lookup(positions, params(2)))).toBe(true);
   });
 });

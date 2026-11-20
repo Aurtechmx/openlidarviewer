@@ -141,12 +141,16 @@ export function parsePrefs(raw: string): Partial<ViewerPrefs> {
   if (typeof o.inspectorSections === 'object' && o.inspectorSections !== null) {
     const sections: Record<string, boolean> = {};
     for (const [k, v] of Object.entries(o.inspectorSections as Record<string, unknown>)) {
+      if (Object.keys(sections).length >= MAX_INSPECTOR_SECTIONS) break;
       if (typeof v === 'boolean' && k !== '__proto__' && k !== 'constructor' && k !== 'prototype') sections[k] = v;
     }
     out.inspectorSections = sections;
   }
   return out;
 }
+
+/** The most Inspector section states kept from saved preferences; the first ones in stored order win. */
+export const MAX_INSPECTOR_SECTIONS = 64;
 
 /**
  * Load saved preferences. Returns only the keys that were stored and valid, so

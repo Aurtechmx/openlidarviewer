@@ -170,7 +170,7 @@ import { createStreamingUiCoordinator } from './app/streamingUiCoordinator';
 // module excluded from the live-build source-transform so Vite can still see the
 // dynamic-import specifiers and emit the chunks (see lazyChunks.ts).
 import {
-  loadStreamingPointCloud,
+  loadStreamingPointCloud, loadStoreJanitor,
   loadCopcWorkerClient,
   loadEptLaszipWorkerClient,
   loadTestSeamMount,
@@ -3150,7 +3150,7 @@ function prewarmLoaders(): void {
     })
     .catch(() => { /* swallow — actual COPC open retries */ });
   // Static LAS/LAZ loader (the "drop a non-COPC LAZ" path).
-  void loadLasLoader().catch(() => { /* swallow */ }); void preloadStreamingReport().catch(() => { /* swallow — the report call retries */ });
+  void loadLasLoader().catch(() => { /* swallow */ }); void preloadStreamingReport().catch(() => { /* swallow — the report call retries */ }); void loadStoreJanitor().then((m) => m.runStartupOocJanitor()).catch(() => { /* swallow — the next start retries */ });
   // The Viewer chunk pulls in three.js / WebGPU (~800 KB) — warm it too, skipping under Save-Data / 2G-3G.
   if (!_isDataSaver()) {
     void ensureViewer().catch(() => { /* swallow — open() retries */ }); warmParseWorker(); // and the shared parse worker's script

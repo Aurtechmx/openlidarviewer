@@ -11,7 +11,8 @@
  * the background, and only for cores whose compute crossed
  * {@link TERRAIN_CORE_PERSIST_MIN_MS}. The store is bounded by
  * {@link TERRAIN_CORE_STORE_BUDGET_BYTES}; the least recently used entries
- * leave first. Nothing here reaches the OOC tile stores or the source file.
+ * leave first, and an entry unused for {@link TERRAIN_CORE_MAX_AGE_MS} is
+ * dropped at the next write. Nothing here reaches the OOC tile stores or the source file.
  * The index is one JSON file beside the payloads; a torn index reads as empty
  * and is rebuilt by the next write.
  */
@@ -29,6 +30,8 @@ export const TERRAIN_CORE_INDEX_VERSION = 1;
 export const TERRAIN_CORE_PERSIST_MIN_MS = 1000;
 /** Upper bound on the bytes the store keeps, all entries together. */
 export const TERRAIN_CORE_STORE_BUDGET_BYTES = 512 * 1024 * 1024;
+/** An entry unused for longer than this is dropped at the next write. */
+export const TERRAIN_CORE_MAX_AGE_MS = 30 * 24 * 60 * 60 * 1000;
 
 export type TerrainCoreMissReason =
   | 'unavailable'
@@ -196,6 +199,12 @@ export function createTerrainCoreStore(root: OpfsDirHandle | null, options: Terr
         for (const stale of index.entries.filter((e) => e.key === p.key)) {
           index.entries = index.entries.filter((e) => e !== stale);
           await remove(d, stale.file);
+        }
+        // Entries idle past the age limit leave before the byte budget is applied.
+        const cutoff = now() - TERRAIN_CORE_MAX_AGE_MS;
+        for (const old of index.entries.filter((e) => e.lastUsed < cutoff)) {
+          index.entries = index.entries.filter((e) => e !== old);
+          await remove(d, old.file);
         }
         // Make room: oldest use first, never below what this payload needs.
         let used = index.entries.reduce((n, e) => n + e.bytes, 0);

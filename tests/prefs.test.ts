@@ -1,4 +1,4 @@
-import { parsePrefs } from '../src/prefs';
+import { parsePrefs, MAX_INSPECTOR_SECTIONS } from '../src/prefs';
 
 // ────────────────────────────────────────────────────────────────────────────
 // parsePrefs — validates a stored JSON string into partial preferences
@@ -86,5 +86,19 @@ describe('parsePrefs', () => {
     expect(parsePrefs(JSON.stringify({ splatMode: 'hologram' })).splatMode).toBeUndefined();
     expect(parsePrefs(JSON.stringify({ splatMode: 42 })).splatMode).toBeUndefined();
     expect(parsePrefs('{}').splatMode).toBeUndefined();
+  });
+});
+
+describe('inspector section cap', () => {
+  test('keeps at most 64 inspector sections from saved preferences', () => {
+    const sections: Record<string, boolean> = {};
+    for (let i = 0; i < 100; i++) sections[`section-${i}`] = i % 2 === 0;
+    let parsed: ReturnType<typeof parsePrefs> = {};
+    expect(() => { parsed = parsePrefs(JSON.stringify({ inspectorSections: sections })); }).not.toThrow();
+    const keys = Object.keys(parsed.inspectorSections ?? {});
+    expect(MAX_INSPECTOR_SECTIONS).toBe(64);
+    expect(keys).toHaveLength(64);
+    expect(keys[0]).toBe('section-0');
+    expect(keys[63]).toBe('section-63');
   });
 });
