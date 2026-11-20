@@ -221,6 +221,18 @@ export function createLocalStore(storage: Pick<Storage, 'getItem' | 'setItem' | 
   };
 }
 
+/** Delete the localStorage fallback copy, wherever it was left. Never throws. */
+export function removeLocalFallback(
+  storage: Pick<Storage, 'removeItem'> | undefined,
+  key = 'olv:recovery:journal',
+): void {
+  try {
+    storage?.removeItem(key);
+  } catch {
+    // Nothing more can be done for a store that refuses the delete.
+  }
+}
+
 /** Whether an entry is past {@link MAX_ENTRY_AGE_MS}. A future timestamp counts as fresh. */
 export const isStale = (e: RecoveryEntry, now: number, maxAge = MAX_ENTRY_AGE_MS): boolean => now - e.savedAt > maxAge;
 
@@ -288,6 +300,36 @@ export async function openIndexedDbStore(idb: IDBFactory): Promise<RecoveryStore
 }
 
 /**
+ * Copy the localStorage fallback entries into `target` without displacing
+ * anything it already holds. An entry is skipped when `target` has the same key
+ * with a savedAt at or after its own. The rest are put oldest first, with every
+ * key already in `target` and every key moved so far kept, so no existing entry
+ * is evicted; the first rejection (for example `held-full`) stops the move and
+ * propagates. The fallback key is then removed only if every fallback entry is
+ * present in `target`, as itself or as a newer copy of the same key. Returns the
+ * number of fallback entries confirmed present after that check.
+ */
+export async function migrateLocalFallback(
+  target: RecoveryStore,
+  storage: Pick<Storage, 'getItem' | 'setItem' | 'removeItem'>,
+  key = 'olv:recovery:journal',
+): Promise<number> {
+  const entries = (await createLocalStore(storage, key).list()).slice().reverse();
+  const have = new Map((await target.list()).map((e) => [e.key, e.savedAt] as const));
+  const keep = [...have.keys()];
+  for (const e of entries) {
+    const present = have.get(e.key);
+    if (present !== undefined && present >= e.savedAt) continue;
+    await target.put(e, keep);
+    if (!keep.includes(e.key)) keep.push(e.key);
+  }
+  const after = new Map((await target.list()).map((e) => [e.key, e.savedAt] as const));
+  const confirmed = entries.filter((e) => (after.get(e.key) ?? -Infinity) >= e.savedAt).length;
+  if (confirmed === entries.length && storage.getItem(key) !== null) storage.removeItem(key);
+  return confirmed;
+}
+
+/**
  * Open the best available store: IndexedDB, else localStorage, else null.
  * Each candidate is probed with a read so a store that opens but cannot be
  * used (some private modes) falls through instead of failing later.
@@ -300,6 +342,13 @@ export async function openRecoveryStore(env: {
     try {
       const store = await openIndexedDbStore(env.indexedDB);
       await store.list();
+      if (env.localStorage) {
+        try {
+          await migrateLocalFallback(store, env.localStorage);
+        } catch {
+          // The fallback copy stays where it is.
+        }
+      }
       return store;
     } catch {
       // Fall through to localStorage.

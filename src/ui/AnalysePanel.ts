@@ -1794,8 +1794,8 @@ export class AnalysePanel {
     // pile, the chips are tiered. A small PRIMARY row of the 2–3 decisive chips
     // (DTM quality + Coverage + the worst-rated remaining signal) is ALWAYS
     // visible; the FULL nine, grouped into Coverage / Surface / Accuracy /
-    // Georef clusters, live in an "All metrics" <details> that defaults open on
-    // desktop and collapsed on mobile (CSS-driven, see _syncMetricsDisclosure).
+    // Georef clusters, live in an "All metrics" <details> that defaults
+    // collapsed (see _syncMetricsDisclosure).
     // Nothing is hidden from a trust decision — the verdict, export readiness,
     // terrain products and the "Why?" causes all stay always-visible above this;
     // only the full numeric breakdown is tiered behind one keyboard-accessible
@@ -1805,7 +1805,7 @@ export class AnalysePanel {
     const analysisSample = basis?.coverage === 'full' && isSampledBasis(basis);
     const metrics = scopeForSampledBasis(a.supportingMetrics, basis?.coverage === 'sampled' || analysisSample,
       analysisSample ? 'full load, analysis sample' : 'display sample');
-    this._assessmentRow.append(this._renderAssessMetrics(metrics));
+    this._assessmentRow.append(...this._renderAssessMetrics(metrics));
 
     // Derived complexity metrics (v0.5.4) — one compact line under the
     // assessment: VRM median [IQR] with its window, TPI dominant class with
@@ -1843,10 +1843,11 @@ export class AnalysePanel {
    * decisive chips plus a grouped, collapsible "All metrics" disclosure holding
    * the full nine in Coverage / Surface / Accuracy / Georef clusters. Pure DOM
    * grouping — every chip the assessment minted is still present and reachable;
-   * the disclosure only tiers the full set behind a default-open (desktop) /
-   * default-collapsed (mobile) expander so the panel reads less dense at a glance.
+   * the disclosure only tiers the full set behind a default-collapsed expander
+   * so the panel reads less dense at a glance. Returns the primary row and the
+   * disclosure as siblings, so the primary row is never inside a closed details.
    */
-  private _renderAssessMetrics(metrics: ReadonlyArray<SupportingMetric>): HTMLElement {
+  private _renderAssessMetrics(metrics: ReadonlyArray<SupportingMetric>): HTMLElement[] {
     // Surface model stats are secondary to the verdict and the products, so the
     // whole block sits behind one disclosure; the chips are all still here.
     const wrap = el('details', { className: 'olv-analyse-assess-metricwrap' });
@@ -1884,7 +1885,8 @@ export class AnalysePanel {
       const m = label ? byLabel.get(label) : undefined;
       if (m) primary.append(pill(m));
     }
-    wrap.append(primary);
+    // The row is returned beside the disclosure, not inside it, so it renders
+    // at rest.
 
     // ── ALL METRICS (grouped, progressive disclosure) ─────────────────────
     // Four meaningful clusters instead of a flat pile. Demote the Georef cluster
@@ -1921,11 +1923,10 @@ export class AnalysePanel {
       group.append(row);
       details.append(group);
     }
-    // Default open on desktop, collapsed on mobile — set imperatively so it
-    // tracks viewport changes without duplicating the chips in the DOM.
+    // Collapsed by default (see _syncMetricsDisclosure); every chip stays in the DOM.
     this._syncMetricsDisclosure(details);
     wrap.append(details);
-    return wrap;
+    return [primary, wrap];
   }
 
   /**
@@ -3377,7 +3378,7 @@ export class AnalysePanel {
   /**
    * The verdict-led "Data Fitness" scorecard: ONE plain verdict + a six-row
    * traffic-light scorecard (friendly metaphor icon + shape-distinct tone glyph
-   * + plain summary) + the non-hideable caveats. Sourced from the same result
+   * + plain summary) + the caveats, shown open by default. Sourced from the same result
    * the panel already computes — no new analysis.
    */
   private _renderFitness(): void {
@@ -3495,10 +3496,11 @@ export class AnalysePanel {
     this._fitnessMore.append(checks);
 
     if (f.caveats.length > 0) {
-      // Collapsed by default: the caveats restate the checklist dimensions above
-      // in longer form, so they sit behind one disclosure instead of stacking a
-      // wall of repeated text under the list.
+      // Open by default: these notes carry the internal-consistency, datum and
+      // CRS statements, which would otherwise be visible nowhere at rest. The
+      // reader can still collapse the block.
       const notes = el('details', { className: 'olv-fit-caveats' });
+      notes.open = true;
       notes.append(
         el('summary', {
           className: 'olv-fit-caveats-summary',

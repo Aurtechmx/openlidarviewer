@@ -12,6 +12,7 @@ import {
   isStale,
   newestMatch,
   pruneStale,
+  migrateLocalFallback,
   openRecoveryStore,
   openIndexedDbStore,
   type RecoveryEntry,
@@ -323,5 +324,84 @@ describe('eviction keeps entries waiting to be restored', () => {
     expect((await store.list()).map((e) => e.key)).toEqual(['new', 'held']);
     await expect(store.put(entry('big', 4, 'x'.repeat(Math.floor(LOCAL_STORAGE_MAX_BYTES * 0.3))), ['held', 'new'])).rejects.toThrow('held-full');
     expect((await store.list()).map((e) => e.key)).toEqual(['new', 'held']);
+  });
+});
+
+describe('migrateLocalFallback', () => {
+  const KEY = 'olv:recovery:journal';
+
+  it('moves fallback entries into IndexedDB and removes the key', async () => {
+    const storage = new MemStorage();
+    const fallback = createLocalStore(storage);
+    await fallback.put(entry('a', 1));
+    await fallback.put(entry('b', 2));
+    const target = createLocalStore(new MemStorage());
+    expect(await migrateLocalFallback(target, storage)).toBe(2);
+    expect((await target.list()).map((e) => e.key)).toEqual(['b', 'a']);
+    expect(storage.getItem(KEY)).toBeNull();
+  });
+
+  it('keeps the key when a put rejects', async () => {
+    const storage = new MemStorage();
+    const fallback = createLocalStore(storage);
+    await fallback.put(entry('a', 1));
+    await fallback.put(entry('b', 2));
+    const inner = createLocalStore(new MemStorage());
+    let n = 0;
+    const target = { ...inner, put: async (e: RecoveryEntry) => { if (++n === 2) throw new Error('quota'); await inner.put(e); } };
+    await expect(migrateLocalFallback(target, storage)).rejects.toThrow('quota');
+    expect(storage.getItem(KEY)).not.toBeNull();
+  });
+
+  it('does nothing when the key is absent', async () => {
+    const target = createLocalStore(new MemStorage());
+    expect(await migrateLocalFallback(target, new MemStorage())).toBe(0);
+    expect(await target.list()).toEqual([]);
+  });
+
+  it('never evicts an entry already in IndexedDB to make room', async () => {
+    const storage = new MemStorage();
+    const fallback = createLocalStore(storage);
+    await fallback.put(entry('f1', 1));
+    await fallback.put(entry('f2', 2));
+    const target = await openIndexedDbStore(fakeIdb());
+    const originals = ['k0', 'k1', 'k2', 'k3', 'k4'];
+    for (const [i, k] of originals.entries()) await target.put(entry(k, 10 + i));
+    await migrateLocalFallback(target, storage).catch(() => 0);
+    expect((await target.list()).map((e) => e.key).sort()).toEqual(originals);
+    expect(storage.getItem(KEY)).not.toBeNull();
+  });
+
+  it('keeps the newer IndexedDB copy when keys collide', async () => {
+    const storage = new MemStorage();
+    await createLocalStore(storage).put(entry('same', 1, '{"from":"fallback"}'));
+    const target = createLocalStore(new MemStorage());
+    await target.put(entry('same', 5, '{"from":"idb"}'));
+    expect(await migrateLocalFallback(target, storage)).toBe(1);
+    const [only] = await target.list();
+    expect(only.savedAt).toBe(5);
+    expect(only.json).toBe('{"from":"idb"}');
+    expect(storage.getItem(KEY)).toBeNull();
+  });
+
+  it('replaces an older IndexedDB copy with the newer fallback copy', async () => {
+    const storage = new MemStorage();
+    await createLocalStore(storage).put(entry('same', 9, '{"from":"fallback"}'));
+    const target = createLocalStore(new MemStorage());
+    await target.put(entry('same', 5, '{"from":"idb"}'));
+    expect(await migrateLocalFallback(target, storage)).toBe(1);
+    expect((await target.list())[0].json).toBe('{"from":"fallback"}');
+    expect(storage.getItem(KEY)).toBeNull();
+  });
+
+  it('openRecoveryStore moves the fallback entries into the IndexedDB store', async () => {
+    const storage = new MemStorage();
+    const fallback = createLocalStore(storage);
+    await fallback.put(entry('a', 1));
+    await fallback.put(entry('b', 2));
+    const store = await openRecoveryStore({ indexedDB: fakeIdb(), localStorage: storage });
+    expect(store?.backend).toBe('indexeddb');
+    expect((await store!.list()).map((e) => e.key)).toEqual(['b', 'a']);
+    expect(storage.getItem(KEY)).toBeNull();
   });
 });

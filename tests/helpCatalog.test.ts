@@ -22,6 +22,20 @@ describe('help catalogue', () => {
     for (const t of HELP_TOPICS) expect(t.paragraphs.length + (t.terms?.length ?? 0), t.id).toBeGreaterThan(0);
   });
 
+  it('says remote datasets are downloaded from their hosts', () => {
+    const t = HELP_TOPICS.find((x) => x.id === 'getting-started')!;
+    const prose = t.paragraphs.join(' ');
+    expect(prose).toContain('Files you open stay on your device: nothing is uploaded.');
+    expect(prose).toContain('Remote datasets are downloaded from their hosts.');
+  });
+
+  it('names the extra panel labels', () => {
+    const t = HELP_TOPICS.find((x) => x.id === 'scientific-states')!;
+    expect(t.paragraphs.join(' ')).toContain(
+      'These states keep the same meaning on every panel, export and report. Some panels add their own labels: Illustration only, Provisional and Areas withheld.',
+    );
+  });
+
   it('references no action the registry does not have', () => {
     expect(orphanActionReferences(actions)).toEqual([]);
   });

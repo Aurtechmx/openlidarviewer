@@ -91,7 +91,7 @@ You can also link an annotation to a measurement: when the scan has measurements
 
 The Annotations panel lists every placed marker with its category badge, title, and when it was last edited. Sort the list by created time, recent edit, category, or title, and use the search box to filter by title, note, or type. Each row jumps the camera to its annotation (restoring the saved viewpoint when one was captured) and offers Edit and delete; Clear all empties the list with a confirm step. Hovering a row highlights the matching marker in the scene.
 
-Every scan stays on your device. Export the session (see Exporting) to save the whole inspection (measurements, annotations, and named views) to a JSON file and reload it later.
+Files you open stay on your device: nothing is uploaded. Remote datasets are downloaded from their hosts. Export the session (see Exporting) to save the whole inspection (measurements, annotations, and named views) to a JSON file and reload it later.
 
 ## Inspecting a point
 

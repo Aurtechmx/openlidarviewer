@@ -31,7 +31,7 @@ export const HELP_TOPICS: readonly HelpTopic[] = [
     title: 'Getting started',
     summary: 'Open a scan, look around, and find the tools.',
     paragraphs: [
-      'Drop a point-cloud file (LAS or LAZ, E57, PLY, COPC) on the page, or use Open scan. Every scan stays on your device: nothing is uploaded.',
+      'Drop a point-cloud file (LAS or LAZ, E57, PLY, COPC) on the page, or use Open scan. Files you open stay on your device: nothing is uploaded. Remote datasets are downloaded from their hosts.',
       'The tool dock along the bottom holds the tools. The left tabs (Data, Tools, Analyse, Export) switch the panel column. The command palette lists every action by name.',
     ],
     actionIds: ['camera.frame-all', 'tour.replay', 'help.shortcuts', 'help.copy-diagnostics', 'help.offline-save', 'help.offline-remove'],
@@ -111,7 +111,7 @@ export const HELP_TOPICS: readonly HelpTopic[] = [
     title: 'Scientific states',
     summary: 'The words the app uses for how far a result can be trusted.',
     paragraphs: [
-      'The app fails closed: when it cannot support a claim it says so instead of printing a number. These states appear on every panel, export and report with the same meaning.',
+      'The app fails closed: when it cannot support a claim it says so instead of printing a number. These states keep the same meaning on every panel, export and report. Some panels add their own labels: Illustration only, Provisional and Areas withheld.',
     ],
     terms: [
       ['Preview', 'Incomplete evidence, such as a streaming source that is not fully resident, a display sample of the points, or gaps in the footprint. The figure is shown with its reason and is not a measurement.'],

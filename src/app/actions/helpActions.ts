@@ -118,8 +118,10 @@ export function contributeHelpActions(deps: HelpActionDeps): Action[] {
           notify('Session recovery is on. It starts after the next page load.');
           return;
         }
-        notify('Session recovery is off. Work saved for recovery in this browser was deleted.');
-        void loadRecovery().then((m) => m.clearRecoveryJournal()).catch(() => {});
+        void loadRecovery()
+          .then((m) => m.clearRecoveryJournal())
+          .then(() => notify('Session recovery is off. Work saved for recovery in this browser was deleted.'))
+          .catch(() => notify('Session recovery is off. Could not clear recovery data. Reload the page and try again.'));
       },
     },
     {

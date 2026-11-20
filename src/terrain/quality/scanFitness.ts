@@ -10,8 +10,8 @@
  * decoupled input — the panel maps the result into it, exactly as
  * `terrainQualityScore` takes a `TerrainQualityInput`) and returns a verdict, a
  * six-dimension scorecard, an optional named tier badge, the headline accuracy,
- * and the NON-HIDEABLE survey-grade caveats (a held-out RMSE is internal
- * consistency, not independent checkpoint verification; a missing datum means
+ * and the survey-grade caveats, which the panel shows open by default (a
+ * held-out RMSE is internal consistency, not independent checkpoint verification; a missing datum means
  * relative heights).
  *
  * Tones are deliberately warm — `ready` / `okay` / `review` — never an alarm
@@ -181,7 +181,7 @@ export interface ScanFitness {
    */
   readonly tierBadge: string | null;
   readonly dimensions: FitnessDimension[];
-  /** Non-hideable honesty caveats. */
+  /** Honesty caveats, shown open by default in the panel. */
   readonly caveats: string[];
   /**
    * True when the grade is provisional — only part of the cloud was analysed
