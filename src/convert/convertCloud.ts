@@ -85,6 +85,7 @@ import { planQuantisation } from './lasQuantisation';
 import { spatialContextFrom, verticalMetresPerUnit } from '../geo/SpatialContext';
 import { planLasVertical, verifyLasVertical, verifyLasWktVertical } from './lasVerticalIdentity';
 import { writeXyzBytes, writeAscBytes } from './writeAscii';
+import { wktForEpsg } from '../io/epsgWkt';
 import { reprojectGlobal } from './reproject';
 import type { TransformProvenance } from './transformProvenance';
 import {
@@ -92,6 +93,7 @@ import {
   epsgDatumFamily,
   isGeocentricEpsg,
   GEOCENTRIC_REPROJECT_REFUSAL,
+  isGeoTiffEpsgCode,
 } from './epsg';
 import {
   CONVERT_FORMATS,
@@ -412,10 +414,10 @@ export function convertCloud(
     // the wrong CRS); otherwise the writer builds a verified WKT for outEpsg,
     // and refuses when it has none (planLas14Crs, below).
     const sourceWkt = opts.format === 'las14' && mode === 'keep' ? (sourceCrs?.wkt ?? null) : null;
-    if (opts.format === 'las' && outEpsg != null && outEpsg > 65535) {
+    if (opts.format === 'las' && outEpsg != null && !isGeoTiffEpsgCode(outEpsg)) {
       log.push({
         level: 'warn',
-        message: `EPSG:${outEpsg} is too large to record in a LAS GeoKey — the file is written without a CRS tag.`,
+        message: `EPSG:${outEpsg} is outside 1024 to 32766, the range a LAS GeoKey records as an EPSG code — the file is written without a CRS tag.`,
       });
     }
     // Linear unit: kept files carry the source unit; output that was ACTUALLY
@@ -642,8 +644,24 @@ export function convertCloud(
   }
 
   log.push({ level: 'info', message: `Wrote ${g.count.toLocaleString()} points as ${spec.label}.` });
+  // XYZ / ASC carry the CRS only as a header comment, so a `.prj` sidecar is the
+  // machine-readable record. Keep mode uses the source WKT when it has one, and
+  // otherwise the stored definition of its EPSG code (a file that carries only
+  // GeoKeys); assign and reproject name the target EPSG's definition.
+  let prj: string | undefined;
+  if (opts.format === 'xyz' || opts.format === 'asc') {
+    const keptWkt = mode === 'keep' ? sourceCrs?.wkt || undefined : undefined;
+    if (keptWkt) {
+      prj = keptWkt;
+    } else if (outEpsg != null) {
+      prj = wktForEpsg(outEpsg) ?? undefined;
+      if (prj === undefined) {
+        log.push({ level: 'info', message: `EPSG:${outEpsg} recorded in the file header only; no .prj written (no definition available).` });
+      }
+    }
+  }
   return {
-    file: { filename, mime: MIME[opts.format], bytes },
+    file: { filename, mime: MIME[opts.format], bytes, ...(prj ? { prj } : {}) },
     report: {
       source: cloud.name,
       ok: true,

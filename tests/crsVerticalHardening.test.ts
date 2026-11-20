@@ -11,6 +11,7 @@ import { cloudToGlobal } from '../src/convert/globalPoints';
 import { convertCloud } from '../src/convert/convertCloud';
 import { runBatch, type DecodeFn } from '../src/convert/convertRunner';
 import { PointCloud } from '../src/model/PointCloud';
+import { wktForEpsg } from '../src/io/epsgWkt';
 
 const COMPOUND_WKT =
   'COMPD_CS["NAD83 / UTM zone 11N + NAVD88 height",' +
@@ -204,7 +205,7 @@ describe('convertCloud — assign-EPSG validation', () => {
   });
 });
 
-describe('runBatch — .prj sidecar for kept ASCII with WKT', () => {
+describe('runBatch — .prj sidecar for ASCII outputs', () => {
   it('emits a .prj carrying the source WKT next to the XYZ output', async () => {
     const decode: DecodeFn = async () =>
       new PointCloud({
@@ -225,7 +226,7 @@ describe('runBatch — .prj sidecar for kept ASCII with WKT', () => {
     expect(new TextDecoder().decode(sc!.bytes)).toMatch(/PROJCS\["NAD83/);
   });
 
-  it('no sidecar for reproject (output CRS ≠ source WKT) or LAS output', async () => {
+  it('reproject writes the target definition; LAS output has no sidecar', async () => {
     const decode: DecodeFn = async () =>
       new PointCloud({
         positions: Float32Array.from([0, 0, 0]),
@@ -237,7 +238,10 @@ describe('runBatch — .prj sidecar for kept ASCII with WKT', () => {
     const r1 = await runBatch([{ name: 's.las', sizeBytes: 8, bytes: async () => new ArrayBuffer(8) }], { format: 'las', crsMode: 'keep' }, decode);
     expect(r1[0].sidecar).toBeUndefined();
     const r2 = await runBatch([{ name: 's.las', sizeBytes: 8, bytes: async () => new ArrayBuffer(8) }], { format: 'xyz', crsMode: 'reproject', targetEpsg: 4326 }, decode);
-    expect(r2[0].sidecar).toBeUndefined();
+    // The output is in the target CRS, so its .prj is the target's definition,
+    // never the source WKT.
+    expect(r2[0].sidecar?.filename).toBe('s.prj');
+    expect(new TextDecoder().decode(r2[0].sidecar!.bytes)).toBe(wktForEpsg(4326));
   });
 });
 

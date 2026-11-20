@@ -42,7 +42,7 @@ import {
 import { BUILD_IDENTITY, type BuildIdentity } from '../build/buildIdentity';
 import { SCAN_ANGLE_EXTENDED_UNIT_DEG } from '../io/lasDecodeShared';
 import { compoundWkt, isUsableWkt, wktForEpsg } from '../io/epsgWkt';
-import { epsgCrsKind } from './epsg';
+import { epsgCrsKind, isGeoTiffEpsgCode } from './epsg';
 
 const HEADER_SIZE = 227; // LAS 1.2 public header block
 const HEADER_SIZE_14 = 375; // LAS 1.4 public header block (R15)
@@ -227,7 +227,7 @@ export function planLas14Crs(opts: WriteLas14Options): Las14CrsPlan {
         'Point formats 6 to 10 require the coordinate system as OGC WKT, ' +
           `and this build has no verified WKT definition for EPSG:${epsg}` +
           `${given ? ' (the WKT the source carried is not a usable definition)' : ''}.` +
-          (epsg <= 65535
+          (isGeoTiffEpsgCode(epsg)
             ? ' Choose LAS 1.2, which records the EPSG code as GeoTIFF keys, or reproject to a CRS this build defines.'
             : ' Reproject to a CRS this build defines.'),
       );
@@ -410,7 +410,7 @@ function buildVerticalGeoKeys(opts: WriteLasOptions): Array<[number, number]> {
   const unit = opts.verticalUnitCode != null && opts.verticalUnitCode > 0 ? opts.verticalUnitCode : null;
   // A vertical unit declared without a vertical CRS is still the unit of the
   // Z values; dropping it would leave a reader to borrow the horizontal unit.
-  if (v == null || !(v > 0) || v > 65535) return unit != null ? [[4099, unit]] : [];
+  if (!isGeoTiffEpsgCode(v)) return unit != null ? [[4099, unit]] : [];
   // Readers (PDAL, GDAL) take the Z unit from the VerticalCSType code and
   // ignore VerticalUnits, so the code written is the one in the unit of the
   // Z values: 5703 with US survey feet is written as 6360.
@@ -432,7 +432,7 @@ function buildVerticalGeoKeys(opts: WriteLasOptions): Array<[number, number]> {
 }
 
 function buildGeoKeys(opts: WriteLasOptions, geo: boolean): Array<[number, number]> {
-  const hasCrs = opts.epsg != null && Number.isFinite(opts.epsg) && opts.epsg > 0 && opts.epsg <= 65535;
+  const hasCrs = isGeoTiffEpsgCode(opts.epsg);
   const geoKeys: Array<[number, number]> = [];
   if (hasCrs) {
     geoKeys.push(

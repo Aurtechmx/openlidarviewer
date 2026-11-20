@@ -44,7 +44,7 @@ export type TerrainCrsFacts = Pick<CrsService, 'current' | 'context' | 'crsRevis
 // The one spatial context this pipeline reads its unit / datum / axis facts
 // from, plus the named vertical-fallback policy that replaces the local
 // `verticalUnitToMetres ?? linearUnitToMetres` chains.
-import { elevationWorkflowRefusal, verticalMetresPerUnit } from '../geo/SpatialContext';
+import { elevationWorkflowRefusal, verticalMetresPerUnit, type SpatialContext } from '../geo/SpatialContext';
 import { analysedBasisOf, WITHHELD_RECOVERY_STATUS } from '../terrain/export/analysedBasis';
 import type {
   AnalyseContoursResult,
@@ -437,6 +437,15 @@ async function recoverWithheldAwareCore(
 }
 
 /**
+ * The vertical-unit label for the contour layer controls, or null when the
+ * scan declares no unit: the horizontal factor stands in only when it is known.
+ */
+export function contourLayerVerticalUnitLabel(ctx: SpatialContext): string | null {
+  const scale = verticalMetresPerUnit(ctx, 'horizontal-when-known') ?? null;
+  return scale != null ? verticalUnitLabel(scale) : null;
+}
+
+/**
  * Build the terrain-analysis runner. Behaviour — including ordering, the A-1
  * stale-result guard, the fingerprint cache, and the worker offload — is
  * identical to the original `runTerrainAnalysis` in main.ts; only the run-state
@@ -536,8 +545,7 @@ export function createTerrainAnalysisRunner(
    * declares none — the fail-honest rule the metric readouts already follow.
    */
   function layerVerticalUnitLabel(): string | null {
-    const scale = verticalMetresPerUnit(crsService.context(), 'horizontal') ?? null;
-    return scale != null ? verticalUnitLabel(scale) : null;
+    return contourLayerVerticalUnitLabel(crsService.context());
   }
 
   /**
