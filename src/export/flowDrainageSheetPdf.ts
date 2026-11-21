@@ -25,8 +25,8 @@ import {
   type PDFPage,
 } from 'pdf-lib';
 import { renderWatershedReport } from './watershedReport/watershedReportPdf';
-import { encodePng } from './watershedReport/pngEncode';
-import type { ReportFonts } from './watershedReport/reportFonts';
+import { encodePng } from './sheetKit/png';
+import type { ReportFonts } from './sheetKit/fonts';
 import {
   PALETTE, drawRuns, heading, paragraph, sectionTitle, table, widthOf, type PageCursor, type PageSize,
 } from './watershedReport/pageKit';

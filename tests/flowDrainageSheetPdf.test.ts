@@ -43,7 +43,7 @@ const selections = (r: FlowPulseResult): Pick<FlowDrainageSheetOptions, 'path' |
   catchment: { mask: catchmentFrom(r, 2), outletCell: 2 },
 });
 
-const FONT_DIR = join(process.cwd(), 'src', 'export', 'watershedReport', 'fonts');
+const FONT_DIR = join(process.cwd(), 'src', 'export', 'sheetKit', 'fonts');
 const render = { loadFont: async (name: string) => new Uint8Array(await readFile(join(FONT_DIR, name))) };
 
 async function pageCount(bytes: Uint8Array): Promise<number> {

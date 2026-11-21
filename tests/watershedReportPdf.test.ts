@@ -17,11 +17,11 @@ import { CATALOG, formatArea, t, type StringKey } from '../src/simulation/flowPu
 import { formatPercent, withheldText } from '../src/simulation/flowPulse/watershed/watershedNarrative';
 import type { CatchmentSection, ReportLanguage, WatershedReportModel } from '../src/simulation/flowPulse/watershed/watershedReportModel';
 import { buildValley, type Valley } from './support/watershedValley';
-import { embedReportFonts } from '../src/export/watershedReport/reportFonts';
+import { embedReportFonts } from '../src/export/sheetKit/fonts';
 import { PALETTE, drawRuns } from '../src/export/watershedReport/pageKit';
 import { encodeStoredPng } from './support/storedPng';
 
-const FONT_DIR = join(process.cwd(), 'src', 'export', 'watershedReport', 'fonts');
+const FONT_DIR = join(process.cwd(), 'src', 'export', 'sheetKit', 'fonts');
 const loadFont = async (name: string): Promise<Uint8Array> => new Uint8Array(await readFile(join(FONT_DIR, name)));
 
 const valleys: Partial<Record<ReportLanguage, Valley>> = {};

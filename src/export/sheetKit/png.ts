@@ -1,5 +1,5 @@
 /**
- * pngEncode.ts: an RGBA PNG encoder for the report's map rasters, using the
+ * png.ts: an RGBA PNG encoder for the export sheets' rasters, using the
  * platform's own zlib (`CompressionStream('deflate')`, in browsers and Node
  * 18+), so the report needs no PNG or zlib dependency.
  */

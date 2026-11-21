@@ -29,7 +29,7 @@ import type {
   CatchmentSection, ReportLanguage, WatershedReportModel,
 } from '../../simulation/flowPulse/watershed/watershedReportModel';
 import { UNIT_GAP, formatArea, formatNumber, t, type StringKey } from '../../simulation/flowPulse/watershed/watershedStrings';
-import { embedReportFonts, type ReportFonts } from './reportFonts';
+import { embedReportFonts, type ReportFonts } from '../sheetKit/fonts';
 import { clampNotes } from './watershedReportOptions';
 import {
   PALETTE, callout, chip, drawRuns, kpiRow, newPage, paragraph, sectionTitle, table, widthOf,

@@ -7,10 +7,10 @@ import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { PDFDocument } from 'pdf-lib';
 import fontkit from '@pdf-lib/fontkit';
-import { embedReportFonts, REPORT_FONT_FILES, SYMBOL_ONLY_CHARS } from '../src/export/watershedReport/reportFonts';
+import { embedReportFonts, REPORT_FONT_FILES, SYMBOL_ONLY_CHARS } from '../src/export/sheetKit/fonts';
 import { CATALOG } from '../src/simulation/flowPulse/watershed/watershedStrings';
 
-const FONT_DIR = join(process.cwd(), 'src', 'export', 'watershedReport', 'fonts');
+const FONT_DIR = join(process.cwd(), 'src', 'export', 'sheetKit', 'fonts');
 const fromDisk = async (name: string): Promise<Uint8Array> => new Uint8Array(await readFile(join(FONT_DIR, name)));
 
 const SPANISH = 'Tiempo de concentración, cañada, ≥ 4,8 ha, 2 067,4 m³';

@@ -8,7 +8,7 @@ import { describe, it, expect, beforeAll } from 'vitest';
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { PDFDocument } from 'pdf-lib';
-import { embedReportFonts, type ReportFonts } from '../src/export/watershedReport/reportFonts';
+import { embedReportFonts, type ReportFonts } from '../src/export/sheetKit/fonts';
 import { newPage } from '../src/export/watershedReport/pageKit';
 import { drawMapPage, smoothLine, STUDIED_OUTLINE_WIDTH } from '../src/export/watershedReport/mapPage';
 import { t } from '../src/simulation/flowPulse/watershed/watershedStrings';
@@ -16,7 +16,7 @@ import { buildValley, type Valley } from './support/watershedValley';
 import { encodeStoredPng } from './support/storedPng';
 import { spyPdf, type PdfSpy } from './support/pdfSpy';
 
-const FONT_DIR = join(process.cwd(), 'src', 'export', 'watershedReport', 'fonts');
+const FONT_DIR = join(process.cwd(), 'src', 'export', 'sheetKit', 'fonts');
 const fromDisk = async (name: string): Promise<Uint8Array> => new Uint8Array(await readFile(join(FONT_DIR, name)));
 
 async function render(v: Valley, focus: boolean): Promise<{ s: PdfSpy; doc: PDFDocument; bytes: () => Promise<Uint8Array> }> {

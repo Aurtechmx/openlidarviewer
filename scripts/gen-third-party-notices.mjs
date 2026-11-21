@@ -101,13 +101,13 @@ export const VENDORED = [
     name: 'Newsreader',
     version: 'google/fonts@e7db6ca6',
     licence: 'OFL-1.1',
-    dir: 'src/export/watershedReport/fonts/newsreader',
+    dir: 'src/export/sheetKit/fonts/newsreader',
   },
   {
     name: 'Figtree',
     version: 'google/fonts@e7db6ca6',
     licence: 'OFL-1.1',
-    dir: 'src/export/watershedReport/fonts/figtree',
+    dir: 'src/export/sheetKit/fonts/figtree',
   },
   {
     name: 'spe-check',

@@ -112,12 +112,13 @@ Authors) under a different family name, as the SIL Open Font License requires
 of a derivative. Its copyright lines and licence text are in the generated
 section below.
 
-### Watershed report fonts
+### Export sheet fonts
 
 The watershed study PDF embeds four static TrueType instances of Newsreader
 (Copyright 2020 The Newsreader Project Authors) and Figtree (Copyright 2022 The
-Figtree Project Authors), both under the SIL Open Font License 1.1. They are
-loaded only by the report's lazy chunk. The upstream files are the variable
+Figtree Project Authors), both under the SIL Open Font License 1.1. The other
+export sheets embed the two Figtree instances. They are loaded only by the
+export chunks. The upstream files are the variable
 fonts in the official Google Fonts repository, https://github.com/google/fonts,
 commit `e7db6ca603fd4862010383ff17ffd6cc4ffac1c0`, directories `ofl/newsreader`
 and `ofl/figtree`, which publish no static files. The four instances were cut
@@ -127,7 +128,7 @@ given static family and style names and matching weight flags. No outline was
 changed. Neither family declares a Reserved Font Name, so the original
 names are kept. The licence files are copied unchanged.
 
-| File in `src/export/watershedReport/fonts/` | SHA-256 |
+| File in `src/export/sheetKit/fonts/` | SHA-256 |
 | --- | --- |
 | upstream `ofl/newsreader/Newsreader[opsz,wght].ttf` | `8a08d13f8a6c0d51be379a60af84f945f65369a67e509ee3c3bdcc421254d7c1` |
 | upstream `ofl/figtree/Figtree[wght].ttf` | `26ad3db9b31ff7dde67a91ff515d022d2f495cd506590699cf264f0bfe6fb714` |
