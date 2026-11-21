@@ -59,6 +59,8 @@ import {
 import { evidenceNote, evidenceStatus } from '../../validation/exportEvidenceNote';
 import { winAnsiSafe } from '../../winAnsiText';
 import type { ClaimId } from '../../validation/evidenceRegistry';
+import type { SheetStyle } from '../../export/sheetKit/tokens';
+import type { SheetReliefInput } from '../../export/sheetKit/contourSheetModel';
 
 /**
  * The claim a crisp contour map sheet stands on (§19): CONTOURS, whose E4 rests
@@ -213,6 +215,20 @@ export interface MapSheetInput {
    * labels), so non-Studio callers are unaffected.
    */
   readonly purpose?: MapSheetPurpose | null;
+  /**
+   * Sheet style. Light and Dark draw the styled sheet (mapSheetStyled.ts);
+   * Classic, or no style, draws this module's sheet, byte for byte as before.
+   * Read by `buildContourSheetPdf`; `buildMapSheetPdf` always draws Classic.
+   */
+  readonly style?: SheetStyle;
+  /** The analysed terrain grid, for the styled sheet's relief and footprint. Ignored by Classic. */
+  readonly relief?: SheetReliefInput | null;
+  /**
+   * True north at the map centre, as an angle from grid north, clockwise
+   * positive. When absent a georeferenced styled sheet draws a grid-north
+   * arrow. Ignored by Classic, which always says "Grid N".
+   */
+  readonly trueNorth?: { readonly convergenceDeg: number } | null;
 }
 
 const SHEET_PT: Record<SheetSize, readonly [number, number]> = {
@@ -575,6 +591,7 @@ function drawPurposeAppendix(
   input: MapSheetInput,
   font: PDFFont,
   bold: PDFFont,
+  drawn?: { readonly hillshade: boolean; readonly tint: boolean },
 ): void {
   const sheetClaim = mapSheetClaim(input.model.contourStyle, purpose);
   const size = input.sheet ?? 'letter';
@@ -621,8 +638,14 @@ function drawPurposeAppendix(
     ['Generalization', generalization],
     ['Contour index interval', `every ${purpose.indexEvery}`],
     ['Labels', purpose.labelsIndexOnly ? 'index only' : 'all contours'],
-    ['Hillshade', `${onOff(purpose.hillshade)} (documented; raster not rendered on this sheet)`],
-    ['Hypsometric tint', `${onOff(purpose.hypsometricTint)} (documented; raster not rendered on this sheet)`],
+    // The Classic sheet draws no raster and says so. A styled sheet states
+    // what it drew, whatever the purpose's own setting.
+    ['Hillshade', drawn
+      ? (drawn.hillshade ? 'drawn on this sheet (four-light, north-west key)' : 'not drawn (no terrain grid supplied)')
+      : `${onOff(purpose.hillshade)} (documented; raster not rendered on this sheet)`],
+    ['Hypsometric tint', drawn
+      ? (drawn.tint ? 'drawn on this sheet (faint elevation tint)' : 'not drawn')
+      : `${onOff(purpose.hypsometricTint)} (documented; raster not rendered on this sheet)`],
     ['Exploratory output allowed', yesNo(purpose.allowExploratory)],
     ['Complete package', yesNo(purpose.completePackage)],
   ];
@@ -1071,6 +1094,146 @@ function clipToWidth(
 }
 
 /** Title block with CRS, datum, scale, accuracy, legend, and provenance. */
+/**
+ * The title-block facts of a sheet as text: reference frame, interval, scale,
+ * hold-out accuracy rows, readiness and evidence. Shared by the Classic title
+ * block and the styled side panel so the two can never word a fact differently.
+ * `mapScale` is the map's page points per source unit (0 when nothing is drawn).
+ */
+export interface MapSheetFacts {
+  readonly sheetClaim: ClaimId;
+  readonly crs: string;
+  readonly datum: string;
+  readonly generated: string;
+  readonly interval: string;
+  /** The vertical unit as the interval prints it: " m", " ft", or a hedge when unverified. */
+  readonly verticalSuffix: string;
+  readonly scaleLabel: string;
+  readonly preparedBy: string;
+  readonly styleLabel: string;
+  readonly analysedBasis: string | null;
+  readonly accuracyHeading: string;
+  readonly accuracyRows: ReadonlyArray<readonly [string, string, string?]>;
+  readonly accuracySampleNote: string | null;
+  readonly readiness: SheetReadiness;
+  readonly readinessNote: string;
+  readonly evidenceLine: string;
+  readonly evidenceValidated: boolean;
+}
+
+export function mapSheetFacts(input: MapSheetInput, mapScale: number): MapSheetFacts {
+  const sheetClaim = mapSheetClaim(input.model.contourStyle, input.purpose);
+  const prov = input.provenance;
+  const crs = prov ? prov.horizontalCrs : (input.crs ?? '— not georeferenced');
+  const datum = prov ? prov.verticalDatum : (input.verticalDatum ?? '—');
+  const generated = prov
+    ? prov.generated.slice(0, 16).replace('T', ' ') + ' UTC'
+    : (input.generatedAt ?? new Date()).toISOString().slice(0, 16).replace('T', ' ') + ' UTC';
+  const intervalValue = prov?.contourIntervalM ?? input.model.intervalM;
+  // A contour interval is an ELEVATION spacing, so it takes the vertical
+  // label, never the horizontal one. Routing it through the horizontal helper
+  // printed "5 m" while this sheet's own notes said "(vertical unit
+  // unverified)" for the same number.
+  const verticalSuffix = verticalSuffixFromLabel(prov?.verticalUnitLabel ?? prov?.contourIntervalUnit ?? prov?.complexity?.zUnit);
+  const interval =
+    intervalValue != null && Number.isFinite(intervalValue)
+      ? `${intervalValue}${verticalSuffix}`
+      : '—';
+  // World-unit→metres factor so the 1:N ratio stays a TRUE dimensionless ratio
+  // on a foot CRS (the map is drawn in source units). Unknown prints no ratio.
+  // Same factor the panels read from `CrsInfo.linearUnitToMetres`.
+  const worldUnitToMetres = input.linearUnit ? metresPerLinearUnit(input.linearUnit) : 1;
+  const scaleN = mapScale > 0 ? Math.round(mapScaleRatio(mapScale, worldUnitToMetres)) : 0;
+  // Honest stamp of the shape style applied to the plotted contours, sourced
+  // from the unified provenance so it matches every other export of the same
+  // run. Without provenance the only style available is the one the view holds
+  // now, which is not necessarily the one this geometry was produced with: a
+  // sheet plotting cartographic contours read "Generalized" while the terrain
+  // report for the same run recorded "Smooth". The fallback therefore says
+  // where its value came from rather than presenting it as the recorded style.
+  const styleLabel = prov
+    ? prov.contourStyleLabel
+    : `${contourShapeStyleLabel(input.model.contourStyle)} (current view, not recorded)`;
+  // Hold-out figures from a sampled or unvalidated surface are a preview, not
+  // a survey accuracy statement.
+  const accuracyHeading =
+    prov && (prov.accuracy?.accuracyOnSample || prov.exportReadiness !== 'Ready')
+      ? 'Hold-out accuracy (preview)'
+      : 'Internal hold-out accuracy';
+  // ' m' is unconditional and correct here: these figures are metres by
+  // construction (a hold-out residual times the resolved vertical factor), and
+  // the provenance withholds the whole accuracy block when no vertical scale
+  // resolved, so an unverified frame reaches this formatter with nulls.
+  const fmtM = (v: number | null | undefined): string => (v != null && Number.isFinite(v) ? `${v.toFixed(2)} m` : '—');
+  // Accuracy rows, single-sourced from provenance when present (its accuracy
+  // block is null when the run measured none, in which case every figure reads
+  // '—' rather than a fabricated zero).
+  const accuracyRows: Array<[string, string, string?]> = prov
+    ? [
+        // "-style (hold-out)" / "(estimated)": the printed sheet must carry
+        // the same qualifiers as the Analyse-panel preview of these rows —
+        // hold-out figures, not independent-checkpoint assessments.
+        ['NVA-style (95%, hold-out)', fmtM(prov.accuracy?.nvaM)],
+        ['VVA-style (95th pct, hold-out)', fmtM(prov.accuracy?.vvaM)],
+        ['RMSEz', fmtM(prov.accuracy?.rmseZM)],
+        // Named for the quantity it measures. "USGS density ref" alone read as a
+        // pulse-density grade, which this is not: the 3DEP floors are nominal
+        // PULSE density and this figure is measured GROUND-RETURN density. The
+        // technical report for the same scan refuses to grade its all-returns
+        // density against these floors, so an unqualified row here put two of
+        // this session's own documents in apparent disagreement.
+        [
+          'Ground-return density ref',
+          prov.accuracy && prov.accuracy.usgsDensityReferenceFloor !== 'none'
+            ? `>= USGS ${prov.accuracy.usgsDensityReferenceFloor}`
+            : prov.accuracy?.accuracyOnSample ? DENSITY_REF_SAMPLE_NOTE : '—',
+          'Ground density ref',
+        ],
+      ]
+    : (() => {
+        const a = input.accuracy ?? null;
+        return [
+          ['NVA-style (95%, hold-out)', fmtM(a?.nvaM)],
+          ['VVA-style (95th pct, hold-out)', fmtM(a?.vvaM)],
+          ['RMSEz', fmtM(a?.rmseZM)],
+          [
+            'Ground-return density ref',
+            a && a.densityReferenceFloorsMet.length > 0 ? `>= USGS ${a.densityReferenceFloorsMet[0]}` : '—',
+          ],
+        ] as Array<[string, string, string?]>;
+      })();
+  // Export-readiness verdict — single-sourced from the unified provenance so the
+  // sheet's readiness note can't disagree with the other exports. Maps the
+  // provenance verdict (Ready / Preview / Blocked) onto the note vocabulary.
+  let readiness: SheetReadiness;
+  if (prov) {
+    if (prov.exportReadiness === 'Ready') readiness = 'ready';
+    else if (prov.exportReadiness === 'Blocked') readiness = 'blocked';
+    else readiness = 'previewOnly';
+  } else {
+    readiness = input.readiness ?? 'previewOnly';
+  }
+  return {
+    sheetClaim,
+    crs,
+    datum,
+    generated,
+    interval,
+    verticalSuffix,
+    scaleLabel: mapScaleLabel(scaleN, input.linearUnit),
+    preparedBy: input.preparedBy ?? '—',
+    styleLabel,
+    analysedBasis: prov ? prov.analysedBasisLine : null,
+    accuracyHeading,
+    accuracyRows,
+    accuracySampleNote: prov?.accuracy?.accuracyOnSample ? 'Figures are from a sample of the points' : null,
+    readiness,
+    readinessNote: readinessNote(readiness),
+    evidenceLine: mapSheetEvidenceLine(sheetClaim),
+    evidenceValidated: evidenceStatus(sheetClaim) === 'validated',
+  };
+}
+
 function drawTitleBlock(
   page: PDFPage,
   PW: number,
@@ -1084,7 +1247,9 @@ function drawTitleBlock(
   text: (s: string, x: number, y: number, sz: number, f?: PDFFont, c?: ReturnType<typeof rgb>) => void,
   rightText: (s: string, xRight: number, y: number, sz: number, f?: PDFFont, c?: ReturnType<typeof rgb>) => void,
 ): void {
-  const sheetClaim = mapSheetClaim(input.model.contourStyle, input.purpose);
+  const mapScale =
+    bbox && frame.w > 0 ? fitTransform(bbox, { x: frame.x + 6, y: frame.y + 6, w: frame.w - 12, h: frame.h - 12 }).scale : 0;
+  const facts = mapSheetFacts(input, mapScale);
   const topY = M + TB;
   page.drawLine({ start: { x: M, y: topY }, end: { x: PW - M, y: topY }, thickness: 1, color: FRAME });
 
@@ -1101,11 +1266,6 @@ function drawTitleBlock(
   // export-readiness can never drift from the other exports of the same scan. The
   // layout is untouched — only the values are sourced from `p`.
   const prov = input.provenance;
-  const crsStr = prov ? prov.horizontalCrs : (input.crs ?? '— not georeferenced');
-  const datumStr = prov ? prov.verticalDatum : (input.verticalDatum ?? '—');
-  const generatedStr = prov
-    ? prov.generated.slice(0, 16).replace('T', ' ') + ' UTC'
-    : (input.generatedAt ?? new Date()).toISOString().slice(0, 16).replace('T', ' ') + ' UTC';
 
   // Left column — identity + reference frame.
   const lx = M + 4;
@@ -1135,36 +1295,13 @@ function drawTitleBlock(
     end: { x: lx + Math.max(60, bold.widthOfTextAtSize(safe(titleDraw), titleSize)), y: topY - 21 },
     thickness: 0.8, color: FRAME,
   });
-  const interval = prov?.contourIntervalM ?? input.model.intervalM;
-  // World-unit→metres factor so the 1:N ratio stays a TRUE dimensionless ratio
-  // on a foot CRS (the map is drawn in source units). Unknown prints no ratio.
-  // Same factor the panels read from `CrsInfo.linearUnitToMetres`.
-  const worldUnitToMetres = input.linearUnit ? metresPerLinearUnit(input.linearUnit) : 1;
-  const scaleN =
-    bbox && frame.w > 0
-      ? Math.round(
-          mapScaleRatio(
-            fitTransform(bbox, { x: frame.x + 6, y: frame.y + 6, w: frame.w - 12, h: frame.h - 12 }).scale,
-            worldUnitToMetres,
-          ),
-        )
-      : 0;
   const rows: Array<[string, string]> = [
-    ['Horizontal CRS', crsStr],
-    ['Vertical datum', datumStr],
-    // A contour interval is an ELEVATION spacing, so it takes the vertical
-    // label, never the horizontal one. Routing it through the horizontal helper
-    // printed "5 m" while this sheet's own notes said "(vertical unit
-    // unverified)" for the same number.
-    [
-      'Contour interval',
-      interval != null && Number.isFinite(interval)
-        ? `${interval}${verticalSuffixFromLabel(prov?.verticalUnitLabel ?? prov?.contourIntervalUnit ?? prov?.complexity?.zUnit)}`
-        : '—',
-    ],
-    ['Approx. scale', mapScaleLabel(scaleN, input.linearUnit)],
-    ['Generated', generatedStr],
-    ['Prepared by', input.preparedBy ?? '—'],
+    ['Horizontal CRS', facts.crs],
+    ['Vertical datum', facts.datum],
+    ['Contour interval', facts.interval],
+    ['Approx. scale', facts.scaleLabel],
+    ['Generated', facts.generated],
+    ['Prepared by', facts.preparedBy],
   ];
   rows.forEach((r, i) => {
     const y = topY - 34 - i * 13;
@@ -1222,16 +1359,7 @@ function drawTitleBlock(
     (s, sz) => font.widthOfTextAtSize(safe(s), sz),
   );
   shareLines.forEach((ln, i) => text(ln, mxx, topY - 84 - i * 7.5, 6.5, font, DIM));
-  // Honest stamp of the shape style applied to the plotted contours, sourced
-  // from the unified provenance so it matches every other export of the same
-  // run. Without provenance the only style available is the one the view holds
-  // now, which is not necessarily the one this geometry was produced with: a
-  // sheet plotting cartographic contours read "Generalized" while the terrain
-  // report for the same run recorded "Smooth". The fallback therefore says
-  // where its value came from rather than presenting it as the recorded style.
-  const styleLabel = prov
-    ? prov.contourStyleLabel
-    : `${contourShapeStyleLabel(input.model.contourStyle)} (current view, not recorded)`;
+  const styleLabel = facts.styleLabel;
   text(`Contour style: ${styleLabel}`, mxx, topY - 99, 6.5, font, DIM);
   // What the sheet was built from, as the provenance states it: a display
   // sample says so on the sheet, not only in the sidecar JSON. Up to four lines:
@@ -1246,74 +1374,18 @@ function drawTitleBlock(
 
   // Right column — accuracy + readiness + provenance.
   const rxr = PW - M - 4;
-  // Hold-out figures from a sampled or unvalidated surface are a preview, not
-  // a survey accuracy statement.
-  const accHeading =
-    prov && (prov.accuracy?.accuracyOnSample || prov.exportReadiness !== 'Ready')
-      ? 'Hold-out accuracy (preview)'
-      : 'Internal hold-out accuracy';
+  const accHeading = facts.accuracyHeading;
   rightText(accHeading, rxr, topY - 16, 9, bold);
   page.drawLine({ start: { x: rxr - bold.widthOfTextAtSize(accHeading, 9), y: topY - 21 }, end: { x: rxr, y: topY - 21 }, thickness: 0.6, color: FRAME });
-  // ' m' is unconditional and correct here: these figures are metres by
-  // construction (a hold-out residual times the resolved vertical factor), and
-  // the provenance withholds the whole accuracy block when no vertical scale
-  // resolved, so an unverified frame reaches this formatter with nulls.
-  const fmtM = (v: number | null | undefined): string => (v != null && Number.isFinite(v) ? `${v.toFixed(2)} m` : '—');
-  // Accuracy rows, single-sourced from provenance when present (its accuracy
-  // block is null when the run measured none, in which case every figure reads
-  // '—' rather than a fabricated zero).
-  const aRows: Array<[string, string, string?]> = prov
-    ? [
-        // "-style (hold-out)" / "(estimated)": the printed sheet must carry
-        // the same qualifiers as the Analyse-panel preview of these rows —
-        // hold-out figures, not independent-checkpoint assessments.
-        ['NVA-style (95%, hold-out)', fmtM(prov.accuracy?.nvaM)],
-        ['VVA-style (95th pct, hold-out)', fmtM(prov.accuracy?.vvaM)],
-        ['RMSEz', fmtM(prov.accuracy?.rmseZM)],
-        // Named for the quantity it measures. "USGS density ref" alone read as a
-        // pulse-density grade, which this is not: the 3DEP floors are nominal
-        // PULSE density and this figure is measured GROUND-RETURN density. The
-        // technical report for the same scan refuses to grade its all-returns
-        // density against these floors, so an unqualified row here put two of
-        // this session's own documents in apparent disagreement.
-        [
-          'Ground-return density ref',
-          prov.accuracy && prov.accuracy.usgsDensityReferenceFloor !== 'none'
-            ? `>= USGS ${prov.accuracy.usgsDensityReferenceFloor}`
-            : prov.accuracy?.accuracyOnSample ? DENSITY_REF_SAMPLE_NOTE : '—',
-          'Ground density ref',
-        ],
-      ]
-    : (() => {
-        const a = input.accuracy ?? null;
-        return [
-          ['NVA-style (95%, hold-out)', fmtM(a?.nvaM)],
-          ['VVA-style (95th pct, hold-out)', fmtM(a?.vvaM)],
-          ['RMSEz', fmtM(a?.rmseZM)],
-          [
-            'Ground-return density ref',
-            a && a.densityReferenceFloorsMet.length > 0 ? `>= USGS ${a.densityReferenceFloorsMet[0]}` : '—',
-          ],
-        ];
-      })();
+  const aRows = facts.accuracyRows;
   const accCol = layoutAccuracyColumn(aRows, {
     topY,
     colW: rxr - rcx,
-    sampleNote: prov?.accuracy?.accuracyOnSample ? 'Figures are from a sample of the points' : null,
+    sampleNote: facts.accuracySampleNote,
     measure: (t, sz) => font.widthOfTextAtSize(safe(t), sz),
   });
   accCol.lines.forEach((ln) => rightText(ln.text, rxr, ln.y, ln.size, font, ln.size < 7 ? DIM : INK));
-  // Export-readiness verdict — single-sourced from the unified provenance so the
-  // sheet's readiness note can't disagree with the other exports. Maps the
-  // provenance verdict (Ready / Preview / Blocked) onto the note vocabulary.
-  let readiness: SheetReadiness;
-  if (prov) {
-    if (prov.exportReadiness === 'Ready') readiness = 'ready';
-    else if (prov.exportReadiness === 'Blocked') readiness = 'blocked';
-    else readiness = 'previewOnly';
-  } else {
-    readiness = input.readiness ?? 'previewOnly';
-  }
+  const readiness = facts.readiness;
   // Export-readiness + evidence verdict, wrapped WITHIN the accuracy column
   // (rcx..rxr) so the honest PREVIEW / exploratory banner can never bleed into
   // the legend column. Both stay the SAME central-gate strings every other
@@ -1322,12 +1394,12 @@ function drawTitleBlock(
   const rcw = rxr - rcx;
   const measure = (s: string, sz: number): number => font.widthOfTextAtSize(safe(s), sz);
   const boldMeasure = (s: string, sz: number): number => bold.widthOfTextAtSize(safe(s), sz);
-  const note = readinessNote(readiness);
+  const note = facts.readinessNote;
   const noteWrapped = wrapTextToWidth(note, rcw, 6.5, boldMeasure, 3);
   const noteTopY = Math.min(topY - 84, accCol.bottomY - 11);
   noteWrapped.forEach((ln, i) => rightText(ln, rxr, noteTopY - i * 8, 6.5, bold, readiness === 'ready' ? INK : warn));
-  const evLine = mapSheetEvidenceLine(sheetClaim);
-  const evColor = evidenceStatus(sheetClaim) === 'validated' ? DIM : warn;
+  const evLine = facts.evidenceLine;
+  const evColor = facts.evidenceValidated ? DIM : warn;
   const evWrapped = wrapTextToWidth(evLine, rcw, 6, measure, 3);
   const evStartY = noteTopY - noteWrapped.length * 8 - 5;
   evWrapped.forEach((ln, i) => rightText(ln, rxr, evStartY - i * 8, 6, font, evColor));
@@ -1348,4 +1420,31 @@ function drawTitleBlock(
       text(buildStr, centre, M - 9, 5.5, font, DIM);
     }
   }
+}
+
+/** The annotation layer and table, for the styled sheet. Same content and placement rules as Classic. */
+export function drawAnnotationLayerForSheet(
+  page: PDFPage,
+  frame: { x: number; y: number; w: number; h: number },
+  inner: { x: number; y: number; w: number; h: number },
+  bbox: Box,
+  t: { ox: number; oy: number; scale: number },
+  input: MapSheetInput,
+  font: PDFFont,
+  bold: PDFFont,
+): void {
+  if (!input.annotations || input.annotations.length === 0) return;
+  drawAnnotationLayer(page, frame, inner, bbox, t, input.annotations, input.sceneUpAxis ?? 'z', font, bold);
+}
+
+/** The purpose appendix page, for the styled sheet, stating what the sheet drew. */
+export function drawPurposeAppendixForSheet(
+  doc: PDFDocument,
+  purpose: MapSheetPurpose,
+  input: MapSheetInput,
+  font: PDFFont,
+  bold: PDFFont,
+  drawn: { readonly hillshade: boolean; readonly tint: boolean },
+): void {
+  drawPurposeAppendix(doc, purpose, input, font, bold, drawn);
 }

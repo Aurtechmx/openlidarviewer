@@ -433,7 +433,7 @@ consecutive passes, counted by `scripts/ios-streak.mjs`.
 fails the build when either passes its recorded baseline, so a raise is a hand
 edit to `docs/validation/monolith-size-baseline.json` and always shows in the
 diff.
-Fan-out is 95 for the shell, 73 for the renderer, across 1224 modules with no
+Fan-out is 95 for the shell, 73 for the renderer, across 1229 modules with no
 dependency cycles. Fan-out counts the distinct modules a file imports with a
 value import, source files and external packages alike; type-only and dynamic
 imports are not counted. The shell and the renderer figures are held
@@ -805,8 +805,8 @@ registry. A code outside that list, a height unit the analysis could not
 resolve, a datum with no EPSG code in the height unit (EGM2008 heights in
 feet, for example) or a depth CRS leaves the vertical CRS off. The heights
 keep their unit as the band unit, and the DEM package README names the source
-code and the reason. The contour deliverable writes its DTM the same way, but
-its README does not yet carry that note.
+code and the reason. The contour deliverable writes its DTM the same way, and
+its README carries the same note.
 
 When the source declares no vertical unit, the height unit is borrowed from
 the horizontal unit, and a vertical CRS written from it states that borrowed

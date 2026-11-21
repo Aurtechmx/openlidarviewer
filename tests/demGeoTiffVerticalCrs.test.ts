@@ -358,3 +358,49 @@ describe('a DTM with no vertical CRS but a known height unit', () => {
     }
   });
 });
+
+describe('the contour deliverable README names the vertical CRS of its DTM', () => {
+  const OPTS = {
+    decision: validatedDecision(DTM_CLAIMS),
+    basename: 'site',
+    worldOrigin: DEM_PKG_OPTS.worldOrigin,
+    isGeographic: false,
+    softwareVersion: '0.7.0',
+    metricVersion: 'v0.4.1',
+    generatedAt: new Date('2026-01-01T00:00:00.000Z'),
+    exportPermit: null,
+  };
+  const readme = (verticalEpsg: number | null, unitToMetres: number): string => {
+    const result = demResultFor(grid(), unitToMetres);
+    (result.dtm as { verticalEpsg: number | null }).verticalEpsg = verticalEpsg;
+    const zip = buildContourDeliverableFromResult(result, OPTS);
+    return new TextDecoder().decode(extractEntry(zip, 'site_README.txt')!);
+  };
+
+  it('states the code the DTM GeoTIFF carries', () => {
+    const text = readme(5703, 1);
+    expect(text).toContain('Vertical CRS   EPSG:5703');
+    expect(text).toContain('in the DTM GeoTIFF (GeoTIFF 1.1 keys)');
+    expect(text).not.toContain('DTM and DSM');
+  });
+
+  it('says why none is written when the code and the heights disagree', () => {
+    // NAVD88 height in metres (5703) given with heights in feet: EPSG has
+    // NAVD88 in feet as its own code, so the writer moves to that code.
+    const feet = readme(5703, 0.3048);
+    expect(feet).toMatch(/Vertical CRS {3}(EPSG:\d+.*in the DTM GeoTIFF|not written to the DTM GeoTIFF\.)/);
+    const zip = buildContourDeliverableFromResult((() => {
+      const r = demResultFor(grid(), 0.3048);
+      (r.dtm as { verticalEpsg: number | null }).verticalEpsg = 5703;
+      return r;
+    })(), OPTS);
+    const tif = extractEntry(zip, 'site_DTM.tif')!;
+    const written = geoKeys(tif).keys.get(4096);
+    if (written == null) expect(feet).toContain('not written to the DTM GeoTIFF.');
+    else expect(feet).toContain(`EPSG:${written}`);
+  });
+
+  it('adds nothing when the source declared no vertical CRS', () => {
+    expect(readme(null, 1)).not.toContain('Vertical CRS   ');
+  });
+});

@@ -442,13 +442,10 @@ export function writeGeoTiff(input: DemGeoTiffInput): Uint8Array {
   // A code the 16-bit key cannot hold as an EPSG code is not written: its low
   // 16 bits would name another CRS. The raster is then user-defined (32767).
   const epsg = isGeoTiffEpsgCode(input.epsg) ? input.epsg : null;
-  const resolved = resolveVerticalGeoKeys(input.verticalEpsg, input.verticalUnitCode);
-  if (resolved.status === 'conflict') {
-    throw new GeoTiffVerticalCrsConflictError(resolved.requestedEpsg, resolved.unitCode, resolved.codeUnitCode);
+  const vertical = rasterVerticalGeoKeys(input.verticalEpsg, input.verticalUnitCode);
+  if (vertical.status === 'conflict') {
+    throw new GeoTiffVerticalCrsConflictError(vertical.requestedEpsg, vertical.unitCode, vertical.codeUnitCode);
   }
-  const vertical: VerticalGeoKeyResolution = resolved.status === 'written' && !isGeoTiffEpsgCode(resolved.epsg)
-    ? { status: 'omitted', requestedEpsg: resolved.requestedEpsg, unitCode: resolved.unitCode, reason: 'unverified-code' }
-    : resolved;
   // With no vertical CRS written, a known height unit still reaches the reader
   // as the band unit, on bands that do not name one already.
   if (vertical.status !== 'written') {
@@ -646,6 +643,22 @@ export function writeGeoTiff(input: DemGeoTiffInput): Uint8Array {
  * raster either way and report the conflict elsewhere, as the DEM package does
  * in its README from {@link resolveVerticalGeoKeys}.
  */
+/**
+ * The vertical CRS a GeoTIFF written with these inputs carries: the resolved
+ * keys, except that a code the 16-bit key cannot hold is omitted. A conflict
+ * is returned as such; `writeGeoTiff` refuses it and
+ * {@link writeGeoTiffDroppingVerticalConflict} writes no vertical CRS for it.
+ */
+export function rasterVerticalGeoKeys(
+  verticalEpsg: number | null | undefined,
+  verticalUnitCode: number | null | undefined,
+): VerticalGeoKeyResolution {
+  const resolved = resolveVerticalGeoKeys(verticalEpsg, verticalUnitCode);
+  return resolved.status === 'written' && !isGeoTiffEpsgCode(resolved.epsg)
+    ? { status: 'omitted', requestedEpsg: resolved.requestedEpsg, unitCode: resolved.unitCode, reason: 'unverified-code' }
+    : resolved;
+}
+
 export function writeGeoTiffDroppingVerticalConflict(input: DemGeoTiffInput): Uint8Array {
   try {
     return writeGeoTiff(input);

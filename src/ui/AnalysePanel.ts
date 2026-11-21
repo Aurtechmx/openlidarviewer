@@ -105,6 +105,8 @@ import {
 import type { ContourGeneralizeMode } from '../terrain/contour/terrainAwareTolerance';
 import {
   loadMapSheetPdf,
+  loadSheetTrueNorth,
+  loadSvgSheet,
   loadDemPackage,
   loadTerrainReportPdf,
   loadContourDownload,
@@ -128,6 +130,7 @@ import type { SheetSize, SheetOrientation, MapSheetPurpose } from '../render/mea
 import type { Annotation } from '../render/annotate/types';
 import {
   SHEET_OPTIONS,
+  STYLE_OPTIONS,
   ORIENTATION_OPTIONS,
   sanitizeMapFilename,
   ensurePdfExtension,
@@ -383,6 +386,8 @@ const REPORT_BUTTON_TITLE =
 let lastPreparedBy = '';
 let lastSheet: SheetSize = 'letter';
 let lastOrientation: SheetOrientation = 'portrait';
+let lastStyle: MapSheetStyleChoice = 'light';
+type MapSheetStyleChoice = (typeof STYLE_OPTIONS)[number]['value'];
 let lastNotes: string | null = null;
 
 /** Whether a terrain product can run from the Export mode, and why not. */
@@ -2488,8 +2493,19 @@ export class AnalysePanel {
       // can't supply one, serializeContours omits the CRS stamp rather than
       // georeferencing local coordinates.
       const worldOrigin = mapCtx?.worldOrigin ?? null;
+      // The SVG follows the sheet style last chosen for the map PDF (Light by
+      // default), with the analysed grid as its relief.
+      let svgSheet = null;
+      if (fmt === 'svg' && lastStyle !== 'classic') {
+        const d = result.dtm;
+        const { buildSvgSheet } = await loadSvgSheet();
+        svgSheet = await buildSvgSheet(lastStyle, {
+          cols: d.cols, rows: d.rows, cellSize: d.cellSizeM, originX: d.originH1, originY: d.originH2, z: d.z, coverage: d.coverage,
+        });
+      }
       triggerBrowserDownload(
         serializeContours(result.model, fmt, {
+          svgSheet,
           basename,
           labels: result.labels,
           provenance,
@@ -3003,6 +3019,16 @@ export class AnalysePanel {
       sheetSel.append(o);
     }
 
+    const sheetStyleSel = document.createElement('select');
+    sheetStyleSel.className = 'olv-modal-input';
+    for (const opt of STYLE_OPTIONS) {
+      const o = document.createElement('option');
+      o.value = opt.value;
+      o.textContent = opt.label;
+      if (opt.value === lastStyle) o.selected = true;
+      sheetStyleSel.append(o);
+    }
+
     const orientSel = document.createElement('select');
     orientSel.className = 'olv-modal-input';
     for (const opt of ORIENTATION_OPTIONS) {
@@ -3078,6 +3104,7 @@ export class AnalysePanel {
       field('Title', titleInput),
       field('Prepared by', preparedInput),
       field('Project / Notes', notesInput, 'Free text printed in the title block.'),
+      field('Sheet style', sheetStyleSel, 'Light and Dark draw shaded relief under the contours. Classic draws the lines only.'),
       field('Sheet size', sheetSel),
       field('Orientation', orientSel),
       field(
@@ -3196,6 +3223,7 @@ export class AnalysePanel {
             notes: notesInput.value,
             sheet: sheetSel.value as SheetSize,
             orientation: orientSel.value as SheetOrientation,
+            style: sheetStyleSel.value as MapSheetStyleChoice,
             filename: filenameInput.value,
             worldOrigin: ctx.worldOrigin ?? null,
             generatedAt,
@@ -3224,6 +3252,7 @@ export class AnalysePanel {
           lastPreparedBy = preparedInput.value;
           lastSheet = sheetSel.value as SheetSize;
           lastOrientation = orientSel.value as SheetOrientation;
+          lastStyle = sheetStyleSel.value as MapSheetStyleChoice;
           lastNotes = notesInput.value;
           handle.close();
         } catch (err) {
@@ -3248,6 +3277,8 @@ export class AnalysePanel {
       notes: string;
       sheet: SheetSize;
       orientation: SheetOrientation;
+      /** Light, Dark or Classic. */
+      style: MapSheetStyleChoice;
       filename: string;
       worldOrigin: { x: number; y: number; z?: number } | null;
       generatedAt: Date;
@@ -3290,7 +3321,25 @@ export class AnalysePanel {
     // the sheet's inputs; the up-axis is the gather's own (annotationMapProjection.ts).
     const annotations = opts.includeAnnotations ? this._cb.getAnnotations?.() ?? [] : [];
     const sceneUpAxis = mapCtx?.sceneUpAxis ?? 'z';
-    const { buildMapSheetPdf } = await loadMapSheetPdf();
+    const { buildContourSheetPdf } = await loadMapSheetPdf();
+    // The styled sheets draw the analysed grid under the contours and, on a
+    // projected CRS, a true-north arrow. Classic reads neither.
+    const styled = opts.style !== 'classic';
+    const d = result.dtm;
+    const relief = styled
+      ? { cols: d.cols, rows: d.rows, cellSize: d.cellSizeM, originX: d.originH1, originY: d.originH2, z: d.z, coverage: d.coverage }
+      : null;
+    let trueNorth: { convergenceDeg: number } | null = null;
+    const bb = result.model.bbox;
+    if (styled && bb && opts.worldOrigin) {
+      const { trueNorthFromGridDeg } = await loadSheetTrueNorth();
+      const deg = trueNorthFromGridDeg(
+        d.horizontalEpsg ?? null,
+        (bb.minX + bb.maxX) / 2 + opts.worldOrigin.x,
+        (bb.minY + bb.maxY) / 2 + opts.worldOrigin.y,
+      );
+      if (deg != null) trueNorth = { convergenceDeg: deg };
+    }
     const { buildExportProvenance, contourArtifactClaims } = await loadExportProvenance();
     // The unified provenance, from the SAME result the sheet plots.
     const provenance = buildExportProvenance(result, {
@@ -3312,7 +3361,7 @@ export class AnalysePanel {
       // weaker of the two.
       evidenceClaimIds: contourArtifactClaims(result),
     });
-    const bytes = await buildMapSheetPdf({
+    const bytes = await buildContourSheetPdf({
       model: result.model,
       labels: result.labels,
       worldOrigin: opts.worldOrigin,
@@ -3339,6 +3388,9 @@ export class AnalysePanel {
       // Purpose deliverable facts (Studio path) so the sheet renders purpose-
       // specific content. Null on any other path ⇒ byte-identical sheet.
       purpose,
+      style: opts.style,
+      relief,
+      trueNorth,
     });
     triggerDownload(
       new Blob([bytes as BlobPart], { type: 'application/pdf' }),

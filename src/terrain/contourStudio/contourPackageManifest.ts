@@ -158,6 +158,12 @@ export interface PackageInput {
   /** One-line citation recommendation for the README. */
   readonly citation: string;
   /**
+   * README lines saying which vertical CRS the DTM GeoTIFF carries, or why it
+   * carries none. Empty or absent when the package has no DTM or the source
+   * declared no vertical CRS.
+   */
+  readonly verticalCrsLines?: readonly string[];
+  /**
    * Per-cell support split (percent of ALL DTM cells), from the same coverage
    * states the Support raster serializes. Present only when a DTM — and thus a
    * support raster — is in the package; the README then reports the split.
@@ -285,6 +291,7 @@ function buildReadme(stem: string, entries: readonly PackageEntry[], input: Pack
     `  Vertical datum: ${input.provenance.verticalDatum}`,
     `  Horizontal unit: ${input.provenance.horizontalUnit}`,
     `  Vertical unit: ${input.provenance.verticalUnit}`,
+    ...(input.verticalCrsLines ?? []),
     '',
     'Integrity',
     '  Verify files against SHA256SUMS (e.g. `shasum -a 256 -c SHA256SUMS`).',

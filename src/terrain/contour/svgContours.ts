@@ -63,10 +63,10 @@ export interface SvgContourParams {
 }
 
 /** Target pixel size for the map panel's longer dimension. */
-const MAP_TARGET_PX = 880;
+export const MAP_TARGET_PX = 880;
 
 /** Escape the three XML-significant characters for safe text / `<metadata>`. */
-function xmlEscape(s: string): string {
+export function xmlEscape(s: string): string {
   return s.replaceAll(/&/g, '&amp;').replaceAll(/</g, '&lt;').replaceAll(/>/g, '&gt;');
 }
 
@@ -96,7 +96,7 @@ function strokeStyle(f: ContourFeature, stroke: string, indexW: number, baseW: n
 }
 
 /** Largest 1 / 2 / 5 × 10ⁿ that is ≤ v — for a round graphic-scale-bar length. */
-function niceRound(v: number): number {
+export function niceRound(v: number): number {
   if (!(v > 0)) return 1;
   const pow = Math.pow(10, Math.floor(Math.log10(v)));
   const f = v / pow;
@@ -169,7 +169,7 @@ function legend(x: number, y: number, stroke: string, indexW: number, baseW: num
 }
 
 /** The visible title-block lines (right-aligned). Includes the interval line. */
-function titleLines(model: ContourFeatureModel, prov: ExportProvenance | undefined, unit: string, intervalDec: number): string[] {
+export function titleLines(model: ContourFeatureModel, prov: ExportProvenance | undefined, unit: string, intervalDec: number): string[] {
   const lines: string[] = [];
   const src = prov?.source ?? null;
   if (src) lines.push(`Source: ${src}`);
@@ -201,7 +201,7 @@ function titleLines(model: ContourFeatureModel, prov: ExportProvenance | undefin
  * Text that is safe inside an XML comment: XML forbids `--` within a comment
  * and a comment ending in `-`, and a file name can hold either.
  */
-function commentText(text: string): string {
+export function commentText(text: string): string {
   const t = text.replace(/-(?=-)/g, '- ');
   return t.endsWith('-') ? `${t} ` : t;
 }

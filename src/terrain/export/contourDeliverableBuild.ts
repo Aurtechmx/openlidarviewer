@@ -39,8 +39,8 @@ import { serializeContours } from '../contour/contourDownload';
 import { dxfContours } from '../contour/dxfContours';
 import { validationDeliverableJson, contourStudioDeliverableJson } from './contourDeliverableJson';
 import { verticalUnitLabel, horizontalUnitLabel } from '../../units/units';
-import { writeGeoTiff, writeGeoTiffDroppingVerticalConflict, verticalUnitGeoKeyCode } from './demGeoTiff';
-import { parseEpsg } from './demPackage';
+import { writeGeoTiff, writeGeoTiffDroppingVerticalConflict, verticalUnitGeoKeyCode, rasterVerticalGeoKeys } from './demGeoTiff';
+import { parseEpsg, verticalCrsReadmeLines } from './demPackage';
 import { outsideCoverageMask } from '../ground/coverageFootprint';
 import {
   buildContourPackageManifest,
@@ -395,6 +395,13 @@ function manifestFor(g: GatheredDeliverable, opts: DeliverableBuildOptions, pdf:
       softwareVersion: g.provenance.softwareVersion,
     },
     citation: `${g.provenance.software} ${g.provenance.softwareVersion}, ${g.basename} contour deliverable.`,
+    // The same decision the DTM GeoTIFF writer makes from the same inputs.
+    verticalCrsLines: g.dtm && g.bytes.has('dtm-raster')
+      ? verticalCrsReadmeLines(
+          rasterVerticalGeoKeys(g.dtm.verticalEpsg ?? parseEpsg(g.dtm.verticalDatum), verticalUnitGeoKeyCode(g.dtm.verticalUnitToMetres)),
+          { files: 'the DTM GeoTIFF', holders: 'The DTM' },
+        )
+      : [],
   });
 }
 

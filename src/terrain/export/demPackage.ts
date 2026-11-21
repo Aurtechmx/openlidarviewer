@@ -363,11 +363,14 @@ const vcrsLabel = (code: number): string => {
  * why none is written when the source's code and height unit do not give a
  * consistent one.
  */
-export function verticalCrsReadmeLines(res: VerticalGeoKeyResolution | null | undefined): string[] {
+export function verticalCrsReadmeLines(
+  res: VerticalGeoKeyResolution | null | undefined,
+  rasters: { readonly files: string; readonly holders: string } = { files: 'the DTM and DSM GeoTIFFs', holders: 'The DTM and DSM' },
+): string[] {
   if (res == null || res.status === 'none') return [];
   const pad = '                 ';
   if (res.status === 'written') {
-    const lines = [`  Vertical CRS   ${vcrsLabel(res.epsg)} in the DTM and DSM GeoTIFFs (GeoTIFF 1.1 keys)`];
+    const lines = [`  Vertical CRS   ${vcrsLabel(res.epsg)} in ${rasters.files} (GeoTIFF 1.1 keys)`];
     const text = [
       res.epsg !== res.requestedEpsg
         ? `The source gave EPSG:${res.requestedEpsg} with heights in ${HEIGHT_UNIT_PLURAL[res.unitCode]}; EPSG:${res.epsg} is the same vertical reference in that unit.`
@@ -388,13 +391,13 @@ export function verticalCrsReadmeLines(res: VerticalGeoKeyResolution | null | un
   } else if (res.reason === 'no-code-in-unit') {
     why = `The source gave ${vcrsLabel(res.requestedEpsg)} with heights in ${heights}, and EPSG has no vertical CRS for that reference in ${heights}.`;
   } else if (res.reason === 'depth-axis') {
-    why = `The source gave ${vcrsLabel(res.requestedEpsg)}, a depth CRS whose axis points down. The DTM and DSM hold heights, which that CRS would read with the sign reversed.`;
+    why = `The source gave ${vcrsLabel(res.requestedEpsg)}, a depth CRS whose axis points down. ${rasters.holders} hold heights, which that CRS would read with the sign reversed.`;
   } else if (res.reason === 'unverified-code') {
     why = `The source gave EPSG:${res.requestedEpsg}, which is not among the vertical CRS codes whose unit the writer can check.`;
   } else {
     why = `The source gave ${vcrsLabel(res.requestedEpsg)} but no recognised height unit, so the code's own unit cannot be checked against the heights.`;
   }
-  return [`  Vertical CRS   not written to the DTM and DSM GeoTIFFs.`, ...wrapReadme(`${why} ${tail}`, pad)];
+  return [`  Vertical CRS   not written to ${rasters.files}.`, ...wrapReadme(`${why} ${tail}`, pad)];
 }
 
 /**
