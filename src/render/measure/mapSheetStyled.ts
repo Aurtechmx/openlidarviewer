@@ -16,7 +16,7 @@
 import { annotationToMapXY } from './annotationMapProjection';
 import { buildAnnotationReport } from './annotationReportTable';
 import type { Annotation } from '../annotate/types';
-import { PDFDocument, StandardFonts, degrees, type PDFFont, type PDFPage } from 'pdf-lib';
+import { PDFDocument, degrees, type PDFFont, type PDFPage } from 'pdf-lib';
 import { INPUT_NOT_RECORDED_NOTE, sourceSha256Text } from '../../science/exportDigestRecord';
 import { crsOriginLine } from '../../science/crsOrigin';
 import {
@@ -61,6 +61,7 @@ import {
 } from '../../export/sheetKit/primitives';
 import { SHEET_SPACE, SHEET_TYPE, sheetTokens, tintAt, type SheetRgb, type SheetTokens } from '../../export/sheetKit/tokens';
 import { scaleBarUnit } from './scaleBar';
+import { drawStyledPurposeAppendix } from './mapSheetStyledAppendix';
 import {
   annotationColor, annotationLines, continuationPages, drawMarkLines, drawMarksContinuation, markLinesHeight,
   measurementLetter, measurementLines, orderedAnnotationRows, type MarksContinuation,
@@ -72,10 +73,13 @@ import {
   contourShareSheetLines,
   mapLinearUnitLabel,
   mapSheetFacts,
-  drawPurposeAppendixForSheet,
+  purposeAppendixContent,
   type MapSheetInput,
   type MapSheetFacts,
 } from './mapSheetPdf';
+
+/** Thinnest legend swatch, points. */
+const LEGEND_MIN_WIDTH = 0.5;
 
 const SHEET_PT: Record<NonNullable<MapSheetInput['sheet']>, readonly [number, number]> = {
   letter: [612, 792],
@@ -193,9 +197,8 @@ export async function buildStyledMapSheetPdf(
   }
 
   if (purpose) {
-    const font = await doc.embedFont(StandardFonts.Helvetica);
-    const bold = await doc.embedFont(StandardFonts.HelveticaBold);
-    drawPurposeAppendixForSheet(doc, purpose, input, font, bold, { hillshade: relief != null, tint: relief != null && t.tintAlpha > 0 });
+    const content = purposeAppendixContent(purpose, input, { hillshade: relief != null, tint: relief != null && t.tintAlpha > 0 });
+    drawStyledPurposeAppendix(doc, content, [PW, PH], M, `OpenLiDARViewer - terrain analysis${buildText}`, t, fonts);
   }
   return doc.save();
 }
@@ -523,12 +526,15 @@ function panelBlocks(
   // ── legend: only the line kinds and marks the sheet draws ────────────────
   const kinds = new Set(input.model.features.map((ft) => contourLineKind(ft)));
   const legend: Array<[LegendKey, string]> = [];
+  // A swatch is never thinner than LEGEND_MIN_WIDTH, so a hairline kind still
+  // shows in the key; its opacity matches the map, so lighter kinds read lighter.
   const line = (isIndex: boolean, kind: ContourLineKind): LegendKey => {
     const st = styledContourStroke(t, isIndex, kind);
-    return { kind: 'line', color: st.color, width: st.width, ...(st.dash ? { dash: st.dash } : {}) };
+    return { kind: 'line', color: st.color, width: Math.max(st.width, LEGEND_MIN_WIDTH), opacity: st.opacity, ...(st.dash ? { dash: st.dash } : {}) };
   };
-  legend.push([line(true, 'measured'), 'Index contour, labelled']);
-  legend.push([line(false, 'measured'), `Contour interval ${ctx.facts.interval}`]);
+  const indexOnly = input.purpose?.labelsIndexOnly ?? true;
+  legend.push([line(true, 'measured'), indexOnly ? 'Index contour, labelled' : 'Index contour']);
+  legend.push([line(false, 'measured'), `Contour interval ${ctx.facts.interval}${indexOnly ? '' : ', labelled'}`]);
   if (kinds.has('sparse')) legend.push([line(false, 'sparse'), 'Sparse measured ground']);
   if (kinds.has('interpolated')) legend.push([line(false, 'interpolated'), 'Contour over filled cells']);
   if (kinds.has('gap')) legend.push([line(false, 'gap'), 'Low-confidence gap']);

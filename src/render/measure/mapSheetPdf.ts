@@ -578,56 +578,39 @@ export async function buildMapSheetPdf(input: MapSheetInput): Promise<Uint8Array
   return doc.save();
 }
 
+/** One line of the validation appendix and how it is weighted. */
+export interface AppendixLine {
+  readonly text: string;
+  /** `warn` for a caution, `dim` for a quiet pass, `ink` otherwise. */
+  readonly tone: 'warn' | 'dim' | 'ink';
+}
+
+/** What the purpose appendix page states, before any drawing. */
+export interface PurposeAppendixContent {
+  readonly title: string;
+  readonly statement: string;
+  readonly settings: ReadonlyArray<readonly [string, string]>;
+  /** The internal-validation lines, or null when the purpose does not require them. */
+  readonly validation: readonly AppendixLine[] | null;
+}
+
 /**
- * The purpose appendix page. Documents WHAT the chosen purpose applied so two
- * purposes produce visibly different deliverables:
- *   - a purpose header + the one-line purpose statement;
- *   - a "This deliverable" settings box (geometry, generalization, labels,
- *     appearance, packaging);
- *   - when {@link MapSheetPurpose.appendixRequired}, an internal-validation
- *     appendix.
+ * The purpose appendix content. Documents WHAT the chosen purpose applied so
+ * two purposes produce visibly different deliverables: the purpose statement,
+ * a "This deliverable" settings list (geometry, generalization, labels,
+ * appearance, packaging) and, when {@link MapSheetPurpose.appendixRequired},
+ * the internal-validation lines.
  *
  * Honesty (§6.3): every string here records a PRESENTATION/product default or
  * the sheet's EXISTING internal validation state. Nothing raises an evidence
- * level, asserts survey certification, or changes a gate decision — the appendix
+ * level, asserts survey certification, or changes a gate decision; the appendix
  * even says so in words.
  */
-function drawPurposeAppendix(
-  doc: PDFDocument,
+export function purposeAppendixContent(
   purpose: MapSheetPurpose,
   input: MapSheetInput,
-  font: PDFFont,
-  bold: PDFFont,
   drawn?: { readonly hillshade: boolean; readonly tint: boolean },
-): void {
-  const sheetClaim = mapSheetClaim(input.model.contourStyle, purpose);
-  const size = input.sheet ?? 'letter';
-  const orient = input.orientation ?? 'portrait';
-  let [PW, PH] = SHEET_PT[size];
-  if (orient === 'landscape') [PW, PH] = [PH, PW];
-  const page = doc.addPage([PW, PH]);
-  const M = 36;
-  const text = (s: string, x: number, y: number, sz: number, f: PDFFont = font, c = INK): void => {
-    page.drawText(safe(s), { x, y, size: sz, font: f, color: c });
-  };
-
-  // Outer neatline — the same finished-sheet convention as page 1.
-  page.drawRectangle({ x: M - 4, y: M - 4, width: PW - 2 * M + 8, height: PH - 2 * M + 8, borderColor: FRAME, borderWidth: 0.6 });
-
-  let y = PH - M - 20;
-  // ── header + purpose statement ─────────────────────────────────────────────
-  text(`Deliverable - ${purpose.label}`, M, y, 15, bold);
-  page.drawLine({ start: { x: M, y: y - 6 }, end: { x: PW - M, y: y - 6 }, thickness: 0.8, color: FRAME });
-  y -= 22;
-  const wrapW = PW - 2 * M;
-  const measure = (s: string, sz: number): number => font.widthOfTextAtSize(safe(s), sz);
-  for (const ln of wrapTextToWidth(purpose.statement, wrapW, 9, measure, 3)) {
-    text(ln, M, y, 9, font, DIM);
-    y -= 12;
-  }
-  y -= 14;
-
-  // ── "This deliverable" settings box ────────────────────────────────────────
+): PurposeAppendixContent {
   const onOff = (b: boolean): string => (b ? 'on' : 'off');
   const yesNo = (b: boolean): string => (b ? 'yes' : 'no');
   let geometry: string;
@@ -639,7 +622,7 @@ function drawPurposeAppendix(
     purpose.generalizeToleranceCells > 0
       ? `tolerance ${purpose.generalizeToleranceCells} x cell (Douglas-Peucker)`
       : 'exact - no generalization';
-  const settings: Array<[string, string]> = [
+  const settings: Array<readonly [string, string]> = [
     ['Geometry', geometry],
     ['Cartographic smoothing', onOff(purpose.cartographicSmoothing)],
     ['Generalization', generalization],
@@ -656,14 +639,67 @@ function drawPurposeAppendix(
     ['Exploratory output allowed', yesNo(purpose.allowExploratory)],
     ['Complete package', yesNo(purpose.completePackage)],
   ];
+  // HONESTY (§6.3): the validation lines record the sheet's INTERNAL validation
+  // state, the same evidence-ladder verdict every export of this scan carries.
+  // They are explicitly NOT a survey certification and do NOT raise the
+  // evidence level. The disclaimer leads so it can never read as a certification.
+  let validation: AppendixLine[] | null = null;
+  if (purpose.appendixRequired) {
+    const sheetClaim = mapSheetClaim(input.model.contourStyle, purpose);
+    validation = [
+      { text: 'This appendix records OpenLiDARViewer\'s INTERNAL validation state for this surface. It is NOT a survey certification and does NOT raise the evidence level of this deliverable.', tone: 'warn' },
+      { text: mapSheetEvidenceNote(sheetClaim), tone: 'ink' },
+      { text: mapSheetEvidenceLine(sheetClaim), tone: evidenceStatus(sheetClaim) === 'validated' ? 'dim' : 'warn' },
+      { text: readinessNote(input.readiness ?? 'previewOnly'), tone: input.readiness === 'ready' ? 'ink' : 'warn' },
+    ];
+  }
+  return { title: `Deliverable - ${purpose.label}`, statement: purpose.statement, settings, validation };
+}
+
+/** The Classic purpose appendix page, drawn from {@link purposeAppendixContent}. */
+function drawPurposeAppendix(
+  doc: PDFDocument,
+  purpose: MapSheetPurpose,
+  input: MapSheetInput,
+  font: PDFFont,
+  bold: PDFFont,
+): void {
+  const content = purposeAppendixContent(purpose, input);
+  const size = input.sheet ?? 'letter';
+  const orient = input.orientation ?? 'portrait';
+  let [PW, PH] = SHEET_PT[size];
+  if (orient === 'landscape') [PW, PH] = [PH, PW];
+  const page = doc.addPage([PW, PH]);
+  const M = 36;
+  const text = (s: string, x: number, y: number, sz: number, f: PDFFont = font, c = INK): void => {
+    page.drawText(safe(s), { x, y, size: sz, font: f, color: c });
+  };
+
+  // Outer neatline, the same finished-sheet convention as page 1.
+  page.drawRectangle({ x: M - 4, y: M - 4, width: PW - 2 * M + 8, height: PH - 2 * M + 8, borderColor: FRAME, borderWidth: 0.6 });
+
+  let y = PH - M - 20;
+  // ── header + purpose statement ─────────────────────────────────────────────
+  text(content.title, M, y, 15, bold);
+  page.drawLine({ start: { x: M, y: y - 6 }, end: { x: PW - M, y: y - 6 }, thickness: 0.8, color: FRAME });
+  y -= 22;
+  const wrapW = PW - 2 * M;
+  const measure = (s: string, sz: number): number => font.widthOfTextAtSize(safe(s), sz);
+  for (const ln of wrapTextToWidth(content.statement, wrapW, 9, measure, 3)) {
+    text(ln, M, y, 9, font, DIM);
+    y -= 12;
+  }
+  y -= 14;
+
+  // ── "This deliverable" settings box ────────────────────────────────────────
   const boxTop = y;
   const rowH = 15;
-  const boxH = 24 + settings.length * rowH;
+  const boxH = 24 + content.settings.length * rowH;
   page.drawRectangle({ x: M, y: boxTop - boxH, width: PW - 2 * M, height: boxH, color: WHITE, borderColor: FRAME, borderWidth: 0.6 });
   text('This deliverable', M + 10, boxTop - 16, 10, bold, SEPIA_INDEX);
   page.drawLine({ start: { x: M + 10, y: boxTop - 20 }, end: { x: PW - M - 10, y: boxTop - 20 }, thickness: 0.5, color: FRAME });
   let ry = boxTop - 36;
-  for (const [k, v] of settings) {
+  for (const [k, v] of content.settings) {
     text(k, M + 12, ry, 8, bold, DIM);
     text(v, M + 190, ry, 8, font, INK);
     ry -= rowH;
@@ -671,24 +707,15 @@ function drawPurposeAppendix(
   y = boxTop - boxH - 20;
 
   // ── internal-validation appendix (only when the purpose requires it) ───────
-  // HONESTY (§6.3): this records the sheet's INTERNAL validation state — the same
-  // evidence-ladder verdict every export of this scan carries. It is explicitly
-  // NOT a survey certification and it does NOT raise the evidence level.
-  if (purpose.appendixRequired) {
+  if (content.validation) {
     text('Validation appendix', M, y, 12, bold);
     page.drawLine({ start: { x: M, y: y - 5 }, end: { x: PW - M, y: y - 5 }, thickness: 0.6, color: FRAME });
     y -= 22;
     const warn = rgb(0.6, 0.2, 0.1);
-    // Lead with the honesty disclaimer so it can never read as a certification.
-    const lines: Array<[string, ReturnType<typeof rgb>]> = [
-      ['This appendix records OpenLiDARViewer\'s INTERNAL validation state for this surface. It is NOT a survey certification and does NOT raise the evidence level of this deliverable.', warn],
-      [mapSheetEvidenceNote(sheetClaim), INK],
-      [mapSheetEvidenceLine(sheetClaim), evidenceStatus(sheetClaim) === 'validated' ? DIM : warn],
-      [readinessNote(input.readiness ?? 'previewOnly'), input.readiness === 'ready' ? INK : warn],
-    ];
-    for (const [ln, c] of lines) {
-      for (const w of wrapTextToWidth(ln, wrapW, 9, measure, 4)) {
-        text(w, M, y, 9, font, c);
+    const tone = { warn, dim: DIM, ink: INK } as const;
+    for (const ln of content.validation) {
+      for (const w of wrapTextToWidth(ln.text, wrapW, 9, measure, 4)) {
+        text(w, M, y, 9, font, tone[ln.tone]);
         y -= 12;
       }
       y -= 6;
@@ -1442,16 +1469,4 @@ export function drawAnnotationLayerForSheet(
 ): void {
   if (!input.annotations || input.annotations.length === 0) return;
   drawAnnotationLayer(page, frame, inner, bbox, t, input.annotations, input.sceneUpAxis ?? 'z', font, bold);
-}
-
-/** The purpose appendix page, for the styled sheet, stating what the sheet drew. */
-export function drawPurposeAppendixForSheet(
-  doc: PDFDocument,
-  purpose: MapSheetPurpose,
-  input: MapSheetInput,
-  font: PDFFont,
-  bold: PDFFont,
-  drawn: { readonly hillshade: boolean; readonly tint: boolean },
-): void {
-  drawPurposeAppendix(doc, purpose, input, font, bold, drawn);
 }
