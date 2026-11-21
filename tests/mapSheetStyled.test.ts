@@ -190,8 +190,8 @@ describe('the styled sheet', () => {
     const purpose = { label: 'Engineering Plan', statement: 'Plan contours.', analytical: true, cartographic: false, cartographicSmoothing: false, generalizeToleranceCells: 0, indexEvery: 5, labelsIndexOnly: true, hillshade: false, hypsometricTint: false, allowExploratory: false, completePackage: true, appendixRequired: true };
     const texts = (await drawn(input({ style: 'dark', purpose }))).map((t) => t.text);
     expect(texts).toContain('2 / 2');
-    expect(texts).toContain('THIS DELIVERABLE');
-    expect(texts).toContain('VALIDATION APPENDIX');
+    // Settings in named groups, each key in caps over its value; the validation note last.
+    for (const want of ['LINE GEOMETRY', 'INDEX AND LABELS', 'APPEARANCE', 'PACKAGING', 'HILLSHADE', 'VALIDATION APPENDIX']) expect(texts).toContain(want);
     vi.restoreAllMocks();
     const doc = await PDFDocument.load(await buildContourSheetPdf(input({ style: 'dark', purpose }), { loadFont }));
     expect(doc.getPageCount()).toBe(2);
