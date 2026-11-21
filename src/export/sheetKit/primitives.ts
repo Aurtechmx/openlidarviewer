@@ -63,12 +63,17 @@ export function wrapSheetText(s: string, font: PDFFont, size: number, width: num
 
 /** A small upper-case section heading with a rule above it. Returns the y below it. */
 export function drawSectionLabel(
-  page: PDFPage, label: string, x: number, y: number, width: number, t: SheetTokens, f: SheetFonts,
+  page: PDFPage, label: string, x: number, y: number, width: number, t: SheetTokens, f: SheetFonts, k = 1,
 ): number {
   page.drawLine({ start: { x, y }, end: { x: x + width, y }, thickness: t.weight.rule, color: pdfColor(t.rule) });
-  const base = y - 14;
-  sheetText(page, label.toUpperCase(), x, base, { font: f.sansBold, size: SHEET_TYPE.section, color: t.dim }, f);
-  return base - 10;
+  const base = y - 12 * k;
+  sheetText(page, label.toUpperCase(), x, base, { font: f.sansBold, size: SHEET_TYPE.section * k, color: t.dim }, f);
+  return base - 9 * k;
+}
+
+/** Height {@link drawSectionLabel} uses at type scale `k`, to its returned y. */
+export function sectionLabelHeight(k = 1): number {
+  return 21 * k;
 }
 
 /** What a legend row's key shows. */
@@ -80,11 +85,16 @@ export type LegendKey =
 
 const KEY_W = 26;
 
+/** Row pitch of {@link drawLegendRow} at type scale `k`. */
+export function legendRowHeight(k = 1): number {
+  return SHEET_TYPE.legend * 1.8 * k;
+}
+
 /** One legend row: a key on the left, a label beside it. Returns the y of the next row. */
 export function drawLegendRow(
-  page: PDFPage, key: LegendKey, label: string, x: number, y: number, t: SheetTokens, f: SheetFonts,
+  page: PDFPage, key: LegendKey, label: string, x: number, y: number, t: SheetTokens, f: SheetFonts, k = 1,
 ): number {
-  const midY = y + SHEET_TYPE.legend * 0.32;
+  const midY = y + SHEET_TYPE.legend * k * 0.32;
   switch (key.kind) {
     case 'line':
       page.drawLine({
@@ -113,8 +123,8 @@ export function drawLegendRow(
       drawMarker(page, key.shape, x + KEY_W / 2, midY, 3.2, key.color);
       break;
   }
-  sheetText(page, label, x + KEY_W + 8, y, { font: f.sans, size: SHEET_TYPE.legend, color: t.ink }, f);
-  return y - SHEET_TYPE.legend * 2.1;
+  sheetText(page, label, x + KEY_W + 8, y, { font: f.sans, size: SHEET_TYPE.legend * k, color: t.ink }, f);
+  return y - legendRowHeight(k);
 }
 
 /** A filled triangle (up or down) or dot centred on (cx, cy). */
@@ -141,19 +151,26 @@ export interface DataRow {
  */
 export function drawDataBlock(
   page: PDFPage, rows: readonly DataRow[], x: number, y: number, width: number, t: SheetTokens, f: SheetFonts,
-  keyWidth = 64,
+  keyWidth = 64, k = 1,
 ): number {
-  const step = SHEET_TYPE.dataValue * 1.75;
+  const step = SHEET_TYPE.dataValue * 1.5 * k;
   let cy = y;
   for (const r of rows) {
-    sheetText(page, r.key.toUpperCase(), x, cy, { font: f.mono, size: SHEET_TYPE.dataKey, color: t.dim }, f);
-    const lines = wrapSheetText(r.value, f.mono, SHEET_TYPE.dataValue, width - keyWidth, f);
+    sheetText(page, r.key.toUpperCase(), x, cy, { font: f.mono, size: SHEET_TYPE.dataKey * k, color: t.dim }, f);
+    const lines = wrapSheetText(r.value, f.mono, SHEET_TYPE.dataValue * k, width - keyWidth * k, f);
     for (const ln of lines) {
-      sheetText(page, ln, x + keyWidth, cy, { font: f.mono, size: SHEET_TYPE.dataValue, color: t.ink }, f);
+      sheetText(page, ln, x + keyWidth * k, cy, { font: f.mono, size: SHEET_TYPE.dataValue * k, color: t.ink }, f);
       cy -= step;
     }
   }
   return cy;
+}
+
+/** Height {@link drawDataBlock} uses for `rows`, matching its returned y. */
+export function dataBlockHeight(rows: readonly DataRow[], width: number, f: SheetFonts, keyWidth = 64, k = 1): number {
+  let lines = 0;
+  for (const r of rows) lines += wrapSheetText(r.value, f.mono, SHEET_TYPE.dataValue * k, width - keyWidth * k, f).length;
+  return lines * SHEET_TYPE.dataValue * 1.5 * k;
 }
 
 export interface ScaleBarSpec {

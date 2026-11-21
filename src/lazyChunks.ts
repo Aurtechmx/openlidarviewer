@@ -257,8 +257,15 @@ export const loadProfilePdf = () => import('./render/measure/profilePdf');
  * Load the contour map-sheet PDF builder (also pulls in pdf-lib). Only reached
  * when the user clicks "Export map (PDF)" on the Analyse panel — routed here so
  * the live transform never sees the literal and pdf-lib stays in its lazy chunk.
+ * The module draws every sheet style; Classic goes on to mapSheetPdf.ts.
  */
-export const loadMapSheetPdf = () => import('./render/measure/mapSheetPdf');
+export const loadMapSheetPdf = () => import('./render/measure/mapSheetStyled');
+
+/** Load the Light / Dark SVG relief builder for the contour SVG download. */
+export const loadSvgSheet = () => import('./export/sheetKit/svgSheet');
+
+/** Load the true-north angle helper (pulls in proj4) for the styled map sheet. */
+export const loadSheetTrueNorth = () => import('./export/sheetKit/trueNorth');
 
 /**
  * Load the DEM package builder (ASCII Grid + GeoTIFF writers + ZIP store).

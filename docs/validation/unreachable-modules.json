@@ -28,27 +28,6 @@
       "review": "2027-02-28"
     },
     {
-      "path": "src/export/sheetKit/primitives.ts",
-      "status": "staged",
-      "why": "Sheet furniture (scale bar, north arrow, legend rows, data block, coordinate ticks, footer) for the restyled export sheets. No sheet draws with it yet.",
-      "graduation": "The contour map sheet PDF and SVG draw with the sheet kit and the export dialog offers the styles.",
-      "review": "2027-02-28"
-    },
-    {
-      "path": "src/export/sheetKit/relief.ts",
-      "status": "staged",
-      "why": "Multi-light shaded relief and the relief raster for the restyled export sheets. No sheet draws with it yet.",
-      "graduation": "The contour map sheet PDF and SVG draw with the sheet kit and the export dialog offers the styles.",
-      "review": "2027-02-28"
-    },
-    {
-      "path": "src/export/sheetKit/tokens.ts",
-      "status": "staged",
-      "why": "Colours, type sizes and line weights for the Light, Dark and Classic sheet styles. No sheet or dialog reads them yet.",
-      "graduation": "The contour map sheet PDF and SVG draw with the sheet kit and the export dialog offers the styles.",
-      "review": "2027-02-28"
-    },
-    {
       "path": "src/geo/projectPlacement.ts",
       "status": "staged",
       "why": "Named in the v0.6.6 release notes as \"a cross-CRS project placement planner\", listed under \"Foundations added for a later release, not reachable in v0.6.6\". It plans a placement; the multi-layer mount still refuses a CRS mismatch rather than asking this planner.",

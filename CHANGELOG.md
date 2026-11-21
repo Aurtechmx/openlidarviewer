@@ -4,6 +4,13 @@ The format is based on Keep a Changelog and the project follows Semantic Version
 
 ## [Unreleased]
 
+### Added
+
+- Light and Dark styles for the contour map sheet PDF, chosen in the export dialog with Light as the default. The sheet draws shaded relief from four lights with a faint elevation tint under the contours, cut to the scan footprint; areas inside the footprint without ground are hatched; the footprint is outlined; and the highest and lowest measured ground are marked. A side panel (right of the map on a landscape sheet, below it on a portrait one) carries the legend, an elevation ramp with a histogram, the scale, the north arrow, a data block, the hold-out accuracy rows and the readiness and evidence lines. Classic draws the earlier sheet, byte for byte.
+- A true-north arrow on the Light and Dark map sheets of a projected CRS, turned by the angle between grid north and true north at the map centre and labelled with it. A georeferenced sheet whose CRS has no projection definition here keeps the Grid N arrow, and a local frame says that north is unknown.
+- The contour SVG download uses the style last chosen for the map sheet, with the relief embedded as an image.
+- The contour deliverable README states which vertical CRS its DTM GeoTIFF carries, or why it carries none, as the DEM package README does.
+
 ## [0.7.2-alpha.1] - 2026-11-17
 
 A development cut on the way to v0.7.2. It carries no DOI, and its test figures

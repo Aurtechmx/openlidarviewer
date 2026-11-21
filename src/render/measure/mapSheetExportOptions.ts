@@ -22,6 +22,16 @@ export const SHEET_OPTIONS: ReadonlyArray<{ value: SheetSize; label: string }> =
   { value: 'a3', label: 'A3' },
 ];
 
+/**
+ * Sheet styles offered in the dialog, Light first and the default. Classic is
+ * the sepia sheet without relief that every earlier version drew.
+ */
+export const STYLE_OPTIONS: ReadonlyArray<{ value: 'light' | 'dark' | 'classic'; label: string }> = [
+  { value: 'light', label: 'Light, with shaded relief' },
+  { value: 'dark', label: 'Dark, with shaded relief (for screens)' },
+  { value: 'classic', label: 'Classic, lines only' },
+];
+
 /** Orientation choices offered in the dialog. */
 export const ORIENTATION_OPTIONS: ReadonlyArray<{ value: SheetOrientation; label: string }> = [
   { value: 'portrait', label: 'Portrait' },

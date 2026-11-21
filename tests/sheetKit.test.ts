@@ -51,6 +51,8 @@ describe('sheet tokens', () => {
       }
       expect(contrastRatio(t.contourLabel, t.paper)).toBeGreaterThanOrEqual(4.5);
       expect(contrastRatio(t.accent, t.panel)).toBeGreaterThanOrEqual(3);
+      expect(contrastRatio(t.warn, t.panel)).toBeGreaterThanOrEqual(4.5);
+      expect(contrastRatio(t.warn, t.paper)).toBeGreaterThanOrEqual(4.5);
     });
   }
 

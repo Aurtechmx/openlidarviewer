@@ -1,7 +1,7 @@
-import { test, expect, type Page } from '@playwright/test';
+import { test, expect, type Locator, type Page } from '@playwright/test';
 import { readFileSync } from 'node:fs';
 import { inflateSync } from 'node:zlib';
-import { PDFDocument } from 'pdf-lib';
+import { PDFDict, PDFDocument, PDFName, PDFRawStream } from 'pdf-lib';
 import { dropDenseGridUtmLas, dropTinyLas, openAnalysePage, openAnalysePanel, showWorkspaceMode } from './helpers';
 
 /**
@@ -72,6 +72,30 @@ async function sheetFacts(bytes: Buffer): Promise<{ pages: number; evidence: str
   };
 }
 
+/** Base font names and image count of a PDF, read through pdf-lib (object streams included). */
+async function pdfResources(bytes: Buffer): Promise<{ fonts: string[]; images: number }> {
+  const doc = await PDFDocument.load(bytes);
+  const fonts: string[] = [];
+  let images = 0;
+  for (const [, obj] of doc.context.enumerateIndirectObjects()) {
+    const dict = obj instanceof PDFRawStream ? obj.dict : obj instanceof PDFDict ? obj : null;
+    if (!dict) continue;
+    const type = dict.get(PDFName.of('Type'));
+    const sub = dict.get(PDFName.of('Subtype'));
+    if (type === PDFName.of('Font')) {
+      const base = dict.get(PDFName.of('BaseFont'));
+      if (base instanceof PDFName) fonts.push(base.decodeText());
+    }
+    if (sub === PDFName.of('Image')) images++;
+  }
+  return { fonts, images };
+}
+
+/** The map sheet dialog's style picker: the select offering Classic. */
+function styleSelect(dialog: Locator) {
+  return dialog.locator('select', { has: dialog.page().locator('option[value="classic"]') });
+}
+
 function contourGroup(page: Page) {
   return page.locator('.olv-export-product-group[data-product="contours"]');
 }
@@ -94,6 +118,9 @@ test('Export mode: the contour map sheet button downloads the PDF', async ({ pag
 
   const dialog = page.locator('.olv-modal[role="dialog"]');
   await expect(dialog).toBeVisible({ timeout: 20_000 });
+  // Classic draws with the standard PDF fonts, whose text this test can read
+  // back from the content streams. The choice carries to the Studio export below.
+  await styleSelect(dialog).selectOption('classic');
   const [download] = await Promise.all([
     page.waitForEvent('download', { timeout: 60_000 }),
     dialog.getByRole('button', { name: 'Export PDF' }).click(),
@@ -127,6 +154,38 @@ test('Export mode: the contour map sheet button downloads the PDF', async ({ pag
   expect(lane.deliverable).toContain('Deliverable - Custom');
   expect(lane.deliverable).toEqual(viaStudio.deliverable);
   expect(Math.abs(studioBytes.length - bytes.length)).toBeLessThan(bytes.length * 0.005);
+});
+
+test('Export mode: the map sheet defaults to Light, with the relief and the sheet fonts embedded', async ({ page }) => {
+  test.setTimeout(120_000);
+  await analyseFixture(page);
+  const group = await openContourLane(page);
+  await group.getByRole('button', { name: 'Contour map sheet (PDF)' }).click();
+  const dialog = page.locator('.olv-modal[role="dialog"]');
+  await expect(dialog).toBeVisible({ timeout: 20_000 });
+  await expect(styleSelect(dialog)).toHaveValue('light');
+  const [download] = await Promise.all([
+    page.waitForEvent('download', { timeout: 60_000 }),
+    dialog.getByRole('button', { name: 'Export PDF' }).click(),
+  ]);
+  const bytes = readFileSync((await download.path())!);
+  expect(bytes.subarray(0, 5).toString('latin1')).toBe('%PDF-');
+  // The relief raster and Figtree, loaded from the build's own font files.
+  const { fonts, images } = await pdfResources(bytes);
+  expect(images).toBeGreaterThan(0);
+  expect(fonts.some((f) => f.includes('Figtree'))).toBe(true);
+  expect(fonts).toContain('Courier');
+  await expect(dialog).toBeHidden();
+
+  // Dark is remembered for the next export in the session.
+  await group.getByRole('button', { name: 'Contour map sheet (PDF)' }).click();
+  await expect(dialog).toBeVisible({ timeout: 20_000 });
+  await styleSelect(dialog).selectOption('dark');
+  await Promise.all([page.waitForEvent('download', { timeout: 60_000 }), dialog.getByRole('button', { name: 'Export PDF' }).click()]);
+  await expect(dialog).toBeHidden();
+  await group.getByRole('button', { name: 'Contour map sheet (PDF)' }).click();
+  await expect(dialog).toBeVisible({ timeout: 20_000 });
+  await expect(styleSelect(dialog)).toHaveValue('dark');
 });
 
 test('Export mode: a map sheet that cannot be written says why', async ({ page }) => {

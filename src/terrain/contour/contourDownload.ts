@@ -19,6 +19,8 @@ import type { ContourLabel } from './labelPlacement';
 import { geojsonString, geojsonStringWgs84, GeoJsonFrameError, type ToLonLat } from './geojsonContours';
 import { epsgFromCrsLabel } from '../../export/crsIdentifier';
 import { svgContours } from './svgContours';
+import { svgContoursStyled, type SvgSheetRelief } from './svgContoursStyled';
+import type { SheetTokens } from '../../export/sheetKit/tokens';
 import { dxfContours, type DxfLinearUnit } from './dxfContours';
 import type { ExportProvenance } from '../export/exportProvenance';
 import { triggerDownload } from '../../io/download';
@@ -92,6 +94,12 @@ export function serializeContours(
     toLonLat?: ToLonLat;
     /** The lon/lat mapper's reason when `toLonLat` is absent, for the refusal. */
     lonLatRefusal?: string;
+    /**
+     * Light or Dark SVG: the style's tokens and, optionally, the relief and
+     * footprint in the LOCAL frame (shifted here with the contours). Absent
+     * keeps the Classic SVG. Other formats ignore it.
+     */
+    svgSheet?: { readonly tokens: SheetTokens; readonly relief?: SvgSheetRelief | null } | null;
   } = {},
 ): ContourFile {
   const basename = opts.basename ?? 'contours';
@@ -152,11 +160,34 @@ export function serializeContours(
       content = geojsonString(exportModel, true, opts.provenance);
       break;
     case 'svg':
-      content = svgContours(exportModel, {
-        labels: exportLabels,
-        provenance: opts.provenance,
-        unitLabel,
-      });
+      if (opts.svgSheet) {
+        const r = opts.svgSheet.relief ?? null;
+        const ox = origin?.x ?? 0, oy = origin?.y ?? 0;
+        const shift = (p: { x: number; y: number; z: number } | null) => (p ? { x: p.x + ox, y: p.y + oy, z: p.z } : null);
+        content = svgContoursStyled(exportModel, {
+          tokens: opts.svgSheet.tokens,
+          labels: exportLabels,
+          provenance: opts.provenance,
+          unitLabel,
+          spotHeightOffset: origin?.z ?? 0,
+          relief: r
+            ? {
+                href: r.href,
+                extent: { minX: r.extent.minX + ox, minY: r.extent.minY + oy, maxX: r.extent.maxX + ox, maxY: r.extent.maxY + oy },
+                outline: r.outline.map((ring) => ring.map(([x, y]) => [x + ox, y + oy] as const)),
+                hasHoles: r.hasHoles,
+                highest: shift(r.highest),
+                lowest: shift(r.lowest),
+              }
+            : null,
+        });
+      } else {
+        content = svgContours(exportModel, {
+          labels: exportLabels,
+          provenance: opts.provenance,
+          unitLabel,
+        });
+      }
       break;
     case 'dxf':
       // Labels ride into the DXF too (their own TEXT layer), shifted into the
