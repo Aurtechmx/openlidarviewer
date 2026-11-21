@@ -3,7 +3,8 @@
  * floor plan, the scan report themes and the Studio image card in the Light
  * and Dark sheet styles, and Classic left as it was.
  */
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi, afterEach } from 'vitest';
+import { fileURLToPath } from 'node:url';
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { PDFDocument, PDFDict, PDFName } from 'pdf-lib';
@@ -20,6 +21,7 @@ import { cardInk } from '../src/export/ScanReportRenderer';
 import { cssColor, sheetTokens } from '../src/export/sheetKit/tokens';
 import { sheetStyle, setSheetStyle } from '../src/export/sheetKit/sessionStyle';
 import { validatedDecision } from './helpers/exportDecisions';
+import { generateReport, DEFAULT_TEMPLATE_ID } from '../src/report';
 import type { AnalyseContoursResult } from '../src/terrain/contour/analyseContours';
 
 const loadFont = async (n: string): Promise<Uint8Array> => new Uint8Array(await readFile(join(process.cwd(), 'src', 'export', 'sheetKit', 'fonts', n)));
@@ -122,6 +124,13 @@ describe('floor plan', () => {
     expect(plain).toContain('fill="#ffffff"');
   });
 
+  it('Dark keeps every block on the style paper, the title block too', () => {
+    const svg = floorPlanSvg(floorPlan, { ...opts, style: 'dark' });
+    expect(svg).not.toContain('#ffffff');
+    const block = svg.match(/<g class="title-block"><rect [^>]*fill="([^"]+)"/);
+    expect(block?.[1]).toBe(cssColor(sheetTokens('dark').paper));
+  });
+
   it('Light and Dark lay the sheet on the style paper and ink', () => {
     for (const style of ['light', 'dark'] as const) {
       const t = sheetTokens(style);
@@ -133,6 +142,31 @@ describe('floor plan', () => {
 });
 
 describe('scan report and Studio image', () => {
+  afterEach(() => { vi.unstubAllGlobals(); });
+
+  it('the sheet themes render the scan report in Figtree', async () => {
+    vi.stubGlobal('fetch', async (u: URL | string) => new Response(await readFile(fileURLToPath(u))));
+    for (const theme of ['sheet-light', 'sheet-dark'] as const) {
+      const r = await generateReport({
+        templateId: DEFAULT_TEMPLATE_ID,
+        branding: { theme },
+        cover: { title: 'Scan Report', datasetName: 'scan.laz', exportedAt: '2026-05-28T15:30:00.000Z' },
+        datasetRows: [{ label: 'Points', value: '12,400,000' }, { label: 'Extent', value: '450 × 320 × 32 m' }],
+        visuals: [], annotations: [], measurements: [{ name: 'Crest', kind: 'distance', value: '125.8 m', pointCount: 2 }],
+      } as never);
+      const bytes = new Uint8Array(await r.blob.arrayBuffer());
+      expect((await fontNames(bytes)).some((n) => n.includes('Figtree'))).toBe(true);
+    }
+  }, 120_000);
+
+  it('caution and warning stay apart in both styles', () => {
+    for (const style of ['light', 'dark'] as const) {
+      const t = sheetTokens(style);
+      const d = Math.hypot(t.caution[0] - t.warn[0], t.caution[1] - t.warn[1], t.caution[2] - t.warn[2]);
+      expect(d).toBeGreaterThan(0.2);
+    }
+  });
+
   it('the sheet themes take the style tokens and the sheet fonts', () => {
     expect(isSheetTheme('sheet-dark')).toBe(true);
     expect(isSheetTheme('dark-inspection')).toBe(false);

@@ -703,7 +703,7 @@ function floorPlanSvgDrawn(model: FloorPlanModel, opts: FloorPlanSvgOptions): st
     const previewNote = `${dateTxt} · Floor plan preview — not for construction`;
     parts.push(
       `<g class="title-block">` +
-        `<rect x="${tbX}" y="${tbY}" width="${tbW}" height="${tbH}" fill="#ffffff" stroke="${INK}" stroke-width="1"/>` +
+        `<rect x="${tbX}" y="${tbY}" width="${tbW}" height="${tbH}" fill="${PAPER}" stroke="${INK}" stroke-width="1"/>` +
         `<line x1="${tbX}" y1="${tbY + 21}" x2="${tbX + tbW}" y2="${tbY + 21}" stroke="${INK}" stroke-width="0.55"/>` +
         `<text x="${tbX + 8}" y="${tbY + 15}" font-size="11" font-weight="bold" fill="${INK}">${escapeXml(tbTitle)}</text>` +
         `<text x="${tbX + 8}" y="${tbY + 34}" font-size="8.5" fill="${INK}">${escapeXml(overallTxt)}</text>` +

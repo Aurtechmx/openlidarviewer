@@ -146,7 +146,7 @@ async function buildTerrainReportPdfStyled(
   const bold = kit ? kit.fonts.sansBold : await doc.embedFont(StandardFonts.HelveticaBold);
   if (kit) {
     const k = kit, t = kit.tokens;
-    useInk({ INK: k.color(t.ink), DIM: k.color(t.dim), FRAME: k.color(t.outline), WARN: k.color(t.warn), GOOD: k.color(t.minor), CAUTION: k.color(t.index) });
+    useInk({ INK: k.color(t.ink), DIM: k.color(t.dim), FRAME: k.color(t.outline), WARN: k.color(t.warn), GOOD: k.color(t.good), CAUTION: k.color(t.caution) });
   }
 
   // ── paging state (the report can flow onto a second page) ────────────────
