@@ -2,9 +2,10 @@
  * sheetMeasurements.ts: the measurements a map sheet may draw, read from the
  * Measure controller with the panel's own figures and support grade.
  *
- * Only measurements on the analysed scan are offered: one that is unowned (a
- * scene of one scan leaves work unowned) or owned by that scan's stable layer
- * id. Work on another layer would land in the wrong place on this map.
+ * Only measurements on the analysed scan are offered: one owned by that scan's
+ * stable layer id, or an unowned one while the scene holds at most one static
+ * scan (a scene of one scan leaves work unowned). With several scans open an
+ * unowned measurement could belong to any of them, so it is left off.
  */
 import type { Viewer } from '../render/Viewer';
 import type { SheetMeasurement } from '../export/sheetKit/sheetMeasurement';
@@ -15,9 +16,10 @@ const RINGS = new Set(['area', 'volume', 'lasso']);
 export function sheetMeasurements(viewer: Viewer, analysedStableId: string | null): SheetMeasurement[] {
   const byId = new Map(viewer.measure.getSummaries().map((s) => [s.id, s]));
   const out: SheetMeasurement[] = [];
+  const oneScan = viewer.clouds().length <= 1;
   for (const m of viewer.measure.getMeasurements()) {
     const owner = m.owner?.layerId ?? null;
-    if (owner != null && owner !== analysedStableId) continue;
+    if (owner == null ? !oneScan : owner !== analysedStableId) continue;
     const s = byId.get(m.id);
     if (!s || m.points.length === 0) continue;
     const notes: string[] = [];

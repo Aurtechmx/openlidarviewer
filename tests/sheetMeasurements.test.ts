@@ -70,6 +70,17 @@ describe('measurements on the styled map sheet', () => {
     expect(t).toContain('2. Fence');
   }, 60_000);
 
+  it('says which listed marks fall outside the map', async () => {
+    const far = { id: 'c', title: 'Far', type: 'info', localPosition: { x: 5000, y: 5000, z: 0 }, createdAt: 0, updatedAt: 0 } as Annotation;
+    const farM: SheetMeasurement = { ...MS[2]!, name: 'Far line', points: [[4000, 4000, 0], [4100, 4000, 0]] };
+    const t = await texts(input({ style: 'light', includeAnnotations: true, annotations: [...ANN, far], measurements: [...MS, farM] }));
+    expect(t.join(' ')).toContain('1 annotation outside the map extent: listed, not plotted.');
+    expect(t.join(' ')).toContain('1 measurement outside the map extent: listed, not plotted.');
+    vi.restoreAllMocks();
+    const inside = await texts(input({ style: 'light', includeAnnotations: true, annotations: ANN, measurements: MS }));
+    expect(inside.join(' ')).not.toContain('outside the map extent');
+  }, 60_000);
+
   it('Classic leaves measurements off, byte for byte', async () => {
     const plain = await buildMapSheetPdf(input());
     expect(Buffer.from(await buildContourSheetPdf(input({ measurements: MS }))).equals(Buffer.from(plain))).toBe(true);
@@ -89,7 +100,8 @@ describe('measurements on the styled map sheet', () => {
 
 describe('sheetMeasurements', () => {
   const m = (id: string, owner?: string): Measurement => ({ id, kind: 'distance', name: id, points: [[0, 0, 0], [1, 0, 0]], ...(owner ? { owner: { layerId: owner, frame: 'source-local' } } : {}) } as Measurement);
-  const viewer = (ms: Measurement[]) => ({
+  const viewer = (ms: Measurement[], scans = 1) => ({
+    clouds: () => Array.from({ length: scans }, () => ({})),
     measure: {
       getMeasurements: () => ms,
       getSummaries: () => ms.map((x) => ({ id: x.id, name: x.name, kind: x.kind, value: '1.00 m', trust: { grade: 'green', caption: 'Supported' } })),
@@ -100,6 +112,11 @@ describe('sheetMeasurements', () => {
     const out = sheetMeasurements(viewer([m('free'), m('mine', 'L1'), m('other', 'L2')]), 'L1');
     expect(out.map((x) => x.name)).toEqual(['free', 'mine']);
     expect(out[0]).toMatchObject({ value: '1.00 m', grade: 'green', support: 'Supported', closed: false });
+  });
+
+  it('leaves unowned work off when several scans are open', () => {
+    const out = sheetMeasurements(viewer([m('free'), m('mine', 'L1')], 2), 'L1');
+    expect(out.map((x) => x.name)).toEqual(['mine']);
   });
 });
 

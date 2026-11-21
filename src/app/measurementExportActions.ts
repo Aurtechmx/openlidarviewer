@@ -240,8 +240,12 @@ function solePlacedLayer(layers: readonly ExportLayer[], deps: MeasurementExport
  */
 interface MeasureSnapshot {
   readonly measurements: readonly Measurement[];
-  /** Each measurement's support grade and caption as the panel shows them, by id. */
-  readonly supportOf: ReadonlyMap<string, { readonly grade: string; readonly caption: string }>;
+  /**
+   * Each measurement's support grade and caption as the panel shows them, by
+   * id. Null when the view keeps no summaries; otherwise the export always
+   * carries the support columns, so its schema does not depend on the grades.
+   */
+  readonly supportOf: ReadonlyMap<string, { readonly grade: string; readonly caption: string }> | null;
   readonly worldUp: Vec3;
   /** Each measurement's own layer up, by id, read with the rest. */
   readonly upOf: ReadonlyMap<string, Vec3>;
@@ -269,8 +273,9 @@ function snapshotMeasure(measure: MeasureExportView): MeasureSnapshot {
     const r = measure.unitFrameOf?.(m).upRefusal;
     if (r) upRefusalOf.set(m.id, r);
   }
-  const supportOf = new Map<string, { grade: string; caption: string }>();
-  for (const s of measure.getSummaries?.() ?? []) if (s.trust) supportOf.set(s.id, { grade: s.trust.grade, caption: s.trust.caption });
+  const summaries = measure.getSummaries?.();
+  const supportOf = summaries ? new Map<string, { grade: string; caption: string }>() : null;
+  for (const s of summaries ?? []) if (s.trust) supportOf?.set(s.id, { grade: s.trust.grade, caption: s.trust.caption });
   return {
     measurements,
     supportOf,
@@ -467,7 +472,7 @@ export async function exportMeasurementsFile(
     // frame is unverified for a stronger reason: no scalar could make it metres.
     unitsVerified: owned ? owned.unitsVerified : snap.unitsVerified,
     lonLat,
-    supportOf: snap.supportOf.size > 0 ? (m) => snap.supportOf.get(m.id) ?? null : undefined,
+    supportOf: snap.supportOf ? ((map) => (m: Measurement) => map.get(m.id) ?? null)(snap.supportOf) : undefined,
     provenance: {
       generatedAt,
       source: stems.length > 0 ? stems.join('+') : null,
