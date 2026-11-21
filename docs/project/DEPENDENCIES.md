@@ -58,7 +58,7 @@ These ship in the deploy archive.
 | laz-perf | ^0.0.7 | 0.0.7 | Apache-2.0 |
 | pdf-lib | ^1.17.1 | 1.17.1 | MIT |
 | proj4 | ^2.23.0 | 2.23.0 | MIT |
-| three | ^0.186.1 | 0.186.1 | MIT |
+| three | ^0.187.0 | 0.187.0 | MIT |
 
 ## Direct development dependencies
 
@@ -72,7 +72,7 @@ Build, test, docs, and mutation tooling. None reaches the deployed app.
 | @stryker-mutator/core | ^10.1.1 | 10.1.1 | Apache-2.0 |
 | @stryker-mutator/vitest-runner | ^10.1.1 | 10.1.1 | Apache-2.0 |
 | @types/proj4 | ^2.19.0 | 2.19.0 | MIT |
-| @types/three | ^0.186.0 | 0.186.0 | MIT |
+| @types/three | ^0.187.0 | 0.187.0 | MIT |
 | @vitest/coverage-v8 | ^5.0.5 | 5.0.5 | MIT |
 | rollup-plugin-visualizer | ^7.1.3 | 7.1.3 | MIT |
 | typescript | ~7.0.2 | 7.0.2 | Apache-2.0 |

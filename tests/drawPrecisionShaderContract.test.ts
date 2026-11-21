@@ -29,10 +29,12 @@ function walk(dir: string, out: string[] = []): string[] {
 }
 
 describe('three.js (the version the mapping was verified against)', () => {
-  // 0.186.0 was read in full; 0.186.1 (the lockfile version) passed every
-  // content pin below in CI. Any other version needs the evidence re-read.
+  // 0.186.0 was read in full and 0.186.1 passed every content pin below in CI.
+  // 0.187.0 (the lockfile version) was read again: only the vec3 to vec4
+  // conversion's source changed, and it still emits vec4(p, 1.0). Any other
+  // version needs the evidence re-read.
   it('is a version the mapping was verified against', () => {
-    expect(['0.186.0', '0.186.1']).toContain(JSON.parse(read('node_modules/three/package.json')).version);
+    expect(['0.186.0', '0.186.1', '0.187.0']).toContain(JSON.parse(read('node_modules/three/package.json')).version);
   });
 
   it('PointsNodeMaterial computes the view position as modelViewMatrix * vec3(positionNode)', () => {
@@ -45,7 +47,9 @@ describe('three.js (the version the mapping was verified against)', () => {
 
   it('a mat4 times a vec3 is emitted as mat4 * vec4(p, 1.0)', () => {
     const src = read(`${THREE_SRC}/nodes/core/NodeBuilder.js`);
-    expect(src).toContain("return `${ this.getType( toType ) }( ${ this.format( snippet, fromType, 'vec3' ) }, 1.0 )`;");
+    expect(src).toContain("return `${ this.getType( toType ) }( ${ this.format( snippet, fromType, vectorType ) }, ${ this.generateConst( componentType, componentType === 'bool' ? true : 1 ) } )`;");
+    // A float constant prints as 1.0, so the vec4 is vec4(p, 1.0).
+    expect(src).toContain("if ( type === 'float' ) return _toFloat( value );");
   });
 
   it('modelViewMatrix resolves to the context matrix, which highPrecision sets to the CPU-composed uniform', () => {

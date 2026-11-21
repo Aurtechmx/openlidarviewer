@@ -26,7 +26,7 @@ only the direct entry points.
 
 | Package | Declared range | Resolved | License | Upstream |
 | --- | --- | --- | --- | --- |
-| three | ^0.186.1 | 0.186.1 | MIT | https://github.com/mrdoob/three.js |
+| three | ^0.187.0 | 0.187.0 | MIT | https://github.com/mrdoob/three.js |
 | @loaders.gl/core | ^4.5.4 | 4.5.4 | MIT | https://github.com/visgl/loaders.gl |
 | @loaders.gl/gltf | ^4.5.4 | 4.5.4 | MIT | https://github.com/visgl/loaders.gl |
 | @loaders.gl/obj | ^4.5.4 | 4.5.4 | MIT | https://github.com/visgl/loaders.gl |
@@ -166,7 +166,7 @@ notices are included below.
 | vitepress | 1.6.4 | 1.6.4 | MIT | https://github.com/vuejs/vitepress |
 | vite-plugin-javascript-obfuscator | ^3.1.0 | 3.1.0 | MIT | https://github.com/elmesutupu/vite-plugin-javascript-obfuscator |
 | @playwright/test | ^1.65.0 | 1.65.0 | Apache-2.0 | https://github.com/microsoft/playwright |
-| @types/three | ^0.186.0 | 0.186.0 | MIT | https://github.com/DefinitelyTyped/DefinitelyTyped |
+| @types/three | ^0.187.0 | 0.187.0 | MIT | https://github.com/DefinitelyTyped/DefinitelyTyped |
 | rollup-plugin-visualizer | ^7.1.3 | 7.1.3 | MIT | https://github.com/btd/rollup-plugin-visualizer |
 | @vitest/coverage-v8 | ^5.0.5 | 5.0.5 | MIT | https://github.com/vitest-dev/vitest |
 | @stryker-mutator/core | ^10.1.1 | 10.1.1 | Apache-2.0 | https://github.com/stryker-mutator/stryker-js |
@@ -847,7 +847,7 @@ Licence: MIT. Text: T17.
 
 - Copyright (c) 2014, Mike Adair, Richard Greenwood, Didier Richard, Stephen Irons, Olivier Terral and Calvin Metcalf
 
-#### three 0.186.1
+#### three 0.187.0
 
 Licence: MIT. Text: T18.
 
@@ -1799,7 +1799,7 @@ Copyright (c) 2014, Mike Adair, Richard Greenwood, Didier Richard, Stephen Irons
 
 #### T18: MIT
 
-Applies to: three 0.186.1.
+Applies to: three 0.187.0.
 
 ```
 The MIT License
