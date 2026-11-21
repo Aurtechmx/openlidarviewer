@@ -43,6 +43,7 @@ export type ScientificProduct =
   | 'contours-geojson-cartographic'
   | 'contours-dxf-cartographic'
   | 'contours-svg-cartographic'
+  | 'contours-png-cartographic'
   | 'dtm-raster'
   | 'deliverable-package'
   | 'terrain-intelligence-report';
@@ -75,6 +76,8 @@ export const SCIENTIFIC_EXPORTERS: readonly ScientificExporterRegistration[] = [
   // print line is stamped as such, so it shares the CONTOURS claim but is
   // registered distinctly so it can never be minted as exact analytical geometry.
   { exporterId: 'contour.svg.cartographic', product: 'contours-svg-cartographic', claimIds: ['CONTOURS-CARTOGRAPHIC', 'DTM'], requiresEvidenceDecision: true },
+  // The PNG is the SVG sheet drawn to pixels: the same cartographic claim.
+  { exporterId: 'contour.png.cartographic', product: 'contours-png-cartographic', claimIds: ['CONTOURS-CARTOGRAPHIC', 'DTM'], requiresEvidenceDecision: true },
   { exporterId: 'contour.dem', product: 'dtm-raster', claimIds: ['DTM'], requiresEvidenceDecision: true },
   { exporterId: 'contour.package', product: 'deliverable-package', claimIds: ['CONTOURS', 'CONTOURS-CARTOGRAPHIC', 'DTM'], requiresEvidenceDecision: true },
   // The terrain intelligence report presents the DTM-derived analysis (verdicts,

@@ -1,34 +1,17 @@
 /**
  * ContourMapExporter.ts
  *
- * Topographic-style contour lines drawn over the elevation raster.
+ * The Studio's "Contour Map" image mode. It is not registered and no control
+ * offers it (see `defaultExportRegistry` in ./index.ts): it renders the
+ * elevation raster, the same output as Height Map, and records the interval,
+ * labels, overlay and palette options in the card without drawing contour
+ * lines. The Labels and Overlay options have no effect on the pixels.
  *
- * **How it works:** the exporter renders an elevation-coloured raster
- * through the shared Studio pipeline (same path as Height Map), then
- * post-processes the captured PNG on the CPU to overlay contour lines
- * at the configured interval. The marching-cell algorithm walks the
- * raster's elevation channel (extracted from the colour-ramp lookup)
- * and draws line segments where the elevation crosses an integer
- * multiple of the interval.
- *
- * **Why post-process and not a shader?** Real-time WebGPU contour
- * extraction is a substantial post-pipeline addition with its own
- * uniforms, framebuffer reads, and resolution-dependent precision
- * trade-offs. CPU post-processing on the captured PNG is bounded:
- * the raster is at most a few thousand pixels per side, marching
- * runs O(w · h) once per export, and the visual quality matches
- * dedicated cartography tools — with the seam open for a future
- * shader-based upgrade if benchmarks ever justify it.
- *
- * **What ships:**
- *   1. Height-map raster underlay (always — contour lines need an
- *      elevation reference to draw against).
- *   2. Contour lines at the configured interval (default 5 m, with
- *      1 / 5 / 10 / 25 / 50 m presets the Studio panel can surface).
- *   3. Optional elevation labels on major contour lines.
- *   4. Overlay modes: `transparent` (lines only), `height-map`
- *      (lines over the elevation ramp), `rgb` (lines over the current
- *      RGB view — useful for orthomosaics).
+ * The contour map image users get is the Export mode's "Contour map (PNG)" and
+ * the Contour Studio's PNG: the contour SVG sheet, drawn from the terrain
+ * analysis, rendered to pixels (src/export/sheetKit/svgRaster.ts). This file
+ * stays so the mode's type and registry plumbing need not be rebuilt if a
+ * point-cloud contour image is added later.
  */
 
 import type {

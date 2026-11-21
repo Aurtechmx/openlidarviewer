@@ -58,6 +58,11 @@ beforeAll(() => {
 });
 afterEach(() => { vi.restoreAllMocks(); });
 
+/** The analysed grid with the test hole, in the shape the SVG sheet reads. */
+function holedDtm() {
+  return { ...r.dtm, coverage: relief.coverage };
+}
+
 function input(over: Partial<MapSheetInput> = {}): MapSheetInput {
   return {
     model: r.model, labels: r.labels, worldOrigin: { x: 412000, y: 4501000, z: 0 },
@@ -250,7 +255,7 @@ describe('relief model', () => {
 
 describe('styled SVG', () => {
   it('embeds the relief, outlines the footprint and keeps the Classic SVG unchanged without a style', async () => {
-    const sheet = await buildSvgSheet('light', relief);
+    const sheet = await buildSvgSheet('light', holedDtm());
     const styled = serializeContours(r.model, 'svg', { labels: r.labels, svgSheet: sheet }).content;
     expect(styled).toContain('<image ');
     expect(styled).toContain('data:image/png;base64,');
@@ -260,11 +265,11 @@ describe('styled SVG', () => {
     const classic = serializeContours(r.model, 'svg', { labels: r.labels }).content;
     expect(classic).toBe(svgContours(r.model, { labels: r.labels, unitLabel: 'm' }));
     expect(classic).not.toContain('<image ');
-    expect(await buildSvgSheet('classic', relief)).toBeNull();
+    expect(await buildSvgSheet('classic', holedDtm())).toBeNull();
   });
 
   it('shifts the relief into the world frame with the contours', async () => {
-    const sheet = await buildSvgSheet('dark', relief);
+    const sheet = await buildSvgSheet('dark', holedDtm());
     const local = serializeContours(r.model, 'svg', { svgSheet: sheet }).content;
     const world = serializeContours(r.model, 'svg', { svgSheet: sheet, worldOrigin: { x: 1000, y: 2000, z: 0 } }).content;
     const img = (s: string): string => /<image x="([^"]+)" y="([^"]+)"/.exec(s)!.slice(1).join(',');

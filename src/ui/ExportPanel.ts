@@ -272,7 +272,10 @@ export interface ExportPanelCallbacks {
 }
 
 /** A product the Products lane can mark with {@link ExportPanel.select}. */
-export type ExportProduct = 'measurements' | 'findings' | 'terrain-dem' | 'contours';
+export type ExportProduct = 'measurements' | 'findings' | 'terrain-dem' | 'contours' | 'contours-png';
+
+/** The terrain lane's products: the DEM package, the contour map sheet PDF and its PNG. */
+export type TerrainLaneKind = 'dem' | 'contours' | 'contours-png';
 
 /** The terrain lane: whether a result exists, and the export run by its owner. */
 /** A terrain lane run: started, or refused with the reason to show. */
@@ -281,12 +284,12 @@ export type TerrainLaneOutcome = { readonly ok: boolean; readonly reason?: strin
 export interface TerrainExportsLane {
   ready(): boolean;
   /** Whether one product can run now, and why not. Absent means it can. */
-  status?(kind: 'dem' | 'contours'): { readonly ready: boolean; readonly reason: string };
+  status?(kind: TerrainLaneKind): { readonly ready: boolean; readonly reason: string };
   /**
    * Run one product. `btn` is the pressed button, for the busy state. A
    * refusal comes back with its reason; nothing returned means it started.
    */
-  run(kind: 'dem' | 'contours', btn?: HTMLButtonElement): TerrainLaneOutcome | Promise<TerrainLaneOutcome> | void;
+  run(kind: TerrainLaneKind, btn?: HTMLButtonElement): TerrainLaneOutcome | Promise<TerrainLaneOutcome> | void;
 }
 
 /** Re-exported: the scope step the conversion and quick exports share owns it. */
@@ -1106,6 +1109,8 @@ export class ExportPanel {
             'Save the elevation rasters with their metadata sheet.'),
           this._terrainProduct(terrain, 'contours', 'Contours', 'Contour map sheet (PDF)', 'contours',
             'Open the map sheet dialog for the contours.'),
+          this._terrainProduct(terrain, 'contours-png', 'Contour map image', 'Contour map (PNG)', 'contours-png',
+            'Save the contour map as an image, in the sheet style last chosen.'),
         );
       }
     }
@@ -1303,7 +1308,7 @@ export class ExportPanel {
    */
   private _terrainProduct(
     terrain: TerrainExportsLane,
-    kind: 'dem' | 'contours',
+    kind: TerrainLaneKind,
     groupLabel: string,
     label: string,
     product: ExportProduct,

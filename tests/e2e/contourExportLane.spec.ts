@@ -188,6 +188,25 @@ test('Export mode: the map sheet defaults to Light, with the relief and the shee
   await expect(styleSelect(dialog)).toHaveValue('dark');
 });
 
+test('Export mode: the contour map PNG draws the sheet and carries its provenance', async ({ page }) => {
+  test.setTimeout(120_000);
+  await analyseFixture(page);
+  await openContourLane(page);
+  const lane = page.locator('.olv-export-product-group[data-product="contours-png"]');
+  const btn = lane.getByRole('button', { name: 'Contour map (PNG)' });
+  await expect(btn).toBeEnabled();
+  const [download] = await Promise.all([page.waitForEvent('download', { timeout: 60_000 }), btn.click()]);
+  expect(download.suggestedFilename()).toMatch(/\.png$/);
+  const bytes = readFileSync((await download.path())!);
+  expect([...bytes.subarray(0, 8)]).toEqual([137, 80, 78, 71, 13, 10, 26, 10]);
+  // Twice the SVG sheet's own size: well over a thousand pixels across.
+  expect(bytes.readUInt32BE(16)).toBeGreaterThan(1000);
+  const latin = bytes.toString('latin1');
+  expect(latin).toContain('tEXtSoftware\0OpenLiDARViewer');
+  expect(latin).toContain('tEXtDescription\0');
+  await expect(lane.locator('.olv-export-fullres-hint')).toHaveText('');
+});
+
 test('Export mode: a map sheet that cannot be written says why', async ({ page }) => {
   test.setTimeout(120_000);
   await analyseFixture(page);

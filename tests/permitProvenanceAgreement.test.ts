@@ -19,7 +19,7 @@ import type { AnalyseContoursResult } from '../src/terrain/contour/analyseContou
 
 const EXPORTER: Record<ContourPermitProduct, string> = {
   pdf: 'contour.pdf', geojson: 'contour.geojson.cartographic', 'geojson-native': 'contour.geojson.analytical',
-  dxf: 'contour.dxf.cartographic', svg: 'contour.svg.cartographic', dem: 'contour.dem',
+  dxf: 'contour.dxf.cartographic', svg: 'contour.svg.cartographic', png: 'contour.png.cartographic', dem: 'contour.dem',
   'complete-package': 'contour.package', report: 'contour.report',
 };
 

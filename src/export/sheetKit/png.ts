@@ -20,7 +20,8 @@ function crc32(bytes: Uint8Array): number {
   return (c ^ 0xffffffff) >>> 0;
 }
 
-function chunk(type: string, data: Uint8Array): Uint8Array {
+/** One PNG chunk: length, type, data and CRC. */
+export function pngChunk(type: string, data: Uint8Array): Uint8Array {
   const out = new Uint8Array(12 + data.length);
   const dv = new DataView(out.buffer);
   dv.setUint32(0, data.length);
@@ -46,9 +47,9 @@ export async function encodePng(rgba: Uint8Array, w: number, h: number): Promise
   ihdr[8] = 8; ihdr[9] = 6; // 8-bit RGBA
   const parts = [
     new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10]),
-    chunk('IHDR', ihdr),
-    chunk('IDAT', await zlib(raw)),
-    chunk('IEND', new Uint8Array(0)),
+    pngChunk('IHDR', ihdr),
+    pngChunk('IDAT', await zlib(raw)),
+    pngChunk('IEND', new Uint8Array(0)),
   ];
   const out = new Uint8Array(parts.reduce((a, p) => a + p.length, 0));
   let o = 0;

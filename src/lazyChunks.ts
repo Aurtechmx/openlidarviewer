@@ -261,11 +261,14 @@ export const loadProfilePdf = () => import('./render/measure/profilePdf');
  */
 export const loadMapSheetPdf = () => import('./render/measure/mapSheetStyled');
 
+/** Load the SVG-to-PNG drawing step for the contour map PNG. */
+export const loadSvgRaster = () => import('./export/sheetKit/svgRaster');
+
 /** Load the Light / Dark SVG relief builder for the contour SVG download. */
 export const loadSvgSheet = () => import('./export/sheetKit/svgSheet');
 
-/** Load the true-north angle helper (pulls in proj4) for the styled map sheet. */
-export const loadSheetTrueNorth = () => import('./export/sheetKit/trueNorth');
+/** Load the styled map sheet's relief and true-north inputs (pulls in proj4). */
+export const loadSheetInputs = () => import('./export/sheetKit/sheetInputs');
 
 /**
  * Load the DEM package builder (ASCII Grid + GeoTIFF writers + ZIP store).

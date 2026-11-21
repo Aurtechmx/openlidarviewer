@@ -45,6 +45,7 @@ export type ContourPermitProduct =
   | 'geojson-native'
   | 'dxf'
   | 'svg'
+  | 'png'
   | 'dem'
   | 'complete-package'
   | 'report';
@@ -231,6 +232,8 @@ export function exporterIdForContourProduct(
       return 'contour.dxf.cartographic';
     case 'svg':
       return 'contour.svg.cartographic';
+    case 'png':
+      return 'contour.png.cartographic';
     case 'dem':
       return 'contour.dem';
     case 'complete-package':
