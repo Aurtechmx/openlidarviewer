@@ -490,3 +490,14 @@ describe('profile section seam — truncated static source', () => {
     expect('coverageNote' in series).toBe(false);
   });
 });
+
+describe('profile section seam — the request can name its own up axis', () => {
+  it('cuts the corridor along the requested up, not the scene one', () => {
+    // 3 m off the line sideways in a Z-up scene, 3 m above it in a Y-up one.
+    const seam = createProfileSectionSeam(deps({ layers: () => [layer({ id: 'y-up', points: [5, 3, 0] })] }));
+    expect(seam.section({ a: A, b: B, corridorWidth: 1 })!.points.count).toBe(0);
+    const own = seam.section({ a: A, b: B, corridorWidth: 1, up: [0, 1, 0] })!;
+    expect(own.points.count).toBe(1);
+    expect(Array.from(own.points.height)).toEqual([3]);
+  });
+});

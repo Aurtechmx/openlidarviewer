@@ -227,6 +227,8 @@ export interface ProfileSectionRequest {
   readonly b: Vec3;
   /** Corridor half-width; null/absent takes the same auto width the series does. */
   readonly corridorWidth?: number | null;
+  /** The up axis to cut the corridor along: the measurement's own frame. Absent takes the scene's. */
+  readonly up?: Vec3 | null;
   /** Points examined between yields. */
   readonly chunkSize?: number;
   readonly signal?: { readonly aborted: boolean };
@@ -581,7 +583,7 @@ export function createProfileSectionSeam(deps: ProfileSectionSeamDeps): ProfileS
     req: ProfileSectionRequest,
   ): Generator<number, ProfileSectionResult | null, void> {
     const token = generation.next();
-    const frame = buildProfileFrame(req.a, req.b, deps.worldUp());
+    const frame = buildProfileFrame(req.a, req.b, req.up ?? deps.worldUp());
     const band = resolveCorridorHalfWidth(
       frame.horizontalLength,
       req.corridorWidth,

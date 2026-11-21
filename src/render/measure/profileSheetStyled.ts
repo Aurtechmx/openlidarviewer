@@ -311,7 +311,7 @@ export async function drawStyledProfileSheet(page: PDFPage, s: StyledProfileShee
     for (let v = 0; v <= len * s.k + 1e-9; v += step) {
       const x = mapX(v / s.k);
       page.drawLine({ start: { x, y: gradeBottom }, end: { x, y: gradeBottom - 3 }, thickness: 0.5, color: ink });
-      const lbl = v.toFixed(0);
+      const lbl = v.toFixed(step >= 1 ? 0 : Math.min(3, Math.ceil(-Math.log10(step) - 1e-9)));
       sheetText(page, lbl, x - sheetTextWidth(lbl, f.mono, SHEET_TYPE.tick, f) / 2, gradeBottom - 11, { font: f.mono, size: SHEET_TYPE.tick, color: t.dim }, f);
     }
   }
@@ -376,7 +376,9 @@ function drawProfilePanel(page: PDFPage, s: StyledProfileSheet, box: { x: number
   // Data.
   y = drawSectionLabel(page, 'Data', x, y - 4, w, t, f);
   y = drawDataBlock(page, s.data, x, y, w, t, f, 74, 0.95);
-  // Notes: every line, smaller if it must be, never cut.
+  // Notes: every line, smaller if it must be. Past the smallest size, the
+  // notes that fit are printed whole and the rest are left to the next sheet,
+  // which carries every general note.
   y = drawSectionLabel(page, 'Notes', x, y + 4, w, t, f);
   const room = y - (box.y + 4);
   let nsz = SHEET_TYPE.note;
@@ -384,6 +386,7 @@ function drawProfilePanel(page: PDFPage, s: StyledProfileSheet, box: { x: number
   let wrapped = linesAt(nsz);
   const heightAt = (ls: string[][], sz: number): number => ls.reduce((a, l) => a + l.length, 0) * sz * 1.32 + ls.length * 2;
   while (nsz > 5 && heightAt(wrapped, nsz) > room) { nsz -= 0.25; wrapped = linesAt(nsz); }
+  wrapped = notesForRoom(wrapped, room, (ls) => heightAt(ls, nsz));
   y += nsz;
   for (const note of wrapped) {
     for (const ln of note) {
@@ -392,6 +395,19 @@ function drawProfilePanel(page: PDFPage, s: StyledProfileSheet, box: { x: number
     }
     y -= 2;
   }
+}
+
+/**
+ * The wrapped notes that fit `room`, whole. When some do not, the last line
+ * says which notes continue on the next sheet, which carries them all.
+ */
+export function notesForRoom(wrapped: string[][], room: number, height: (ls: string[][]) => number): string[][] {
+  if (height(wrapped) <= room) return wrapped;
+  const all = wrapped.length;
+  const tail = (n: number): string => (n + 1 === all ? `Note ${all} continues on the next sheet.` : `Notes ${n + 1} to ${all} continue on the next sheet.`);
+  let fit = all - 1;
+  while (fit > 0 && height([...wrapped.slice(0, fit), [tail(fit)]]) > room) fit--;
+  return [...wrapped.slice(0, fit), [tail(fit)]];
 }
 
 /** Grade over {@link GRADE_BASE_M} ahead of each station; null where a gap breaks it. */

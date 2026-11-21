@@ -127,8 +127,8 @@ import type { MountedRangeWorkbench } from './rangeWorkbenchMount';
 import type { MountedFeatureCandidates } from './featureCandidatesMount';
 import type { PointCloud } from '../model/PointCloud';
 import { openModal, type ModalHandle } from './Modal';
-/** The Export mode terrain lane's products (ExportPanel's TerrainLaneKind). */
-type TerrainLaneKind = 'dem' | 'contours' | 'contours-png';
+/** ExportPanel's TerrainLaneKind, restated to keep the edge out; a type test keeps them equal. */
+export type TerrainLaneKind = 'dem' | 'contours' | 'contours-png';
 import type { SheetSize, SheetOrientation, MapSheetPurpose } from '../render/measure/mapSheetPdf';
 import type { Annotation } from '../render/annotate/types';
 import {

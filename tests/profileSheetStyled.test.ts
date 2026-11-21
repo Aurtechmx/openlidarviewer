@@ -7,7 +7,7 @@ import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { PDFDocument, PDFPage } from 'pdf-lib';
 import { buildProfilePdf, type ProfilePdfInput } from '../src/render/measure/profilePdf';
-import { countsPerStation, gradeSeries, indexCrossings, profileInkFor } from '../src/render/measure/profileSheetStyled';
+import { countsPerStation, gradeSeries, indexCrossings, notesForRoom, profileInkFor } from '../src/render/measure/profileSheetStyled';
 import { DEFAULT_PROFILE_IMAGE_THEME, profileImageThemeFor } from '../src/render/measure/profileSectionImage';
 import { returnsAgree, sampleFrame } from '../src/app/profileSheetExtras';
 import { sheetTokens } from '../src/export/sheetKit/tokens';
@@ -105,6 +105,12 @@ describe('the styled sheet one', () => {
     expect(bare).not.toContain('Crosses an index contour');
   }, 120_000);
 
+  it('labels the chainage ticks of a short profile with the decimals the step needs', async () => {
+    const short: ProfileChartSample[] = Array.from({ length: 31 }, (_, i) => ({ distance: i * 0.1, height: 100 + 0.05 * i, count: 20 }));
+    const { texts } = await drawn(base({ style: 'light', samples: short, extras: null }));
+    expect(texts).toEqual(expect.arrayContaining(['0.2', '1.0', '2.8', '3.0']));
+  }, 120_000);
+
   it('still draws when the font files cannot be loaded', async () => {
     const bytes = await buildProfilePdf(base({ style: 'light', loadFont: async () => { throw new Error('offline'); } }));
     expect((await PDFDocument.load(bytes)).getPageCount()).toBeGreaterThan(1);
@@ -139,6 +145,20 @@ describe('figures', () => {
   it('the section image matches the style, and Classic keeps its own ink', () => {
     expect(profileImageThemeFor('classic')).toBe(DEFAULT_PROFILE_IMAGE_THEME);
     expect(profileImageThemeFor('dark').pageBackground).toBe('#0c1116');
+  });
+});
+
+describe('notesForRoom', () => {
+  const h = (ls: string[][]): number => ls.reduce((a, l) => a + l.length, 0) * 10;
+  const notes = [['1. a'], ['2. b', 'b2'], ['3. c'], ['4. d']];
+  it('keeps every note when they fit', () => {
+    expect(notesForRoom(notes, 50, h)).toEqual(notes);
+  });
+  it('prints the notes that fit whole and says which continue', () => {
+    const out = notesForRoom(notes, 40, h);
+    expect(out).toEqual([['1. a'], ['2. b', 'b2'], ['Notes 3 to 4 continue on the next sheet.']]);
+    expect(h(out)).toBeLessThanOrEqual(40);
+    expect(notesForRoom([...notes.slice(0, 3), ['4. d', 'd2']], 50, h).at(-1)).toEqual(['Note 4 continues on the next sheet.']);
   });
 });
 

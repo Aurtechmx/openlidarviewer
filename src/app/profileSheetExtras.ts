@@ -106,7 +106,8 @@ export async function profileSheetExtras(
   // The corridor's returns, walked in chunks so a dense corridor does not hold the page.
   let returns: ProfileSheetReturns | null = null;
   const half = summary.profileCorridorWidthM != null ? summary.profileCorridorWidthM / frame.f : null;
-  const walk = viewer.profileSeam.sectionChunks({ a: m.points[0]!, b: m.points[1]!, corridorWidth: half });
+  // Cut along the profile's own up axis, as its samples were, not the active layer's.
+  const walk = viewer.profileSeam.sectionChunks({ a: m.points[0]!, b: m.points[1]!, corridorWidth: half, up: unit.up ?? null });
   let step = walk.next();
   while (!step.done) {
     await nextTick();
