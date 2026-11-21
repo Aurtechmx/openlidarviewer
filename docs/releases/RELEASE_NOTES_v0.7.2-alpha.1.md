@@ -14,9 +14,20 @@ change.
 These notes list what changed since v0.7.0 (tag `v0.7.0`). Volumes and terrain
 outputs now state only the evidence that covers them, figures and deliverables
 from a sampled load say so, Flow Pulse exports a drainage sheet PDF, scenes clean up after close and replace, exports name the scan they
-were measured on, startup and large loads are faster, and the file loaders
-handle more malformed input. The license is AGPL-3.0-only; releases through
+were measured on, large scans reach their final display sample sooner, the
+file loaders handle more malformed input, and the drawn exports have Light and
+Dark sheet styles. The license is AGPL-3.0-only; releases through
 v0.6.6 remain available under MIT.
+
+## Export sheets
+
+- The export dialogs offer three sheet styles: Light (the default), Dark and Classic. The choice holds for the session and is not saved. Classic keeps the earlier layout of each export.
+- Contour map sheet PDF: shaded relief with a faint elevation tint under the contours, cut to the scan footprint, with areas inside the footprint that have no ground hatched, the footprint outlined, and the highest and lowest measured ground marked. A side panel holds the legend, the accuracy figures and the notes.
+- A true-north arrow on the Light and Dark map sheets of a projected CRS, turned by the meridian convergence at the map centre and labelled with the angle.
+- Measurements and annotations on the Light and Dark map sheets: measurements are lettered on the map and listed with their figure and support grade, and annotations are numbered and grouped by type. The measurement CSV and GeoJSON carry the support grade.
+- Contour map PNG, from the Export tab's terrain lane and from Contour Studio: the contour SVG sheet at twice its size, with the export provenance in the PNG text chunks. The contour SVG takes the chosen style, with the relief embedded.
+- Profile sheet: a plan strip along the line from the terrain analysis of the same scan, the corridor's returns under the ground line, the gaps in ground returns, index contour crossings, ground returns per metre and a grade chart over 10 m of chainage, beside the length, relief, gradient and steepest-grade figures. The plan strip is left out, with the reason, when the scan has no terrain run.
+- The terrain report, space report, Contour Studio PDF and scan report PDF take the chosen style's paper, ink and typefaces, with their content and page count unchanged. The floor plan SVG and the Studio image card take the style's colours.
 
 ## Scene lifecycle
 
@@ -25,7 +36,7 @@ v0.6.6 remain available under MIT.
 - A session imported before its scan no longer leaves its clip box behind when the session is dropped or refused.
 - Opening a file while static layers and a stream are both open asks only about the stream's work, and Replace removes only that work. Saved views stay.
 - Replacing one stream with another resets the Streaming panel's grade figures and pause state, and cancels a grade still running on the old stream.
-- Removing the active layer refreshes the class legend, colour chips, point count and scan report for the layer that takes its place. The class filter resets to all visible.
+- Removing the active layer refreshes the class legend, colour chips, point count and scan report for the layer that takes its place. The class filter stays on; a layer with no classes clears it and says so.
 - Removing the last static layer beside an open stream keeps the stream instead of resetting the app to the empty state, and both Close and a replacing open disarm the lasso so its button stays in sync.
 - A cancelled or failed COPC, EPT or out-of-core open returns the panels to their earlier state.
 - A stream opened beside a static scan in a different coordinate system shows a notice.
@@ -189,4 +200,4 @@ The register holds 41 claims, 18 of them at E4 and none at E5. Since v0.7.0, MEA
 
 ## Known limits
 
-[KNOWN_LIMITATIONS_v0.7.1.md](KNOWN_LIMITATIONS_v0.7.1.md) lists the limits of this build. The validation record is [VALIDATION_REPORT_v0.7.1.md](VALIDATION_REPORT_v0.7.1.md), and the dated history is in [CHANGELOG.md](../../CHANGELOG.md).
+[KNOWN_LIMITATIONS_v0.7.2-alpha.1.md](KNOWN_LIMITATIONS_v0.7.2-alpha.1.md) lists the limits of this build. The validation record is [VALIDATION_REPORT_v0.7.2-alpha.1.md](VALIDATION_REPORT_v0.7.2-alpha.1.md), and the dated history is in [CHANGELOG.md](../../CHANGELOG.md).
