@@ -20,11 +20,12 @@ It is a diagnostic. The render loop never calls it.
 
 ## Paths and findings
 
-Read in three.js 0.186.0; three.js line numbers below are for that version.
-The lockfile resolves 0.186.1, and every quoted excerpt is pinned by content in
-`tests/drawPrecisionShaderContract.test.ts`, which passes against 0.186.1 in
-CI. The test also fails on any three.js version other than these two, and on
-a change to the OLV side.
+Read in three.js 0.186.0 and again in 0.187.0, the version the lockfile
+resolves; three.js line numbers below are for 0.187.0. Every quoted excerpt is
+pinned by content in `tests/drawPrecisionShaderContract.test.ts`, and
+`tests/viewerRenderBootstrap.test.ts` checks the compiled WGSL and GLSL vertex
+stages for the same expression. The contract test fails on any three.js
+version not listed in it, and on a change to the OLV side.
 
 | Path | Used for | Expression | State |
 |---|---|---|---|
@@ -50,7 +51,8 @@ a change to the OLV side.
    (`three/src/materials/nodes/PointsNodeMaterial.js:86`) returns
    `modelViewMatrix.mul( vec3( positionNode || positionLocal ) ).xyz`. A mat4
    times a vec3 is emitted as `mat4 * vec4(p, 1.0)`
-   (`three/src/nodes/core/NodeBuilder.js:3424`).
+   (`three/src/nodes/core/NodeBuilder.js:3865`; 0.187 writes the 1.0 through
+   `generateConst`, which prints a float constant as `1.0`).
 4. The model-view is composed in binary64 and narrowed once.
    `modelViewMatrix` resolves to `builder.context.modelViewMatrix` when it is
    set (`three/src/nodes/accessors/ModelNode.js:130`); otherwise to
@@ -58,7 +60,7 @@ a change to the OLV side.
    (`ModelNode.js:142`), which would NOT match. OLV creates the renderer with
    `renderer.highPrecision = true` (`src/render/viewerRenderBootstrap.ts:111`),
    whose setter assigns `highpModelViewMatrix` to the context
-   (`three/src/renderers/common/Renderer.js:1266`). That uniform is computed per
+   (`three/src/renderers/common/Renderer.js:1545`). That uniform is computed per
    object as `object.modelViewMatrix.multiplyMatrices( camera.matrixWorldInverse,
    object.matrixWorld )` in JavaScript numbers (`ModelNode.js:190`) and narrowed
    to binary32 when it is uploaded. The mesh's world matrix carries the layer

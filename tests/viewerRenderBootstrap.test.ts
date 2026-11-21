@@ -69,6 +69,12 @@ function pointVertexShader(core: ReturnType<typeof buildCore>): string {
       vertexShader: string;
     };
   };
+  // three.js 0.187 asks the renderer's binding cache to share bind groups while
+  // building. A renderer that was never initialised has no cache (null), and
+  // sharing only reuses BindGroup objects, so it does not change the emitted
+  // shader. Building without the cache matches what 0.186 did here.
+  const r = core.renderer as unknown as { _bindings?: unknown };
+  if (r._bindings === null) r._bindings = undefined;
   const builder = backend.createNodeBuilder(mesh, core.renderer);
   builder.scene = core.scene;
   builder.material = material;
@@ -170,6 +176,8 @@ describe('viewer render core precision', () => {
     expect(vertex).toMatch(/modelViewMatrix = highpModelViewMatrix;/);
     // No stage multiplies the float32 camera view matrix by the world matrix.
     expect(vertex).not.toMatch(/cameraViewMatrix\s*\*/);
+    // The centre goes through one mat4 times vec4(p, 1.0).
+    expect(vertex).toMatch(/modelViewMatrix \* vec4(<f32>)?\( nodeAttribute0, 1\.0 \)/);
   });
 
   it('keeps a far layer within 5 micrometres of where it is, at any offset', () => {
