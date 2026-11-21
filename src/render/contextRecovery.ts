@@ -1,8 +1,8 @@
 /**
  * contextRecovery.ts — redraw the scene after a WebGL context is restored.
  *
- * three.js r186's WebGPURenderer cannot come back from a lost WebGL context in
- * place. Its WebGL backend listens for `webglcontextlost` only; the renderer's
+ * three.js's WebGPURenderer (r186 and r187) cannot come back from a lost WebGL
+ * context in place. Its WebGL backend listens for `webglcontextlost` only; the renderer's
  * loss handler sets `_isDeviceLost`, which nothing ever clears, and every
  * render, compute and clear returns early on it. Its backend caches (buffers,
  * programs, VAOs, textures, the GL state mirror) still hold handles from the
@@ -48,11 +48,21 @@ export interface ContextRecoveryHost {
   adopt(core: RecoverableCore): void;
 }
 
-/** Private three.js r186 internals retiring touches, each optional. */
+/** A geometry the renderer tracks: the event target its dispose listener sits on. */
+interface TrackedGeometry {
+  removeEventListener(type: 'dispose', listener: () => void): void;
+}
+
+/** Private three.js r187 internals retiring touches, each optional. */
 interface RendererInternals {
   _animation?: { dispose(): void };
   _objects?: { _renderObjects?: Set<{ onDispose: () => void }>; dispose(): void };
-  _geometries?: { dispose(): void };
+  _geometries?: {
+    /** Weak references to every geometry with GPU data (three r187). */
+    _tracked?: Set<WeakRef<TrackedGeometry>>;
+    get?(geometry: TrackedGeometry): { onDispose?: () => void };
+    dispose(): void;
+  };
   backend?: { _onContextLost?: EventListener };
   domElement?: EventTarget;
 }
@@ -68,7 +78,22 @@ export function retireRenderer(renderer: THREE.WebGPURenderer): void {
   // which frees pipelines and bindings through the backend. Blank that first.
   for (const ro of r._objects?._renderObjects ?? []) ro.onDispose = () => {};
   r._objects?.dispose();
-  r._geometries?.dispose();
+  // From r187, Geometries.dispose() runs each tracked geometry's dispose
+  // handler, which deletes its GL buffers. Those handles belong to the lost
+  // context, and the restored one reports every delete as an error. Take the
+  // handlers off the geometries and empty the set first, so dispose() deletes
+  // nothing and only drops the renderer's own records.
+  const geometries = r._geometries;
+  if (geometries?._tracked && geometries.get) {
+    for (const ref of geometries._tracked) {
+      const geometry = ref.deref();
+      if (!geometry) continue;
+      const handler = geometries.get(geometry).onDispose;
+      if (handler) geometry.removeEventListener('dispose', handler);
+    }
+    geometries._tracked.clear();
+  }
+  geometries?.dispose();
   const onLost = r.backend?._onContextLost;
   if (onLost) r.domElement?.removeEventListener('webglcontextlost', onLost);
 }

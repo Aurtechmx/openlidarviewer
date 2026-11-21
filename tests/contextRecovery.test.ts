@@ -132,6 +132,53 @@ describe('context recovery', () => {
   });
 });
 
+describe('retiring the lost renderer deletes no GL object', () => {
+  /** Three r187's Geometries shape: weakly tracked geometries whose dispose handler deletes GPU buffers. */
+  function trackedGeometries() {
+    const deleted: string[] = [];
+    const data = new Map<THREE.BufferGeometry, { onDispose: () => void }>();
+    const tracked = new Set<WeakRef<THREE.BufferGeometry>>();
+    const add = (g: THREE.BufferGeometry) => {
+      const d = { onDispose: () => { deleted.push(g.name); g.removeEventListener('dispose', d.onDispose); tracked.delete(ref); } };
+      const ref = new WeakRef(g);
+      data.set(g, d);
+      g.addEventListener('dispose', d.onDispose);
+      tracked.add(ref);
+    };
+    const geometries = {
+      _tracked: tracked,
+      get: (g: THREE.BufferGeometry) => data.get(g)!,
+      // As r187: run every tracked geometry's handler, then clear.
+      dispose: vi.fn(() => { for (const ref of [...tracked]) { const g = ref.deref(); if (g) data.get(g)!.onDispose(); } tracked.clear(); }),
+    };
+    return { geometries, add, deleted };
+  }
+
+  it('drops the tracked geometries without running their GPU delete, and frees their listeners', () => {
+    const { geometries, add, deleted } = trackedGeometries();
+    const a = new THREE.BufferGeometry(); a.name = 'a';
+    const b = new THREE.BufferGeometry(); b.name = 'b';
+    add(a); add(b);
+    const f = fakeRenderer();
+    (f.r as unknown as { _geometries: unknown })._geometries = geometries;
+    retireRenderer(f.asRenderer);
+    expect(geometries.dispose).toHaveBeenCalled();
+    expect(deleted).toEqual([]);
+    expect(geometries._tracked.size).toBe(0);
+    // A later dispose of the geometry no longer reaches the retired renderer.
+    a.dispose(); b.dispose();
+    expect(deleted).toEqual([]);
+  });
+
+  it('the installed three.js Geometries still has the shape retiring relies on', async () => {
+    const { readFileSync } = await import('node:fs');
+    const src = readFileSync('node_modules/three/src/renderers/common/Geometries.js', 'utf8');
+    expect(src).toContain('this._tracked = new Set();');
+    expect(src).toMatch(/dispose\(\) \{\s*for \( const ref of this\._tracked \)/);
+    expect(src).toContain("geometry.addEventListener( 'dispose', geometryData.onDispose );");
+  });
+});
+
 describe('recoverViewer surface', () => {
   it('names fields and methods the Viewer class actually has', async () => {
     const { readFileSync } = await import('node:fs');
