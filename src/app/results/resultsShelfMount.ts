@@ -13,7 +13,7 @@
  */
 
 import type { WorkspaceRoute } from '../workspace/workspaceRouter';
-import type { TerrainExportsLane } from '../../ui/ExportPanel';
+import type { TerrainExportsLane, TerrainLaneKind } from '../../ui/ExportPanel';
 import {
   cachedDtmAim,
   contourSource,
@@ -58,9 +58,9 @@ type Pose = { position: [number, number, number]; target: [number, number, numbe
 type TerrainOutcome = { readonly ok: true } | { readonly ok: false; readonly reason: string };
 
 export interface ShelfTerrainPanel extends TerrainReader {
-  exportProductStatus(kind: 'dem' | 'contours'): { readonly ready: boolean; readonly reason: string };
+  exportProductStatus(kind: TerrainLaneKind): { readonly ready: boolean; readonly reason: string };
   exportProduct(
-    kind: 'dem' | 'contours',
+    kind: TerrainLaneKind,
     srcBtn?: HTMLButtonElement,
   ): TerrainOutcome | Promise<TerrainOutcome>;
 }
@@ -161,9 +161,9 @@ export function mountResultsShelf(
   // The Export mode's terrain lane runs the Analyse panel's own exports.
   const terrainExports: TerrainExportsLane = {
     ready: () => !!src.terrain()?.resultRef(),
-    status: (kind: 'dem' | 'contours') =>
+    status: (kind: TerrainLaneKind) =>
       src.terrain()?.exportProductStatus(kind) ?? { ready: false, reason: 'Run a terrain analysis first.' },
-    run: (kind: 'dem' | 'contours', btn?: HTMLButtonElement) =>
+    run: (kind: TerrainLaneKind, btn?: HTMLButtonElement) =>
       src.terrain()?.exportProduct(kind, btn) ?? { ok: false, reason: 'Run a terrain analysis first.' },
   };
   exportPanel?.setTerrainExports(terrainExports);

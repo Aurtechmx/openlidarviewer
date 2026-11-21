@@ -36,6 +36,7 @@ import { el } from './dom';
  */
 export type ContourStudioExportProduct =
   | 'pdf'
+  | 'png'
   | 'geojson'
   | 'geojson-native'
   | 'dxf'
@@ -258,7 +259,7 @@ function renderExportBar(
     label: string;
     items: ReadonlyArray<{ id: ContourStudioExportProduct; label: string }>;
   }> = [
-    { label: 'Map sheet', items: [{ id: 'pdf', label: 'PDF' }] },
+    { label: 'Map sheet', items: [{ id: 'pdf', label: 'PDF' }, { id: 'png', label: 'PNG' }] },
     { label: 'Vector', items: [
       { id: 'geojson', label: 'GeoJSON' },
       { id: 'dxf', label: 'DXF' },

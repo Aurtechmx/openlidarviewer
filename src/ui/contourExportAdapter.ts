@@ -28,8 +28,8 @@ import { permitStamp } from '../export/permitStamp';
 import type { ExportPermitStamp } from '../terrain/export/exportProvenance';
 import { announcePolite } from './politeAnnounce';
 
-/** The vector contour formats the adapter dispatches to the host. */
-export type ContourVectorFormat = Extract<ContourStudioExportProduct, 'geojson' | 'dxf' | 'svg'>;
+/** The contour file formats the adapter dispatches to the host's file exporter (the PNG is the SVG sheet drawn to pixels). */
+export type ContourVectorFormat = Extract<ContourStudioExportProduct, 'geojson' | 'dxf' | 'svg' | 'png'>;
 
 /**
  * What the adapter needs the host (AnalysePanel) to provide. Every method that
@@ -177,7 +177,7 @@ export class ContourExportAdapter {
       this.host.openMapPdf(permit, intent);
       return { ok: true };
     }
-    // geojson | dxf | svg → the gated vector exporter, stamped self-describing.
+    // geojson | dxf | svg | png → the gated file exporter, stamped self-describing.
     const fmt = product as ContourVectorFormat;
     void this._busy(srcBtn, () =>
       this.host.exportVector(fmt, {

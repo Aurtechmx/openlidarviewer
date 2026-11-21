@@ -116,13 +116,13 @@ describe('renderContourStudioWorkspace', () => {
     expect(blocked.allText()).toContain('Blocked');
   });
 
-  it('renders the grouped premium export section (keep-all: 7 products)', () => {
+  it('renders the grouped premium export section (keep-all: 8 products)', () => {
     const c = createContourStudioController();
     const onExport = vi.fn();
     const root = renderContourStudioWorkspace({ controller: c, launch: AVAILABLE, onExport }) as unknown as FakeEl;
     const btns = root.byClass('olv-cs-export-btn');
-    // Vector (GeoJSON, DXF, SVG) + Map sheet (PDF) + Data package (DEM, Complete) + Report.
-    expect(btns).toHaveLength(7);
+    // Map sheet (PDF, PNG) + Vector (GeoJSON, DXF, SVG) + Data package (DEM, Complete) + Report.
+    expect(btns).toHaveLength(8);
     // Gestalt grouping is present (labelled groups).
     expect(root.byClass('olv-cs-export-group-label')).toHaveLength(4);
   });
@@ -140,7 +140,7 @@ describe('renderContourStudioWorkspace', () => {
     const onExport = vi.fn();
     const root = renderContourStudioWorkspace({ controller: c, launch: UNAVAILABLE, onExport }) as unknown as FakeEl;
     const btns = root.byClass('olv-cs-export-btn');
-    expect(btns).toHaveLength(7);
+    expect(btns).toHaveLength(8);
     expect(btns.every((b) => b.disabled)).toBe(true);
     btns[0].click();
     expect(onExport).not.toHaveBeenCalled();

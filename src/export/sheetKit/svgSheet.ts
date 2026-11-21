@@ -3,7 +3,8 @@
  * with the raster encoded as a PNG data URL. Asynchronous because PNG
  * encoding is; the SVG writer itself stays synchronous and pure.
  */
-import { contourSheetRaster, contourSheetRelief, type SheetReliefInput } from './contourSheetModel';
+import { contourSheetRaster, contourSheetRelief } from './contourSheetModel';
+import { reliefFromDtm, type SheetDtm } from './sheetInputs';
 import { encodePng } from './png';
 import { sheetTokens, type SheetStyle, type SheetTokens } from './tokens';
 
@@ -28,11 +29,12 @@ function base64(bytes: Uint8Array): string {
   return btoa(bin);
 }
 
-/** The SVG sheet for `style` over `grid` (local frame). Null for Classic. */
-export async function buildSvgSheet(style: SheetStyle, grid: SheetReliefInput | null): Promise<SvgSheet | null> {
+/** The SVG sheet for `style` over the analysed grid (local frame). Null for Classic. */
+export async function buildSvgSheet(style: SheetStyle, dtm: SheetDtm | null): Promise<SvgSheet | null> {
   if (style === 'classic') return null;
   const tokens = sheetTokens(style);
-  if (!grid) return { tokens, relief: null };
+  if (!dtm) return { tokens, relief: null };
+  const grid = reliefFromDtm(dtm);
   const rel = contourSheetRelief(grid);
   if (!rel.extent) return { tokens, relief: null };
   const e = rel.extent;

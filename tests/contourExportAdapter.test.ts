@@ -172,6 +172,15 @@ describe('ContourExportAdapter — gated dispatch', () => {
     expect(calls.vector[0].permit.exporterId).toBe('contour.svg.cartographic');
   });
 
+  it('sends the PNG to the file exporter with its own cartographic permit', () => {
+    const { host, calls } = fakeHost();
+    new ContourExportAdapter(host).handle('png', btn(), intent(), okFrame);
+    expect(calls.vector).toHaveLength(1);
+    expect(calls.vector[0].fmt).toBe('png');
+    expect(calls.vector[0].permit.exporterId).toBe('contour.png.cartographic');
+    expect(calls.mapPdf).toHaveLength(0);
+  });
+
   it('sends the map PDF to openMapPdf with a granted permit (no vector export)', () => {
     const { host, calls } = fakeHost();
     new ContourExportAdapter(host).handle('pdf', btn(), intent(), okFrame);

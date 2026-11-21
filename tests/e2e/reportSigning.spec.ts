@@ -110,7 +110,7 @@ test('Show and Copy expose only the public key', async ({ page, context }) => {
   await expect(panel.locator('[data-testid="report-sign-status"]')).toHaveText(/copied|could not copy/i);
 });
 
-test('the verifier reads signer, supplied key and tampering plainly', async ({ page }) => {
+test('the verifier reads signer, supplied key and tampering plainly', async ({ page, browserName }) => {
   const panel = await prepare(page);
   await createKey(panel);
   await panel.locator('[data-testid="report-sign-show"]').click();
@@ -124,7 +124,14 @@ test('the verifier reads signer, supplied key and tampering plainly', async ({ p
   await expect(page.locator('[data-testid="report-verify-valid"]')).toBeVisible();
 
   // The dialog is labelled and the page has no new accessibility violations.
-  const axe = await new AxeBuilder({ page }).include('[data-testid="report-verify"]').analyze();
+  // Firefox's content process sometimes crashes while axe runs its
+  // aria-dialog-name rule on this dialog (about 1 run in 10 under parallel
+  // load, with or without the backdrop blur). That rule is skipped on Firefox;
+  // the accessible name is checked directly on every engine.
+  await expect(dialog).toHaveAccessibleName('Digest matches the contents');
+  const builder = new AxeBuilder({ page }).include('[data-testid="report-verify"]');
+  if (browserName === 'firefox') builder.disableRules(['aria-dialog-name']);
+  const axe = await builder.analyze();
   expect(axe.violations.filter((v) => v.impact === 'critical' || v.impact === 'serious')).toEqual([]);
 
   const input = page.locator('[data-testid="report-verify-trusted-key"]');

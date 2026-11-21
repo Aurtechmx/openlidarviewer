@@ -10,6 +10,7 @@ The format is based on Keep a Changelog and the project follows Semantic Version
 - A true-north arrow on the Light and Dark map sheets of a projected CRS, turned by the angle between grid north and true north at the map centre and labelled with it. A georeferenced sheet whose CRS has no projection definition here keeps the Grid N arrow, and a local frame says that north is unknown.
 - The contour SVG download uses the style last chosen for the map sheet, with the relief embedded as an image.
 - The contour deliverable README states which vertical CRS its DTM GeoTIFF carries, or why it carries none, as the DEM package README does.
+- A contour map PNG: "Contour map (PNG)" in the Export mode's terrain lane and a PNG button beside the map sheet PDF in Contour Studio. It is the contour SVG sheet in the style last chosen, drawn at twice its size, with the export provenance in the PNG's text chunks. It passes the same evidence permit as the other contour files.
 
 ## [0.7.2-alpha.1] - 2026-11-17
 

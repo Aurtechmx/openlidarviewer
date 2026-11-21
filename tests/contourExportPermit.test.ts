@@ -24,6 +24,7 @@ const ALL_PRODUCTS: ContourPermitProduct[] = [
   'geojson',
   'dxf',
   'svg',
+  'png',
   'dem',
   'complete-package',
   'report',
@@ -59,6 +60,9 @@ describe('contour export permit — registration (no bypass)', () => {
     expect(exporterIdForContourProduct('geojson', false)).toBe('contour.geojson.cartographic');
     // SVG is always cartographic — the analytical flag can't promote it.
     expect(exporterIdForContourProduct('svg', true)).toBe('contour.svg.cartographic');
+    // The PNG is the SVG sheet drawn to pixels: cartographic, never analytical.
+    expect(exporterIdForContourProduct('png', true)).toBe('contour.png.cartographic');
+    expect(exporterRegistration('contour.png.cartographic')?.claimIds).toEqual(exporterRegistration('contour.svg.cartographic')?.claimIds);
   });
 });
 

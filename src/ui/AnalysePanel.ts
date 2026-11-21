@@ -105,8 +105,9 @@ import {
 import type { ContourGeneralizeMode } from '../terrain/contour/terrainAwareTolerance';
 import {
   loadMapSheetPdf,
-  loadSheetTrueNorth,
+  loadSheetInputs,
   loadSvgSheet,
+  loadSvgRaster,
   loadDemPackage,
   loadTerrainReportPdf,
   loadContourDownload,
@@ -126,6 +127,7 @@ import type { MountedRangeWorkbench } from './rangeWorkbenchMount';
 import type { MountedFeatureCandidates } from './featureCandidatesMount';
 import type { PointCloud } from '../model/PointCloud';
 import { openModal, type ModalHandle } from './Modal';
+import type { TerrainLaneKind } from './ExportPanel';
 import type { SheetSize, SheetOrientation, MapSheetPurpose } from '../render/measure/mapSheetPdf';
 import type { Annotation } from '../render/annotate/types';
 import {
@@ -627,8 +629,6 @@ export class AnalysePanel {
    * each attempt.
    */
   private _contourPdfPurpose: MapSheetPurpose | null = null;
-  /** The Export mode's map sheet press while its chunk loads, so a second press joins it. */
-  private _lanePdfPending: Promise<TerrainProductOutcome> | null = null;
   /** The button the Export mode pressed, for the dialog to return focus to. */
   private _lanePdfTrigger: HTMLButtonElement | null = null;
   /**
@@ -1175,13 +1175,13 @@ export class AnalysePanel {
    * Whether one of the panel's own exports can run from elsewhere (the Export
    * mode's terrain lane), and the panel's own words for why not.
    */
-  exportProductStatus(kind: 'dem' | 'contours'): TerrainProductStatus {
+  exportProductStatus(kind: TerrainLaneKind): TerrainProductStatus {
     const r = this._result;
     if (!r) return { ready: false, reason: NO_TERRAIN_RESULT };
     const breach = this._freshnessBreach();
     if (breach !== null) return { ready: false, reason: FRESHNESS_REFUSALS[breach] };
     const btn = this._studioExportBtns.get(kind === 'dem' ? 'package' : 'pdf');
-    if (kind === 'contours') {
+    if (kind !== 'dem') {
       const blocked = contourExportBlockReason(r);
       if (blocked) return { ready: false, reason: blocked };
     }
@@ -1200,7 +1200,7 @@ export class AnalysePanel {
    * it shows the busy or blocked state. Refusals say why.
    */
   exportProduct(
-    kind: 'dem' | 'contours',
+    kind: TerrainLaneKind,
     srcBtn?: HTMLButtonElement,
   ): TerrainProductOutcome | Promise<TerrainProductOutcome> {
     const status = this.exportProductStatus(kind);
@@ -1212,11 +1212,22 @@ export class AnalysePanel {
         (err: unknown): TerrainProductOutcome => ({ ok: false, reason: classifyLoadError(err) === 'stale-chunk' ? chunkFailureText('DEM export') : 'DEM export failed. Try again.' }),
       );
     }
-    if (this._lanePdfPending) return this._lanePdfPending;
+    return this._laneStudioExport(kind === 'contours-png' ? 'png' : 'pdf', srcBtn);
+  }
+
+  /**
+   * The map sheet PDF or the contour map PNG from the Export mode's terrain
+   * lane, run as the Studio product with the Studio's starting intent, so it
+   * passes the same permit and carries the same purpose and provenance as a
+   * Studio export of the same scan. The PDF opens its dialog; the PNG writes.
+   */
+  private _laneStudioExport(product: 'pdf' | 'png', srcBtn?: HTMLButtonElement): Promise<TerrainProductOutcome> | TerrainProductOutcome {
+    const pending = this._lanePending.get(product);
+    if (pending) return pending;
     const result = this._result;
     const ctx = this._contourFrame;
     if (!result || !ctx) return { ok: false, reason: MAP_SHEET_OPEN_STUDIO };
-    const btn = srcBtn ?? this._studioExportBtns.get('pdf');
+    const btn = srcBtn ?? this._studioExportBtns.get(product);
     if (!btn) return { ok: false, reason: MAP_SHEET_OPEN_STUDIO };
     const before = this._styleSnapshot();
     const run = loadContourStudioMount()
@@ -1225,9 +1236,11 @@ export class AnalysePanel {
         // for the previous run, and say so.
         if (this._result !== result || this._contourFrame !== ctx) return { ok: false, reason: ANALYSIS_CHANGED };
         const { intent, frame } = defaultContourExport(result, ctx);
-        this._lanePdfTrigger = btn;
-        this._lanePdfStyleRestore = before;
-        const decision = await this._handleContourStudioExport('pdf', btn, intent, frame);
+        if (product === 'pdf') {
+          this._lanePdfTrigger = btn;
+          this._lanePdfStyleRestore = before;
+        }
+        const decision = await this._handleContourStudioExport(product, btn, intent, frame);
         // The dialog takes both when it opens; nothing else may inherit them.
         this._lanePdfTrigger = null;
         this._lanePdfStyleRestore = null;
@@ -1238,13 +1251,15 @@ export class AnalysePanel {
       })
       .catch((err: unknown): TerrainProductOutcome => {
         // eslint-disable-next-line no-console
-        console.error('OpenLiDARViewer: map sheet export could not start.', err);
+        console.error('OpenLiDARViewer: contour export from the Export mode could not start.', err);
         return { ok: false, reason: MAP_SHEET_LOAD_FAILED };
       })
-      .finally(() => { this._lanePdfPending = null; });
-    this._lanePdfPending = run;
+      .finally(() => { this._lanePending.delete(product); });
+    this._lanePending.set(product, run);
     return run;
   }
+  /** The Export mode's press while its chunk loads, per product, so a second press joins it. */
+  private readonly _lanePending = new Map<'pdf' | 'png', Promise<TerrainProductOutcome>>();
 
   private _styleSnapshot(): ContourStyleSnapshot {
     return { style: this._contourStyle, tol: this._contourGeneralizeToleranceCells, mode: this._contourGeneralizeMode };
@@ -2420,7 +2435,7 @@ export class AnalysePanel {
    * still refuses a blocked export so no misleading file is ever written.
    */
   private async _exportContourFormat(
-    fmt: ContourFormat,
+    fmt: ContourFormat | 'png',
     btn?: HTMLButtonElement,
     provenanceExtra?: {
       contourMethod?: string;
@@ -2495,16 +2510,10 @@ export class AnalysePanel {
       const worldOrigin = mapCtx?.worldOrigin ?? null;
       // The SVG follows the sheet style last chosen for the map PDF (Light by
       // default), with the analysed grid as its relief.
-      let svgSheet = null;
-      if (fmt === 'svg' && lastStyle !== 'classic') {
-        const d = result.dtm;
-        const { buildSvgSheet } = await loadSvgSheet();
-        svgSheet = await buildSvgSheet(lastStyle, {
-          cols: d.cols, rows: d.rows, cellSize: d.cellSizeM, originX: d.originH1, originY: d.originH2, z: d.z, coverage: d.coverage,
-        });
-      }
-      triggerBrowserDownload(
-        serializeContours(result.model, fmt, {
+      // The PNG is that SVG sheet drawn to pixels.
+      const svgLike = fmt === 'svg' || fmt === 'png';
+      const svgSheet = svgLike ? await (await loadSvgSheet()).buildSvgSheet(lastStyle, result.dtm) : null;
+      const file = serializeContours(result.model, svgLike ? 'svg' : fmt, {
           svgSheet,
           basename,
           labels: result.labels,
@@ -2514,8 +2523,14 @@ export class AnalysePanel {
           // foot-based CRS stamps feet instead of the metre default.
           linearUnit: mapCtx?.linearUnit,
           toLonLat: mapCtx?.worldToLonLat, lonLatRefusal: mapCtx?.lonLatRefusal,
-        }),
-      );
+        });
+      if (fmt === 'png') {
+        const { contourMapPng } = await loadSvgRaster();
+        const png = await contourMapPng(file, provenance, basename, __APP_VERSION__);
+        triggerDownload(png.blob, png.filename);
+      } else {
+        triggerBrowserDownload(file);
+      }
     } catch (err) {
       // eslint-disable-next-line no-console
       console.error('OpenLiDARViewer: contour export failed.', err);
@@ -3324,22 +3339,7 @@ export class AnalysePanel {
     const { buildContourSheetPdf } = await loadMapSheetPdf();
     // The styled sheets draw the analysed grid under the contours and, on a
     // projected CRS, a true-north arrow. Classic reads neither.
-    const styled = opts.style !== 'classic';
-    const d = result.dtm;
-    const relief = styled
-      ? { cols: d.cols, rows: d.rows, cellSize: d.cellSizeM, originX: d.originH1, originY: d.originH2, z: d.z, coverage: d.coverage }
-      : null;
-    let trueNorth: { convergenceDeg: number } | null = null;
-    const bb = result.model.bbox;
-    if (styled && bb && opts.worldOrigin) {
-      const { trueNorthFromGridDeg } = await loadSheetTrueNorth();
-      const deg = trueNorthFromGridDeg(
-        d.horizontalEpsg ?? null,
-        (bb.minX + bb.maxX) / 2 + opts.worldOrigin.x,
-        (bb.minY + bb.maxY) / 2 + opts.worldOrigin.y,
-      );
-      if (deg != null) trueNorth = { convergenceDeg: deg };
-    }
+    const { relief, trueNorth } = (await loadSheetInputs()).styledSheetInputs(opts.style, result.dtm, result.model.bbox, opts.worldOrigin);
     const { buildExportProvenance, contourArtifactClaims } = await loadExportProvenance();
     // The unified provenance, from the SAME result the sheet plots.
     const provenance = buildExportProvenance(result, {
