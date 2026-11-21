@@ -20,6 +20,8 @@
 import type { ProfilePdfInput } from '../render/measure/profilePdf';
 import type { MeasurementSummary } from '../render/measure/MeasureController';
 import type { DisplayUnits } from '../render/measure/format';
+import type { ProfileSheetExtras } from '../render/measure/profileSheetStyled';
+import { sheetStyle } from '../render/measure/mapSheetExportOptions';
 
 /** CRS provenance for the sheet header, as the host resolves it at export time. */
 export interface ProfileExportContext {
@@ -71,4 +73,18 @@ export function profilePdfInputFor(
     pickedRiseM: s.profilePickedRiseM ?? null,
     generatedAt: options.generatedAt,
   };
+}
+
+/**
+ * `input` in the sheet style chosen for the session. A Light or Dark sheet
+ * also draws the returns, plan strip and index crossings `extras` can read;
+ * a failure to read them leaves them off rather than failing the export.
+ */
+export async function withSheetStyle(
+  input: ProfilePdfInput,
+  extras: () => Promise<ProfileSheetExtras | null>,
+): Promise<ProfilePdfInput> {
+  const style = sheetStyle();
+  if (style === 'classic') return { ...input, style };
+  return { ...input, style, extras: await extras().catch(() => null) };
 }

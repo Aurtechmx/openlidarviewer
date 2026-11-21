@@ -148,6 +148,10 @@ import {
 // Metres → feet, single-sourced: this module used to keep its own copy.
 import { FT_PER_M as FEET_PER_METRE } from '../../units/units';
 import { winAnsiSafe as sharedWinAnsiSafe } from '../../winAnsiText';
+import {
+  countsPerStation, drawFooter, drawPaper, drawStyledProfileSheet, embedSheetFonts, profileInkFor as inkFor, sheetTokens,
+  type ProfileInk, type ProfileSheetExtras, type SheetStyle,
+} from './profileSheetStyled';
 
 
 export interface ProfilePdfInput {
@@ -232,6 +236,11 @@ export interface ProfilePdfInput {
    * largest standard ratio that fits is used.
    */
   readonly verticalExaggeration?: number | null;
+  /** Light or Dark: see profileSheetStyled.ts. Classic, or none, is the set as before, byte for byte. */
+  readonly style?: SheetStyle;
+  /** What a styled sheet one draws beyond the ground line, and its font loader. Ignored by Classic. */
+  readonly extras?: ProfileSheetExtras | null;
+  readonly loadFont?: (name: string) => Promise<Uint8Array>;
 }
 
 /**
@@ -260,32 +269,32 @@ const M = 48;
  * station band against is only as trustworthy as the frame it was read from.
  * Nothing else on the sheet may be a 1pt horizontal line in this colour.
  */
-const INK = rgb(0.09, 0.11, 0.15);
-const INK_DIM = rgb(0.42, 0.46, 0.52);
+let INK = rgb(0.09, 0.11, 0.15);
+let INK_DIM = rgb(0.42, 0.46, 0.52);
 /**
  * Secondary table text: the item column, the engineering remarks, the grade
  * column of the schedule. Darker than `INK_DIM`, which is a pen for hairlines
  * and captions and is too light to set a column of 8.5pt prose a reader is
  * expected to actually read.
  */
-const INK_SOFT = rgb(0.3, 0.34, 0.4);
-const INK_MUTED = rgb(0.53, 0.57, 0.63);
-const GRID = rgb(0.83, 0.86, 0.9);
-const GRID_MINOR = rgb(0.91, 0.93, 0.95);
+let INK_SOFT = rgb(0.3, 0.34, 0.4);
+let INK_MUTED = rgb(0.53, 0.57, 0.63);
+let GRID = rgb(0.83, 0.86, 0.9);
+let GRID_MINOR = rgb(0.91, 0.93, 0.95);
 /**
  * The first of the two colours: the section itself. Darker than a screen blue
  * on purpose: engineering sheets are printed on mono devices, and this
  * converts to roughly 31% luminance, which still separates from the ground
  * tint (84%) and from paper.
  */
-const CURVE = rgb(0.05, 0.36, 0.56);
+let CURVE = rgb(0.05, 0.36, 0.56);
 /**
  * The ground under the section: a desaturated tint of the section colour, not
  * a colour of its own. It sits behind the data and must never compete with
  * the line drawn on top of it. About a 16% tint in greyscale, which every
  * printer renders as an unambiguous fill rather than as almost-paper.
  */
-const GROUND = rgb(0.78, 0.85, 0.91);
+let GROUND = rgb(0.78, 0.85, 0.91);
 /**
  * The second colour, and its only job: a cell of the station schedule, or of
  * the station band, that says `gap` — a station where nothing returned.
@@ -297,8 +306,8 @@ const GROUND = rgb(0.78, 0.85, 0.91);
  * (about 38% luminance) to stay a legible mark on a mono printer rather than
  * fading toward the paper the way a bright orange would.
  */
-const GAP_MARK = rgb(0.72, 0.31, 0.02);
-const RULE = rgb(0.7, 0.74, 0.8);
+let GAP_MARK = rgb(0.72, 0.31, 0.02);
+let RULE = rgb(0.7, 0.74, 0.8);
 
 /**
  * Type sizes, one constant per role, because a drawing that is readable in
@@ -319,6 +328,17 @@ const RULE = rgb(0.7, 0.74, 0.8);
  * the word rather than on the figure. Bold runs to roughly a sixth of the
  * words on a sheet; past about a fifth it stops meaning anything.
  */
+/** Notes-table row rule lift, pt: 0 for Classic; a styled build lifts it clear of the next row's letters. */
+let rowRuleLift = 0;
+
+const CLASSIC_INK: ProfileInk = { INK, INK_DIM, INK_SOFT, INK_MUTED, GRID, GRID_MINOR, CURVE, GROUND, GAP_MARK, RULE };
+
+/** Set the module's colours and rule lift; only around drawing with no await, so no build sees another's. */
+function useInk(k: ProfileInk, lift: number): void {
+  ({ INK, INK_DIM, INK_SOFT, INK_MUTED, GRID, GRID_MINOR, CURVE, GROUND, GAP_MARK, RULE } = k);
+  rowRuleLift = lift;
+}
+
 const T_TITLE = 18; // sheet title, bold
 const T_STAMP = 9; // generation stamp, top right
 const T_SCALE = 10; // the scale + exaggeration + print statement, bold
@@ -986,12 +1006,18 @@ export async function buildProfilePdf(input: ProfilePdfInput): Promise<Uint8Arra
   const infoStamp = pdfInfoDate(input.generatedAt);
   doc.setCreationDate(infoStamp);
   doc.setModificationDate(infoStamp);
-  const f: Faces = {
-    font: await doc.embedFont(StandardFonts.Helvetica),
-    bold: await doc.embedFont(StandardFonts.HelveticaBold),
-    mono: await doc.embedFont(StandardFonts.Courier),
-    monoBold: await doc.embedFont(StandardFonts.CourierBold),
-  };
+  // Light and Dark take the sheet kit's fonts; Classic embeds as it always did, so its bytes hold.
+  const tokens = input.style === 'light' || input.style === 'dark' ? sheetTokens(input.style) : null;
+  const styled = tokens != null;
+  const sheetFonts = tokens ? await embedSheetFonts(doc, input.loadFont) : null;
+  const f: Faces = sheetFonts
+    ? { font: sheetFonts.sans, bold: sheetFonts.sansBold, mono: sheetFonts.mono, monoBold: sheetFonts.monoBold }
+    : {
+        font: await doc.embedFont(StandardFonts.Helvetica),
+        bold: await doc.embedFont(StandardFonts.HelveticaBold),
+        mono: await doc.embedFont(StandardFonts.Courier),
+        monoBold: await doc.embedFont(StandardFonts.CourierBold),
+      };
 
   const stats = computeCivilProfileStats(input.samples);
   const when = input.generatedAt;
@@ -1073,347 +1099,392 @@ export async function buildProfilePdf(input: ProfilePdfInput): Promise<Uint8Arra
     notes,
   };
   const sheets: EmittedSheet[] = [];
+  const bare = (s: string) => s.replace(/\s+(m|ft)$/, '').replace(/%$/, '');
 
   // ── Sheet 1: the longitudinal profile ──────────────────────────────────
-  const page = doc.addPage([PAGE_W, PAGE_H]);
-  sheets.push({
-    page,
-    identity: {
-      sheetName: 'LONGITUDINAL PROFILE',
-      descriptor: 'Section along the measured alignment, with the station data band beneath it.',
-    },
-  });
-
-  // `Terrain Profile` is drawn as one string, untracked: it is how the
-  // sheet's own tests find sheet one.
-  const headerBot = drawSheetHeader(
-    page,
-    f,
-    'Terrain Profile',
-    `Generated ${when.toISOString().slice(0, 16).replace('T', ' ')} UTC`,
-  );
-
-  // Plot box (pdf coords, y up).
-  const plotLeft = M + AXIS_COL + STUB_W;
-  const plotRight = PAGE_W - M - 6;
-  const plotW = plotRight - plotLeft;
-  const scaleLineY = headerBot - 18;
-  const plotTopY = scaleLineY - 16; // y-up coordinate of the TOP edge
-  const plotH = 300;
-  const plotBotY = plotTopY - plotH;
-  // The band hangs off the bottom edge of the plot and shares its rules, so
-  // the two read as one drawing rather than as a chart above a table.
-  const bandTop = plotBotY - GRID_LABEL_STRIP;
-  const bandBot = bandTop - 3 * BAND_ROW_H;
-
   const len = stats.length;
   const minEl = stats.minElevation;
   const maxEl = stats.maxElevation;
   const span = stats.reliefSpan;
-
-  // The finite checks are a v0.4.5 crash guard: a corrupt sample (Infinity /
-  // NaN chainage or height) would otherwise pass `len > 0`, and the grid
-  // walks below — float accumulators — would loop forever building a PDF
-  // that never finishes. Corrupt geometry takes the honest "nothing to plot"
-  // branch instead.
-  if (
-    Number.isFinite(len) && len > 0 &&
-    minEl != null && maxEl != null && span != null &&
-    Number.isFinite(span) && span >= 0
-  ) {
-    // Standard print scales, chosen before anything is drawn: the drawing is
-    // made at exactly the scales the header states. The frame is as wide as
-    // the chainage at that scale, and the height axis is widened to round
-    // ticks with margin so no plotted value falls outside it.
-    const scales = chooseProfileScales({
-      lengthM: len,
-      minM: minEl,
-      maxM: maxEl,
-      plotWpt: plotW,
-      plotHpt: plotH,
-      k,
+  if (styled) {
+    // The Light or Dark sheet one, in the sheet kit's style.
+    const page = doc.addPage([PAGE_W, PAGE_H]);
+    sheets.push({
+      page,
+      identity: { sheetName: 'PROFILE', descriptor: 'Section along the measured alignment with its plan, station band and grade.' },
+    });
+    await drawStyledProfileSheet(page, {
+      doc, tokens: tokens!, fonts: sheetFonts!,
+      title: input.name?.trim() || 'Terrain profile',
+      subtitle: [projectName, input.corridorWidthM != null ? `corridor ${(input.corridorWidthM * k).toFixed(2)} ${unit} each side` : null]
+        .filter(Boolean).join(', '),
+      stations: stats.stations, lengthM: len, minM: minEl, maxM: maxEl, k, unit, heightWord,
       requestedExaggeration: input.verticalExaggeration ?? null,
+      formatStation: (c) => formatStation(c, system),
+      kpis: [
+        [`Length (${unit})`, bare(lenStr(len))],
+        [`Relief (${unit})`, stats.reliefSpan == null ? '-' : bare(reliefStr())],
+        ['Endpoint gradient (%)', bare(formatGradePercent(stats.meanGrade))],
+        [`Steepest over ${GRADE_BASE_M} m (%)`, baseGrade == null ? '-' : bare(formatGradePercent(baseGrade.grade))],
+      ],
+      data: [
+        { key: 'CRS', value: crsLabel ?? 'not georeferenced' },
+        { key: 'Vertical', value: heightWord + (datumKnown && input.verticalDatum ? `, ${input.verticalDatum}` : '') },
+        { key: 'Min / max', value: minEl == null || maxEl == null ? '-' : `${(minEl * k).toFixed(2)} / ${(maxEl * k).toFixed(2)} ${unit}` },
+        { key: 'Corridor', value: input.corridorWidthM != null ? `${(input.corridorWidthM * k).toFixed(2)} ${unit} each side` : 'auto' },
+        ...(input.extras?.returns ? [{ key: 'Returns', value: `${input.extras.returns.count.toLocaleString('en-US')} drawn` }] : []),
+        { key: 'Coverage', value: `${(stats.coverage * 100).toFixed(0)} % of stations` },
+        { key: 'Gaps', value: `${gapCount}` },
+      ],
+      notes,
+      groundLineLabel: legend.seriesName,
+      countsPerStation: countsPerStation(input.samples),
+      planMissingNote: input.extras?.plan ? null : 'not drawn: no terrain run gives a surface for this scan',
+      extras: input.extras ?? null,
     });
-    const drawW = scales.drawnWpt;
-    const drawRight = plotLeft + drawW;
-    const axisSpanM = scales.axisHiM - scales.axisLoM;
-    const mapX = (c: number) => plotLeft + (c / len) * drawW;
-    const mapYdown = (e: number) => ((scales.axisHiM - e) / axisSpanM) * plotH; // local y-down
+  } else {
+    const page = doc.addPage([PAGE_W, PAGE_H]);
+    sheets.push({
+      page,
+      identity: {
+        sheetName: 'LONGITUDINAL PROFILE',
+        descriptor: 'Section along the measured alignment, with the station data band beneath it.',
+      },
+    });
 
-    // The station band, resolved first: the grid verticals stand on its
-    // stations. Round chainages at a standard interval, 0 and the end always.
-    const bandHeightStr = (m: number | null) => (m == null ? '-' : (m * k).toFixed(2));
-    const bandMeasure = (t: string) => f.mono.widthOfTextAtSize(winAnsiSafe(t), T_BAND) + BAND_PAD;
-    const sampledStations = stats.stations.map((st) => ({ chainage: st.chainage, height: st.elevation }));
-    const band = buildRoundChainageBand({
-      stations: sampledStations,
-      lengthM: len,
-      k,
-      mapX,
-      columnWpt: Math.max(
-        bandMeasure(formatStation(len, system)),
-        bandMeasure(bandHeightStr(maxEl)),
-        bandMeasure(bandHeightStr(minEl)),
-      ),
-    });
-    for (const c of band.columns) rule(page, c.x, plotTopY, c.x, plotBotY, GRID, 0.5);
-    // Height grid on round ticks of the display unit, from the axis bottom.
-    for (
-      let n = 0, eD = scales.firstTick;
-      eD <= scales.axisHiM * k + 1e-9 && n < 64;
-      n++, eD = scales.firstTick + n * scales.tickStep
+    // `Terrain Profile` is drawn as one string, untracked: it is how the
+    // sheet's own tests find sheet one.
+    const headerBot = drawSheetHeader(
+      page,
+      f,
+      'Terrain Profile',
+      `Generated ${when.toISOString().slice(0, 16).replace('T', ' ')} UTC`,
+    );
+
+    // Plot box (pdf coords, y up).
+    const plotLeft = M + AXIS_COL + STUB_W;
+    const plotRight = PAGE_W - M - 6;
+    const plotW = plotRight - plotLeft;
+    const scaleLineY = headerBot - 18;
+    const plotTopY = scaleLineY - 16; // y-up coordinate of the TOP edge
+    const plotH = 300;
+    const plotBotY = plotTopY - plotH;
+    // The band hangs off the bottom edge of the plot and shares its rules, so
+    // the two read as one drawing rather than as a chart above a table.
+    const bandTop = plotBotY - GRID_LABEL_STRIP;
+    const bandBot = bandTop - 3 * BAND_ROW_H;
+
+
+    // The finite checks are a v0.4.5 crash guard: a corrupt sample (Infinity /
+    // NaN chainage or height) would otherwise pass `len > 0`, and the grid
+    // walks below — float accumulators — would loop forever building a PDF
+    // that never finishes. Corrupt geometry takes the honest "nothing to plot"
+    // branch instead.
+    if (
+      Number.isFinite(len) && len > 0 &&
+      minEl != null && maxEl != null && span != null &&
+      Number.isFinite(span) && span >= 0
     ) {
-      const y = plotTopY - mapYdown(eD / k);
-      rule(page, plotLeft, y, drawRight, y, GRID_MINOR, 0.5);
-      // Right-aligned against the axis, so a column of heights reads down
-      // its last figure.
-      const tick = eD.toFixed(scales.tickStep < 0.1 ? 2 : 1);
-      put(
-        page,
-        tick,
-        plotLeft - 5 - f.mono.widthOfTextAtSize(tick, T_TICK),
-        y - 3,
-        T_TICK,
-        f.mono,
-        INK_DIM,
-      );
-    }
-    // Profile runs (break on gaps), drawn as straight segments between
-    // adjacent samples so no plotted height falls outside the two stations
-    // that bracket it. The ground is filled to the plot floor first and the
-    // line stroked over it, so the fill can never be mistaken for the datum
-    // the line is read against. A gap fills nothing: absent ground is absent,
-    // not flat.
-    let run: Array<{ x: number; y: number }> = [];
-    const drawRun = () => {
-      if (run.length >= 1) {
-        fillUnderRun(page, run, plotLeft, plotTopY, plotBotY);
-        page.drawSvgPath(profilePolylinePath(run), {
-          x: plotLeft,
-          y: plotTopY,
-          borderColor: CURVE,
-          borderWidth: 1.6,
-        });
-      }
-      run = [];
-    };
-    for (const st of stats.stations) {
-      if (st.elevation == null) {
-        drawRun();
-        continue;
-      }
-      run.push({ x: mapX(st.chainage) - plotLeft, y: mapYdown(st.elevation) });
-    }
-    drawRun();
-
-    // The plot frame, drawn last. A full rectangle rather than two axis
-    // lines: the section is a drawing, and a drawing is bounded on all four
-    // sides. Last, because the ground fill reaches the floor and would
-    // otherwise erase the edge it is standing on.
-    strokeBox(page, plotLeft, plotBotY, drawW, plotH, INK_DIM, 1);
-
-    // The height axis title, rotated to read up the left edge of the plot.
-    // It is `heightLabel`'s own string and nothing else: the axis is where a
-    // reader decides what the figures beside it mean, so an undeclared datum
-    // says so here rather than three blocks away.
-    {
-      const title = `${heightWord} (${unit})`;
-      const w = f.bold.widthOfTextAtSize(winAnsiSafe(title), T_AXIS);
-      page.drawText(winAnsiSafe(title), {
-        x: M + 12,
-        y: plotBotY + (plotH - w) / 2,
-        size: T_AXIS,
-        font: f.bold,
-        color: INK_DIM,
-        rotate: degrees(90),
+      // Standard print scales, chosen before anything is drawn: the drawing is
+      // made at exactly the scales the header states. The frame is as wide as
+      // the chainage at that scale, and the height axis is widened to round
+      // ticks with margin so no plotted value falls outside it.
+      const scales = chooseProfileScales({
+        lengthM: len,
+        minM: minEl,
+        maxM: maxEl,
+        plotWpt: plotW,
+        plotHpt: plotH,
+        k,
+        requestedExaggeration: input.verticalExaggeration ?? null,
       });
-    }
+      const drawW = scales.drawnWpt;
+      const drawRight = plotLeft + drawW;
+      const axisSpanM = scales.axisHiM - scales.axisLoM;
+      const mapX = (c: number) => plotLeft + (c / len) * drawW;
+      const mapYdown = (e: number) => ((scales.axisHiM - e) / axisSpanM) * plotH; // local y-down
 
-    // The maximum grade, called out on the drawing where it happens.
-    drawMaxGradeCallout(page, f, {
-      steepest: intel.steepest,
-      stations: stats.stations,
-      mapX,
-      mapYdown,
-      plotTopY,
-      plotBotY,
-      plotLeft,
-      plotRight: drawRight,
-      system,
-      pairLength: steepestSpanM == null ? '' : lenStr(steepestSpanM),
-    });
-
-    // ── Station data band (the civil "guitarra") ───────────────────────
-    // One ruled row per quantity, columns dropped from the same x mapping the
-    // polyline was drawn with, so a vertical from the curve lands on its own
-    // figures. Row headings sit in the fixed stub at the left.
-    const partialStr = (m: number | null) => (m == null ? '-' : (m * k).toFixed(2));
-    const stubX = M + AXIS_COL;
-    const bandRows: Array<[string, (i: number) => string]> = [
-      [`Partial dist. (${unit})`, (i) => partialStr(band.columns[i].partial)],
-      ['Chainage', (i) => formatStation(band.columns[i].chainage, system)],
-      [`${heightWord} (${unit})`, (i) => bandHeightStr(band.columns[i].height)],
-    ];
-    for (let r = 0; r <= bandRows.length; r++) {
-      const y = bandTop - r * BAND_ROW_H;
-      rule(page, stubX, y, drawRight, y, RULE, 0.5);
-    }
-    // Horizontal rules, and the single vertical that separates the stub from
-    // the figures. Not a border per cell: a full grid of cell borders is more
-    // ink than the figures it is meant to organise, and the columns are
-    // already tied to the curve by their own drop lines.
-    rule(page, plotLeft, bandTop, plotLeft, bandBot, RULE, 0.5);
-    bandRows.forEach(([head], r) => {
-      const y = bandTop - (r + 1) * BAND_ROW_H + 5;
-      put(page, clipText(head, f.bold, T_BAND, STUB_W - 10), stubX, y, T_BAND, f.bold, INK_MUTED);
-    });
-    band.columns.forEach((c, i) => {
-      // A tick hung off the plot's own bottom edge, at the column's x. It
-      // stops there rather than running the depth of the band: a rule
-      // continued through three rows of centred figures crosses every one of
-      // them through the middle, and a hairline drawn over a digit is a
-      // hairline drawn over a digit however light it is.
-      rule(page, c.x, plotBotY, c.x, plotBotY - 5, INK_DIM, 0.5);
-      bandRows.forEach(([, cell], r) => {
-        const t = winAnsiSafe(cell(i));
-        const y = bandTop - (r + 1) * BAND_ROW_H + 5;
-        // The height row is the measured one, so it carries the weight the way
-        // the schedule's height column does. Partial distance and chainage
-        // describe WHERE the station is rather than what was found there.
-        const measured = r === bandRows.length - 1 && t !== '-';
-        // Courier throughout, so the figures of one row line up digit under
-        // digit whatever their magnitude. A cell that says `gap` takes the
-        // gap colour, the same mark the station schedule uses for the same
-        // fact, and the word carries it on a mono printer.
+      // The station band, resolved first: the grid verticals stand on its
+      // stations. Round chainages at a standard interval, 0 and the end always.
+      const bandHeightStr = (m: number | null) => (m == null ? '-' : (m * k).toFixed(2));
+      const bandMeasure = (t: string) => f.mono.widthOfTextAtSize(winAnsiSafe(t), T_BAND) + BAND_PAD;
+      const sampledStations = stats.stations.map((st) => ({ chainage: st.chainage, height: st.elevation }));
+      const band = buildRoundChainageBand({
+        stations: sampledStations,
+        lengthM: len,
+        k,
+        mapX,
+        columnWpt: Math.max(
+          bandMeasure(formatStation(len, system)),
+          bandMeasure(bandHeightStr(maxEl)),
+          bandMeasure(bandHeightStr(minEl)),
+        ),
+      });
+      for (const c of band.columns) rule(page, c.x, plotTopY, c.x, plotBotY, GRID, 0.5);
+      // Height grid on round ticks of the display unit, from the axis bottom.
+      for (
+        let n = 0, eD = scales.firstTick;
+        eD <= scales.axisHiM * k + 1e-9 && n < 64;
+        n++, eD = scales.firstTick + n * scales.tickStep
+      ) {
+        const y = plotTopY - mapYdown(eD / k);
+        rule(page, plotLeft, y, drawRight, y, GRID_MINOR, 0.5);
+        // Right-aligned against the axis, so a column of heights reads down
+        // its last figure.
+        const tick = eD.toFixed(scales.tickStep < 0.1 ? 2 : 1);
         put(
           page,
-          t,
-          // The end columns sit on the frame edges, so their figures are set
-          // inward from the edge rather than centred across it.
-          ((w) =>
-            i === 0 ? c.x + 2 : i === band.columns.length - 1 ? c.x - w - 2 : c.x - w / 2)(
-            (measured ? f.monoBold : f.mono).widthOfTextAtSize(t, T_BAND),
-          ),
-          y,
-          T_BAND,
-          measured ? f.monoBold : f.mono,
-          t === '-' && r === bandRows.length - 1 ? GAP_MARK : INK,
+          tick,
+          plotLeft - 5 - f.mono.widthOfTextAtSize(tick, T_TICK),
+          y - 3,
+          T_TICK,
+          f.mono,
+          INK_DIM,
         );
+      }
+      // Profile runs (break on gaps), drawn as straight segments between
+      // adjacent samples so no plotted height falls outside the two stations
+      // that bracket it. The ground is filled to the plot floor first and the
+      // line stroked over it, so the fill can never be mistaken for the datum
+      // the line is read against. A gap fills nothing: absent ground is absent,
+      // not flat.
+      let run: Array<{ x: number; y: number }> = [];
+      const drawRun = () => {
+        if (run.length >= 1) {
+          fillUnderRun(page, run, plotLeft, plotTopY, plotBotY);
+          page.drawSvgPath(profilePolylinePath(run), {
+            x: plotLeft,
+            y: plotTopY,
+            borderColor: CURVE,
+            borderWidth: 1.6,
+          });
+        }
+        run = [];
+      };
+      for (const st of stats.stations) {
+        if (st.elevation == null) {
+          drawRun();
+          continue;
+        }
+        run.push({ x: mapX(st.chainage) - plotLeft, y: mapYdown(st.elevation) });
+      }
+      drawRun();
+
+      // The plot frame, drawn last. A full rectangle rather than two axis
+      // lines: the section is a drawing, and a drawing is bounded on all four
+      // sides. Last, because the ground fill reaches the floor and would
+      // otherwise erase the edge it is standing on.
+      strokeBox(page, plotLeft, plotBotY, drawW, plotH, INK_DIM, 1);
+
+      // The height axis title, rotated to read up the left edge of the plot.
+      // It is `heightLabel`'s own string and nothing else: the axis is where a
+      // reader decides what the figures beside it mean, so an undeclared datum
+      // says so here rather than three blocks away.
+      {
+        const title = `${heightWord} (${unit})`;
+        const w = f.bold.widthOfTextAtSize(winAnsiSafe(title), T_AXIS);
+        page.drawText(winAnsiSafe(title), {
+          x: M + 12,
+          y: plotBotY + (plotH - w) / 2,
+          size: T_AXIS,
+          font: f.bold,
+          color: INK_DIM,
+          rotate: degrees(90),
+        });
+      }
+
+      // The maximum grade, called out on the drawing where it happens.
+      drawMaxGradeCallout(page, f, {
+        steepest: intel.steepest,
+        stations: stats.stations,
+        mapX,
+        mapYdown,
+        plotTopY,
+        plotBotY,
+        plotLeft,
+        plotRight: drawRight,
+        system,
+        pairLength: steepestSpanM == null ? '' : lenStr(steepestSpanM),
       });
-    });
-    // Thinning stated, not silent: a band showing one station in nine looks
-    // exactly like a band showing every station the section has. It shares a
-    // line with the series legend, right-aligned against the plot: both are
-    // captions on the drawing above them, and two captions on two lines is
-    // two rows of the sheet spent saying so.
-    {
-      const caption =
-        `Station data band - every ${formatScaleDenominator(band.interval)} ${unit} and the end chainage` +
-        `${band.omitted > 0 ? ', without the round chainages beside the start and the end' : ''}; ` +
-        `${reference === 'orthometric' ? 'elevations' : 'heights'} at round chainages interpolated between ` +
-        `the ${band.total} sampled stations, '-' where a neighbouring station has no returns`;
+
+      // ── Station data band (the civil "guitarra") ───────────────────────
+      // One ruled row per quantity, columns dropped from the same x mapping the
+      // polyline was drawn with, so a vertical from the curve lands on its own
+      // figures. Row headings sit in the fixed stub at the left.
+      const partialStr = (m: number | null) => (m == null ? '-' : (m * k).toFixed(2));
+      const stubX = M + AXIS_COL;
+      const bandRows: Array<[string, (i: number) => string]> = [
+        [`Partial dist. (${unit})`, (i) => partialStr(band.columns[i].partial)],
+        ['Chainage', (i) => formatStation(band.columns[i].chainage, system)],
+        [`${heightWord} (${unit})`, (i) => bandHeightStr(band.columns[i].height)],
+      ];
+      for (let r = 0; r <= bandRows.length; r++) {
+        const y = bandTop - r * BAND_ROW_H;
+        rule(page, stubX, y, drawRight, y, RULE, 0.5);
+      }
+      // Horizontal rules, and the single vertical that separates the stub from
+      // the figures. Not a border per cell: a full grid of cell borders is more
+      // ink than the figures it is meant to organise, and the columns are
+      // already tied to the curve by their own drop lines.
+      rule(page, plotLeft, bandTop, plotLeft, bandBot, RULE, 0.5);
+      bandRows.forEach(([head], r) => {
+        const y = bandTop - (r + 1) * BAND_ROW_H + 5;
+        put(page, clipText(head, f.bold, T_BAND, STUB_W - 10), stubX, y, T_BAND, f.bold, INK_MUTED);
+      });
+      band.columns.forEach((c, i) => {
+        // A tick hung off the plot's own bottom edge, at the column's x. It
+        // stops there rather than running the depth of the band: a rule
+        // continued through three rows of centred figures crosses every one of
+        // them through the middle, and a hairline drawn over a digit is a
+        // hairline drawn over a digit however light it is.
+        rule(page, c.x, plotBotY, c.x, plotBotY - 5, INK_DIM, 0.5);
+        bandRows.forEach(([, cell], r) => {
+          const t = winAnsiSafe(cell(i));
+          const y = bandTop - (r + 1) * BAND_ROW_H + 5;
+          // The height row is the measured one, so it carries the weight the way
+          // the schedule's height column does. Partial distance and chainage
+          // describe WHERE the station is rather than what was found there.
+          const measured = r === bandRows.length - 1 && t !== '-';
+          // Courier throughout, so the figures of one row line up digit under
+          // digit whatever their magnitude. A cell that says `gap` takes the
+          // gap colour, the same mark the station schedule uses for the same
+          // fact, and the word carries it on a mono printer.
+          put(
+            page,
+            t,
+            // The end columns sit on the frame edges, so their figures are set
+            // inward from the edge rather than centred across it.
+            ((w) =>
+              i === 0 ? c.x + 2 : i === band.columns.length - 1 ? c.x - w - 2 : c.x - w / 2)(
+              (measured ? f.monoBold : f.mono).widthOfTextAtSize(t, T_BAND),
+            ),
+            y,
+            T_BAND,
+            measured ? f.monoBold : f.mono,
+            t === '-' && r === bandRows.length - 1 ? GAP_MARK : INK,
+          );
+        });
+      });
+      // Thinning stated, not silent: a band showing one station in nine looks
+      // exactly like a band showing every station the section has. It shares a
+      // line with the series legend, right-aligned against the plot: both are
+      // captions on the drawing above them, and two captions on two lines is
+      // two rows of the sheet spent saying so.
+      {
+        const caption =
+          `Station data band - every ${formatScaleDenominator(band.interval)} ${unit} and the end chainage` +
+          `${band.omitted > 0 ? ', without the round chainages beside the start and the end' : ''}; ` +
+          `${reference === 'orthometric' ? 'elevations' : 'heights'} at round chainages interpolated between ` +
+          `the ${band.total} sampled stations, '-' where a neighbouring station has no returns`;
+        put(
+          page,
+          caption,
+          plotRight - f.font.widthOfTextAtSize(winAnsiSafe(caption), T_CAPTION),
+          bandBot - 16,
+          T_CAPTION,
+          f.font,
+          INK_MUTED,
+        );
+      }
+
+      // Stated scales + VEX + the print instruction, in the plot header where a
+      // reader looks before taking a measurement off the paper.
+      // The scales the drawing was made at, standard ratios by construction.
+      const hScale = scales.horizontal;
+      const vScale = scales.vertical;
+      // Horizontal over vertical denominator: above 1 the relief is stretched.
+      const vex = scales.exaggeration;
+      const vexText = verticalScaleStatement(vex);
+      // With no known ground unit a 1:N ratio would read source units as
+      // metres, so the sheet says so, as the map sheet does; the exaggeration
+      // is a ratio of the two and stays.
+      const ratios = system === 'unverified'
+        ? 'Horizontal and vertical scale: units unknown'
+        : `Horizontal 1:${formatScaleDenominator(hScale)}   ·   Vertical 1:${formatScaleDenominator(vScale)}`;
+      const scaleLine = `${ratios}   ·   ${vexText}   |   PRINT AT 100% ON ${SHEET_SIZE}`;
+      put(page, scaleLine, M, scaleLineY, T_SCALE, f.bold, INK);
+      const axisTitle =
+        system === 'unverified' ? 'Chainage (unit unverified)' : system === 'metric' ? 'Chainage (station km+m)' : 'Chainage (100 ft stations)';
       put(
         page,
-        caption,
-        plotRight - f.font.widthOfTextAtSize(winAnsiSafe(caption), T_CAPTION),
-        bandBot - 16,
-        T_CAPTION,
+        axisTitle,
+        plotRight - f.font.widthOfTextAtSize(winAnsiSafe(axisTitle), T_AXIS),
+        scaleLineY,
+        T_AXIS,
         f.font,
         INK_MUTED,
       );
+    } else {
+      put(page, 'No covered samples — nothing to plot.', plotLeft, plotTopY - 20, 11, f.font, INK_DIM);
     }
 
-    // Stated scales + VEX + the print instruction, in the plot header where a
-    // reader looks before taking a measurement off the paper.
-    // The scales the drawing was made at, standard ratios by construction.
-    const hScale = scales.horizontal;
-    const vScale = scales.vertical;
-    // Horizontal over vertical denominator: above 1 the relief is stretched.
-    const vex = scales.exaggeration;
-    const vexText = verticalScaleStatement(vex);
-    // With no known ground unit a 1:N ratio would read source units as
-    // metres, so the sheet says so, as the map sheet does; the exaggeration
-    // is a ratio of the two and stays.
-    const ratios = system === 'unverified'
-      ? 'Horizontal and vertical scale: units unknown'
-      : `Horizontal 1:${formatScaleDenominator(hScale)}   ·   Vertical 1:${formatScaleDenominator(vScale)}`;
-    const scaleLine = `${ratios}   ·   ${vexText}   |   PRINT AT 100% ON ${SHEET_SIZE}`;
-    put(page, scaleLine, M, scaleLineY, T_SCALE, f.bold, INK);
-    const axisTitle =
-      system === 'unverified' ? 'Chainage (unit unverified)' : system === 'metric' ? 'Chainage (station km+m)' : 'Chainage (100 ft stations)';
+    // Chart legend swatch: the pen, the name of the series it draws, and the
+    // number of the note that says what the series is.
+    //
+    // The name is the legend's own, so the plotted series is named on the print
+    // exactly as it is named on screen. What the name does NOT carry here is
+    // the method, the station count or the gap count: general note 1 states the
+    // method in full on this sheet and on every other sheet of the set, the
+    // band caption below states how many stations are drawn, and the KPI band
+    // states how many returned nothing. A key that restated all three would put
+    // the same three facts twice on one sheet and give a reader two wordings to
+    // reconcile. Clipped against the space the band caption leaves on the same
+    // line, so a long series name cannot print over it.
+    rule(page, M, bandBot - 13, M + 18, bandBot - 13, CURVE, 1.6);
     put(
       page,
-      axisTitle,
-      plotRight - f.font.widthOfTextAtSize(winAnsiSafe(axisTitle), T_AXIS),
-      scaleLineY,
-      T_AXIS,
+      clipText(`${legend.seriesName} - see general note 1`, f.font, T_CAPTION, plotRight - M - 26 - 240),
+      M + 26,
+      bandBot - 16,
+      T_CAPTION,
       f.font,
-      INK_MUTED,
+      INK,
     );
-  } else {
-    put(page, 'No covered samples — nothing to plot.', plotLeft, plotTopY - 20, 11, f.font, INK_DIM);
+
+    // ── The KPI band ───────────────────────────────────────────────────────
+    // The magnitude only: the unit is stated once, in the cell's label. The
+    // length formatter is still the one that produces the figure, so the KPI
+    // and the notes table cannot round the same quantity two ways.
+    drawKpiBand(page, f, bandBot - 32, [
+      { label: `LENGTH (${unit})`, value: bare(lenStr(len)) },
+      {
+        label: `RELIEF (${unit})`,
+        value: stats.reliefSpan == null ? '-' : bare(reliefStr()),
+      },
+      {
+        label: `MIN / MAX (${unit})`,
+        value:
+          minEl == null || maxEl == null
+            ? '-'
+            : `${(minEl * k).toFixed(2)} / ${(maxEl * k).toFixed(2)}`,
+        // Two figures and a separator in one cell, so it is given two cells of
+        // width. A pair set in a cell sized for a single figure is a pair with
+        // its second half trimmed off, and a trimmed height is a wrong height.
+        span: 2,
+      },
+      // Two cells wide: the label is longer than one cell holds.
+      { label: 'ENDPOINT GRADIENT (%)', value: bare(formatGradePercent(stats.meanGrade)), span: 2 },
+      // Signed steepest grade: the panel, the callout, and this KPI must agree on
+      // sign for one profile. stats.maxGrade is an unsigned magnitude; intel.maxGrade
+      // is the signed steepest-section grade (same segment). The ratio/degrees row
+      // below stays magnitude on purpose.
+      { label: 'MAX GRADE (%)', value: bare(formatGradePercent(intel.maxGrade)) },
+      { label: 'COVERAGE (%)', value: `${(stats.coverage * 100).toFixed(0)}` },
+      { label: 'GAPS', value: `${gapCount}` },
+      {
+        label: `CORRIDOR +/- (${unit})`,
+        value: input.corridorWidthM != null ? (input.corridorWidthM * k).toFixed(2) : 'auto',
+      },
+    ]);
   }
 
-  // Chart legend swatch: the pen, the name of the series it draws, and the
-  // number of the note that says what the series is.
-  //
-  // The name is the legend's own, so the plotted series is named on the print
-  // exactly as it is named on screen. What the name does NOT carry here is
-  // the method, the station count or the gap count: general note 1 states the
-  // method in full on this sheet and on every other sheet of the set, the
-  // band caption below states how many stations are drawn, and the KPI band
-  // states how many returned nothing. A key that restated all three would put
-  // the same three facts twice on one sheet and give a reader two wordings to
-  // reconcile. Clipped against the space the band caption leaves on the same
-  // line, so a long series name cannot print over it.
-  rule(page, M, bandBot - 13, M + 18, bandBot - 13, CURVE, 1.6);
-  put(
-    page,
-    clipText(`${legend.seriesName} - see general note 1`, f.font, T_CAPTION, plotRight - M - 26 - 240),
-    M + 26,
-    bandBot - 16,
-    T_CAPTION,
-    f.font,
-    INK,
-  );
-
-  // ── The KPI band ───────────────────────────────────────────────────────
-  // The magnitude only: the unit is stated once, in the cell's label. The
-  // length formatter is still the one that produces the figure, so the KPI
-  // and the notes table cannot round the same quantity two ways.
-  const bare = (s: string) => s.replace(/\s+(m|ft)$/, '').replace(/%$/, '');
-  drawKpiBand(page, f, bandBot - 32, [
-    { label: `LENGTH (${unit})`, value: bare(lenStr(len)) },
-    {
-      label: `RELIEF (${unit})`,
-      value: stats.reliefSpan == null ? '-' : bare(reliefStr()),
-    },
-    {
-      label: `MIN / MAX (${unit})`,
-      value:
-        minEl == null || maxEl == null
-          ? '-'
-          : `${(minEl * k).toFixed(2)} / ${(maxEl * k).toFixed(2)}`,
-      // Two figures and a separator in one cell, so it is given two cells of
-      // width. A pair set in a cell sized for a single figure is a pair with
-      // its second half trimmed off, and a trimmed height is a wrong height.
-      span: 2,
-    },
-    // Two cells wide: the label is longer than one cell holds.
-    { label: 'ENDPOINT GRADIENT (%)', value: bare(formatGradePercent(stats.meanGrade)), span: 2 },
-    // Signed steepest grade: the panel, the callout, and this KPI must agree on
-    // sign for one profile. stats.maxGrade is an unsigned magnitude; intel.maxGrade
-    // is the signed steepest-section grade (same segment). The ratio/degrees row
-    // below stays magnitude on purpose.
-    { label: 'MAX GRADE (%)', value: bare(formatGradePercent(intel.maxGrade)) },
-    { label: 'COVERAGE (%)', value: `${(stats.coverage * 100).toFixed(0)}` },
-    { label: 'GAPS', value: `${gapCount}` },
-    {
-      label: `CORRIDOR +/- (${unit})`,
-      value: input.corridorWidthM != null ? (input.corridorWidthM * k).toFixed(2) : 'auto',
-    },
-  ]);
-
+  // No await from here to the save, so a styled build swaps in its colours and paper safely.
+  const addPage = doc.addPage.bind(doc);
+  if (tokens) {
+    useInk(inkFor(tokens), 6.5);
+    doc.addPage = ((...a: Parameters<PDFDocument['addPage']>) => { const pg = addPage(...a); drawPaper(pg, tokens); return pg; }) as PDFDocument['addPage'];
+  }
+  try {
   // ── Sheet 2: technical notes ───────────────────────────────────────────
   const contributing = record == null ? 0 : record.sources.filter((s) => s.contributed).length;
   // ITEM / RECORDED INFORMATION / ENGINEERING REMARK. The remark column is
@@ -1596,7 +1667,20 @@ export async function buildProfilePdf(input: ProfilePdfInput): Promise<Uint8Arra
   // The furniture is stamped LAST, once every page exists, so `SHEET n / m`
   // takes its total from the page count the document actually reached.
   const total = doc.getPageCount();
-  sheets.forEach((s, i) => drawFurniture(s.page, f, set, s.identity, i + 1, total));
+  sheets.forEach((s, i) => {
+    // A styled sheet one carries its own panel and footer, not the title block.
+    if (styled && i === 0) {
+      drawFooter(s.page, `OpenLiDARViewer - terrain profile  ·  Generated ${when.toISOString().slice(0, 16).replace('T', ' ')} UTC`, `SHEET 1 / ${total}`, 36, PAGE_W - 36, 22, tokens!, sheetFonts!);
+      return;
+    }
+    drawFurniture(s.page, f, set, s.identity, i + 1, total);
+  });
+  } finally {
+    if (tokens) {
+      useInk(CLASSIC_INK, 0);
+      doc.addPage = addPage;
+    }
+  }
 
   return doc.save();
 }
@@ -1841,7 +1925,7 @@ function renderTechnicalNotes(
       put(page, line, xRemark, y - i * 12, T_REMARK, f.font, INK_SOFT);
     });
     y -= lines * 12 + 3;
-    rule(page, M, y + 1, M + usableW, y + 1, GRID, 0.4);
+    rule(page, M, y + 1 + rowRuleLift, M + usableW, y + 1 + rowRuleLift, GRID, 0.4);
     y -= 4;
   }
 }
@@ -2112,3 +2196,4 @@ function renderStationSchedule(
     );
   }
 }
+

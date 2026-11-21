@@ -66,17 +66,17 @@ export interface SheetTokens {
 
 /** Type sizes in points, shared by every style. */
 export const SHEET_TYPE = {
-  kicker: 8,
-  title: 18,
-  subtitle: 8.5,
-  section: 7,
-  legend: 7.5,
-  dataKey: 6.5,
-  dataValue: 7.5,
-  tick: 6,
-  contourLabel: 6.5,
-  note: 6.5,
-  footer: 6,
+  kicker: 8.5,
+  title: 20,
+  subtitle: 9.5,
+  section: 8,
+  legend: 8.5,
+  dataKey: 7.5,
+  dataValue: 8.5,
+  tick: 7,
+  contourLabel: 7,
+  note: 7.5,
+  footer: 7,
 } as const;
 
 const hex = (h: number): SheetRgb => [((h >> 16) & 255) / 255, ((h >> 8) & 255) / 255, (h & 255) / 255];
@@ -89,7 +89,7 @@ const LIGHT: SheetTokens = {
   nodata: hex(0xd9d6d0),
   hatch: hex(0xb3ada2),
   ink: hex(0x1d2329),
-  dim: hex(0x5f6770),
+  dim: hex(0x555d66),
   rule: hex(0xc9ccd0),
   halo: hex(0xffffff),
   minor: hex(0x2f6b55),
@@ -115,7 +115,7 @@ const DARK: SheetTokens = {
   nodata: hex(0x161e26),
   hatch: hex(0x2c3a46),
   ink: hex(0xe6edf3),
-  dim: hex(0x8b98a5),
+  dim: hex(0xa7b3bf),
   rule: hex(0x26323d),
   halo: hex(0x0c1116),
   minor: hex(0x3fbf9f),

@@ -261,6 +261,9 @@ export const loadProfilePdf = () => import('./render/measure/profilePdf');
  */
 export const loadMapSheetPdf = () => import('./render/measure/mapSheetStyled');
 
+/** Load the profile sheet's returns, plan and crossing builder, on a styled profile export. */
+export const loadProfileSheetExtras = () => import('./app/profileSheetExtras');
+
 /** Load the SVG-to-PNG drawing step for the contour map PNG. */
 export const loadSvgRaster = () => import('./export/sheetKit/svgRaster');
 

@@ -17,6 +17,7 @@
  * module is safe to statically import from the shell: only the TYPE is eager.
  */
 
+import type { ProfileTerrainRef } from './profileSheetExtras';
 import { aggregate as aggregateMeasurements } from '../render/measure/measurementChains';
 import { positionStepsResolver } from './measurementPositionSteps';
 import type { AxisSteps } from '../render/measure/geometry';
@@ -30,7 +31,7 @@ import { profileExportContext, profileWorkbenchSource, type ProfileExportContext
 import { datasetIdentity } from '../geo/CrsService';
 import { buildResultModel } from './measureResultModel';
 import { copyToClipboard } from '../ui/clipboard';
-import { loadMeasurePanel, loadProfileWorkbenchRuntime } from '../lazyChunks';
+import { loadMeasurePanel, loadProfileWorkbenchRuntime, loadProfileSheetExtras } from '../lazyChunks';
 import { retryableOnce, mountPanelOnce } from './lazySurfaceLoad';
 import { browserOnline, chunkReloadAction, markChunkFailureReported } from './staleChunkReload';
 
@@ -63,6 +64,8 @@ type MeasurePanelCtor = Awaited<ReturnType<typeof loadMeasurePanel>>['MeasurePan
  */
 export interface MeasurePanelMountDeps {
   getViewer: () => Viewer;
+  /** A fresh terrain analysis of the scan with this stable layer id, for the profile sheet's plan strip. */
+  terrainFor?: (stableLayerId: string | null) => ProfileTerrainRef | null;
   crsService: CrsService;
   getExportPanel: () => { refresh(): void };
   exportSession: () => unknown;
@@ -393,6 +396,8 @@ export function createMeasurePanelMount(deps: MeasurePanelMountDeps): MeasurePan
       // scan's selection does not relabel it. Local and unknown frames return
       // nulls and the PDF keeps its "— (not georeferenced)" fallback.
       getProfileExportContext: profileSource,
+      getProfileSheetExtras: async (id, s) =>
+        (await loadProfileSheetExtras()).profileSheetExtras(viewer, id, s, deps.terrainFor ?? (() => null)),
       getProfileExportFrame: (id) => {
         const measurement = viewer.measure.getMeasurements().find((m) => m.id === id);
         return measurement ? viewer.measure.unitFrameOf(measurement) : null;

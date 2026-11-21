@@ -283,6 +283,44 @@ export function contourSheetRaster(
 ): SheetRaster {
   const W = Math.max(1, Math.min(MAX_RASTER_SIDE, Math.round(width)));
   const H = Math.max(1, Math.min(MAX_RASTER_SIDE, Math.round(height)));
+  const sx = (area.maxX - area.minX) / W, sy = (area.maxY - area.minY) / H;
+  return reliefRaster(g, tokens, W, H, (px, py) => [area.minX + (px + 0.5) * sx, area.maxY - (py + 0.5) * sy], zRange);
+}
+
+/**
+ * A relief raster along a line: pixel column u runs from `u0` to `u1` along
+ * the unit direction `dir` from `origin`, and pixel row v from `v1` (top) down
+ * to `v0` across it, `perp` being `dir` turned a quarter turn anticlockwise.
+ * Used for the profile sheet's plan strip, which is drawn along the profile.
+ */
+export function stripSheetRaster(
+  g: SheetReliefInput,
+  tokens: SheetTokens,
+  origin: readonly [number, number],
+  dir: readonly [number, number],
+  u: readonly [number, number],
+  v: readonly [number, number],
+  width: number,
+  height: number,
+): SheetRaster {
+  const W = Math.max(1, Math.min(MAX_RASTER_SIDE, Math.round(width)));
+  const H = Math.max(1, Math.min(MAX_RASTER_SIDE, Math.round(height)));
+  const perp: readonly [number, number] = [-dir[1], dir[0]];
+  const su = (u[1] - u[0]) / W, sv = (v[1] - v[0]) / H;
+  return reliefRaster(g, tokens, W, H, (px, py) => {
+    const uu = u[0] + (px + 0.5) * su, vv = v[1] - (py + 0.5) * sv;
+    return [origin[0] + uu * dir[0] + vv * perp[0], origin[1] + uu * dir[1] + vv * perp[1]];
+  });
+}
+
+function reliefRaster(
+  g: SheetReliefInput,
+  tokens: SheetTokens,
+  W: number,
+  H: number,
+  at: (px: number, py: number) => readonly [number, number],
+  zRange?: readonly [number, number],
+): SheetRaster {
   const state = classifyCells(g);
   // Shade on a grid no finer than twice the raster, so a large grid stays quick.
   const base: ReliefGrid = {
@@ -330,12 +368,10 @@ export function contourSheetRaster(
   const put = (o: number, c: SheetRgb): void => {
     rgba[o] = Math.round(c[0] * 255); rgba[o + 1] = Math.round(c[1] * 255); rgba[o + 2] = Math.round(c[2] * 255); rgba[o + 3] = 255;
   };
-  const sx = (area.maxX - area.minX) / W, sy = (area.maxY - area.minY) / H;
   for (let py = 0; py < H; py++) {
-    const wy = area.maxY - (py + 0.5) * sy;
-    const gr = (wy - g.originY) / g.cellSize;
     for (let px = 0; px < W; px++) {
-      const wx = area.minX + (px + 0.5) * sx;
+      const [wx, wy] = at(px, py);
+      const gr = (wy - g.originY) / g.cellSize;
       const gc = (wx - g.originX) / g.cellSize;
       const c = Math.floor(gc), r = Math.floor(gr);
       if (c < 0 || r < 0 || c >= g.cols || r >= g.rows) continue;

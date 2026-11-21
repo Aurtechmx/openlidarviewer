@@ -482,7 +482,7 @@ function panelBlocks(
     return { kind: 'line', color: st.color, width: st.width, ...(st.dash ? { dash: st.dash } : {}) };
   };
   legend.push([line(true, 'measured'), 'Index contour, labelled']);
-  legend.push([line(false, 'measured'), `Contour, ${ctx.facts.interval} interval`]);
+  legend.push([line(false, 'measured'), `Contour interval ${ctx.facts.interval}`]);
   if (kinds.has('sparse')) legend.push([line(false, 'sparse'), 'Sparse measured ground']);
   if (kinds.has('interpolated')) legend.push([line(false, 'interpolated'), 'Contour over filled cells']);
   if (kinds.has('gap')) legend.push([line(false, 'gap'), 'Low-confidence gap']);

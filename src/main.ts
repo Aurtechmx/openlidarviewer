@@ -1556,7 +1556,7 @@ const measureMount = createMeasurePanelMount({
   recordUsage, getScanBaseName: () => activeScanName(),
   workbenchStage: stage,
   onWorkbenchClose: () => analyseProfileVisibility.restore(),
-  onUseAsClip: (id) => clipFlow.isolate(id),
+  onUseAsClip: (id) => clipFlow.isolate(id), terrainFor: (stableId) => { const r = analysePanel?.resultRef(); const ok = !!r?.fresh && !!r.scanId && (stableId == null ? viewer.clouds().length === 1 : runtime.layerIdentity.stableIdFor(r.scanId) === stableId); return ok ? { result: r!.result, sceneUpAxis: r!.sceneUpAxis } : null; },
 });
 // Save the AnalysePanel's visibility when a profile hides it, and restore that
 // exact state on the workbench close (kind-change fires on open, not on close).

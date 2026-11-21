@@ -51,6 +51,7 @@
  * substituted in a Node test.
  */
 
+import { cssColor, sheetTokens, type SheetStyle } from '../../export/sheetKit/tokens';
 import {
   ProfileSectionRenderer,
   type ProfileRenderingContext,
@@ -156,6 +157,23 @@ export const DEFAULT_PROFILE_IMAGE_THEME: ProfileImageTheme = {
   mutedText: 'rgb(80, 80, 88)',
   annotation: 'rgb(190, 60, 30)',
 };
+
+/**
+ * The section image's ink in a sheet style, so the PNG matches the profile
+ * sheet. Classic keeps {@link DEFAULT_PROFILE_IMAGE_THEME}.
+ */
+export function profileImageThemeFor(style: SheetStyle): ProfileImageTheme {
+  if (style === 'classic') return DEFAULT_PROFILE_IMAGE_THEME;
+  const t = sheetTokens(style);
+  return {
+    pageBackground: cssColor(t.paper),
+    plotBackground: cssColor(t.panel),
+    axis: cssColor(t.dim),
+    text: cssColor(t.ink),
+    mutedText: cssColor(t.dim),
+    annotation: cssColor(t.accent),
+  };
+}
 
 /** Everything one image is composed from. */
 export interface ProfileSectionImageRequest {
