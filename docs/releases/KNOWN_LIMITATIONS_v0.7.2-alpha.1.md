@@ -433,7 +433,7 @@ consecutive passes, counted by `scripts/ios-streak.mjs`.
 fails the build when either passes its recorded baseline, so a raise is a hand
 edit to `docs/validation/monolith-size-baseline.json` and always shows in the
 diff.
-Fan-out is 95 for the shell, 73 for the renderer, across 1233 modules with no
+Fan-out is 95 for the shell, 73 for the renderer, across 1235 modules with no
 dependency cycles. Fan-out counts the distinct modules a file imports with a
 value import, source files and external packages alike; type-only and dynamic
 imports are not counted. The shell and the renderer figures are held
@@ -726,9 +726,12 @@ latitude.
 
 On a geographic CRS the PDF report, profile sheet, CSV, GeoJSON, KML, findings,
 integrity report, chain total and drawn labels withhold every figure but
-heights, as the Measure panel does. The per-measurement support grade does not
-travel with them: a measurement with an endpoint in empty space reads
-Unverified in the panel and is still published as a number. On a compound CRS
+heights, as the Measure panel does. The measurement CSV and GeoJSON carry each
+measurement's support grade and the panel's caption for it, and the Light and
+Dark map sheets print it beside each measurement. The PDF report, KML,
+findings, integrity report, chain total and drawn labels do not yet: there a
+measurement with an endpoint in empty space, which reads Unverified in the
+panel, is still published as a number without the grade. On a compound CRS
 whose height unit differs from its horizontal unit, the panel, the exports and
 the PDF all compute 3D lengths, grades and tilted areas with each axis in its
 own unit.

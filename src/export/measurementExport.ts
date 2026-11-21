@@ -121,6 +121,14 @@ export interface MeasurementExportContext {
    */
   readonly unitsVerified?: boolean;
   /**
+   * Each measurement's support grade (green, yellow, red) and the panel's
+   * caption for it. When given, the CSV gains `support_grade` and `support`
+   * columns and every GeoJSON feature the same two properties, so a figure
+   * the panel reads as Unverified does not leave as a bare number. Absent:
+   * both files are as before.
+   */
+  readonly supportOf?: (m: Measurement) => { readonly grade: string; readonly caption: string } | null;
+  /**
    * Build, source, CRS, interpretation level and data basis for the file.
    * Written as a `provenance` foreign member of the GeoJSON FeatureCollection
    * (RFC 7946 section 6.1). The CSV has no metadata slot and does not carry it.
@@ -639,6 +647,7 @@ export function measurementsToGeoJSON(
         ...areaNoteProp(m, ctx),
         ...(placed.withheld ? { geometry_withheld: placed.withheld } : {}),
         ...(lonLat.sourceHeights ? { elevations_source: placed.elevations } : {}),
+        ...supportProps(m, ctx),
       };
       if (ctx.crsName) properties.crs = ctx.crsName;
       // Same coverage verdict the CSV's grid_authority column carries — see
@@ -879,6 +888,13 @@ function csvCell(v: string | number): string {
   return neutralise || /[",\r\n]/.test(cell) ? `"${cell.replaceAll(/"/g, '""')}"` : cell;
 }
 
+/** The support grade and caption of `m`, as `support_grade` and `support`, or nothing. */
+function supportProps(m: Measurement, ctx: MeasurementExportContext): Record<string, string> {
+  if (!ctx.supportOf) return {};
+  const s = ctx.supportOf(m);
+  return s ? { support_grade: s.grade, support: s.caption } : { support_grade: 'not graded', support: '' };
+}
+
 /** Serialise measurements to a CSV — one row per measurement, metres throughout. */
 export function measurementsToCsv(
   measurements: readonly Measurement[],
@@ -892,7 +908,8 @@ export function measurementsToCsv(
   const reducedColumns = measurements.some((m) => m.kind === 'volume' && m.volume?.withheld?.reduction)
     ? REDUCTION_CSV_COLUMNS
     : [];
-  const columns = [...(unitsKnown ? CSV_COLUMNS : CSV_COLUMNS.map(sourceUnitKey)), ...reducedColumns];
+  const supportColumns = ctx.supportOf ? (['support_grade', 'support'] as const) : [];
+  const columns = [...(unitsKnown ? CSV_COLUMNS : CSV_COLUMNS.map(sourceUnitKey)), ...reducedColumns, ...supportColumns];
   const rows: string[] = [columns.join(',')];
   // Route the CSV through the SAME one gate the GeoJSON path uses (PR §19):
   // measurements sit below their required evidence level, so every row carries
@@ -934,6 +951,7 @@ export function measurementsToCsv(
       vertices: m.points.length,
       ...metrics,
       evidence: evidenceFor(m),
+      ...supportProps(m, ctx),
     };
     if (m.kind === 'volume' && m.volume?.gridAuthority) base.grid_authority = gridAuthorityExportValue(m.volume.gridAuthority);
     if (m.kind === 'volume' && m.volume?.method) base.volume_method = m.volume.method;

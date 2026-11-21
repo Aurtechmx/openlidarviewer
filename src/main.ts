@@ -61,7 +61,7 @@ import { noteEdit, withSuppressed } from './ui/undoRouter';
 // The Measurements panel is lazy-mounted on the first scan load (never in the
 // empty-state shell); its whole mount lifecycle lives in `measurePanelMount.ts`,
 // which pulls the panel class through `loadMeasurePanel()` inside `ensure()`.
-import { createMeasurePanelMount, createAnalyseProfileVisibility, mountClip, leaveClipPage } from './app/measurePanelMount';
+import { createMeasurePanelMount, createAnalyseProfileVisibility, mountClip, leaveClipPage, sheetMeasurements } from './app/measurePanelMount';
 import { createProcessStudioFromShell } from './app/processStudioMount';
 import { readTerrainComputePath } from './app/terrainComputePath';
 import { lazyCoordinateHud } from './app/coordinateHudLazy';
@@ -1646,7 +1646,7 @@ function newAnalysePanel(
     // Same cached-core rebuild, generalised with the contour shape-style picker so
     // an export reflects the user's chosen interval AND line shape.
     buildResultForExport: (opts) => terrainRunner.buildResultForExport(opts),
-    getExportBasename: activeScanName, getAnnotations: () => viewer.annotate.getAnnotations(), getActiveScanId: () => scans.activeExportTargetId(), getFeatureCloud: (id) => viewer.getCloud(id) ?? null, activeClassificationEpoch: () => { const id = scans.activeId; return id ? viewer.classificationEpoch(id) : 0; }, crsRevision: () => crsService.crsRevision(), getDerivedLayerHost: () => viewer.derivedLayerHost(),
+    getExportBasename: activeScanName, getAnnotations: () => viewer.annotate.getAnnotations(), getSheetMeasurements: (scanId) => sheetMeasurements(viewer, scanId ? runtime.layerIdentity.stableIdFor(scanId) : null), getActiveScanId: () => scans.activeExportTargetId(), getFeatureCloud: (id) => viewer.getCloud(id) ?? null, activeClassificationEpoch: () => { const id = scans.activeId; return id ? viewer.classificationEpoch(id) : 0; }, crsRevision: () => crsService.crsRevision(), getDerivedLayerHost: () => viewer.derivedLayerHost(),
     // Terrain Intelligence Report (v0.4.5): hand the report the Inspector
     // card's CURRENT Dataset Intelligence summary so the PDF's bucket labels
     // are the card's own strings (null when the card is empty — the report

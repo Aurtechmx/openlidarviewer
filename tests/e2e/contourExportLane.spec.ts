@@ -207,6 +207,31 @@ test('Export mode: the contour map PNG draws the sheet and carries its provenanc
   await expect(lane.locator('.olv-export-fullres-hint')).toHaveText('');
 });
 
+test('Export mode: the map sheet offers the scan\'s measurements, checked', async ({ page }) => {
+  test.setTimeout(120_000);
+  await analyseFixture(page);
+  await page.locator('.olv-tool', { hasText: 'Measure' }).click();
+  await page.evaluate(() => {
+    const api = (window as unknown as { __OLV_TEST_API__: { setMeasureKind(k: string): void; placeMeasurementPoint(p: { x: number; y: number; z: number }): void } }).__OLV_TEST_API__;
+    api.setMeasureKind('distance');
+    api.placeMeasurementPoint({ x: 0, y: 0, z: 0 });
+    api.placeMeasurementPoint({ x: 3, y: 4, z: 0 });
+  });
+  await expect(page.locator('.olv-mp-row')).toHaveCount(1, { timeout: 5_000 });
+  const group = await openContourLane(page);
+  await group.getByRole('button', { name: 'Contour map sheet (PDF)' }).click();
+  const dialog = page.locator('.olv-modal[role="dialog"]');
+  await expect(dialog).toBeVisible({ timeout: 20_000 });
+  const option = dialog.getByLabel('Include measurements');
+  await expect(option).toBeChecked();
+  await expect(option).toBeEnabled();
+  await expect(dialog.getByText(/^1 measurement\. Light and Dark draw them lettered/)).toBeVisible();
+  const [download] = await Promise.all([page.waitForEvent('download', { timeout: 60_000 }), dialog.getByRole('button', { name: 'Export PDF' }).click()]);
+  const bytes = readFileSync((await download.path())!);
+  expect(bytes.subarray(0, 5).toString('latin1')).toBe('%PDF-');
+  await expect(dialog).toBeHidden();
+});
+
 test('Export mode: a map sheet that cannot be written says why', async ({ page }) => {
   test.setTimeout(120_000);
   await analyseFixture(page);

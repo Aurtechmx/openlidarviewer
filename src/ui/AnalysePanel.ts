@@ -127,6 +127,7 @@ import type { MountedRangeWorkbench } from './rangeWorkbenchMount';
 import type { MountedFeatureCandidates } from './featureCandidatesMount';
 import type { PointCloud } from '../model/PointCloud';
 import { openModal, type ModalHandle } from './Modal';
+import type { SheetMeasurement } from '../export/sheetKit/sheetMeasurement';
 /** ExportPanel's TerrainLaneKind, restated to keep the edge out; a type test keeps them equal. */
 export type TerrainLaneKind = 'dem' | 'contours' | 'contours-png';
 import type { SheetSize, SheetOrientation, MapSheetPurpose } from '../render/measure/mapSheetPdf';
@@ -135,6 +136,8 @@ import {
   SHEET_OPTIONS,
   STYLE_OPTIONS,
   setSheetStyle,
+  measurementsOptionState,
+  optionCheck,
   sheetStyle,
   type SheetStyleChoice,
   ORIENTATION_OPTIONS,
@@ -282,6 +285,8 @@ export interface AnalysePanelCallbacks {
    * is drawn.
    */
   getAnnotations?: () => ReadonlyArray<Annotation>;
+  /** Measurements on the analysed scan, for the map sheet; see app/sheetMeasurements.ts. */
+  getSheetMeasurements?: (scanId: string | null) => readonly SheetMeasurement[];
   /**
    * Scene membership for a DERIVED LAYER overlay — `viewer.derivedLayerHost()`
    * verbatim. Read once by {@link AnalysePanel.flowPulseInput} so the Flow
@@ -3106,16 +3111,14 @@ export class AnalysePanel {
     // `annotationsOptionState` so the dialog and its unit tests agree.
     const annotationCount = this._cb.getAnnotations?.().length ?? 0;
     const annoState = annotationsOptionState(annotationCount);
-    const annoCheck = document.createElement('input');
-    annoCheck.type = 'checkbox';
-    annoCheck.className = 'olv-modal-check';
     // Default ON when the scan actually has annotations, so a map sheet includes
     // them without the user hunting for the toggle — the reported "annotations
     // missing from the map sheet" was this box sitting unchecked. A scan with no
     // annotations keeps the clean, byte-reproducible sheet: the option is
-    // disabled there, so `!disabled` leaves it off and unchanged.
-    annoCheck.checked = !annoState.disabled;
-    annoCheck.disabled = annoState.disabled;
+    // disabled there, so `!disabled` leaves it off and unchanged. Measurements likewise.
+    const annoCheck = optionCheck(annoState);
+    const sheetMs = this._cb.getSheetMeasurements?.(this._resultScanId) ?? [];
+    const measState = measurementsOptionState(sheetMs.length), measCheck = optionCheck(measState);
 
     const editable = el('div', { className: 'olv-modal-grid' });
     editable.append(
@@ -3141,6 +3144,7 @@ export class AnalysePanel {
       ),
       field('Output filename', filenameInput, 'A single .pdf is added on download.'),
       field(annoState.label, annoCheck, annoState.hint),
+      field(measState.label, measCheck, measState.hint),
     );
 
     // ── locked / auto section (read-only) ────────────────────────────────────
@@ -3248,6 +3252,7 @@ export class AnalysePanel {
             // A disabled checkbox can never be checked, so a scan with no
             // annotations always exports the plain sheet.
             includeAnnotations: annoCheck.checked,
+            measurements: measCheck.checked ? sheetMs : null,
             permit,
             purpose,
           });
@@ -3302,6 +3307,7 @@ export class AnalysePanel {
       generatedAt: Date;
       /** Draw the (opt-in) annotation layer on the sheet. */
       includeAnnotations: boolean;
+      measurements: readonly SheetMeasurement[] | null;
       /** The §19 permit minted for this dialog, or null when none reached it. */
       permit: ContourExportPermit | null;
       /** The Studio purpose facts minted with it; null keeps the plain sheet. */
@@ -3392,6 +3398,7 @@ export class AnalysePanel {
       // specific content. Null on any other path ⇒ byte-identical sheet.
       purpose,
       style: opts.style,
+      measurements: opts.measurements,
       relief,
       trueNorth,
     });

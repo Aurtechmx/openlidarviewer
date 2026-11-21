@@ -13,6 +13,10 @@
  * styles never word a figure differently. The Classic style is still drawn by
  * mapSheetPdf.ts, unchanged.
  */
+import { annotationToMapXY } from './annotationMapProjection';
+import { buildAnnotationReport } from './annotationReportTable';
+import { supportWord } from '../../export/sheetKit/sheetMeasurement';
+import type { Annotation } from '../annotate/types';
 import { PDFDocument, StandardFonts, degrees, type PDFFont, type PDFPage } from 'pdf-lib';
 import { INPUT_NOT_RECORDED_NOTE, sourceSha256Text } from '../../science/exportDigestRecord';
 import { crsOriginLine } from '../../science/crsOrigin';
@@ -35,6 +39,7 @@ import {
   type ContourSheetRelief,
 } from '../../export/sheetKit/contourSheetModel';
 import {
+  clipPolyline,
   drawCoordinateTicks,
   drawDataBlock,
   drawFooter,
@@ -62,7 +67,6 @@ import {
   contourShareSheetLines,
   mapLinearUnitLabel,
   mapSheetFacts,
-  drawAnnotationLayerForSheet,
   drawPurposeAppendixForSheet,
   type MapSheetInput,
   type MapSheetFacts,
@@ -151,7 +155,6 @@ export async function buildStyledMapSheetPdf(
 
   if (ctx.tr) ctx.facts = mapSheetFacts(input, ctx.tr.scale);
   for (const { block, panel, y } of layout.placed) block.draw(panel.x, y, panel.w, layout.k);
-  const tr = ctx.tr;
   const M = MARGIN;
 
   // Footer: software and build on the left, the deliverable in the middle, page count right.
@@ -165,12 +168,6 @@ export async function buildStyledMapSheetPdf(
     sheetText(page, label, PW - M - w - 40, M, { font: fonts.sansBold, size: SHEET_TYPE.footer, color: t.dim }, fonts);
   }
 
-  if (input.includeAnnotations && input.annotations && input.annotations.length > 0 && tr && bbox) {
-    const font = await doc.embedFont(StandardFonts.Helvetica);
-    const bold = await doc.embedFont(StandardFonts.HelveticaBold);
-    const inner = { x: frame.x + 6, y: frame.y + 6, w: frame.w - 12, h: frame.h - 12 };
-    drawAnnotationLayerForSheet(page, frame, inner, tr.area, { ox: tr.ox, oy: tr.oy, scale: tr.scale }, input, font, bold);
-  }
   if (purpose) {
     const font = await doc.embedFont(StandardFonts.Helvetica);
     const bold = await doc.embedFont(StandardFonts.HelveticaBold);
@@ -286,6 +283,9 @@ async function drawMapLayers(
     }
   }
 
+  // ── measurements and annotations, numbered; the panel lists them ─────────
+  drawMarks(page, input, t, fonts, inner, pageX, pageY);
+
   // ── highest and lowest measured ground ───────────────────────────────────
   if (relief) {
     const oz = input.worldOrigin?.z ?? 0;
@@ -380,17 +380,20 @@ function chooseLayout(PW: number, PH: number, blocks: readonly PanelBlock[]): La
     const mapW = PW - 2 * M - panelW - 24 - TICK_ROOM;
     const right: Frame = { x: PW - M - panelW, y: M + FOOTER_H, w: panelW, h: PH - 2 * M - FOOTER_H };
     candidates.push({ frame: { x: M + TICK_ROOM, y: M + FOOTER_H + TICK_ROOM, w: mapW, h: PH - 2 * M - FOOTER_H - TICK_ROOM }, panels: [right] });
-    for (const stripH of [PH * 0.22, PH * 0.3]) {
-      const colW = (mapW + TICK_ROOM - 22) / 2;
+    // A strip of two, then three, columns under the map, taller each time.
+    for (const [cols, share] of [[2, 0.22], [2, 0.3], [3, 0.3], [3, 0.38]] as const) {
+      const stripH = PH * share;
+      const colW = (mapW + TICK_ROOM - 22 * (cols - 1)) / cols;
+      const strip = Array.from({ length: cols }, (_, c) => ({ x: M + c * (colW + 22), y: M + FOOTER_H, w: colW, h: stripH }));
       candidates.push({
         frame: { x: M + TICK_ROOM, y: M + FOOTER_H + stripH + TICK_ROOM + 8, w: mapW, h: PH - 2 * M - FOOTER_H - stripH - TICK_ROOM - 8 },
-        panels: [right, { x: M, y: M + FOOTER_H, w: colW, h: stripH }, { x: M + colW + 22, y: M + FOOTER_H, w: colW, h: stripH }],
+        panels: [right, ...strip],
       });
     }
   } else {
     const colGap = 22;
     const colW = (PW - 2 * M - colGap) / 2;
-    for (const share of [0.34, 0.42, 0.5]) {
+    for (const share of [0.34, 0.42, 0.5, 0.58]) {
       const panelH = PH * share;
       candidates.push({
         frame: { x: M + TICK_ROOM, y: M + FOOTER_H + panelH + TICK_ROOM + 10, w: PW - 2 * M - TICK_ROOM, h: PH - 2 * M - FOOTER_H - panelH - TICK_ROOM - 10 },
@@ -492,6 +495,8 @@ function panelBlocks(
   if (relief?.hasHoles) legend.push([{ kind: 'hatch', color: t.hatch, background: t.nodata }, 'No ground data inside the footprint']);
   if (relief?.highest) legend.push([{ kind: 'marker', color: t.ink, shape: 'up' }, 'Highest measured ground']);
   if (relief?.lowest) legend.push([{ kind: 'marker', color: t.ink, shape: 'down' }, 'Lowest measured ground']);
+  if ((input.measurements?.length ?? 0) > 0) legend.push([{ kind: 'line', color: t.area, width: t.weight.area }, 'Measurement, lettered as listed']);
+  if (input.includeAnnotations && (input.annotations?.length ?? 0) > 0) legend.push([{ kind: 'marker', color: t.accent, shape: 'dot' }, 'Annotation, numbered as listed']);
   blocks.push({
     height: (_w, k) => SL(k) + legend.length * legendRowHeight(k) - legendRowHeight(k) + SHEET_TYPE.legend * k,
     draw: (x, y, w, k) => {
@@ -564,6 +569,72 @@ function panelBlocks(
       }
     },
   });
+
+  // ── measurements: number, name, the panel's figure and its support ───────
+  const ms = input.measurements ?? [];
+  if (ms.length > 0) {
+    const nameW = 18;
+    // One row per printed line; a measurement's first row carries its number.
+    interface MRow { num: string | null; text: string; font: PDFFont; color: SheetRgb; first: boolean }
+    const mRows = (w: number, k: number): MRow[] => {
+      const out: MRow[] = [];
+      const sz = SHEET_TYPE.note * k;
+      const tw = w - nameW;
+      ms.forEach((m, i) => {
+        const lines: Array<[string, PDFFont, SheetRgb]> = [];
+        for (const ln of wrapSheetText(m.name, f.sansBold, sz, tw, f)) lines.push([ln, f.sansBold, t.ink]);
+        for (const ln of wrapSheetText(m.value, f.mono, sz, tw, f)) lines.push([ln, f.mono, t.ink]);
+        for (const ln of wrapSheetText(`Support: ${m.support ?? supportWord(m.grade)}`, f.sans, sz, tw, f)) lines.push([ln, f.sans, m.grade === 'green' ? t.dim : t.warn]);
+        for (const note of m.notes) for (const ln of wrapSheetText(note, f.sans, sz, tw, f)) lines.push([ln, f.sans, t.dim]);
+        lines.forEach(([text, font, color], j) => out.push({ num: j === 0 ? measurementLetter(i) : null, text, font, color, first: j === 0 && i > 0 }));
+      });
+      return out;
+    };
+    blocks.push({
+      height: (w, k) => SL(k) + mRows(w, k).reduce((a, r) => a + noteStep(k) + (r.first ? SHEET_SPACE.sm * k : 0), 0),
+      draw: (x, y, w, k) => {
+        let cy = drawSectionLabel(page, `Measurements (${ms.length})`, x, y, w, t, f, k) + noteStep(k);
+        const sz = SHEET_TYPE.note * k;
+        for (const r of mRows(w, k)) {
+          cy -= noteStep(k) + (r.first ? SHEET_SPACE.sm * k : 0);
+          if (r.num) sheetText(page, r.num, x, cy, { font: f.sansBold, size: sz, color: t.area }, f);
+          sheetText(page, r.text, x + nameW, cy, { font: r.font, size: sz, color: r.color }, f);
+        }
+      },
+    });
+  }
+
+  // ── annotations, grouped by type ─────────────────────────────────────────
+  const anns = input.includeAnnotations && input.annotations ? input.annotations : [];
+  if (anns.length > 0) {
+    const report = buildAnnotationReport(anns, {});
+    const order = ['issue', 'warning', 'note', 'info'] as const;
+    const groupName: Record<string, string> = { issue: 'Issues', warning: 'Warnings', note: 'Notes', info: 'Information' };
+    const aLines = (w: number, k: number): Array<{ text: string; font: PDFFont; color: SheetRgb; indent: number; gap: boolean }> => {
+      const out: Array<{ text: string; font: PDFFont; color: SheetRgb; indent: number; gap: boolean }> = [];
+      const sz = SHEET_TYPE.note * k;
+      for (const type of order) {
+        const rows = report.rows.filter((r) => r.type === type);
+        if (rows.length === 0) continue;
+        out.push({ text: `${groupName[type]} (${rows.length})`, font: f.sansBold, color: annotationColor(t, type), indent: 0, gap: out.length > 0 });
+        for (const r of rows) {
+          const body = r.note ? `${r.title}: ${r.note}${r.noteTruncated ? '...' : ''}` : r.title;
+          wrapSheetText(`${r.index}. ${body}`, f.sans, sz, w - 8, f).forEach((ln) => out.push({ text: ln, font: f.sans, color: t.ink, indent: 8, gap: false }));
+        }
+      }
+      return out;
+    };
+    blocks.push({
+      height: (w, k) => SL(k) + aLines(w, k).reduce((a, l) => a + noteStep(k) + (l.gap ? SHEET_SPACE.xs * k : 0), 0),
+      draw: (x, y, w, k) => {
+        let cy = drawSectionLabel(page, report.header, x, y, w, t, f, k) + noteStep(k);
+        for (const ln of aLines(w, k)) {
+          cy -= noteStep(k) + (ln.gap ? SHEET_SPACE.xs * k : 0);
+          sheetText(page, ln.text, x + ln.indent, cy, { font: ln.font, size: SHEET_TYPE.note * k, color: ln.color }, f);
+        }
+      },
+    });
+  }
 
   // ── accuracy, readiness, evidence ────────────────────────────────────────
   // The figures as a data block, like the panel's other figures; the sample
@@ -659,3 +730,80 @@ function pct(n: number, d: number): string {
   return `${((100 * n) / d).toFixed(1)} %`;
 }
 
+/** Annotation type colours, from the style's tokens. */
+function annotationColor(t: SheetTokens, type: string): SheetRgb {
+  if (type === 'issue') return t.area;
+  if (type === 'warning') return t.warn;
+  if (type === 'info') return t.accent;
+  return t.minor;
+}
+
+/** The annotations a sheet draws: only when asked for and present. */
+function sheetAnnotations(input: MapSheetInput): ReadonlyArray<Annotation> {
+  return input.includeAnnotations && input.annotations ? input.annotations : [];
+}
+
+/** A measurement's letter: A to Z, then AA, AB and on. */
+export function measurementLetter(i: number): string {
+  let n = i + 1, out = '';
+  while (n > 0) { const r = (n - 1) % 26; out = String.fromCharCode(65 + r) + out; n = Math.floor((n - 1) / 26); }
+  return out;
+}
+
+/** A badge: a short label in a disc with a halo, so it reads over relief and lines. */
+function badge(page: PDFPage, label: string, cx: number, cy: number, color: SheetRgb, t: SheetTokens, f: SheetFonts): void {
+  const r = label.length > 1 ? 6.2 : 5.4;
+  page.drawCircle({ x: cx, y: cy, size: r + 1.2, color: pdfColor(t.halo), opacity: 0.9 });
+  page.drawCircle({ x: cx, y: cy, size: r, color: pdfColor(color) });
+  const w = f.sansBold.widthOfTextAtSize(label, 6.5);
+  page.drawText(label, { x: cx - w / 2, y: cy - 2.3, size: 6.5, font: f.sansBold, color: pdfColor(t.panel) });
+}
+
+function drawMarks(
+  page: PDFPage,
+  input: MapSheetInput,
+  t: SheetTokens,
+  f: SheetFonts,
+  inner: Frame,
+  pageX: (x: number) => number,
+  pageY: (y: number) => number,
+): void {
+  const up = input.sceneUpAxis ?? 'z';
+  const PH = page.getHeight();
+  const box = { x: inner.x, y: inner.y, w: inner.w, h: inner.h };
+  const inside = (x: number, y: number): boolean => x >= inner.x && x <= inner.x + inner.w && y >= inner.y && y <= inner.y + inner.h;
+  (input.measurements ?? []).forEach((m, i) => {
+    const pts = m.points.map((p) => {
+      const q = annotationToMapXY({ x: p[0], y: p[1], z: p[2] }, up);
+      return [pageX(q.x), pageY(q.y)] as [number, number];
+    });
+    if (pts.length === 0) return;
+    const ring = m.closed && pts.length >= 3 ? [...pts, pts[0]!] : pts;
+    if (m.closed && pts.length >= 3 && pts.every(([x, y]) => inside(x, y))) {
+      const d = pts.map(([x, y], k) => `${k === 0 ? 'M' : 'L'}${x.toFixed(2)} ${(PH - y).toFixed(2)}`).join(' ') + ' Z';
+      page.drawSvgPath(d, { x: 0, y: PH, color: pdfColor(t.area), opacity: 0.1 });
+    }
+    for (const run of clipPolyline(ring, box)) {
+      if (run.length < 2) continue;
+      const d = run.map(([x, y], k) => `${k === 0 ? 'M' : 'L'}${x.toFixed(2)} ${(PH - y).toFixed(2)}`).join(' ');
+      page.drawSvgPath(d, { x: 0, y: PH, borderColor: pdfColor(t.halo), borderWidth: t.weight.area + 1.6, borderOpacity: 0.7 });
+      page.drawSvgPath(d, { x: 0, y: PH, borderColor: pdfColor(t.area), borderWidth: t.weight.area });
+    }
+    for (const [x, y] of pts) {
+      if (inside(x, y)) page.drawRectangle({ x: x - 1.8, y: y - 1.8, width: 3.6, height: 3.6, color: pdfColor(t.panel), borderColor: pdfColor(t.area), borderWidth: 0.8 });
+    }
+    // The badge sits at the ring's centre or the line's middle.
+    const n = pts.length;
+    const [ax, ay] = m.closed && n >= 3
+      ? [pts.reduce((a, p) => a + p[0], 0) / n, pts.reduce((a, p) => a + p[1], 0) / n]
+      : n >= 2 ? [(pts[Math.floor((n - 1) / 2)]![0] + pts[Math.ceil((n - 1) / 2)]![0]) / 2, (pts[Math.floor((n - 1) / 2)]![1] + pts[Math.ceil((n - 1) / 2)]![1]) / 2] : pts[0]!;
+    if (inside(ax, ay)) badge(page, measurementLetter(i), ax, ay, t.area, t, f);
+  });
+  // Annotations: a coloured, numbered dot at each one on the map; the panel groups them by type.
+  const anns = sheetAnnotations(input);
+  anns.forEach((a, i) => {
+    const q = annotationToMapXY(a.localPosition, up);
+    const x = pageX(q.x), y = pageY(q.y);
+    if (inside(x, y)) badge(page, String(i + 1), x, y, annotationColor(t, a.type), t, f);
+  });
+}

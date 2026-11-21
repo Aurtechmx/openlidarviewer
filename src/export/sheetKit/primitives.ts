@@ -330,3 +330,28 @@ export function drawPaper(page: PDFPage, t: SheetTokens): void {
   const { width, height } = page.getSize();
   page.drawRectangle({ x: 0, y: 0, width, height, color: pdfColor(t.paper) });
 }
+
+/** Cut a polyline to a box (Liang-Barsky per segment), keeping runs inside. */
+export function clipPolyline(pts: Array<[number, number]>, b: { x: number; y: number; w: number; h: number }): Array<Array<[number, number]>> {
+  const out: Array<Array<[number, number]>> = [];
+  let cur: Array<[number, number]> = [];
+  const x0 = b.x, x1 = b.x + b.w, y0 = b.y, y1 = b.y + b.h;
+  for (let i = 1; i < pts.length; i++) {
+    const [ax, ay] = pts[i - 1]!, [bx, by] = pts[i]!;
+    let t0 = 0, t1 = 1;
+    const dx = bx - ax, dy = by - ay;
+    let ok = true;
+    for (const [p, q] of [[-dx, ax - x0], [dx, x1 - ax], [-dy, ay - y0], [dy, y1 - ay]] as const) {
+      if (p === 0) { if (q < 0) { ok = false; break; } continue; }
+      const r = q / p;
+      if (p < 0) { if (r > t1) { ok = false; break; } if (r > t0) t0 = r; } else { if (r < t0) { ok = false; break; } if (r < t1) t1 = r; }
+    }
+    if (!ok) { if (cur.length) { out.push(cur); cur = []; } continue; }
+    const s0: [number, number] = [ax + t0 * dx, ay + t0 * dy], s1: [number, number] = [ax + t1 * dx, ay + t1 * dy];
+    if (cur.length === 0) cur.push(s0);
+    cur.push(s1);
+    if (t1 < 1) { out.push(cur); cur = []; }
+  }
+  if (cur.length) out.push(cur);
+  return out;
+}
