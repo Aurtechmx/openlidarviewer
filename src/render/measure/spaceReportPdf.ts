@@ -19,7 +19,11 @@
  * from the on-screen numbers.
  */
 
-import { PDFDocument, StandardFonts, rgb, type PDFFont, type PDFPage } from 'pdf-lib';
+import { PDFDocument, StandardFonts, rgb, type PDFFont, type PDFPage, type RGB } from 'pdf-lib';
+/** The session's sheet style, read by the caller that loads this chunk. */
+export { sheetStyle } from './mapSheetExportOptions';
+import { startStyledReport } from '../../export/sheetKit/reportStyle';
+import type { SheetStyle } from '../../export/sheetKit/tokens';
 import { metresToFeet, type SpaceMetrics } from '../../terrain/spaceMetrics';
 import type { ObjectMetrics } from '../../terrain/objectMetrics';
 import { buildSpaceReportContent } from '../../terrain/space/spaceReportLayout';
@@ -56,19 +60,45 @@ export interface SpaceReportPdfInput {
   readonly coverageNote?: string | null;
 }
 
-const INK = rgb(0.12, 0.14, 0.18);
-const DIM = rgb(0.42, 0.46, 0.52);
-const FRAME = rgb(0.2, 0.22, 0.26);
-const FILL = rgb(0.93, 0.945, 0.96);
-const CONTENTS = rgb(0.87, 0.885, 0.91);
-const WARN = rgb(0.54, 0.18, 0.11);
-const WHITE = rgb(1, 1, 1);
+let INK = rgb(0.12, 0.14, 0.18);
+let DIM = rgb(0.42, 0.46, 0.52);
+let FRAME = rgb(0.2, 0.22, 0.26);
+let FILL = rgb(0.93, 0.945, 0.96);
+let CONTENTS = rgb(0.87, 0.885, 0.91);
+let WARN = rgb(0.54, 0.18, 0.11);
+let WHITE = rgb(1, 1, 1);
+
+/** The report's colours, swapped for a Light or Dark build and restored after it. */
+interface ReportInk { readonly INK: RGB; readonly DIM: RGB; readonly FRAME: RGB; readonly FILL: RGB; readonly CONTENTS: RGB; readonly WARN: RGB; readonly WHITE: RGB; }
+const CLASSIC_INK: ReportInk = { INK, DIM, FRAME, FILL, CONTENTS, WARN, WHITE };
+function useInk(c: ReportInk): void {
+  ({ INK, DIM, FRAME, FILL, CONTENTS, WARN, WHITE } = c);
+}
 
 /** Keep every drawn string WinAnsi-encodable (StandardFonts throw otherwise). */
 const safe = winAnsiSafe;
 
 /** Build the Space / Object report PDF and return its bytes. */
-export async function buildSpaceReportPdf(input: SpaceReportPdfInput): Promise<Uint8Array> {
+/**
+ * The report in a sheet style (`render.style`): Light and Dark set it in the
+ * sheet kit's type, colours and paper with the same content; Classic, or no
+ * style, is the report as before, byte for byte.
+ */
+export async function buildSpaceReportPdf(
+  input: SpaceReportPdfInput,
+  render: { readonly style?: SheetStyle | null; readonly loadFont?: (name: string) => Promise<Uint8Array> } = {},
+): Promise<Uint8Array> {
+  try {
+    return await buildSpaceReportPdfStyled(input, render);
+  } finally {
+    useInk(CLASSIC_INK);
+  }
+}
+
+async function buildSpaceReportPdfStyled(
+  input: SpaceReportPdfInput,
+  render: { readonly style?: SheetStyle | null; readonly loadFont?: (name: string) => Promise<Uint8Array> },
+): Promise<Uint8Array> {
   const content = buildSpaceReportContent(input);
   const doc = await PDFDocument.create();
   // Accessibility metadata. `showInWindowTitleBar` sets the ViewerPreferences
@@ -85,8 +115,15 @@ export async function buildSpaceReportPdf(input: SpaceReportPdfInput): Promise<U
   const infoStamp = pdfInfoDate(input.generatedAt);
   doc.setCreationDate(infoStamp);
   doc.setModificationDate(infoStamp);
-  const font = await doc.embedFont(StandardFonts.Helvetica);
-  const bold = await doc.embedFont(StandardFonts.HelveticaBold);
+  // Light and Dark: the sheet kit's fonts and colours. No await follows until
+  // the save, so the swapped colours are this build's alone.
+  const kit = await startStyledReport(doc, render.style, render.loadFont);
+  const font = kit ? kit.fonts.sans : await doc.embedFont(StandardFonts.Helvetica);
+  const bold = kit ? kit.fonts.sansBold : await doc.embedFont(StandardFonts.HelveticaBold);
+  if (kit) {
+    const k = kit, t = kit.tokens;
+    useInk({ INK: k.color(t.ink), DIM: k.color(t.dim), FRAME: k.color(t.outline), FILL: k.mix(t.panel, t.rule, 0.35), CONTENTS: k.mix(t.panel, t.rule, 0.7), WARN: k.color(t.warn), WHITE: k.color(t.panel) });
+  }
 
   const [PW, PH] = [612, 792]; // US Letter portrait
   let page = doc.addPage([PW, PH]);
@@ -230,6 +267,10 @@ export async function buildSpaceReportPdf(input: SpaceReportPdfInput): Promise<U
     ny -= 11;
   }
 
+  if (kit) {
+    useInk(CLASSIC_INK);
+    kit.done();
+  }
   return doc.save();
 }
 

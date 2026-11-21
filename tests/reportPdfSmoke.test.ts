@@ -90,6 +90,16 @@ function makeInputs(templateId: ReportInputs['templateId']): ReportInputs {
 }
 
 describe('PDF report smoke render', () => {
+  for (const theme of ['sheet-light', 'sheet-dark'] as const) {
+    it(`renders the default template in the ${theme} theme`, async () => {
+      const inputs = makeInputs(DEFAULT_TEMPLATE_ID);
+      const result = await generateReport({ ...inputs, branding: { ...inputs.branding, theme } });
+      const parsed = await PDFDocument.load(new Uint8Array(await result.blob.arrayBuffer()));
+      expect(parsed.getPageCount()).toBe(result.pages);
+      expect(result.pages).toBeGreaterThan(0);
+    });
+  }
+
   for (const template of REPORT_TEMPLATES) {
     it(`renders the ${template.id} template end-to-end`, async () => {
       const result = await generateReport(makeInputs(template.id));

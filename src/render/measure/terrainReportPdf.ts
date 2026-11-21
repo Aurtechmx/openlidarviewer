@@ -26,7 +26,9 @@
  * caller triggers the download.
  */
 
-import { PDFDocument, StandardFonts, rgb, type PDFFont } from 'pdf-lib';
+import { PDFDocument, StandardFonts, rgb, type PDFFont, type RGB } from 'pdf-lib';
+import { startStyledReport } from '../../export/sheetKit/reportStyle';
+import type { SheetStyle } from '../../export/sheetKit/tokens';
 import type { AnalyseContoursResult } from '../../terrain/contour/analyseContours';
 import {
   buildTerrainReportContent,
@@ -45,12 +47,19 @@ import {
   wrapToWidth,
 } from '../../winAnsiText';
 
-const INK = rgb(0.12, 0.14, 0.18);
-const DIM = rgb(0.42, 0.46, 0.52);
-const FRAME = rgb(0.2, 0.22, 0.26);
-const WARN = rgb(0.54, 0.18, 0.11);
-const GOOD = rgb(0.13, 0.43, 0.2);
-const CAUTION = rgb(0.55, 0.4, 0.05);
+let INK = rgb(0.12, 0.14, 0.18);
+let DIM = rgb(0.42, 0.46, 0.52);
+let FRAME = rgb(0.2, 0.22, 0.26);
+let WARN = rgb(0.54, 0.18, 0.11);
+let GOOD = rgb(0.13, 0.43, 0.2);
+let CAUTION = rgb(0.55, 0.4, 0.05);
+
+/** The report's colours, swapped for a Light or Dark build and restored after it. */
+interface ReportInk { readonly INK: RGB; readonly DIM: RGB; readonly FRAME: RGB; readonly WARN: RGB; readonly GOOD: RGB; readonly CAUTION: RGB; }
+const CLASSIC_INK: ReportInk = { INK, DIM, FRAME, WARN, GOOD, CAUTION };
+function useInk(c: ReportInk): void {
+  ({ INK, DIM, FRAME, WARN, GOOD, CAUTION } = c);
+}
 
 /** A4 portrait, in points. */
 const PW = 595.28;
@@ -91,9 +100,27 @@ function isContent(x: unknown): x is TerrainReportContent {
  * (assembled here). Pure: it carries no timestamp, and its Info-dictionary
  * dates are pinned rather than read from the clock.
  */
+/**
+ * The report in a sheet style (`render.style`): Light and Dark set it in the
+ * sheet kit's type, colours and paper with the same content; Classic, or no
+ * style, is the report as before, byte for byte.
+ */
 export async function buildTerrainReportPdf(
   input: TerrainReportContent | AnalyseContoursResult,
   opts: TerrainReportContentOptions = NO_RESOLVED_VERTICAL_SCALE,
+  render: { readonly style?: SheetStyle | null; readonly loadFont?: (name: string) => Promise<Uint8Array> } = {},
+): Promise<Uint8Array> {
+  try {
+    return await buildTerrainReportPdfStyled(input, opts, render);
+  } finally {
+    useInk(CLASSIC_INK);
+  }
+}
+
+async function buildTerrainReportPdfStyled(
+  input: TerrainReportContent | AnalyseContoursResult,
+  opts: TerrainReportContentOptions = NO_RESOLVED_VERTICAL_SCALE,
+  render: { readonly style?: SheetStyle | null; readonly loadFont?: (name: string) => Promise<Uint8Array> },
 ): Promise<Uint8Array> {
   const content = isContent(input) ? input : buildTerrainReportContent(input, opts);
 
@@ -112,8 +139,15 @@ export async function buildTerrainReportPdf(
   const infoStamp = pdfInfoDate(undefined);
   doc.setCreationDate(infoStamp);
   doc.setModificationDate(infoStamp);
-  const font = await doc.embedFont(StandardFonts.Helvetica);
-  const bold = await doc.embedFont(StandardFonts.HelveticaBold);
+  // Light and Dark: the sheet kit's fonts and colours. No await follows until
+  // the save, so the swapped colours are this build's alone.
+  const kit = await startStyledReport(doc, render.style, render.loadFont);
+  const font = kit ? kit.fonts.sans : await doc.embedFont(StandardFonts.Helvetica);
+  const bold = kit ? kit.fonts.sansBold : await doc.embedFont(StandardFonts.HelveticaBold);
+  if (kit) {
+    const k = kit, t = kit.tokens;
+    useInk({ INK: k.color(t.ink), DIM: k.color(t.dim), FRAME: k.color(t.outline), WARN: k.color(t.warn), GOOD: k.color(t.minor), CAUTION: k.color(t.index) });
+  }
 
   // ── paging state (the report can flow onto a second page) ────────────────
   let page = doc.addPage([PW, PH]);
@@ -287,6 +321,10 @@ export async function buildTerrainReportPdf(
     ny -= NOTE_LEAD;
   }
 
+  if (kit) {
+    useInk(CLASSIC_INK);
+    kit.done();
+  }
   return doc.save();
 }
 

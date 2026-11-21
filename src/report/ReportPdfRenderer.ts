@@ -17,6 +17,7 @@
  */
 
 import { PDFDocument, StandardFonts, rgb, type PDFPage, type PDFFont, type PDFImage } from 'pdf-lib';
+import { embedSheetFonts } from '../export/sheetKit/fonts';
 import type {
   ReportInputs,
   ReportResult,
@@ -29,6 +30,7 @@ import {
   effectiveBranding,
   parseAccentColor,
   resolveTheme,
+  isSheetTheme,
   type ParsedColor,
   type ReportThemePalette,
 } from './ReportBranding';
@@ -167,9 +169,12 @@ export async function renderReportPdf(
   doc.setCreationDate(infoStamp);
   doc.setModificationDate(infoStamp);
 
-  const helvetica = await doc.embedFont(StandardFonts.Helvetica);
-  const helveticaBold = await doc.embedFont(StandardFonts.HelveticaBold);
   const branding = effectiveBranding(inputs.branding);
+  // The sheet themes are set in Figtree, as the other drawn exports are; the
+  // other themes keep the standard fonts, embedded as they always were.
+  const sheetFonts = isSheetTheme(branding.theme) ? await embedSheetFonts(doc) : null;
+  const helvetica = sheetFonts ? sheetFonts.sans : await doc.embedFont(StandardFonts.Helvetica);
+  const helveticaBold = sheetFonts ? sheetFonts.sansBold : await doc.embedFont(StandardFonts.HelveticaBold);
   // Per-template cover / section accent. `effectiveBranding` backfills
   // `accentColor` with the single app default whenever the caller supplied
   // none — which quietly erased each template's design DNA, so every template

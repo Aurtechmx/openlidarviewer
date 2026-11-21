@@ -32,25 +32,8 @@ export const STYLE_OPTIONS: ReadonlyArray<{ value: 'light' | 'dark' | 'classic';
   { value: 'classic', label: 'Classic, lines only' },
 ];
 
-/**
- * The sheet style chosen in this tab, shared by the map sheet, the contour SVG
- * and PNG, the profile sheet and the section image, so one choice styles every
- * drawn export. Module state on purpose: it lasts the session and is never
- * written to storage. Light until the user picks another.
- */
-export type SheetStyleChoice = 'light' | 'dark' | 'classic';
-
-let current: SheetStyleChoice = 'light';
-
-/** The style the next drawn export uses. */
-export function sheetStyle(): SheetStyleChoice {
-  return current;
-}
-
-/** Remember the style the user chose. */
-export function setSheetStyle(style: SheetStyleChoice): void {
-  current = style;
-}
+/** The sheet style chosen in this tab; it lives in the sheet kit so the export layer can read it. */
+export { sheetStyle, setSheetStyle, type SheetStyleChoice } from '../../export/sheetKit/sessionStyle';
 
 /** Orientation choices offered in the dialog. */
 export const ORIENTATION_OPTIONS: ReadonlyArray<{ value: SheetOrientation; label: string }> = [

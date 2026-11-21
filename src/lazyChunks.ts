@@ -325,6 +325,7 @@ export const loadFloorPlan = () =>
   ]).then(([compute, svg]) => ({
     extractFloorPlan: compute.extractFloorPlan,
     floorPlanSvg: svg.floorPlanSvg,
+    sheetStyle: svg.sheetStyle,
   }));
 
 /**

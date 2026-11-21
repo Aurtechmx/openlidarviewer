@@ -62,8 +62,10 @@ export interface ReportBranding {
    * inspection report; `dark-inspection` is a high-contrast dark-page variant
    * for on-screen review; `minimal-engineering` strips chrome (no accent
    * stripe, monochrome rules) for an austere engineering record.
+   * `sheet-light` and `sheet-dark` are the Light and Dark sheet styles the
+   * other drawn exports use: the sheet kit's colours, set in Figtree.
    */
-  readonly theme?: 'light-technical' | 'dark-inspection' | 'minimal-engineering';
+  readonly theme?: 'light-technical' | 'dark-inspection' | 'minimal-engineering' | 'sheet-light' | 'sheet-dark';
   /**
    * optional custom footer line. Appended after the standard
    * "OpenLiDARViewer · timestamp" line; useful for a footer notice,
