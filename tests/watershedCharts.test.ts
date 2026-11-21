@@ -7,14 +7,14 @@ import { describe, it, expect, beforeAll } from 'vitest';
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { PDFDocument } from 'pdf-lib';
-import { embedReportFonts, type ReportFonts } from '../src/export/watershedReport/reportFonts';
+import { embedReportFonts, type ReportFonts } from '../src/export/sheetKit/fonts';
 import { drawChannelProfile, drawHypsometricCurve, PROFILE_INTERPOLATED_DASH } from '../src/export/watershedReport/charts';
 import type { Box } from '../src/export/watershedReport/pageKit';
 import type { MainChannel } from '../src/simulation/flowPulse/watershed/mainChannel';
 import { formatNumber } from '../src/simulation/flowPulse/watershed/watershedStrings';
 import { spyPdf, type PdfSpy } from './support/pdfSpy';
 
-const FONT_DIR = join(process.cwd(), 'src', 'export', 'watershedReport', 'fonts');
+const FONT_DIR = join(process.cwd(), 'src', 'export', 'sheetKit', 'fonts');
 const fromDisk = async (name: string): Promise<Uint8Array> => new Uint8Array(await readFile(join(FONT_DIR, name)));
 
 let doc: PDFDocument;

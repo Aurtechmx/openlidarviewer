@@ -12,8 +12,8 @@
 import { PDFDocument, rgb, degrees } from 'pdf-lib';
 import type { PDFFont, PDFPage, RGB } from 'pdf-lib';
 import type { Verdict } from '../../simulation/flowPulse/watershed/catchmentQuality';
-import { SYMBOL_ONLY_CHARS } from './reportFonts';
-import type { ReportFonts } from './reportFonts';
+import { SYMBOL_ONLY_CHARS } from '../sheetKit/fonts';
+import type { ReportFonts } from '../sheetKit/fonts';
 
 export interface Box { x: number; y: number; width: number; height: number }
 

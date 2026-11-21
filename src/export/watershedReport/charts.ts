@@ -17,7 +17,7 @@ import { formatNumber, t } from '../../simulation/flowPulse/watershed/watershedS
 import { withheldText } from '../../simulation/flowPulse/watershed/watershedNarrative';
 import { PALETTE, drawRuns, splitRuns, widthOf } from './pageKit';
 import type { Box } from './pageKit';
-import type { ReportFonts } from './reportFonts';
+import type { ReportFonts } from '../sheetKit/fonts';
 
 /** Dash pattern of the profile where the ground was interpolated. */
 export const PROFILE_INTERPOLATED_DASH: readonly number[] = [3, 2.5];

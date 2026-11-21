@@ -39,7 +39,7 @@ import { formatNumber, t } from '../../simulation/flowPulse/watershed/watershedS
 import { scaleBarUnit } from '../../render/measure/scaleBar';
 import { PALETTE, drawRuns, heading, newPage, widthOf } from './pageKit';
 import type { PageCursor } from './pageKit';
-import type { ReportFonts } from './reportFonts';
+import type { ReportFonts } from '../sheetKit/fonts';
 import { decimalsFor, fitSize, niceFloor, niceStep, strokePath, svgPolyline, wrapText } from './charts';
 
 export interface MapLayers {

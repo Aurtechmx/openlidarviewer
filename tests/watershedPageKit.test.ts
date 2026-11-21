@@ -8,12 +8,12 @@ import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { PDFDocument } from 'pdf-lib';
 import type { PDFFont, PDFPage } from 'pdf-lib';
-import { embedReportFonts } from '../src/export/watershedReport/reportFonts';
-import type { ReportFonts } from '../src/export/watershedReport/reportFonts';
+import { embedReportFonts } from '../src/export/sheetKit/fonts';
+import type { ReportFonts } from '../src/export/sheetKit/fonts';
 import { PALETTE, newPage, heading, paragraph, table, kpiRow, chip, callout, fitFooter, widthOf } from '../src/export/watershedReport/pageKit';
 import type { PageCursor } from '../src/export/watershedReport/pageKit';
 
-const FONT_DIR = join(process.cwd(), 'src', 'export', 'watershedReport', 'fonts');
+const FONT_DIR = join(process.cwd(), 'src', 'export', 'sheetKit', 'fonts');
 const fromDisk = async (name: string): Promise<Uint8Array> => new Uint8Array(await readFile(join(FONT_DIR, name)));
 
 interface TextCall { text: string; x: number; y: number; font: PDFFont; size: number; rotated: boolean; color: { red: number; green: number; blue: number } }
