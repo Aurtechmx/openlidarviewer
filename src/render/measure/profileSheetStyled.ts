@@ -32,7 +32,7 @@ import {
   type DataRow,
   type LegendKey,
 } from '../../export/sheetKit/primitives';
-import { SHEET_TYPE, type SheetRgb, type SheetTokens } from '../../export/sheetKit/tokens';
+import { SHEET_SPACE, SHEET_TYPE, type SheetRgb, type SheetTokens } from '../../export/sheetKit/tokens';
 import type { ContourFeatureModel } from '../../terrain/contour/contourFeatureModel';
 import type { ProfileChartSample } from './types';
 import {
@@ -343,15 +343,18 @@ function drawProfilePanel(page: PDFPage, s: StyledProfileSheet, box: { x: number
   page.drawLine({ start: { x, y }, end: { x: x + w, y }, thickness: t.weight.rule, color: pdfColor(t.rule) });
   // Headline figures, two by two.
   const colW = w / 2;
+  // Headline figures: a small dim label, then the figure at display size, the
+  // largest type in the panel after the title.
+  const rowH = SHEET_SPACE.md + SHEET_TYPE.figure + SHEET_SPACE.lg;
   s.kpis.forEach(([label, value], i) => {
     const cx = x + (i % 2) * colW;
-    const cy = y - 16 - Math.floor(i / 2) * 42;
-    sheetText(page, label.toUpperCase(), cx, cy, { font: f.mono, size: SHEET_TYPE.dataKey, color: t.dim }, f);
-    let vs = 17;
-    while (vs > 9 && sheetTextWidth(value, f.sansBold, vs, f) > colW - 8) vs -= 0.5;
-    sheetText(page, value, cx, cy - 20, { font: f.sansBold, size: vs, color: t.ink }, f);
+    const cy = y - SHEET_SPACE.lg - Math.floor(i / 2) * rowH;
+    sheetText(page, label.toUpperCase(), cx, cy, { font: f.sansBold, size: SHEET_TYPE.dataKey, color: t.dim }, f);
+    let vs: number = SHEET_TYPE.figure;
+    while (vs > 11 && sheetTextWidth(value, f.sansBold, vs, f) > colW - 8) vs -= 0.5;
+    sheetText(page, value, cx, cy - SHEET_SPACE.xs - vs, { font: f.sansBold, size: vs, color: t.ink }, f);
   });
-  y -= 16 + Math.ceil(s.kpis.length / 2) * 42;
+  y -= SHEET_SPACE.lg + Math.ceil(s.kpis.length / 2) * rowH - SHEET_SPACE.sm;
   // Legend.
   const legend: Array<[LegendKey, string]> = [
     [{ kind: 'line', color: t.index, width: 1.4 }, s.groundLineLabel],

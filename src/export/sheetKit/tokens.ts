@@ -64,20 +64,35 @@ export interface SheetTokens {
   readonly filledDash: readonly number[];
 }
 
-/** Type sizes in points, shared by every style. */
+/**
+ * The type scale, points: four steps and nothing between them. Small (7) for
+ * labels, keys, ticks and the footer; base (8.5) for legend, values and notes;
+ * lead (11) for the subtitle and secondary figures; display (20) for the title
+ * and headline figures. Hierarchy within a step comes from weight and colour.
+ */
+export const SHEET_SCALE = { small: 7, base: 8.5, lead: 11, display: 20 } as const;
+
+/** Type sizes in points by role, each a step of {@link SHEET_SCALE}. */
 export const SHEET_TYPE = {
-  kicker: 8.5,
-  title: 20,
-  subtitle: 9.5,
-  section: 8,
-  legend: 8.5,
-  dataKey: 7.5,
-  dataValue: 8.5,
-  tick: 7,
-  contourLabel: 7,
-  note: 7.5,
-  footer: 7,
+  kicker: SHEET_SCALE.base,
+  title: SHEET_SCALE.display,
+  subtitle: SHEET_SCALE.base,
+  section: SHEET_SCALE.small,
+  legend: SHEET_SCALE.base,
+  dataKey: SHEET_SCALE.small,
+  dataValue: SHEET_SCALE.base,
+  tick: SHEET_SCALE.small,
+  contourLabel: SHEET_SCALE.small,
+  note: SHEET_SCALE.base,
+  footer: SHEET_SCALE.small,
+  figure: SHEET_SCALE.display,
 } as const;
+
+/**
+ * The spacing scale, points. Space inside a group is a step or two smaller
+ * than the space between groups, so groups read as groups.
+ */
+export const SHEET_SPACE = { xs: 4, sm: 8, md: 12, lg: 16, xl: 24 } as const;
 
 const hex = (h: number): SheetRgb => [((h >> 16) & 255) / 255, ((h >> 8) & 255) / 255, (h & 255) / 255];
 
