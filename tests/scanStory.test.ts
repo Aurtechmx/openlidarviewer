@@ -267,3 +267,20 @@ describe('buildExportHealth scope for a strided local file', () => {
     expect(scope?.tier).toBe('caution');
   });
 });
+
+describe('buildScanStory — small footprints', () => {
+  it('keeps two significant figures below 10 m² instead of rounding to "0 m²"', () => {
+    expect(buildScanStory({ areaM2: 0.33, pointCount: 55_288 }).headline).toBe(
+      'Point cloud — 0.33 m² bounding box, 55.3K points',
+    );
+    expect(buildScanStory({ areaM2: 7.4, pointCount: 100 }).headline).toBe(
+      'Point cloud — 7.4 m² bounding box, 100 points',
+    );
+  });
+
+  it('leaves whole-metre areas at 10 m² and above unchanged', () => {
+    expect(buildScanStory({ areaM2: 520, pointCount: 100 }).headline).toBe(
+      'Point cloud — 520 m² bounding box, 100 points',
+    );
+  });
+});

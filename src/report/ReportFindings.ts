@@ -130,6 +130,9 @@ function footprintAreaM2(metadata: MetadataInputs): number {
 function formatArea(areaM2: number): string {
   if (!Number.isFinite(areaM2) || areaM2 <= 0) return 'unknown extent';
   if (areaM2 >= 10_000) return `${(areaM2 / 10_000).toFixed(1)} ha`;
+  // Below 10 m² a whole-metre round loses the figure (a 0.33 m² object scan
+  // read "0 m²"), so keep two significant figures there.
+  if (areaM2 < 10) return `${areaM2.toLocaleString('en-US', { maximumSignificantDigits: 2 })} m²`;
   return `${Math.round(areaM2).toLocaleString('en-US')} m²`;
 }
 
