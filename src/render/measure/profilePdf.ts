@@ -148,6 +148,7 @@ import {
 // Metres → feet, single-sourced: this module used to keep its own copy.
 import { FT_PER_M as FEET_PER_METRE } from '../../units/units';
 import { winAnsiSafe as sharedWinAnsiSafe } from '../../winAnsiText';
+import { clipText, wrapText } from './profileText';
 import {
   countsPerStation, drawFooter, drawPaper, drawStyledProfileSheet, embedSheetFonts, planMissingNote, profileInkFor as inkFor, profileScaleRatios, sheetTokens,
   type ProfileInk, type ProfileSheetExtras, type SheetStyle,
@@ -503,36 +504,6 @@ function legendSources(record: ProfileProvenance | null | undefined): DerivedSur
           ? ('static-truncated' as const)
           : ('static' as const),
     }));
-}
-
-/** Greedy word wrap against the font's real metrics. WinAnsi-safe first. */
-function wrapText(s: string, font: PDFFont, size: number, maxW: number): string[] {
-  const words = winAnsiSafe(s).split(/\s+/).filter((w) => w !== '');
-  if (words.length === 0) return [];
-  const out: string[] = [];
-  let line = '';
-  for (const w of words) {
-    const next = line === '' ? w : `${line} ${w}`;
-    if (line === '' || font.widthOfTextAtSize(next, size) <= maxW) {
-      line = next;
-    } else {
-      out.push(line);
-      line = w;
-    }
-  }
-  if (line !== '') out.push(line);
-  return out;
-}
-
-/** Trim to fit `maxW`, marking the trim so a truncated id never reads whole. */
-function clipText(s: string, font: PDFFont, size: number, maxW: number): string {
-  const safe = winAnsiSafe(s);
-  if (font.widthOfTextAtSize(safe, size) <= maxW) return safe;
-  let cut = safe;
-  while (cut.length > 1 && font.widthOfTextAtSize(`${cut}...`, size) > maxW) {
-    cut = cut.slice(0, -1);
-  }
-  return `${cut}...`;
 }
 
 /** One straight ruled segment. Every rule on this sheet is drawn through it. */
@@ -2049,14 +2020,17 @@ function renderMethodSheet(
         'their classification and the read scope are not recorded on this sheet.',
     );
   } else {
+    // The columns span 940 pt at Classic's size; a larger type widens them only
+    // as far as the page allows, so the last column ends inside the margin.
+    const cz = (v: number): number => v * Math.min(pageTypeK, usableW / 940);
     const cols: Array<{ head: string; x: number; w: number }> = [
-      { head: 'LAYER ID', x: M, w: z(190) },
-      { head: 'NAME', x: M + z(200), w: z(190) },
-      { head: 'CLASSIFICATION', x: M + z(400), w: z(120) },
-      { head: 'READ', x: M + z(530), w: z(90) },
-      { head: 'ACCEPTED', x: M + z(630), w: z(90) },
-      { head: 'CONTRIBUTED', x: M + z(730), w: z(100) },
-      { head: 'RESIDENCY', x: M + z(840), w: z(100) },
+      { head: 'LAYER ID', x: M, w: cz(190) },
+      { head: 'NAME', x: M + cz(200), w: cz(190) },
+      { head: 'CLASSIFICATION', x: M + cz(400), w: cz(120) },
+      { head: 'READ', x: M + cz(530), w: cz(90) },
+      { head: 'ACCEPTED', x: M + cz(630), w: cz(90) },
+      { head: 'CONTRIBUTED', x: M + cz(730), w: cz(100) },
+      { head: 'RESIDENCY', x: M + cz(840), w: cz(100) },
     ];
     const drawHead = () => {
       need(z(28));

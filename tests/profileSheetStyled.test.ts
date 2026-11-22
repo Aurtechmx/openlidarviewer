@@ -166,6 +166,26 @@ describe('the styled sheet one', () => {
     expect(Buffer.from(await buildProfilePdf(base({ loadFont: undefined }))).equals(Buffer.from(before))).toBe(true);
   });
 
+  it('keeps the styled method sheet\'s source table cells inside the right margin', async () => {
+    const provenance = {
+      recordVersion: 1, method: 'corridor-percentile', corridorVersion: 1, capturedAt: '2026-01-01T00:00:00.000Z',
+      up: [0, 0, 1], upDegenerate: false, acceptedCount: 10, scope: 'resident', residentOnly: true, complete: true,
+      sources: [{ layerId: 'layer-1', displayName: 'Scan', classification: 'producer', streaming: true, acceptedCount: 10, contributed: true, residency: true }],
+      classPolicy: { excludedClasses: [], availableOnEverySource: false },
+      units: { linearUnit: 'metre', verticalReference: 'orthometric', verticalMetresPerUnit: 1 },
+    };
+    let right = 0;
+    const orig = PDFPage.prototype.drawText;
+    vi.spyOn(PDFPage.prototype, 'drawText').mockImplementation(function (this: PDFPage, text: string, o?: { x?: number; size?: number; font?: { widthOfTextAtSize(t: string, s: number): number } }) {
+      if (text === 'complete' && o?.font && o.size) right = Math.max(right, (o.x ?? 0) + o.font.widthOfTextAtSize(text, o.size));
+      return orig.call(this, text, o as never);
+    });
+    await buildProfilePdf(base({ style: 'dark', provenance } as never));
+    expect(right).toBeGreaterThan(0);
+    // A3 landscape, 48 pt margins: the content ends at 1142.55 pt.
+    expect(right).toBeLessThanOrEqual(1190.55 - 48);
+  });
+
   it('still draws when the font files cannot be loaded', async () => {
     const bytes = await buildProfilePdf(base({ style: 'light', loadFont: async () => { throw new Error('offline'); } }));
     expect((await PDFDocument.load(bytes)).getPageCount()).toBeGreaterThan(1);
