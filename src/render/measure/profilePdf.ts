@@ -331,12 +331,25 @@ let RULE = rgb(0.7, 0.74, 0.8);
 /** Notes-table row rule lift, pt: 0 for Classic; a styled build lifts it clear of the next row's letters. */
 let rowRuleLift = 0;
 
+/**
+ * Type factor for the notes, method and schedule sheets: 1 for Classic. A
+ * styled build sets them larger, with their line pitches and row heights, so
+ * an A3 page of tables reads at arm's length.
+ */
+let pageTypeK = 1;
+/** A size or pitch on the continuation sheets, at the current type factor. */
+const z = (v: number): number => v * pageTypeK;
+
+/** The styled continuation sheets' type factor: 10 pt table text becomes 12 pt. */
+const STYLED_PAGE_TYPE_K = 1.2;
+
 const CLASSIC_INK: ProfileInk = { INK, INK_DIM, INK_SOFT, INK_MUTED, GRID, GRID_MINOR, CURVE, GROUND, GAP_MARK, RULE };
 
 /** Set the module's colours and rule lift; only around drawing with no await, so no build sees another's. */
-function useInk(k: ProfileInk, lift: number): void {
+function useInk(k: ProfileInk, lift: number, typeK = 1): void {
   ({ INK, INK_DIM, INK_SOFT, INK_MUTED, GRID, GRID_MINOR, CURVE, GROUND, GAP_MARK, RULE } = k);
   rowRuleLift = lift;
+  pageTypeK = typeK;
 }
 
 const T_TITLE = 18; // sheet title, bold
@@ -1482,7 +1495,7 @@ export async function buildProfilePdf(input: ProfilePdfInput): Promise<Uint8Arra
   // No await from here to the save, so a styled build swaps in its colours and paper safely.
   const addPage = doc.addPage.bind(doc);
   if (tokens) {
-    useInk(inkFor(tokens), 6.5);
+    useInk(inkFor(tokens), 6.5, STYLED_PAGE_TYPE_K);
     doc.addPage = ((...a: Parameters<PDFDocument['addPage']>) => { const pg = addPage(...a); drawPaper(pg, tokens); return pg; }) as PDFDocument['addPage'];
   }
   try {
@@ -1890,42 +1903,42 @@ function renderTechnicalNotes(
       : 'Recorded information, its value, and the engineering remark that qualifies it.',
   });
   sheets.push({ page, identity: identity() });
-  let y = drawSheetHeader(page, f, 'Technical notes', '') - 22;
+  let y = drawSheetHeader(page, f, 'Technical notes', '') - z(22);
 
   const newPage = () => {
     continued = true;
     page = doc.addPage([PAGE_W, PAGE_H]);
     sheets.push({ page, identity: identity() });
-    y = drawSheetHeader(page, f, 'Technical notes (continued)', '') - 22;
+    y = drawSheetHeader(page, f, 'Technical notes (continued)', '') - z(22);
   };
 
   const tableHead = () => {
-    trackedText(page, 'ITEM', xItem, y, T_TABLE_HEAD, f.bold, INK, 0.8);
-    trackedText(page, 'RECORDED INFORMATION', xValue, y, T_TABLE_HEAD, f.bold, INK, 0.8);
-    trackedText(page, 'ENGINEERING REMARK', xRemark, y, T_TABLE_HEAD, f.bold, INK, 0.8);
+    trackedText(page, 'ITEM', xItem, y, z(T_TABLE_HEAD), f.bold, INK, 0.8);
+    trackedText(page, 'RECORDED INFORMATION', xValue, y, z(T_TABLE_HEAD), f.bold, INK, 0.8);
+    trackedText(page, 'ENGINEERING REMARK', xRemark, y, z(T_TABLE_HEAD), f.bold, INK, 0.8);
     rule(page, M, y - 5, M + usableW, y - 5, INK, 0.7);
-    y -= 18;
+    y -= z(18);
   };
   tableHead();
   for (const row of input.rows) {
     // A value that states a limitation is set bold for the same reason a
     // measurement is: it is the thing on the row a reader must not miss.
     const valueFace = row.limit === true ? f.bold : f.font;
-    const valueLines = wrapText(row.value, valueFace, T_TABLE, COL_VALUE);
-    const remarkLines = wrapText(row.remark, f.font, T_REMARK, COL_REMARK);
+    const valueLines = wrapText(row.value, valueFace, z(T_TABLE), COL_VALUE);
+    const remarkLines = wrapText(row.remark, f.font, z(T_REMARK), COL_REMARK);
     const lines = Math.max(1, valueLines.length, remarkLines.length);
-    if (y - (lines * 12 + 7) < CONTENT_BOT) {
+    if (y - (lines * z(12) + 7) < CONTENT_BOT) {
       newPage();
       tableHead();
     }
-    put(page, clipText(row.item, f.font, T_TABLE, COL_ITEM), xItem, y, T_TABLE, f.font, INK_SOFT);
+    put(page, clipText(row.item, f.font, z(T_TABLE), COL_ITEM), xItem, y, z(T_TABLE), f.font, INK_SOFT);
     valueLines.forEach((line, i) => {
-      put(page, line, xValue, y - i * 12, T_TABLE, valueFace, INK);
+      put(page, line, xValue, y - i * z(12), z(T_TABLE), valueFace, INK);
     });
     remarkLines.forEach((line, i) => {
-      put(page, line, xRemark, y - i * 12, T_REMARK, f.font, INK_SOFT);
+      put(page, line, xRemark, y - i * z(12), z(T_REMARK), f.font, INK_SOFT);
     });
-    y -= lines * 12 + 3;
+    y -= lines * z(12) + 3;
     rule(page, M, y + 1 + rowRuleLift, M + usableW, y + 1 + rowRuleLift, GRID, 0.4);
     y -= 4;
   }
@@ -1967,13 +1980,13 @@ function renderMethodSheet(
       : 'How the section was derived, what the heights are measured from, and what was read.',
   });
   sheets.push({ page, identity: identity() });
-  let y = drawSheetHeader(page, f, 'Method and sources', '') - 22;
+  let y = drawSheetHeader(page, f, 'Method and sources', '') - z(22);
 
   const newPage = () => {
     continued = true;
     page = doc.addPage([PAGE_W, PAGE_H]);
     sheets.push({ page, identity: identity() });
-    y = drawSheetHeader(page, f, 'Method and sources (continued)', '') - 22;
+    y = drawSheetHeader(page, f, 'Method and sources (continued)', '') - z(22);
   };
   const need = (h: number) => {
     if (y - h < CONTENT_BOT) newPage();
@@ -1983,17 +1996,17 @@ function renderMethodSheet(
   // hairline. Small, but unmistakably a heading, which is what the run of
   // same-size paragraphs underneath needs.
   const heading = (s: string) => {
-    need(36);
-    y -= 14;
-    trackedText(page, s.toUpperCase(), M, y, T_SECTION, f.bold, INK);
+    need(z(36));
+    y -= z(14);
+    trackedText(page, s.toUpperCase(), M, y, z(T_SECTION), f.bold, INK);
     rule(page, M, y - 5, M + usableW, y - 5, CURVE, 0.7);
-    y -= 17;
+    y -= z(17);
   };
   const para = (s: string, size = T_PARA, color = INK) => {
-    for (const line of wrapText(s, f.font, size, proseW)) {
-      need(14);
-      put(page, line, M, y, size, f.font, color);
-      y -= 12;
+    for (const line of wrapText(s, f.font, z(size), proseW)) {
+      need(z(14));
+      put(page, line, M, y, z(size), f.font, color);
+      y -= z(12);
     }
     y -= 3;
   };
@@ -2037,23 +2050,23 @@ function renderMethodSheet(
     );
   } else {
     const cols: Array<{ head: string; x: number; w: number }> = [
-      { head: 'LAYER ID', x: M, w: 190 },
-      { head: 'NAME', x: M + 200, w: 190 },
-      { head: 'CLASSIFICATION', x: M + 400, w: 120 },
-      { head: 'READ', x: M + 530, w: 90 },
-      { head: 'ACCEPTED', x: M + 630, w: 90 },
-      { head: 'CONTRIBUTED', x: M + 730, w: 100 },
-      { head: 'RESIDENCY', x: M + 840, w: 100 },
+      { head: 'LAYER ID', x: M, w: z(190) },
+      { head: 'NAME', x: M + z(200), w: z(190) },
+      { head: 'CLASSIFICATION', x: M + z(400), w: z(120) },
+      { head: 'READ', x: M + z(530), w: z(90) },
+      { head: 'ACCEPTED', x: M + z(630), w: z(90) },
+      { head: 'CONTRIBUTED', x: M + z(730), w: z(100) },
+      { head: 'RESIDENCY', x: M + z(840), w: z(100) },
     ];
     const drawHead = () => {
-      need(28);
-      for (const c of cols) trackedText(page, c.head, c.x, y, T_TABLE_HEAD, f.bold, INK, 0.8);
+      need(z(28));
+      for (const c of cols) trackedText(page, c.head, c.x, y, z(T_TABLE_HEAD), f.bold, INK, 0.8);
       rule(page, M, y - 5, M + usableW, y - 5, INK, 0.6);
-      y -= 16;
+      y -= z(16);
     };
     drawHead();
     for (const s of input.record.sources) {
-      if (y - 13 < CONTENT_BOT) {
+      if (y - z(13) < CONTENT_BOT) {
         newPage();
         drawHead();
       }
@@ -2074,9 +2087,9 @@ function renderMethodSheet(
       ];
       cells.forEach((cell, i) => {
         const c = cols[i];
-        put(page, clipText(cell, f.mono, T_SOURCE, c.w), c.x, y, T_SOURCE, f.mono, INK);
+        put(page, clipText(cell, f.mono, z(T_SOURCE), c.w), c.x, y, z(T_SOURCE), f.mono, INK);
       });
-      y -= 13;
+      y -= z(13);
     }
     y -= 5;
     para(`Total accepted returns: ${formatCount(input.record.acceptedCount)}.`, T_PARA, INK_SOFT);
@@ -2105,7 +2118,8 @@ function renderMethodSheet(
 }
 
 /**
- * The station schedule, in four column groups across the page.
+ * The station schedule, in four column groups across the page (three on a
+ * Light or Dark sheet, whose type is larger).
  *
  * Four groups because a schedule read down a single column wastes an A3 sheet
  * and spills to pages a reader then has to hold side by side. Set in Courier
@@ -2128,11 +2142,12 @@ function renderStationSchedule(
   // B9: the schedule prints in the display unit; geometry stays metres.
   const k = system === 'imperial' ? FEET_PER_METRE : 1;
   const unit = unitToken(system);
-  const colCount = 4;
+  // Three groups at a styled sheet's larger type, so each keeps its three columns.
+  const colCount = pageTypeK > 1 ? 3 : 4;
   const colGap = 22;
   const usableW = PAGE_W - 2 * M;
   const colW = (usableW - colGap * (colCount - 1)) / colCount;
-  const rowH = 14;
+  const rowH = z(14);
   const legendTop = CONTENT_BOT + 28;
   const bottomY = legendTop + 16;
 
@@ -2154,25 +2169,25 @@ function renderStationSchedule(
       },
     });
     continued = true;
-    const topY = drawSheetHeader(page, f, 'Station schedule', '') - 22;
+    const topY = drawSheetHeader(page, f, 'Station schedule', '') - z(22);
     const rowsPerCol = Math.max(1, Math.floor((topY - bottomY) / rowH) - 1);
 
     for (let col = 0; col < colCount && idx < stations.length; col++) {
       const x = M + col * (colW + colGap);
-      trackedText(page, 'STA', x, topY, T_TABLE_HEAD, f.bold, INK, 0.8);
-      trackedText(page, `${columnHead} (${unit})`, x + 108, topY, T_TABLE_HEAD, f.bold, INK, 0.8);
-      trackedText(page, 'GRADE', x + 200, topY, T_TABLE_HEAD, f.bold, INK, 0.8);
+      trackedText(page, 'STA', x, topY, z(T_TABLE_HEAD), f.bold, INK, 0.8);
+      trackedText(page, `${columnHead} (${unit})`, x + z(108), topY, z(T_TABLE_HEAD), f.bold, INK, 0.8);
+      trackedText(page, 'GRADE', x + z(200), topY, z(T_TABLE_HEAD), f.bold, INK, 0.8);
       rule(page, x, topY - 5, x + colW, topY - 5, INK, 0.7);
       for (let r = 0; r < rowsPerCol && idx < stations.length; r++, idx++) {
         const st = stations[idx];
-        const y = topY - 16 - r * rowH;
+        const y = topY - z(16) - r * rowH;
         const height = fmtEl(st.elevation);
-        put(page, formatStation(st.chainage, system), x, y, T_SCHED, f.mono, INK);
+        put(page, formatStation(st.chainage, system), x, y, z(T_SCHED), f.mono, INK);
         // The height is what the row is FOR: chainage is an address and grade is
         // derived from two heights, so the weight goes on the measured figure.
-        put(page, height, x + 108, y, T_SCHED, height === 'gap' ? f.mono : f.monoBold,
+        put(page, height, x + z(108), y, z(T_SCHED), height === 'gap' ? f.mono : f.monoBold,
           height === 'gap' ? GAP_MARK : INK);
-        put(page, fmtGrade(st.gradeToNext), x + 200, y, T_SCHED, f.mono, INK_SOFT);
+        put(page, fmtGrade(st.gradeToNext), x + z(200), y, z(T_SCHED), f.mono, INK_SOFT);
       }
     }
 
@@ -2182,7 +2197,7 @@ function renderStationSchedule(
       'GAP = NO RETURN AT STATION. DASH = GRADE NOT AVAILABLE.',
       M,
       legendTop,
-      T_CAPTION,
+      z(T_CAPTION),
       f.font,
       INK,
     );
@@ -2190,8 +2205,8 @@ function renderStationSchedule(
       page,
       'GRADE = SLOPE FROM CURRENT STATION TO NEXT STATION',
       M,
-      legendTop - 12,
-      T_CAPTION,
+      legendTop - z(12),
+      z(T_CAPTION),
       f.font,
       INK_DIM,
     );

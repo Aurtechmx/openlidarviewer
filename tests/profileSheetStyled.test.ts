@@ -69,12 +69,18 @@ describe('style dispatch', () => {
   });
 
   for (const style of ['light', 'dark'] as const) {
-    it(`${style}: deterministic, and the same number of sheets as Classic`, async () => {
-      const a = await buildProfilePdf(base({ style, extras: { returns: returns(), plan: plan(), indexLevels: [110, 130] } }));
-      const b = await buildProfilePdf(base({ style, extras: { returns: returns(), plan: plan(), indexLevels: [110, 130] } }));
+    it(`${style}: deterministic, and every station and note row printed`, async () => {
+      const input = base({ style, extras: { returns: returns(), plan: plan(), indexLevels: [110, 130] } });
+      const { texts, bytes: a } = await drawn(input);
+      vi.restoreAllMocks();
+      const b = await buildProfilePdf(input);
       expect(Buffer.from(a).equals(Buffer.from(b))).toBe(true);
-      const classic = await PDFDocument.load(await buildProfilePdf(base()));
-      expect((await PDFDocument.load(a)).getPageCount()).toBe(classic.getPageCount());
+      // The larger type can take more sheets than Classic; it never drops a row.
+      const { texts: classicTexts, bytes: c } = await drawn(base());
+      const stationsIn = (ts: string[]): number => ts.filter((t) => /^0\+\d{3}\.\d{2}$/.test(t)).length;
+      expect(stationsIn(texts)).toBeGreaterThanOrEqual(stationsIn(classicTexts));
+      for (const row of ['Length (horizontal)', 'Class exclusion', 'Read scope']) expect(texts).toContain(row);
+      expect((await PDFDocument.load(a)).getPageCount()).toBeGreaterThanOrEqual((await PDFDocument.load(c)).getPageCount());
     }, 120_000);
   }
 });
@@ -136,6 +142,28 @@ describe('the styled sheet one', () => {
     const unread = (await drawn(base({ style: 'light', extras: null }))).texts;
     expect(unread.some((t) => t.includes('could not be read for this export'))).toBe(true);
     expect(unread.some((t) => t.includes('no terrain run'))).toBe(false);
+  });
+
+  it('sets the notes, method and schedule sheets in larger type than Classic, and Classic after it unchanged', async () => {
+    const sizeOf = async (input: ProfilePdfInput, text: string): Promise<number> => {
+      let size = 0;
+      const orig = PDFPage.prototype.drawText;
+      vi.spyOn(PDFPage.prototype, 'drawText').mockImplementation(function (this: PDFPage, t: string, o?: { size?: number }) {
+        if (t === text && size === 0) size = o?.size ?? 0;
+        return orig.call(this, t, o as never);
+      });
+      await buildProfilePdf(input);
+      vi.restoreAllMocks();
+      return size;
+    };
+    const classic = await sizeOf(base({ style: 'classic' }), 'Length (horizontal)');
+    const styled = await sizeOf(base({ style: 'dark' }), 'Length (horizontal)');
+    expect(classic).toBeGreaterThan(0);
+    expect(styled).toBeCloseTo(classic * 1.2, 5);
+    // The type factor is restored: a Classic build after a styled one is byte for byte the first.
+    const before = await buildProfilePdf(base({ loadFont: undefined }));
+    await buildProfilePdf(base({ style: 'light' }));
+    expect(Buffer.from(await buildProfilePdf(base({ loadFont: undefined }))).equals(Buffer.from(before))).toBe(true);
   });
 
   it('still draws when the font files cannot be loaded', async () => {
