@@ -7,7 +7,8 @@
  * style's paper. Classic is the report as before, byte for byte: the caller
  * gets null and embeds its standard fonts as it always did.
  */
-import { rgb, type PDFDocument, type RGB } from 'pdf-lib';
+import { StandardFonts, rgb, type PDFDocument, type PDFFont, type RGB } from 'pdf-lib';
+import { pdfInfoDate } from '../../pdfInfoDate';
 import { embedSheetFonts, type SheetFonts } from './fonts';
 import { drawPaper } from './primitives';
 import { sheetTokens, type SheetRgb, type SheetStyle, type SheetTokens } from './tokens';
@@ -49,4 +50,38 @@ export async function startStyledReport(
     mix: (a, b, k) => rgb(a[0] + (b[0] - a[0]) * k, a[1] + (b[1] - a[1]) * k, a[2] + (b[2] - a[2]) * k),
     done: () => { doc.addPage = addPage; },
   };
+}
+
+/** What a report draws with: the style, or null for Classic, and its two faces. */
+export interface OpenedReport {
+  readonly kit: StyledReport | null;
+  readonly font: PDFFont;
+  readonly bold: PDFFont;
+}
+
+/**
+ * Stamp a report's Info dictionary and pick its faces. The title is announced
+ * in the viewer's title bar (ViewerPreferences DisplayDocTitle) and the
+ * language is tagged, the supported accessibility hooks of this PDF library.
+ * CreationDate and ModDate come from `date`, or the epoch when the report
+ * prints none, so two builds of the same input are byte-identical (see
+ * src/pdfInfoDate.ts). Light and Dark take the sheet fonts; Classic embeds
+ * Helvetica as before.
+ */
+export async function openReport(
+  doc: PDFDocument,
+  title: string,
+  date: Parameters<typeof pdfInfoDate>[0],
+  render: { readonly style?: SheetStyle | null; readonly loadFont?: (name: string) => Promise<Uint8Array> },
+): Promise<OpenedReport> {
+  doc.setTitle(title, { showInWindowTitleBar: true });
+  doc.setLanguage('en-US');
+  doc.setAuthor('OpenLiDARViewer');
+  const infoStamp = pdfInfoDate(date);
+  doc.setCreationDate(infoStamp);
+  doc.setModificationDate(infoStamp);
+  const kit = await startStyledReport(doc, render.style, render.loadFont);
+  const font = kit ? kit.fonts.sans : await doc.embedFont(StandardFonts.Helvetica);
+  const bold = kit ? kit.fonts.sansBold : await doc.embedFont(StandardFonts.HelveticaBold);
+  return { kit, font, bold };
 }

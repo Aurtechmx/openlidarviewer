@@ -1,10 +1,10 @@
 import { test, expect, type Locator, type Page } from '@playwright/test';
 import { readFileSync } from 'node:fs';
 import { createHash } from 'node:crypto';
-import { inflateSync } from 'node:zlib';
 import { geomFixtures, dropBytes } from './geomFixtures';
 import { openToolPage, showWorkspaceMode } from './helpers';
 import { tileAt } from './georefTile';
+import { pdfText } from './pdfText';
 
 /**
  * An export describes one request: the scan, the clip and the frame as they
@@ -325,29 +325,6 @@ test.describe('an export describes the scan it was asked for', () => {
   }
 });
 
-/** The text a PDF draws: every Flate content stream inflated, then its string operands decoded. */
-function pdfText(bytes: Buffer): string {
-  const raw = bytes.toString('latin1');
-  const out: string[] = [];
-  const re = /stream\r?\n/g;
-  let m: RegExpExecArray | null;
-  while ((m = re.exec(raw)) !== null) {
-    const start = m.index + m[0].length;
-    const end = raw.indexOf('endstream', start);
-    if (end < 0) break;
-    let body: string;
-    try {
-      body = inflateSync(bytes.subarray(start, end)).toString('latin1');
-    } catch {
-      continue;
-    }
-    for (const h of body.matchAll(/<([0-9A-Fa-f\s]+)>\s*Tj/g)) out.push(Buffer.from(h[1].replace(/\s+/g, ''), 'hex').toString('latin1'));
-    for (const l of body.matchAll(/\(((?:\\.|[^\\)])*)\)\s*Tj/g)) out.push(l[1]);
-    re.lastIndex = end;
-  }
-  return out.join('\n');
-}
-
 test.describe('the technical PDF describes one scan', () => {
   for (const [label, glob] of [
     ['the source is hashed', '**/assets/localOocIndexerWorker-*.js'],
@@ -397,7 +374,7 @@ test.describe('the technical PDF describes one scan', () => {
       }
       const { name, bytes } = downloaded as { name: string; bytes: Buffer };
       expect(name).toBe('report-source-a-technical-report.pdf');
-      const text = pdfText(bytes);
+      const text = await pdfText(bytes);
       expect(text).toContain('report-source-a.las');
       expect(text).not.toContain('report-source-b.las');
       expect(text).not.toContain(sha(b).slice(0, 16));

@@ -18,11 +18,10 @@
  * `buildXxx(...): Promise<Uint8Array>` convention of {@link buildMapSheetPdf}.
  */
 
-import { PDFDocument, StandardFonts, rgb, degrees, type PDFFont, type PDFPage, type RGB } from 'pdf-lib';
-import { startStyledReport } from '../../export/sheetKit/reportStyle';
+import { PDFDocument, rgb, degrees, type PDFFont, type PDFPage, type RGB } from 'pdf-lib';
+import { openReport } from '../../export/sheetKit/reportStyle';
 import type { SheetStyle } from '../../export/sheetKit/tokens';
 import type { ContourPdfModel } from '../contourStudio/contourDeliverablePdfModel';
-import { pdfInfoDate } from '../../pdfInfoDate';
 import { winAnsiSafe } from '../../winAnsiText';
 
 let INK = rgb(0.12, 0.14, 0.18);
@@ -112,31 +111,11 @@ async function buildContourStudioPdfStyled(
   render: { readonly style?: SheetStyle | null; readonly loadFont?: (name: string) => Promise<Uint8Array> },
 ): Promise<Uint8Array> {
   const doc = await PDFDocument.create();
-  // Accessibility metadata. `showInWindowTitleBar` sets the ViewerPreferences
-  // DisplayDocTitle flag so a screen reader / PDF viewer announces the
-  // deliverable title rather than the raw filename; setLanguage tags the
-  // document language. (A full tagged-structure tree is out of reach with this
-  // PDF library; these are the honest, supported accessibility hooks — see
-  // ReportPdfRenderer.)
   const pdfTitle = model.titleBlock[0]?.trim() || 'Contour Studio Deliverable';
-  doc.setTitle(pdfTitle, { showInWindowTitleBar: true });
-  doc.setLanguage('en-US');
-  doc.setAuthor('OpenLiDARViewer');
-  // Pin the Info-dictionary dates. pdf-lib defaults CreationDate and ModDate to
-  // the wall clock at `create()`, so two identical builds either side of a
-  // second boundary stop being byte-identical. See src/pdfInfoDate.ts.
-  // The model carries its timestamp only as rendered title-block text, so
-  // there is no structured date to source from here. The page still prints
-  // "Generated ...", and the Info dictionary takes the epoch rather than the
-  // clock.
-  const infoStamp = pdfInfoDate(undefined);
-  doc.setCreationDate(infoStamp);
-  doc.setModificationDate(infoStamp);
-  // Light and Dark: the sheet kit's fonts and colours. No await follows until
-  // the save, so the swapped colours are this build's alone.
-  const kit = await startStyledReport(doc, render.style, render.loadFont);
-  const font = kit ? kit.fonts.sans : await doc.embedFont(StandardFonts.Helvetica);
-  const bold = kit ? kit.fonts.sansBold : await doc.embedFont(StandardFonts.HelveticaBold);
+  // Info dictionary, accessibility hooks and faces. Light and Dark: the sheet
+  // kit's fonts and colours. No await follows until the save, so the swapped
+  // colours are this build's alone.
+  const { kit, font, bold } = await openReport(doc, pdfTitle, undefined, render);
   if (kit) {
     const k = kit, t = kit.tokens;
     useInk({ INK: k.color(t.ink), DIM: k.color(t.dim), RULE: k.color(t.outline), WATERMARK: k.mix(t.warn, t.paper, 0.35) });

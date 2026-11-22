@@ -1,8 +1,8 @@
 import { test, expect, type Page } from '@playwright/test';
 import { readFileSync } from 'node:fs';
-import { inflateSync } from 'node:zlib';
 import { geomFixtures, dropBytes } from './geomFixtures';
 import { dropTinyPly, openToolPage, showWorkspaceMode } from './helpers';
+import { pdfText } from './pdfText';
 
 /**
  * A measurement reads its height, grade, profile and box along the up axis of
@@ -49,32 +49,6 @@ async function csvColumn(page: Page, column: string): Promise<number[]> {
   return rows.map((r) => Number(r.split(',')[i]));
 }
 
-/** The text a PDF draws: every Flate stream inflated, its string operands decoded. */
-function pdfText(bytes: Buffer): string {
-  const raw = bytes.toString('latin1');
-  const out: string[] = [];
-  const re = /stream\r?\n/g;
-  let m: RegExpExecArray | null;
-  while ((m = re.exec(raw)) !== null) {
-    const start = m.index + m[0].length;
-    const end = raw.indexOf('endstream', start);
-    if (end < 0) break;
-    let body: string;
-    try {
-      body = inflateSync(bytes.subarray(start, end)).toString('latin1');
-    } catch {
-      body = raw.slice(start, end);
-    }
-    for (const h of body.matchAll(/<([0-9A-Fa-f\s]+)>\s*Tj/g)) out.push(Buffer.from(h[1]!.replace(/\s+/g, ''), 'hex').toString('latin1'));
-    for (const l of body.matchAll(/\(((?:\\.|[^\\)])*)\)\s*Tj/g)) out.push(l[1]!);
-    for (const t of body.matchAll(/\[((?:[^\]])*)\]\s*TJ/g)) {
-      out.push([...t[1]!.matchAll(/\(((?:\\.|[^\\)])*)\)/g)].map((s) => s[1]).join(''));
-    }
-    re.lastIndex = end + 'endstream'.length;
-  }
-  return out.join('\n');
-}
-
 async function technicalPdf(page: Page): Promise<string> {
   await showWorkspaceMode(page, 'output');
   const panel = page.locator('.olv-export-panel');
@@ -83,7 +57,7 @@ async function technicalPdf(page: Page): Promise<string> {
   await panel.getByRole('combobox', { name: 'PDF report template' }).selectOption('technical-report');
   const w = page.waitForEvent('download');
   await panel.getByRole('button', { name: 'Report PDF', exact: true }).click();
-  return pdfText(readFileSync((await (await w).path())!));
+  return await pdfText(readFileSync((await (await w).path())!));
 }
 
 const sceneUp = (page: Page) => page.evaluate(() => (window as unknown as { __OLV_TEST_API__: Seam }).__OLV_TEST_API__.sceneUp());
