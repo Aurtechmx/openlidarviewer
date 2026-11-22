@@ -97,6 +97,8 @@ export function drawStyledPurposeAppendix(
   pageSize: readonly [number, number],
   margin: number,
   footerLeft: string,
+  /** The footer's page label, e.g. "4 / 4": the appendix is the set's last sheet. */
+  pageLabel: string,
   t: SheetTokens,
   f: SheetFonts,
 ): void {
@@ -145,5 +147,5 @@ export function drawStyledPurposeAppendix(
     page.drawRectangle({ x, y: last - z.read * 0.25, width: 3, height: top - (last - z.read * 0.25), color: pdfColor(t.warn) });
   }
 
-  drawFooter(page, footerLeft, '2 / 2', margin, PW - margin, margin, t, f);
+  drawFooter(page, footerLeft, pageLabel, margin, PW - margin, margin, t, f);
 }

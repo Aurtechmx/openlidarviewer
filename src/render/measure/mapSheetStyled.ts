@@ -198,7 +198,7 @@ export async function buildStyledMapSheetPdf(
 
   if (purpose) {
     const content = purposeAppendixContent(purpose, input, { hillshade: relief != null, tint: relief != null && t.tintAlpha > 0 });
-    drawStyledPurposeAppendix(doc, content, [PW, PH], M, `OpenLiDARViewer - terrain analysis${buildText}`, t, fonts);
+    drawStyledPurposeAppendix(doc, content, [PW, PH], M, footerLeft, `${pages} / ${pages}`, t, fonts);
   }
   return doc.save();
 }
