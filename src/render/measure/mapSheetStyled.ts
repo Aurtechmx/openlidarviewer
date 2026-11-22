@@ -15,7 +15,6 @@
  */
 import { annotationToMapXY } from './annotationMapProjection';
 import { buildAnnotationReport } from './annotationReportTable';
-import { supportWord } from '../../export/sheetKit/sheetMeasurement';
 import type { Annotation } from '../annotate/types';
 import { PDFDocument, StandardFonts, degrees, type PDFFont, type PDFPage } from 'pdf-lib';
 import { INPUT_NOT_RECORDED_NOTE, sourceSha256Text } from '../../science/exportDigestRecord';
@@ -62,6 +61,12 @@ import {
 } from '../../export/sheetKit/primitives';
 import { SHEET_SPACE, SHEET_TYPE, sheetTokens, tintAt, type SheetRgb, type SheetTokens } from '../../export/sheetKit/tokens';
 import { scaleBarUnit } from './scaleBar';
+import {
+  annotationColor, annotationLines, continuationPages, drawMarkLines, drawMarksContinuation, markLinesHeight,
+  measurementLetter, measurementLines, orderedAnnotationRows, type MarksContinuation,
+} from './mapSheetStyledMarks';
+
+export { measurementLetter } from './mapSheetStyledMarks';
 import {
   buildMapSheetPdf,
   contourShareSheetLines,
@@ -136,20 +141,21 @@ export async function buildStyledMapSheetPdf(
   const relief = input.relief ? contourSheetRelief(input.relief) : null;
   const bbox = input.model.bbox;
   const area: Box | null = relief?.extent ?? bbox ?? null;
-  const ctx: PanelContext = { facts: mapSheetFacts(input, 0), tr: null, offMap: { measurements: 0, annotations: 0 } };
+  const ctx: PanelContext = {
+    facts: mapSheetFacts(input, 0), tr: null, offMap: { measurements: 0, annotations: 0 },
+    listed: { measurements: input.measurements?.length ?? 0, annotations: annotationRowsOf(input).length },
+  };
   const blocks = panelBlocks(page, input, ctx, relief, t, fonts, size, orient);
   const noMap = !area || (input.model.features.length === 0 && !relief?.extent);
-  // The panel says how many listed marks the map cannot show. That line can
-  // change the layout and so the map frame; settle the count in a few passes.
+  // When the panel cannot hold every listed mark, list fewer on sheet one and
+  // continue the rest on sheets of their own, until a layout fits.
   let layout = chooseLayout(PW, PH, blocks);
-  for (let pass = 0; pass < 3; pass++) {
-    const counts = noMap || !area
-      ? { measurements: input.measurements?.length ?? 0, annotations: sheetAnnotations(input).length }
-      : offMapCounts(input, innerOf(layout.frame), fitTransform(area, innerOf(layout.frame)), area);
-    if (counts.measurements === ctx.offMap.measurements && counts.annotations === ctx.offMap.annotations) break;
-    ctx.offMap = counts;
-    layout = chooseLayout(PW, PH, blocks);
-  }
+  while (!layout.fits && listFewer(ctx.listed)) layout = chooseLayout(PW, PH, blocks);
+  // The off-map line's room is kept whatever its count, so the count does not
+  // move the layout: it is worked out once, against the final map frame.
+  ctx.offMap = noMap || !area
+    ? { measurements: input.measurements?.length ?? 0, annotations: sheetAnnotations(input).length }
+    : offMapCounts(input, innerOf(layout.frame), fitTransform(area, innerOf(layout.frame)), area);
   const frame = layout.frame;
 
   page.drawRectangle({ x: frame.x, y: frame.y, width: frame.w, height: frame.h, color: pdfColor(t.panel) });
@@ -169,9 +175,17 @@ export async function buildStyledMapSheetPdf(
 
   // Footer: software and build on the left, the deliverable in the middle, page count right.
   const purpose = input.purpose;
-  const pages = purpose ? 2 : 1;
+  const rest: MarksContinuation = {
+    measurements: (input.measurements ?? []).slice(ctx.listed.measurements),
+    measurementStart: ctx.listed.measurements,
+    annotations: annotationRowsOf(input).slice(ctx.listed.annotations),
+  };
+  const more = rest.measurements.length + rest.annotations.length > 0 ? continuationPages(rest, [PW, PH], MARGIN, t, fonts) : 0;
+  const pages = 1 + more + (purpose ? 1 : 0);
   const buildText = input.provenance?.build ? `  ·  ${input.provenance.build}` : '';
-  drawFooter(page, `OpenLiDARViewer - terrain analysis${buildText}`, `1 / ${pages}`, M, PW - M, M, t, fonts);
+  const footerLeft = `OpenLiDARViewer - terrain analysis${buildText}`;
+  drawFooter(page, footerLeft, `1 / ${pages}`, M, PW - M, M, t, fonts);
+  if (more > 0) drawMarksContinuation(doc, rest, [PW, PH], MARGIN, footerLeft, 2, pages, t, fonts);
   if (purpose) {
     const label = `Deliverable - ${purpose.label}`;
     const w = sheetTextWidth(label, fonts.sansBold, SHEET_TYPE.footer, fonts);
@@ -341,6 +355,8 @@ interface PanelContext {
   tr: MapTransform | null;
   /** Listed measurements and annotations the map does not show. */
   offMap: { measurements: number; annotations: number };
+  /** How many measurements and annotation rows sheet one lists; the rest continue on their own sheets. */
+  listed: { measurements: number; annotations: number };
 }
 
 /** The map area inside the frame, where marks are drawn. */
@@ -365,6 +381,8 @@ const SCALES = [1, 0.95, 0.9, 0.85, 0.8, 0.75];
 interface Layout {
   readonly frame: Frame;
   readonly k: number;
+  /** False for the fallback, whose last column may run past the panel. */
+  readonly fits: boolean;
   readonly placed: ReadonlyArray<{ readonly block: PanelBlock; readonly panel: Frame; readonly y: number }>;
 }
 
@@ -427,7 +445,7 @@ function chooseLayout(PW: number, PH: number, blocks: readonly PanelBlock[]): La
   for (const c of candidates) {
     for (const k of SCALES) {
       const placed = flow(blocks, c.panels, k);
-      if (placed) return { frame: c.frame, k, placed };
+      if (placed) return { frame: c.frame, k, placed, fits: true };
     }
   }
   // Nothing fits: the roomiest arrangement at the smallest scale, blocks stacked
@@ -446,7 +464,7 @@ function chooseLayout(PW: number, PH: number, blocks: readonly PanelBlock[]): La
     placed.push({ block, panel: last.panels[col]!, y });
     y -= h + BLOCK_GAP * k;
   }
-  return { frame: last.frame, k, placed };
+  return { frame: last.frame, k, placed, fits: false };
 }
 
 function panelBlocks(
@@ -594,71 +612,56 @@ function panelBlocks(
   });
 
   // ── measurements: number, name, the panel's figure and its support ───────
+  // ── measurements and annotations ─────────────────────────────────────────
+  // Sheet one lists the first ctx.listed of each; a line says where the rest
+  // are. The off-map line keeps its room at the widest count it could print.
+  const listTail = (more: string | null, offAtMost: number, what: 'measurement' | 'annotation', w: number, k: number): string[] => [
+    ...(more ? wrapSheetText(more, f.sans, SHEET_TYPE.note * k, w, f) : []),
+    ...(offAtMost > 0 ? wrapSheetText(offMapLine(offAtMost, what), f.sans, SHEET_TYPE.note * k, w, f) : []),
+  ];
+  const tailHeight = (lines: number, k: number): number => (lines > 0 ? SHEET_SPACE.sm * k + lines * noteStep(k) : 0);
+  const drawTail = (x: number, cy: number, w: number, k: number, more: string | null, off: number, what: 'measurement' | 'annotation'): void => {
+    listTail(more, off, what, w, k).forEach((ln, j) => {
+      cy -= noteStep(k) + (j === 0 ? SHEET_SPACE.sm * k : 0);
+      sheetText(page, ln, x, cy, { font: f.sans, size: SHEET_TYPE.note * k, color: t.dim }, f);
+    });
+  };
+
   const ms = input.measurements ?? [];
   if (ms.length > 0) {
-    const nameW = 18;
-    // One row per printed line; a measurement's first row carries its number.
-    interface MRow { num: string | null; text: string; font: PDFFont; color: SheetRgb; first: boolean }
-    const mRows = (w: number, k: number): MRow[] => {
-      const out: MRow[] = [];
-      const sz = SHEET_TYPE.note * k;
-      const tw = w - nameW;
-      ms.forEach((m, i) => {
-        const lines: Array<[string, PDFFont, SheetRgb]> = [];
-        for (const ln of wrapSheetText(m.name, f.sansBold, sz, tw, f)) lines.push([ln, f.sansBold, t.ink]);
-        for (const ln of wrapSheetText(m.value, f.mono, sz, tw, f)) lines.push([ln, f.mono, t.ink]);
-        for (const ln of wrapSheetText(`Support: ${m.support ?? supportWord(m.grade)}`, f.sans, sz, tw, f)) lines.push([ln, f.sans, m.grade === 'green' ? t.dim : t.warn]);
-        for (const note of m.notes) for (const ln of wrapSheetText(note, f.sans, sz, tw, f)) lines.push([ln, f.sans, t.dim]);
-        lines.forEach(([text, font, color], j) => out.push({ num: j === 0 ? measurementLetter(i) : null, text, font, color, first: j === 0 && i > 0 }));
-      });
-      return out;
+    const lines = (w: number, k: number) => measurementLines(ms.slice(0, ctx.listed.measurements), 0, w, k, t, f);
+    const more = (): string | null => {
+      const n = ctx.listed.measurements;
+      if (n >= ms.length) return null;
+      return n === ms.length - 1
+        ? `Measurement ${measurementLetter(n)} is listed on the next sheet.`
+        : `Measurements ${measurementLetter(n)} to ${measurementLetter(ms.length - 1)} are listed on the next sheet.`;
     };
-    const mOff = (w: number, k: number): string[] => ctx.offMap.measurements > 0 ? wrapSheetText(offMapLine(ctx.offMap.measurements, 'measurement'), f.sans, SHEET_TYPE.note * k, w, f) : [];
     blocks.push({
-      height: (w, k) => SL(k) + mRows(w, k).reduce((a, r) => a + noteStep(k) + (r.first ? SHEET_SPACE.sm * k : 0), 0) + (mOff(w, k).length > 0 ? SHEET_SPACE.sm * k + mOff(w, k).length * noteStep(k) : 0),
+      height: (w, k) => SL(k) + markLinesHeight(lines(w, k), k) + tailHeight(listTail(more(), ms.length, 'measurement', w, k).length, k),
       draw: (x, y, w, k) => {
-        let cy = drawSectionLabel(page, `Measurements (${ms.length})`, x, y, w, t, f, k) + noteStep(k);
-        const sz = SHEET_TYPE.note * k;
-        for (const r of mRows(w, k)) {
-          cy -= noteStep(k) + (r.first ? SHEET_SPACE.sm * k : 0);
-          if (r.num) sheetText(page, r.num, x, cy, { font: f.sansBold, size: sz, color: t.area }, f);
-          sheetText(page, r.text, x + nameW, cy, { font: r.font, size: sz, color: r.color }, f);
-        }
-        mOff(w, k).forEach((ln, j) => { cy -= noteStep(k) + (j === 0 ? SHEET_SPACE.sm * k : 0); sheetText(page, ln, x, cy, { font: f.sans, size: sz, color: t.dim }, f); });
+        const top = drawSectionLabel(page, `Measurements (${ms.length})`, x, y, w, t, f, k) + noteStep(k);
+        const cy = lines(w, k).length > 0 ? drawMarkLines(page, lines(w, k), x, top, k, t.area, f) : top;
+        drawTail(x, cy, w, k, more(), ctx.offMap.measurements, 'measurement');
       },
     });
   }
 
-  // ── annotations, grouped by type ─────────────────────────────────────────
-  const anns = input.includeAnnotations && input.annotations ? input.annotations : [];
-  if (anns.length > 0) {
-    const report = buildAnnotationReport(anns, {});
-    const order = ['issue', 'warning', 'note', 'info'] as const;
-    const groupName: Record<string, string> = { issue: 'Issues', warning: 'Warnings', note: 'Notes', info: 'Information' };
-    const aLines = (w: number, k: number): Array<{ text: string; font: PDFFont; color: SheetRgb; indent: number; gap: boolean }> => {
-      const out: Array<{ text: string; font: PDFFont; color: SheetRgb; indent: number; gap: boolean }> = [];
-      const sz = SHEET_TYPE.note * k;
-      for (const type of order) {
-        const rows = report.rows.filter((r) => r.type === type);
-        if (rows.length === 0) continue;
-        out.push({ text: `${groupName[type]} (${rows.length})`, font: f.sansBold, color: annotationColor(t, type), indent: 0, gap: out.length > 0 });
-        for (const r of rows) {
-          const body = r.note ? `${r.title}: ${r.note}${r.noteTruncated ? '...' : ''}` : r.title;
-          wrapSheetText(`${r.index}. ${body}`, f.sans, sz, w - 8, f).forEach((ln) => out.push({ text: ln, font: f.sans, color: t.ink, indent: 8, gap: false }));
-        }
-      }
-      return out;
+  const annRows = annotationRowsOf(input);
+  if (annRows.length > 0) {
+    const header = buildAnnotationReport(sheetAnnotations(input), {}).header;
+    const lines = (w: number, k: number) => annotationLines(annRows.slice(0, ctx.listed.annotations), w, k, t, f);
+    const more = (): string | null => {
+      const n = annRows.length - ctx.listed.annotations;
+      if (n <= 0) return null;
+      return n === 1 ? '1 more annotation is listed on the next sheet.' : `${n} more annotations are listed on the next sheet.`;
     };
-    const aOff = (w: number, k: number): string[] => ctx.offMap.annotations > 0 ? wrapSheetText(offMapLine(ctx.offMap.annotations, 'annotation'), f.sans, SHEET_TYPE.note * k, w, f) : [];
     blocks.push({
-      height: (w, k) => SL(k) + aLines(w, k).reduce((a, l) => a + noteStep(k) + (l.gap ? SHEET_SPACE.xs * k : 0), 0) + (aOff(w, k).length > 0 ? SHEET_SPACE.sm * k + aOff(w, k).length * noteStep(k) : 0),
+      height: (w, k) => SL(k) + markLinesHeight(lines(w, k), k) + tailHeight(listTail(more(), annRows.length, 'annotation', w, k).length, k),
       draw: (x, y, w, k) => {
-        let cy = drawSectionLabel(page, report.header, x, y, w, t, f, k) + noteStep(k);
-        for (const ln of aLines(w, k)) {
-          cy -= noteStep(k) + (ln.gap ? SHEET_SPACE.xs * k : 0);
-          sheetText(page, ln.text, x + ln.indent, cy, { font: ln.font, size: SHEET_TYPE.note * k, color: ln.color }, f);
-        }
-        aOff(w, k).forEach((ln, j) => { cy -= noteStep(k) + (j === 0 ? SHEET_SPACE.sm * k : 0); sheetText(page, ln, x, cy, { font: f.sans, size: SHEET_TYPE.note * k, color: t.dim }, f); });
+        const top = drawSectionLabel(page, header, x, y, w, t, f, k) + noteStep(k);
+        const cy = lines(w, k).length > 0 ? drawMarkLines(page, lines(w, k), x, top, k, t.ink, f) : top;
+        drawTail(x, cy, w, k, more(), ctx.offMap.annotations, 'annotation');
       },
     });
   }
@@ -757,24 +760,27 @@ function pct(n: number, d: number): string {
   return `${((100 * n) / d).toFixed(1)} %`;
 }
 
-/** Annotation type colours, from the style's tokens. */
-function annotationColor(t: SheetTokens, type: string): SheetRgb {
-  if (type === 'issue') return t.area;
-  if (type === 'warning') return t.warn;
-  if (type === 'info') return t.accent;
-  return t.minor;
+
+/** The annotation report rows a sheet lists, in list order. */
+function annotationRowsOf(input: MapSheetInput) {
+  const anns = sheetAnnotations(input);
+  return anns.length > 0 ? orderedAnnotationRows(buildAnnotationReport(anns, {}).rows) : [];
+}
+
+/**
+ * Lists fewer marks on sheet one: the longer list loses a quarter. False when
+ * nothing is left to move to the continuation sheets.
+ */
+function listFewer(listed: { measurements: number; annotations: number }): boolean {
+  if (listed.measurements === 0 && listed.annotations === 0) return false;
+  const key = listed.measurements >= listed.annotations ? 'measurements' : 'annotations';
+  listed[key] = listed[key] <= 1 ? 0 : Math.floor(listed[key] * 0.75);
+  return true;
 }
 
 /** The annotations a sheet draws: only when asked for and present. */
 function sheetAnnotations(input: MapSheetInput): ReadonlyArray<Annotation> {
   return input.includeAnnotations && input.annotations ? input.annotations : [];
-}
-
-/** A measurement's letter: A to Z, then AA, AB and on. */
-export function measurementLetter(i: number): string {
-  let n = i + 1, out = '';
-  while (n > 0) { const r = (n - 1) % 26; out = String.fromCharCode(65 + r) + out; n = Math.floor((n - 1) / 26); }
-  return out;
 }
 
 /** A badge: a short label in a disc with a halo, so it reads over relief and lines. */

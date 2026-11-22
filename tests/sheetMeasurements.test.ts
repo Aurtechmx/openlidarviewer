@@ -5,7 +5,7 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
-import { PDFPage } from 'pdf-lib';
+import { PDFDocument, PDFPage } from 'pdf-lib';
 import { buildMapSheetPdf, type MapSheetInput } from '../src/render/measure/mapSheetPdf';
 import { buildContourSheetPdf, measurementLetter } from '../src/render/measure/mapSheetStyled';
 import { measurementsOptionState } from '../src/render/measure/mapSheetExportOptions';
@@ -80,6 +80,37 @@ describe('measurements on the styled map sheet', () => {
     const inside = await texts(input({ style: 'light', includeAnnotations: true, annotations: ANN, measurements: MS }));
     expect(inside.join(' ')).not.toContain('outside the map extent');
   }, 60_000);
+
+  it('continues a list too long for the panel on its own sheets, keeping every line on a page', async () => {
+    const many: SheetMeasurement[] = Array.from({ length: 60 }, (_, i) => ({
+      ...MS[1]!, name: `Stockpile ${i + 1}`, points: [[10 + (i % 8) * 10, 5 + Math.floor(i / 8) * 7, 0], [14 + (i % 8) * 10, 5 + Math.floor(i / 8) * 7, 0], [14 + (i % 8) * 10, 9 + Math.floor(i / 8) * 7, 0]],
+      notes: ['Base level 101.20 m (median of the outline’s vertex heights)', 'Read from a sample of the points'],
+    }));
+    const placed: Array<{ text: string; y: number; page: PDFPage }> = [];
+    const orig = PDFPage.prototype.drawText;
+    vi.spyOn(PDFPage.prototype, 'drawText').mockImplementation(function (this: PDFPage, t: string, o?: { y?: number }) {
+      placed.push({ text: t, y: o?.y ?? 0, page: this });
+      return orig.call(this, t, o as never);
+    });
+    const bytes = await buildContourSheetPdf(input({ style: 'light', orientation: 'portrait', measurements: many, includeAnnotations: true, annotations: ANN }), { loadFont });
+    vi.restoreAllMocks();
+    const doc = await PDFDocument.load(bytes);
+    expect(doc.getPageCount()).toBeGreaterThan(1);
+    // Nothing below the footer or above the top of any page.
+    for (const p of placed) {
+      expect(p.y, p.text).toBeGreaterThanOrEqual(20);
+      expect(p.y, p.text).toBeLessThanOrEqual(p.page.getHeight());
+    }
+    const texts = placed.map((p) => p.text);
+    expect(texts.some((t) => /^Measurements [A-Z]+ to BH are listed on the next sheet\.$/.test(t))).toBe(true);
+    expect(texts).toContain('Measurements and annotations, continued');
+    // Every measurement is named in a list, on sheet one or after it.
+    for (let i = 1; i <= 60; i++) expect(texts, `Stockpile ${i}`).toContain(`Stockpile ${i}`);
+    // The footers count every sheet.
+    const n = doc.getPageCount();
+    expect(texts).toContain(`1 / ${n}`);
+    expect(texts).toContain(`${n} / ${n}`);
+  }, 120_000);
 
   it('Classic leaves measurements off, byte for byte', async () => {
     const plain = await buildMapSheetPdf(input());
