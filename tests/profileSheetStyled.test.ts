@@ -111,6 +111,33 @@ describe('the styled sheet one', () => {
     expect(texts).toEqual(expect.arrayContaining(['0.2', '1.0', '2.8', '3.0']));
   }, 120_000);
 
+  it('states the print scales, or that the units are unknown, and names the grade base in the right unit', async () => {
+    const metric = (await drawn(base({ style: 'light' }))).texts;
+    expect(metric.some((t) => /^Horizontal 1:[\d,]+  ·  Vertical 1:[\d,]+  ·  .*print at 100% on A3$/.test(t))).toBe(true);
+    vi.restoreAllMocks();
+    const unverified = (await drawn(base({ style: 'light', unitSystem: 'unverified' }))).texts;
+    expect(unverified.some((t) => t.startsWith('Horizontal and vertical scale: units unknown'))).toBe(true);
+    expect(unverified.some((t) => t.includes('units of chainage (unit unverified)'))).toBe(true);
+    expect(unverified).toContain('STEEPEST OVER 10 UNITS (%)');
+    expect(unverified.some((t) => / m of chainage/.test(t))).toBe(false);
+  });
+
+  it('finishes on a corrupt sample with a non-finite chainage instead of looping', async () => {
+    const bad = samples(false);
+    bad[bad.length - 1] = { ...bad[bad.length - 1]!, distance: Number.POSITIVE_INFINITY };
+    const bytes = await buildProfilePdf(base({ style: 'dark', samples: bad }));
+    expect(bytes.length).toBeGreaterThan(1000);
+  }, 30_000);
+
+  it('says why the plan strip is missing: no terrain run, or extras that could not be read', async () => {
+    const noTerrain = (await drawn(base({ style: 'light', extras: { returns: null, plan: null } }))).texts;
+    expect(noTerrain.some((t) => t.includes('no terrain run gives a surface'))).toBe(true);
+    vi.restoreAllMocks();
+    const unread = (await drawn(base({ style: 'light', extras: null }))).texts;
+    expect(unread.some((t) => t.includes('could not be read for this export'))).toBe(true);
+    expect(unread.some((t) => t.includes('no terrain run'))).toBe(false);
+  });
+
   it('still draws when the font files cannot be loaded', async () => {
     const bytes = await buildProfilePdf(base({ style: 'light', loadFont: async () => { throw new Error('offline'); } }));
     expect((await PDFDocument.load(bytes)).getPageCount()).toBeGreaterThan(1);

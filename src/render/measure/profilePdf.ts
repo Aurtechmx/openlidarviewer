@@ -149,7 +149,7 @@ import {
 import { FT_PER_M as FEET_PER_METRE } from '../../units/units';
 import { winAnsiSafe as sharedWinAnsiSafe } from '../../winAnsiText';
 import {
-  countsPerStation, drawFooter, drawPaper, drawStyledProfileSheet, embedSheetFonts, profileInkFor as inkFor, sheetTokens,
+  countsPerStation, drawFooter, drawPaper, drawStyledProfileSheet, embedSheetFonts, planMissingNote, profileInkFor as inkFor, profileScaleRatios, sheetTokens,
   type ProfileInk, type ProfileSheetExtras, type SheetStyle,
 } from './profileSheetStyled';
 
@@ -1119,13 +1119,14 @@ export async function buildProfilePdf(input: ProfilePdfInput): Promise<Uint8Arra
       subtitle: [projectName, input.corridorWidthM != null ? `corridor ${(input.corridorWidthM * k).toFixed(2)} ${unit} each side` : null]
         .filter(Boolean).join(', '),
       stations: stats.stations, lengthM: len, minM: minEl, maxM: maxEl, k, unit, heightWord,
+      unitsVerified: system !== 'unverified', scaleRatios: profileScaleRatios(system === 'unverified'),
       requestedExaggeration: input.verticalExaggeration ?? null,
       formatStation: (c) => formatStation(c, system),
       kpis: [
         [`Length (${unit})`, bare(lenStr(len))],
         [`Relief (${unit})`, stats.reliefSpan == null ? '-' : bare(reliefStr())],
         ['Endpoint gradient (%)', bare(formatGradePercent(stats.meanGrade))],
-        [`Steepest over ${GRADE_BASE_M} m (%)`, baseGrade == null ? '-' : bare(formatGradePercent(baseGrade.grade))],
+        [`Steepest over ${GRADE_BASE_M} ${system === 'unverified' ? 'units' : 'm'} (%)`, baseGrade == null ? '-' : bare(formatGradePercent(baseGrade.grade))],
       ],
       data: [
         { key: 'CRS', value: crsLabel ?? 'not georeferenced' },
@@ -1139,7 +1140,7 @@ export async function buildProfilePdf(input: ProfilePdfInput): Promise<Uint8Arra
       notes,
       groundLineLabel: legend.seriesName,
       countsPerStation: countsPerStation(input.samples),
-      planMissingNote: input.extras?.plan ? null : 'not drawn: no terrain run gives a surface for this scan',
+      planMissingNote: planMissingNote(input.extras),
       extras: input.extras ?? null,
     });
   } else {

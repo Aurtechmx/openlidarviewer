@@ -222,6 +222,29 @@ describe('profile section seam — a stale extraction never lands', () => {
     expect(step.value!.points.count).toBe(4);
   });
 
+  it('an independent read neither overtakes a running walk nor is overtaken by one', () => {
+    const seam = seamWith();
+    const work = seam.sectionChunks({ a: A, b: B, corridorWidth: 1, chunkSize: 1 });
+    expect(work.next().done).toBe(false);
+    // An export's read runs to the end while the workbench's walk is under way.
+    const exportRead = seam.sectionChunks({ a: A, b: B, corridorWidth: 1, chunkSize: 1, independent: true });
+    expect(exportRead.next().done).toBe(false);
+    const newer = seam.section({ a: A, b: B, corridorWidth: 1 });
+    expect(newer).not.toBeNull();
+    let e = exportRead.next();
+    while (!e.done) e = exportRead.next();
+    expect(e.value).not.toBeNull();
+    expect(e.value!.generation).toBe(-1);
+    // The workbench walk was overtaken by the newer workbench request, not by the export.
+    let w = work.next();
+    while (!w.done) w = work.next();
+    expect(w.value).toBeNull();
+    // And an independent read on its own leaves the next request's token where it was.
+    const fresh = createProfileSectionSeam(deps({ layers: () => [layer({ id: 'one', points: [1, 0, 1, 2, 0, 2] })] }));
+    fresh.section({ a: A, b: B, corridorWidth: 1, independent: true });
+    expect(fresh.section({ a: A, b: B, corridorWidth: 1 })!.generation).toBe(1);
+  });
+
   it('refuses every result once abandoned', () => {
     const seam = seamWith();
     seam.abandon();

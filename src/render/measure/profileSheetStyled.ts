@@ -40,6 +40,7 @@ import {
   chooseProfileScales,
   interpolateStationHeight,
   verticalScaleStatement,
+  formatScaleDenominator,
 } from './profileSheetLayout';
 
 /** The corridor's returns, in metres along the line and metres of height. */
@@ -89,6 +90,13 @@ export interface StyledProfileSheet {
   /** "Elevation" only over an orthometric datum; "Height" otherwise. */
   readonly heightWord: string;
   readonly requestedExaggeration: number | null;
+  /**
+   * The print scales as Classic states them, from the drawn scales: "Horizontal
+   * 1:N · Vertical 1:N", or that the units are unknown. Null leaves the line out.
+   */
+  readonly scaleRatios?: ((horizontal: number, vertical: number) => string) | null;
+  /** False when the ground unit is unverified: figures are in source units, not metres. */
+  readonly unitsVerified?: boolean;
   readonly formatStation: (chainageM: number) => string;
   /** Four headline figures, label and value. */
   readonly kpis: ReadonlyArray<readonly [string, string]>;
@@ -138,7 +146,10 @@ export async function drawStyledProfileSheet(page: PDFPage, s: StyledProfileShee
   const sectionH = sectionTop - sectionBottom;
 
   const len = s.lengthM;
-  const drawable = len > 0 && s.minM != null && s.maxM != null;
+  // The same guard as the Classic sheet: a corrupt sample can make the length or
+  // the relief non-finite, and nothing below may loop or scale on one.
+  const drawable = Number.isFinite(len) && len > 0 && s.minM != null && s.maxM != null
+    && Number.isFinite(s.minM) && Number.isFinite(s.maxM);
   const scales = drawable
     ? chooseProfileScales({ lengthM: len, minM: s.minM!, maxM: s.maxM!, plotWpt: plotW, plotHpt: sectionH, k: s.k, requestedExaggeration: s.requestedExaggeration })
     : null;
@@ -216,7 +227,9 @@ export async function drawStyledProfileSheet(page: PDFPage, s: StyledProfileShee
       }
     }
     // Scale statement, in the top-right corner of the section.
-    const stretch = verticalScaleStatement(scales.exaggeration);
+    // The ratios a reader scales off the paper, then the stretch and the print size, as Classic states them.
+    const ratios = s.scaleRatios ? s.scaleRatios(scales.horizontal, scales.vertical) : null;
+    const stretch = [ratios, verticalScaleStatement(scales.exaggeration), 'print at 100% on A3'].filter(Boolean).join('  ·  ');
     const sw = sheetTextWidth(stretch, f.mono, SHEET_TYPE.tick, f);
     page.drawRectangle({ x: left + drawW - sw - 10, y: sectionBottom + sectionH - 16, width: sw + 8, height: 12, color: pdfColor(t.panel), borderColor: pdfColor(t.accent), borderWidth: 0.6 });
     sheetText(page, stretch, left + drawW - sw - 6, sectionBottom + sectionH - 12.5, { font: f.mono, size: SHEET_TYPE.tick, color: t.accent }, f);
@@ -273,10 +286,13 @@ export async function drawStyledProfileSheet(page: PDFPage, s: StyledProfileShee
   }
 
   // ── grade chart ──────────────────────────────────────────────────────────
-  sheetText(page, `GRADE %  over ${GRADE_BASE_M} ${s.unit === 'ft' ? 'm of chainage (shown in feet)' : 'm of chainage'}`, left, gradeTop + 6, { font: f.sansBold, size: SHEET_TYPE.section, color: t.dim }, f);
+  const gradeBase = s.unitsVerified === false
+    ? `${GRADE_BASE_M} units of chainage (unit unverified)`
+    : `${GRADE_BASE_M} ${s.unit === 'ft' ? 'm of chainage (shown in feet)' : 'm of chainage'}`;
+  sheetText(page, `GRADE %  over ${gradeBase}`, left, gradeTop + 6, { font: f.sansBold, size: SHEET_TYPE.section, color: t.dim }, f);
   page.drawRectangle({ x: left, y: gradeBottom, width: drawW, height: gradeH, color: pdfColor(t.panel) });
   const grades = gradeSeries(s.stations, len);
-  const known = grades.filter((g) => g.grade != null) as Array<{ chainage: number; grade: number }>;
+  const known = grades.filter((g) => g.grade != null && Number.isFinite(g.grade)) as Array<{ chainage: number; grade: number }>;
   if (known.length > 1) {
     const gMax = Math.max(5, ...known.map((g) => Math.abs(g.grade)));
     const step = niceGradeStep(gMax);
@@ -308,7 +324,8 @@ export async function drawStyledProfileSheet(page: PDFPage, s: StyledProfileShee
   // Chainage ticks under the grade chart.
   if (scales) {
     const step = niceGradeStep(len * s.k / 6);
-    for (let v = 0; v <= len * s.k + 1e-9; v += step) {
+    // At most a few dozen ticks whatever the step, so a degenerate step cannot spin.
+    for (let v = 0, n = 0; v <= len * s.k + 1e-9 && n < MAX_TICKS && step > 0 && Number.isFinite(step); v += step, n++) {
       const x = mapX(v / s.k);
       page.drawLine({ start: { x, y: gradeBottom }, end: { x, y: gradeBottom - 3 }, thickness: 0.5, color: ink });
       const lbl = v.toFixed(step >= 1 ? 0 : Math.min(3, Math.ceil(-Math.log10(step) - 1e-9)));
@@ -446,6 +463,26 @@ export function indexCrossings(
   }
   return out.sort((p, q) => p.chainage - q.chainage);
 }
+
+/**
+ * Why the plan strip is missing, or null when it is drawn. Extras with no plan
+ * mean the scan has no terrain run; no extras at all mean they could not be
+ * read for this export, which says nothing about a terrain run.
+ */
+export function planMissingNote(extras: ProfileSheetExtras | null | undefined): string | null {
+  if (extras?.plan) return null;
+  return extras ? 'not drawn: no terrain run gives a surface for this scan' : 'not drawn: the plan could not be read for this export';
+}
+
+/** The print-scale words Classic states, for the styled header: ratios, or that the units are unknown. */
+export function profileScaleRatios(unitsUnverified: boolean): (horizontal: number, vertical: number) => string {
+  return (h, v) => unitsUnverified
+    ? 'Horizontal and vertical scale: units unknown'
+    : `Horizontal 1:${formatScaleDenominator(h)}  ·  Vertical 1:${formatScaleDenominator(v)}`;
+}
+
+/** Most ticks one axis draws. */
+const MAX_TICKS = 40;
 
 function niceGradeStep(span: number): number {
   const raw = Math.max(1e-9, span) / 3;

@@ -107,7 +107,8 @@ export async function profileSheetExtras(
   let returns: ProfileSheetReturns | null = null;
   const half = summary.profileCorridorWidthM != null ? summary.profileCorridorWidthM / frame.f : null;
   // Cut along the profile's own up axis, as its samples were, not the active layer's.
-  const walk = viewer.profileSeam.sectionChunks({ a: m.points[0]!, b: m.points[1]!, corridorWidth: half, up: unit.up ?? null });
+  // Independent, so this read and the workbench's section never cancel each other.
+  const walk = viewer.profileSeam.sectionChunks({ a: m.points[0]!, b: m.points[1]!, corridorWidth: half, up: unit.up ?? null, independent: true });
   let step = walk.next();
   while (!step.done) {
     await nextTick();

@@ -260,7 +260,8 @@ async function drawMapLayers(
       maxCurvature: 0.5,
       edgeMargin: extent * 0.015,
       labelHeight: (sz + 2) / tr.scale,
-      charWidth: 4.1 / tr.scale,
+      // The gap is sized from the label face at its drawn size, plus room for the halo.
+      charWidth: (fonts.sansBold.widthOfTextAtSize('0', sz) + 0.4) / tr.scale,
       minFeatureLenForScale: extent * 0.04,
       indexOnly: input.purpose?.labelsIndexOnly ?? true,
       maxLabels: 60,
