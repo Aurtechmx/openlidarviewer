@@ -78,7 +78,7 @@ export function sectionLabelHeight(k = 1): number {
 
 /** What a legend row's key shows. */
 export type LegendKey =
-  | { readonly kind: 'line'; readonly color: SheetRgb; readonly width: number; readonly dash?: readonly number[] }
+  | { readonly kind: 'line'; readonly color: SheetRgb; readonly width: number; readonly dash?: readonly number[]; readonly opacity?: number }
   | { readonly kind: 'fill'; readonly color: SheetRgb; readonly border?: SheetRgb }
   | { readonly kind: 'hatch'; readonly color: SheetRgb; readonly background: SheetRgb }
   | { readonly kind: 'marker'; readonly color: SheetRgb; readonly shape: 'up' | 'down' | 'dot' };
@@ -100,6 +100,7 @@ export function drawLegendRow(
       page.drawLine({
         start: { x, y: midY }, end: { x: x + KEY_W, y: midY }, thickness: key.width, color: pdfColor(key.color),
         ...(key.dash ? { dashArray: [...key.dash] } : {}),
+        ...(key.opacity != null && key.opacity < 1 ? { opacity: key.opacity } : {}),
       });
       break;
     case 'fill':

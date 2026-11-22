@@ -425,7 +425,7 @@ export function styledContourStroke(t: SheetTokens, isIndex: boolean, kind: Cont
   const color = isIndex ? t.index : t.minor;
   const width = isIndex ? t.weight.index : t.weight.minor;
   if (kind === 'measured') return { color, width, dash: null, opacity: 1 };
-  if (kind === 'sparse') return { color, width: width * 0.85, dash: null, opacity: 0.7 };
+  if (kind === 'sparse') return { color, width: width * 0.7, dash: null, opacity: 0.45 };
   if (kind === 'interpolated') return { color, width: width * 0.9, dash: t.filledDash.map((d) => d * (isIndex ? 1.6 : 1)), opacity: 0.85 };
   return { color, width: width * 0.8, dash: [0.6, 1.8], opacity: 0.6 };
 }

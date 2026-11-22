@@ -5,7 +5,7 @@
 import { describe, it, expect, beforeAll, vi, afterEach } from 'vitest';
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
-import { PDFDocument, PDFPage } from 'pdf-lib';
+import { PDFDict, PDFDocument, PDFName, PDFPage } from 'pdf-lib';
 import { analyseContours, type AnalyseContoursResult } from '../src/terrain/contour/analyseContours';
 import type { TerrainPoint } from '../src/terrain/TerrainContracts';
 import { buildMapSheetPdf, readinessNote, mapSheetEvidenceLine, type MapSheetInput } from '../src/render/measure/mapSheetPdf';
@@ -177,6 +177,35 @@ describe('the styled sheet', () => {
     expect(texts.some((s) => s.includes('raster not rendered'))).toBe(false);
     expect(texts).toContain('1 / 2');
   }, 120_000);
+
+  it('the legend says which contours carry labels', async () => {
+    const all = { label: 'Custom', statement: 'You drive every setting.', analytical: true, cartographic: true, cartographicSmoothing: true, generalizeToleranceCells: 0.5, indexEvery: 5, labelsIndexOnly: false, hillshade: true, hypsometricTint: true, allowExploratory: true, completePackage: false, appendixRequired: false };
+    const texts = (await drawn(input({ style: 'light', purpose: all }))).map((t) => t.text);
+    expect(texts).toContain('Index contour');
+    expect(texts).not.toContain('Index contour, labelled');
+    expect(texts.some((s) => /^Contour interval .*, labelled$/.test(s))).toBe(true);
+  }, 120_000);
+
+  it('the purpose appendix page takes the sheet style and its own footer', async () => {
+    const purpose = { label: 'Engineering Plan', statement: 'Plan contours.', analytical: true, cartographic: false, cartographicSmoothing: false, generalizeToleranceCells: 0, indexEvery: 5, labelsIndexOnly: true, hillshade: false, hypsometricTint: false, allowExploratory: false, completePackage: true, appendixRequired: true };
+    const texts = (await drawn(input({ style: 'dark', purpose }))).map((t) => t.text);
+    expect(texts).toContain('2 / 2');
+    // Settings in named groups, each key in caps over its value; the validation note last.
+    for (const want of ['LINE GEOMETRY', 'INDEX AND LABELS', 'APPEARANCE', 'PACKAGING', 'HILLSHADE', 'VALIDATION APPENDIX']) expect(texts).toContain(want);
+    vi.restoreAllMocks();
+    const doc = await PDFDocument.load(await buildContourSheetPdf(input({ style: 'dark', purpose }), { loadFont }));
+    expect(doc.getPageCount()).toBe(2);
+    const fontsOf = (i: number): string[] => {
+      const res = doc.getPage(i).node.Resources();
+      const dict = res?.lookup(PDFName.of('Font'), PDFDict);
+      return dict ? dict.keys().map((k) => String(dict.lookup(k, PDFDict).get(PDFName.of('BaseFont')))) : [];
+    };
+    const page2 = fontsOf(1);
+    expect(page2.length).toBeGreaterThan(0);
+    // Figtree for text and Courier, the sheet's figure face, for the page label: no Helvetica.
+    expect(page2.some((n) => n.includes('Figtree'))).toBe(true);
+    expect(page2.filter((n) => n.includes('Helvetica'))).toEqual([]);
+  }, 120_000);
 });
 
 describe('relief model', () => {
@@ -251,6 +280,16 @@ describe('relief model', () => {
     expect(styledContourStroke(t, false, 'interpolated').dash).toEqual(t.filledDash);
     expect(styledContourStroke(t, false, 'gap').dash).not.toBeNull();
   });
+
+  it('sparse measured ground reads clearly lighter than measured ground', () => {
+    for (const style of ['light', 'dark'] as const) {
+      const t = sheetTokens(style);
+      const m = styledContourStroke(t, false, 'measured'), sp = styledContourStroke(t, false, 'sparse');
+      expect(sp.dash).toBeNull();
+      expect(sp.opacity).toBeLessThanOrEqual(0.5);
+      expect(sp.width).toBeLessThanOrEqual(m.width * 0.75);
+    }
+  });
 });
 
 describe('styled SVG', () => {
@@ -275,5 +314,18 @@ describe('styled SVG', () => {
     const img = (s: string): string => /<image x="([^"]+)" y="([^"]+)"/.exec(s)!.slice(1).join(',');
     // Same placement on the sheet: the relief moved with the contours.
     expect(img(world)).toBe(img(local));
+  });
+
+  it('keeps the data off the frame, names the arrow and draws every legend swatch visibly', async () => {
+    const sheet = await buildSvgSheet('dark', holedDtm());
+    const svg = serializeContours(r.model, 'svg', { labels: r.labels, svgSheet: sheet }).content;
+    const frame = /<rect x="([\d.]+)" y="([\d.]+)" width="([\d.]+)" height="([\d.]+)" fill="none"/.exec(svg)!.slice(1).map(Number);
+    const [img] = /<image x="([\d.]+)"/.exec(svg)!.slice(1).map(Number);
+    expect(img! - frame[0]!).toBeGreaterThanOrEqual(10);
+    expect(svg).toContain('>Grid N</text>');
+    expect(svg).not.toContain('>N</text>');
+    const legendWidths = [...svg.matchAll(/<line [^>]*stroke-width="([\d.]+)"/g)].map((m) => Number(m[1]));
+    expect(legendWidths.length).toBeGreaterThan(0);
+    expect(Math.min(...legendWidths)).toBeGreaterThanOrEqual(1.2);
   });
 });

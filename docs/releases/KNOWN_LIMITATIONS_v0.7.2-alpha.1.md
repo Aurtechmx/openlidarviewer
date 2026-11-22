@@ -433,7 +433,7 @@ consecutive passes, counted by `scripts/ios-streak.mjs`.
 fails the build when either passes its recorded baseline, so a raise is a hand
 edit to `docs/validation/monolith-size-baseline.json` and always shows in the
 diff.
-Fan-out is 95 for the shell, 73 for the renderer, across 1238 modules with no
+Fan-out is 95 for the shell, 73 for the renderer, across 1239 modules with no
 dependency cycles. Fan-out counts the distinct modules a file imports with a
 value import, source files and external packages alike; type-only and dynamic
 imports are not counted. The shell and the renderer figures are held
@@ -986,9 +986,9 @@ Not yet available: real datum transformation with epoch and grids (NADCON,
 NTv2 and time-dependent ITRF transformations), so NAD83, NAD27 and the
 plate-fixed datums can be exported at their true WGS 84 positions.
 
-## Grid north, not true north
+## Grid north, except on the styled map sheet
 
-The map sheet's orientation arrow, the compass rose and the distance bearing in
+The Classic map sheet's orientation arrow, the compass rose and the distance bearing in
 the Measurements panel are measured from the scan's +Y axis. On a projected CRS
 that is grid north, which differs from true north by the meridian convergence:
 1.29 degrees in UTM zone 12 at 109 W, 40 N, 2.27 degrees at a zone edge at
@@ -1002,8 +1002,30 @@ north unknown" note. A geographic CRS shows no bearing, because a degree of
 longitude and a degree of latitude are not the same length. Hillshade and
 aspect azimuths are grid-relative too, as is usual in GIS.
 
-Not yet available: a true-north arrow on the map sheet, rotated by the
-meridian convergence at the sheet centre and labelled with that angle.
+The Light and Dark map sheets of a projected CRS draw a true-north arrow,
+turned by the meridian convergence at the map centre and labelled with that
+angle. A georeferenced sheet whose CRS has no projection definition in OLV
+keeps the Grid N arrow, and a local frame says that north is unknown. The
+angle is the convergence at the map centre; it changes slightly across a
+large sheet.
+
+## Sheet styles
+
+The Light and Dark styles use the Figtree typeface bundled with the app. If
+the font files cannot be loaded, the sheet is drawn in Helvetica with the same
+content. The style chosen in an export dialog holds until the page is closed
+and is not saved in a session file.
+
+The profile sheet's plan strip and index contour crossings come from a terrain
+run on the same scan. Without one, the strip is left out and the sheet says
+so. The corridor's returns are drawn only when they sit on the ground line
+they were sampled into; a set read in another height frame is left out. A
+corridor denser than 400,000 returns is thinned evenly.
+
+The map sheet lists the measurements made on the analysed scan.
+Measurements that belong to no scan are listed only while one scan is open,
+and measurements on other open scans are left off. Classic sheets do not draw
+measurements.
 
 ## The reference plane is a drawing, not a surface
 

@@ -92,7 +92,8 @@ describe('measurements on the styled map sheet', () => {
       placed.push({ text: t, y: o?.y ?? 0, page: this });
       return orig.call(this, t, o as never);
     });
-    const bytes = await buildContourSheetPdf(input({ style: 'light', orientation: 'portrait', measurements: many, includeAnnotations: true, annotations: ANN }), { loadFont });
+    const purpose = { label: 'Survey Review', statement: 'Review contours.', analytical: true, cartographic: false, cartographicSmoothing: false, generalizeToleranceCells: 0, indexEvery: 5, labelsIndexOnly: true, hillshade: false, hypsometricTint: false, allowExploratory: true, completePackage: false, appendixRequired: false };
+    const bytes = await buildContourSheetPdf(input({ style: 'light', orientation: 'portrait', measurements: many, includeAnnotations: true, annotations: ANN, purpose }), { loadFont });
     vi.restoreAllMocks();
     const doc = await PDFDocument.load(bytes);
     expect(doc.getPageCount()).toBeGreaterThan(1);
@@ -109,7 +110,11 @@ describe('measurements on the styled map sheet', () => {
     // The footers count every sheet.
     const n = doc.getPageCount();
     expect(texts).toContain(`1 / ${n}`);
+    // The purpose appendix comes last, after the continuation sheets, and says so.
     expect(texts).toContain(`${n} / ${n}`);
+    expect(texts).toContain('LINE GEOMETRY');
+    expect(n).toBeGreaterThan(2);
+    expect(texts).not.toContain('2 / 2');
   }, 120_000);
 
   it('Classic leaves measurements off, byte for byte', async () => {
