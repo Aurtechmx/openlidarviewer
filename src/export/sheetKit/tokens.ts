@@ -44,6 +44,10 @@ export interface SheetTokens {
   readonly accent: SheetRgb;
   /** Readiness and evidence lines that are not a clean pass. */
   readonly warn: SheetRgb;
+  /** A verdict that holds with caveats: kept apart from `warn` in both styles. */
+  readonly caution: SheetRgb;
+  /** A verdict that passes. */
+  readonly good: SheetRgb;
   // Relief raster
   /** Hillshade output is mapped into [shadeLo, shadeHi] before tinting. */
   readonly shadeLo: number;
@@ -114,6 +118,8 @@ const LIGHT: SheetTokens = {
   area: hex(0xd8342a),
   accent: hex(0xc42f25),
   warn: hex(0x9a3412),
+  caution: hex(0x8a6100),
+  good: hex(0x2f6b55),
   shadeLo: 0.3,
   shadeHi: 1,
   tint: [hex(0xcfdcc4), hex(0xe4e0c5), hex(0xe6d2b4), hex(0xd9c0a6)],
@@ -140,6 +146,8 @@ const DARK: SheetTokens = {
   area: hex(0xff4d5e),
   accent: hex(0x3fd0ff),
   warn: hex(0xff9e6b),
+  caution: hex(0xf2c94c),
+  good: hex(0x3fbf9f),
   shadeLo: 0.05,
   shadeHi: 0.55,
   tint: [hex(0x0f3b46), hex(0x1d4d48), hex(0x3b4a35), hex(0x5a4630)],
@@ -167,6 +175,8 @@ const CLASSIC: SheetTokens = {
   area: [0.36, 0.24, 0.13],
   accent: [0.12, 0.14, 0.18],
   warn: [0.6, 0.2, 0.1],
+  caution: [0.55, 0.4, 0.05],
+  good: [0.13, 0.43, 0.2],
   shadeLo: 1,
   shadeHi: 1,
   tint: [],

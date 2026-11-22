@@ -19,21 +19,22 @@
  * from the on-screen numbers.
  */
 
-import { PDFDocument, StandardFonts, rgb, type PDFFont, type PDFPage } from 'pdf-lib';
+import { PDFDocument, rgb, type PDFFont, type PDFPage, type RGB } from 'pdf-lib';
+/** The session's sheet style, read by the caller that loads this chunk. */
+export { sheetStyle } from './mapSheetExportOptions';
+import { openReport } from '../../export/sheetKit/reportStyle';
+import type { SheetStyle } from '../../export/sheetKit/tokens';
 import { metresToFeet, type SpaceMetrics } from '../../terrain/spaceMetrics';
 import type { ObjectMetrics } from '../../terrain/objectMetrics';
 import { buildSpaceReportContent } from '../../terrain/space/spaceReportLayout';
 import type { FloorPlanModel } from '../../terrain/space/floorplan/extractFloorPlan';
 import type { PlanUnitSystem } from '../../terrain/space/floorplan/floorPlanSvg';
-import { pdfInfoDate } from '../../pdfInfoDate';
 import {
-  capFieldText,
   clipWithSuffix,
   mayCapField,
-  omissionMarker,
-  pdfParagraphs,
   winAnsiSafe,
-  wrapToWidth,
+  wrapReportField,
+  wrapStampLine,
 } from '../../winAnsiText';
 
 export interface SpaceReportPdfInput {
@@ -56,37 +57,55 @@ export interface SpaceReportPdfInput {
   readonly coverageNote?: string | null;
 }
 
-const INK = rgb(0.12, 0.14, 0.18);
-const DIM = rgb(0.42, 0.46, 0.52);
-const FRAME = rgb(0.2, 0.22, 0.26);
-const FILL = rgb(0.93, 0.945, 0.96);
-const CONTENTS = rgb(0.87, 0.885, 0.91);
-const WARN = rgb(0.54, 0.18, 0.11);
-const WHITE = rgb(1, 1, 1);
+let INK = rgb(0.12, 0.14, 0.18);
+let DIM = rgb(0.42, 0.46, 0.52);
+let FRAME = rgb(0.2, 0.22, 0.26);
+let FILL = rgb(0.93, 0.945, 0.96);
+let CONTENTS = rgb(0.87, 0.885, 0.91);
+let WARN = rgb(0.54, 0.18, 0.11);
+let WHITE = rgb(1, 1, 1);
+
+/** The report's colours, swapped for a Light or Dark build and restored after it. */
+interface ReportInk { readonly INK: RGB; readonly DIM: RGB; readonly FRAME: RGB; readonly FILL: RGB; readonly CONTENTS: RGB; readonly WARN: RGB; readonly WHITE: RGB; }
+const CLASSIC_INK: ReportInk = { INK, DIM, FRAME, FILL, CONTENTS, WARN, WHITE };
+function useInk(c: ReportInk): void {
+  ({ INK, DIM, FRAME, FILL, CONTENTS, WARN, WHITE } = c);
+}
 
 /** Keep every drawn string WinAnsi-encodable (StandardFonts throw otherwise). */
 const safe = winAnsiSafe;
 
 /** Build the Space / Object report PDF and return its bytes. */
-export async function buildSpaceReportPdf(input: SpaceReportPdfInput): Promise<Uint8Array> {
+/**
+ * The report in a sheet style (`render.style`): Light and Dark set it in the
+ * sheet kit's type, colours and paper with the same content; Classic, or no
+ * style, is the report as before, byte for byte.
+ */
+export async function buildSpaceReportPdf(
+  input: SpaceReportPdfInput,
+  render: { readonly style?: SheetStyle | null; readonly loadFont?: (name: string) => Promise<Uint8Array> } = {},
+): Promise<Uint8Array> {
+  try {
+    return await buildSpaceReportPdfStyled(input, render);
+  } finally {
+    useInk(CLASSIC_INK);
+  }
+}
+
+async function buildSpaceReportPdfStyled(
+  input: SpaceReportPdfInput,
+  render: { readonly style?: SheetStyle | null; readonly loadFont?: (name: string) => Promise<Uint8Array> },
+): Promise<Uint8Array> {
   const content = buildSpaceReportContent(input);
   const doc = await PDFDocument.create();
-  // Accessibility metadata. `showInWindowTitleBar` sets the ViewerPreferences
-  // DisplayDocTitle flag so a screen reader / PDF viewer announces the report
-  // title rather than the raw filename; setLanguage tags the document language.
-  // (A full tagged-structure tree is out of reach with this PDF library; these
-  // are the honest, supported accessibility hooks — see ReportPdfRenderer.)
-  doc.setTitle(content.title, { showInWindowTitleBar: true });
-  doc.setLanguage('en-US');
-  doc.setAuthor('OpenLiDARViewer');
-  // Pin the Info-dictionary dates. pdf-lib defaults CreationDate and ModDate to
-  // the wall clock at `create()`, so two identical builds either side of a
-  // second boundary stop being byte-identical. See src/pdfInfoDate.ts.
-  const infoStamp = pdfInfoDate(input.generatedAt);
-  doc.setCreationDate(infoStamp);
-  doc.setModificationDate(infoStamp);
-  const font = await doc.embedFont(StandardFonts.Helvetica);
-  const bold = await doc.embedFont(StandardFonts.HelveticaBold);
+  // Info dictionary, accessibility hooks and faces. Light and Dark: the sheet
+  // kit's fonts and colours. No await follows until the save, so the swapped
+  // colours are this build's alone.
+  const { kit, font, bold } = await openReport(doc, content.title, input.generatedAt, render);
+  if (kit) {
+    const k = kit, t = kit.tokens;
+    useInk({ INK: k.color(t.ink), DIM: k.color(t.dim), FRAME: k.color(t.outline), FILL: k.mix(t.panel, t.rule, 0.35), CONTENTS: k.mix(t.panel, t.rule, 0.7), WARN: k.color(t.warn), WHITE: k.color(t.panel) });
+  }
 
   const [PW, PH] = [612, 792]; // US Letter portrait
   let page = doc.addPage([PW, PH]);
@@ -131,7 +150,7 @@ export async function buildSpaceReportPdf(input: SpaceReportPdfInput): Promise<U
    * footer. Used for app-written hints and caveats, which are never capped.
    */
   const flow = (s: string, x: number, maxW: number, sz: number, f: PDFFont, c: Color): void => {
-    for (const line of wrapField(s, f, sz, maxW, false)) {
+    for (const line of wrapReportField(s, f, sz, maxW, false)) {
       room(sz + 3);
       page.drawText(line, { x, y, size: sz, font: f, color: c });
       y -= sz + 3;
@@ -162,8 +181,8 @@ export async function buildSpaceReportPdf(input: SpaceReportPdfInput): Promise<U
       // A row value may copy file-derived text (the scan name) and is capped,
       // unless its label marks a CRS, datum, digest or unit.
       const cap = mayCapField(row.label);
-      const labelLines = wrapField(row.label, bold, 9.5, labelW, cap);
-      const valueLines = wrapField(row.value, font, 9.5, valueW, cap);
+      const labelLines = wrapReportField(row.label, bold, 9.5, labelW, cap);
+      const valueLines = wrapReportField(row.value, font, 9.5, valueW, cap);
       const rows = Math.max(labelLines.length, valueLines.length);
       for (let i = 0; i < rows; i++) {
         if (i > 0) y -= 12.5;
@@ -230,59 +249,14 @@ export async function buildSpaceReportPdf(input: SpaceReportPdfInput): Promise<U
     ny -= 11;
   }
 
+  if (kit) {
+    useInk(CLASSIC_INK);
+    kit.done();
+  }
   return doc.save();
 }
 
-/**
- * Split one `Key  Value` provenance line into segments that fit the footer
- * width, breaking ONLY at spaces and keeping each segment's internal spacing
- * (a plain word-split would collapse the padded key column). Continuation
- * segments render with a hanging indent, so they measure against `maxW -
- * indent`. A single unbreakable run longer than the width draws whole rather
- * than truncating — provenance never silently loses characters. Mirrors the
- * helper in terrainReportPdf.ts (pure, injected font measurer).
- */
-function wrapStampLine(
-  font: PDFFont,
-  s: string,
-  maxW: number,
-  sz: number,
-  indent: number,
-): string[] {
-  const out: string[] = [];
-  let rest = safe(s);
-  let w = maxW;
-  while (font.widthOfTextAtSize(rest, sz) > w) {
-    // The longest space-boundary prefix that fits.
-    let cut = -1;
-    for (let i = rest.indexOf(' '); i !== -1; i = rest.indexOf(' ', i + 1)) {
-      if (font.widthOfTextAtSize(rest.slice(0, i), sz) <= w) cut = i;
-      else break;
-    }
-    if (cut <= 0) break;
-    out.push(rest.slice(0, cut));
-    rest = rest.slice(cut + 1).trimStart();
-    w = maxW - indent;
-  }
-  out.push(rest);
-  return out;
-}
-
 type Color = ReturnType<typeof rgb>;
-
-/**
- * Word-wrap one field into lines no wider than `maxW` (a word wider than the
- * line is hard-broken). With `cap`, a field past PDF_FIELD_CHAR_CAP is cut there
- * with a marker line; app-written text and CRS, digest or unit rows pass false. Mirrors the wrapper in terrainReportPdf.ts.
- */
-function wrapField(s: string, font: PDFFont, sz: number, maxW: number, cap: boolean): string[] {
-  const field = cap ? capFieldText(s) : { text: s, omitted: 0 };
-  const measure = (t: string): number => font.widthOfTextAtSize(t, sz);
-  // A line break starts a new line and a tab is a space (never '?').
-  const lines = pdfParagraphs(field.text).flatMap((p) => wrapToWidth(safe(p), measure, maxW));
-  if (field.omitted > 0) lines.push(...wrapToWidth(safe(omissionMarker(field.omitted)), measure, maxW));
-  return lines;
-}
 
 /** Draw the extracted wall plan (floor fill + wall poché + dims) in a box. */
 function drawFloorPlan(

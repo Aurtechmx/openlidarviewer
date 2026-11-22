@@ -10,6 +10,20 @@
  */
 
 import type { ReportBranding } from './types';
+import { sheetTokens, type SheetRgb } from '../export/sheetKit/tokens';
+
+/** A sheet style's tokens as a report palette. */
+function sheetPalette(style: 'light' | 'dark'): ReportThemePalette {
+  const t = sheetTokens(style);
+  const c = (v: SheetRgb) => ({ r: v[0], g: v[1], b: v[2] });
+  const mix = (a: SheetRgb, b: SheetRgb, k: number) => ({ r: a[0] + (b[0] - a[0]) * k, g: a[1] + (b[1] - a[1]) * k, b: a[2] + (b[2] - a[2]) * k });
+  return { pageBackground: c(t.paper), bodyText: c(t.ink), mutedText: c(t.dim), rule: c(t.rule), rowTint: mix(t.paper, t.rule, 0.25), drawAccentStripe: true };
+}
+
+/** True for the two themes that take the sheet kit's fonts. */
+export function isSheetTheme(theme: ReportBranding['theme']): theme is 'sheet-light' | 'sheet-dark' {
+  return theme === 'sheet-light' || theme === 'sheet-dark';
+}
 
 /** OpenLiDARViewer's accent — the same `#00b2ff` the live UI uses. */
 export const DEFAULT_ACCENT = '#00b2ff';
@@ -110,6 +124,8 @@ const PALETTES: Record<NonNullable<ReportBranding['theme']>, ReportThemePalette>
     // chrome on the cover.
     drawAccentStripe: false,
   },
+  'sheet-light': sheetPalette('light'),
+  'sheet-dark': sheetPalette('dark'),
 };
 
 /**

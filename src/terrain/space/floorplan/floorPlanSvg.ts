@@ -23,7 +23,10 @@
  * XML-escaped so a scan name with `<` / `&` / `"` can never break the markup.
  */
 
+import { cssColor, sheetTokens, type SheetRgb } from '../../../export/sheetKit/tokens';
 import { OBSERVED_FRAC_MIN, type FloorPlanModel } from './extractFloorPlan';
+/** The session's sheet style, read by the caller that loads this chunk. */
+export { sheetStyle } from '../../../render/measure/mapSheetExportOptions';
 import { ringSignedArea, type Ring } from './vectorize';
 import { metresToFeet, sqMetresToSqFeet } from '../../spaceMetrics';
 import { UNIT_FACTORS } from '../../../units/units';
@@ -39,21 +42,44 @@ export interface FloorPlanSvgOptions {
   readonly width?: number;
   /** Primary unit for dimensions + scale bar. Default 'metric'. */
   readonly unitSystem?: PlanUnitSystem;
+  /** Sheet style: Light or Dark take the sheet kit's colours; Classic, or none, the sheet as before. */
+  readonly style?: 'light' | 'dark' | 'classic';
   /** Date printed in the title block (ISO yyyy-mm-dd). Default: today. */
   readonly dateText?: string;
 }
 
 /** Near-black architectural ink — the sheet is always a white print sheet
  * (theme-agnostic), so the poché stays near-black in every app theme. */
-const INK = '#111111';
+let INK = '#111111';
 /** Yellow-tinted poché for walls mostly interpolated by gap-closing. */
-const WEAK_INK = '#8f750f';
-const DIM = '#6a6f78';
-const FLOOR_FILL = '#f1f3f6';
-const FLOOR_STROKE = '#d4d9e0';
-const CONTENTS_FILL = '#dde2e9';
-const CONTENTS_STROKE = '#bfc6d0';
-const WARN = '#8a2f1e';
+let WEAK_INK = '#8f750f';
+let DIM = '#6a6f78';
+let FLOOR_FILL = '#f1f3f6';
+let FLOOR_STROKE = '#d4d9e0';
+let CONTENTS_FILL = '#dde2e9';
+let CONTENTS_STROKE = '#bfc6d0';
+let WARN = '#8a2f1e';
+let PAPER = '#ffffff';
+let ROOM_LABEL = '#2c3640';
+let AREA_LABEL = '#3c4753';
+
+/** The sheet's colours; a Light or Dark build swaps them for its duration. */
+interface PlanInk { INK: string; WEAK_INK: string; DIM: string; FLOOR_FILL: string; FLOOR_STROKE: string; CONTENTS_FILL: string; CONTENTS_STROKE: string; WARN: string; PAPER: string; ROOM_LABEL: string; AREA_LABEL: string }
+const CLASSIC_PLAN_INK: PlanInk = { INK, WEAK_INK, DIM, FLOOR_FILL, FLOOR_STROKE, CONTENTS_FILL, CONTENTS_STROKE, WARN, PAPER, ROOM_LABEL, AREA_LABEL };
+function usePlanInk(k: PlanInk): void {
+  ({ INK, WEAK_INK, DIM, FLOOR_FILL, FLOOR_STROKE, CONTENTS_FILL, CONTENTS_STROKE, WARN, PAPER, ROOM_LABEL, AREA_LABEL } = k);
+}
+
+/** A sheet style's tokens as the plan's colours. */
+function planInkFor(style: 'light' | 'dark'): PlanInk {
+  const t = sheetTokens(style);
+  const mix = (a: SheetRgb, b: SheetRgb, k: number): string => cssColor([a[0] + (b[0] - a[0]) * k, a[1] + (b[1] - a[1]) * k, a[2] + (b[2] - a[2]) * k]);
+  return {
+    INK: cssColor(t.ink), WEAK_INK: cssColor(t.index), DIM: cssColor(t.dim), FLOOR_FILL: mix(t.panel, t.rule, 0.35),
+    FLOOR_STROKE: cssColor(t.rule), CONTENTS_FILL: mix(t.panel, t.rule, 0.7), CONTENTS_STROKE: mix(t.rule, t.dim, 0.4),
+    WARN: cssColor(t.warn), PAPER: cssColor(t.paper), ROOM_LABEL: cssColor(t.ink), AREA_LABEL: mix(t.ink, t.dim, 0.4),
+  };
+}
 
 /**
  * Minimum RENDERED wall (poché) thickness, metres. A typical stud wall is
@@ -227,6 +253,17 @@ function areaShort(m2: number, unitSystem: PlanUnitSystem): string {
  * — NOT true north; the footer says so).
  */
 export function floorPlanSvg(model: FloorPlanModel, opts: FloorPlanSvgOptions = {}): string {
+  // Light and Dark swap the colours for this synchronous build; Classic, or no style, is the sheet as before.
+  if (opts.style !== 'light' && opts.style !== 'dark') return floorPlanSvgDrawn(model, opts);
+  usePlanInk(planInkFor(opts.style));
+  try {
+    return floorPlanSvgDrawn(model, opts);
+  } finally {
+    usePlanInk(CLASSIC_PLAN_INK);
+  }
+}
+
+function floorPlanSvgDrawn(model: FloorPlanModel, opts: FloorPlanSvgOptions): string {
   const W = Math.max(360, Math.floor(opts.width ?? 720));
   const unitSystem: PlanUnitSystem = opts.unitSystem === 'imperial' ? 'imperial' : 'metric';
   const titleH = 54;
@@ -367,7 +404,7 @@ export function floorPlanSvg(model: FloorPlanModel, opts: FloorPlanSvgOptions = 
   const parts: string[] = [];
   parts.push(
     `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${W} ${totalH}" width="${W}" height="${totalH}" font-family="Helvetica, Arial, sans-serif">`,
-    `<rect x="0" y="0" width="${W}" height="${totalH}" fill="#ffffff"/>`,
+    `<rect x="0" y="0" width="${W}" height="${totalH}" fill="${PAPER}"/>`,
   );
 
   // ── Title ──
@@ -518,7 +555,7 @@ export function floorPlanSvg(model: FloorPlanModel, opts: FloorPlanSvgOptions = 
       });
       if (labels.length > 0) {
         parts.push(
-          `<g class="room-labels" font-size="10" font-weight="bold" fill="#2c3640">${labels.join('')}</g>`,
+          `<g class="room-labels" font-size="10" font-weight="bold" fill="${ROOM_LABEL}">${labels.join('')}</g>`,
         );
       }
     }
@@ -542,7 +579,7 @@ export function floorPlanSvg(model: FloorPlanModel, opts: FloorPlanSvgOptions = 
         const anchor = pointInRing(c, big) ? c : big[0];
         const txt = `Open space · ~${areaShort(model.openSpaceAreaM2, unitSystem)}`;
         parts.push(
-          `<g class="room-labels open-space" font-size="11" font-weight="bold" fill="#2c3640"><text x="${px(anchor[0]).toFixed(1)}" y="${(py(anchor[1]) + 4).toFixed(1)}" text-anchor="middle">${escapeXml(txt)}</text></g>`,
+          `<g class="room-labels open-space" font-size="11" font-weight="bold" fill="${ROOM_LABEL}"><text x="${px(anchor[0]).toFixed(1)}" y="${(py(anchor[1]) + 4).toFixed(1)}" text-anchor="middle">${escapeXml(txt)}</text></g>`,
         );
       }
     }
@@ -575,7 +612,7 @@ export function floorPlanSvg(model: FloorPlanModel, opts: FloorPlanSvgOptions = 
       }
       if (labels.length > 0) {
         parts.push(
-          `<g class="room-areas" font-size="10" fill="#3c4753">${labels.join('')}</g>`,
+          `<g class="room-areas" font-size="10" fill="${AREA_LABEL}">${labels.join('')}</g>`,
         );
       }
     }
@@ -666,7 +703,7 @@ export function floorPlanSvg(model: FloorPlanModel, opts: FloorPlanSvgOptions = 
     const previewNote = `${dateTxt} · Floor plan preview — not for construction`;
     parts.push(
       `<g class="title-block">` +
-        `<rect x="${tbX}" y="${tbY}" width="${tbW}" height="${tbH}" fill="#ffffff" stroke="${INK}" stroke-width="1"/>` +
+        `<rect x="${tbX}" y="${tbY}" width="${tbW}" height="${tbH}" fill="${PAPER}" stroke="${INK}" stroke-width="1"/>` +
         `<line x1="${tbX}" y1="${tbY + 21}" x2="${tbX + tbW}" y2="${tbY + 21}" stroke="${INK}" stroke-width="0.55"/>` +
         `<text x="${tbX + 8}" y="${tbY + 15}" font-size="11" font-weight="bold" fill="${INK}">${escapeXml(tbTitle)}</text>` +
         `<text x="${tbX + 8}" y="${tbY + 34}" font-size="8.5" fill="${INK}">${escapeXml(overallTxt)}</text>` +

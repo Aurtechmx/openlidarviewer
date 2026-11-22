@@ -18,15 +18,23 @@
  * `buildXxx(...): Promise<Uint8Array>` convention of {@link buildMapSheetPdf}.
  */
 
-import { PDFDocument, StandardFonts, rgb, degrees, type PDFFont, type PDFPage } from 'pdf-lib';
+import { PDFDocument, rgb, degrees, type PDFFont, type PDFPage, type RGB } from 'pdf-lib';
+import { openReport } from '../../export/sheetKit/reportStyle';
+import type { SheetStyle } from '../../export/sheetKit/tokens';
 import type { ContourPdfModel } from '../contourStudio/contourDeliverablePdfModel';
-import { pdfInfoDate } from '../../pdfInfoDate';
 import { winAnsiSafe } from '../../winAnsiText';
 
-const INK = rgb(0.12, 0.14, 0.18);
-const DIM = rgb(0.42, 0.46, 0.52);
-const RULE = rgb(0.2, 0.22, 0.26);
-const WATERMARK = rgb(0.85, 0.4, 0.36);
+let INK = rgb(0.12, 0.14, 0.18);
+let DIM = rgb(0.42, 0.46, 0.52);
+let RULE = rgb(0.2, 0.22, 0.26);
+let WATERMARK = rgb(0.85, 0.4, 0.36);
+
+/** The report's colours, swapped for a Light or Dark build and restored after it. */
+interface ReportInk { readonly INK: RGB; readonly DIM: RGB; readonly RULE: RGB; readonly WATERMARK: RGB; }
+const CLASSIC_INK: ReportInk = { INK, DIM, RULE, WATERMARK };
+function useInk(c: ReportInk): void {
+  ({ INK, DIM, RULE, WATERMARK } = c);
+}
 
 // US Letter, portrait.
 const PAGE_W = 612;
@@ -82,30 +90,36 @@ function drawWatermark(page: PDFPage, font: PDFFont, mark: string): void {
  * header on the first page. Returns the PDF bytes. Renders honest text only —
  * nothing beyond what the model provides.
  */
-export async function buildContourStudioPdf(model: ContourPdfModel): Promise<Uint8Array> {
+/**
+ * The report in a sheet style (`render.style`): Light and Dark set it in the
+ * sheet kit's type, colours and paper with the same content; Classic, or no
+ * style, is the report as before, byte for byte.
+ */
+export async function buildContourStudioPdf(
+  model: ContourPdfModel,
+  render: { readonly style?: SheetStyle | null; readonly loadFont?: (name: string) => Promise<Uint8Array> } = {},
+): Promise<Uint8Array> {
+  try {
+    return await buildContourStudioPdfStyled(model, render);
+  } finally {
+    useInk(CLASSIC_INK);
+  }
+}
+
+async function buildContourStudioPdfStyled(
+  model: ContourPdfModel,
+  render: { readonly style?: SheetStyle | null; readonly loadFont?: (name: string) => Promise<Uint8Array> },
+): Promise<Uint8Array> {
   const doc = await PDFDocument.create();
-  // Accessibility metadata. `showInWindowTitleBar` sets the ViewerPreferences
-  // DisplayDocTitle flag so a screen reader / PDF viewer announces the
-  // deliverable title rather than the raw filename; setLanguage tags the
-  // document language. (A full tagged-structure tree is out of reach with this
-  // PDF library; these are the honest, supported accessibility hooks — see
-  // ReportPdfRenderer.)
   const pdfTitle = model.titleBlock[0]?.trim() || 'Contour Studio Deliverable';
-  doc.setTitle(pdfTitle, { showInWindowTitleBar: true });
-  doc.setLanguage('en-US');
-  doc.setAuthor('OpenLiDARViewer');
-  // Pin the Info-dictionary dates. pdf-lib defaults CreationDate and ModDate to
-  // the wall clock at `create()`, so two identical builds either side of a
-  // second boundary stop being byte-identical. See src/pdfInfoDate.ts.
-  // The model carries its timestamp only as rendered title-block text, so
-  // there is no structured date to source from here. The page still prints
-  // "Generated ...", and the Info dictionary takes the epoch rather than the
-  // clock.
-  const infoStamp = pdfInfoDate(undefined);
-  doc.setCreationDate(infoStamp);
-  doc.setModificationDate(infoStamp);
-  const font = await doc.embedFont(StandardFonts.Helvetica);
-  const bold = await doc.embedFont(StandardFonts.HelveticaBold);
+  // Info dictionary, accessibility hooks and faces. Light and Dark: the sheet
+  // kit's fonts and colours. No await follows until the save, so the swapped
+  // colours are this build's alone.
+  const { kit, font, bold } = await openReport(doc, pdfTitle, undefined, render);
+  if (kit) {
+    const k = kit, t = kit.tokens;
+    useInk({ INK: k.color(t.ink), DIM: k.color(t.dim), RULE: k.color(t.outline), WATERMARK: k.mix(t.warn, t.paper, 0.35) });
+  }
 
   const contentW = PAGE_W - 2 * MARGIN;
 
@@ -155,5 +169,9 @@ export async function buildContourStudioPdf(model: ContourPdfModel): Promise<Uin
     });
   });
 
+  if (kit) {
+    useInk(CLASSIC_INK);
+    kit.done();
+  }
   return doc.save();
 }

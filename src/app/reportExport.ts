@@ -31,6 +31,7 @@
  * (see `docs/architecture/architecture-map.md`).
  */
 
+import { sheetStyle } from '../render/measure/mapSheetExportOptions';
 import { chunkFailureText, classifyLoadError } from './staleChunkReload';
 import { activeScanPositionSteps } from './measurementPositionSteps';
 import { pointBasisLine } from '../export/exportSummary';
@@ -665,7 +666,10 @@ export async function generateReportPdf(templateId: string, deps: ReportExportDe
     report.normalizeReportTemplateId(templateId) ?? report.DEFAULT_TEMPLATE_ID;
   const template = report.getReportTemplate(validatedTemplateId);
   const coverTitle = template?.label ?? 'Scan Report';
-  const inputs = report.composeReportInputs({ ...captured, templateId: validatedTemplateId, title: coverTitle, metadata });
+  // The scan report follows the session's sheet style: Light and Dark take the sheet themes, Classic its own.
+  const style = sheetStyle();
+  const branding = style === 'classic' ? undefined : { theme: style === 'dark' ? 'sheet-dark' as const : 'sheet-light' as const };
+  const inputs = report.composeReportInputs({ ...captured, ...(branding ? { branding } : {}), templateId: validatedTemplateId, title: coverTitle, metadata });
 
   const result = await report.generateReport(inputs);
   // The download filename now mirrors the template choice so the

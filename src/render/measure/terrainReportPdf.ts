@@ -26,7 +26,9 @@
  * caller triggers the download.
  */
 
-import { PDFDocument, StandardFonts, rgb, type PDFFont } from 'pdf-lib';
+import { PDFDocument, rgb, type PDFFont, type RGB } from 'pdf-lib';
+import { openReport } from '../../export/sheetKit/reportStyle';
+import type { SheetStyle } from '../../export/sheetKit/tokens';
 import type { AnalyseContoursResult } from '../../terrain/contour/analyseContours';
 import {
   buildTerrainReportContent,
@@ -34,23 +36,27 @@ import {
   type TerrainReportContentOptions,
 } from '../../terrain/export/terrainReportContent';
 import { NO_RESOLVED_VERTICAL_SCALE } from '../../terrain/export/exportProvenance';
-import { pdfInfoDate } from '../../pdfInfoDate';
 import {
-  capFieldText,
   clipWithSuffix,
   mayCapField,
-  omissionMarker,
-  pdfParagraphs,
   winAnsiSafe,
-  wrapToWidth,
+  wrapReportField,
+  wrapStampLine,
 } from '../../winAnsiText';
 
-const INK = rgb(0.12, 0.14, 0.18);
-const DIM = rgb(0.42, 0.46, 0.52);
-const FRAME = rgb(0.2, 0.22, 0.26);
-const WARN = rgb(0.54, 0.18, 0.11);
-const GOOD = rgb(0.13, 0.43, 0.2);
-const CAUTION = rgb(0.55, 0.4, 0.05);
+let INK = rgb(0.12, 0.14, 0.18);
+let DIM = rgb(0.42, 0.46, 0.52);
+let FRAME = rgb(0.2, 0.22, 0.26);
+let WARN = rgb(0.54, 0.18, 0.11);
+let GOOD = rgb(0.13, 0.43, 0.2);
+let CAUTION = rgb(0.55, 0.4, 0.05);
+
+/** The report's colours, swapped for a Light or Dark build and restored after it. */
+interface ReportInk { readonly INK: RGB; readonly DIM: RGB; readonly FRAME: RGB; readonly WARN: RGB; readonly GOOD: RGB; readonly CAUTION: RGB; }
+const CLASSIC_INK: ReportInk = { INK, DIM, FRAME, WARN, GOOD, CAUTION };
+function useInk(c: ReportInk): void {
+  ({ INK, DIM, FRAME, WARN, GOOD, CAUTION } = c);
+}
 
 /** A4 portrait, in points. */
 const PW = 595.28;
@@ -91,29 +97,39 @@ function isContent(x: unknown): x is TerrainReportContent {
  * (assembled here). Pure: it carries no timestamp, and its Info-dictionary
  * dates are pinned rather than read from the clock.
  */
+/**
+ * The report in a sheet style (`render.style`): Light and Dark set it in the
+ * sheet kit's type, colours and paper with the same content; Classic, or no
+ * style, is the report as before, byte for byte.
+ */
 export async function buildTerrainReportPdf(
   input: TerrainReportContent | AnalyseContoursResult,
   opts: TerrainReportContentOptions = NO_RESOLVED_VERTICAL_SCALE,
+  render: { readonly style?: SheetStyle | null; readonly loadFont?: (name: string) => Promise<Uint8Array> } = {},
+): Promise<Uint8Array> {
+  try {
+    return await buildTerrainReportPdfStyled(input, opts, render);
+  } finally {
+    useInk(CLASSIC_INK);
+  }
+}
+
+async function buildTerrainReportPdfStyled(
+  input: TerrainReportContent | AnalyseContoursResult,
+  opts: TerrainReportContentOptions,
+  render: { readonly style?: SheetStyle | null; readonly loadFont?: (name: string) => Promise<Uint8Array> },
 ): Promise<Uint8Array> {
   const content = isContent(input) ? input : buildTerrainReportContent(input, opts);
 
   const doc = await PDFDocument.create();
-  // Accessibility metadata. `showInWindowTitleBar` sets the ViewerPreferences
-  // DisplayDocTitle flag so a screen reader / PDF viewer announces the report
-  // title rather than the raw filename; setLanguage tags the document language.
-  // (A full tagged-structure tree is out of reach with this PDF library; these
-  // are the honest, supported accessibility hooks — see ReportPdfRenderer.)
-  doc.setTitle(content.title, { showInWindowTitleBar: true });
-  doc.setLanguage('en-US');
-  doc.setAuthor('OpenLiDARViewer');
-  // Pin the Info-dictionary dates. pdf-lib defaults CreationDate and ModDate to
-  // the wall clock at `create()`, so two identical builds either side of a
-  // second boundary stop being byte-identical. See src/pdfInfoDate.ts.
-  const infoStamp = pdfInfoDate(undefined);
-  doc.setCreationDate(infoStamp);
-  doc.setModificationDate(infoStamp);
-  const font = await doc.embedFont(StandardFonts.Helvetica);
-  const bold = await doc.embedFont(StandardFonts.HelveticaBold);
+  // Info dictionary, accessibility hooks and faces. Light and Dark: the sheet
+  // kit's fonts and colours. No await follows until the save, so the swapped
+  // colours are this build's alone.
+  const { kit, font, bold } = await openReport(doc, content.title, undefined, render);
+  if (kit) {
+    const k = kit, t = kit.tokens;
+    useInk({ INK: k.color(t.ink), DIM: k.color(t.dim), FRAME: k.color(t.outline), WARN: k.color(t.warn), GOOD: k.color(t.good), CAUTION: k.color(t.caution) });
+  }
 
   // ── paging state (the report can flow onto a second page) ────────────────
   let page = doc.addPage([PW, PH]);
@@ -148,7 +164,7 @@ export async function buildTerrainReportPdf(
    * is never capped. Advances the shared cursor.
    */
   const flow = (s: string, x: number, maxW: number, sz: number, f: PDFFont, c: Color): void => {
-    for (const line of wrapField(s, f, sz, maxW, false)) {
+    for (const line of wrapReportField(s, f, sz, maxW, false)) {
       ensure(sz + 3);
       page.drawText(line, { x, y, size: sz, font: f, color: c });
       y -= sz + 3;
@@ -187,8 +203,8 @@ export async function buildTerrainReportPdf(
       // A row value may copy file-derived text (the scan name) and is capped,
       // unless its label marks a CRS, datum, digest or unit.
       const cap = mayCapField(row.label);
-      const labelLines = wrapField(row.label, bold, 9.5, labelW, cap);
-      const valueLines = wrapField(row.value, font, 9.5, valueW, cap);
+      const labelLines = wrapReportField(row.label, bold, 9.5, labelW, cap);
+      const valueLines = wrapReportField(row.value, font, 9.5, valueW, cap);
       const startPage = page;
       const startY = y;
       for (let i = 0; i < Math.max(labelLines.length, valueLines.length); i++) {
@@ -287,59 +303,14 @@ export async function buildTerrainReportPdf(
     ny -= NOTE_LEAD;
   }
 
+  if (kit) {
+    useInk(CLASSIC_INK);
+    kit.done();
+  }
   return doc.save();
 }
 
-/**
- * Split one `Key  Value` provenance line into segments that fit the footer
- * width, breaking ONLY at spaces and keeping each segment's internal spacing
- * (a plain word-split would collapse the padded key column). Continuation
- * segments render with a hanging indent, so they measure against `maxW -
- * indent`. A single unbreakable run longer than the width draws whole rather
- * than truncating — provenance never silently loses characters. Mirrors the
- * helper in spaceReportPdf.ts (pure, injected font measurer).
- */
-function wrapStampLine(
-  font: PDFFont,
-  s: string,
-  maxW: number,
-  sz: number,
-  indent: number,
-): string[] {
-  const out: string[] = [];
-  let rest = safe(s);
-  let w = maxW;
-  while (font.widthOfTextAtSize(rest, sz) > w) {
-    // The longest space-boundary prefix that fits.
-    let cut = -1;
-    for (let i = rest.indexOf(' '); i !== -1; i = rest.indexOf(' ', i + 1)) {
-      if (font.widthOfTextAtSize(rest.slice(0, i), sz) <= w) cut = i;
-      else break;
-    }
-    if (cut <= 0) break;
-    out.push(rest.slice(0, cut));
-    rest = rest.slice(cut + 1).trimStart();
-    w = maxW - indent;
-  }
-  out.push(rest);
-  return out;
-}
-
 type Color = ReturnType<typeof rgb>;
-
-/**
- * Word-wrap one field into lines no wider than `maxW` (a word wider than the
- * line is hard-broken). With `cap`, a field past PDF_FIELD_CHAR_CAP is cut there
- * with a marker line; app-written text and CRS, digest or unit rows pass false. Mirrors the wrapper in spaceReportPdf.ts.
- */
-function wrapField(s: string, font: PDFFont, sz: number, maxW: number, cap: boolean): string[] {
-  const field = cap ? capFieldText(s) : { text: s, omitted: 0 };
-  const measure = (t: string): number => font.widthOfTextAtSize(t, sz);
-  // A line break starts a new line and a tab is a space (never '?').
-  const lines = pdfParagraphs(field.text).flatMap((p) => wrapToWidth(safe(p), measure, maxW));
-  if (field.omitted > 0) lines.push(...wrapToWidth(safe(omissionMarker(field.omitted)), measure, maxW));
-  return lines;
-}
 
 // Re-exported for callers that want to colour-key the marks / availability
 // outside the PDF (the colours are documented here as the report's palette).

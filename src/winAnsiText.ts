@@ -170,3 +170,51 @@ export function clipWithSuffix(
   }
   return `${text.slice(0, lo).trimEnd()}...${suffix}`;
 }
+
+/** Anything that measures text, such as a pdf-lib font. */
+export interface TextMeasurer {
+  widthOfTextAtSize(text: string, size: number): number;
+}
+
+/**
+ * Split one `Key  Value` provenance line into segments that fit `maxW`,
+ * breaking ONLY at spaces and keeping each segment's internal spacing (a plain
+ * word-split would collapse the padded key column). Continuation segments
+ * render with a hanging indent, so they measure against `maxW - indent`. A
+ * single unbreakable run longer than the width draws whole rather than
+ * truncating, so provenance never silently loses characters.
+ */
+export function wrapStampLine(font: TextMeasurer, s: string, maxW: number, sz: number, indent: number): string[] {
+  const out: string[] = [];
+  let rest = winAnsiSafe(s);
+  let w = maxW;
+  while (font.widthOfTextAtSize(rest, sz) > w) {
+    // The longest space-boundary prefix that fits.
+    let cut = -1;
+    for (let i = rest.indexOf(' '); i !== -1; i = rest.indexOf(' ', i + 1)) {
+      if (font.widthOfTextAtSize(rest.slice(0, i), sz) <= w) cut = i;
+      else break;
+    }
+    if (cut <= 0) break;
+    out.push(rest.slice(0, cut));
+    rest = rest.slice(cut + 1).trimStart();
+    w = maxW - indent;
+  }
+  out.push(rest);
+  return out;
+}
+
+/**
+ * Word-wrap one report field into lines no wider than `maxW` (a word wider
+ * than the line is hard-broken). With `cap`, a field past PDF_FIELD_CHAR_CAP is
+ * cut there with a marker line; app-written text and CRS, digest or unit rows
+ * pass false.
+ */
+export function wrapReportField(s: string, font: TextMeasurer, sz: number, maxW: number, cap: boolean): string[] {
+  const field = cap ? capFieldText(s) : { text: s, omitted: 0 };
+  const measure = (t: string): number => font.widthOfTextAtSize(t, sz);
+  // A line break starts a new line and a tab is a space (never '?').
+  const lines = pdfParagraphs(field.text).flatMap((p) => wrapToWidth(winAnsiSafe(p), measure, maxW));
+  if (field.omitted > 0) lines.push(...wrapToWidth(winAnsiSafe(omissionMarker(field.omitted)), measure, maxW));
+  return lines;
+}

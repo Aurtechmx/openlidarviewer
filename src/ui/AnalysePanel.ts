@@ -2838,7 +2838,7 @@ export class AnalysePanel {
       // rebuild means this bundle is no longer the one the user is looking at.
       if (this._refuseForeignScanExport()) return;
       const bytes = await buildContourDeliverableFromResultAsync(result, {
-        digests: await terrainExportDigests(this._cb, result),
+        digests: await terrainExportDigests(this._cb, result), sheetStyle: sheetStyle(),
         decision: permit.decision,
         basename,
         worldOrigin: ctx.worldOrigin ?? null,
@@ -2931,7 +2931,7 @@ export class AnalysePanel {
         // real unit ('ft' / 'degrees') instead of a hard-coded metre.
         linearUnit: mapCtx.linearUnit,
         isGeographic: mapCtx.isGeographic,
-      });
+      }, { style: sheetStyle() });
       triggerDownload(new Blob([bytes as BlobPart], { type: 'application/pdf' }), `${basename}-terrain-report.pdf`);
     } catch (err) {
       // eslint-disable-next-line no-console

@@ -19,6 +19,7 @@
  * what the standalone export would produce.
  */
 
+import type { SheetStyle } from '../../export/sheetKit/tokens';
 import { safeEntryName } from '../../export/safeText';
 import type { ExportDigests } from '../../science/exportDigestRecord';
 import type { AnalysedBasis } from './analysedBasis';
@@ -51,6 +52,8 @@ import { assembleContourDeliverable } from './contourDeliverablePackage';
 const enc = (s: string): Uint8Array => new TextEncoder().encode(s);
 
 export interface DeliverableBuildOptions {
+  /** Sheet style of the package's PDF; Classic or none keeps it as before. */
+  readonly sheetStyle?: SheetStyle | null;
   /** Source-file digest and CRS origin for the provenance record. */
   readonly digests?: ExportDigests | null;
   /** The granted export decision (from the §19 permit). */
@@ -487,7 +490,7 @@ export async function buildContourDeliverableFromResultAsync(
     geometry: { cartographic: !g.isAnalytical, analyticalAvailable: false },
   });
 
-  const pdfBytes = await buildContourStudioPdf(pdfModel);
+  const pdfBytes = await buildContourStudioPdf(pdfModel, { style: opts.sheetStyle });
   g.bytes.set('contour-map-pdf', pdfBytes);
 
   return assembleContourDeliverable(manifestFor(g, opts, true), g.bytes);

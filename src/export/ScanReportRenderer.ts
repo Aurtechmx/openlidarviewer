@@ -16,6 +16,9 @@
  * content and never exceeds 40% of the canvas width.
  */
 
+import { cssColor, sheetTokens, type SheetRgb } from './sheetKit/tokens';
+import { sheetStyle, type SheetStyleChoice } from './sheetKit/sessionStyle';
+
 /** One row of the report — a label/value pair. */
 export interface ScanReportRow {
   readonly label: string;
@@ -47,11 +50,19 @@ const ROW_SIZE = 14;      // 12 × 1.2 (rounded down)
 const FOOTER_SIZE = 13;   // 11 × 1.2 (rounded up)
 const ROW_GAP = 7;        //  6 × 1.2
 const SECTION_GAP = 12;   // 10 × 1.2
-const BG_FILL = 'rgba(10, 14, 22, 0.86)';
-const BG_STROKE = 'rgba(255, 255, 255, 0.12)';
-const TEXT_PRIMARY = '#f4f6fa';
-const TEXT_SECONDARY = '#a8b0bc';
-const ACCENT = '#4f9dff';
+/** The card's ink: Classic is the translucent dark card every earlier image carried. */
+interface CardInk { readonly bg: string; readonly stroke: string; readonly primary: string; readonly secondary: string; readonly accent: string }
+const CLASSIC_CARD: CardInk = {
+  bg: 'rgba(10, 14, 22, 0.86)', stroke: 'rgba(255, 255, 255, 0.12)', primary: '#f4f6fa', secondary: '#a8b0bc', accent: '#4f9dff',
+};
+
+/** The card in a sheet style, so a Studio image matches the session's other exports. */
+export function cardInk(style: SheetStyleChoice | null | undefined): CardInk {
+  if (style !== 'light' && style !== 'dark') return CLASSIC_CARD;
+  const t = sheetTokens(style);
+  const rgba = (c: SheetRgb, a: number): string => `rgba(${c.map((v) => Math.round(v * 255)).join(', ')}, ${a})`;
+  return { bg: rgba(t.panel, 0.9), stroke: rgba(t.rule, 1), primary: cssColor(t.ink), secondary: cssColor(t.dim), accent: cssColor(t.accent) };
+}
 
 /**
  * Decode a PNG Blob into an `HTMLImageElement` so a 2-D canvas can draw it.
@@ -140,7 +151,9 @@ export function drawScanReport(
   data: ScanReportData,
   corner: ScanReportCorner = 'bottom-right',
   margin = 24,
+  style: SheetStyleChoice | null = null,
 ): void {
+  const ink = cardInk(style);
   // Cap the card at 48% of the canvas width (was 40%) — the Studio
   // 20%-larger card needs the extra headroom on narrower viewports.
   const maxCardWidth = Math.floor(ctx.canvas.width * 0.48);
@@ -156,27 +169,27 @@ export function drawScanReport(
   ctx.save();
 
   // Card background — rounded translucent dark with a 1-px hairline border.
-  ctx.fillStyle = BG_FILL;
-  ctx.strokeStyle = BG_STROKE;
+  ctx.fillStyle = ink.bg;
+  ctx.strokeStyle = ink.stroke;
   ctx.lineWidth = 1;
   roundRect(ctx, x, y, width, height, 8);
   ctx.fill();
   ctx.stroke();
 
   // Accent stripe down the left edge — visual cue this is the report card.
-  ctx.fillStyle = ACCENT;
+  ctx.fillStyle = ink.accent;
   ctx.fillRect(x, y, 3, height);
 
   // Title (bold).
   let cy = y + PADDING + TITLE_SIZE;
-  ctx.fillStyle = TEXT_PRIMARY;
+  ctx.fillStyle = ink.primary;
   ctx.font = `600 ${TITLE_SIZE}px system-ui, -apple-system, sans-serif`;
   ctx.textBaseline = 'alphabetic';
   ctx.fillText(data.title, x + PADDING, cy);
 
   // Scan name (secondary).
   cy += 4 + NAME_SIZE;
-  ctx.fillStyle = TEXT_SECONDARY;
+  ctx.fillStyle = ink.secondary;
   ctx.font = `${NAME_SIZE}px system-ui, -apple-system, sans-serif`;
   // Truncate the name if it overflows.
   const nameMax = width - PADDING * 2;
@@ -194,10 +207,10 @@ export function drawScanReport(
   ctx.font = `${ROW_SIZE}px system-ui, -apple-system, sans-serif`;
   for (const row of data.rows) {
     cy += ROW_SIZE;
-    ctx.fillStyle = TEXT_SECONDARY;
+    ctx.fillStyle = ink.secondary;
     ctx.textAlign = 'left';
     ctx.fillText(row.label, x + PADDING, cy);
-    ctx.fillStyle = TEXT_PRIMARY;
+    ctx.fillStyle = ink.primary;
     ctx.textAlign = 'right';
     ctx.fillText(row.value, x + width - PADDING, cy);
     cy += ROW_GAP;
@@ -207,7 +220,7 @@ export function drawScanReport(
 
   // Footer (small, secondary, left-aligned).
   cy += SECTION_GAP + FOOTER_SIZE;
-  ctx.fillStyle = TEXT_SECONDARY;
+  ctx.fillStyle = ink.secondary;
   ctx.font = `${FOOTER_SIZE}px system-ui, -apple-system, sans-serif`;
   ctx.textAlign = 'left';
   ctx.fillText(data.footer, x + PADDING, cy);
@@ -245,7 +258,8 @@ export async function composeScanReportOntoBlob(
   const ctx = canvas.getContext('2d');
   if (!ctx) return source;
   ctx.drawImage(img, 0, 0);
-  drawScanReport(ctx, data, corner);
+  // In the session's sheet style, as the other drawn exports are.
+  drawScanReport(ctx, data, corner, 24, sheetStyle());
 
   return new Promise<Blob>((resolve, reject) => {
     canvas.toBlob((b) => {
@@ -294,7 +308,7 @@ export function drawClassScopeBanner(
 
   // Pill background with a hairline border, mirroring the report card chrome.
   ctx.fillStyle = BANNER_BG;
-  ctx.strokeStyle = BG_STROKE;
+  ctx.strokeStyle = CLASSIC_CARD.stroke;
   ctx.lineWidth = 1;
   roundRect(ctx, x, y, bannerW, bannerH, 8);
   ctx.fill();
