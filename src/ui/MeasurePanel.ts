@@ -20,7 +20,8 @@ import { PROFILE_CHART_ASSUMED_BOX, profileVexChipLabel, readProfileVex, PROFILE
 // lazyChunks.ts (excluded from the live source-transform) so its literal is
 // never scrambled. Importing the thunk pulls nothing heavy into the shell.
 import { loadProfilePdf } from '../lazyChunks';
-import { profilePdfInputFor } from './profilePdfInput';
+import type { ProfileSheetExtras } from '../render/measure/profileSheetStyled';
+import { profilePdfInputFor, withSheetStyle } from './profilePdfInput';
 import type { MeasurementSummary, ProfileResampleParams } from '../render/measure/MeasureController';
 import {
   DIMENSION_LABEL,
@@ -268,6 +269,8 @@ export interface MeasurePanelCallbacks {
    * v0.3.10 Profile-as-Deliverable stream.
    */
   getUnitSystem?: () => 'metric' | 'imperial';
+  /** What a Light or Dark profile sheet draws beyond the ground line; null when nothing more can be drawn. */
+  getProfileSheetExtras?: (id: string, s: MeasurementSummary) => Promise<ProfileSheetExtras | null>;
   /**
    * CRS provenance for the profile PDF header (v0.4.5, B4) — resolved by the
    * host from the CRS service AT EXPORT TIME, so a late CRS confirmation or
@@ -831,15 +834,10 @@ export class MeasurePanel {
     // control. What a second assembly drops is the CRS, the unit system and
     // the provenance record, which is exactly what a reader of the file
     // cannot recover from anywhere else.
-    const bytes = await buildProfilePdf(
-      profilePdfInputFor(s, {
-        context,
-        unitSystem,
-        // The clock is read HERE, at the app boundary. The builder takes the
-        // stamp as a parameter so the same sheet is the same bytes.
-        generatedAt: new Date(),
-      }),
-    );
+    // The clock is read HERE, at the app boundary. The builder takes the
+    // stamp as a parameter so the same sheet is the same bytes.
+    const extras = () => this._cb.getProfileSheetExtras?.(s.id, s) ?? Promise.resolve(null);
+    const bytes = await buildProfilePdf(await withSheetStyle(profilePdfInputFor(s, { context, unitSystem, generatedAt: new Date() }), extras));
     triggerDownload(
       new Blob([bytes as BlobPart], { type: 'application/pdf' }),
       profileExportFileName(context?.scanName, s.name, 'pdf') ?? `${safeFileName(s.name)}-profile.pdf`,

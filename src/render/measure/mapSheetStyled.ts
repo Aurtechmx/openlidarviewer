@@ -55,7 +55,7 @@ import {
   type LegendKey,
   type NorthSpec,
 } from '../../export/sheetKit/primitives';
-import { SHEET_TYPE, sheetTokens, tintAt, type SheetRgb, type SheetTokens } from '../../export/sheetKit/tokens';
+import { SHEET_SPACE, SHEET_TYPE, sheetTokens, tintAt, type SheetRgb, type SheetTokens } from '../../export/sheetKit/tokens';
 import { scaleBarUnit } from './scaleBar';
 import {
   buildMapSheetPdf,
@@ -260,7 +260,8 @@ async function drawMapLayers(
       maxCurvature: 0.5,
       edgeMargin: extent * 0.015,
       labelHeight: (sz + 2) / tr.scale,
-      charWidth: 4.1 / tr.scale,
+      // The gap is sized from the label face at its drawn size, plus room for the halo.
+      charWidth: (fonts.sansBold.widthOfTextAtSize('0', sz) + 0.4) / tr.scale,
       minFeatureLenForScale: extent * 0.04,
       indexOnly: input.purpose?.labelsIndexOnly ?? true,
       maxLabels: 60,
@@ -333,7 +334,8 @@ interface PanelContext {
 const MARGIN = 30;
 const FOOTER_H = 18;
 const TICK_ROOM = 14;
-const BLOCK_GAP = 11;
+/** Space between panel groups: a step above the space inside a group. */
+const BLOCK_GAP = SHEET_SPACE.lg;
 /** Type scales tried, largest first. Below the last, text would print smaller than about 5 points. */
 const SCALES = [1, 0.95, 0.9, 0.85, 0.8, 0.75];
 
@@ -482,7 +484,7 @@ function panelBlocks(
     return { kind: 'line', color: st.color, width: st.width, ...(st.dash ? { dash: st.dash } : {}) };
   };
   legend.push([line(true, 'measured'), 'Index contour, labelled']);
-  legend.push([line(false, 'measured'), `Contour, ${ctx.facts.interval} interval`]);
+  legend.push([line(false, 'measured'), `Contour interval ${ctx.facts.interval}`]);
   if (kinds.has('sparse')) legend.push([line(false, 'sparse'), 'Sparse measured ground']);
   if (kinds.has('interpolated')) legend.push([line(false, 'interpolated'), 'Contour over filled cells']);
   if (kinds.has('gap')) legend.push([line(false, 'gap'), 'Low-confidence gap']);
@@ -564,27 +566,30 @@ function panelBlocks(
   });
 
   // ── accuracy, readiness, evidence ────────────────────────────────────────
+  // The figures as a data block, like the panel's other figures; the sample
+  // note, readiness and evidence follow as sentences.
+  const ACC_KEY_W = 128;
   interface Ln { text: string; color: SheetRgb; font: PDFFont }
-  const accLines = (w: number, k: number): Ln[] => {
-    const out: Ln[] = [];
-    const sz = SHEET_TYPE.note * k;
+  const accRows = (_w: number, k: number): DataRow[] => ctx.facts.accuracyRows.map(([label, value, short]) => ({
+    key: short && sheetTextWidth(label.toUpperCase(), f.sansBold, SHEET_TYPE.dataKey * k, f) > ACC_KEY_W * k - 6 ? short : label,
+    value,
+  }));
+  const accText = (w: number, k: number): Ln[] => {
     const facts = ctx.facts;
-    if (facts.accuracySampleNote) out.push({ text: facts.accuracySampleNote, color: t.dim, font: f.sans });
-    for (const [label, value, short] of facts.accuracyRows) {
-      const full = `${label}: ${value}`;
-      const row = sheetTextWidth(full, f.mono, sz, f) > w && short ? `${short}: ${value}` : full;
-      for (const ln of wrapSheetText(row, f.mono, sz, w, f)) out.push({ text: ln, color: t.ink, font: f.mono });
-    }
+    const sz = SHEET_TYPE.note * k;
+    const out: Ln[] = [];
+    if (facts.accuracySampleNote) for (const ln of wrapSheetText(facts.accuracySampleNote, f.sans, sz, w, f)) out.push({ text: ln, color: t.dim, font: f.sans });
     const readyColor = facts.readiness === 'ready' ? t.ink : t.warn;
     for (const ln of wrapSheetText(facts.readinessNote, f.sansBold, sz, w, f)) out.push({ text: ln, color: readyColor, font: f.sansBold });
     for (const ln of wrapSheetText(facts.evidenceLine, f.sans, sz, w, f)) out.push({ text: ln, color: facts.evidenceValidated ? t.dim : t.warn, font: f.sans });
     return out;
   };
   blocks.push({
-    height: (w, k) => SL(k) + accLines(w, k).length * noteStep(k),
+    height: (w, k) => SL(k) + dataBlockHeight(accRows(w, k), w, f, ACC_KEY_W, k) + SHEET_SPACE.xs * k + accText(w, k).length * noteStep(k),
     draw: (x, y, w, k) => {
-      let cy = drawSectionLabel(page, ctx.facts.accuracyHeading, x, y, w, t, f, k) + noteStep(k);
-      for (const ln of accLines(w, k)) {
+      let cy = drawSectionLabel(page, ctx.facts.accuracyHeading, x, y, w, t, f, k);
+      cy = drawDataBlock(page, accRows(w, k), x, cy, w, t, f, ACC_KEY_W, k) - SHEET_SPACE.xs * k + noteStep(k);
+      for (const ln of accText(w, k)) {
         cy -= noteStep(k);
         sheetText(page, ln.text, x, cy, { font: ln.font, size: SHEET_TYPE.note * k, color: ln.color }, f);
       }

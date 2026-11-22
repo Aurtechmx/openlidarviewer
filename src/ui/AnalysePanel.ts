@@ -127,12 +127,16 @@ import type { MountedRangeWorkbench } from './rangeWorkbenchMount';
 import type { MountedFeatureCandidates } from './featureCandidatesMount';
 import type { PointCloud } from '../model/PointCloud';
 import { openModal, type ModalHandle } from './Modal';
-import type { TerrainLaneKind } from './ExportPanel';
+/** ExportPanel's TerrainLaneKind, restated to keep the edge out; a type test keeps them equal. */
+export type TerrainLaneKind = 'dem' | 'contours' | 'contours-png';
 import type { SheetSize, SheetOrientation, MapSheetPurpose } from '../render/measure/mapSheetPdf';
 import type { Annotation } from '../render/annotate/types';
 import {
   SHEET_OPTIONS,
   STYLE_OPTIONS,
+  setSheetStyle,
+  sheetStyle,
+  type SheetStyleChoice,
   ORIENTATION_OPTIONS,
   sanitizeMapFilename,
   ensurePdfExtension,
@@ -388,8 +392,7 @@ const REPORT_BUTTON_TITLE =
 let lastPreparedBy = '';
 let lastSheet: SheetSize = 'letter';
 let lastOrientation: SheetOrientation = 'portrait';
-let lastStyle: MapSheetStyleChoice = 'light';
-type MapSheetStyleChoice = (typeof STYLE_OPTIONS)[number]['value'];
+type MapSheetStyleChoice = SheetStyleChoice;
 let lastNotes: string | null = null;
 
 /** Whether a terrain product can run from the Export mode, and why not. */
@@ -2512,7 +2515,7 @@ export class AnalysePanel {
       // default), with the analysed grid as its relief.
       // The PNG is that SVG sheet drawn to pixels.
       const svgLike = fmt === 'svg' || fmt === 'png';
-      const svgSheet = svgLike ? await (await loadSvgSheet()).buildSvgSheet(lastStyle, result.dtm) : null;
+      const svgSheet = svgLike ? await (await loadSvgSheet()).buildSvgSheet(sheetStyle(), result.dtm) : null;
       const file = serializeContours(result.model, svgLike ? 'svg' : fmt, {
           svgSheet,
           basename,
@@ -3040,7 +3043,7 @@ export class AnalysePanel {
       const o = document.createElement('option');
       o.value = opt.value;
       o.textContent = opt.label;
-      if (opt.value === lastStyle) o.selected = true;
+      if (opt.value === sheetStyle()) o.selected = true;
       sheetStyleSel.append(o);
     }
 
@@ -3267,7 +3270,7 @@ export class AnalysePanel {
           lastPreparedBy = preparedInput.value;
           lastSheet = sheetSel.value as SheetSize;
           lastOrientation = orientSel.value as SheetOrientation;
-          lastStyle = sheetStyleSel.value as MapSheetStyleChoice;
+          setSheetStyle(sheetStyleSel.value as MapSheetStyleChoice);
           lastNotes = notesInput.value;
           handle.close();
         } catch (err) {

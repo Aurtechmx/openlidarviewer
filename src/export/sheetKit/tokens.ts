@@ -64,20 +64,35 @@ export interface SheetTokens {
   readonly filledDash: readonly number[];
 }
 
-/** Type sizes in points, shared by every style. */
+/**
+ * The type scale, points: four steps and nothing between them. Small (7) for
+ * labels, keys, ticks and the footer; base (8.5) for legend, values and notes;
+ * lead (11) for the subtitle and secondary figures; display (20) for the title
+ * and headline figures. Hierarchy within a step comes from weight and colour.
+ */
+export const SHEET_SCALE = { small: 7, base: 8.5, lead: 11, display: 20 } as const;
+
+/** Type sizes in points by role, each a step of {@link SHEET_SCALE}. */
 export const SHEET_TYPE = {
-  kicker: 8,
-  title: 18,
-  subtitle: 8.5,
-  section: 7,
-  legend: 7.5,
-  dataKey: 6.5,
-  dataValue: 7.5,
-  tick: 6,
-  contourLabel: 6.5,
-  note: 6.5,
-  footer: 6,
+  kicker: SHEET_SCALE.base,
+  title: SHEET_SCALE.display,
+  subtitle: SHEET_SCALE.base,
+  section: SHEET_SCALE.small,
+  legend: SHEET_SCALE.base,
+  dataKey: SHEET_SCALE.small,
+  dataValue: SHEET_SCALE.base,
+  tick: SHEET_SCALE.small,
+  contourLabel: SHEET_SCALE.small,
+  note: SHEET_SCALE.base,
+  footer: SHEET_SCALE.small,
+  figure: SHEET_SCALE.display,
 } as const;
+
+/**
+ * The spacing scale, points. Space inside a group is a step or two smaller
+ * than the space between groups, so groups read as groups.
+ */
+export const SHEET_SPACE = { xs: 4, sm: 8, md: 12, lg: 16, xl: 24 } as const;
 
 const hex = (h: number): SheetRgb => [((h >> 16) & 255) / 255, ((h >> 8) & 255) / 255, (h & 255) / 255];
 
@@ -89,7 +104,7 @@ const LIGHT: SheetTokens = {
   nodata: hex(0xd9d6d0),
   hatch: hex(0xb3ada2),
   ink: hex(0x1d2329),
-  dim: hex(0x5f6770),
+  dim: hex(0x555d66),
   rule: hex(0xc9ccd0),
   halo: hex(0xffffff),
   minor: hex(0x2f6b55),
@@ -115,7 +130,7 @@ const DARK: SheetTokens = {
   nodata: hex(0x161e26),
   hatch: hex(0x2c3a46),
   ink: hex(0xe6edf3),
-  dim: hex(0x8b98a5),
+  dim: hex(0xa7b3bf),
   rule: hex(0x26323d),
   halo: hex(0x0c1116),
   minor: hex(0x3fbf9f),

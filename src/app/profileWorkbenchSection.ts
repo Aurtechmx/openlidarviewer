@@ -36,6 +36,7 @@
  * way to them.
  */
 
+import { sheetStyle } from '../render/measure/mapSheetExportOptions';
 import {
   colourProfileSection,
   type ProfileColourMode,
@@ -94,6 +95,7 @@ import {
 import { drawProfileLinkOverlay } from '../render/measure/profileLinkOverlay2d';
 import {
   composeProfileSectionImage,
+  profileImageThemeFor,
   type ProfileImageSurface,
   type ProfileSectionImageRequest,
 } from '../render/measure/profileSectionImage';
@@ -549,6 +551,8 @@ export interface SectionImageExportPorts {
   createCanvas?: () => SectionImageCanvas;
   /** Hand the encoded PNG to the browser. Defaults to {@link triggerDownload}. */
   download?: (blob: Blob, filename: string) => void;
+  /** Sheet style for the image's ink. Defaults to the session's choice. */
+  style?: 'light' | 'dark' | 'classic';
 }
 
 function defaultSectionImageCanvas(): SectionImageCanvas {
@@ -586,7 +590,8 @@ export async function exportProfileSectionImagePng(
     name: opts.name,
     generatedAt: opts.generatedAt,
   });
-  composeProfileSectionImage(request);
+  // The ink of the sheet style chosen for the session, so the PNG matches the profile sheet.
+  composeProfileSectionImage({ ...request, theme: profileImageThemeFor(ports.style ?? sheetStyle()) });
   const blob = await new Promise<Blob | null>((resolve) => {
     canvas.toBlob((b) => resolve(b), 'image/png');
   });

@@ -11,7 +11,7 @@ import { degrees, rgb } from 'pdf-lib';
 import type { PDFFont, PDFPage, RGB } from 'pdf-lib';
 import { formatScaleTick, scaleBar } from '../../terrain/contour/mapSheetLayout';
 import { drawableText, type SheetFonts } from './fonts';
-import { SHEET_TYPE, type SheetRgb, type SheetTokens } from './tokens';
+import { SHEET_SPACE, SHEET_TYPE, type SheetRgb, type SheetTokens } from './tokens';
 
 /** pdf-lib colour for a token colour. */
 export function pdfColor(c: SheetRgb): RGB {
@@ -66,14 +66,14 @@ export function drawSectionLabel(
   page: PDFPage, label: string, x: number, y: number, width: number, t: SheetTokens, f: SheetFonts, k = 1,
 ): number {
   page.drawLine({ start: { x, y }, end: { x: x + width, y }, thickness: t.weight.rule, color: pdfColor(t.rule) });
-  const base = y - 12 * k;
+  const base = y - SHEET_SPACE.md * k;
   sheetText(page, label.toUpperCase(), x, base, { font: f.sansBold, size: SHEET_TYPE.section * k, color: t.dim }, f);
-  return base - 9 * k;
+  return base - SHEET_SPACE.md * k;
 }
 
 /** Height {@link drawSectionLabel} uses at type scale `k`, to its returned y. */
 export function sectionLabelHeight(k = 1): number {
-  return 21 * k;
+  return 2 * SHEET_SPACE.md * k;
 }
 
 /** What a legend row's key shows. */
@@ -145,9 +145,9 @@ export interface DataRow {
 }
 
 /**
- * Key and value rows in Courier: keys upper-case in the dim colour, values in
- * ink. A value too wide for its column wraps onto further lines. Returns the
- * y below the block.
+ * Key and value rows: keys as small upper-case labels in the dim colour, so
+ * they step back; values in Courier and ink, so the figures lead. A value too
+ * wide for its column wraps onto further lines. Returns the y below the block.
  */
 export function drawDataBlock(
   page: PDFPage, rows: readonly DataRow[], x: number, y: number, width: number, t: SheetTokens, f: SheetFonts,
@@ -156,7 +156,7 @@ export function drawDataBlock(
   const step = SHEET_TYPE.dataValue * 1.5 * k;
   let cy = y;
   for (const r of rows) {
-    sheetText(page, r.key.toUpperCase(), x, cy, { font: f.mono, size: SHEET_TYPE.dataKey * k, color: t.dim }, f);
+    sheetText(page, r.key.toUpperCase(), x, cy, { font: f.sansBold, size: SHEET_TYPE.dataKey * k, color: t.dim }, f);
     const lines = wrapSheetText(r.value, f.mono, SHEET_TYPE.dataValue * k, width - keyWidth * k, f);
     for (const ln of lines) {
       sheetText(page, ln, x + keyWidth * k, cy, { font: f.mono, size: SHEET_TYPE.dataValue * k, color: t.ink }, f);

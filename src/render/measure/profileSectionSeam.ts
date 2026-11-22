@@ -211,7 +211,7 @@ export interface ProfileSectionResult {
   /** Null when the streaming source's node count is not known. */
   readonly streamingComplete: boolean | null;
   readonly sources: readonly ProfileSectionSourceRef[];
-  /** The token this extraction ran under. */
+  /** The token this extraction ran under; -1 for an independent read. */
   readonly generation: number;
   /** True when the scan stopped early because the signal aborted. */
   readonly aborted: boolean;
@@ -227,9 +227,16 @@ export interface ProfileSectionRequest {
   readonly b: Vec3;
   /** Corridor half-width; null/absent takes the same auto width the series does. */
   readonly corridorWidth?: number | null;
+  /** The up axis to cut the corridor along: the measurement's own frame. Absent takes the scene's. */
+  readonly up?: Vec3 | null;
   /** Points examined between yields. */
   readonly chunkSize?: number;
   readonly signal?: { readonly aborted: boolean };
+  /**
+   * An export's own read: it neither supersedes the section the workbench is
+   * computing nor is superseded by it. Its result carries generation -1.
+   */
+  readonly independent?: boolean;
 }
 
 /** The seam a host wires its measure controller and section workbench to. */
@@ -580,8 +587,8 @@ export function createProfileSectionSeam(deps: ProfileSectionSeamDeps): ProfileS
   function* sectionChunks(
     req: ProfileSectionRequest,
   ): Generator<number, ProfileSectionResult | null, void> {
-    const token = generation.next();
-    const frame = buildProfileFrame(req.a, req.b, deps.worldUp());
+    const token = req.independent ? -1 : generation.next();
+    const frame = buildProfileFrame(req.a, req.b, req.up ?? deps.worldUp());
     const band = resolveCorridorHalfWidth(
       frame.horizontalLength,
       req.corridorWidth,
@@ -626,7 +633,7 @@ export function createProfileSectionSeam(deps: ProfileSectionSeamDeps): ProfileS
     // Checked after the walk, never before it: the point of the token is that
     // a request made WHILE this one ran wins, and only the end of the scan
     // can know whether that happened.
-    if (!generation.accepts(token)) return null;
+    if (!req.independent && !generation.accepts(token)) return null;
     const scope = resolveSectionScope({
       staticSourceCount: statics.length,
       streamingSourceCount: residents.length,
