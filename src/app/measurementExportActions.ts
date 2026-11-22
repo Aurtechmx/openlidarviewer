@@ -42,6 +42,8 @@ export interface MeasureExportView {
   upFor?(m: Measurement): Vec3;
   /** A measurement's own unit frame; read for its up refusal (a layer with no resolved up axis). */
   unitFrameOf?(m: Measurement): Pick<MeasureUnitFrame, 'upRefusal'>;
+  /** The panel's summaries; read for each measurement's support grade and its caption. */
+  getSummaries?(): ReadonlyArray<{ readonly id: string; readonly trust?: { readonly grade: string; readonly caption: string } }>;
   readonly unitToMetres: number;
   readonly verticalUnitToMetres: number;
   /** True when the scan's linear scale is known — drives the M1 units caveat. */
@@ -238,6 +240,12 @@ function solePlacedLayer(layers: readonly ExportLayer[], deps: MeasurementExport
  */
 interface MeasureSnapshot {
   readonly measurements: readonly Measurement[];
+  /**
+   * Each measurement's support grade and caption as the panel shows them, by
+   * id. Null when the view keeps no summaries; otherwise the export always
+   * carries the support columns, so its schema does not depend on the grades.
+   */
+  readonly supportOf: ReadonlyMap<string, { readonly grade: string; readonly caption: string }> | null;
   readonly worldUp: Vec3;
   /** Each measurement's own layer up, by id, read with the rest. */
   readonly upOf: ReadonlyMap<string, Vec3>;
@@ -265,8 +273,12 @@ function snapshotMeasure(measure: MeasureExportView): MeasureSnapshot {
     const r = measure.unitFrameOf?.(m).upRefusal;
     if (r) upRefusalOf.set(m.id, r);
   }
+  const summaries = measure.getSummaries?.();
+  const supportOf = summaries ? new Map<string, { grade: string; caption: string }>() : null;
+  for (const s of summaries ?? []) if (s.trust) supportOf?.set(s.id, { grade: s.trust.grade, caption: s.trust.caption });
   return {
     measurements,
+    supportOf,
     worldUp: [w[0], w[1], w[2]],
     upOf,
     upRefusalOf,
@@ -460,6 +472,7 @@ export async function exportMeasurementsFile(
     // frame is unverified for a stronger reason: no scalar could make it metres.
     unitsVerified: owned ? owned.unitsVerified : snap.unitsVerified,
     lonLat,
+    supportOf: snap.supportOf ? ((map) => (m: Measurement) => map.get(m.id) ?? null)(snap.supportOf) : undefined,
     provenance: {
       generatedAt,
       source: stems.length > 0 ? stems.join('+') : null,

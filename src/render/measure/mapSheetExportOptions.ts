@@ -152,3 +152,31 @@ export function annotationsOptionState(count: number): {
     hint: `Plot the ${count} placed annotation${count === 1 ? '' : 's'} as numbered markers with a description table.`,
   };
 }
+
+/**
+ * The map dialog's measurements option. On by default when the scan has
+ * measurements; off and disabled when it has none, so a sheet without them is
+ * unchanged.
+ */
+export function measurementsOptionState(count: number): { disabled: boolean; label: string; hint: string } {
+  if (count <= 0) return { disabled: true, label: 'Include measurements', hint: 'No measurements on this scan.' };
+  return {
+    disabled: false,
+    label: 'Include measurements',
+    hint: `${count} measurement${count === 1 ? '' : 's'}. Light and Dark draw them lettered, with each figure and its support grade; Classic leaves them off.`,
+  };
+}
+
+/**
+ * The dialog checkbox for an option state: checked when the option is
+ * available, disabled when it is not. The one function here that needs a
+ * document; it is only called while the dialog is built.
+ */
+export function optionCheck(state: { readonly disabled: boolean }): HTMLInputElement {
+  const box = document.createElement('input');
+  box.type = 'checkbox';
+  box.className = 'olv-modal-check';
+  box.checked = !state.disabled;
+  box.disabled = state.disabled;
+  return box;
+}

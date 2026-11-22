@@ -61,6 +61,7 @@ import { winAnsiSafe } from '../../winAnsiText';
 import type { ClaimId } from '../../validation/evidenceRegistry';
 import type { SheetStyle } from '../../export/sheetKit/tokens';
 import type { SheetReliefInput } from '../../export/sheetKit/contourSheetModel';
+import type { SheetMeasurement } from '../../export/sheetKit/sheetMeasurement';
 
 /**
  * The claim a crisp contour map sheet stands on (§19): CONTOURS, whose E4 rests
@@ -229,6 +230,12 @@ export interface MapSheetInput {
    * arrow. Ignored by Classic, which always says "Grid N".
    */
   readonly trueNorth?: { readonly convergenceDeg: number } | null;
+  /**
+   * Measurements to draw on a Light or Dark sheet, numbered, with a table in
+   * the side panel giving each one's figure and support grade as the Measure
+   * panel words them. Ignored by Classic.
+   */
+  readonly measurements?: readonly SheetMeasurement[] | null;
 }
 
 const SHEET_PT: Record<SheetSize, readonly [number, number]> = {

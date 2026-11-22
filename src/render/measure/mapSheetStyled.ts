@@ -13,6 +13,9 @@
  * styles never word a figure differently. The Classic style is still drawn by
  * mapSheetPdf.ts, unchanged.
  */
+import { annotationToMapXY } from './annotationMapProjection';
+import { buildAnnotationReport } from './annotationReportTable';
+import type { Annotation } from '../annotate/types';
 import { PDFDocument, StandardFonts, degrees, type PDFFont, type PDFPage } from 'pdf-lib';
 import { INPUT_NOT_RECORDED_NOTE, sourceSha256Text } from '../../science/exportDigestRecord';
 import { crsOriginLine } from '../../science/crsOrigin';
@@ -35,6 +38,7 @@ import {
   type ContourSheetRelief,
 } from '../../export/sheetKit/contourSheetModel';
 import {
+  clipPolyline,
   drawCoordinateTicks,
   drawDataBlock,
   drawFooter,
@@ -58,11 +62,16 @@ import {
 import { SHEET_SPACE, SHEET_TYPE, sheetTokens, tintAt, type SheetRgb, type SheetTokens } from '../../export/sheetKit/tokens';
 import { scaleBarUnit } from './scaleBar';
 import {
+  annotationColor, annotationLines, continuationPages, drawMarkLines, drawMarksContinuation, markLinesHeight,
+  measurementLetter, measurementLines, orderedAnnotationRows, type MarksContinuation,
+} from './mapSheetStyledMarks';
+
+export { measurementLetter } from './mapSheetStyledMarks';
+import {
   buildMapSheetPdf,
   contourShareSheetLines,
   mapLinearUnitLabel,
   mapSheetFacts,
-  drawAnnotationLayerForSheet,
   drawPurposeAppendixForSheet,
   type MapSheetInput,
   type MapSheetFacts,
@@ -132,17 +141,28 @@ export async function buildStyledMapSheetPdf(
   const relief = input.relief ? contourSheetRelief(input.relief) : null;
   const bbox = input.model.bbox;
   const area: Box | null = relief?.extent ?? bbox ?? null;
-  const ctx: PanelContext = { facts: mapSheetFacts(input, 0), tr: null };
+  const ctx: PanelContext = {
+    facts: mapSheetFacts(input, 0), tr: null, offMap: { measurements: 0, annotations: 0 },
+    listed: { measurements: input.measurements?.length ?? 0, annotations: annotationRowsOf(input).length },
+  };
   const blocks = panelBlocks(page, input, ctx, relief, t, fonts, size, orient);
-  const layout = chooseLayout(PW, PH, blocks);
+  const noMap = !area || (input.model.features.length === 0 && !relief?.extent);
+  // When the panel cannot hold every listed mark, list fewer on sheet one and
+  // continue the rest on sheets of their own, until a layout fits.
+  let layout = chooseLayout(PW, PH, blocks);
+  while (!layout.fits && listFewer(ctx.listed)) layout = chooseLayout(PW, PH, blocks);
+  // The off-map line's room is kept whatever its count, so the count does not
+  // move the layout: it is worked out once, against the final map frame.
+  ctx.offMap = noMap || !area
+    ? { measurements: input.measurements?.length ?? 0, annotations: sheetAnnotations(input).length }
+    : offMapCounts(input, innerOf(layout.frame), fitTransform(area, innerOf(layout.frame)), area);
   const frame = layout.frame;
 
   page.drawRectangle({ x: frame.x, y: frame.y, width: frame.w, height: frame.h, color: pdfColor(t.panel) });
-  if (!area || (input.model.features.length === 0 && !relief?.extent)) {
+  if (noMap || !area) {
     sheetText(page, 'No contours to map.', frame.x + 12, frame.y + frame.h - 20, { font: fonts.sans, size: 11, color: t.dim }, fonts);
   } else {
-    const pad = 6;
-    const inner = { x: frame.x + pad, y: frame.y + pad, w: frame.w - 2 * pad, h: frame.h - 2 * pad };
+    const inner = innerOf(frame);
     const fit = fitTransform(area, inner);
     ctx.tr = { area, scale: fit.scale, ox: fit.ox, oy: fit.oy };
     await drawMapLayers(doc, page, input, t, fonts, frame, inner, ctx.tr, relief);
@@ -151,26 +171,27 @@ export async function buildStyledMapSheetPdf(
 
   if (ctx.tr) ctx.facts = mapSheetFacts(input, ctx.tr.scale);
   for (const { block, panel, y } of layout.placed) block.draw(panel.x, y, panel.w, layout.k);
-  const tr = ctx.tr;
   const M = MARGIN;
 
   // Footer: software and build on the left, the deliverable in the middle, page count right.
   const purpose = input.purpose;
-  const pages = purpose ? 2 : 1;
+  const rest: MarksContinuation = {
+    measurements: (input.measurements ?? []).slice(ctx.listed.measurements),
+    measurementStart: ctx.listed.measurements,
+    annotations: annotationRowsOf(input).slice(ctx.listed.annotations),
+  };
+  const more = rest.measurements.length + rest.annotations.length > 0 ? continuationPages(rest, [PW, PH], MARGIN, t, fonts) : 0;
+  const pages = 1 + more + (purpose ? 1 : 0);
   const buildText = input.provenance?.build ? `  ·  ${input.provenance.build}` : '';
-  drawFooter(page, `OpenLiDARViewer - terrain analysis${buildText}`, `1 / ${pages}`, M, PW - M, M, t, fonts);
+  const footerLeft = `OpenLiDARViewer - terrain analysis${buildText}`;
+  drawFooter(page, footerLeft, `1 / ${pages}`, M, PW - M, M, t, fonts);
+  if (more > 0) drawMarksContinuation(doc, rest, [PW, PH], MARGIN, footerLeft, 2, pages, t, fonts);
   if (purpose) {
     const label = `Deliverable - ${purpose.label}`;
     const w = sheetTextWidth(label, fonts.sansBold, SHEET_TYPE.footer, fonts);
     sheetText(page, label, PW - M - w - 40, M, { font: fonts.sansBold, size: SHEET_TYPE.footer, color: t.dim }, fonts);
   }
 
-  if (input.includeAnnotations && input.annotations && input.annotations.length > 0 && tr && bbox) {
-    const font = await doc.embedFont(StandardFonts.Helvetica);
-    const bold = await doc.embedFont(StandardFonts.HelveticaBold);
-    const inner = { x: frame.x + 6, y: frame.y + 6, w: frame.w - 12, h: frame.h - 12 };
-    drawAnnotationLayerForSheet(page, frame, inner, tr.area, { ox: tr.ox, oy: tr.oy, scale: tr.scale }, input, font, bold);
-  }
   if (purpose) {
     const font = await doc.embedFont(StandardFonts.Helvetica);
     const bold = await doc.embedFont(StandardFonts.HelveticaBold);
@@ -286,6 +307,9 @@ async function drawMapLayers(
     }
   }
 
+  // ── measurements and annotations, numbered; the panel lists them ─────────
+  drawMarks(page, input, t, fonts, inner, pageX, pageY);
+
   // ── highest and lowest measured ground ───────────────────────────────────
   if (relief) {
     const oz = input.worldOrigin?.z ?? 0;
@@ -329,6 +353,21 @@ interface PanelBlock {
 interface PanelContext {
   facts: MapSheetFacts;
   tr: MapTransform | null;
+  /** Listed measurements and annotations the map does not show. */
+  offMap: { measurements: number; annotations: number };
+  /** How many measurements and annotation rows sheet one lists; the rest continue on their own sheets. */
+  listed: { measurements: number; annotations: number };
+}
+
+/** The map area inside the frame, where marks are drawn. */
+function innerOf(frame: Frame): Frame {
+  const pad = 6;
+  return { x: frame.x + pad, y: frame.y + pad, w: frame.w - 2 * pad, h: frame.h - 2 * pad };
+}
+
+/** The line a panel block ends with when some of its marks fall off the map. */
+function offMapLine(n: number, what: 'measurement' | 'annotation'): string {
+  return `${n} ${what}${n === 1 ? '' : 's'} outside the map extent: listed, not plotted.`;
 }
 
 const MARGIN = 30;
@@ -342,6 +381,8 @@ const SCALES = [1, 0.95, 0.9, 0.85, 0.8, 0.75];
 interface Layout {
   readonly frame: Frame;
   readonly k: number;
+  /** False for the fallback, whose last column may run past the panel. */
+  readonly fits: boolean;
   readonly placed: ReadonlyArray<{ readonly block: PanelBlock; readonly panel: Frame; readonly y: number }>;
 }
 
@@ -380,17 +421,20 @@ function chooseLayout(PW: number, PH: number, blocks: readonly PanelBlock[]): La
     const mapW = PW - 2 * M - panelW - 24 - TICK_ROOM;
     const right: Frame = { x: PW - M - panelW, y: M + FOOTER_H, w: panelW, h: PH - 2 * M - FOOTER_H };
     candidates.push({ frame: { x: M + TICK_ROOM, y: M + FOOTER_H + TICK_ROOM, w: mapW, h: PH - 2 * M - FOOTER_H - TICK_ROOM }, panels: [right] });
-    for (const stripH of [PH * 0.22, PH * 0.3]) {
-      const colW = (mapW + TICK_ROOM - 22) / 2;
+    // A strip of two, then three, columns under the map, taller each time.
+    for (const [cols, share] of [[2, 0.22], [2, 0.3], [3, 0.3], [3, 0.38]] as const) {
+      const stripH = PH * share;
+      const colW = (mapW + TICK_ROOM - 22 * (cols - 1)) / cols;
+      const strip = Array.from({ length: cols }, (_, c) => ({ x: M + c * (colW + 22), y: M + FOOTER_H, w: colW, h: stripH }));
       candidates.push({
         frame: { x: M + TICK_ROOM, y: M + FOOTER_H + stripH + TICK_ROOM + 8, w: mapW, h: PH - 2 * M - FOOTER_H - stripH - TICK_ROOM - 8 },
-        panels: [right, { x: M, y: M + FOOTER_H, w: colW, h: stripH }, { x: M + colW + 22, y: M + FOOTER_H, w: colW, h: stripH }],
+        panels: [right, ...strip],
       });
     }
   } else {
     const colGap = 22;
     const colW = (PW - 2 * M - colGap) / 2;
-    for (const share of [0.34, 0.42, 0.5]) {
+    for (const share of [0.34, 0.42, 0.5, 0.58]) {
       const panelH = PH * share;
       candidates.push({
         frame: { x: M + TICK_ROOM, y: M + FOOTER_H + panelH + TICK_ROOM + 10, w: PW - 2 * M - TICK_ROOM, h: PH - 2 * M - FOOTER_H - panelH - TICK_ROOM - 10 },
@@ -401,7 +445,7 @@ function chooseLayout(PW: number, PH: number, blocks: readonly PanelBlock[]): La
   for (const c of candidates) {
     for (const k of SCALES) {
       const placed = flow(blocks, c.panels, k);
-      if (placed) return { frame: c.frame, k, placed };
+      if (placed) return { frame: c.frame, k, placed, fits: true };
     }
   }
   // Nothing fits: the roomiest arrangement at the smallest scale, blocks stacked
@@ -420,7 +464,7 @@ function chooseLayout(PW: number, PH: number, blocks: readonly PanelBlock[]): La
     placed.push({ block, panel: last.panels[col]!, y });
     y -= h + BLOCK_GAP * k;
   }
-  return { frame: last.frame, k, placed };
+  return { frame: last.frame, k, placed, fits: false };
 }
 
 function panelBlocks(
@@ -492,6 +536,8 @@ function panelBlocks(
   if (relief?.hasHoles) legend.push([{ kind: 'hatch', color: t.hatch, background: t.nodata }, 'No ground data inside the footprint']);
   if (relief?.highest) legend.push([{ kind: 'marker', color: t.ink, shape: 'up' }, 'Highest measured ground']);
   if (relief?.lowest) legend.push([{ kind: 'marker', color: t.ink, shape: 'down' }, 'Lowest measured ground']);
+  if ((input.measurements?.length ?? 0) > 0) legend.push([{ kind: 'line', color: t.area, width: t.weight.area }, 'Measurement, lettered as listed']);
+  if (input.includeAnnotations && (input.annotations?.length ?? 0) > 0) legend.push([{ kind: 'marker', color: t.accent, shape: 'dot' }, 'Annotation, numbered as listed']);
   blocks.push({
     height: (_w, k) => SL(k) + legend.length * legendRowHeight(k) - legendRowHeight(k) + SHEET_TYPE.legend * k,
     draw: (x, y, w, k) => {
@@ -564,6 +610,61 @@ function panelBlocks(
       }
     },
   });
+
+  // ── measurements: number, name, the panel's figure and its support ───────
+  // ── measurements and annotations ─────────────────────────────────────────
+  // Sheet one lists the first ctx.listed of each; a line says where the rest
+  // are. The off-map line keeps its room at the widest count it could print.
+  const listTail = (more: string | null, offAtMost: number, what: 'measurement' | 'annotation', w: number, k: number): string[] => [
+    ...(more ? wrapSheetText(more, f.sans, SHEET_TYPE.note * k, w, f) : []),
+    ...(offAtMost > 0 ? wrapSheetText(offMapLine(offAtMost, what), f.sans, SHEET_TYPE.note * k, w, f) : []),
+  ];
+  const tailHeight = (lines: number, k: number): number => (lines > 0 ? SHEET_SPACE.sm * k + lines * noteStep(k) : 0);
+  const drawTail = (x: number, cy: number, w: number, k: number, more: string | null, off: number, what: 'measurement' | 'annotation'): void => {
+    listTail(more, off, what, w, k).forEach((ln, j) => {
+      cy -= noteStep(k) + (j === 0 ? SHEET_SPACE.sm * k : 0);
+      sheetText(page, ln, x, cy, { font: f.sans, size: SHEET_TYPE.note * k, color: t.dim }, f);
+    });
+  };
+
+  const ms = input.measurements ?? [];
+  if (ms.length > 0) {
+    const lines = (w: number, k: number) => measurementLines(ms.slice(0, ctx.listed.measurements), 0, w, k, t, f);
+    const more = (): string | null => {
+      const n = ctx.listed.measurements;
+      if (n >= ms.length) return null;
+      return n === ms.length - 1
+        ? `Measurement ${measurementLetter(n)} is listed on the next sheet.`
+        : `Measurements ${measurementLetter(n)} to ${measurementLetter(ms.length - 1)} are listed on the next sheet.`;
+    };
+    blocks.push({
+      height: (w, k) => SL(k) + markLinesHeight(lines(w, k), k) + tailHeight(listTail(more(), ms.length, 'measurement', w, k).length, k),
+      draw: (x, y, w, k) => {
+        const top = drawSectionLabel(page, `Measurements (${ms.length})`, x, y, w, t, f, k) + noteStep(k);
+        const cy = lines(w, k).length > 0 ? drawMarkLines(page, lines(w, k), x, top, k, t.area, f) : top;
+        drawTail(x, cy, w, k, more(), ctx.offMap.measurements, 'measurement');
+      },
+    });
+  }
+
+  const annRows = annotationRowsOf(input);
+  if (annRows.length > 0) {
+    const header = buildAnnotationReport(sheetAnnotations(input), {}).header;
+    const lines = (w: number, k: number) => annotationLines(annRows.slice(0, ctx.listed.annotations), w, k, t, f);
+    const more = (): string | null => {
+      const n = annRows.length - ctx.listed.annotations;
+      if (n <= 0) return null;
+      return n === 1 ? '1 more annotation is listed on the next sheet.' : `${n} more annotations are listed on the next sheet.`;
+    };
+    blocks.push({
+      height: (w, k) => SL(k) + markLinesHeight(lines(w, k), k) + tailHeight(listTail(more(), annRows.length, 'annotation', w, k).length, k),
+      draw: (x, y, w, k) => {
+        const top = drawSectionLabel(page, header, x, y, w, t, f, k) + noteStep(k);
+        const cy = lines(w, k).length > 0 ? drawMarkLines(page, lines(w, k), x, top, k, t.ink, f) : top;
+        drawTail(x, cy, w, k, more(), ctx.offMap.annotations, 'annotation');
+      },
+    });
+  }
 
   // ── accuracy, readiness, evidence ────────────────────────────────────────
   // The figures as a data block, like the panel's other figures; the sample
@@ -659,3 +760,110 @@ function pct(n: number, d: number): string {
   return `${((100 * n) / d).toFixed(1)} %`;
 }
 
+
+/** The annotation report rows a sheet lists, in list order. */
+function annotationRowsOf(input: MapSheetInput) {
+  const anns = sheetAnnotations(input);
+  return anns.length > 0 ? orderedAnnotationRows(buildAnnotationReport(anns, {}).rows) : [];
+}
+
+/**
+ * Lists fewer marks on sheet one: the longer list loses a quarter. False when
+ * nothing is left to move to the continuation sheets.
+ */
+function listFewer(listed: { measurements: number; annotations: number }): boolean {
+  if (listed.measurements === 0 && listed.annotations === 0) return false;
+  const key = listed.measurements >= listed.annotations ? 'measurements' : 'annotations';
+  listed[key] = listed[key] <= 1 ? 0 : Math.floor(listed[key] * 0.75);
+  return true;
+}
+
+/** The annotations a sheet draws: only when asked for and present. */
+function sheetAnnotations(input: MapSheetInput): ReadonlyArray<Annotation> {
+  return input.includeAnnotations && input.annotations ? input.annotations : [];
+}
+
+/** A badge: a short label in a disc with a halo, so it reads over relief and lines. */
+function badge(page: PDFPage, label: string, cx: number, cy: number, color: SheetRgb, t: SheetTokens, f: SheetFonts): void {
+  const r = label.length > 1 ? 6.2 : 5.4;
+  page.drawCircle({ x: cx, y: cy, size: r + 1.2, color: pdfColor(t.halo), opacity: 0.9 });
+  page.drawCircle({ x: cx, y: cy, size: r, color: pdfColor(color) });
+  const w = f.sansBold.widthOfTextAtSize(label, 6.5);
+  page.drawText(label, { x: cx - w / 2, y: cy - 2.3, size: 6.5, font: f.sansBold, color: pdfColor(t.panel) });
+}
+
+/** Where a measurement's letter sits: the ring's centre or the line's middle. */
+function badgeAt(pts: ReadonlyArray<readonly [number, number]>, closed: boolean): [number, number] {
+  const n = pts.length;
+  if (closed && n >= 3) return [pts.reduce((a, p) => a + p[0], 0) / n, pts.reduce((a, p) => a + p[1], 0) / n];
+  if (n >= 2) {
+    const a = pts[Math.floor((n - 1) / 2)]!, b = pts[Math.ceil((n - 1) / 2)]!;
+    return [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2];
+  }
+  return [pts[0]![0], pts[0]![1]];
+}
+
+/** How many listed measurements and annotations get no letter or number on the map. */
+function offMapCounts(input: MapSheetInput, inner: Frame, fit: { scale: number; ox: number; oy: number }, area: Box): { measurements: number; annotations: number } {
+  const up = input.sceneUpAxis ?? 'z';
+  const px = (x: number): number => fit.ox + (x - area.minX) * fit.scale;
+  const py = (y: number): number => fit.oy + (y - area.minY) * fit.scale;
+  const inside = (x: number, y: number): boolean => x >= inner.x && x <= inner.x + inner.w && y >= inner.y && y <= inner.y + inner.h;
+  let measurements = 0, annotations = 0;
+  for (const m of input.measurements ?? []) {
+    const pts = m.points.map((p) => { const q = annotationToMapXY({ x: p[0], y: p[1], z: p[2] }, up); return [px(q.x), py(q.y)] as [number, number]; });
+    if (pts.length === 0) continue;
+    const [ax, ay] = badgeAt(pts, m.closed);
+    if (!inside(ax, ay)) measurements++;
+  }
+  for (const a of sheetAnnotations(input)) {
+    const q = annotationToMapXY(a.localPosition, up);
+    if (!inside(px(q.x), py(q.y))) annotations++;
+  }
+  return { measurements, annotations };
+}
+
+function drawMarks(
+  page: PDFPage,
+  input: MapSheetInput,
+  t: SheetTokens,
+  f: SheetFonts,
+  inner: Frame,
+  pageX: (x: number) => number,
+  pageY: (y: number) => number,
+): void {
+  const up = input.sceneUpAxis ?? 'z';
+  const PH = page.getHeight();
+  const box = { x: inner.x, y: inner.y, w: inner.w, h: inner.h };
+  const inside = (x: number, y: number): boolean => x >= inner.x && x <= inner.x + inner.w && y >= inner.y && y <= inner.y + inner.h;
+  (input.measurements ?? []).forEach((m, i) => {
+    const pts = m.points.map((p) => {
+      const q = annotationToMapXY({ x: p[0], y: p[1], z: p[2] }, up);
+      return [pageX(q.x), pageY(q.y)] as [number, number];
+    });
+    if (pts.length === 0) return;
+    const ring = m.closed && pts.length >= 3 ? [...pts, pts[0]!] : pts;
+    if (m.closed && pts.length >= 3 && pts.every(([x, y]) => inside(x, y))) {
+      const d = pts.map(([x, y], k) => `${k === 0 ? 'M' : 'L'}${x.toFixed(2)} ${(PH - y).toFixed(2)}`).join(' ') + ' Z';
+      page.drawSvgPath(d, { x: 0, y: PH, color: pdfColor(t.area), opacity: 0.1 });
+    }
+    for (const run of clipPolyline(ring, box)) {
+      if (run.length < 2) continue;
+      const d = run.map(([x, y], k) => `${k === 0 ? 'M' : 'L'}${x.toFixed(2)} ${(PH - y).toFixed(2)}`).join(' ');
+      page.drawSvgPath(d, { x: 0, y: PH, borderColor: pdfColor(t.halo), borderWidth: t.weight.area + 1.6, borderOpacity: 0.7 });
+      page.drawSvgPath(d, { x: 0, y: PH, borderColor: pdfColor(t.area), borderWidth: t.weight.area });
+    }
+    for (const [x, y] of pts) {
+      if (inside(x, y)) page.drawRectangle({ x: x - 1.8, y: y - 1.8, width: 3.6, height: 3.6, color: pdfColor(t.panel), borderColor: pdfColor(t.area), borderWidth: 0.8 });
+    }
+    const [ax, ay] = badgeAt(pts, m.closed);
+    if (inside(ax, ay)) badge(page, measurementLetter(i), ax, ay, t.area, t, f);
+  });
+  // Annotations: a coloured, numbered dot at each one on the map; the panel groups them by type.
+  const anns = sheetAnnotations(input);
+  anns.forEach((a, i) => {
+    const q = annotationToMapXY(a.localPosition, up);
+    const x = pageX(q.x), y = pageY(q.y);
+    if (inside(x, y)) badge(page, String(i + 1), x, y, annotationColor(t, a.type), t, f);
+  });
+}

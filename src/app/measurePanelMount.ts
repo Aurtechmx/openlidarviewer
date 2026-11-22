@@ -17,6 +17,7 @@
  * module is safe to statically import from the shell: only the TYPE is eager.
  */
 
+export { sheetMeasurements } from './sheetMeasurements';
 import type { ProfileTerrainRef } from './profileSheetExtras';
 import { aggregate as aggregateMeasurements } from '../render/measure/measurementChains';
 import { positionStepsResolver } from './measurementPositionSteps';
