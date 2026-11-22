@@ -205,8 +205,8 @@ export async function drawStyledProfileSheet(page: PDFPage, s: StyledProfileShee
     // Highest and lowest ground.
     const known = s.stations.filter((st) => st.elevation != null) as Array<{ chainage: number; elevation: number }>;
     if (known.length) {
-      const hi = known.reduce((a, b) => (b.elevation > a.elevation ? b : a));
-      const lo = known.reduce((a, b) => (b.elevation < a.elevation ? b : a));
+      const hi = known.reduce((a, b) => (b.elevation > a.elevation ? b : a), known[0]!);
+      const lo = known.reduce((a, b) => (b.elevation < a.elevation ? b : a), known[0]!);
       for (const [p, shape] of [[hi, 'up'], [lo, 'down']] as const) {
         drawMarker(page, shape, mapX(p.chainage), mapY(p.elevation) + (shape === 'up' ? 6 : -6), 3, t.ink);
         const lbl = (p.elevation * s.k).toFixed(1);
