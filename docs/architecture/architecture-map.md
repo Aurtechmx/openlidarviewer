@@ -28,7 +28,7 @@ from the tree and fails when a cell drifts.
 | Geo | `src/geo` | ~6.5k | CRS math, `ProjectSpatialFrame`, transforms. |
 | Science domain | `src/terrain`, `src/validation`, `src/analysis`, `src/science` | ~56k | Ground filtering, DTM, contours, derivatives, hold-out RMSE, evidence model. UI-free by lint. |
 | I/O | `src/io` | ~43k | Format loaders (LAS/LAZ/PLY/PCD/PTX/E57/…), COPC + EPT streaming sources, range transports, session. |
-| Render | `src/render` | ~87k | three.js/WebGPU scene, streaming scheduler, measurement tools, colour modes. |
+| Render | `src/render` | ~88k | three.js/WebGPU scene, streaming scheduler, measurement tools, colour modes. |
 | Export / report | `src/export`, `src/report`, `src/convert` | ~27k | Studio exporters, PDF/report builders, batch conversion. |
 | Application services | `src/app` | ~35k | Composition root and the services that own shared state. |
 | UI | `src/ui` | ~49k | Panels, Inspector, Studio surfaces, onboarding. |
