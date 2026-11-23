@@ -21,7 +21,7 @@ v0.6.6 remain available under MIT.
 
 ## Export sheets
 
-- The export dialogs offer three sheet styles: Light (the default), Dark and Classic. The choice holds for the session and is not saved. Classic keeps the earlier layout of each export.
+- Exports come in three sheet styles: Light (the default), Dark and Classic. The style is chosen in the map sheet dialog, on the Export tab, or next to the report buttons of a room or object scan. The choice holds for the session and is not saved. Classic keeps the earlier layout of each export.
 - Contour map sheet PDF: shaded relief with a faint elevation tint under the contours, cut to the scan footprint, with areas inside the footprint that have no ground hatched, the footprint outlined, and the highest and lowest measured ground marked. A side panel holds the legend, the accuracy figures and the notes.
 - A true-north arrow on the Light and Dark map sheets of a projected CRS, turned by the meridian convergence at the map centre and labelled with the angle.
 - Measurements and annotations on the Light and Dark map sheets: measurements are lettered on the map and listed with their figure and support grade, and annotations are numbered and grouped by type. The measurement CSV and GeoJSON carry the support grade.

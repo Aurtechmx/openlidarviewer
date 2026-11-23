@@ -47,6 +47,6 @@ The largest open item — that georeferenced scans with different origins overla
 
 This is an alpha. The project spatial frame's scene wiring and an anti-thrash streaming-selection option (which targets a residual budget-boundary flicker) are implemented and tested but left staged/opt-in, pending visual verification in a browser. Measurement remains for visual inspection, not survey-grade unless validated against survey-grade data and procedures.
 
-## Internal restructuring
+## Code restructuring
 
 A composition root (`AppRuntime`/`AppContext`) now owns the shared application state that previously lived in scattered module-level variables, and the first extracted service manages the layer list against it. Behaviour is unchanged — this is the foundation the v0.6 workflow features build on, landed early so they arrive on stable ground.

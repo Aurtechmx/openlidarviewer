@@ -13,6 +13,7 @@
  */
 
 import { el } from '../dom';
+import { sheetStyleControl } from '../sheetStyleControl';
 import { collapsibleSection } from '../collapsibleSection';
 import type { ExportFormat } from '../../io/exporters';
 import type { ExportMode } from '../../export/types';
@@ -244,6 +245,7 @@ export function buildExportDeliverables(cb: ExportDeliverablesCallbacks): Export
 
   const element = el('div', {}, [
     formatSection,
+    sheetStyleControl(),
     collapsibleSection('Image export', imageRow),
     collapsibleSection('PDF report', reportRow),
   ]);
