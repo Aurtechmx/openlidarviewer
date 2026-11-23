@@ -433,7 +433,7 @@ consecutive passes, counted by `scripts/ios-streak.mjs`.
 fails the build when either passes its recorded baseline, so a raise is a hand
 edit to `docs/validation/monolith-size-baseline.json` and always shows in the
 diff.
-Fan-out is 95 for the shell, 73 for the renderer, across 1240 modules with no
+Fan-out is 95 for the shell, 73 for the renderer, across 1241 modules with no
 dependency cycles. Fan-out counts the distinct modules a file imports with a
 value import, source files and external packages alike; type-only and dynamic
 imports are not counted. The shell and the renderer figures are held
@@ -1013,8 +1013,9 @@ large sheet.
 
 The Light and Dark styles use the Figtree typeface bundled with the app. If
 the font files cannot be loaded, the sheet is drawn in Helvetica with the same
-content. The style chosen in an export dialog holds until the page is closed
-and is not saved in a session file.
+content. The style chosen in the map sheet dialog, on the Export tab or in
+the room and object panel holds until the page is closed and is not saved in
+a session file.
 
 The profile sheet's plan strip and index contour crossings come from a terrain
 run on the same scan. Without one, the strip is left out and the sheet says

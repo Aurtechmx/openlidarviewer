@@ -252,3 +252,4 @@
 /* ui-typography: tabular figures so numbers align in the data-heavy panels. */
 .olv-analyse-panel, .olv-object-panel, .olv-measure-panel { font-variant-numeric: tabular-nums; }
 
+.olv-sheet-style { margin: var(--space-sm) 0; }

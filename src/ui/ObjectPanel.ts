@@ -41,6 +41,7 @@ import {
   type ScanTypeDisabledReasons,
 } from './scanTypeControl';
 import { el } from './dom';
+import { sheetStyleControl } from './sheetStyleControl';
 
 /**
  * The user-tunable subset of the floor-plan extraction settings, surfaced as a
@@ -396,6 +397,9 @@ export class ObjectPanel {
     }
 
     this._body.append(row);
+    // The report and the floor plan follow this choice; it is the same one
+    // the map sheet dialog and the Export tab show.
+    this._body.append(sheetStyleControl());
     if (withFloorPlan) {
       // The compact options control for the preview export — wall snapping +
       // adaptive band — sits directly under the button it tunes.
