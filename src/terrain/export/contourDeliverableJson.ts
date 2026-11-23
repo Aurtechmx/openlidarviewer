@@ -10,6 +10,7 @@
  * object states plainly that its accuracy is internal hold-out, not external.
  */
 
+import { CRS_UNKNOWN_WARNING } from '../ground/cellConfidence';
 import type { ValidationReport } from '../validate/ValidationReport';
 import type { AnalyseGenerationParams } from '../contour/analyseContours';
 
@@ -23,8 +24,11 @@ function finiteOrNull(v: number): number | null {
  * explicit statement of scope. Deliberately omits the raw per-point `samples`
  * (a calibration input, not a deliverable). `independentCheckpoints` is always
  * false here — this package supplies no external field checkpoints.
+ *
+ * The hold-out rebuilds its surface without the scan's CRS, so its own "CRS
+ * unknown" line is left out when the package's CRS is known.
  */
-export function validationDeliverableJson(v: ValidationReport): Record<string, unknown> {
+export function validationDeliverableJson(v: ValidationReport, crsKnown = false): Record<string, unknown> {
   return {
     schemaVersion: VALIDATION_JSON_SCHEMA,
     estimand: v.estimand,
@@ -49,7 +53,7 @@ export function validationDeliverableJson(v: ValidationReport): Record<string, u
     perBand: v.perBand,
     perSlopeBand: v.perSlopeBand ?? null,
     perZone: v.perZone ?? null,
-    warnings: v.warnings,
+    warnings: crsKnown ? v.warnings.filter((w) => w !== CRS_UNKNOWN_WARNING) : v.warnings,
     independentCheckpoints: false,
     scope: 'Internal hold-out validation only; no independent field checkpoints. Not survey-grade.',
   };

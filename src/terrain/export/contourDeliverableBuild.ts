@@ -37,7 +37,7 @@ import {
 import { buildContourPdfModel } from '../contourStudio/contourDeliverablePdfModel';
 import { buildContourStudioPdf } from './contourStudioPdf';
 import { serializeContours } from '../contour/contourDownload';
-import { dxfContours } from '../contour/dxfContours';
+import { sourceSha256Text } from '../../science/exportDigestRecord';
 import { validationDeliverableJson, contourStudioDeliverableJson } from './contourDeliverableJson';
 import { verticalUnitLabel, horizontalUnitLabel } from '../../units/units';
 import { writeGeoTiff, writeGeoTiffDroppingVerticalConflict, verticalUnitGeoKeyCode, rasterVerticalGeoKeys } from './demGeoTiff';
@@ -121,7 +121,7 @@ interface GatheredDeliverable {
   /** Elevation unit label — a declared Z unit ('m'|'ft'|'units') or 'unknown'. */
   readonly verticalUnit: string;
   /**
-   * Per-cell support split as a share of ALL DTM cells, tallied from
+   * Per-cell support split as a share of the surveyed cells, tallied from
    * dtm.coverage (0 = unsupported/void, 1 = interpolated, 2 = measured) — the
    * same states the Support.tif serializes. Null when there is no DTM.
    */
@@ -145,7 +145,7 @@ export function deliverableGridLabel(
 ): string {
   if (dtm == null) return 'unknown';
   const unit = isGeographic ? 'degrees' : horizontalUnit;
-  return `${dtm.cols}x${dtm.rows} @ ${dtm.cellSizeM} ${unit}`;
+  return `${dtm.cols}x${dtm.rows} @ ${Number(dtm.cellSizeM.toPrecision(7))} ${unit}`;
 }
 
 function gatherDeliverable(
@@ -229,7 +229,12 @@ function gatherDeliverable(
     if (!isAnalytical) {
       bytes.set(
         'contours-cartographic-dxf',
-        enc(dxfContours(model, { provenance, labels: result.labels, linearUnit: opts.linearUnit })),
+        // Through serializeContours, as the standalone DXF: it adds the origin the
+        // loader subtracted, so the lines land on their coordinates in CAD.
+        enc(serializeContours(model, 'dxf', {
+          basename, labels: result.labels, provenance,
+          worldOrigin: opts.worldOrigin ?? null, linearUnit: opts.linearUnit,
+        }).content),
       );
     }
   }
@@ -329,7 +334,7 @@ function gatherDeliverable(
   if (result.validation) {
     bytes.set(
       'validation-json',
-      enc(JSON.stringify(validationDeliverableJson(result.validation), null, 2)),
+      enc(JSON.stringify(validationDeliverableJson(result.validation, provenance.crsKnown), null, 2)),
     );
   }
 
@@ -440,15 +445,10 @@ export async function buildContourDeliverableFromResultAsync(
 ): Promise<Uint8Array> {
   const g = gatherDeliverable(result, opts);
 
-  // Honest support split from the DTM cell tally (measured / interpolated /
-  // everything-else-unsupported), as percentages of the surveyed area: no-data
-  // outside the survey is not unsupported surface.
-  const tally = result.cellStatusTally;
-  const surveyed = tally.total - (tally.outsideCoverage ?? 0);
-  const total = surveyed > 0 ? surveyed : 1;
-  const measuredPct = (tally.measured / total) * 100;
-  const interpolatedPct = (tally.interpolated / total) * 100;
-  const unsupportedPct = Math.max(0, 100 - measuredPct - interpolatedPct);
+  // The split the README prints and Support.tif serializes. The evidence tally
+  // is not used: it files low-confidence and edge cells apart from interpolated
+  // ones, and they are filled surface, not unsupported surface.
+  const support = g.supportPct ?? { measuredPct: 0, interpolatedPct: 0, unsupportedPct: 100 };
 
   const validation = result.validation;
   const record = analysisRecordFromProvenance(g.provenance);
@@ -468,9 +468,10 @@ export async function buildContourDeliverableFromResultAsync(
       // The registered contour method actually exported, when Contour Studio set
       // it; otherwise none (never a fabricated id).
       methodIds: g.provenance.contourMethod ? [g.provenance.contourMethod] : [],
-      sourceHash: record.contentHash,
+      sourceSha256: sourceSha256Text(g.provenance),
+      recordHash: record.contentHash,
     },
-    support: { measuredPct, interpolatedPct, unsupportedPct },
+    support,
     validation: {
       mode: validation.method,
       // A field named M holds metres. `holdoutRmse` scales residuals by

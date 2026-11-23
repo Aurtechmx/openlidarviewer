@@ -25,6 +25,7 @@ The format is based on Keep a Changelog and the project follows Semantic Version
 
 ### Fixed
 
+- The complete contour package's DXF is written at its real coordinates. It left out the scan's origin, so the lines landed near 0, 0 in CAD while the file named the CRS; the standalone DXF export was not affected. The package's PDF gives the same measured, interpolated and unsupported shares as its README and Support.tif, names the source file's SHA-256 apart from the analysis record's hash, and rounds the cell size. Validation.json no longer says the CRS is unknown when the package states one.
 - Classic profile sheet: the series key moves to the scale line when the station band caption needs its room; the two printed over each other. Classic map sheet: grid labels and the footer sit between the frame and the outer border, 7 mm from the paper edge; they crossed the border and reached within 2 mm of the edge.
 - The technical report labels width, depth and height with the display sample they were read from. The profile method sheet no longer says it read the full sources on a display sample, and a fully loaded room or object report no longer says its values change as more data streams in.
 - A browser older than the build supports (below Safari 16.4, Chrome 98 or Firefox 114) shows a message saying so, instead of a page that never loads a scan, and its failure is no longer treated as a stale deploy to reload. The README lists the minimum and full-layout versions.

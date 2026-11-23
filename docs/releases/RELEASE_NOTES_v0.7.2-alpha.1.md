@@ -34,6 +34,8 @@ v0.6.6 remain available under MIT.
 - Classic keeps the earlier layout with two corrections: the profile sheet's series key no longer prints over the station band caption, and the map sheet's grid labels and footer sit inside the outer border, clear of the paper edge.
 - The technical report says when its width and depth come from the display sample, the profile's method sheet says it read every loaded point, and a room report no longer says its values change as data streams in.
 
+- The complete contour package's DXF is written at its real coordinates; in v0.7.1 and earlier it left out the scan's origin. Its PDF states the same support shares as its README and support raster.
+
 ## Rooms and objects
 
 - The ceiling height of a room is measured from the lowest strong height peak to the highest. A bed or table top is no longer read as the floor when the floor is not quite level. The enclosed volume follows.

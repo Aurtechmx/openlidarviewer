@@ -26,7 +26,7 @@ function input(decision: ScientificExportDecision, over: Partial<ContourPdfInput
     provenance: {
       software: 'OpenLiDARViewer', softwareVersion: '0.5.9', gitCommit: 'abc123', generated: '2026-07-09T00:00:00Z',
       crs: 'EPSG:32610', verticalDatum: 'EPSG:5703', horizontalUnit: 'metre', verticalUnit: 'metre',
-      grid: '0.25 m', methodIds: ['olv.ground.smrf@1', 'olv.contour.generalize.dp@1'], sourceHash: 'deadbeef',
+      grid: '0.25 m', methodIds: ['olv.ground.smrf@1', 'olv.contour.generalize.dp@1'], sourceSha256: 'deadbeef', recordHash: 'abcd1234',
     },
     support: { measuredPct: 83, interpolatedPct: 14, unsupportedPct: 3 },
     validation: { mode: 'Spatial internal', rmseM: 0.09, sampleSize: 1200, independentCheckpoints: false },

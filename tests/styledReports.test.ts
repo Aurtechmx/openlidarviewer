@@ -53,7 +53,7 @@ function contourInput(): ContourPdfInput {
     provenance: {
       software: 'OpenLiDARViewer', softwareVersion: '0.5.9', gitCommit: 'abc1234', generated: '2026-07-12T00:00:00.000Z',
       crs: 'EPSG:32610', verticalDatum: 'EGM2008 height', horizontalUnit: 'm', verticalUnit: 'm', grid: '10x10 @ 1 m',
-      methodIds: ['olv.contour.analytical@2'], sourceHash: 'deadbeefcafe',
+      methodIds: ['olv.contour.analytical@2'], sourceSha256: 'deadbeefcafe', recordHash: 'abcd1234',
     },
     support: { measuredPct: 80, interpolatedPct: 15, unsupportedPct: 5 },
     validation: { mode: 'holdout-cross-validation', rmseM: 0.123, sampleSize: 42, independentCheckpoints: false },

@@ -267,7 +267,7 @@ function buildReadme(stem: string, entries: readonly PackageEntry[], input: Pack
     lines.push(
       '',
       'Surface support',
-      '  Per-cell provenance recorded in the Support raster, as a share of all DTM cells:',
+      '  Per-cell provenance recorded in the Support raster, as a share of the surveyed cells:',
       `    Measured:     ${pct(sc.measuredPct)}`,
       `    Interpolated: ${pct(sc.interpolatedPct)}`,
       `    Unsupported:  ${pct(sc.unsupportedPct)}`,
