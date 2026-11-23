@@ -19,6 +19,9 @@ The format is based on Keep a Changelog and the project follows Semantic Version
 
 ### Fixed
 
+- The ceiling height of a room is measured from the lowest strong height peak (the floor) to the highest (the ceiling). Taking the fullest bin read a bed or table top as the floor when the floor was not quite level, and printed 1.9 m for a 2.45 m room. The enclosed volume follows.
+- glTF/GLB and E57 heights are in metres, as their specifications state for every axis. Reports printed them in "source units (vertical unit not declared)" beside widths in metres. A session saved earlier gets the metre heights back when it is opened.
+- The density on the technical report and the Studio card says "(bounding-box estimate)", as the Scan report panel does.
 - The Studio image card sits in the bottom-left corner, so it no longer covers the colour bar's notes on the right.
 - On a scan with no CRS, the Studio card prints Width, Depth and Density in the unit its Height uses (metres for a GLB) instead of "units".
 - The space report and the Objects & Space panel call the occupied plan area "Footprint area". It counts walls and furniture, so it can be larger than the floor plane listed under Planes.

@@ -10,6 +10,7 @@
  * (CRS only when known, etc.).
  */
 
+import { BOUNDING_BOX_ESTIMATE } from '../analysis/streamingExtentRows';
 import type { ReportDatasetRow, ReportTerrainSummary } from './types';
 import { HEIGHT_INCLUDES_NOISE_SUFFIX, HEIGHT_UNIT_GAP_SUFFIX, type HeightUnitGap } from '../geo/height';
 import { CLEARED_CLASS_NOTE } from '../export/clearedClassNote';
@@ -376,7 +377,8 @@ export function buildDatasetSummary(inputs: MetadataInputs): readonly ReportData
   if (Number.isFinite(inputs.density) && inputs.density > 0) {
     // One decimal — same as the Inspection-summary finding and the on-screen
     // panel. Integer rounding printed 2.586 as "3", disagreeing with them.
-    rows.push({ label: 'Density', value: `${inputs.density.toFixed(1)} pts/m²` });
+    // Count over the axis-aligned bounding box, as the panel's row says.
+    rows.push({ label: 'Density', value: `${inputs.density.toFixed(1)} pts/m² ${BOUNDING_BOX_ESTIMATE}` });
   }
   rows.push(
     { label: 'RGB',            value: inputs.hasRgb ? 'Yes' : 'No' },

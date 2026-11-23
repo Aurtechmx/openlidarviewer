@@ -100,8 +100,13 @@ export function parseResolvedCrs(v: unknown): SerializedResolvedCrs | null {
       ? { horizontalDatum: v.horizontalDatum }
       : {}),
     // Which specification gives the metres of a `format-specification` frame.
+    // The specification fixes Z in metres as well; a session saved before the
+    // frame carried that gets it back here.
     ...(v.source === 'format-specification' && (v.formatSpecification === 'glTF' || v.formatSpecification === 'E57')
-      ? { formatSpecification: v.formatSpecification }
+      ? {
+          formatSpecification: v.formatSpecification,
+          ...(v.verticalUnitToMetres === undefined ? { verticalUnitToMetres: 1, verticalLinearUnit: 'metre' as const } : {}),
+        }
       : {}),
   };
   return out;

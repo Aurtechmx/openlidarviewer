@@ -30,6 +30,7 @@
  *     exporter is invoked once per click and resolves to a Blob.
  */
 
+import { BOUNDING_BOX_ESTIMATE } from '../analysis/streamingExtentRows';
 import * as THREE from 'three/webgpu';
 import type { ColorMode } from '../render/colorModes';
 import type { CommonExportOptions, ExportContext, ExportMode, ExportResult, ExportSceneAdapter } from './types';
@@ -319,7 +320,7 @@ export function baseReportRows(
       const density = total / (w * d);
       // One decimal, matching the Scan Report panel (`toFixed(0)` rounded
       // 2.586 pts/m² up to "3", disagreeing with the panel's "2.6").
-      rows.push({ label: 'Density', value: `${density.toFixed(1)} pts/${uLabel}²` });
+      rows.push({ label: 'Density', value: `${density.toFixed(1)} pts/${uLabel}² ${BOUNDING_BOX_ESTIMATE}` });
     }
   }
   // Capability summary — which channels the export can honour. Matches the

@@ -1028,6 +1028,13 @@ Measurements that belong to no scan are listed only while one scan is open,
 and measurements on other open scans are left off. Classic sheets do not draw
 measurements.
 
+## A small room can read as an object
+
+Scan type detection looks at the shape of a scan, not its size. A room about
+as tall as it is wide, such as a 3 by 3 m room with a 2.6 m ceiling, can open
+in the Object scan panel. Set Treat scan as to Interior to get the space
+report and the floor plan.
+
 ## The reference plane is a drawing, not a surface
 
 The View panel's reference plane is a visual grid at an elevation you

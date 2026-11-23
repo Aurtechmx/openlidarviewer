@@ -51,7 +51,7 @@ describe('buildDatasetSummary — confirmed unit (unchanged)', () => {
   it('prints metre extents, a pts/m² density, and the CRS unit', () => {
     const m = rowMap(CONFIRMED);
     expect(m.get('Width')).toBe('30.0 m');
-    expect(m.get('Density')).toBe('8.3 pts/m²');
+    expect(m.get('Density')).toBe('8.3 pts/m² (bounding-box estimate)');
     expect(m.get('Units')).toBe('metre');
   });
 });

@@ -121,7 +121,7 @@ describe('Studio card ground-metre gating', () => {
     const rows = baseReportRows(local, null);
     expect(val(rows, 'Width')).toBe('2.00 km');
     expect(val(rows, 'Height')).toBe('50.00 m');
-    expect(val(rows, 'Density')).toMatch(/ pts\/m²$/);
+    expect(val(rows, 'Density')).toMatch(/ pts\/m² \(bounding-box estimate\)$/);
     expect(val(rows, 'CRS')).toBeUndefined();
   });
 
@@ -137,7 +137,7 @@ describe('Studio card ground-metre gating', () => {
   it('a ground-metre frame keeps metres and density', () => {
     const rows = baseReportRows(adapterFor(UTM), null);
     expect(val(rows, 'Width')).toBe('2.00 km');
-    expect(val(rows, 'Density')).toBe('0.3 pts/m²');
+    expect(val(rows, 'Density')).toBe('0.3 pts/m² (bounding-box estimate)');
     expect(val(rows, 'Units')).not.toMatch(/Not ground metres/);
   });
 });

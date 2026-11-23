@@ -188,6 +188,9 @@ export function formatSpecificationCrs(format: MetreFormatSpecification): CrsInf
     name: LOCAL_UNIT_NAMES.metre,
     linearUnit: 'metre',
     linearUnitToMetres: 1,
+    // The specification fixes every axis, Z included, so heights are metres too.
+    verticalLinearUnit: 'metre',
+    verticalUnitToMetres: 1,
     isGeographic: false,
     localFrame: true,
     formatSpecification: format,
