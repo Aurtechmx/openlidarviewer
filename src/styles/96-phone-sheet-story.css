@@ -70,6 +70,9 @@
     align-items: center;
     gap: var(--space-sm);
     padding: 14px var(--space-md) var(--space-sm);
+    /* Landscape on a notched phone: keep the tabs out from under the notch. */
+    padding-left: max(var(--space-md), env(safe-area-inset-left));
+    padding-right: max(var(--space-md), env(safe-area-inset-right));
     flex: 0 0 auto;
     cursor: pointer;
     /* The head is the drag surface: claim vertical gestures so a drag moves the
@@ -182,6 +185,8 @@
     overflow-y: auto;
     -webkit-overflow-scrolling: touch;
     padding: 0 var(--space-md) var(--space-md);
+    padding-left: max(var(--space-md), env(safe-area-inset-left));
+    padding-right: max(var(--space-md), env(safe-area-inset-right));
   }
   .olv-msheet-body.olv-hidden { display: none; }
   .olv-msheet-slot { display: none; }

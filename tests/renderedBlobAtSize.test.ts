@@ -107,7 +107,8 @@ describe('renderedBlobAtSize', () => {
       );
       expect(renderedAt, 'the frame renders into the planned buffer').toBe(2048);
       expect(seen).toEqual([{ glW: 2048, outW: 2048, outH: 1024 }]);
-      expect([out.width, out.height]).toEqual([2048, 1024]);
+      // The scratch canvas gives its pixels back once encoded; the size is reported from before.
+      expect([out.width, out.height]).toEqual([0, 0]);
       expect(result.widthPx).toBe(2048);
       expect(result.heightPx).toBe(1024);
     } finally {

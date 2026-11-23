@@ -24,6 +24,12 @@ import type { OrthoExtent } from './pngWorldFile';
 /** Default raster width when the caller does not request one. */
 export const DEFAULT_FRAMED_EXPORT_WIDTH_PX = 2048;
 
+/** Longest edge a framed export may have: the WebGPU texture limit, also the figure cap. */
+export const MAX_FRAMED_EXPORT_EDGE_PX = 8192;
+
+/** Largest area a framed export may have: iOS Safari's per-canvas limit (4096 x 4096). */
+export const MAX_FRAMED_EXPORT_AREA_PX = 16_777_216;
+
 /** Orthographic frustum half-planes plus clip range (camera-local units). */
 export interface OrthoFrustum {
   readonly left: number;
@@ -86,7 +92,9 @@ export function orthoFrustumWorldRect(
  *   - Output width is the request (default {@link DEFAULT_FRAMED_EXPORT_WIDTH_PX}),
  *     height follows the footprint aspect so pixels stay square to within
  *     the 1 px rounding the world file's independent X/Y scales absorb
- *     exactly. Both clamp to ≥ 2 px so a sliver footprint still rasterises.
+ *     exactly. Both clamp to ≥ 2 px so a sliver footprint still rasterises,
+ *     and both scale down together past {@link MAX_FRAMED_EXPORT_EDGE_PX}
+ *     or {@link MAX_FRAMED_EXPORT_AREA_PX}.
  *
  * Returns null for a degenerate footprint (zero/negative/NaN XY extent) —
  * the caller falls back to the non-georeferenced view capture.
@@ -116,8 +124,17 @@ export function frameTopDownOrtho(
     near: 0.01,
     far: dz * 4 + 1,
   };
-  const outW = Math.max(2, Math.round(widthPx ?? DEFAULT_FRAMED_EXPORT_WIDTH_PX));
-  const outH = Math.max(2, Math.round(outW * (fpH / fpW)));
+  let outW = Math.max(2, Math.round(widthPx ?? DEFAULT_FRAMED_EXPORT_WIDTH_PX));
+  let outH = Math.max(2, Math.round(outW * (fpH / fpW)));
+  // A long, narrow footprint made the height run away (a 6:1 corridor at the
+  // default width is 2048 x 12288). Scale both edges down together, keeping
+  // the pixels square, until the long edge and the area fit what phone
+  // browsers will allocate for one canvas.
+  const fit = Math.min(1, MAX_FRAMED_EXPORT_EDGE_PX / Math.max(outW, outH), Math.sqrt(MAX_FRAMED_EXPORT_AREA_PX / (outW * outH)));
+  if (fit < 1) {
+    outW = Math.max(2, Math.floor(outW * fit));
+    outH = Math.max(2, Math.floor(outH * fit));
+  }
   return {
     extent: orthoFrustumWorldRect(camera, frustum),
     widthPx: outW,

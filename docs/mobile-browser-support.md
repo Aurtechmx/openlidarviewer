@@ -73,6 +73,10 @@ Eye Dome Lighting (the screen-space depth shading) is off by default on phones a
 - Use modern phones and tablets when possible.
 - Very large LAS/LAZ datasets are better handled on desktop.
 
+## Exporting on a phone
+
+Reports, sheets and images are built on the device and saved through the browser. On an iPhone, Safari shows a download prompt first; the file stays available for a minute while you choose where to save it. Light and Dark sheets need Safari 16.4 or later; on an older iPhone, choose the Classic style. The sheet typefaces are kept for offline use once the app has been opened online. A georeferenced top-down image of a long, narrow scan is scaled down to fit what the phone browser can draw in one image, keeping its world file exact.
+
 ## Limitations
 
 - Browser memory limits can affect what loads.

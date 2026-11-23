@@ -64,6 +64,19 @@ describe('frameTopDownOrtho — hand-computed framing', () => {
     expect(f.camera.z).toBeGreaterThan(2);
   });
 
+  it('scales a long, narrow footprint down to fit a phone canvas, pixels still square', async () => {
+    const { MAX_FRAMED_EXPORT_AREA_PX, MAX_FRAMED_EXPORT_EDGE_PX } = await import('../src/render/export/orthoFraming');
+    // A 100 m x 600 m corridor at the default 2048 px width would be 2048 x 12288.
+    const f = frameTopDownOrtho([0, 0, 0, 100, 600, 10])!;
+    expect(f.heightPx).toBeLessThanOrEqual(MAX_FRAMED_EXPORT_EDGE_PX);
+    expect(f.widthPx * f.heightPx).toBeLessThanOrEqual(MAX_FRAMED_EXPORT_AREA_PX);
+    expect(f.heightPx / f.widthPx).toBeCloseTo(6, 1);
+    // The extent is unchanged: only the pixel count drops.
+    expect(f.extent.maxY - f.extent.minY).toBeCloseTo(600, 9);
+    // An ordinary footprint keeps the requested width.
+    expect(frameTopDownOrtho([0, 0, 0, 100, 150, 10])!.widthPx).toBe(2048);
+  });
+
   it('refuses degenerate or malformed footprints', () => {
     expect(frameTopDownOrtho([0, 0, 0, 0, 10, 1], 100)).toBeNull(); // zero X span
     expect(frameTopDownOrtho([0, 0, 0, 10, 0, 1], 100)).toBeNull(); // zero Y span

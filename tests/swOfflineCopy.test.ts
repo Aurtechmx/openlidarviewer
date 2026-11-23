@@ -345,4 +345,19 @@ describe('sw-precache.json manifest', () => {
       rmSync(dir, { recursive: true, force: true });
     }
   });
+
+  it('includes the sheet fonts, so styled sheets keep their typeface offline', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'olv-swm-'));
+    try {
+      mkdirSync(join(dir, 'assets'));
+      writeFileSync(join(dir, 'assets', 'Figtree-Regular-CIRQZMZp.ttf'), 'x'.repeat(4));
+      writeFileSync(join(dir, 'index.html'), HTML);
+      expect(buildSwPrecacheManifest(dir).assets.map((a: { url: string }) => a.url)).toEqual(['./assets/Figtree-Regular-CIRQZMZp.ttf']);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+    const sw = readFileSync(join(process.cwd(), 'public', 'sw.js'), 'utf8');
+    expect(sw).toMatch(/HASHED_APP_ASSET = [^\n]*\|ttf\)/);
+    expect(sw).toMatch(/woff2\?\|ttf\)\$\/\.test\(path\)/);
+  });
 });

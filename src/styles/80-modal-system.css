@@ -121,6 +121,8 @@
 .olv-result-focus .olv-modal {
   width: min(1040px, 92vw);
   max-height: min(88vh, 900px);
+  /* The visible height, so the close button stays clear of Safari's toolbars. */
+  max-height: min(88dvh, 900px);
   /* The surface lives OUTSIDE the measure panel, so it opts into tabular
      figures itself — every survey number stays column-aligned. */
   font-variant-numeric: tabular-nums;
@@ -274,11 +276,19 @@
   }
 }
 
-/* Tablets and other touch screens get the same 44px confirm targets as phones. */
+/* Tablets, landscape phones and other touch screens get the same 44px
+   targets as portrait phones, and 16px text in dialog fields so iOS does not
+   zoom the page when one is tapped. */
 @media (pointer: coarse) {
   .olv-confirm-cancel, .olv-confirm-ok {
     min-height: 44px;
     display: inline-flex; align-items: center; justify-content: center;
+  }
+  .olv-modal-btn { min-height: 44px; }
+  .olv-modal-input { font-size: var(--text-xl); }
+  .olv-modal-check { width: 24px; height: 24px; }
+  .olv-modal-field:has(> .olv-modal-check) > .olv-modal-label {
+    display: flex; align-items: center; min-height: 44px;
   }
 }
 

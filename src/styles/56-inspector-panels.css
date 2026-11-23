@@ -66,6 +66,8 @@
   border-radius: var(--radius-sm); padding: var(--space-sm) var(--space-sm);
   transition: border-color var(--dur-fast) var(--ease-standard);
 }
+/* iOS zooms the page when a field under 16px is tapped; --text-xl is 16px. */
+@media (pointer: coarse) { .olv-report-select { font-size: var(--text-xl); } }
 .olv-report-select:hover:not(:disabled) { border-color: var(--accent); }
 .olv-report-select:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .olv-report-select:disabled { opacity: 0.42; cursor: not-allowed; }

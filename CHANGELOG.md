@@ -19,6 +19,11 @@ The format is based on Keep a Changelog and the project follows Semantic Version
 
 ### Fixed
 
+- Touch screens: the room and object Report PDF and Floor plan buttons, the profile Export PDF and CSV buttons, the map sheet dialog buttons in landscape, and the map sheet's include checkboxes are 44 px targets. Dialog fields and the report template picker use 16 px text, so iOS no longer zooms the page when one is tapped. The phone sheet keeps its tabs clear of the notch in landscape.
+- A georeferenced top-down image of a long, narrow scan scales down to fit a phone browser's canvas limit (8192 px on an edge, 16.7 million pixels in all) instead of failing.
+- A download link stays valid for a minute, long enough to answer the iOS download prompt. Scratch canvases are freed once an image is encoded, so repeated image exports on an iPhone do not run out of canvas memory.
+- The offline copy includes the sheet typefaces, so Light and Dark sheets keep their fonts without a connection.
+
 - The ceiling height of a room is measured from the lowest strong height peak (the floor) to the highest (the ceiling). Taking the fullest bin read a bed or table top as the floor when the floor was not quite level, and printed 1.9 m for a 2.45 m room. The enclosed volume follows.
 - glTF/GLB and E57 heights are in metres, as their specifications state for every axis. Reports printed them in "source units (vertical unit not declared)" beside widths in metres. A session saved earlier gets the metre heights back when it is opened.
 - The density on the technical report and the Studio card says "(bounding-box estimate)", as the Scan report panel does.

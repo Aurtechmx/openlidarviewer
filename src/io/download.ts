@@ -10,6 +10,13 @@
  */
 
 import { ownedExactBuffer } from './range/boundedRead';
+
+/**
+ * How long the object URL outlives the click. iOS Safari shows a download
+ * sheet first and reads the URL only when the user taps it; one second freed
+ * it before a slow tap. A minute holds one copy of the file in memory that long.
+ */
+export const DOWNLOAD_URL_LIFETIME_MS = 60_000;
 import { safeEntryName } from '../export/safeText';
 
 /** Trigger a browser download of `blob` as `filename`, deferring the URL revoke. */
@@ -27,7 +34,7 @@ export function triggerDownload(blob: Blob, filename: string): void {
   a.click();
   a.remove();
   // Defer past the click so large / Safari / iOS downloads complete.
-  setTimeout(() => URL.revokeObjectURL(url), 1000);
+  setTimeout(() => URL.revokeObjectURL(url), DOWNLOAD_URL_LIFETIME_MS);
 }
 
 /** Download raw bytes with an explicit MIME type. */

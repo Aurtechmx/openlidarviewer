@@ -263,6 +263,8 @@ export async function composeScanReportOntoBlob(
 
   return new Promise<Blob>((resolve, reject) => {
     canvas.toBlob((b) => {
+      // A scratch canvas: give its pixels back now (iOS counts canvas memory until collection).
+      canvas.width = 0; canvas.height = 0;
       if (b) resolve(b);
       else reject(new Error('composeScanReportOntoBlob: canvas.toBlob returned null'));
     }, 'image/png');
@@ -362,6 +364,8 @@ export async function composeClassScopeBannerOntoBlob(
 
   return new Promise<Blob>((resolve, reject) => {
     canvas.toBlob((b) => {
+      // A scratch canvas: give its pixels back now (iOS counts canvas memory until collection).
+      canvas.width = 0; canvas.height = 0;
       if (b) resolve(b);
       else reject(new Error('composeClassScopeBannerOntoBlob: canvas.toBlob returned null'));
     }, 'image/png');
