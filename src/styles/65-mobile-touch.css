@@ -243,6 +243,7 @@
     right: calc(var(--space-md) + env(safe-area-inset-right));
     left: auto;
     width: min(212px, calc(100vw - 2 * var(--space-md)));
+    max-height: 38vh;
     max-height: 38dvh;
     padding: var(--space-md);
     padding-bottom: var(--space-3xl);

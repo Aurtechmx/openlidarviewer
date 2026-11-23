@@ -417,6 +417,15 @@ function errorName(err: unknown): string {
 }
 
 /**
+ * True in a browser older than the build supports: the same test as
+ * public/browser-check.js (CompressionStream with structuredClone marks
+ * Safari 16.4, Chrome 98 and Firefox 113 or later).
+ */
+export function browserBelowFloor(g: { CompressionStream?: unknown; structuredClone?: unknown } = globalThis): boolean {
+  return typeof g.CompressionStream !== 'function' || typeof g.structuredClone !== 'function';
+}
+
+/**
  * Is this failure a swept-away code chunk / failed module preload — the thing a
  * page reload actually fixes — rather than an ordinary feature exception?
  *
@@ -431,6 +440,10 @@ function errorName(err: unknown): string {
  */
 export function classifyLoadError(err: unknown): StaleChunkVerdict {
   if (err == null) return 'other';
+  // A browser older than the build's floor fails to PARSE a chunk, and Safari
+  // words that like a missing chunk. A reload cannot help there, and the page
+  // already says the browser is too old (public/browser-check.js).
+  if (browserBelowFloor()) return 'other';
 
   // Tagged by name by the bundler — the most reliable signal when present.
   if (/chunkloaderror/i.test(errorName(err))) return 'stale-chunk';

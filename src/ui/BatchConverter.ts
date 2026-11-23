@@ -13,6 +13,7 @@
  * shown but disabled with an honest reason rather than producing a bad file.
  */
 
+import { pickerAccept } from './pickerAccept';
 import { el, optInRow } from './dom';
 import { wireDialogA11y, focusableIn, type DialogA11yHandle } from './Modal';
 import { downloadBytes } from '../io/download';
@@ -247,7 +248,7 @@ export class BatchConverter {
     const drop = el('label', { className: 'olv-bc-drop' });
     const input = el('input', { className: 'olv-file-input', type: 'file' }) as HTMLInputElement;
     input.multiple = true;
-    input.accept = ACCEPT;
+    input.accept = pickerAccept(ACCEPT);
     input.addEventListener('change', () => {
       if (input.files) this._addFiles(input.files);
       input.value = '';

@@ -58,6 +58,28 @@ recovery journal does not keep class edits either, and a streaming scan cannot
 be reclassified, so Save session gives no warning there. Storing an edit log
 keyed to the source file's SHA-256 is not yet available.
 
+## Browsers and operating systems
+
+The app runs in Safari 16.4 (iOS and iPadOS 16.4), Chrome and Edge 98 and
+Firefox 114 or later, and has its full layout from Chrome 111 and Firefox 121.
+An older browser is told so on load. Only current Chromium, Firefox and WebKit
+on Linux run the full end-to-end suite in CI; Windows runs a start-up check
+only, and macOS, Android and ChromeOS browsers are not tested in CI.
+
+- When a WebGPU device is lost the app asks for a reload; a lost WebGL context
+  is rebuilt in place.
+- A software renderer (llvmpipe, SwiftShader, Microsoft Basic Render Driver)
+  is not detected, so a machine without graphics acceleration gets the same
+  point budget as a slow GPU and runs slowly.
+- A trackpad pinch in Safari on macOS has not been checked on a device.
+- Touch-sized controls follow the primary pointer, so a Windows 2-in-1 or a
+  ChromeOS convertible used by touch keeps the smaller desktop targets.
+- CSV files are written as UTF-8 without a byte-order mark, so Excel can show
+  accented measurement or scan names wrongly; open them with Data > From Text,
+  or in another spreadsheet.
+- Downloads inside in-app browsers (a link opened from a chat or social app)
+  may not save; open the app in Safari or Chrome to export.
+
 ## A Safari chunk failure does not reload the page by itself
 
 When a lazy part of the app fails to load while the browser reports a
@@ -433,7 +455,7 @@ consecutive passes, counted by `scripts/ios-streak.mjs`.
 fails the build when either passes its recorded baseline, so a raise is a hand
 edit to `docs/validation/monolith-size-baseline.json` and always shows in the
 diff.
-Fan-out is 95 for the shell, 73 for the renderer, across 1241 modules with no
+Fan-out is 95 for the shell, 73 for the renderer, across 1242 modules with no
 dependency cycles. Fan-out counts the distinct modules a file imports with a
 value import, source files and external packages alike; type-only and dynamic
 imports are not counted. The shell and the renderer figures are held

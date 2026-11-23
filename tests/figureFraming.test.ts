@@ -14,6 +14,7 @@ import { test, expect } from 'vitest';
 import {
   DEFAULT_FIGURE_WIDTH_PX,
   MAX_FIGURE_EDGE_PX,
+  MAX_FIGURE_AREA_PX,
   planFigureRender,
 } from '../src/render/export/figureFraming';
 
@@ -64,9 +65,21 @@ test('the aspect always matches the ACTUAL output pixels, not the request', () =
 });
 
 test('oversize requests are scaled down to the edge cap, preserving aspect', () => {
-  const plan = planFigureRender({ widthPx: 20000, heightPx: 10000 }, LIVE);
+  // A long, thin request is held by the edge cap alone.
+  const plan = planFigureRender({ widthPx: 20000, heightPx: 2000 }, LIVE);
   expect(plan!.widthPx).toBe(MAX_FIGURE_EDGE_PX);
-  expect(plan!.heightPx).toBe(MAX_FIGURE_EDGE_PX / 2);
+  expect(plan!.heightPx).toBe(819);
+});
+
+test('a large request is also held to the area a phone browser allocates for one canvas', () => {
+  // 8192 x 4096 would be 33.5 million pixels; iOS Safari stops at 16.7 million.
+  const plan = planFigureRender({ widthPx: 20000, heightPx: 10000 }, LIVE)!;
+  expect(plan.widthPx * plan.heightPx).toBeLessThanOrEqual(MAX_FIGURE_AREA_PX);
+  expect(plan.widthPx).toBeLessThanOrEqual(MAX_FIGURE_EDGE_PX);
+  expect(plan.widthPx / plan.heightPx).toBeCloseTo(2, 2);
+  // A 4096-wide request on a portrait phone (aspect 0.46) used to reach 31 million pixels.
+  const phone = planFigureRender({ widthPx: 4096 }, { widthPx: 390, heightPx: 844 })!;
+  expect(phone.widthPx * phone.heightPx).toBeLessThanOrEqual(MAX_FIGURE_AREA_PX);
 });
 
 test('non-finite or non-positive requests are rejected as null', () => {

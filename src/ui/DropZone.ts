@@ -278,10 +278,18 @@ export class DropZone {
       target.classList.remove('olv-dragging');
       const files = e.dataTransfer?.files;
       if (!files || files.length === 0) return;
+      // A folder dragged from Finder, Explorer or a Linux file manager arrives
+      // as a zero-byte file that no loader can read. Say so instead of failing
+      // on it, and open whatever files came with it.
+      const opened = withoutFolders(Array.from(files), e.dataTransfer?.items);
+      if (opened.folders > 0 && opened.files.length === 0) {
+        this.setError(FOLDER_DROP_MESSAGE);
+        return;
+      }
       // Multiple datasets mount together, loaded one at a time. A multi-file
       // drop opens each in turn rather than dropping all but the first; each
       // file's own progress updates take over as it loads.
-      void this._openSequentially(Array.from(files), onFile);
+      void this._openSequentially(opened.files, onFile);
     });
   }
 
@@ -734,4 +742,28 @@ export class DropZone {
     if (this._ownStatus !== null && this._srStatus.textContent === this._ownStatus) this._srStatus.textContent = '';
     this._ownStatus = null;
   }
+}
+
+/** Shown when only folders were dropped. */
+export const FOLDER_DROP_MESSAGE =
+  'A folder cannot be opened. Open the scan file inside it instead (for example the .las, .laz, .e57 or .ply file).';
+
+/**
+ * The dropped files without the folders among them. A folder's entry says it
+ * is a directory where the browser exposes entries (Chromium, Safari, Firefox);
+ * without entries, nothing is filtered.
+ */
+export function withoutFolders(
+  files: readonly File[],
+  items: { readonly length: number; [i: number]: { webkitGetAsEntry?: () => { isDirectory?: boolean } | null } } | undefined,
+): { files: File[]; folders: number } {
+  if (!items || items.length !== files.length) return { files: [...files], folders: 0 };
+  const kept: File[] = [];
+  let folders = 0;
+  for (let i = 0; i < files.length; i++) {
+    const entry = items[i]?.webkitGetAsEntry?.();
+    if (entry?.isDirectory) folders++;
+    else kept.push(files[i]);
+  }
+  return { files: kept, folders };
 }

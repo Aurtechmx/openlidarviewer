@@ -127,7 +127,26 @@ export async function createSigningKey(
     if (winner) return winner;
     throw new SigningError('The signing key could not be saved. Try again.');
   }
+  // Ask the browser to keep this origin's storage. Best-effort storage can be
+  // cleared under pressure, and Safari clears script-written storage of a site
+  // not visited for seven days; a lost key means later reports carry a new key
+  // ID. The answer does not change what happens next, so it is not awaited.
+  void requestPersistentStorage();
   return { privateKey: pair.privateKey, publicKey: jwk, keyId };
+}
+
+/**
+ * Ask for persistent storage where the browser offers it. Resolves to the
+ * browser's answer, or false where the call is missing or refused.
+ */
+export async function requestPersistentStorage(
+  storage: { persist?: () => Promise<boolean> } | undefined = globalThis.navigator?.storage,
+): Promise<boolean> {
+  try {
+    return typeof storage?.persist === 'function' ? await storage.persist() : false;
+  } catch {
+    return false;
+  }
 }
 
 /** Delete the stored key. */

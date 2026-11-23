@@ -71,7 +71,9 @@ function download(blob: Blob, filename: string): void {
   document.body.appendChild(a);
   a.click();
   a.remove();
-  setTimeout(() => URL.revokeObjectURL(url), 1000);
+  // DOWNLOAD_URL_LIFETIME_MS in io/download.ts: iOS reads the URL only when the
+  // download prompt is answered. The file name is a fixed stamp, safe as is.
+  setTimeout(() => URL.revokeObjectURL(url), 60_000);
 }
 
 function defaultSchedule(fn: () => void): void {

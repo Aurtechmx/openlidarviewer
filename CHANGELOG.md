@@ -19,6 +19,13 @@ The format is based on Keep a Changelog and the project follows Semantic Version
 
 ### Fixed
 
+- A browser older than the build supports (below Safari 16.4, Chrome 98 or Firefox 114) shows a message saying so, instead of a page that never loads a scan, and its failure is no longer treated as a stale deploy to reload. The README lists the minimum and full-layout versions.
+- A figure export is held to 16.7 million pixels as well as 8192 px on an edge, so a wide request on a portrait phone no longer exceeds what the browser allocates for one canvas.
+- File pickers for sessions, workflows and the batch converter no longer filter by extension on iPhone and iPad, where custom extensions such as .olvsession or .laz were greyed out.
+- Dropping a folder says it cannot be opened, and files dropped with it still open.
+- Copy Diagnostics reports iPadOS for an iPad that asks for desktop sites.
+- Creating a report signing key asks the browser to keep the site's storage, so the key is not cleared with best-effort data.
+- The session log download link stays valid for a minute, as other downloads do; ChromeOS uses its Arial-compatible font while the interface font loads.
 - Touch screens: the room and object Report PDF and Floor plan buttons, the profile Export PDF and CSV buttons, the map sheet dialog buttons in landscape, and the map sheet's include checkboxes are 44 px targets. Dialog fields and the report template picker use 16 px text, so iOS no longer zooms the page when one is tapped. The phone sheet keeps its tabs clear of the notch in landscape.
 - A georeferenced top-down image of a long, narrow scan scales down to fit a phone browser's canvas limit (8192 px on an edge, 16.7 million pixels in all) instead of failing.
 - A download link stays valid for a minute, long enough to answer the iOS download prompt. Scratch canvases are freed once an image is encoded, so repeated image exports on an iPhone do not run out of canvas memory.

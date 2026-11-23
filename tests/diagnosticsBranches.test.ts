@@ -59,6 +59,12 @@ describe('diagnostics report: browser and platform', () => {
     expect(report.platform.os).toBe(os);
   });
 
+  it('names iPadOS for an iPad that asks for the desktop site, and macOS for a Mac', () => {
+    const ua = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 Version/17.0 Safari/605.1.15';
+    expect(buildDiagnosticsReport(null, env({ userAgent: ua, brands: [], maxTouchPoints: 5 }), [], build).platform.os).toBe('iPadOS');
+    expect(buildDiagnosticsReport(null, env({ userAgent: ua, brands: [], maxTouchPoints: 0 }), [], build).platform.os).toBe('macOS');
+  });
+
   it('classes a mobile device and rounds the pixel ratio', () => {
     const report = buildDiagnosticsReport(null, env({ isMobile: true, devicePixelRatio: 2.6251 }), [], build);
     expect(report.platform.class).toBe('mobile');
