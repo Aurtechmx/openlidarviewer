@@ -63,7 +63,7 @@ export function exportLanguageControl(appliesTo: string): HTMLElement {
   langLabel.setAttribute('for', `${id}-select`);
   const select = document.createElement('select');
   select.id = `${id}-select`;
-  select.className = 'olv-report-select olv-export-lang-select';
+  select.className = 'olv-export-lang-select';
   for (const lang of EXPORT_LANGUAGES) {
     const option = document.createElement('option');
     option.value = lang.id;

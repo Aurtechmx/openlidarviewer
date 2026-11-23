@@ -18,6 +18,8 @@
 
 import { cssColor, sheetTokens, type SheetRgb } from './sheetKit/tokens';
 import { sheetStyle, type SheetStyleChoice } from './sheetKit/sessionStyle';
+import { exportLocale } from '../i18n/exportLocale';
+import { classScopeBannerText, localizeScanReport } from './localizeCard';
 
 /** One row of the report — a label/value pair. */
 export interface ScanReportRow {
@@ -258,8 +260,8 @@ export async function composeScanReportOntoBlob(
   const ctx = canvas.getContext('2d');
   if (!ctx) return source;
   ctx.drawImage(img, 0, 0);
-  // In the session's sheet style, as the other drawn exports are.
-  drawScanReport(ctx, data, corner, 24, sheetStyle());
+  // In the session's sheet style and export language, as the other drawn exports are.
+  drawScanReport(ctx, localizeScanReport(data, exportLocale()), corner, 24, sheetStyle());
 
   return new Promise<Blob>((resolve, reject) => {
     canvas.toBlob((b) => {
@@ -295,7 +297,7 @@ export function drawClassScopeBanner(
 ): void {
   const stamp = scopeStamp.trim();
   if (stamp.length === 0) return; // full / unfiltered view — draw nothing.
-  const label = `Class filter active — ${stamp}`;
+  const label = classScopeBannerText(stamp, exportLocale());
 
   ctx.save();
   ctx.font = `600 ${BANNER_FONT_SIZE}px system-ui, -apple-system, sans-serif`;
