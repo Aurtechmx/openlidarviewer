@@ -29,6 +29,7 @@ import { FLOOR_PLAN_TEXT, type FloorPlanKey } from '../../../i18n/deliverables/f
 import { ENGLISH, type ExportLocale } from '../../../i18n/exportLocale';
 import { fill } from '../../../i18n/message';
 import { fixed, grouped, withDecimalMark, type NumberStyle } from '../../../i18n/numberStyle';
+import { languageInfo } from '../../../i18n/languages';
 /** The session's sheet style, read by the caller that loads this chunk. */
 export { sheetStyle } from '../../../render/measure/mapSheetExportOptions';
 export { exportLocale } from '../../../i18n/exportLocale';
@@ -81,7 +82,7 @@ export function planNoteText(n: FloorPlanNote, w: PlanWords = words): string {
   const adapted = (a: boolean): string => (a ? t('bandAdapted') : '');
   switch (n.code) {
     case 'too-few': return t('tooFew', { n: int(n.n), min: int(n.min) });
-    case 'unit-unverified': return t('unitUnverified');
+    case 'unit-unverified': return t('unitUnverified', { low: fx(0.7, 1), high: fx(1.8, 1) });
     case 'no-wall-height': return t('noWallHeight');
     case 'slice-sparse': return t('sliceSparse');
     case 'no-outline': return t('noOutline');
@@ -233,7 +234,8 @@ export function escapeXml(s: string): string {
 
 /** Greedy word-wrap (the footer has no DOM to measure text with). */
 function wrapText(s: string, maxChars: number): string[] {
-  const words = s.split(/\s+/);
+  // A no-break space groups the digits of one figure and never breaks.
+  const words = s.split(/[^\S\u00A0]+/);
   const lines: string[] = [];
   let line = '';
   for (const w of words) {
@@ -247,6 +249,18 @@ function wrapText(s: string, maxChars: number): string[] {
   }
   if (line) lines.push(line);
   return lines;
+}
+
+/** Roughly how wide `s` is in a Helvetica-like face, in px: no metrics exist here. */
+function estimatedWidth(s: string, fontPx: number): number {
+  let em = 0;
+  for (const ch of s) {
+    if (/[ijlI.,:;'|!()\[\]/ \u00A0ftr-]/.test(ch)) em += 0.3;
+    else if (/[mwMW%]/.test(ch)) em += 0.85;
+    else if (/[A-ZÀ-Þ]/.test(ch)) em += 0.7;
+    else em += 0.555;
+  }
+  return em * fontPx;
 }
 
 /** A round-number scale-bar length ≤ maxLen, in the bar's own unit. */
@@ -439,7 +453,7 @@ function floorPlanSvgDrawn(model: FloorPlanModel, opts: FloorPlanSvgOptions): st
   const said = (key: FloorPlanKey, params?: Record<string, string | number>): FooterLine =>
     ({ text: t(key, params), en: en.t(key, params) });
   const modelLines: FooterLine[] =
-    words.lang === 'en' || !model.notes || model.notes.length !== model.reasons.length
+    (words.lang === 'en' && words.style === 'point') || !model.notes || model.notes.length !== model.reasons.length
       ? model.reasons.map((r) => ({ text: r, en: r }))
       : model.notes.map((n, i) => ({ text: planNoteText(n), en: model.reasons[i] }));
   const footerReasons: FooterLine[] = [said('experimental'), ...modelLines];
@@ -463,6 +477,8 @@ function floorPlanSvgDrawn(model: FloorPlanModel, opts: FloorPlanSvgOptions): st
   if (weakRings.length > 0) {
     footerReasons.push(said('tinted', { pct: Math.round(OBSERVED_FRAC_MIN * 100) }));
   }
+
+  if (!languageInfo(words.lang).reviewed) footerReasons.push(said('draft'));
 
   // Footer: dims + scale bar + frame note + (wrapped) reasons. Wrap width is
   // sized for ~5.2 px/char at the footer font over the sheet's inner width.
@@ -794,7 +810,7 @@ function floorPlanSvgDrawn(model: FloorPlanModel, opts: FloorPlanSvgOptions): st
     // English lines are sized for the box and never get the attribute.
     const room = tbW - 16;
     const fitBox = (line: string): string =>
-      words.lang !== 'en' && line.length * 4.7 > room ? ` textLength="${room}" lengthAdjust="spacingAndGlyphs"` : '';
+      words.lang !== 'en' && estimatedWidth(line, 8.5) > room ? ` textLength="${room}" lengthAdjust="spacingAndGlyphs"` : '';
     parts.push(
       `<g class="title-block">` +
         `<rect x="${tbX}" y="${tbY}" width="${tbW}" height="${tbH}" fill="${PAPER}" stroke="${INK}" stroke-width="1"/>` +

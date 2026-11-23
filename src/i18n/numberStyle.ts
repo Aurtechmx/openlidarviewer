@@ -47,3 +47,11 @@ export function grouped(style: NumberStyle, value: number): string {
   const body = digits.replace(/\B(?=(\d{3})+(?!\d))/g, sep);
   return (n < 0 ? '-' : '') + body;
 }
+
+/** Numbers written with a point and comma grouping, rewritten in the comma style. */
+export function restyleNumbers(text: string, style: NumberStyle): string {
+  if (style === 'point') return text;
+  return text
+    .replace(/(\d),(?=\d{3}(?!\d))/g, `$1${NBSP}`)
+    .replace(/(\d)\.(\d)/g, '$1,$2');
+}

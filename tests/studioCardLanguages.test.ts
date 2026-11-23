@@ -34,7 +34,8 @@ import { resolvedExportCrs } from '../src/app/exportCrsResolver';
 import { resolvedFromCrsInfo } from '../src/geo/CoordinateTypes';
 import type { CrsInfo } from '../src/io/crs';
 import type { ScanReportData } from '../src/export/ScanReportRenderer';
-import { classScopeBannerText, localizeScanReport, restyleNumbers } from '../src/export/localizeCard';
+import { classScopeBannerText, localizeScanReport } from '../src/export/localizeCard';
+import { restyleNumbers } from '../src/i18n/numberStyle';
 import { STUDIO_CARD_TEXT } from '../src/i18n/deliverables/studioCard';
 import { EXPORT_LANGUAGES, languageInfo, type ExportLanguage } from '../src/i18n/languages';
 import { DERIVED_COLOR_NOTE, CLASSIFICATION_COLOR_NOTE } from '../src/render/colorModeProvenance';
@@ -150,5 +151,37 @@ describe('the Studio card in each language', () => {
   it('says the class filter banner in the language, and in English as before', () => {
     expect(classScopeBannerText('Ground · 1 of 3 classes', { lang: 'en', numberStyle: 'point' })).toBe('Class filter active — Ground · 1 of 3 classes');
     expect(classScopeBannerText('Ground · 1 of 3 classes', { lang: 'es', numberStyle: 'point' })).toBe('Filtro de clases activo: Ground · 1 de 3 clases');
+  });
+
+  const one = (label: string, value: string, lang: ExportLanguage, numberStyle: 'point' | 'comma' = 'comma'): string =>
+    localizeScanReport({ title: 'Height Map', scanName: 's', footer: 'f', rows: [{ label, value }] }, { lang, numberStyle }).rows[0].value;
+
+  it('follows the number style in English too', () => {
+    expect(one('Points', '1,250,000', 'en')).toBe('1\u00a0250\u00a0000');
+    expect(one('Width', '1.23 km', 'en')).toBe('1,23 km');
+  });
+
+  it('leaves CRS names alone and translates only the placeholder', () => {
+    for (const name of ['unknown', 'Custom grid units', 'units of 0.5 m']) expect(one('CRS', name, 'de')).toBe(name);
+    expect(one('CRS', 'Unknown CRS', 'de')).toBe('Unbekanntes KBS');
+  });
+
+  it('translates undetermined and declared capture types, quoting the declared value', () => {
+    expect(one('Capture', 'Capture method not determined (low)', 'de')).toBe('Erfassungsmethode nicht bestimmt (Konfidenz gering)');
+    expect(one('Capture', 'Declared: Sim (v2) (from file metadata) (high)', 'es')).toBe('Declarado: Sim (v2) (según los metadatos del archivo) (confianza alta)');
+  });
+
+  it('translates every colour mode', () => {
+    for (const lang of OTHERS) for (const mode of ['coverage', 'confidence']) expect(one('Mode', mode, lang)).not.toBe(mode);
+  });
+
+  it('says the class filter with every class hidden', () => {
+    expect(one('Class filter', '· 0 of 5 classes', 'de')).toBe('0 von 5 Klassen');
+    expect(classScopeBannerText('· 0 of 5 classes', { lang: 'fr', numberStyle: 'comma' })).toContain('0 sur 5 classes');
+  });
+
+  it('marks an unreviewed language in the card footer, never English', () => {
+    for (const lang of OTHERS) expect(localizeScanReport(syntheticCard(), { lang, numberStyle: 'point' }).footer).toContain(STUDIO_CARD_TEXT[lang].templates.draft);
+    expect(localizeScanReport(syntheticCard(), { lang: 'en', numberStyle: 'comma' }).footer).toBe(syntheticCard().footer);
   });
 });

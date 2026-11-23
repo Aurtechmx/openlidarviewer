@@ -13,5 +13,5 @@ export function fill(template: string, params: Readonly<Record<string, string | 
 
 /** The parameter names a template uses, sorted, for catalog parity tests. */
 export function templateParams(template: string): string[] {
-  return [...new Set([...template.matchAll(/\{(\w+)\}/g)].map((m) => m[1]))].sort();
+  return [...new Set([...template.matchAll(/\{(\w+)\}/g)].map((m) => m[1]))].sort((a, b) => (a < b ? -1 : 1));
 }

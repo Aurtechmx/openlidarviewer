@@ -15,7 +15,7 @@ import { fixed, grouped, withDecimalMark, asNumberStyle } from '../src/i18n/numb
 import { fill, templateParams } from '../src/i18n/message';
 import { exportLocale, onExportLocaleChange, setExportLanguage, setExportNumberStyle } from '../src/i18n/exportLocale';
 import { SPACE_REPORT_TEXT, type SpaceReportKey } from '../src/i18n/deliverables/spaceReport';
-import { winAnsiSafe } from '../src/winAnsiText';
+import { pdfParagraphs, winAnsiSafe, wrapToWidth } from '../src/winAnsiText';
 import {
   ANGULAR_COVERAGE_HINT,
   ANGULAR_COVERAGE_LABEL,
@@ -29,6 +29,7 @@ import { spaceMetrics } from '../src/terrain/spaceMetrics';
 import { buildSpaceReportContent, noteText, spaceReportWords } from '../src/terrain/space/spaceReportLayout';
 import { buildSpaceReportPdf } from '../src/render/measure/spaceReportPdf';
 import { extractFloorPlan } from '../src/terrain/space/floorplan/extractFloorPlan';
+import { floorPlanSvg } from '../src/terrain/space/floorplan/floorPlanSvg';
 
 const loadFont = async (n: string): Promise<Uint8Array> =>
   new Uint8Array(await readFile(join(process.cwd(), 'src', 'export', 'sheetKit', 'fonts', n)));
@@ -196,4 +197,33 @@ describe('the space report in each language', () => {
       expect(text, `${lang} ${style}`).not.toMatch(/\?/);
     }
   }, 120_000);
+});
+
+describe('large figures and grouped digits', () => {
+  it.each(['de', 'fr', 'pt', 'en'] as const)('%s with comma decimals never leaves a grouping comma in a figure', (lang) => {
+    const big = cubePos.map((v) => v * 6.25);
+    const content = buildSpaceReportContent({
+      name: 's', space: spaceMetrics(big, { upAxis: 'z', spaceKind: 'object', unitToMetres: 1, unitKnown: true }), object: objectMetrics(big),
+      generatedAt: AT, locale: { lang, numberStyle: 'comma' },
+    });
+    const volume = content.sections.flatMap((s) => s.rows).map((r) => r.value).find((v) => v.includes('m³'))!;
+    expect(volume).toBe(`15${NBSP}625 m³ (551${NBSP}792 ft³)`);
+    for (const r of content.sections.flatMap((s) => s.rows)) expect(r.value).not.toMatch(/\d,\d{3}(?!\d)/);
+  });
+
+  it('keeps the digits of a figure on one line', () => {
+    const text = `loaded 1${NBSP}234${NBSP}567 points`;
+    expect(pdfParagraphs(text)).toEqual([text]);
+    expect(wrapToWidth(text, (s) => s.length, 10)).toEqual(['loaded', `1${NBSP}234${NBSP}567`, 'points']);
+  });
+
+  it('marks an unreviewed floor plan and writes its band in the number style', () => {
+    const svg = floorPlanSvg(plan, { locale: { lang: 'de', numberStyle: 'comma' } });
+    expect(svg).toContain('Übersetzung noch nicht geprüft.');
+    expect(floorPlanSvg(plan, {})).not.toContain('Translation not yet reviewed');
+    const refused = extractFloorPlan(roomPos, { upAxis: 'z', unitKnown: false });
+    const text = (numberStyle: 'point' | 'comma') => floorPlanSvg(refused, { locale: { lang: 'es', numberStyle } }).replace(/<[^>]+>/g, ' ');
+    expect(text('comma')).toMatch(/0,7 a\s+1,8/);
+    expect(text('point')).toMatch(/0\.7 a\s+1\.8/);
+  });
 });

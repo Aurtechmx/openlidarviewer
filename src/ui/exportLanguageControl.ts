@@ -67,6 +67,7 @@ export function exportLanguageControl(appliesTo: string): HTMLElement {
   for (const lang of EXPORT_LANGUAGES) {
     const option = document.createElement('option');
     option.value = lang.id;
+    option.lang = lang.tag;
     option.textContent = languageOptionText(lang.id);
     select.append(option);
   }
@@ -74,11 +75,13 @@ export function exportLanguageControl(appliesTo: string): HTMLElement {
   langRow.append(langLabel, select);
 
   const numRow = el('div', { className: 'olv-fp-opt-row' });
-  numRow.append(el('span', { className: 'olv-fp-opt-label', text: 'Numbers' }));
+  const numLabel = el('span', { className: 'olv-fp-opt-label', text: 'Numbers' });
+  numLabel.id = `${id}-numbers`;
+  numRow.append(numLabel);
   const seg = document.createElement('div');
   seg.className = 'olv-fp-seg';
   seg.setAttribute('role', 'radiogroup');
-  seg.setAttribute('aria-label', 'Number style for reports');
+  seg.setAttribute('aria-labelledby', numLabel.id);
   const styles: HTMLInputElement[] = [];
   for (const style of NUMBER_STYLES) {
     const input = document.createElement('input');

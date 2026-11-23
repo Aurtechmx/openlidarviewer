@@ -146,7 +146,7 @@ const ES: Catalog = {
   unknown: 'desconocido',
 
   secDimensions: 'Dimensiones',
-  secPlanes: 'Planos',
+  secPlanes: 'Superficies planas',
   secCapture: 'Calidad de captura',
   secMeasurements: 'Mediciones',
 
@@ -158,8 +158,8 @@ const ES: Catalog = {
   floor: 'Piso',
   ceiling: 'Techo',
   walls: 'Muros',
-  oriented: 'Orientado (L x A x H)',
-  axisAligned: 'Alineado a los ejes (L x A x H)',
+  oriented: 'Orientada (L x A x H)',
+  axisAligned: 'Alineada a los ejes (L x A x H)',
   largest: 'Dimensión mayor (sin validar)',
   envelopeVolume: 'Volumen de la envolvente',
   boundingSurface: 'Área de la superficie envolvente',
@@ -167,7 +167,7 @@ const ES: Catalog = {
   points: 'Puntos (medidos / cargados)',
   density: 'Densidad',
   spacing: 'Separación media',
-  boundingFilled: 'Área ocupada del recuadro',
+  boundingFilled: 'Área ocupada del rectángulo envolvente',
   colour: 'Color (RGB)',
   status: 'Estado',
 
@@ -190,7 +190,7 @@ const ES: Catalog = {
     'Área de la superficie de la caja envolvente (aproximada): la piel de la envolvente, '
     + 'no la superficie real (malla) del objeto.',
   hintAngular:
-    'Proporción de las direcciones alrededor del centroide del conjunto de puntos que tienen '
+    'Proporción de los intervalos de dirección alrededor del centroide del conjunto de puntos que tienen '
     + 'retornos. Sigue la forma del escaneo: una superficie plana o laminar llena solo parte '
     + 'de la esfera, por completa que sea su captura.',
 
@@ -223,8 +223,8 @@ const ES: Catalog = {
   notSurveyGrade: 'Aptitud: no tiene calidad topográfica salvo que se valide contra puntos de control en campo.',
   evidence:
     'Estimación de envolvente sin validar. Las áreas, los volúmenes, la cobertura angular y la '
-    + 'densidad son estimaciones de envolvente y de cuadrícula a partir de la muestra de puntos '
-    + 'cargada. Ninguna afirmación registrada las respalda, así que no tienen validación cruzada '
+    + 'densidad de este informe son estimaciones de envolvente y de cuadrícula a partir de la muestra de puntos '
+    + 'cargada. Ninguna afirmación registrada las cubre, así que no tienen validación cruzada '
     + 'entre implementaciones ni validación en campo. No presente este documento como un '
     + 'entregable validado.',
 
@@ -234,19 +234,19 @@ const ES: Catalog = {
     + 'áreas y volúmenes cambiarán al cargar más. Deje que se transmita la nube completa y vuelva a calcular.',
   noteUnitUnverified:
     'Las unidades de las coordenadas no están verificadas, así que dimensiones, áreas, volúmenes y '
-    + 'densidades se dan en las unidades propias del archivo, no en metros. Confirme el sistema de '
-    + 'referencia de origen para expresarlas en metros.',
+    + 'densidades se dan en las unidades propias del archivo, no en metros. Confirme el SRC '
+    + 'de origen para expresarlos en metros.',
   noteTooFewPoints: 'Todavía hay muy pocos puntos para medir este espacio.',
   noteStrayExcluded:
-    'Se excluyeron {count} retorno(s) aislado(s) fuera de la huella densa; las dimensiones describen '
+    'Retornos aislados fuera de la huella densa excluidos: {count}; las dimensiones describen '
     + 'el espacio escaneado, igual que la hoja del plano.',
   noteDensityScaled:
     'La densidad y la separación se escalan de un subconjunto medido de {measured} puntos a la muestra '
-    + 'cargada de {loaded} puntos (suponiendo un muestreo uniforme). La muestra cargada es lo que tiene '
+    + 'cargada de {loaded} puntos (suponiendo un submuestreo de paso uniforme, uno de cada n puntos). La muestra cargada es lo que tiene '
     + 'el visor, y puede ser a su vez un subconjunto del archivo.',
   noteCeilingApproximate: 'Los techos suelen capturarse con pocos puntos: la altura de piso a techo y el volumen encerrado son aproximados.',
-  noteCeilingMissing: 'Aún no se ha capturado un techo claro: la altura y el volumen no estarán disponibles hasta escanear la superficie superior.',
-  noteWallsEstimate: 'Las cifras de muros y planos son estimaciones prácticas, no un levantamiento certificado.',
+  noteCeilingMissing: 'Aún no se ha capturado un techo bien definido: la altura y el volumen no estarán disponibles hasta escanear la superficie superior.',
+  noteWallsEstimate: 'Las cifras de muros y superficies planas son estimaciones prácticas, no un levantamiento certificado.',
   noteOpenObject: 'Objeto abierto: el volumen encerrado es una envolvente de caja, no una medición de un sólido.',
 
   planTitle: 'Vista previa del plano (muros trazados a partir del escaneo)',
@@ -313,7 +313,7 @@ const PT: Catalog = {
     'Área da superfície da caixa envolvente (aproximada): a pele do envelope, não a superfície '
     + 'real (malha) do objeto.',
   hintAngular:
-    'Parcela das direções em torno do centroide do conjunto de pontos que têm retornos. Acompanha a '
+    'Parcela dos intervalos de direção em torno do centroide do conjunto de pontos que têm retornos. Acompanha a '
     + 'forma da varredura: uma superfície plana ou laminar preenche só parte da esfera, por mais '
     + 'completa que seja a captura.',
 
@@ -346,7 +346,7 @@ const PT: Catalog = {
   notSurveyGrade: 'Adequação: sem qualidade de levantamento topográfico, salvo validação com pontos de controle em campo.',
   evidence:
     'Estimativa de envelope não validada. As áreas, os volumes, a cobertura angular e a densidade '
-    + 'são estimativas de envelope e de grade a partir da amostra de pontos carregada. Nenhuma '
+    + 'deste relatório são estimativas de envelope e de grade a partir da amostra de pontos carregada. Nenhuma '
     + 'afirmação registrada as cobre, portanto não têm validação cruzada entre implementações nem '
     + 'validação em campo. Não apresente este documento como um entregável validado.',
 
@@ -356,18 +356,18 @@ const PT: Catalog = {
     + 'volumes vão mudar à medida que mais dados carregarem. Deixe a nuvem completa ser transmitida e calcule de novo.',
   noteUnitUnverified:
     'As unidades das coordenadas não foram verificadas, então dimensões, áreas, volumes e densidades '
-    + 'são dadas nas unidades do próprio arquivo, não em metros. Confirme o sistema de referência de '
-    + 'origem para expressá-las em metros.',
-  noteTooFewPoints: 'Ainda há poucos pontos para medir este espaço.',
+    + 'são dados nas unidades do próprio arquivo, não em metros. Confirme o SRC de '
+    + 'origem para expressá-los em metros.',
+  noteTooFewPoints: 'Ainda não há pontos suficientes para medir este espaço.',
   noteStrayExcluded:
-    '{count} retorno(s) isolado(s) fora da área densa foram excluídos; as dimensões descrevem o '
+    'Retornos isolados fora da área densa em planta excluídos: {count}; as dimensões descrevem o '
     + 'espaço escaneado, como na folha da planta.',
   noteDensityScaled:
     'A densidade e o espaçamento são escalados de um subconjunto medido de {measured} pontos para a '
-    + 'amostra carregada de {loaded} pontos (supondo amostragem uniforme). A amostra carregada é o que '
+    + 'amostra carregada de {loaded} pontos (supondo subamostragem de passo uniforme, um a cada n pontos). A amostra carregada é o que '
     + 'o visualizador tem, e pode ela mesma ser um subconjunto do arquivo.',
   noteCeilingApproximate: 'Tetos costumam ser capturados com poucos pontos: o pé-direito e o volume fechado são aproximados.',
-  noteCeilingMissing: 'Ainda não há um teto claro capturado: altura e volume ficam indisponíveis até a superfície superior ser escaneada.',
+  noteCeilingMissing: 'Ainda não há um teto bem definido capturado: altura e volume ficam indisponíveis até a superfície superior ser escaneada.',
   noteWallsEstimate: 'Os valores de paredes e planos são estimativas práticas, não um levantamento certificado.',
   noteOpenObject: 'Objeto aberto: o volume fechado é um envelope de caixa, não a medição de um sólido.',
 
@@ -387,18 +387,18 @@ const PT: Catalog = {
 const FR: Catalog = {
   scanInterior: 'Espace intérieur',
   scanObject: 'Objet',
-  untitled: 'Relevé sans titre',
-  unknown: 'inconnu',
+  untitled: 'Scan sans titre',
+  unknown: 'inconnue',
 
   secDimensions: 'Dimensions',
-  secPlanes: 'Plans',
+  secPlanes: 'Surfaces planes',
   secCapture: 'Qualité de capture',
   secMeasurements: 'Mesures',
 
   lxwxh: 'L x l x H',
   footprint: "Surface d'emprise",
   ceilingHeight: 'Hauteur sous plafond',
-  enclosedVolume: 'Volume intérieur',
+  enclosedVolume: 'Volume englobé',
   storeys: 'Niveaux',
   floor: 'Sol',
   ceiling: 'Plafond',
@@ -436,7 +436,7 @@ const FR: Catalog = {
     + "(maillage) de l'objet.",
   hintAngular:
     "Part des directions autour du centroïde du nuage qui reçoivent des retours. Elle suit la forme du "
-    + "relevé : une surface plane ou en feuille ne remplit qu'une partie de la sphère, aussi complète "
+    + "scan : une surface plane ou en feuille ne remplit qu'une partie de la sphère, aussi complète "
     + "que soit la capture.",
 
   sourceUnits: '(unités source)',
@@ -454,12 +454,12 @@ const FR: Catalog = {
   kMetricVersion: 'Version des métriques',
   kGenerated: 'Généré le',
   kSource: 'Source',
-  kScanType: 'Type de relevé',
+  kScanType: 'Type de scan',
   kUnits: 'Unités',
   kPoints: 'Points',
   kCoverage: 'Couverture',
   kNote: 'Note',
-  kEvidence: 'Preuves',
+  kEvidence: "Éléments d'appui",
   kLanguage: 'Langue',
   pointsLine: '{measured} mesurés / {loaded} chargés dans la visionneuse',
   coverageLine: '{coverage}. Les valeurs proviennent des points lus.',
@@ -467,33 +467,33 @@ const FR: Catalog = {
 
   notSurveyGrade: "Usage : pas de qualité topographique sans validation par des points de contrôle terrain.",
   evidence:
-    "Estimation d'enveloppe non validée. Les surfaces, volumes, la couverture angulaire et la densité "
+    "Estimation d'enveloppe non validée. Les surfaces, les volumes, la couverture angulaire et la densité "
     + "sont des estimations d'enveloppe et de grille à partir de l'échantillon de points chargé. Aucune "
     + "affirmation enregistrée ne les couvre : elles n'ont ni validation croisée entre "
     + "implémentations ni validation terrain. Ne présentez pas ce document comme un livrable validé.",
 
   noteStream: 'Calculé sur les points chargés ou diffusés à ce stade ; les valeurs peuvent changer à mesure que les données arrivent.',
   noteStreamPartial:
-    "Provisoire : seule la partie déjà diffusée du relevé a été mesurée ; dimensions, surfaces "
+    "Provisoire : seule la partie déjà diffusée du scan a été mesurée ; dimensions, surfaces "
     + "et volumes changeront à mesure du chargement. Laissez le nuage complet se charger, puis relancez.",
   noteUnitUnverified:
     "Les unités des coordonnées ne sont pas vérifiées : dimensions, surfaces, volumes et densités "
-    + "sont donnés dans les unités du fichier, pas en mètres. Confirmez le système de référence source "
+    + "sont donnés dans les unités du fichier, pas en mètres. Confirmez le SRC source "
     + "pour les exprimer en mètres.",
   noteTooFewPoints: "Trop peu de points pour mesurer cet espace pour l'instant.",
   noteStrayExcluded:
-    "{count} retour(s) isolé(s) hors de l'emprise dense ont été exclus ; les dimensions décrivent "
-    + "l'espace relevé, comme la feuille du plan.",
+    "Retours isolés hors de l'emprise dense exclus : {count} ; les dimensions décrivent "
+    + "l'espace scanné, comme la feuille du plan.",
   noteDensityScaled:
     "La densité et l'espacement sont extrapolés d'un sous-ensemble mesuré de {measured} points à "
     + "l'échantillon chargé de {loaded} points (hypothèse d'un pas régulier). L'échantillon chargé est "
     + "ce que contient la visionneuse, et peut lui-même n'être qu'une partie du fichier.",
-  noteCeilingApproximate: 'Les plafonds sont souvent peu captés : la hauteur sous plafond et le volume intérieur sont approximatifs.',
-  noteCeilingMissing: "Aucun plafond net n'est encore capté : hauteur et volume restent indisponibles tant que la surface supérieure n'est pas relevée.",
-  noteWallsEstimate: 'Les valeurs des murs et des plans sont des estimations pratiques, pas un relevé certifié.',
-  noteOpenObject: "Objet ouvert : le volume intérieur est une enveloppe de boîte, pas la mesure d'un solide.",
+  noteCeilingApproximate: 'Les plafonds sont souvent peu captés : la hauteur sous plafond et le volume englobé sont approximatifs.',
+  noteCeilingMissing: "Aucun plafond net n'est encore capté : hauteur et volume restent indisponibles tant que la surface supérieure n'est pas scannée.",
+  noteWallsEstimate: 'Les valeurs des murs et des surfaces planes sont des estimations pratiques, pas un levé certifié.',
+  noteOpenObject: "Objet ouvert : le volume englobé est une enveloppe de boîte, pas la mesure d'un solide.",
 
-  planTitle: 'Aperçu du plan (murs tracés à partir du relevé)',
+  planTitle: 'Aperçu du plan (murs tracés à partir du scan)',
   notesTitle: 'Notes',
   continued: ' (suite)',
   roomImperial: 'Pièce {i} {area} ft2',
@@ -501,9 +501,9 @@ const FR: Catalog = {
   planDimsImperial: 'l {w} ft ({wAlt} m) x P {d} ft ({dAlt} m)',
   planDimsMetric: 'l {w} m ({wAlt} ft) x P {d} m ({dAlt} ft)',
   planCaptionGraph:
-    "Aperçu expérimental : reconstruction du graphe des murs à partir du relevé, pas un plan mesuré ; à valider visuellement.",
+    "Aperçu expérimental : reconstruction du graphe des murs à partir du scan, pas un plan mesuré ; à valider visuellement.",
   planCaptionTrace:
-    "Aperçu expérimental : murs tracés à partir du relevé, pas un plan mesuré ; à valider visuellement.",
+    "Aperçu expérimental : murs tracés à partir du scan, pas un plan mesuré ; à valider visuellement.",
 };
 
 const DE: Catalog = {
@@ -513,7 +513,7 @@ const DE: Catalog = {
   unknown: 'unbekannt',
 
   secDimensions: 'Abmessungen',
-  secPlanes: 'Flächen',
+  secPlanes: 'Ebene Flächen',
   secCapture: 'Erfassungsqualität',
   secMeasurements: 'Messungen',
 
@@ -557,7 +557,7 @@ const DE: Catalog = {
     'Oberfläche des Hüllquaders (näherungsweise): die Haut der Hülle, nicht die tatsächliche '
     + '(Netz-)Oberfläche des Objekts.',
   hintAngular:
-    'Anteil der Richtungen um den Schwerpunkt der Punktmenge, aus denen Rückläufe vorliegen. Er folgt '
+    'Anteil der Richtungen um den Schwerpunkt der Punktmenge, aus denen Echos vorliegen. Er folgt '
     + 'der Form des Scans: Eine flache oder blattartige Fläche füllt nur einen Teil der Kugel, wie '
     + 'vollständig sie auch erfasst wurde.',
 
@@ -581,7 +581,7 @@ const DE: Catalog = {
   kPoints: 'Punkte',
   kCoverage: 'Abdeckung',
   kNote: 'Hinweis',
-  kEvidence: 'Nachweis',
+  kEvidence: 'Evidenz',
   kLanguage: 'Sprache',
   pointsLine: '{measured} gemessen / {loaded} im Viewer geladen',
   coverageLine: '{coverage}. Die Werte stammen aus den gelesenen Punkten.',
@@ -592,7 +592,7 @@ const DE: Catalog = {
     'Nicht validierte Hüllschätzung. Flächen, Volumen, Winkelabdeckung und Dichte sind Hüll- und '
     + 'Rasterschätzungen aus der geladenen Punktstichprobe. Keine registrierte Aussage deckt sie ab, '
     + 'daher haben sie weder eine Kreuzvalidierung zwischen Implementierungen noch eine '
-    + 'Feldvalidierung. Nicht als validiertes Ergebnis weitergeben.',
+    + 'Feldvalidierung. Dieses Dokument nicht als validiertes Lieferergebnis darstellen.',
 
   noteStream: 'Beruht auf den bisher geladenen oder gestreamten Punkten; die Werte können sich ändern, wenn weitere Daten eintreffen.',
   noteStreamPartial:
@@ -600,11 +600,11 @@ const DE: Catalog = {
     + 'Volumen ändern sich, wenn mehr geladen wird. Die ganze Wolke laden lassen und dann neu berechnen.',
   noteUnitUnverified:
     'Die Koordinateneinheiten sind nicht geprüft, daher sind Abmessungen, Flächen, Volumen und Dichten '
-    + 'in den eigenen Einheiten der Datei angegeben, nicht in Metern. Das Quell-Bezugssystem bestätigen, '
+    + 'in den eigenen Einheiten der Datei angegeben, nicht in Metern. Das Quell-KBS bestätigen, '
     + 'um sie in Metern anzugeben.',
   noteTooFewPoints: 'Noch zu wenige Punkte, um diesen Raum zu messen.',
   noteStrayExcluded:
-    '{count} vereinzelte Rückläufe außerhalb der dichten Grundfläche wurden ausgeschlossen; die '
+    'Ausgeschlossene vereinzelte Echos außerhalb der dichten Grundfläche: {count}; die '
     + 'Abmessungen beschreiben den gescannten Raum, wie das Grundrissblatt.',
   noteDensityScaled:
     'Dichte und Punktabstand werden von einer gemessenen Teilmenge mit {measured} Punkten auf die '
@@ -612,7 +612,7 @@ const DE: Catalog = {
     + 'geladene Stichprobe ist das, was der Viewer hält, und kann selbst eine Teilmenge der Datei sein.',
   noteCeilingApproximate: 'Decken werden oft nur spärlich erfasst: Raumhöhe und umschlossenes Volumen sind Näherungswerte.',
   noteCeilingMissing: 'Noch keine klare Decke erfasst: Höhe und Volumen sind erst verfügbar, wenn die obere Fläche gescannt ist.',
-  noteWallsEstimate: 'Wand- und Flächenwerte sind pragmatische Schätzungen, keine zertifizierte Vermessung.',
+  noteWallsEstimate: 'Werte für Wände und ebene Flächen sind pragmatische Schätzungen, keine zertifizierte Vermessung.',
   noteOpenObject: 'Offenes Objekt: Das umschlossene Volumen ist eine Quaderhülle, keine Festkörpermessung.',
 
   planTitle: 'Grundrissvorschau (Wände aus dem Scan nachgezeichnet)',

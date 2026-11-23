@@ -27,7 +27,7 @@ import {
   sqMetresToSqFeet,
   cubicMetresToCubicFeet,
   resolveLinearUnitScale,
-  magnitudeFixed,
+  fineDecimals,
 } from '../spaceMetrics';
 import type { ObjectMetrics } from '../objectMetrics';
 import { SOFTWARE_NAME } from '../export/exportProvenance';
@@ -36,7 +36,7 @@ import { SPACE_REPORT_TEXT, type SpaceReportKey } from '../../i18n/deliverables/
 import { ENGLISH, type ExportLocale } from '../../i18n/exportLocale';
 import { languageInfo } from '../../i18n/languages';
 import { fill } from '../../i18n/message';
-import { fixed, grouped, withDecimalMark, type NumberStyle } from '../../i18n/numberStyle';
+import { fixed, grouped, restyleNumbers, withDecimalMark, type NumberStyle } from '../../i18n/numberStyle';
 
 /**
  * One label/value line in a report section, with the OPTIONAL per-row qualifier
@@ -214,10 +214,20 @@ interface UnitFormat {
   readonly density: (v: Num) => string;
 }
 
+/**
+ * A fine figure in the report's number style, at the decimal count its
+ * magnitude supports. The panel's `magnitudeFixed` groups in the host's locale,
+ * and a grouping comma left in a comma-style report reads as a decimal.
+ */
+function magnitude(style: NumberStyle, v: number, maxDecimals: number): string {
+  const d = Math.min(maxDecimals, fineDecimals(v));
+  return d === 0 ? grouped(style, v) : fixed(style, v, d);
+}
+
 /** Metric branch: in English, the exact strings the report has always printed. */
 function metricFormat(w: ReportWords): UnitFormat {
   const { m1, i0, fx, style } = w;
-  const mag = (v: number, d: number): string => withDecimalMark(style, magnitudeFixed(v, d));
+  const mag = (v: number, d: number): string => magnitude(style, v, d);
   return {
     triple: (l, wd, h) =>
       `${m1(l)} x ${m1(wd)} x ${m1(h)} m  (${fx(metresToFeet(l), 1)} x ` +
@@ -242,7 +252,7 @@ function metricFormat(w: ReportWords): UnitFormat {
  */
 function sourceFormat(w: ReportWords): UnitFormat {
   const { m1, i0, fx, style } = w;
-  const mag = (v: number, d: number): string => withDecimalMark(style, magnitudeFixed(v, d));
+  const mag = (v: number, d: number): string => magnitude(style, v, d);
   const SU = w.t('sourceUnits');
   const SU_SQ = w.t('sourceUnitsSq');
   const SU_CU = w.t('sourceUnitsCu');
@@ -451,14 +461,14 @@ function assemble(
 }
 
 /**
- * The metrics' caveats in the report's language. English prints the metrics'
+ * The metrics' caveats in the report's language. English with point decimals prints the metrics'
  * own sentences, as it always has. Another language says each coded note in
  * that language; a metrics object without notes (one built before notes
  * existed, or by hand in a test) keeps its English sentences rather than lose
  * a caveat.
  */
 function caveatsIn(space: SpaceMetrics, w: ReportWords, locale: ExportLocale): string[] {
-  if (locale.lang === 'en' || !space.notes || space.notes.length !== space.reasons.length) return [...space.reasons];
+  if ((locale.lang === 'en' && locale.numberStyle === 'point') || !space.notes || space.notes.length !== space.reasons.length) return [...space.reasons];
   return space.notes.map((n) => noteText(n, w));
 }
 
@@ -521,7 +531,7 @@ export function spaceProvenanceLines(p: SpaceReportProvenance, locale: ExportLoc
     kv(t('kUnits'), p.units),
     ...(locale.lang === 'en' ? [] : [kv(t('kLanguage'), info.reviewed ? info.name : t('languageDraft', { name: info.name }))]),
     kv(t('kPoints'), t('pointsLine', { measured: i0(p.measuredPointCount), loaded: i0(p.loadedPointCount) })),
-    ...(p.coverage ? [kv(t('kCoverage'), t('coverageLine', { coverage: p.coverage }))] : []),
+    ...(p.coverage ? [kv(t('kCoverage'), t('coverageLine', { coverage: restyleNumbers(p.coverage, w.style) }))] : []),
     kv(t('kNote'), p.notSurveyGrade),
     kv(t('kEvidence'), t('evidence')),
   ];

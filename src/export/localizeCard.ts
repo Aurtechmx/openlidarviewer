@@ -4,17 +4,17 @@
  * The card's rows are written in English by the exporters. This turns them
  * into the export language as the card is drawn: exact text from the
  * catalog, text with figures in it by template, and numbers in the export's
- * number style. English is returned as it came, so an English card is
+ * number style. English with point decimals is returned as it came, so an English card is
  * unchanged. Text with no entry stays in English; a test runs every exporter
  * so that does not happen for anything the card can print.
  */
 import { STUDIO_CARD_TEXT, type CardCatalog, type CardExactKey, type CardTemplateKey } from '../i18n/deliverables/studioCard';
+import { languageInfo } from '../i18n/languages';
 import type { ExportLocale } from '../i18n/exportLocale';
-import type { NumberStyle } from '../i18n/numberStyle';
+import { restyleNumbers } from '../i18n/numberStyle';
 import type { ScanReportData, ScanReportRow } from './ScanReportRenderer';
 
 const ENGLISH = STUDIO_CARD_TEXT.en;
-const NBSP = ' ';
 
 /** Rows whose values are names or encodings, never reformatted as numbers. */
 const VERBATIM_ROWS = new Set(['CRS', 'Capture', 'Class filter', 'Encoding', 'Mode', 'Palette', 'Overlay']);
@@ -51,15 +51,7 @@ function fillTemplate(cat: CardCatalog, key: CardTemplateKey, params: Record<str
 }
 
 function exact(cat: CardCatalog, text: string): string | null {
-  return Object.prototype.hasOwnProperty.call(ENGLISH.exact, text) ? cat.exact[text as CardExactKey] : null;
-}
-
-/** Numbers written with a point and comma grouping, rewritten in the comma style. */
-export function restyleNumbers(text: string, style: NumberStyle): string {
-  if (style === 'point') return text;
-  return text
-    .replace(/(\d),(?=\d{3}(?!\d))/g, `$1${NBSP}`)
-    .replace(/(\d)\.(\d)/g, '$1,$2');
+  return Object.hasOwn(ENGLISH.exact, text) ? cat.exact[text as CardExactKey] : null;
 }
 
 function label(cat: CardCatalog, text: string): string {
@@ -76,7 +68,15 @@ function unitWord(cat: CardCatalog, text: string): string {
   return text.replace(/\bunits\b/g, cat.exact.units);
 }
 
+/** A capture type: a known one, one the file declared (quoted as it is), or the text as it came. */
+function captureType(cat: CardCatalog, text: string): string {
+  const declared = match('declared', text);
+  return exact(cat, text) ?? (declared ? fillTemplate(cat, 'declared', declared) : text);
+}
+
 function value(cat: CardCatalog, rowLabel: string, text: string): string {
+  // A CRS is a name; only the app's own placeholders are words.
+  if (rowLabel === 'CRS') return /^Unknown( CRS)?$/.test(text) ? exact(cat, text) ?? text : text;
   const hit = exact(cat, text);
   if (hit !== null) return hit;
   let m = match('displaySample', text);
@@ -91,7 +91,7 @@ function value(cat: CardCatalog, rowLabel: string, text: string): string {
   if (m) return fillTemplate(cat, 'notGround', { reason: exact(cat, m.reason) ?? m.reason });
   if (rowLabel === 'Capture') {
     m = match('capture', text);
-    if (m) return fillTemplate(cat, 'capture', { label: exact(cat, m.label) ?? m.label, confidence: exact(cat, m.confidence) ?? m.confidence });
+    if (m) return fillTemplate(cat, 'capture', { label: captureType(cat, m.label), confidence: exact(cat, m.confidence) ?? m.confidence });
   }
   if (rowLabel === 'Class filter') return scopeStampIn(cat, text);
   m = match('unitsOf', text);
@@ -102,13 +102,16 @@ function value(cat: CardCatalog, rowLabel: string, text: string): string {
 function scopeStampIn(cat: CardCatalog, text: string): string {
   const hit = exact(cat, text);
   if (hit !== null) return hit;
+  // With every class hidden there are no names before the count.
+  const none = match('scopeNone', text);
+  if (none) return fillTemplate(cat, 'scopeNone', none);
   const m = match('scope', text);
   return m ? fillTemplate(cat, 'scope', m) : text;
 }
 
 /** The card in the export language; English comes back unchanged. */
 export function localizeScanReport(data: ScanReportData, locale: ExportLocale): ScanReportData {
-  if (locale.lang === 'en') return data;
+  if (locale.lang === 'en' && locale.numberStyle === 'point') return data;
   const cat = STUDIO_CARD_TEXT[locale.lang];
   const rows: ScanReportRow[] = data.rows.map((row) => {
     const translated = value(cat, row.label, row.value);
@@ -118,7 +121,8 @@ export function localizeScanReport(data: ScanReportData, locale: ExportLocale): 
       value: VERBATIM_ROWS.has(row.label) ? translated : restyleNumbers(translated, locale.numberStyle),
     };
   });
-  return { ...data, title: exact(cat, data.title) ?? data.title, rows };
+  const footer = languageInfo(locale.lang).reviewed ? data.footer : `${data.footer} · ${cat.templates.draft}`;
+  return { ...data, title: exact(cat, data.title) ?? data.title, rows, footer };
 }
 
 /** The class-filter banner's text in the export language. */

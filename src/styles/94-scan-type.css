@@ -109,10 +109,10 @@
 }
 .olv-object-dl:hover { color: var(--text); border-color: var(--accent); }
 .olv-object-dl:disabled { opacity: 0.4; cursor: default; }
+.olv-export-lang { display: flex; flex-direction: column; gap: var(--space-sm); margin: var(--space-sm) 0; }
 @media (pointer: coarse) {
   .olv-object-dl { min-height: 44px; }
-  .olv-export-lang { display: flex; flex-direction: column; gap: var(--space-sm); margin: var(--space-sm) 0; }
-.olv-fp-toggle { min-height: 44px; }
+  .olv-fp-toggle { min-height: 44px; }
 }
 .olv-object-dl.is-primary {
   color: var(--accent); background: var(--accent-soft);

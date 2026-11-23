@@ -45,7 +45,7 @@ export const cubicMetresToCubicFeet = (v: number): number => v * FT_PER_M * FT_P
  * same rule printed ten significant figures and claimed a cubic-centimetre
  * resolution the estimate does not have.
  */
-function fineDecimals(v: number): number {
+export function fineDecimals(v: number): number {
   const a = Math.abs(v);
   if (a < 100) return 2;
   if (a < 10_000) return 1;
