@@ -55,6 +55,7 @@ import { parseWorkOwnership, serializeWorkOwnership } from '../model/workOwnersh
 import type { WorkOwnership } from '../model/workOwnership';
 import { parseSourceReduction, parseWithheldReadCounts } from './withheldCountsJson';
 import { parseWorkplaneSettings, type WorkplaneSettings } from '../model/workplaneSettings';
+import { cleanJob, cleanProfileFields, isEmptyFields, type JobDetails } from '../model/deliverableFields';
 import { sanitizeOverlayPrefs } from '../app/overlayRegistry';
 
 /**
@@ -111,6 +112,11 @@ import { sanitizeOverlayPrefs } from '../app/overlayRegistry';
  * additive within v8 on the same terms: a view setting, emitted only once the
  * plane has been used, and read field by field so a damaged block falls back to
  * the default (off) rather than failing the import.
+ *
+ * The job (`job`: project, client, place, date, status) and a profile's own
+ * sheet words (`measurement.sheet`), see `model/deliverableFields.ts`, are
+ * additive within v8 on the same terms, and are emitted only when set. The
+ * company, logo and people of an export are never written to a session.
  *
  * Older v1..v7 files parse with no loss: the new optional fields just
  * read as undefined, and the Viewer falls back to its current state. A v7
@@ -366,6 +372,8 @@ export interface InspectionSession {
   layerGroups?: SessionLayerGroup[];
   /** The reference plane's settings, a view setting; absent when it was never used. */
   referencePlane?: WorkplaneSettings;
+  /** The job an exported drawing names (project, client, place, date, status). Additive within v8; emitted only when set. */
+  job?: JobDetails;
   /**
    * Shown or hidden state of each generated scene overlay (contours, drainage
    * lines, access map), keyed by overlay id. Additive within v8 and read
@@ -496,6 +504,9 @@ export function serializeSession(
   const groups = sanitizeLayerGroups(session.layerGroups);
   if (groups.length > 0) doc.layerGroups = groups;
   if (session.referencePlane) doc.referencePlane = session.referencePlane;
+  // The job's own fields (project, client, place, date, status); only when any is set.
+  const job = cleanJob(session.job);
+  if (!isEmptyFields(job)) doc.job = job;
   const overlayVisibility = sanitizeOverlayVisibility(session.overlayVisibility);
   if (overlayVisibility) doc.overlayVisibility = overlayVisibility;
   if (session.upFrame) doc.upFrame = { axis: session.upFrame.axis, basis: session.upFrame.basis };
@@ -714,6 +725,8 @@ export function parseSession(text: string): InspectionSession {
   if (layerGroups.length > 0) out.layerGroups = layerGroups;
   const referencePlane = parseWorkplaneSettings(raw.referencePlane);
   if (referencePlane) out.referencePlane = referencePlane;
+  const job = cleanJob(raw.job);
+  if (!isEmptyFields(job)) out.job = job;
   const overlayVisibility = sanitizeOverlayVisibility(raw.overlayVisibility);
   if (overlayVisibility) out.overlayVisibility = overlayVisibility;
   // v8. The project frame. Version-independent on read, like the other
@@ -1667,6 +1680,9 @@ function parseMeasurements(v: unknown): Measurement[] {
       if (typeof item.profileCoverageNote === 'string' && item.profileCoverageNote !== '') {
         m.profileCoverageNote = item.profileCoverageNote;
       }
+      // Additive: the user's own words for the exported sheets.
+      const sheet = cleanProfileFields(item.sheet);
+      if (!isEmptyFields(sheet)) m.sheet = sheet;
     } else if (k === 'volume') {
       const volume = parseVolumeRecord(item.volume);
       if (volume) m.volume = volume;

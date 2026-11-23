@@ -135,10 +135,13 @@ describe('figure and report exports describe the scan they captured', () => {
 
   it('the profile sheet captures its CRS and unit system first', () => {
     const body = memberBody(MEASUREPANEL, 'private async _buildProfileSheet(');
-    const awaitAt = body.indexOf('await loadProfilePdf()');
+    const awaitAt = body.indexOf('await loadProfileExport()');
     expect(awaitAt).toBeGreaterThan(-1);
     expect(body.slice(awaitAt)).not.toMatch(/getProfileExportContext\(\)/);
     expect(body.slice(awaitAt)).not.toMatch(/getUnitSystem\(\)/);
+    // Both reach the flow as values, and the flow has no way to read them again.
+    expect(body.slice(awaitAt)).toMatch(/context, unitSystem,/);
+    expect(readFileSync(new URL('../src/ui/profileExportFlow.ts', import.meta.url), 'utf8')).not.toMatch(/getProfileExportContext|getUnitSystem/);
   });
 
   it('the terrain report captures the Inspector summary first', () => {

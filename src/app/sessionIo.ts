@@ -19,6 +19,7 @@
  * Part of the v0.6 decomposition (see `docs/architecture/architecture-map.md`).
  */
 
+import { setJobDetails } from '../model/deliverableFields';
 import { heldCutAxes, sessionUpAxisNote } from './sessionUpAxisNote';
 import type { LayerUpFrame } from '../geo/frame/layerUpFrame';
 import type { Viewer } from '../render/Viewer';
@@ -816,6 +817,9 @@ export async function importSession(
     if (work.layerGroups) deps.restoreLayerGroups(work.layerGroups);
     // A view setting, additive within v8: absent leaves the plane as it is.
     if (session.referencePlane) deps.restoreReferencePlane?.(session.referencePlane);
+    // The job's fields, additive within v8. The session's own job, or none: a
+    // sheet must not carry the client of the work that was open before.
+    setJobDetails(session.job ?? {});
     // Overlays are rebuilt by re-running their analysis; the saved shown or
     // hidden state is applied when each one is next generated. A file
     // without the field clears any earlier preference.

@@ -253,6 +253,9 @@ export const loadComputeTerrainCoreAsync = () =>
  */
 export const loadProfilePdf = () => import('./render/measure/profilePdf');
 
+/** Load the profile export dialog and its flow, on a profile's Export PDF. */
+export const loadProfileExport = () => import('./ui/profileExportFlow');
+
 /**
  * Load the contour map-sheet PDF builder (also pulls in pdf-lib). Only reached
  * when the user clicks "Export map (PDF)" on the Analyse panel — routed here so

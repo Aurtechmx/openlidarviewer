@@ -76,7 +76,7 @@ describe('style dispatch', () => {
       expect(Buffer.from(a).equals(Buffer.from(b))).toBe(true);
       // The larger type can take more sheets than Classic; it never drops a row.
       const { texts: classicTexts, bytes: c } = await drawn(base());
-      const stationsIn = (ts: string[]): number => ts.filter((t) => /^0\+\d{3}\.\d{2}$/.test(t)).length;
+      const stationsIn = (ts: string[]): number => ts.filter((t) => /^0\+\d{3}(\.\d{2})?$/.test(t)).length;
       expect(stationsIn(texts)).toBeGreaterThanOrEqual(stationsIn(classicTexts));
       for (const row of ['Length (horizontal)', 'Class exclusion', 'Read scope']) expect(texts).toContain(row);
       expect((await PDFDocument.load(a)).getPageCount()).toBeGreaterThanOrEqual((await PDFDocument.load(c)).getPageCount());
@@ -229,15 +229,15 @@ describe('figures', () => {
 
 describe('fitColumns', () => {
   const b = (n: number) => Array.from({ length: n }, (_, i) => `l${i}`);
-  it('sets every block whole, down the columns', () => {
-    const r = fitColumns([b(2), b(2), b(1)], 3, 3);
+  it('sets every block whole, and spreads them across the columns', () => {
+    const r = fitColumns([b(2), b(2), b(1)], 3, 3, 'T');
     expect(r.left).toBe(0);
-    expect(r.placed.map((q) => [q.col, q.row])).toEqual([[0, 0], [1, 0], [1, 2]]);
+    expect(r.placed.map((q) => [q.col, q.row])).toEqual([[0, 0], [1, 0], [2, 0]]);
   });
   it('says where the rest are when they do not fit', () => {
-    const r = fitColumns([b(2), b(3), b(2), b(3)], 3, 3);
+    const r = fitColumns([b(2), b(3), b(2), b(3)], 3, 3, 'T');
     expect(r.left).toBe(1);
-    expect(r.placed.at(-1)).toEqual({ col: 2, row: 2, lines: ['Every note is on the method sheet.'] });
+    expect(r.placed.at(-1)).toEqual({ col: 2, row: 2, lines: ['T'] });
     for (const q of r.placed) expect(q.row + q.lines.length).toBeLessThanOrEqual(3);
   });
 });

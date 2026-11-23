@@ -6,6 +6,7 @@
  * state through {@link SessionSnapshotDeps}. The provenance builders are
  * optional: the recovery journal loads them only after an analysis exists.
  */
+import { jobDetails } from '../model/deliverableFields';
 import type { Viewer } from '../render/Viewer';
 import type { PointCloud } from '../model/PointCloud';
 import type { ViewStateBundle } from '../io/viewState';
@@ -229,6 +230,7 @@ export function serializeActiveSession(
     crs: deps.crs() ?? undefined,
     layerGroups: deps.layerGroups(),
     referencePlane: deps.referencePlane?.(),
+    job: jobDetails(),
     overlayVisibility: overlayRegistry.snapshot(),
   });
 }

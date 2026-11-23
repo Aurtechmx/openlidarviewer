@@ -12,12 +12,15 @@
  * styled sheet states exactly what the Classic sheet states. This module only
  * draws. The sheets that follow are profileSheetPages.ts's.
  */
-import { setCharacterSpacing, type PDFDocument, type PDFFont, type PDFPage } from 'pdf-lib';
+import { rgb, setCharacterSpacing, type PDFDocument, type PDFFont, type PDFImage, type PDFPage } from 'pdf-lib';
 import { encodePng } from '../../export/sheetKit/png';
 import { stripSheetRaster, type SheetReliefInput } from '../../export/sheetKit/contourSheetModel';
 import type { SheetFonts } from '../../export/sheetKit/fonts';
 import { clipPolyline, drawPaper, pdfColor, sheetText, sheetTextRight, sheetTextWidth, wrapSheetText } from '../../export/sheetKit/primitives';
 import type { SheetRgb } from '../../export/sheetKit/tokens';
+import type { ProfileWords } from '../../export/localizeProfile';
+import type { ProfileSheetKey } from '../../i18n/deliverables/profileSheet';
+import type { DeliverableStatus, ProfileDeliverable } from '../../model/deliverableFields';
 import type { ContourFeatureModel } from '../../terrain/contour/contourFeatureModel';
 import { PROFILE_TYPE, STEEP_PERCENT, type ProfilePalette } from './profileSheetPalette';
 import type { ProfileChartSample } from './types';
@@ -90,6 +93,13 @@ export interface StyledProfileSheet {
   readonly doc: PDFDocument;
   readonly tokens: ProfilePalette;
   readonly fonts: SheetFonts;
+  /** The export language and number style. Text in this record is already in them. */
+  readonly words: ProfileWords;
+  /** The user's own words, printed as typed. */
+  readonly deliverable: ProfileDeliverable;
+  readonly logo: PDFImage | null;
+  /** The paper's name, for the print statement. */
+  readonly paper: string;
   readonly title: string;
   readonly project: string;
   readonly subtitle: string;
@@ -134,6 +144,8 @@ export type { SheetStyle } from '../../export/sheetKit/tokens';
 export { embedSheetFonts } from '../../export/sheetKit/fonts';
 export { profilePalette } from './profileSheetPalette';
 
+/** The height the sheet's lower half is laid out on, points. */
+const A3_H = 841.89;
 /** Left and right page margins of the furniture. */
 const M = 48;
 /** The drawing's left edge, and the room kept to its right for the relief dimension. */
@@ -150,6 +162,7 @@ interface Pen {
   readonly page: PDFPage;
   readonly f: SheetFonts;
   readonly t: ProfilePalette;
+  readonly w: ProfileWords;
 }
 interface Box { x0: number; y0: number; x1: number; y1: number }
 
@@ -172,6 +185,13 @@ export function fitLine(s: string, font: PDFFont, size: number, w: number, f: Sh
   return `${chars.join('')}...`;
 }
 
+/** The largest size up to `max`, and not below the set's floor, at which `s` fits `w`. */
+function fitSize(s: string, font: PDFFont, max: number, w: number, f: SheetFonts): number {
+  let size = max;
+  while (size > PROFILE_TYPE.small && sheetTextWidth(s, font, size, f) > w) size -= 0.25;
+  return Math.max(size, PROFILE_TYPE.small);
+}
+
 /** A large heading set slightly tight. */
 export function drawDisplay(page: PDFPage, s: string, x: number, y: number, size: number, f: SheetFonts, color: SheetRgb): void {
   page.pushOperators(setCharacterSpacing(-size * 0.02));
@@ -181,11 +201,13 @@ export function drawDisplay(page: PDFPage, s: string, x: number, y: number, size
 
 /** Draw sheet one. The page footer is stamped by the caller once the page count is known. */
 export async function drawStyledProfileSheet(page: PDFPage, s: StyledProfileSheet): Promise<void> {
-  const t = s.tokens, f = s.fonts, p: Pen = { page, f, t }, T = PROFILE_TYPE;
+  const t = s.tokens, f = s.fonts, p: Pen = { page, f, t, w: s.words }, T = PROFILE_TYPE, W = s.words;
   drawPaper(page, t);
   const PW = page.getWidth(), PH = page.getHeight();
   const plotW = PW - X0 - RIGHT_ROOM;
   const top = (v: number): number => PH - v;
+  // Everything from the section's foot down is placed from the bottom edge, so the section takes up a paper's extra or missing height.
+  const low = (v: number): number => A3_H - v;
   const hasPlan = s.extras?.plan != null;
 
   // ── header ───────────────────────────────────────────────────────────────
@@ -201,21 +223,28 @@ export async function drawStyledProfileSheet(page: PDFPage, s: StyledProfileShee
     title = title.map((ln) => fitLine(ln, f.sansBold, tsz, TW, f));
   }
   title.forEach((ln, i) => drawDisplay(page, ln, X0 - 2, top(title.length > 1 ? 46 + i * 23 : 66), tsz, f, t.ink));
+  if (s.logo) drawLogo(page, s.logo, M - 12, top(74), X0 - M - 8, 50, t);
+  if (s.deliverable.company) text(p, fitLine(s.deliverable.company, f.sansBold, T.label, 560, f), X0, top(22), T.label, { font: f.sansBold, color: t.dim });
   const suit = wrapSheetText(s.suitability, f.sans, T.label, 240, f);
-  text(p, 'Preliminary', PW - M, top(44), T.value, { font: f.sansBold, align: 'right' });
+  text(p, W.say(STATUS_KEY[s.deliverable.status ?? 'preliminary']), PW - M, top(44), T.value, { font: f.sansBold, align: 'right' });
   suit.slice(0, 2).forEach((ln, i) => text(p, ln, PW - M, top(60 + i * 13), T.label, { color: t.dim, align: 'right' }));
   const hx = X0 + Math.max(...title.map((ln) => sheetTextWidth(ln, f.sansBold, tsz, f))) + 28;
   const hw = PW - M - 262 - hx;
   let psz: number = T.value;
   while (psz > T.small && sheetTextWidth(s.project, f.sansBold, psz, f) > hw) psz -= 0.5;
   text(p, fitLine(s.project, f.sansBold, psz, hw, f), hx, top(49), psz, { font: f.sansBold });
-  text(p, fitLine(s.subtitle, f.sans, T.body, hw, f), hx, top(66), T.body, { color: t.dim });
+  // A long subtitle takes two lines, a little smaller.
+  if (sheetTextWidth(s.subtitle, f.sans, T.body, f) <= hw) text(p, s.subtitle, hx, top(66), T.body, { color: t.dim });
+  else {
+    const [one = '', ...rest] = wrapSheetText(s.subtitle, f.sans, T.label, hw, f);
+    [one, rest.join(' ')].forEach((ln, i) => text(p, fitLine(ln, f.sans, T.label, hw, f), hx, top(64 + i * 13), T.label, { color: t.dim }));
+  }
 
   // ── scales ───────────────────────────────────────────────────────────────
   // Page tops, points from the top edge.
   const planTop = 90, planH = hasPlan ? 104 : 14;
   const secTop = planTop + planH + 52, secBot = 544, baseBot = 626;
-  const sectionBottom = top(secBot), sectionTop = top(secTop), sectionH = sectionTop - sectionBottom;
+  const sectionBottom = low(secBot), sectionTop = top(secTop), sectionH = sectionTop - sectionBottom;
   const len = s.lengthM;
   // The same guard as the Classic sheet: a corrupt sample can make the length or
   // the relief non-finite, and nothing below may loop or scale on one.
@@ -236,33 +265,33 @@ export async function drawStyledProfileSheet(page: PDFPage, s: StyledProfileShee
 
   // ── plan strip ───────────────────────────────────────────────────────────
   if (hasPlan && len > 0 && scales) {
-    side('Plan', s.unitsVerified === false ? null : `1:${formatScaleDenominator(scales.horizontal)}`, top(planTop + 12));
+    side(W.say('plan'), s.unitsVerified === false ? null : `1:${W.num(formatScaleDenominator(scales.horizontal))}`, top(planTop + 12));
     await drawPlanStrip(page, s, { x: X0, y: top(planTop + planH), w: drawW, h: planH }, len);
   } else {
-    side('Plan', null, top(planTop + 10));
+    side(W.say('plan'), null, top(planTop + 10));
     if (s.planMissingNote) text(p, s.planMissingNote, X0, top(planTop + 10), T.label, { color: t.dim });
   }
 
   if (!scales) {
-    text(p, 'No ground line to draw: the profile has no sampled heights.', X0, (sectionTop + sectionBottom) / 2, T.head, { color: t.dim });
-    drawNotes(p, s, top(748), top(812), PW);
+    text(p, W.say('noLine'), X0, (sectionTop + sectionBottom) / 2, T.head, { color: t.dim });
+    drawNotes(p, s, low(748), low(812), PW);
     return;
   }
 
   // ── scale statement and key ──────────────────────────────────────────────
   // The ratios a reader scales off the paper, then the stretch and the print size, as Classic states them.
   const ratios = s.scaleRatios ? s.scaleRatios(scales.horizontal, scales.vertical) : null;
-  const stretch = [ratios, verticalScaleStatement(scales.exaggeration), 'print at 100% on A3'].filter(Boolean).join('  ·  ');
+  const stretch = [ratios, W.translate(verticalScaleStatement(scales.exaggeration)), W.say('printAt', { u_paper: s.paper })].filter(Boolean).join('  ·  ');
   text(p, stretch, X0, sectionTop + 27, T.label, { font: f.sansBold });
   drawKey(p, s, X0, sectionTop + 10);
   // The unit of the height axis, over its figures.
-  text(p, `${s.heightWord.replace(/ \(.*\)$/, '')}, ${s.unit}`, X0 - 16, sectionTop + 10, T.small, { color: t.dim, align: 'right' });
+  text(p, `${shortHeight(s)}, ${s.unit}`, X0 - 16, sectionTop + 10, T.small, { color: t.dim, align: 'right' });
 
   // ── section ──────────────────────────────────────────────────────────────
   for (let n = 0, eD = scales.firstTick; eD <= scales.axisHiM * s.k + 1e-9 && n < 64; n++, eD = scales.firstTick + n * scales.tickStep) {
     const y = mapY(eD / s.k);
     line(p, X0, y, X1, y, t.rule, 0.5);
-    if (y > sectionBottom + 4) text(p, eD.toFixed(scales.tickStep < 0.1 ? 2 : 1), X0 - 16, y - 3.6, T.label, { color: t.dim, align: 'right' });
+    if (y > sectionBottom + 4) text(p, W.num(eD.toFixed(scales.tickStep < 0.1 ? 2 : 1)), X0 - 16, y - 3.6, T.label, { color: t.dim, align: 'right' });
   }
   const rets = s.extras?.returns;
   if (rets && rets.count > 0) await drawReturns(page, s, rets, { x: X0, y: sectionBottom, w: drawW, h: sectionH }, mapX, mapY);
@@ -274,7 +303,7 @@ export async function drawStyledProfileSheet(page: PDFPage, s: StyledProfileShee
   }
   if (cur.length) runs.push(cur);
   // The ground, cut along the line and standing on the station band.
-  page.drawRectangle({ x: X0, y: top(baseBot), width: drawW, height: sectionBottom - top(baseBot), color: pdfColor(t.base) });
+  page.drawRectangle({ x: X0, y: low(baseBot), width: drawW, height: sectionBottom - low(baseBot), color: pdfColor(t.base) });
   for (const run of runs) {
     if (run.length < 2) continue;
     const d = `${path([[run[0]![0], sectionBottom], ...run, [run[run.length - 1]![0], sectionBottom]], PH)} Z`;
@@ -319,22 +348,38 @@ export async function drawStyledProfileSheet(page: PDFPage, s: StyledProfileShee
     let sz: number = T.lead;
     while (sz > 11 && sheetTextWidth(s.figures.relief, f.sansBold, sz, f) > w) sz -= 0.5;
     text(p, s.figures.relief, x + 10, mid - 3, sz, { font: f.sansBold });
-    text(p, `${s.unit} relief`, x + 10, mid - 17, T.small, { color: t.dim });
+    text(p, W.say('relief', { u_unit: s.unit }), x + 10, mid - 17, T.small, { color: t.dim });
   }
 
   // ── station band, on the ground's base ───────────────────────────────────
-  drawBand(p, s, { X0, X1, drawW, len, mapX, rows: [top(563), top(582), top(601), top(620)], tick: sectionBottom });
+  drawBand(p, s, { X0, X1, drawW, len, mapX, rows: [low(563), low(582), low(601), low(620)], tick: sectionBottom });
 
   // ── grade chart ──────────────────────────────────────────────────────────
-  const gradeBase = s.unitsVerified === false
-    ? `${GRADE_BASE_M} units of chainage (unit unverified)`
-    : `${GRADE_BASE_M} ${s.unit === 'ft' ? 'm of chainage (shown in feet)' : 'm of chainage'}`;
-  drawGrade(p, s, { X0, X1, len, mapX, y0: top(688), y1: top(650), label: `Grade % over ${gradeBase}` });
+  const gradeKey = s.unitsVerified === false ? 'gradeOverUnits' : s.unit === 'ft' ? 'gradeOverFt' : 'gradeOverM';
+  drawGrade(p, s, { X0, X1, len, mapX, y0: low(688), y1: low(650), label: W.say(gradeKey, { n: GRADE_BASE_M }) });
 
   // ── true proportion ──────────────────────────────────────────────────────
-  drawTrueShape(p, s, runs, { X0, drawW, len, top: top(708), bottom: top(738), exaggeration: scales.exaggeration, mapY, PW });
+  drawTrueShape(p, s, runs, { X0, drawW, len, top: low(708), bottom: low(738), exaggeration: scales.exaggeration, mapY, PW });
 
-  drawNotes(p, s, top(748), top(812), PW);
+  drawNotes(p, s, low(748), low(812), PW);
+}
+
+/** The catalog row of each status. */
+export const STATUS_KEY: Readonly<Record<DeliverableStatus, ProfileSheetKey>> = { preliminary: 'preliminary', review: 'forReview', issued: 'issued' };
+
+/** The height word without its bracketed reference, in the export language. */
+function shortHeight(s: StyledProfileSheet): string {
+  return s.words.translate(s.heightWord.replace(/ \(.*\)$/, ''));
+}
+
+/** The user's logo scaled to fit a box, keeping its shape, against the box's left edge. On dark paper it stands on a white plate, so a dark logo still reads. */
+export function drawLogo(page: PDFPage, img: PDFImage, x: number, y: number, w: number, h: number, t: ProfilePalette): void {
+  const dark = t.style === 'dark', pad = dark ? 4 : 0;
+  const k = Math.min((w - 2 * pad) / img.width, (h - 2 * pad) / img.height);
+  if (!(k > 0) || !Number.isFinite(k)) return;
+  const iw = img.width * k, ih = img.height * k, by = y + (h - ih) / 2;
+  if (dark) page.drawRectangle({ x, y: by - pad, width: iw + 2 * pad, height: ih + 2 * pad, color: rgb(1, 1, 1) });
+  page.drawImage(img, { x: x + pad, y: by, width: iw, height: ih });
 }
 
 /** The sampled line between two chainages, ends interpolated; empty when a gap is in the way. */
@@ -347,6 +392,12 @@ function reachOf(stations: StyledProfileSheet['stations'], from: number, to: num
   for (const s of stations) if (s.chainage > from && s.chainage < to) { if (s.elevation == null) return []; out.push([s.chainage, s.elevation]); }
   out.push([to, b]);
   return out;
+}
+
+/** A numbered dot on the line. */
+function drawMarkDot(p: Pen, x: number, y: number, n: string, r: number): void {
+  p.page.drawCircle({ x, y, size: r, color: pdfColor(p.t.paper), borderColor: pdfColor(p.t.ink), borderWidth: 1.1 });
+  text(p, n, x, y - r * 0.5, Math.max(r * 1.4, PROFILE_TYPE.small), { font: p.f.sansBold, align: 'mid' });
 }
 
 /** The badge at one end of the line. */
@@ -368,13 +419,14 @@ function drawKey(p: Pen, s: StyledProfileSheet, x: number, y: number): void {
     x += w + 6 + sheetTextWidth(label, f.sans, size, f) + 20;
   };
   item(20, s.groundLineLabel, (a) => line(p, a, mid, a + 20, mid, t.surface, 2));
-  if (s.stations.some((st) => st.elevation == null)) item(20, 'Across a gap with no accepted returns', (a) => line(p, a, mid, a + 20, mid, t.surface, 1, [3, 3]));
+  if (s.stations.some((st) => st.elevation == null)) item(20, p.w.say('keyGap'), (a) => line(p, a, mid, a + 20, mid, t.surface, 1, [3, 3]));
   const dot = (c: SheetRgb) => (a: number): void => { p.page.drawCircle({ x: a + 4, y: mid, size: 2.6, color: pdfColor(c) }); };
   if (s.extras?.returns?.ground) {
-    item(8, 'Ground returns', dot(t.groundDot));
-    item(8, 'Other returns', dot(t.otherDot));
-  } else if (s.extras?.returns) item(8, 'Returns in the corridor', dot(t.otherDot));
-  if ((s.extras?.indexCrossings?.length ?? 0) > 0) item(9, 'Crosses an index contour', (a) => drawDiamond(p, a + 4.5, mid, 3.6));
+    item(8, p.w.say('keyGround'), dot(t.groundDot));
+    item(8, p.w.say('keyOther'), dot(t.otherDot));
+  } else if (s.extras?.returns) item(8, p.w.say('keyCorridor'), dot(t.otherDot));
+  if ((s.extras?.indexCrossings?.length ?? 0) > 0) item(9, p.w.say('keyCrossing'), (a) => drawDiamond(p, a + 4.5, mid, 3.6));
+  if ((s.deliverable.marks?.length ?? 0) > 0) item(12, p.w.say('keyMarked'), (a) => drawMarkDot(p, a + 5, mid, '1', 5));
 }
 
 interface Frame {
@@ -426,12 +478,12 @@ function drawCallouts(p: Pen, s: StyledProfileSheet, g: Frame): void {
     p.page.drawRectangle({ x: b.x0 - 3, y: b.y0 - 2, width: b.x1 - b.x0 + 6, height: b.y1 - b.y0 + 2, color: pdfColor(t.paper), opacity: 0.86 });
   };
   const W = (q: string, font: PDFFont, size: number): number => sheetTextWidth(q, font, size, f);
-  const fmt = (m: number): string => `${(m * s.k).toFixed(2)} ${s.unit}`;
+  const fmt = (m: number): string => `${p.w.num((m * s.k).toFixed(2))} ${s.unit}`;
 
   const hi = g.covered.reduce((a, b) => (b.elevation > a.elevation ? b : a)), lo = g.covered.reduce((a, b) => (b.elevation < a.elevation ? b : a));
   const drawLeader = (x: number, y: number, b: Box): void => { const [m, n] = leaderTo(x, y, b); line(p, m.x, m.y, n.x, n.y, t.ink, 0.8); };
-  const extreme = (q: { chainage: number; elevation: number }, word: string, up: boolean): void => {
-    const label = `${word} ${fmt(q.elevation)} at ${s.formatStation(q.chainage)}`;
+  const extreme = (q: { chainage: number; elevation: number }, key: 'highestAt' | 'lowestAt', up: boolean): void => {
+    const label = p.w.say(key, { v: fmt(q.elevation), u_s: s.formatStation(q.chainage) });
     const w = W(label, f.sansBold, T.figure), x = g.mapX(q.chainage), y = g.mapY(q.elevation);
     const b = place(w, T.figure, around(x, y, w, T.figure, up), up, [x, y]) ?? place(w, T.figure, around(x, y, w, T.figure, !up), !up, [x, y]);
     if (!b) return;
@@ -440,13 +492,14 @@ function drawCallouts(p: Pen, s: StyledProfileSheet, g: Frame): void {
     drawLeader(x, y, b);
     text(p, label, b.x0, b.y0 + 2, T.figure, { font: f.sansBold });
   };
-  extreme(lo, 'Lowest', false);
+  extreme(lo, 'lowestAt', false);
   if (s.steepest && s.figures.steepest !== '-') {
     const c = (s.steepest.fromChainage + s.steepest.toChainage) / 2;
     const h = interpolateStationHeight(s.stations.map((st) => ({ chainage: st.chainage, height: st.elevation })), c);
     if (h != null) {
-      const base = `${GRADE_BASE_M} ${s.unitsVerified === false ? 'units' : 'm'}`;
-      const l1 = `Steepest over ${base}: ${s.figures.steepest} %`, l2 = `${s.formatStation(s.steepest.fromChainage)} to ${s.formatStation(s.steepest.toChainage)}`;
+      const base = p.w.say(s.unitsVerified === false ? 'baseUnits' : 'baseM', { n: GRADE_BASE_M });
+      const l1 = p.w.say('steepestOver', { b: base, g: s.figures.steepest });
+      const l2 = p.w.say('range', { u_a: s.formatStation(s.steepest.fromChainage), u_b: s.formatStation(s.steepest.toChainage) });
       const w = Math.max(W(l1, f.sansBold, T.head), W(l2, f.sans, T.label)), x = g.mapX(c), y = g.mapY(h);
       const b = place(w, 32, around(x, y + 24, w, 32, true), true, [x, y]) ?? place(w, 32, around(x, y - 8, w, 32, false), false, [x, y]);
       if (b) {
@@ -458,10 +511,25 @@ function drawCallouts(p: Pen, s: StyledProfileSheet, g: Frame): void {
       }
     }
   }
-  extreme(hi, 'Highest', true);
+  extreme(hi, 'highestAt', true);
+  // The user's marked points: a numbered dot on the line, and its words where they fit. All are listed on the method sheet.
+  (s.deliverable.marks ?? []).forEach((mk, i) => {
+    const h = interpolateStationHeight(s.stations.map((st) => ({ chainage: st.chainage, height: st.elevation })), mk.chainage);
+    if (h == null || mk.chainage > s.lengthM) return;
+    const x = g.mapX(mk.chainage), y = g.mapY(h), w = W(mk.text, f.sansBold, T.label);
+    const spots = [...around(x, y + 10, w, T.label, true)];
+    const b = place(w, T.label, spots, true, [x, y + 6]) ?? place(w, T.label, around(x, y - 10, w, T.label, false), false, [x, y - 6]);
+    if (b) {
+      const up = b.y0 > y;
+      if (up) plate(b);
+      drawLeader(x, y + (up ? 6 : -6), b);
+      text(p, mk.text, b.x0, b.y0 + 2, T.label, { font: f.sansBold });
+    }
+    drawMarkDot(p, x, y, String(i + 1), 6.5);
+  });
   const a = g.covered[0]!, z = g.covered[g.covered.length - 1]!;
   if (z.chainage > a.chainage && s.figures.endpoint !== '-') {
-    const label = `End to end ${s.figures.endpoint} %`, w = W(label, f.sans, T.label);
+    const label = p.w.say('endToEnd', { g: s.figures.endpoint }), w = W(label, f.sans, T.label);
     const spots: Array<[number, number]> = [];
     for (const u of [0.25, 0.75, 0.35, 0.65, 0.5, 0.15, 0.85]) {
       const x = g.mapX(a.chainage + (z.chainage - a.chainage) * u), y = g.mapY(a.elevation + (z.elevation - a.elevation) * u);
@@ -478,15 +546,15 @@ function drawBand(p: Pen, s: StyledProfileSheet, g: {
   const { f, t } = p, T = PROFILE_TYPE, size = T.figure;
   const stationsIn = s.stations.map((st) => ({ chainage: st.chainage, height: st.elevation }));
   // Whole chainages drop their decimals together, so more of them fit.
-  const sta = (m: number): string => s.formatStation(m).replace(/\.00$/, '');
+  const sta = (m: number): string => s.formatStation(m).replace(/[.,]00$/, '');
   const peakH = Math.max(Math.abs(s.minM ?? 0), Math.abs(s.maxM ?? 0)) * s.k;
   const colW = Math.max(sheetTextWidth(sta(Math.floor(g.len)), f.sansBold, size, f), sheetTextWidth(`${(s.minM ?? 0) < 0 ? '-' : ''}${peakH.toFixed(2)}`, f.sans, size, f)) + 8;
   const band = buildRoundChainageBand({ stations: stationsIn, lengthM: g.len, k: s.k, mapX: g.mapX, columnWpt: colW, startClearColumns: 1.4 });
   // The count is of every return the sampler kept, whatever its class.
-  const per = s.unitsVerified === false ? 'unit' : 'm';
+  const per = s.unitsVerified === false ? p.w.say('unit') : 'm';
   // The section heading carries the reference in full; the row head has the margin's width.
-  const heads = ['Chainage', `${s.heightWord.replace(/ \(.*\)$/, '')} ${s.unit}`, 'Grade %', `Returns per ${per}`];
-  heads.forEach((h, r) => text(p, h, g.X0 - 16, g.rows[r]!, T.label, { color: t.dim, align: 'right' }));
+  const heads = [p.w.say('chainage'), `${shortHeight(s)} ${s.unit}`, p.w.say('gradePct'), p.w.say('returnsPer', { u_per: per })];
+  heads.forEach((h, r) => text(p, h, g.X0 - 16, g.rows[r]!, fitSize(h, f.sans, T.label, g.X0 - 28, f), { color: t.dim, align: 'right' }));
   const n = band.columns.length;
   band.columns.forEach((c, i) => {
     const put = (txt: string, row: number, font: PDFFont): void => {
@@ -495,11 +563,11 @@ function drawBand(p: Pen, s: StyledProfileSheet, g: {
       else text(p, txt, c.x, g.rows[row]!, size, { font, align: 'mid' });
     };
     put(sta(c.chainage), 0, f.sansBold);
-    put(c.height == null ? '-' : (c.height * s.k).toFixed(2), 1, f.sans);
+    put(c.height == null ? '-' : p.w.num((c.height * s.k).toFixed(2)), 1, f.sans);
     if (i > 0 && i < n - 1) line(p, c.x, g.tick, c.x, g.tick - 5, t.baseDim, 0.8);
     const next = band.columns[i + 1];
     if (next && c.height != null && next.height != null && next.chainage > c.chainage) {
-      const v = (100 * (next.height - c.height)) / (next.chainage - c.chainage), txt = v.toFixed(1);
+      const v = (100 * (next.height - c.height)) / (next.chainage - c.chainage), txt = p.w.num(v.toFixed(1));
       const steep = Math.abs(v) >= STEEP_PERCENT, mid = (c.x + next.x) / 2, w = sheetTextWidth(txt, f.sansBold, size, f);
       if (steep) p.page.drawRectangle({ x: mid - w / 2 - 6, y: g.rows[2]! - 3.4, width: w + 12, height: 15, color: pdfColor(t.hot) });
       text(p, txt, mid, g.rows[2]!, size, { font: steep ? f.sansBold : f.sans, color: steep ? t.hotInk : t.baseDim, align: 'mid' });
@@ -517,8 +585,8 @@ function drawBand(p: Pen, s: StyledProfileSheet, g: {
     p.page.drawRectangle({ x: x0, y, width: Math.max(0.3, x1 - x0 - Math.min(0.8, (x1 - x0) * 0.2)), height: (c / peak) * 13, color: pdfColor(t.solid) });
   }
   // Beside the bars it describes.
-  text(p, `accepted returns per ${per},`, g.X1 + 10, g.rows[3]! + 12, T.small, { color: t.dim });
-  text(p, `tallest bar ${peak < 1 ? peak.toFixed(2) : Math.round(peak).toLocaleString('en-US')}`, g.X1 + 10, g.rows[3]!, T.small, { color: t.dim });
+  text(p, p.w.say('acceptedPer', { u_per: per }), g.X1 + 10, g.rows[3]! + 12, T.small, { color: t.dim });
+  text(p, p.w.say('tallestBar', { n: peak < 1 ? peak.toFixed(2) : Math.round(peak).toLocaleString('en-US') }), g.X1 + 10, g.rows[3]!, T.small, { color: t.dim });
 }
 
 function drawGrade(p: Pen, s: StyledProfileSheet, g: {
@@ -547,7 +615,7 @@ function drawGrade(p: Pen, s: StyledProfileSheet, g: {
       run.push([g.mapX(q.chainage), gy(Math.max(-lim, Math.min(lim, q.grade)))]);
     }
     flush();
-  } else text(p, 'no grade: the line is shorter than the base, or a gap is in the way', g.X0 + 8, mid + 5, T.small, { color: t.dim });
+  } else text(p, p.w.say('noGrade'), g.X0 + 8, mid + 5, T.small, { color: t.dim });
   line(p, g.X0, mid, g.X1, mid, t.ink, 0.7);
   // Chainage ticks under the grade chart.
   const step = niceGradeStep(g.len * s.k / 6);
@@ -555,7 +623,7 @@ function drawGrade(p: Pen, s: StyledProfileSheet, g: {
   for (let v = 0, n = 0; v <= g.len * s.k + 1e-9 && n < MAX_TICKS && step > 0 && Number.isFinite(step); v += step, n++) {
     const x = g.mapX(v / s.k);
     line(p, x, g.y0, x, g.y0 - 3, t.ink, 0.6);
-    text(p, v.toFixed(step >= 1 ? 0 : Math.min(3, Math.ceil(-Math.log10(step) - 1e-9))), x, g.y0 - 13, T.small, { color: t.dim, align: 'mid' });
+    text(p, p.w.num(v.toFixed(step >= 1 ? 0 : Math.min(3, Math.ceil(-Math.log10(step) - 1e-9)))), x, g.y0 - 13, T.small, { color: t.dim, align: 'mid' });
   }
 }
 
@@ -569,7 +637,7 @@ function drawTrueShape(p: Pen, s: StyledProfileSheet, runs: ReadonlyArray<Readon
   // Smaller than the drawing by one factor both ways, so the strip and the length beside it fit.
   const q = Math.min(0.5, relief > 0 ? room / (relief * ptPerM) : 0.5);
   const w = g.drawW * q, y0 = g.bottom;
-  text(p, 'True shape', g.X0 - 16, g.bottom + 11, T.label, { font: f.sansBold, align: 'right' });
+  text(p, p.w.say('trueShape'), g.X0 - 16, g.bottom + 11, T.label, { font: f.sansBold, align: 'right' });
   const slope = (g.mapY(1) - g.mapY(0)) || 1;
   for (const run of runs) {
     if (run.length < 2) continue;
@@ -581,8 +649,8 @@ function drawTrueShape(p: Pen, s: StyledProfileSheet, runs: ReadonlyArray<Readon
   while (sz > 14 && sheetTextWidth(`${s.figures.length} ${s.unit}`, f.sansBold, sz, f) > 190) sz -= 1;
   const L = `${s.figures.length} ${s.unit}`, lw = sheetTextWidth(L, f.sansBold, sz, f);
   text(p, L, tx, y0 + 4, sz, { font: f.sansBold });
-  text(p, 'long, measured along the line', tx + lw + 12, y0 + 15, T.label, { color: t.dim });
-  text(p, 'The same section with no vertical exaggeration', tx + lw + 12, y0 + 2, T.label, { color: t.dim });
+  text(p, p.w.say('longAlong'), tx + lw + 12, y0 + 15, T.label, { color: t.dim });
+  text(p, p.w.say('sameSection'), tx + lw + 12, y0 + 2, T.label, { color: t.dim });
 }
 
 /** The notes and facts in three columns. What does not fit is on the method sheet, which carries them all. */
@@ -590,9 +658,19 @@ function drawNotes(p: Pen, s: StyledProfileSheet, yTop: number, yBot: number, PW
   const { f, t } = p, size = PROFILE_TYPE.small, step = size * 1.26;
   line(p, M, yTop, PW - M, yTop, t.ink, 1);
   const gap = 26, cw = (PW - 2 * M - 2 * gap) / 3;
+  const block = titleBlock(p, s);
+  const cols = block.length > 0 ? 2 : 3;
   const rows = Math.max(1, Math.floor((yTop - yBot - 4) / step));
-  const blocks = [...s.notes.map((n, i) => `${i + 1}. ${n}`), ...(s.facts.length ? [s.facts.join(' ')] : [])].map((n) => wrapSheetText(n, f.sans, size, cw, f));
-  const fit = fitColumns(blocks, rows, 3);
+  const blocks = [...s.notes.map((n, i) => `${i + 1}. ${n}`), ...(s.facts.length ? [s.facts.join(' ')] : []), ...(s.deliverable.notes ? [`${p.w.say('projectNotes')}: ${s.deliverable.notes.replace(/\n+/g, ' ')}`] : [])].map((n) => wrapSheetText(n, f.sans, size, cw, f));
+  // The user's title block: label and value, two pairs a row, whole on the technical notes.
+  const bx = M + 2 * (cw + gap), pw = (cw - 14) / 2;
+  block.slice(0, rows * 2).forEach(([k, v], i) => {
+    const x = bx + (i % 2) * (pw + 14), y = yTop - 14 - Math.floor(i / 2) * step;
+    const kw = Math.min(sheetTextWidth(k, f.sans, size, f) + 6, pw * 0.55);
+    text(p, fitLine(k, f.sans, size, kw - 4, f), x, y, size, { color: t.dim });
+    text(p, fitLine(v, f.sansBold, size, pw - kw, f), x + kw, y, size, { font: f.sansBold });
+  });
+  const fit = fitColumns(blocks, rows, cols, p.w.say('notesOnMethod'));
   fit.placed.forEach(({ col, row, lines }) => lines.forEach((ln, i) => text(p, ln, M + col * (cw + gap), yTop - 14 - (row + i) * step, size, { color: t.ink })));
 }
 
@@ -600,7 +678,7 @@ function drawNotes(p: Pen, s: StyledProfileSheet, yTop: number, yBot: number, PW
  * Set whole blocks of lines into columns of `rows`. When some do not fit, the
  * last line that is free says they continue on the method sheet.
  */
-export function fitColumns(blocks: readonly string[][], rows: number, cols: number): { placed: Array<{ col: number; row: number; lines: string[] }>; left: number } {
+export function fitColumns(blocks: readonly string[][], rows: number, cols: number, tail: string): { placed: Array<{ col: number; row: number; lines: string[] }>; left: number } {
   const run = (depth: number, reserve: boolean): { placed: Array<{ col: number; row: number; lines: string[] }>; left: number; col: number; row: number } => {
     const placed: Array<{ col: number; row: number; lines: string[] }> = [];
     let col = 0, row = 0, i = 0;
@@ -621,8 +699,18 @@ export function fitColumns(blocks: readonly string[][], rows: number, cols: numb
     return { placed: all.placed, left: 0 };
   }
   const some = run(rows, true);
-  return { placed: [...some.placed, { col: cols - 1, row: rows - 1, lines: ['Every note is on the method sheet.'] }], left: some.left };
+  return { placed: [...some.placed, { col: cols - 1, row: rows - 1, lines: [tail] }], left: some.left };
 }
+
+/** The job fields the sheet's title block prints, in the order a drawing gives them. */
+export function titleBlockRows(d: ProfileDeliverable, w: ProfileWords): Array<[string, string]> {
+  const rows: Array<[ProfileSheetKey, string | undefined]> = [
+    ['fClient', d.client], ['fDrawing', d.drawingNo], ['fLocation', d.location], ['fRevision', d.revision],
+    ['fPrepared', d.preparedBy], ['fDate', d.date], ['fChecked', d.checkedBy], ['fApproved', d.approvedBy],
+  ];
+  return rows.flatMap(([k, v]): Array<[string, string]> => (v ? [[w.say(k), v]] : []));
+}
+const titleBlock = (p: Pen, s: StyledProfileSheet): Array<[string, string]> => titleBlockRows(s.deliverable, p.w);
 
 /** Grade in percent over a fixed base of chainage, at the base's midpoint. Null where an end has no height. */
 export function gradeSeries(
@@ -653,10 +741,10 @@ export function planMissingNote(extras: ProfileSheetExtras | null | undefined): 
 }
 
 /** The print-scale words Classic states, for the styled header: ratios, or that the units are unknown. */
-export function profileScaleRatios(unitsUnverified: boolean): (horizontal: number, vertical: number) => string {
+export function profileScaleRatios(unitsUnverified: boolean, w: ProfileWords): (horizontal: number, vertical: number) => string {
   return (h, v) => unitsUnverified
-    ? 'Horizontal and vertical scale: units unknown'
-    : `Horizontal 1:${formatScaleDenominator(h)}  ·  Vertical 1:${formatScaleDenominator(v)}`;
+    ? w.say('ratiosUnknown')
+    : w.say('ratios', { h: formatScaleDenominator(h), v: formatScaleDenominator(v) });
 }
 
 function niceGradeStep(span: number): number {
@@ -713,7 +801,7 @@ function toBytes(c: SheetRgb): [number, number, number] {
 
 async function drawPlanStrip(page: PDFPage, s: StyledProfileSheet, box: { x: number; y: number; w: number; h: number }, lengthM: number): Promise<void> {
   const plan = s.extras!.plan!;
-  const t = s.tokens, f = s.fonts, p: Pen = { page, f, t };
+  const t = s.tokens, f = s.fonts, p: Pen = { page, f, t, w: s.words };
   const PH = page.getHeight();
   const ax = plan.a[0], ay = plan.a[1];
   const dx = plan.b[0] - ax, dy = plan.b[1] - ay;
@@ -756,7 +844,7 @@ async function drawPlanStrip(page: PDFPage, s: StyledProfileSheet, box: { x: num
   const cx = box.x + box.w + 44, cy = box.y + box.h - 22;
   const R = (a: number, r: number): string => `${(cx + Math.cos(ang + a) * r).toFixed(2)} ${(PH - (cy + Math.sin(ang + a) * r)).toFixed(2)}`;
   page.drawSvgPath(`M ${R(0, 15)} L ${R(2.65, 11)} L ${R(Math.PI, 5)} L ${R(-2.65, 11)} Z`, { x: 0, y: PH, color: pdfColor(t.ink) });
-  text(p, 'Grid N', cx, cy - 32, PROFILE_TYPE.small, { color: t.dim, align: 'mid' });
+  text(p, p.w.say('gridNorth'), cx, cy - 32, PROFILE_TYPE.small, { color: t.dim, align: 'mid' });
 }
 
 /**

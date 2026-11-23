@@ -149,11 +149,14 @@ import {
 import { FT_PER_M as FEET_PER_METRE } from '../../units/units';
 import { winAnsiSafe as sharedWinAnsiSafe } from '../../winAnsiText';
 import { clipText, wrapText } from './profileText';
+import type { ProfileSheetExtras, SheetStyle } from './profileSheetStyled';
+import type { ExportLocale } from '../../i18n/exportLocale';
+import type { IssueRow, ProfileDeliverable } from '../../model/deliverableFields';
+import type { ProfileSetContext } from './profileSheetPages';
 import {
-  countsPerStation, drawStyledProfileSheet, embedSheetFonts, planMissingNote, profilePalette, profileScaleRatios,
-  type ProfileSheetExtras, type SheetStyle,
-} from './profileSheetStyled';
-import { drawMethodSheets, drawNotesSheet, drawScheduleSheets, drawSetFooters, type ProfileSetContext } from './profileSheetPages';
+  countsPerStation, drawFollowingSheets, drawStyledProfileSheet, embedLogo, embedSheetFonts, NO_SOURCE_RECORD, planMissingNote, profilePalette,
+  profileScaleRatios, profileWords, residencyWord, STATUS_KEY, type MethodSheetInput,
+} from './profilePdfParts';
 
 
 export interface ProfilePdfInput {
@@ -242,6 +245,14 @@ export interface ProfilePdfInput {
   readonly style?: SheetStyle;
   /** What a styled sheet one draws beyond the ground line, and its font loader. Ignored by Classic. */
   readonly extras?: ProfileSheetExtras | null;
+  /** What the user adds: title, job, people, logo, notes. Classic prints the ones its title block has room for. */
+  readonly deliverable?: ProfileDeliverable | null;
+  /** Export language and number style of a styled set. Classic is in English. */
+  readonly locale?: ExportLocale;
+  /** The paper of a styled set. Classic is A3. */
+  readonly paper?: ProfilePaper;
+  /** Called with an English sentence that has no row in the export language, for the test that keeps the catalog whole. */
+  readonly onUntranslated?: (text: string) => void;
   readonly loadFont?: (name: string) => Promise<Uint8Array>;
 }
 
@@ -259,6 +270,13 @@ export interface ProfilePdfInput {
 const PAGE_W = 1190.55;
 const PAGE_H = 841.89;
 const SHEET_SIZE = 'A3';
+
+/** The papers a styled set is laid out on, points and the name it prints. */
+export const PROFILE_PAPERS = {
+  a3: { size: [PAGE_W, PAGE_H], name: 'A3' },
+  tabloid: { size: [1224, 792], name: 'Tabloid (11 x 17 in)' },
+} as const;
+export type ProfilePaper = keyof typeof PROFILE_PAPERS;
 const M = 48;
 
 /**
@@ -696,6 +714,11 @@ interface SetIdentity {
   readonly crs: string | null;
   /** The numbered general notes, already composed. */
   readonly notes: readonly string[];
+  /** The user's own title-block fields, when given. */
+  readonly status?: string;
+  readonly drawingNo?: string;
+  readonly revision?: string;
+  readonly issues?: readonly IssueRow[];
 }
 
 /**
@@ -777,11 +800,11 @@ function drawTitleBlock(
   };
 
   cell(x0, 235, top, 'PROJECT', set.project.trim() !== '' ? set.project : 'Unnamed', true);
-  cell(c1, 117.5, top, 'STATUS', 'PRELIMINARY', true);
+  cell(c1, 117.5, top, 'STATUS', set.status ?? 'PRELIMINARY', true);
   cell(c2, TITLE_BLOCK_W - 352.5, top, 'SHEET', `${index} / ${total}`, true);
   fitCell(x0, 235, rowA, 'HORIZONTAL CRS', set.crs ?? 'Not recorded', set.crs == null);
-  cell(c1, 117.5, rowA, 'DRAWING NO.', 'Not assigned', true);
-  cell(c2, TITLE_BLOCK_W - 352.5, rowA, 'REV.', '-', false);
+  cell(c1, 117.5, rowA, 'DRAWING NO.', set.drawingNo ?? 'Not assigned', true);
+  cell(c2, TITLE_BLOCK_W - 352.5, rowA, 'REV.', set.revision ?? '-', false);
 
   trackedText(p, 'TERRAIN PROFILE', x0 + 7, rowB - 14, T_TB_EYEBROW, f.font, INK_MUTED, 1.1);
   // The profile's own name, on the eyebrow line and right-aligned, when the
@@ -818,7 +841,7 @@ function drawTitleBlock(
  * date against an issue nobody made would also be a record of an event that
  * did not happen.
  */
-function drawIssueStrip(p: PDFPage, f: Faces): void {
+function drawIssueStrip(p: PDFPage, f: Faces, issues: readonly IssueRow[]): void {
   const x0 = M;
   const x1 = PAGE_W - M;
   const w = x1 - x0;
@@ -844,6 +867,14 @@ function drawIssueStrip(p: PDFPage, f: Faces): void {
     put(p, c.head, x + 7, ISSUE_TOP - 11, T_ISSUE_HEAD, f.bold, INK);
     x += c.w;
   }
+  // The issues the user recorded, the latest that fit.
+  issues.slice(-(ISSUE_ROWS - 1)).forEach((r, n) => {
+    let cx = x0;
+    [r.issue, r.description, r.date, r.by, r.checked].forEach((v, q) => {
+      put(p, clipText(v, f.font, T_ISSUE_HEAD, cols[q]!.w - 14), cx + 7, ISSUE_TOP - 11 - (n + 1) * ISSUE_ROW_H, T_ISSUE_HEAD, f.font, INK);
+      cx += cols[q]!.w;
+    });
+  });
 }
 
 /**
@@ -897,7 +928,7 @@ function drawFurniture(
   drawSheetBorder(p);
   drawGeneralNotes(p, f, set.notes);
   drawTitleBlock(p, f, set, sheet, index, total);
-  drawIssueStrip(p, f);
+  drawIssueStrip(p, f, set.issues ?? []);
   // The sheet size, in the corner, so a reader who prints this knows what
   // paper the stated scales are true on.
   trackedText(
@@ -955,12 +986,17 @@ export async function buildProfilePdf(input: ProfilePdfInput): Promise<Uint8Arra
   // title rather than the raw filename; setLanguage tags the document language.
   // (A full tagged-structure tree is out of reach with this PDF library; these
   // are the honest, supported accessibility hooks — see ReportPdfRenderer.)
-  const pdfTitle = input.name?.trim()
-    ? `Terrain Profile - ${input.name.trim()}`
+  // A styled set speaks the export language; Classic is in English.
+  const isStyled = input.style === 'light' || input.style === 'dark';
+  const words = profileWords(isStyled ? input.locale : undefined, input.onUntranslated);
+  const own: ProfileDeliverable = input.deliverable ?? {};
+  const sheetName = own.title ?? input.name?.trim() ?? '';
+  const pdfTitle = sheetName
+    ? words.say('docTitle', { u_name: sheetName })
     : 'Terrain Profile';
   doc.setTitle(pdfTitle, { showInWindowTitleBar: true });
-  doc.setLanguage('en-US');
-  doc.setAuthor('OpenLiDARViewer');
+  doc.setLanguage(words.tag);
+  doc.setAuthor(own.preparedBy ?? own.company ?? 'OpenLiDARViewer');
   // Pin the Info-dictionary dates. pdf-lib defaults CreationDate and ModDate to
   // the wall clock at `create()`, so two identical builds either side of a
   // second boundary stop being byte-identical. See src/pdfInfoDate.ts.
@@ -968,7 +1004,8 @@ export async function buildProfilePdf(input: ProfilePdfInput): Promise<Uint8Arra
   doc.setCreationDate(infoStamp);
   doc.setModificationDate(infoStamp);
   // Light and Dark take the sheet kit's fonts; Classic embeds as it always did, so its bytes hold.
-  const tokens = input.style === 'light' || input.style === 'dark' ? profilePalette(input.style) : null;
+  const tokens = isStyled && input.style ? profilePalette(input.style) : null;
+  const paper = PROFILE_PAPERS[input.paper ?? 'a3'];
   const styled = tokens != null;
   const sheetFonts = tokens ? await embedSheetFonts(doc, input.loadFont) : null;
   const f: Faces = sheetFonts
@@ -1055,25 +1092,30 @@ export async function buildProfilePdf(input: ProfilePdfInput): Promise<Uint8Arra
         : ''),
   ];
   const set: SetIdentity = {
-    project: projectName ?? input.name,
-    profileName: projectName != null ? input.name : null,
+    project: own.project ?? projectName ?? input.name,
+    profileName: own.title ?? (projectName != null ? input.name : null),
     crs: crsLabel,
     notes,
+    ...(own.status && own.status !== 'preliminary' ? { status: words.say(STATUS_KEY[own.status]).toUpperCase() } : {}),
+    ...(own.drawingNo ? { drawingNo: own.drawingNo } : {}),
+    ...(own.revision ? { revision: own.revision } : {}),
+    ...(own.issues ? { issues: own.issues } : {}),
   };
   const sheets: EmittedSheet[] = [];
   const bare = (s: string) => s.replace(/\s+(m|ft)$/, '').replace(/%$/, '');
-  const figure = (s: string) => bare(s).replace(` ${UNIT_UNVERIFIED}`, '');
+  const figure = (s: string) => words.num(bare(s).replace(` ${UNIT_UNVERIFIED}`, ''));
+  const sheetNotes = notes.map((n) => words.translate(n));
   // A styled sheet names the unverified unit once, so its stations carry the figure alone.
-  const sheetStation = (c: number): string => formatStation(c, system).replace(` ${UNIT_UNVERIFIED}`, '');
+  const sheetStation = (c: number): string => words.num(formatStation(c, system).replace(` ${UNIT_UNVERIFIED}`, ''));
   // The unit word on a styled sheet: an unverified unit is named, never printed as metres.
-  const sheetUnit = system === 'unverified' ? 'units' : unit;
+  const sheetUnit = system === 'unverified' ? words.say('units') : unit;
 
   // ── Sheet 1: the longitudinal profile ──────────────────────────────────
   const len = stats.length;
   const styledSet: ProfileSetContext | null = tokens && sheetFonts
     ? {
-        doc, size: [PAGE_W, PAGE_H], tokens, fonts: sheetFonts, profileName: input.name?.trim() || 'Terrain profile', project: set.project,
-        crs: crsLabel, suitability: NOT_SURVEY_GRADE_NOTE, generated: `${when.toISOString().slice(0, 16).replace('T', ' ')} UTC`,
+        doc, size: paper.size, tokens, fonts: sheetFonts, words, deliverable: own, logo: await embedLogo(doc, own.logoDataUrl), profileName: sheetName || words.say('untitled'), project: set.project,
+        crs: crsLabel, suitability: words.translate(NOT_SURVEY_GRADE_NOTE), generated: `${when.toISOString().slice(0, 16).replace('T', ' ')} UTC`,
         stations: stats.stations, lengthM: len, pages: [],
       }
     : null;
@@ -1082,18 +1124,21 @@ export async function buildProfilePdf(input: ProfilePdfInput): Promise<Uint8Arra
   const span = stats.reliefSpan;
   if (styled) {
     // The Light or Dark sheet one, in the sheet kit's style.
-    const page = doc.addPage([PAGE_W, PAGE_H]);
+    const page = doc.addPage([paper.size[0], paper.size[1]]);
     styledSet!.pages.push(page);
+    const endName = (l: string, n: string | undefined): string => (n ? `${l} (${n})` : l);
+    const ends = { u_a: endName('A', own.endA), u_b: endName('B', own.endB) };
     await drawStyledProfileSheet(page, {
       doc, tokens: tokens!, fonts: sheetFonts!,
-      title: input.name?.trim() || 'Terrain profile',
+      words, deliverable: own, logo: styledSet!.logo, paper: paper.name,
+      title: sheetName || words.say('untitled'),
       project: set.project,
-      subtitle: input.corridorWidthM != null
-        ? `Longitudinal section A to B, corridor ${(input.corridorWidthM * k).toFixed(2)} ${sheetUnit} each side`
-        : 'Longitudinal section A to B, automatic corridor',
-      suitability: NOT_SURVEY_GRADE_NOTE,
+      subtitle: own.subtitle ?? (input.corridorWidthM != null
+        ? words.say('subtitle', { ...ends, w: `${(input.corridorWidthM * k).toFixed(2)} ${sheetUnit}` })
+        : words.say('subtitleAuto', ends)),
+      suitability: words.translate(NOT_SURVEY_GRADE_NOTE),
       stations: stats.stations, lengthM: len, minM: minEl, maxM: maxEl, k, unit: sheetUnit, heightWord,
-      unitsVerified: system !== 'unverified', scaleRatios: profileScaleRatios(system === 'unverified'),
+      unitsVerified: system !== 'unverified', scaleRatios: profileScaleRatios(system === 'unverified', words),
       requestedExaggeration: input.verticalExaggeration ?? null,
       formatStation: sheetStation,
       figures: {
@@ -1104,15 +1149,17 @@ export async function buildProfilePdf(input: ProfilePdfInput): Promise<Uint8Arra
       },
       steepest: baseGrade,
       facts: [
-        `CRS: ${crsLabel ?? 'not georeferenced'}.`,
-        `Vertical: ${heightWord}${datumKnown && input.verticalDatum ? `, ${input.verticalDatum}` : ''}.`,
-        ...(input.extras?.returns ? [`Returns drawn: ${input.extras.returns.count.toLocaleString('en-US')}.`] : []),
-        `Coverage: ${(stats.coverage * 100).toFixed(0)} % of stations, ${gapCount === 1 ? '1 gap' : `${gapCount} gaps`}.`,
+        words.say('factCrs', { u_crs: crsLabel ?? words.say('notGeoreferenced') }),
+        datumKnown && input.verticalDatum
+          ? words.say('factVerticalDatum', { t_w: heightWord, u_datum: input.verticalDatum })
+          : words.say('factVertical', { t_w: heightWord }),
+        ...(input.extras?.returns ? [words.say('factReturns', { n: input.extras.returns.count.toLocaleString('en-US') })] : []),
+        words.say('factCoverage', { n: (stats.coverage * 100).toFixed(0), g: gapCount === 1 ? words.say('gap1') : words.say('gapN', { n: gapCount }) }),
       ],
-      notes,
-      groundLineLabel: legend.seriesName,
+      notes: sheetNotes,
+      groundLineLabel: words.translate(legend.seriesName),
       countsPerStation: countsPerStation(input.samples),
-      planMissingNote: planMissingNote(input.extras),
+      planMissingNote: ((n) => (n ? words.translate(n) : null))(planMissingNote(input.extras)),
       extras: input.extras ?? null,
     });
   } else {
@@ -1620,28 +1667,14 @@ export async function buildProfilePdf(input: ProfilePdfInput): Promise<Uint8Arra
   ];
 
   if (styledSet) {
-    drawNotesSheet(styledSet, notesRows.map((r) => ({ ...r, group: noteGroup(r.item) })));
-    drawScheduleSheets(styledSet, {
-      formatStation: sheetStation, k, unit: sheetUnit,
-      heightHead: heightWord.replace(/ \(.*\)$/, ''),
-    });
-    drawMethodSheets(styledSet, {
-      sections: methodSections({
+    drawFollowingSheets(styledSet, {
+      method: {
         legend, record, reference, crs: crsLabel, verticalDatum: datumKnown ? (input.verticalDatum ?? null) : null,
         datumKnown, reduction: reduction ?? null, pointsRead: input.withheld ?? null,
-      }),
-      notes,
-      sources: record == null ? null : record.sources.map((src) => ({
-        name: src.displayName !== '' ? src.displayName : '-', id: src.layerId, classification: src.classification,
-        read: src.streaming ? 'streaming' : 'static', accepted: formatCount(src.acceptedCount), contributed: src.contributed ? 'yes' : 'no',
-        residency: residencyWord(src),
-      })),
-      noSources: NO_SOURCE_RECORD,
-      totalAccepted: record == null ? null : formatCount(record.acceptedCount),
-      station: input.extras?.station ?? null,
-      formatStation: sheetStation, k, unit: sheetUnit,
+      },
+      rows: notesRows, notes: sheetNotes, scanName: projectName, declaredDatum: input.verticalDatum ?? null,
+      station: input.extras?.station ?? null, heightWord, formatStation: sheetStation, k, unit: sheetUnit,
     });
-    drawSetFooters(styledSet, 1, doc.getPageCount());
     return doc.save();
   }
 
@@ -1668,54 +1701,6 @@ export async function buildProfilePdf(input: ProfilePdfInput): Promise<Uint8Arra
   sheets.forEach((s, i) => drawFurniture(s.page, f, set, s.identity, i + 1, total));
 
   return doc.save();
-}
-
-/** The group a technical note is set under on a styled sheet. */
-function noteGroup(item: string): string {
-  if (/grad(e|ient)|^steepest/i.test(item)) return 'Grade';
-  if (/^(samples|corridor|sources|derived|class|read)/i.test(item)) return 'Sampling';
-  if (/^(vertical|horizontal)/i.test(item)) return 'Reference';
-  return 'Geometry';
-}
-
-const NO_SOURCE_RECORD =
-  'No provenance record was attached to this export, so the contributing sources, ' +
-  'their classification and the read scope are not recorded on this sheet.';
-
-function residencyWord(s: ProfileProvenance['sources'][number]): string {
-  return !s.streaming ? '-' : s.residency === true ? 'complete' : s.residency === false ? 'incomplete' : 'unknown';
-}
-
-/** The method sheet's sections for a styled set: the sentences the Classic method sheet prints. */
-function methodSections(m: MethodSheetInput): Array<{ head: string; lines: string[] }> {
-  return [
-    { head: 'Derived series', lines: m.legend.lines.slice(1) },
-    {
-      head: 'Height reference',
-      lines: [
-        `${heightLabel(m.reference)}. See general note 2.`,
-        `Vertical datum: ${m.verticalDatum ?? 'not declared'}`,
-        `Horizontal CRS: ${m.crs ?? 'not georeferenced'}`,
-        ...(m.datumKnown ? [] : [DATUM_CONFLICT_MEASURE_NOTICE]),
-      ],
-    },
-    ...(m.reduction == null ? [] : [{
-      head: 'Sample basis',
-      lines: [
-        `${describeSampleBasis(m.reduction)}.`,
-        describeSampleCaveat(m.reduction),
-        ...(m.pointsRead == null ? [] : [`${formatCount(m.pointsRead.analysedPoints)} of ${formatCount(m.pointsRead.sourcePoints)} sample points were analysed.`]),
-      ],
-    }]),
-    ...(m.record == null ? [] : [{
-      head: 'Read scope',
-      lines: [
-        'See general note 3.',
-        `Method ${m.record.method}, corridor definition version ${String(m.record.corridorVersion)}, record version ${String(m.record.recordVersion)}, captured ${m.record.capturedAt}.`,
-        ...(m.record.upDegenerate ? ['The scene up axis was degenerate when this sample was taken, so the heights were not measured along a usable vertical.'] : []),
-      ],
-    }]),
-  ];
 }
 
 /** One cell of the KPI band. `span` buys a cell the width of two. */
@@ -1875,18 +1860,6 @@ interface TechnicalNotesInput {
     remark: string;
     limit?: boolean;
   }>;
-}
-
-interface MethodSheetInput {
-  readonly legend: DerivedSurfaceLegend;
-  readonly record: ProfileProvenance | null;
-  readonly reference: VerticalReference;
-  readonly crs: string | null;
-  readonly verticalDatum: string | null;
-  readonly datumKnown: boolean;
-  /** How the loaded cloud was reduced, or null for a whole cloud. */
-  readonly reduction: SourceReduction | null;
-  readonly pointsRead: WithheldReadCounts | null;
 }
 
 /**

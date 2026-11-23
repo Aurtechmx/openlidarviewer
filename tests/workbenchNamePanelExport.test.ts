@@ -376,15 +376,20 @@ describe('there is one assembly of the sheet, not one per control', () => {
     'utf8',
   );
 
+  const flow = readFileSync(fileURLToPath(new URL('../src/ui/profileExportFlow.ts', import.meta.url)), 'utf8');
+
   it('reaches the builder from a single call site', () => {
-    const calls = source.match(/\bbuildProfilePdf\s*\(/g) ?? [];
-    expect(calls.length).toBe(1);
+    expect(flow.match(/\bbuildProfilePdf\s*\(/g) ?? []).toHaveLength(1);
+    expect(source).not.toMatch(/\bbuildProfilePdf\b/);
+    // And the flow itself from one place in the panel, which both controls run.
+    expect(source.match(/\bexportProfileSheet\s*\(/g) ?? []).toHaveLength(1);
   });
 
   it('reaches it through the shared assembly, never with a literal of its own', () => {
-    const at = source.indexOf('buildProfilePdf(');
+    const at = flow.indexOf('buildProfilePdf(');
     expect(at).toBeGreaterThan(0);
-    expect(source.slice(at, at + 200)).toContain('profilePdfInputFor(');
+    expect(flow.slice(0, at)).toContain('profilePdfInputFor(s,');
+    expect(flow.slice(at, at + 60)).toContain('...input');
   });
 
   it('exposes the export by id, which is the route the dock takes', () => {

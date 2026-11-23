@@ -32,6 +32,7 @@ import { profileExportContext, profileWorkbenchSource, type ProfileExportContext
 import { datasetIdentity } from '../geo/CrsService';
 import { buildResultModel } from './measureResultModel';
 import type { OwnedItem } from './measurementOwnership';
+import { isEmptyFields } from '../model/deliverableFields';
 import { copyToClipboard } from '../ui/clipboard';
 import { loadMeasurePanel, loadProfileWorkbenchRuntime, loadProfileSheetExtras } from '../lazyChunks';
 import { retryableOnce, mountPanelOnce } from './lazySurfaceLoad';
@@ -398,6 +399,13 @@ export function createMeasurePanelMount(deps: MeasurePanelMountDeps): MeasurePan
       // scan's selection does not relabel it. Local and unknown frames return
       // nulls and the PDF keeps its "— (not georeferenced)" fallback.
       getProfileExportContext: profileSource,
+      getProfileSheet: (id) => viewer.measure.getMeasurements().find((m) => m.id === id)?.sheet,
+      onProfileSheet: (id, fields) => {
+        const m = viewer.measure.getMeasurements().find((x) => x.id === id);
+        if (!m) return;
+        if (isEmptyFields(fields)) delete m.sheet; else m.sheet = fields;
+        deps.onRenamed?.(); // a change to saved work that redraws nothing
+      },
       getProfileSheetExtras: async (id, s) =>
         (await loadProfileSheetExtras()).profileSheetExtras(viewer, id, s, deps.terrainFor ?? (() => null)),
       getProfileExportFrame: (id) => {
