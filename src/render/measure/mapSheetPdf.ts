@@ -238,6 +238,13 @@ export interface MapSheetInput {
   readonly measurements?: readonly SheetMeasurement[] | null;
 }
 
+/**
+ * Distance of Classic's outer neatline from the page edge, points: outside the
+ * grid labels and the footer, so no rule crosses them, and inside what desktop
+ * printers can reach.
+ */
+const NEATLINE = 20;
+
 const SHEET_PT: Record<SheetSize, readonly [number, number]> = {
   letter: [612, 792],
   a4: [595.28, 841.89],
@@ -560,7 +567,7 @@ export async function buildMapSheetPdf(input: MapSheetInput): Promise<Uint8Array
   // outer sheet neatline around the whole printable area — the finished-map
   // convention that reads as a deliverable rather than a screenshot.
   page.drawRectangle({ x: frame.x - 3, y: frame.y - 3, width: frame.w + 6, height: frame.h + 6, borderColor: FRAME, borderWidth: 0.4 });
-  page.drawRectangle({ x: M - 4, y: M - 4, width: PW - 2 * M + 8, height: PH - 2 * M + 8, borderColor: FRAME, borderWidth: 0.6 });
+  page.drawRectangle({ x: M - NEATLINE, y: M - NEATLINE, width: PW - 2 * (M - NEATLINE), height: PH - 2 * (M - NEATLINE), borderColor: FRAME, borderWidth: 0.6 });
 
   // ── purpose (Contour Studio deliverable) ───────────────────────────────────
   // Gated on the optional purpose facts: absent ⇒ nothing drawn and no page
@@ -676,7 +683,7 @@ function drawPurposeAppendix(
   };
 
   // Outer neatline, the same finished-sheet convention as page 1.
-  page.drawRectangle({ x: M - 4, y: M - 4, width: PW - 2 * M + 8, height: PH - 2 * M + 8, borderColor: FRAME, borderWidth: 0.6 });
+  page.drawRectangle({ x: M - NEATLINE, y: M - NEATLINE, width: PW - 2 * (M - NEATLINE), height: PH - 2 * (M - NEATLINE), borderColor: FRAME, borderWidth: 0.6 });
 
   let y = PH - M - 20;
   // ── header + purpose statement ─────────────────────────────────────────────
@@ -788,7 +795,7 @@ function drawMap(
     page.drawLine({ start: { x: tx.px, y: frame.y + frame.h }, end: { x: tx.px, y: frame.y + frame.h - 6 }, thickness: 0.5, color: FRAME });
     if (labelGrid) {
       const s = `${tx.w.toFixed(decX)}${georef ? 'E' : ''}`;
-      page.drawText(safe(s), { x: tx.px - font.widthOfTextAtSize(s, 6) / 2, y: frame.y + frame.h + 3, size: 6, font, color: DIM });
+      page.drawText(safe(s), { x: tx.px - font.widthOfTextAtSize(s, 6) / 2, y: frame.y + frame.h + 5, size: 6, font, color: DIM });
     }
   }
   for (const ty of ticksY) {
@@ -796,7 +803,8 @@ function drawMap(
     page.drawLine({ start: { x: frame.x + frame.w, y: ty.py }, end: { x: frame.x + frame.w - 6, y: ty.py }, thickness: 0.5, color: FRAME });
     if (labelGrid) {
       const s = `${ty.w.toFixed(decY)}${georef ? 'N' : ''}`;
-      page.drawText(safe(s), { x: frame.x - 3 - font.widthOfTextAtSize(s, 6), y: ty.py - 3, size: 6, font, color: DIM });
+      // Read bottom to top, inside the outer neatline and the printable area.
+      page.drawText(safe(s), { x: frame.x - 5, y: ty.py - font.widthOfTextAtSize(s, 6) / 2, size: 6, font, color: DIM, rotate: degrees(90) });
     }
   }
 

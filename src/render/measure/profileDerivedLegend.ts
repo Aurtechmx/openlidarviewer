@@ -242,7 +242,7 @@ function exclusionLine(
 function readLine(scope: SectionReadScope): string {
   switch (scope) {
     case 'full-static':
-      return 'Read: the full static sources.';
+      return 'Read: every loaded point of the static sources.';
     case 'partial-static':
       return 'Read: a truncated static source. The file holds fewer points than its header declares, so only the points read were sampled.';
     case 'resident-snapshot':

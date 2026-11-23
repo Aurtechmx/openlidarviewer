@@ -55,7 +55,7 @@ describe('ObjectPanel — space / object routing', () => {
     for (const field of [
       'Space scan', 'Dimensions (L×W×H)', 'Footprint area', 'Ceiling height',
       'Enclosed volume', 'Storeys', 'Planes', 'Walls', 'Capture quality',
-      'currently loaded / streamed',
+      'Based on the points loaded in the viewer',
     ]) {
       expect(text).toContain(field);
     }
@@ -229,7 +229,7 @@ describe('ObjectPanel — space / object routing', () => {
     expect(lead!.textContent).toMatch(/not a certified survey/i);
 
     // Every secondary caveat is still present in the DOM (collapsed, not gone).
-    expect(root.textContent).toContain('currently loaded / streamed');
+    expect(root.textContent).toContain('Based on the points loaded in the viewer');
     expect(root.textContent).toMatch(/pragmatic estimates, not a certified survey/);
   });
 

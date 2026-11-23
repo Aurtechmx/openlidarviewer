@@ -82,13 +82,13 @@ describe('spaceMetrics — interior', () => {
     expect(m.storyCount).toBe(1);
   });
 
-  it('reports honest capture quality with a streaming caveat', () => {
+  it('reports honest capture quality with the basis it was read from', () => {
     expect(m.quality.sampledPointCount).toBeGreaterThan(0);
     expect(m.quality.densityPerM2).toBeGreaterThan(0);
     expect(m.quality.meanSpacingM).toBeGreaterThan(0);
     expect(m.quality.coveragePct).toBeGreaterThan(50);
     expect(m.quality.hasRgb).toBe(false);
-    expect(m.reasons.some((r) => /currently loaded \/ streamed/.test(r))).toBe(true);
+    expect(m.reasons.some((r) => r === 'Based on the points loaded in the viewer.')).toBe(true);
   });
 
   it('leads with a "Preliminary — partial stream" caveat when residentOnly', () => {
@@ -97,7 +97,7 @@ describe('spaceMetrics — interior', () => {
     expect(partial.reasons[0]).toMatch(/^Preliminary —/);
     expect(partial.reasons[0]).toMatch(/will change as more loads/);
     // The generic "currently loaded" caveat is replaced, not stacked.
-    expect(partial.reasons.some((r) => /currently loaded \/ streamed/.test(r))).toBe(false);
+    expect(partial.reasons.some((r) => /loaded in the viewer/.test(r))).toBe(false);
     // A full (non-resident) gather keeps the milder caveat, not "Preliminary".
     expect(m.reasons[0]).not.toMatch(/^Preliminary —/);
   });

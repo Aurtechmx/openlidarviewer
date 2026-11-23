@@ -51,17 +51,17 @@ const SPACE_REPORT_CASES = {
 
 const FROZEN: Record<string, string> = {
   'empty:classic': '42dc9b89913a3e75b63878b41b66c8836bd7be487659a2b14216faa89ec80199',
-  'empty:dark': 'ca9afefb442a1eaa1cd6c327155287967891c08472a13a0adb4945ccc46c3943',
-  'empty:light': '5f3d120c900abf5f5dfd40953f3994bee9e0333e3ea54acaa83773e52a94c5e7',
-  'interior:classic': 'd00c46e2fc82b9857ffd0c27b1fa8a4ed6e27e33e57db1856fa65e9d0b388968',
-  'interior:dark': '80f182e1ee2e59ab591ef4aa01cccbedfa42f434cc1517f9b247e7e4c6deea19',
-  'interior:light': 'bc6bdedc8b47f005c5058eae1177cfc26db0262df7d480a6473eeb72934cad71',
-  'object:classic': 'f9c6e99f369dd13075dd1af1cab01771c191dd2d3190a37ce81b254ae5a13a84',
-  'object:dark': 'd329a1dda3f3b92061583f90fc2103577cbe58a635f54f8fbda36b88ce6cb4b2',
-  'object:light': '9d7bb91f3af0f1ec44f412d95a0a3afc9aa974360b63c3c681512e37c921f16e',
-  'unknownUnit:classic': '59dee66c7c96943d8f74083bd45ad40d69328fcc1e7d0de6d5cbdc68c48c037b',
-  'unknownUnit:dark': '78ded2bc71cb78c9c0010f1bfc5ca685e45a66dc006e71b946d0a64ea59716fb',
-  'unknownUnit:light': '0ed96e796bafdd859d4b2a3063a13a5b5b794f2697ba03296aabe1592966298a',
+  'empty:dark': '29435dc268d4d55d6a15b5f971bd8d1efd109812841e58305b40a78ec53755ef',
+  'empty:light': '67466e8f277528ea73066cfa244841a84de641824cbf7c2b5f75a7a211d90817',
+  'interior:classic': '724030aae26cedc90ebdb8222af5a4f36753e5972c412dab7e8ffe3f11cba78e',
+  'interior:dark': 'a21b02be67fba6ac782ddc8da6866ff04e8262955776bad6c40527f3a80a4c6a',
+  'interior:light': 'a94d98aa926f03c3bf7be33c5ac77fa9e5b270a9b3fa10754f8bebb0ca471b02',
+  'object:classic': 'e44762264775c3c190ae6fe1aeae2dc9fc2bab114636372a7ef26f1ced49b694',
+  'object:dark': '479fad59afb420aa80af539e4d474b9e12f8fa58644bd1a1c3e9dc4eee700574',
+  'object:light': 'a9de7e8434ccb36bcc3e69e7da3d554c1253c8cf1cf1da9e167d1a162854ca33',
+  'unknownUnit:classic': '0b5950d8beb70030d333dd046ad4352c45b26a634a4f7af6ad098ed52b7ba23c',
+  'unknownUnit:dark': '6bd49be874a1280126ab9d9164f299d71f94d56ed7f178db90b3b5c2ad5876f0',
+  'unknownUnit:light': 'b8792d40924b47aa7c95e6b608cd58dd0a0d1ab895ff7e45eb9d232f62e03ffd',
 };
 
 describe('English space reports are unchanged', () => {

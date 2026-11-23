@@ -590,7 +590,7 @@ function panelBlocks(
     if (input.relief) out.push({ key: 'Grid', value: `${fmtNum(input.relief.cellSize)} ${unit} cells` });
     out.push({ key: 'Interval', value: ctx.facts.interval });
     if (relief && Number.isFinite(relief.zMin)) {
-      out.push({ key: 'Relief', value: `${(relief.zMin + oz).toFixed(1)} - ${(relief.zMax + oz).toFixed(1)}${vSuffix}` });
+      out.push({ key: 'Relief', value: `${(relief.zMin + oz).toFixed(1)} – ${(relief.zMax + oz).toFixed(1)}${vSuffix}` });
       const drawn = relief.measuredCells + relief.filledCells;
       if (drawn > 0) out.push({ key: 'Ground', value: `${pct(relief.measuredCells, drawn)} measured, ${pct(relief.filledCells, drawn)} filled (dashed)` });
     }
@@ -605,11 +605,11 @@ function panelBlocks(
   const basisLines = (w: number, k: number): string[] =>
     ctx.facts.analysedBasis ? wrapSheetText(`Analysed basis: ${ctx.facts.analysedBasis}`, f.sans, SHEET_TYPE.note * k, w, f).slice(0, 4) : [];
   blocks.push({
-    height: (w, k) => SL(k) + dataBlockHeight(rows(), w, f, 64, k) + (shareLines(w, k).length + basisLines(w, k).length) * noteStep(k),
+    height: (w, k) => SL(k) + dataBlockHeight(rows(), w, f, 64, k) + SHEET_SPACE.xs * k + (shareLines(w, k).length + basisLines(w, k).length) * noteStep(k),
     draw: (x, y, w, k) => {
       let cy = drawSectionLabel(page, 'Data', x, y, w, t, f, k);
       cy = drawDataBlock(page, rows(), x, cy, w, t, f, 64, k);
-      cy += SHEET_TYPE.dataValue * 1.5 * k - noteStep(k);
+      cy += SHEET_TYPE.dataValue * 1.5 * k - noteStep(k) - SHEET_SPACE.xs * k;
       for (const ln of [...shareLines(w, k), ...basisLines(w, k)]) {
         cy -= noteStep(k);
         sheetText(page, ln, x, cy + noteStep(k), { font: f.sans, size: SHEET_TYPE.note * k, color: t.dim }, f);
@@ -678,7 +678,7 @@ function panelBlocks(
   const ACC_KEY_W = 128;
   interface Ln { text: string; color: SheetRgb; font: PDFFont }
   const accRows = (_w: number, k: number): DataRow[] => ctx.facts.accuracyRows.map(([label, value, short]) => ({
-    key: short && sheetTextWidth(label.toUpperCase(), f.sansBold, SHEET_TYPE.dataKey * k, f) > ACC_KEY_W * k - 6 ? short : label,
+    key: short && sheetTextWidth(label, f.sans, SHEET_TYPE.dataKey * k, f) > ACC_KEY_W * k - 6 ? short : label,
     value,
   }));
   const accText = (w: number, k: number): Ln[] => {

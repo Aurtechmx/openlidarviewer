@@ -27,7 +27,7 @@
  */
 
 import { PDFDocument, rgb, type PDFFont, type RGB } from 'pdf-lib';
-import { openReport } from '../../export/sheetKit/reportStyle';
+import { drawProvenanceRows, openReport, provenanceHeight, provenanceRows } from '../../export/sheetKit/reportStyle';
 import type { SheetStyle } from '../../export/sheetKit/tokens';
 import type { AnalyseContoursResult } from '../../terrain/contour/analyseContours';
 import {
@@ -134,6 +134,9 @@ async function buildTerrainReportPdfStyled(
   // ── paging state (the report can flow onto a second page) ────────────────
   let page = doc.addPage([PW, PH]);
   let y = PH - M;
+  // The lowest the body may reach. Classic keeps its reserved strip; Light and
+  // Dark use the page down to the margin, and the stamp measures its own room.
+  const floor = kit ? M + 12 : M + FOOTER_RESERVE;
 
   const text = (s: string, x: number, yy: number, sz: number, f: PDFFont = font, c = INK): void => {
     page.drawText(safe(s), { x, y: yy, size: sz, font: f, color: c });
@@ -147,12 +150,12 @@ async function buildTerrainReportPdfStyled(
 
   /** Ensure `need` points of vertical space remain above the footer; page-break otherwise. */
   const ensure = (need: number): void => {
-    if (y - need < M + FOOTER_RESERVE) newPage();
+    if (y - need < floor) newPage();
   };
 
   /** Like {@link ensure}, reporting whether it started a new page. */
   const broke = (need: number): boolean => {
-    if (y - need >= M + FOOTER_RESERVE) return false;
+    if (y - need >= floor) return false;
     newPage();
     return true;
   };
@@ -277,6 +280,7 @@ async function buildTerrainReportPdfStyled(
   // Long lines wrap with a hanging indent instead of leaving the sheet, and
   // the whole block moves to a fresh page when the body cursor sits inside it.
   const footerW = PW - 2 * M;
+  const rows = kit ? provenanceRows(content.provenanceLines, footerW, kit) : [];
   const stamp = content.provenanceLines.flatMap((line) =>
     wrapStampLine(font, line, footerW, STAMP_SIZE, STAMP_INDENT).map((seg, i) => ({
       seg,
@@ -288,22 +292,25 @@ async function buildTerrainReportPdfStyled(
   const note = wrapStampLine(bold, content.notSurveyGrade, footerW, NOTE_SIZE, 0);
   const noteTop = M - 4 + (note.length - 1) * NOTE_LEAD;
   // First stamp baseline: as low as possible while every line clears the note.
-  let fy0 = noteTop + 16 + (stamp.length - 1) * STAMP_LEAD;
+  let fy0 = kit ? noteTop + 22 + provenanceHeight(rows) : noteTop + 16 + (stamp.length - 1) * STAMP_LEAD;
   let headed = false;
-  if (y - 16 < fy0 + 12) {
+  if (y - 16 < fy0 + (kit ? 32 : 12)) {
     newPage();
     // Light and Dark: a page that holds only the stamp opens with a heading
     // and sets the stamp from the top, so it reads as the provenance page
     // rather than an empty page with a footer. Classic keeps its layout.
     if (kit) {
-      text('Provenance', M, y, 12, bold, INK);
       fy0 = y - 20;
-      headed = true;
     }
+  }
+  if (kit) {
+    text('Provenance', M, fy0 + 20, 12, bold, INK);
+    headed = true;
   }
   page.drawLine({ start: { x: M, y: fy0 + 12 }, end: { x: PW - M, y: fy0 + 12 }, thickness: headed ? 0.5 : 0.75, color: FRAME });
   let fy = fy0;
-  for (const s of stamp) {
+  if (kit) drawProvenanceRows(page, rows, M, fy - 2, kit);
+  else for (const s of stamp) {
     text(s.seg, s.x, fy, STAMP_SIZE, font, DIM);
     fy -= STAMP_LEAD;
   }

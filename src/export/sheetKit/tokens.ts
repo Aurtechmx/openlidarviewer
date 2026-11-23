@@ -83,7 +83,7 @@ export const SHEET_TYPE = {
   subtitle: SHEET_SCALE.base,
   section: SHEET_SCALE.small,
   legend: SHEET_SCALE.base,
-  dataKey: SHEET_SCALE.small,
+  dataKey: SHEET_SCALE.base,
   dataValue: SHEET_SCALE.base,
   tick: SHEET_SCALE.small,
   contourLabel: SHEET_SCALE.small,

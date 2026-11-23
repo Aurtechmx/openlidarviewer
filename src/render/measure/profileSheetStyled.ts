@@ -250,10 +250,10 @@ export async function drawStyledProfileSheet(page: PDFPage, s: StyledProfileShee
     // station needs one column of clear width, not a column and a half.
     const band = buildRoundChainageBand({ stations: stationsIn, lengthM: len, k: s.k, mapX, columnWpt: colW, startClearColumns: 1 });
     const rowsY = [bandTop - bandRowH, bandTop - 2 * bandRowH, bandTop - 3 * bandRowH, bandTop - 4 * bandRowH];
-    const heads = ['CHAINAGE', `${s.heightWord.toUpperCase()} ${s.unit}`, 'GRADE %', 'GROUND RETURNS'];
+    const heads = ['Chainage', `${s.heightWord} ${s.unit}`, 'Grade %', 'Returns per m'];
     page.drawRectangle({ x: left, y: bandBottom, width: drawW, height: bandTop - bandBottom, color: pdfColor(t.panel), borderColor: pdfColor(t.outline), borderWidth: t.weight.frame });
     for (let r = 1; r < 4; r++) page.drawLine({ start: { x: left, y: rowsY[r - 1]! }, end: { x: left + drawW, y: rowsY[r - 1]! }, thickness: 0.4, color: rule });
-    heads.forEach((h, r) => sheetTextRight(page, h, left - 5, rowsY[r]! + 5, { font: f.mono, size: SHEET_TYPE.dataKey, color: t.dim }, f));
+    heads.forEach((h, r) => sheetTextRight(page, h, left - 5, rowsY[r]! + 5, { font: f.sans, size: SHEET_TYPE.tick, color: t.dim }, f));
     const o = { font: f.mono, size: SHEET_TYPE.tick, color: t.ink };
     band.columns.forEach((c, i) => {
       const x = Math.min(left + drawW - 2, c.x + 2);
@@ -292,7 +292,7 @@ export async function drawStyledProfileSheet(page: PDFPage, s: StyledProfileShee
   const gradeBase = s.unitsVerified === false
     ? `${GRADE_BASE_M} units of chainage (unit unverified)`
     : `${GRADE_BASE_M} ${s.unit === 'ft' ? 'm of chainage (shown in feet)' : 'm of chainage'}`;
-  sheetText(page, `GRADE %  over ${gradeBase}`, left, gradeTop + 6, { font: f.sansBold, size: SHEET_TYPE.section, color: t.dim }, f);
+  sheetText(page, `Grade % over ${gradeBase}`, left, gradeTop + 6, { font: f.sansBold, size: SHEET_TYPE.section, color: t.dim }, f);
   page.drawRectangle({ x: left, y: gradeBottom, width: drawW, height: gradeH, color: pdfColor(t.panel) });
   const grades = gradeSeries(s.stations, len);
   const known = grades.filter((g) => g.grade != null && Number.isFinite(g.grade)) as Array<{ chainage: number; grade: number }>;

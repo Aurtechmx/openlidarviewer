@@ -312,7 +312,7 @@ describe('classification provenance', () => {
     expect(legend.readScope).toBe('unknown');
     const text = allStrings(legend);
     expect(text).toContain('no contributing source was recorded');
-    expect(text).not.toContain('the full static sources');
+    expect(text).not.toContain('every loaded point of the static sources');
   });
 });
 
@@ -322,7 +322,7 @@ describe('read scope', () => {
   it('reports a full static read as such', () => {
     const legend = baseline();
     expect(legend.readScope).toBe('full-static');
-    expect(allStrings(legend)).toContain('Read: the full static sources.');
+    expect(allStrings(legend)).toContain('Read: every loaded point of the static sources.');
   });
 
   it('never reports a resident streaming snapshot as a full static read', () => {
@@ -335,7 +335,7 @@ describe('read scope', () => {
     expect(legend.readScope).toBe('resident-snapshot');
     const text = allStrings(legend);
     expect(text).toContain('a resident streaming snapshot, not the full sources');
-    expect(text).not.toContain('the full static sources');
+    expect(text).not.toContain('every loaded point of the static sources');
   });
 
   it('reports a part-streaming section as a partial read', () => {
@@ -346,7 +346,7 @@ describe('read scope', () => {
     expect(legend.readScope).toBe('partial-resident');
     const text = allStrings(legend);
     expect(text).toContain('part static, part resident streaming snapshot');
-    expect(text).not.toContain('Read: the full static sources.');
+    expect(text).not.toContain('Read: every loaded point of the static sources.');
   });
 });
 

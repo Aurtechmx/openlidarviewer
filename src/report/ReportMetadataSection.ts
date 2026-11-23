@@ -185,11 +185,13 @@ export function extentRows(inputs: {
       { label: `Max elevation${basis}`, value: unit(e.max) + noise },
     ];
   };
+  // The plan extent is read from the same points as the elevation range.
+  const extent = inputs.elevationBasis ? ` (${inputs.elevationBasis})` : '';
   if (!inputs.unitKnown) {
     return [
-      { label: 'Width', value: formatSourceUnits(inputs.width) },
-      { label: 'Depth', value: formatSourceUnits(inputs.depth) },
-      { label: 'Height', value: formatSourceUnits(inputs.height) + noise },
+      { label: `Width${extent}`, value: formatSourceUnits(inputs.width) },
+      { label: `Depth${extent}`, value: formatSourceUnits(inputs.depth) },
+      { label: `Height${extent}`, value: formatSourceUnits(inputs.height) + noise },
       ...elevationRows((v) => `${v.toFixed(2)} (source units)`),
     ];
   }
@@ -202,10 +204,10 @@ export function extentRows(inputs: {
     Number.isFinite(v) ? `${(v / scale.div).toFixed(scale.dp)} ${scale.unit}` : 'unknown';
   const h = inputs.height;
   return [
-    { label: 'Width', value: fmt(inputs.width) },
-    { label: 'Depth', value: fmt(inputs.depth) },
+    { label: `Width${extent}`, value: fmt(inputs.width) },
+    { label: `Depth${extent}`, value: fmt(inputs.depth) },
     {
-      label: 'Height',
+      label: `Height${extent}`,
       value: (gap === undefined
         ? fmt(h)
         : Number.isFinite(h) ? `${h.toFixed(1)}${HEIGHT_UNIT_GAP_SUFFIX[gap]}` : 'unknown') + (Number.isFinite(h) ? noise : ''),

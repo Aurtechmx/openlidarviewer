@@ -7,8 +7,9 @@
  * style's paper. Classic is the report as before, byte for byte: the caller
  * gets null and embeds its standard fonts as it always did.
  */
-import { StandardFonts, rgb, type PDFDocument, type PDFFont, type RGB } from 'pdf-lib';
+import { StandardFonts, rgb, type PDFDocument, type PDFFont, type PDFPage, type RGB } from 'pdf-lib';
 import { pdfInfoDate } from '../../pdfInfoDate';
+import { wrapReportField } from '../../winAnsiText';
 import { embedSheetFonts, type SheetFonts } from './fonts';
 import { drawPaper } from './primitives';
 import { sheetTokens, type SheetRgb, type SheetStyle, type SheetTokens } from './tokens';
@@ -86,4 +87,40 @@ export async function openReport(
   const font = kit ? kit.fonts.sans : await doc.embedFont(StandardFonts.Helvetica);
   const bold = kit ? kit.fonts.sansBold : await doc.embedFont(StandardFonts.HelveticaBold);
   return { kit, font, bold };
+}
+
+/** Type of the provenance table: size, line pitch and the key column's width. */
+const PROV_SIZE = 8.5;
+const PROV_LEAD = 12.5;
+const PROV_KEY_W = 132;
+
+interface ProvenanceRow { readonly key: string[]; readonly value: string[] }
+
+/** `Key  Value` stamp lines as rows of a two-column table `width` points wide. */
+export function provenanceRows(lines: readonly string[], width: number, kit: StyledReport): ProvenanceRow[] {
+  const f = kit.fonts;
+  const wrap = (s: string, font: PDFFont, w: number): string[] => wrapReportField(s, font, PROV_SIZE, w, false);
+  return lines.map((line) => {
+    const m = /^(.+?) {2,}(.+)$/.exec(line);
+    return m
+      ? { key: wrap(m[1]!, f.sans, PROV_KEY_W - 10), value: wrap(m[2]!, f.sans, width - PROV_KEY_W) }
+      : { key: [], value: wrap(line, f.sans, width - PROV_KEY_W) };
+  });
+}
+
+/** Height {@link drawProvenanceRows} uses. */
+export function provenanceHeight(rows: readonly ProvenanceRow[]): number {
+  return rows.reduce((a, r) => a + Math.max(r.key.length, r.value.length) * PROV_LEAD, 0);
+}
+
+/** Draws the rows with the first baseline at `y`. Returns the y below them. */
+export function drawProvenanceRows(page: PDFPage, rows: readonly ProvenanceRow[], x: number, y: number, kit: StyledReport): number {
+  const t = kit.tokens, f = kit.fonts;
+  let cy = y;
+  for (const r of rows) {
+    r.key.forEach((ln, i) => page.drawText(ln, { x, y: cy - i * PROV_LEAD, size: PROV_SIZE, font: f.sans, color: kit.color(t.dim) }));
+    r.value.forEach((ln, i) => page.drawText(ln, { x: x + PROV_KEY_W, y: cy - i * PROV_LEAD, size: PROV_SIZE, font: f.sans, color: kit.color(t.ink) }));
+    cy -= Math.max(r.key.length, r.value.length) * PROV_LEAD;
+  }
+  return cy;
 }

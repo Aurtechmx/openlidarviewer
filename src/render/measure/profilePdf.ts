@@ -342,7 +342,7 @@ let pageTypeK = 1;
 const z = (v: number): number => v * pageTypeK;
 
 /** The styled continuation sheets' type factor: 10 pt table text becomes 12 pt. */
-const STYLED_PAGE_TYPE_K = 1.2;
+const STYLED_PAGE_TYPE_K = 1.08;
 
 const CLASSIC_INK: ProfileInk = { INK, INK_DIM, INK_SOFT, INK_MUTED, GRID, GRID_MINOR, CURVE, GROUND, GAP_MARK, RULE };
 
@@ -1151,6 +1151,9 @@ export async function buildProfilePdf(input: ProfilePdfInput): Promise<Uint8Arra
     const plotRight = PAGE_W - M - 6;
     const plotW = plotRight - plotLeft;
     const scaleLineY = headerBot - 18;
+    // Left edges of the two right-aligned captions the series key must clear.
+    let bandCaptionLeft = Infinity;
+    let axisTitleLeft = plotRight;
     const plotTopY = scaleLineY - 16; // y-up coordinate of the TOP edge
     const plotH = 300;
     const plotBotY = plotTopY - plotH;
@@ -1361,10 +1364,11 @@ export async function buildProfilePdf(input: ProfilePdfInput): Promise<Uint8Arra
           `${band.omitted > 0 ? ', without the round chainages beside the start and the end' : ''}; ` +
           `${reference === 'orthometric' ? 'elevations' : 'heights'} at round chainages interpolated between ` +
           `the ${band.total} sampled stations, '-' where a neighbouring station has no returns`;
+        bandCaptionLeft = plotRight - f.font.widthOfTextAtSize(winAnsiSafe(caption), T_CAPTION);
         put(
           page,
           caption,
-          plotRight - f.font.widthOfTextAtSize(winAnsiSafe(caption), T_CAPTION),
+          bandCaptionLeft,
           bandBot - 16,
           T_CAPTION,
           f.font,
@@ -1390,10 +1394,11 @@ export async function buildProfilePdf(input: ProfilePdfInput): Promise<Uint8Arra
       put(page, scaleLine, M, scaleLineY, T_SCALE, f.bold, INK);
       const axisTitle =
         system === 'unverified' ? 'Chainage (unit unverified)' : system === 'metric' ? 'Chainage (station km+m)' : 'Chainage (100 ft stations)';
+      axisTitleLeft = plotRight - f.font.widthOfTextAtSize(winAnsiSafe(axisTitle), T_AXIS);
       put(
         page,
         axisTitle,
-        plotRight - f.font.widthOfTextAtSize(winAnsiSafe(axisTitle), T_AXIS),
+        axisTitleLeft,
         scaleLineY,
         T_AXIS,
         f.font,
@@ -1415,16 +1420,17 @@ export async function buildProfilePdf(input: ProfilePdfInput): Promise<Uint8Arra
     // the same three facts twice on one sheet and give a reader two wordings to
     // reconcile. Clipped against the space the band caption leaves on the same
     // line, so a long series name cannot print over it.
-    rule(page, M, bandBot - 13, M + 18, bandBot - 13, CURVE, 1.6);
-    put(
-      page,
-      clipText(`${legend.seriesName} - see general note 1`, f.font, T_CAPTION, plotRight - M - 26 - 240),
-      M + 26,
-      bandBot - 16,
-      T_CAPTION,
-      f.font,
-      INK,
-    );
+    // When the band caption leaves no room on that line, the key moves up to the
+    // scale line, left of the axis title.
+    {
+      const key = clipText(`${legend.seriesName} - see general note 1`, f.font, T_CAPTION, plotRight - M - 26 - 240);
+      const keyW = f.font.widthOfTextAtSize(winAnsiSafe(key), T_CAPTION);
+      const clash = M + 26 + keyW + 8 > bandCaptionLeft;
+      const keyX = clash ? axisTitleLeft - 18 - keyW : M + 26;
+      const keyY = clash ? scaleLineY : bandBot - 16;
+      rule(page, keyX - 26, keyY + 3, keyX - 8, keyY + 3, CURVE, 1.6);
+      put(page, key, keyX, keyY, T_CAPTION, f.font, INK);
+    }
 
     // ── The KPI band ───────────────────────────────────────────────────────
     // The magnitude only: the unit is stated once, in the cell's label. The
