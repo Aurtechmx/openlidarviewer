@@ -94,7 +94,7 @@ function typeFits(url, contentType) {
   if (/\.m?js$/.test(path)) return /^(?:text|application)\/(?:x-)?(?:javascript|ecmascript)$/.test(type);
   if (path.endsWith('.css')) return type === 'text/css';
   if (path.endsWith('.wasm')) return type === 'application/wasm' || type === 'application/octet-stream';
-  if (/\.woff2?$/.test(path)) return /^(?:font\/|application\/(?:font-|x-font-|octet-stream))/.test(type);
+  if (/\.(?:woff2?|ttf)$/.test(path)) return /^(?:font\/|application\/(?:font-|x-font-|octet-stream))/.test(type);
   return false;
 }
 
@@ -297,7 +297,7 @@ function isShellNavigation(url) {
  * `OlvFont-Regular-Latin-8tf8FM3T.woff2`), so this shape is what an immutable
  * app asset looks like — and, crucially, what a user's DATASET never looks like.
  */
-const HASHED_APP_ASSET = /(^|\/)assets\/[^/]+-[A-Za-z0-9_-]{8,}\.(?:js|mjs|css|wasm|woff2?)$/i;
+const HASHED_APP_ASSET = /(^|\/)assets\/[^/]+-[A-Za-z0-9_-]{8,}\.(?:js|mjs|css|wasm|woff2?|ttf)$/i;
 
 /**
  * The ONLY same-origin responses this worker stores: the build's content-hashed

@@ -506,6 +506,9 @@
   transition: color var(--dur-fast) var(--ease-standard), background var(--dur-fast) var(--ease-standard), border-color var(--dur-fast) var(--ease-standard),
     transform 90ms var(--ease-standard);
 }
+@media (pointer: coarse) {
+  .olv-mp-profile-pdf { min-height: 44px; display: inline-flex; align-items: center; justify-content: center; }
+}
 .olv-mp-profile-pdf:hover {
   color: var(--text);
   background: rgba(255, 255, 255, 0.08);

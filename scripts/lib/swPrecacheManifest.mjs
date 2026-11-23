@@ -9,7 +9,7 @@ import { createHash } from 'node:crypto';
 import { readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 
-const HASHED = /-[A-Za-z0-9_-]{8,}\.(?:js|mjs|css|wasm|woff2?)$/i;
+const HASHED = /-[A-Za-z0-9_-]{8,}\.(?:js|mjs|css|wasm|woff2?|ttf)$/i;
 
 export function buildSwPrecacheManifest(dir) {
   const assets = readdirSync(join(dir, 'assets'))

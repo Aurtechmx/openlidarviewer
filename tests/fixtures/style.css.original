@@ -3104,6 +3104,8 @@ body:has(.olv-right-rail.olv-right-collapsed) .olv-navbar { --olv-nb-r: 0px; }
   border-radius: var(--radius-sm); padding: var(--space-sm) var(--space-sm);
   transition: border-color var(--dur-fast) var(--ease-standard);
 }
+/* iOS zooms the page when a field under 16px is tapped; --text-xl is 16px. */
+@media (pointer: coarse) { .olv-report-select { font-size: var(--text-xl); } }
 .olv-report-select:hover:not(:disabled) { border-color: var(--accent); }
 .olv-report-select:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .olv-report-select:disabled { opacity: 0.42; cursor: not-allowed; }
@@ -6426,6 +6428,9 @@ body:has(.olv-anno-editor:not(.olv-hidden)) .olv-toast.olv-recovery-notice { dis
   transition: color var(--dur-fast) var(--ease-standard), background var(--dur-fast) var(--ease-standard), border-color var(--dur-fast) var(--ease-standard),
     transform 90ms var(--ease-standard);
 }
+@media (pointer: coarse) {
+  .olv-mp-profile-pdf { min-height: 44px; display: inline-flex; align-items: center; justify-content: center; }
+}
 .olv-mp-profile-pdf:hover {
   color: var(--text);
   background: rgba(255, 255, 255, 0.08);
@@ -7682,6 +7687,8 @@ body:has(.olv-anno-editor:not(.olv-hidden)) .olv-toast.olv-recovery-notice { dis
 .olv-result-focus .olv-modal {
   width: min(1040px, 92vw);
   max-height: min(88vh, 900px);
+  /* The visible height, so the close button stays clear of Safari's toolbars. */
+  max-height: min(88dvh, 900px);
   /* The surface lives OUTSIDE the measure panel, so it opts into tabular
      figures itself — every survey number stays column-aligned. */
   font-variant-numeric: tabular-nums;
@@ -7835,11 +7842,19 @@ body:has(.olv-anno-editor:not(.olv-hidden)) .olv-toast.olv-recovery-notice { dis
   }
 }
 
-/* Tablets and other touch screens get the same 44px confirm targets as phones. */
+/* Tablets, landscape phones and other touch screens get the same 44px
+   targets as portrait phones, and 16px text in dialog fields so iOS does not
+   zoom the page when one is tapped. */
 @media (pointer: coarse) {
   .olv-confirm-cancel, .olv-confirm-ok {
     min-height: 44px;
     display: inline-flex; align-items: center; justify-content: center;
+  }
+  .olv-modal-btn { min-height: 44px; }
+  .olv-modal-input { font-size: var(--text-xl); }
+  .olv-modal-check { width: 24px; height: 24px; }
+  .olv-modal-field:has(> .olv-modal-check) > .olv-modal-label {
+    display: flex; align-items: center; min-height: 44px;
   }
 }
 
@@ -9986,6 +10001,10 @@ details[open] > :is(.olv-why-summary, .olv-fit-caveats-summary, .olv-analyse-wor
 }
 .olv-object-dl:hover { color: var(--text); border-color: var(--accent); }
 .olv-object-dl:disabled { opacity: 0.4; cursor: default; }
+@media (pointer: coarse) {
+  .olv-object-dl { min-height: 44px; }
+  .olv-fp-toggle { min-height: 44px; }
+}
 .olv-object-dl.is-primary {
   color: var(--accent); background: var(--accent-soft);
   border-color: var(--accent); font-weight: 600;
@@ -10401,6 +10420,9 @@ details[open] > :is(.olv-why-summary, .olv-fit-caveats-summary, .olv-analyse-wor
     align-items: center;
     gap: var(--space-sm);
     padding: 14px var(--space-md) var(--space-sm);
+    /* Landscape on a notched phone: keep the tabs out from under the notch. */
+    padding-left: max(var(--space-md), env(safe-area-inset-left));
+    padding-right: max(var(--space-md), env(safe-area-inset-right));
     flex: 0 0 auto;
     cursor: pointer;
     /* The head is the drag surface: claim vertical gestures so a drag moves the
@@ -10513,6 +10535,8 @@ details[open] > :is(.olv-why-summary, .olv-fit-caveats-summary, .olv-analyse-wor
     overflow-y: auto;
     -webkit-overflow-scrolling: touch;
     padding: 0 var(--space-md) var(--space-md);
+    padding-left: max(var(--space-md), env(safe-area-inset-left));
+    padding-right: max(var(--space-md), env(safe-area-inset-right));
   }
   .olv-msheet-body.olv-hidden { display: none; }
   .olv-msheet-slot { display: none; }

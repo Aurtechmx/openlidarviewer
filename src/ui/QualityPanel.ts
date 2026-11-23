@@ -22,6 +22,7 @@
  * panel's Quality chips are untouched and keep working exactly as before.
  */
 
+import { triggerDownload } from '../io/download';
 import { el, formatCount } from './dom';
 import { collapsibleSection } from './collapsibleSection';
 import {
@@ -340,11 +341,8 @@ export class QualityPanel {
       await navigator.clipboard.writeText(json);
       this._note('Certificate copied.');
     } catch {
-      const url = URL.createObjectURL(new Blob([json], { type: 'application/json' }));
-      const a = el('a', { href: url }) as HTMLAnchorElement;
-      a.download = 'precision-certificate.json';
-      a.click();
-      setTimeout(() => URL.revokeObjectURL(url), 0);
+      // The shared helper keeps the URL alive long enough for iOS.
+      triggerDownload(new Blob([json], { type: 'application/json' }), 'precision-certificate.json');
       this._note('The clipboard was not available, so the certificate was saved as a file.');
     }
   }

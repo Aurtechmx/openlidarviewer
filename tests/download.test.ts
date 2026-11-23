@@ -72,6 +72,16 @@ describe('triggerDownload — deferred-revoke contract', () => {
     expect(revokeObjectURL).toHaveBeenCalledTimes(1);
     expect(revokeObjectURL).toHaveBeenCalledWith('blob:fake-url');
   });
+
+  it('keeps the URL for a minute, long enough for a slow tap on the iOS download sheet', async () => {
+    const { DOWNLOAD_URL_LIFETIME_MS } = await import('../src/io/download');
+    expect(DOWNLOAD_URL_LIFETIME_MS).toBeGreaterThanOrEqual(30_000);
+    triggerDownload(new Blob(['x']), 'a.bin');
+    vi.advanceTimersByTime(DOWNLOAD_URL_LIFETIME_MS - 1);
+    expect(revokeObjectURL).not.toHaveBeenCalled();
+    vi.advanceTimersByTime(1);
+    expect(revokeObjectURL).toHaveBeenCalledTimes(1);
+  });
 });
 
 describe('downloadBytes — partial-view handling', () => {

@@ -156,10 +156,16 @@ export function fastPathEligible(plan: SnapshotPlan, activeBar: ActiveColorbar |
   );
 }
 
-/** Encode a canvas to a PNG `Blob`, rejecting if the browser returns none. */
-export function canvasToBlob(canvas: HTMLCanvasElement): Promise<Blob> {
+/**
+ * Encode a canvas to a PNG `Blob`, rejecting if the browser returns none.
+ * With `release`, a scratch canvas gives back its pixels once encoded: iOS
+ * Safari counts canvas memory until collection, and repeated exports ran out.
+ * Never release the viewer's own canvas.
+ */
+export function canvasToBlob(canvas: HTMLCanvasElement, release = false): Promise<Blob> {
   return new Promise<Blob>((resolve, reject) => {
     canvas.toBlob((blob) => {
+      if (release) { canvas.width = 0; canvas.height = 0; }
       if (blob) resolve(blob);
       else reject(new Error('Viewer.snapshot(): canvas.toBlob returned null'));
     }, 'image/png');
@@ -241,7 +247,8 @@ export function renderedCopy(
 
 /** Render a frame and encode it to a PNG `Blob`, reading the canvas in the render's task. */
 export function renderedBlob(gl: HTMLCanvasElement, renderFrame: () => void, background?: unknown): Promise<Blob> {
-  return canvasToBlob(renderedCopy(gl, renderFrame, gl.width, gl.height, background));
+  const copy = renderedCopy(gl, renderFrame, gl.width, gl.height, background);
+  return canvasToBlob(copy, copy !== gl);
 }
 
 /** The renderer calls {@link pinDrawingBuffer} needs (three's renderer fits). */
@@ -285,7 +292,8 @@ export async function renderedBlobAtSize(
     pinDrawingBuffer(renderer, gl, width, height);
     renderFrame();
   }, width, height, background);
-  return { blob: await canvasToBlob(copy), widthPx: copy.width, heightPx: copy.height };
+  const widthPx = copy.width, heightPx = copy.height;
+  return { blob: await canvasToBlob(copy, copy !== gl), widthPx, heightPx };
 }
 
 /** Run one render, then wait one animation frame so the frame is presented. */
@@ -365,7 +373,7 @@ export async function presentedBlobAtSize(
   const [dark, light] = pixels as [ImageData, ImageData];
   composeNoDataAlpha(dark.data, light.data, dark.data);
   first!.getContext('2d')!.putImageData(dark, 0, 0);
-  return { blob: await canvasToBlob(first!), widthPx: width, heightPx: height, noDataTransparent: true };
+  return { blob: await canvasToBlob(first!, true), widthPx: width, heightPx: height, noDataTransparent: true };
 }
 
 /**
@@ -491,7 +499,7 @@ export async function captureSnapshot(
       drawProbeReadoutCard(ctx, probe.info, { x: sx, y: sy }, probe.labels);
     }
   }
-  return canvasToBlob(out);
+  return canvasToBlob(out, true);
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
