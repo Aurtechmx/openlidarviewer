@@ -199,7 +199,7 @@ function rowList(o: {
  * Ask, then run `run` with the choice. Stays open with the reason when `run`
  * fails. Resolves true when a file was made, false when the user closed it.
  */
-export function openProfileExportDialog(p: ProfileExportDialogInput, run: (c: ProfileExportChoice) => Promise<void>): Promise<boolean> {
+export function openProfileExportDialog(p: ProfileExportDialogInput, run: (c: ProfileExportChoice, closed: () => boolean) => Promise<void>): Promise<boolean> {
   const remembered = rememberedCompany();
   const who = isEmptyFields(companyDetails()) && remembered ? remembered : companyDetails();
   const job = jobDetails(), f = p.fields;
@@ -331,11 +331,11 @@ export function openProfileExportDialog(p: ProfileExportDialogInput, run: (c: Pr
   const footer = el('div', { className: 'olv-modal-actions' }, [err, chars, cancel, go]);
 
   return new Promise<boolean>((resolve) => {
-    let made = false, busy = false;
+    let made = false, busy = false, closed = false;
     const fail = (m: string): void => { err.textContent = m; err.hidden = false; };
     const handle = openModal({
       title: 'Export profile (PDF)', body, footer, returnFocusTo: p.returnFocusTo ?? null,
-      onClose: () => { off(); resolve(made); },
+      onClose: () => { closed = true; off(); resolve(made); },
     });
     handle.element.classList.add('olv-pe');
     cancel.addEventListener('click', () => handle.close());
@@ -368,7 +368,8 @@ export function openProfileExportDialog(p: ProfileExportDialogInput, run: (c: Pr
       busy = true;
       go.disabled = cancel.disabled = true;
       go.textContent = 'Exporting…';
-      void run({ deliverable: { ...c, ...j, ...fields }, fields, fileName: fileName.value, paper: paper.value as ProfilePaper, unitSystem: shownUnit() }).then(() => {
+      void run({ deliverable: { ...c, ...j, ...fields }, fields, fileName: fileName.value, paper: paper.value as ProfilePaper, unitSystem: shownUnit() }, () => closed).then(() => {
+        if (closed) return;
         // Kept only once a sheet was made with them.
         setJobDetails(j);
         setCompanyDetails(c);
@@ -388,7 +389,7 @@ export function openProfileExportDialog(p: ProfileExportDialogInput, run: (c: Pr
       }, (e: unknown) => {
         // eslint-disable-next-line no-console
         console.error('OpenLiDARViewer: profile PDF export failed.', e);
-        fail('The PDF could not be made, so nothing was saved. Reload the page and try again.');
+        fail(e instanceof Error && e.name === 'ProfileExportRefusal' ? e.message : 'The PDF could not be made, so nothing was saved. Reload the page and try again.');
         busy = false;
         go.disabled = cancel.disabled = false;
         go.textContent = 'Export PDF';

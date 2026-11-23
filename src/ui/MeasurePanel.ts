@@ -820,22 +820,22 @@ export class MeasurePanel {
    * shows the failure in its own vocabulary.
    */
   private async _buildProfileSheet(s: MeasurementSummary, from: HTMLElement | null = null): Promise<void> {
-    if (!s.profileChart || s.profileChart.length < 2) return;
-    // The sheet prints grades and chainages, which a geographic frame refuses,
-    // exactly as the profile CSV is refused. The docked workbench comes through
-    // here too, so the refusal covers both controls.
-    const refusal = this._profileFrameRefusal(s);
-    if (refusal) throw new Error(refusal);
-    // The frame the section was measured in, captured with it. Both were read
-    // after the chunk await, so a scan swap while pdf-lib loaded labelled this
-    // profile's geometry with the next scan's CRS and unit system.
-    const context = this._cb.getProfileExportContext ? this._cb.getProfileExportContext(s.id) : null;
-    if (context?.refused) throw new Error(context.refused);
-    const unitSystem = this._displayUnits(s);
-    const { exportProfileSheet } = await loadProfileExport();
+    const { exportProfileSheet, ProfileExportRefusal } = await loadProfileExport();
+    const refuse = (why: string): never => { throw new ProfileExportRefusal(why); };
+    // Read together, before anything is awaited, each time the flow asks: a scan
+    // swap in between would label this profile with the next scan's frame.
+    const capture = () => {
+      const now = this._summaries.find((x) => x.id === s.id);
+      if (!now?.profileChart || now.profileChart.length < 2) return refuse('This profile is no longer open.');
+      // A geographic frame refuses the sheet's grades and chainages, as it refuses the CSV.
+      const refusal = this._profileFrameRefusal(now);
+      const context = this._cb.getProfileExportContext ? this._cb.getProfileExportContext(now.id) : null;
+      const why = refusal ?? context?.refused;
+      return why ? refuse(why) : { summary: now, context, unitSystem: this._displayUnits(now) };
+    };
     await exportProfileSheet({
-      summary: s, context, unitSystem, fields: this._cb.getProfileSheet?.(s.id), saveFields: (f) => this._cb.onProfileSheet?.(s.id, f),
-      extras: () => this._cb.getProfileSheetExtras?.(s.id, s) ?? Promise.resolve(null), download: triggerDownload, returnFocusTo: from,
+      capture, fields: this._cb.getProfileSheet?.(s.id), saveFields: (f) => this._cb.onProfileSheet?.(s.id, f),
+      extras: (now) => this._cb.getProfileSheetExtras?.(now.id, now) ?? Promise.resolve(null), download: triggerDownload, returnFocusTo: from,
     });
   }
 

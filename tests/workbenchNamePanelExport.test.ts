@@ -388,7 +388,7 @@ describe('there is one assembly of the sheet, not one per control', () => {
   it('reaches it through the shared assembly, never with a literal of its own', () => {
     const at = flow.indexOf('buildProfilePdf(');
     expect(at).toBeGreaterThan(0);
-    expect(flow.slice(0, at)).toContain('profilePdfInputFor(s,');
+    expect(flow.slice(0, at)).toContain('profilePdfInputFor(now.summary,');
     expect(flow.slice(at, at + 60)).toContain('...input');
   });
 

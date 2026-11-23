@@ -1583,7 +1583,8 @@ export async function buildProfilePdf(input: ProfilePdfInput): Promise<Uint8Arra
           : `${formatStation(intel.steepest.fromChainage, system)} to ` +
             `${formatStation(intel.steepest.toChainage, system)}  ` +
             `(${formatGradePercent(intel.steepest.grade)})`,
-      remark: 'Where that single-pair maximum was measured. Called out on the profile sheet.',
+      // Only Classic calls the pair out; a styled sheet marks the steepest reach over the base.
+      remark: isStyled ? 'Where that single-pair maximum was measured.' : 'Where that single-pair maximum was measured. Called out on the profile sheet.',
     },
     {
       item: `Highest / Lowest ${heightWord.toLowerCase()}`,
