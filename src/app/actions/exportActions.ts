@@ -5,6 +5,7 @@
  * export health check and the integrity-report verifier. The verifier chunk
  * loads on demand.
  */
+import { pickerAccept } from '../../ui/pickerAccept';
 import { scanRequired, type Action } from '../../ui/actionRegistry';
 import { buildExportHealth, type ScanStoryInputs } from '../../intelligence/scanStory';
 import { renderExportHealthPanel } from '../../ui/scanStoryViews';
@@ -41,7 +42,7 @@ export interface ExportActionDeps {
 function pickFile(accept: string, onFile: (file: File) => void): void {
   const input = el('input', { className: 'olv-hidden' });
   input.type = 'file';
-  input.accept = accept;
+  input.accept = pickerAccept(accept);
   // A dismissed picker fires `cancel` and no `change`.
   input.addEventListener('cancel', () => input.remove());
   input.addEventListener('change', () => {

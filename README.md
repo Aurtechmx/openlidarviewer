@@ -232,7 +232,15 @@ OpenLiDARViewer needs a browser with WebGL 2.0 and hardware acceleration; perfor
 | CPU | Modern dual-core | Quad-core or better |
 | RAM | 8 GB | 16 GB or more |
 | GPU | Integrated GPU with WebGL 2.0 | Dedicated GPU, or a modern integrated GPU |
-| Browser | WebGL 2.0 compatible | WebGL 2.0 and WebGPU-capable |
+| Browser | WebGL 2.0 compatible, at or above the versions below | WebGL 2.0 and WebGPU-capable |
+
+| Browser | Runs from | Full layout from |
+|---|---|---|
+| Safari on macOS, iOS and iPadOS (every browser on iPhone and iPad uses it) | 16.4 | 16.4 |
+| Chrome, Edge, Brave and other Chromium browsers, including on Android | 98 | 111 |
+| Firefox | 114 | 121 |
+
+An older browser shows a message that it is too old rather than a page that never loads a scan. Below the full-layout versions the app runs, but some colours and collapsing panels fall back to plainer styling.
 
 Very large datasets are best handled as COPC or EPT; other very large formats may need downsampling or preprocessing. See [`docs/copc.md`](docs/copc.md) and [`docs/performance.md`](docs/performance.md).
 </details>

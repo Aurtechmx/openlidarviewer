@@ -467,6 +467,8 @@ matching `tests/myModule.test.ts`.
 
 Where WebGPU is unavailable the viewer automatically uses WebGL 2. The active backend is shown in the UI.
 
+The build targets ES2022 (`vite.config.ts`), so the oldest browsers it runs in are Safari 16.4 (iOS and iPadOS 16.4), Chrome and Edge 98 and Firefox 114; full styling needs Chrome 111 and Firefox 121 (`color-mix()` and `:has()`). `public/browser-check.js` runs before the app and shows a plain message in an older browser, and `browserBelowFloor()` in `src/app/staleChunkReload.ts` keeps an old browser's parse failure out of the stale-deploy reload.
+
 ### Cross-browser end-to-end results
 
 The deterministic Playwright set (`grepInvert: /@gpu/`, 165 specs) runs on all

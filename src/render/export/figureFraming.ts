@@ -29,6 +29,9 @@ export const DEFAULT_FIGURE_WIDTH_PX = 2048;
  */
 export const MAX_FIGURE_EDGE_PX = 8192;
 
+/** Largest figure area: iOS Safari's per-canvas limit (4096 x 4096), as for the ortho export. */
+export const MAX_FIGURE_AREA_PX = 16_777_216;
+
 /** The exact drawing-buffer size + camera aspect for one figure render. */
 export interface FigureRenderPlan {
   readonly widthPx: number;
@@ -99,10 +102,13 @@ export function planFigureRender(
 
   // Scale down together so an oversize request keeps its aspect instead of
   // being clipped edge-per-edge into a different shape.
-  const over = Math.max(w, h) / MAX_FIGURE_EDGE_PX;
+  // The edge cap alone let a 4096-wide request on a portrait phone reach
+  // about 3786 x 8192 (31 million pixels), past what iOS Safari allocates for
+  // one canvas; the area cap is the ortho export's (16.7 million pixels).
+  const over = Math.max(Math.max(w, h) / MAX_FIGURE_EDGE_PX, Math.sqrt((w * h) / MAX_FIGURE_AREA_PX));
   if (over > 1) {
-    w = Math.max(1, Math.round(w / over));
-    h = Math.max(1, Math.round(h / over));
+    w = Math.max(1, Math.floor(w / over));
+    h = Math.max(1, Math.floor(h / over));
   }
 
   return { widthPx: w, heightPx: h, aspect: w / h };

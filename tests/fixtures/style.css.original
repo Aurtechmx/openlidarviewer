@@ -20,22 +20,22 @@
  * The overrides give the local face Olv Font's vertical box (hhea 1050/350/100
  * per 1000 upm, divided by size-adjust), so a swap never changes line boxes,
  * and size-adjust is the ratio of Olv Font's advance widths to Arial's over
- * the header strings, per weight (Arial Bold for 600). Liberation Sans is
- * metric-compatible with Arial. Measured by tests/e2e/fontSwapShift.spec.ts.
+ * the header strings, per weight (Arial Bold for 600). Liberation Sans and
+ * Arimo (ChromeOS) are metric-compatible with Arial, so the same overrides hold. Measured by tests/e2e/fontSwapShift.spec.ts.
  */
 @font-face {
   font-family: "Olv Font Fallback"; font-weight: 400;
-  src: local("Arial"), local("ArialMT"), local("Liberation Sans"), local("LiberationSans");
+  src: local("Arial"), local("ArialMT"), local("Liberation Sans"), local("LiberationSans"), local("Arimo");
   size-adjust: 105.4%; ascent-override: 99.62%; descent-override: 33.21%; line-gap-override: 9.49%;
 }
 @font-face {
   font-family: "Olv Font Fallback"; font-weight: 500;
-  src: local("Arial"), local("ArialMT"), local("Liberation Sans"), local("LiberationSans");
+  src: local("Arial"), local("ArialMT"), local("Liberation Sans"), local("LiberationSans"), local("Arimo");
   size-adjust: 106.48%; ascent-override: 98.61%; descent-override: 32.87%; line-gap-override: 9.39%;
 }
 @font-face {
   font-family: "Olv Font Fallback"; font-weight: 600;
-  src: local("Arial Bold"), local("Arial-BoldMT"), local("Liberation Sans Bold"), local("LiberationSans-Bold");
+  src: local("Arial Bold"), local("Arial-BoldMT"), local("Liberation Sans Bold"), local("LiberationSans-Bold"), local("Arimo Bold"), local("Arimo-Bold");
   size-adjust: 101.02%; ascent-override: 103.94%; descent-override: 34.65%; line-gap-override: 9.9%;
 }
 :root {
@@ -4210,6 +4210,7 @@ body:has(.olv-colorbar.olv-colorbar-floating) .olv-project-card {
     right: calc(var(--space-md) + env(safe-area-inset-right));
     left: auto;
     width: min(212px, calc(100vw - 2 * var(--space-md)));
+    max-height: 38vh;
     max-height: 38dvh;
     padding: var(--space-md);
     padding-bottom: var(--space-3xl);

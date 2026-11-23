@@ -4,6 +4,7 @@
  * The workflow recorder: start, stop and save, replay a file, settings.
  * Absent from the registry when the feature flag is off, not merely inert.
  */
+import { pickerAccept } from '../../ui/pickerAccept';
 import type { Action } from '../../ui/actionRegistry';
 import { COUNTDOWN_CANCELLED, WORKFLOW_RECORDER_ENABLED, saveWorkflowWithToast, type WorkflowController } from '../../ui/WorkflowController';
 import type { WorkflowConfigPanel } from '../../ui/WorkflowConfigPanel';
@@ -75,7 +76,7 @@ export function contributeWorkflowActions(deps: WorkflowActionDeps): Action[] {
       run: () => {
         const input = el('input', { className: 'olv-hidden' });
         input.type = 'file';
-        input.accept = '.olvworkflow,application/json';
+        input.accept = pickerAccept('.olvworkflow,application/json');
         // A dismissed picker fires `cancel` and no `change`.
         input.addEventListener('cancel', () => input.remove());
         input.addEventListener('change', () => {

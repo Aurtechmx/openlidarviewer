@@ -41,6 +41,8 @@ export interface DiagnosticsEnvironment {
   readonly deviceMemoryGB?: number;
   readonly hardwareConcurrency?: number;
   readonly devicePixelRatio: number;
+  /** Touch points; an iPad reports a Mac user agent and is told apart by this. */
+  readonly maxTouchPoints?: number;
   /** Generic form factor and capability probe; absent when not probed. */
   readonly runtime?: DiagnosticsRuntime;
 }
@@ -85,8 +87,10 @@ function browserOf(env: DiagnosticsEnvironment): DiagnosticsReport['browser'] {
   return { brand: 'other', majorVersion: null };
 }
 
-function osOf(userAgent: string): string {
+function osOf(userAgent: string, maxTouchPoints = 0): string {
   if (/iPhone|iPad|iPod/.test(userAgent)) return 'iOS';
+  // iPadOS asks for desktop sites with a Mac user agent; only touch tells it apart.
+  if (/Macintosh/.test(userAgent) && maxTouchPoints > 1) return 'iPadOS';
   if (/Android/.test(userAgent)) return 'Android';
   if (/Windows/.test(userAgent)) return 'Windows';
   if (/Mac OS X|Macintosh/.test(userAgent)) return 'macOS';
@@ -126,7 +130,7 @@ export function buildDiagnosticsReport(
       builtAt: matchOr(build.builtAt, /^\d{4}-\d{2}-\d{2}T[\d:.]+Z$/),
     },
     browser: browserOf(env),
-    platform: { class: env.isMobile ? 'mobile' : 'desktop', os: osOf(env.userAgent) },
+    platform: { class: env.isMobile ? 'mobile' : 'desktop', os: osOf(env.userAgent, env.maxTouchPoints) },
     render: {
       backend: viewer ? ledgerToken(safely(() => viewer.activeBackend(), 'other')) : null,
       deviceTier: deviceTier({ deviceMemoryGB: env.deviceMemoryGB, hardwareConcurrency: env.hardwareConcurrency, isMobile: env.isMobile }),
@@ -189,6 +193,7 @@ export function browserEnvironment(viewer: DiagnosticsViewer | null = null): Dia
     deviceMemoryGB: nav.deviceMemory,
     hardwareConcurrency: nav.hardwareConcurrency,
     devicePixelRatio: window.devicePixelRatio || 1,
+    maxTouchPoints: nav.maxTouchPoints,
     runtime: browserRuntime(viewer),
   };
 }
