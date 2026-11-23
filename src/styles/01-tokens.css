@@ -116,6 +116,7 @@
   --lab-num: tabular-nums slashed-zero;
   --lab-glow: rgba(0, 178, 255, 0.28);
   --lab-north-ink: #ffffff;
+  --logo-plate: #ffffff; /* a logo preview sits on paper white in both themes */
   --lab-frame-on-light: rgba(15, 23, 42, 0.28);
   --lab-caveat-ink-on-light: #7a5600;
   --lab-caveat-fill-on-light: rgba(184, 134, 11, 0.14);

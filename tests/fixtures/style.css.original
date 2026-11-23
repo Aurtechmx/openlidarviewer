@@ -116,6 +116,7 @@
   --lab-num: tabular-nums slashed-zero;
   --lab-glow: rgba(0, 178, 255, 0.28);
   --lab-north-ink: #ffffff;
+  --logo-plate: #ffffff; /* a logo preview sits on paper white in both themes */
   --lab-frame-on-light: rgba(15, 23, 42, 0.28);
   --lab-caveat-ink-on-light: #7a5600;
   --lab-caveat-fill-on-light: rgba(184, 134, 11, 0.14);
@@ -7800,12 +7801,12 @@ body:has(.olv-anno-editor:not(.olv-hidden)) .olv-toast.olv-recovery-notice { dis
 .olv-pe-row > .olv-pe-wide { flex: 3 1 180px; }
 .olv-pe-del { padding: 0 var(--space-lg); min-width: 32px; }
 .olv-pe-add { align-self: flex-start; margin-top: var(--space-sm); }
-.olv-pe-logo { max-width: 160px; max-height: 56px; object-fit: contain; align-self: flex-start; background: #fff; border-radius: var(--radius-sm); padding: 4px; }
+.olv-pe-logo { max-width: 160px; max-height: 56px; object-fit: contain; align-self: flex-start; background: var(--logo-plate); border-radius: var(--radius-sm); padding: 4px; }
 .olv-pe-check { display: flex; align-items: center; gap: var(--space-sm); font-size: var(--text-xs); color: var(--text); min-height: 28px; }
 @media (pointer: coarse) {
   .olv-modal-summary, .olv-pe-check, .olv-pe-del, .olv-pe-add { min-height: 44px; }
   .olv-pe-del { min-width: 44px; }
-  .olv-pe .olv-modal-input { font-size: 16px; min-height: 44px; }
+  .olv-pe .olv-modal-input { font-size: var(--text-xl); min-height: 44px; }
 }
 @media (max-width: 600px) { .olv-pe .olv-modal { width: 100%; } }
 

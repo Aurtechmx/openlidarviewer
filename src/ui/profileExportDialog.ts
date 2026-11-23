@@ -7,6 +7,7 @@
  * ticks the box; the job is kept for the session; the rest belongs to this
  * profile. Measured figures, sources and caveats are not fields.
  */
+import { UNIT_FACTORS } from '../units/units';
 import { onSheetStyleChange, sheetStyle } from '../export/sheetKit/sessionStyle';
 import type { ProfilePaper } from '../render/measure/profilePdf';
 import {
@@ -39,7 +40,7 @@ export interface ProfileExportChoice {
   readonly unitSystem: 'metric' | 'imperial' | 'unverified';
 }
 
-const FEET = 1 / 0.3048;
+const FEET = 1 / UNIT_FACTORS.M_PER_FT;
 
 /**
  * A chainage as typed, in metres of the line: "34.5", "34,5" or a station,
@@ -164,7 +165,7 @@ function rowList(o: {
   readonly rowLabel: string;
 }): RowList<string[]> {
   const list = el('div', { className: 'olv-pe-rows' });
-  const add = el('button', { className: 'olv-modal-btn olv-modal-cancel olv-pe-add', text: o.addLabel }) as HTMLButtonElement;
+  const add = el('button', { className: 'olv-modal-btn olv-modal-cancel olv-pe-add', text: o.addLabel, tip: `${o.addLabel} to this sheet` }) as HTMLButtonElement;
   add.type = 'button';
   const rows: HTMLInputElement[][] = [];
   const sync = (): void => { add.disabled = rows.length >= o.max; };
@@ -175,7 +176,7 @@ function rowList(o: {
       if (c.wide) i.classList.add('olv-pe-wide');
       return i;
     });
-    const del = el('button', { className: 'olv-modal-btn olv-modal-cancel olv-pe-del', text: '×', ariaLabel: `Remove ${o.rowLabel}` }) as HTMLButtonElement;
+    const del = el('button', { className: 'olv-modal-btn olv-modal-cancel olv-pe-del', text: '×', ariaLabel: `Remove ${o.rowLabel}`, tip: `Remove ${o.rowLabel}` }) as HTMLButtonElement;
     del.type = 'button';
     const line = el('div', { className: 'olv-pe-row' }, [...inputs, del]);
     del.addEventListener('click', () => {
@@ -240,7 +241,7 @@ export function openProfileExportDialog(p: ProfileExportDialogInput, run: (c: Pr
   const logoShow = document.createElement('img');
   logoShow.className = 'olv-pe-logo';
   logoShow.alt = 'Logo to print';
-  const logoDrop = el('button', { className: 'olv-modal-btn olv-modal-cancel', text: 'Remove logo' }) as HTMLButtonElement;
+  const logoDrop = el('button', { className: 'olv-modal-btn olv-modal-cancel', text: 'Remove logo', tip: 'Print the sheet without a logo' }) as HTMLButtonElement;
   logoDrop.type = 'button';
   const logoSay = el('p', { className: 'olv-modal-hint' });
   logoSay.setAttribute('role', 'status');
@@ -325,8 +326,8 @@ export function openProfileExportDialog(p: ProfileExportDialogInput, run: (c: Pr
   const textBoxes = (): string => [...body.querySelectorAll<HTMLInputElement | HTMLTextAreaElement>('input[type="text"], textarea')].map((i) => i.value).join('');
   body.addEventListener('input', () => { chars.hidden = !unusualCharacters(textBoxes()); });
   chars.hidden = !unusualCharacters(textBoxes());
-  const cancel = el('button', { className: 'olv-modal-btn olv-modal-cancel', text: 'Cancel' }) as HTMLButtonElement;
-  const go = el('button', { className: 'olv-modal-btn olv-modal-cta', text: 'Export PDF' }) as HTMLButtonElement;
+  const cancel = el('button', { className: 'olv-modal-btn olv-modal-cancel', text: 'Cancel', tip: 'Close without exporting' }) as HTMLButtonElement;
+  const go = el('button', { className: 'olv-modal-btn olv-modal-cta', text: 'Export PDF', tip: 'Make the PDF with these details' }) as HTMLButtonElement;
   cancel.type = go.type = 'button';
   const footer = el('div', { className: 'olv-modal-actions' }, [err, chars, cancel, go]);
 
