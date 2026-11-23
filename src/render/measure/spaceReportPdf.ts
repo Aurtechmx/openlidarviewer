@@ -22,11 +22,14 @@
 import { PDFDocument, rgb, type PDFFont, type PDFPage, type RGB } from 'pdf-lib';
 /** The session's sheet style, read by the caller that loads this chunk. */
 export { sheetStyle } from './mapSheetExportOptions';
+export { exportLocale } from '../../i18n/exportLocale';
 import { openReport } from '../../export/sheetKit/reportStyle';
 import type { SheetStyle } from '../../export/sheetKit/tokens';
 import { metresToFeet, type SpaceMetrics } from '../../terrain/spaceMetrics';
 import type { ObjectMetrics } from '../../terrain/objectMetrics';
-import { buildSpaceReportContent } from '../../terrain/space/spaceReportLayout';
+import { buildSpaceReportContent, spaceReportWords, type ReportWords } from '../../terrain/space/spaceReportLayout';
+import { languageInfo } from '../../i18n/languages';
+import type { ExportLocale } from '../../i18n/exportLocale';
 import type { FloorPlanModel } from '../../terrain/space/floorplan/extractFloorPlan';
 import type { PlanUnitSystem } from '../../terrain/space/floorplan/floorPlanSvg';
 import {
@@ -55,6 +58,8 @@ export interface SpaceReportPdfInput {
   readonly unitSystem?: PlanUnitSystem;
   /** Truncation note for a truncated source file; printed as a Coverage row. */
   readonly coverageNote?: string | null;
+  /** The language and number style to write the report in; English when absent. */
+  readonly locale?: ExportLocale;
 }
 
 let INK = rgb(0.12, 0.14, 0.18);
@@ -97,11 +102,12 @@ async function buildSpaceReportPdfStyled(
   render: { readonly style?: SheetStyle | null; readonly loadFont?: (name: string) => Promise<Uint8Array> },
 ): Promise<Uint8Array> {
   const content = buildSpaceReportContent(input);
+  const words = spaceReportWords(input.locale);
   const doc = await PDFDocument.create();
   // Info dictionary, accessibility hooks and faces. Light and Dark: the sheet
   // kit's fonts and colours. No await follows until the save, so the swapped
   // colours are this build's alone.
-  const { kit, font, bold } = await openReport(doc, content.title, input.generatedAt, render);
+  const { kit, font, bold } = await openReport(doc, content.title, input.generatedAt, render, languageInfo(input.locale?.lang).tag);
   if (kit) {
     const k = kit, t = kit.tokens;
     useInk({ INK: k.color(t.ink), DIM: k.color(t.dim), FRAME: k.color(t.outline), FILL: k.mix(t.panel, t.rule, 0.35), CONTENTS: k.mix(t.panel, t.rule, 0.7), WARN: k.color(t.warn), WHITE: k.color(t.panel) });
@@ -187,7 +193,7 @@ async function buildSpaceReportPdfStyled(
       for (let i = 0; i < rows; i++) {
         if (i > 0) y -= 12.5;
         if (room(9.5) && i >= labelLines.length) {
-          const cont = clipWithSuffix(labelLines.join(' '), ' (continued)', (t) => bold.widthOfTextAtSize(t, 9.5), labelW);
+          const cont = clipWithSuffix(labelLines.join(' '), words.t('continued'), (t) => bold.widthOfTextAtSize(t, 9.5), labelW);
           page.drawText(cont, { x: labelX, y, size: 9.5, font: bold, color: DIM });
         }
         if (i < labelLines.length) page.drawText(labelLines[i], { x: labelX, y, size: 9.5, font: bold, color: DIM });
@@ -209,18 +215,18 @@ async function buildSpaceReportPdfStyled(
   if (input.floorPlan && input.floorPlan.wallRings.length > 0) {
     y -= 4;
     room(200);
-    text('Floor plan preview (walls traced from the scan)', M, y, 11, bold, INK);
+    text(words.t('planTitle'), M, y, 11, bold, INK);
     y -= 8;
     const planTop = y;
     const planBox = { x: M, y: planTop - 180, w: PW - 2 * M, h: 176 };
-    drawFloorPlan(page, planBox, input.floorPlan, font, bold, input.unitSystem ?? 'metric');
+    drawFloorPlan(page, planBox, input.floorPlan, font, bold, input.unitSystem ?? 'metric', words);
     y = planBox.y - 12;
   }
 
   // ── Caveats ──
   if (content.caveats.length > 0) {
     room(30);
-    text('Notes', M, y, 10, bold, INK);
+    text(words.t('notesTitle'), M, y, 10, bold, INK);
     y -= 14;
     for (const c of content.caveats) {
       // Two lines of headroom, so a note that wraps starts on the page it ends on.
@@ -266,6 +272,7 @@ function drawFloorPlan(
   font: PDFFont,
   bold: PDFFont,
   unitSystem: PlanUnitSystem,
+  words: ReportWords,
 ): void {
   const PH = 792;
   const pad = 28;
@@ -329,8 +336,8 @@ function drawFloorPlan(
     plan.rooms.forEach((room, i) => {
       const txt = safe(
         unitSystem === 'imperial'
-          ? `Room ${i + 1} ${Math.round(room.areaM2 / 0.09290304)} sq ft`
-          : `Room ${i + 1} ${room.areaM2.toFixed(1)} m2`,
+          ? words.t('roomImperial', { i: i + 1, area: Math.round(room.areaM2 / 0.09290304) })
+          : words.t('roomMetric', { i: i + 1, area: words.fx(room.areaM2, 1) }),
       );
       const sz = 6.5;
       const w = bold.widthOfTextAtSize(txt, sz);
@@ -358,20 +365,25 @@ function drawFloorPlan(
   // feet first), so the report never argues with the on-screen numbers.
   const wFt = metresToFeet(plan.widthM);
   const dFt = metresToFeet(plan.depthM);
+  const f1 = (v: number): string => words.fx(v, 1);
   const dimsTxt =
     unitSystem === 'imperial'
-      ? `W ${wFt.toFixed(1)} ft (${plan.widthM.toFixed(1)} m) x D ${dFt.toFixed(1)} ft (${plan.depthM.toFixed(1)} m)`
-      : `W ${plan.widthM.toFixed(1)} m (${wFt.toFixed(1)} ft) x D ${plan.depthM.toFixed(1)} m (${dFt.toFixed(1)} ft)`;
+      ? words.t('planDimsImperial', { w: f1(wFt), wAlt: f1(plan.widthM), d: f1(dFt), dAlt: f1(plan.depthM) })
+      : words.t('planDimsMetric', { w: f1(plan.widthM), wAlt: f1(wFt), d: f1(plan.depthM), dAlt: f1(dFt) });
   page.drawText(safe(dimsTxt), { x: box.x + 6, y: box.y + 6, size: 7.5, font, color: INK });
   // Claim-accurate caption: "wall-graph reconstruction" only when the model
   // really came from the graph pass; either way still an experimental preview.
-  const caption = plan.fromWallGraph
-    ? 'Experimental preview - wall-graph reconstruction from the scan, not a measured floor plan; requires visual validation.'
-    : 'Experimental preview - walls traced from the scan, not a measured floor plan; requires visual validation.';
-  page.drawText(safe(caption), {
+  const caption = plan.fromWallGraph ? words.t('planCaptionGraph') : words.t('planCaptionTrace');
+  // A caption longer than the box (German runs close) steps down in size
+  // rather than leave the plan's frame; English fits at 7 pt as before.
+  const captionText = safe(caption);
+  const captionRoom = box.w - 12;
+  const captionWidth = bold.widthOfTextAtSize(captionText, 7);
+  const captionSize = captionWidth > captionRoom ? Math.max(5, 7 * captionRoom / captionWidth) : 7;
+  page.drawText(captionText, {
     x: box.x + 6,
     y: box.y + box.h - 11,
-    size: 7,
+    size: captionSize,
     font: bold,
     color: WARN,
   });

@@ -21,7 +21,7 @@
  * qualified as source units, with no foot conversion.
  */
 
-import type { SpaceMetrics } from '../spaceMetrics';
+import type { SpaceMetrics, SpaceNote } from '../spaceMetrics';
 import {
   metresToFeet,
   sqMetresToSqFeet,
@@ -29,16 +29,14 @@ import {
   resolveLinearUnitScale,
   magnitudeFixed,
 } from '../spaceMetrics';
-import {
-  type ObjectMetrics,
-  ANGULAR_COVERAGE_LABEL,
-  ANGULAR_COVERAGE_HINT,
-  OBJECT_ENVELOPE_VOLUME_HINT,
-  OBJECT_SURFACE_AREA_HINT,
-  OBJECT_ORIENTED_UNVALIDATED_HINT,
-} from '../objectMetrics';
-import { SOFTWARE_NAME, NOT_SURVEY_GRADE_NOTE } from '../export/exportProvenance';
+import type { ObjectMetrics } from '../objectMetrics';
+import { SOFTWARE_NAME } from '../export/exportProvenance';
 import { type LinearUnitScale, UNIT_FACTORS } from '../../units/units';
+import { SPACE_REPORT_TEXT, type SpaceReportKey } from '../../i18n/deliverables/spaceReport';
+import { ENGLISH, type ExportLocale } from '../../i18n/exportLocale';
+import { languageInfo } from '../../i18n/languages';
+import { fill } from '../../i18n/message';
+import { fixed, grouped, withDecimalMark, type NumberStyle } from '../../i18n/numberStyle';
 
 /**
  * One label/value line in a report section, with the OPTIONAL per-row qualifier
@@ -143,19 +141,45 @@ export interface SpaceReportInput {
    * from the resolved `SpatialContext`.
    */
   readonly linearUnit?: LinearUnitScale;
+  /**
+   * The language and number style to write the report in. English with point
+   * decimals when absent; the English report is byte-identical to the one
+   * printed before the report had a catalog.
+   */
+  readonly locale?: ExportLocale;
 }
 
 const DASH = '—';
 type Num = number | null | undefined;
 const ok = (v: Num): v is number => v != null && Number.isFinite(v);
-const m1 = (v: Num): string => (ok(v) ? v.toFixed(2) : DASH);
-const i0 = (v: Num): string => (ok(v) ? Math.round(v).toLocaleString() : DASH);
 
-// Source-unit qualifiers for the UNKNOWN-scale branch. They name the number's
-// dimensionality without asserting a metre, so the row is still readable.
-const SU = '(source units)';
-const SU_SQ = '(square source units)';
-const SU_CU = '(cubic source units)';
+/**
+ * The words and number writers for one report: the catalog of its language
+ * and the helpers bound to its number style.
+ */
+interface ReportWords {
+  readonly style: NumberStyle;
+  /** The catalog entry for `key`, its parameters filled. */
+  readonly t: (key: SpaceReportKey, params?: Record<string, string | number>) => string;
+  /** Two decimals, or a dash. */
+  readonly m1: (v: Num) => string;
+  /** A grouped whole number, or a dash. */
+  readonly i0: (v: Num) => string;
+  /** `toFixed` in the report's number style. */
+  readonly fx: (v: number, digits: number) => string;
+}
+
+function reportWords(locale: ExportLocale): ReportWords {
+  const catalog = SPACE_REPORT_TEXT[locale.lang];
+  const style = locale.numberStyle;
+  return {
+    style,
+    t: (key, params) => fill(catalog[key], params, key),
+    m1: (v) => (ok(v) ? fixed(style, v, 2) : DASH),
+    i0: (v) => (ok(v) ? grouped(style, v) : DASH),
+    fx: (v, digits) => fixed(style, v, digits),
+  };
+}
 
 /**
  * The value formatters for one report, bound ONCE to the resolved scale.
@@ -190,32 +214,24 @@ interface UnitFormat {
   readonly density: (v: Num) => string;
 }
 
-/** Metric branch: the exact strings the report has always printed. */
-const METRIC_FORMAT: UnitFormat = {
-  triple: (l, w, h) =>
-    `${m1(l)} x ${m1(w)} x ${m1(h)} m  (${metresToFeet(l).toFixed(1)} x ` +
-    `${metresToFeet(w).toFixed(1)} x ${metresToFeet(h).toFixed(1)} ft)`,
-  tripleBare: (l, w, h) => `${m1(l)} x ${m1(w)} x ${m1(h)} m`,
-  len: (v) => (ok(v) ? `${v.toFixed(1)} m (${metresToFeet(v).toFixed(1)} ft)` : DASH),
-  area: (v) =>
-    ok(v)
-      ? `${Math.round(v).toLocaleString()} m² (${Math.round(sqMetresToSqFeet(v)).toLocaleString()} ft²)`
-      : DASH,
-  vol: (v) =>
-    ok(v)
-      ? `${Math.round(v).toLocaleString()} m³ (${Math.round(cubicMetresToCubicFeet(v)).toLocaleString()} ft³)`
-      : DASH,
-  areaFine: (v) =>
-    ok(v)
-      ? `${magnitudeFixed(v, 2)} m² (${magnitudeFixed(sqMetresToSqFeet(v), 1)} ft²)`
-      : DASH,
-  volFine: (v) =>
-    ok(v)
-      ? `${magnitudeFixed(v, 2)} m³ (${magnitudeFixed(cubicMetresToCubicFeet(v), 1)} ft³)`
-      : DASH,
-  spacing: (v) => (ok(v) ? `${(v * 100).toFixed(1)} cm` : DASH),
-  density: (v) => (ok(v) ? `${v.toFixed(1)} pts/m²` : DASH),
-};
+/** Metric branch: in English, the exact strings the report has always printed. */
+function metricFormat(w: ReportWords): UnitFormat {
+  const { m1, i0, fx, style } = w;
+  const mag = (v: number, d: number): string => withDecimalMark(style, magnitudeFixed(v, d));
+  return {
+    triple: (l, wd, h) =>
+      `${m1(l)} x ${m1(wd)} x ${m1(h)} m  (${fx(metresToFeet(l), 1)} x ` +
+      `${fx(metresToFeet(wd), 1)} x ${fx(metresToFeet(h), 1)} ft)`,
+    tripleBare: (l, wd, h) => `${m1(l)} x ${m1(wd)} x ${m1(h)} m`,
+    len: (v) => (ok(v) ? `${fx(v, 1)} m (${fx(metresToFeet(v), 1)} ft)` : DASH),
+    area: (v) => (ok(v) ? `${i0(v)} m² (${i0(sqMetresToSqFeet(v))} ft²)` : DASH),
+    vol: (v) => (ok(v) ? `${i0(v)} m³ (${i0(cubicMetresToCubicFeet(v))} ft³)` : DASH),
+    areaFine: (v) => (ok(v) ? `${mag(v, 2)} m² (${mag(sqMetresToSqFeet(v), 1)} ft²)` : DASH),
+    volFine: (v) => (ok(v) ? `${mag(v, 2)} m³ (${mag(cubicMetresToCubicFeet(v), 1)} ft³)` : DASH),
+    spacing: (v) => (ok(v) ? `${fx(v * 100, 1)} cm` : DASH),
+    density: (v) => (ok(v) ? w.t('densityMetric', { v: fx(v, 1) }) : DASH),
+  };
+}
 
 /**
  * Unknown branch: the SAME numbers with no metre suffix and no foot conversion.
@@ -224,20 +240,27 @@ const METRIC_FORMAT: UnitFormat = {
  * spacing loses its x100 centimetre rendering for the same reason: a centimetre
  * is a metre subdivision, and the scale is not known to be metres.
  */
-const SOURCE_FORMAT: UnitFormat = {
-  triple: (l, w, h) => `${m1(l)} x ${m1(w)} x ${m1(h)}  ${SU}`,
-  tripleBare: (l, w, h) => `${m1(l)} x ${m1(w)} x ${m1(h)}  ${SU}`,
-  len: (v) => (ok(v) ? `${v.toFixed(1)} ${SU}` : DASH),
-  area: (v) => (ok(v) ? `${Math.round(v).toLocaleString()} ${SU_SQ}` : DASH),
-  vol: (v) => (ok(v) ? `${Math.round(v).toLocaleString()} ${SU_CU}` : DASH),
-  areaFine: (v) => (ok(v) ? `${magnitudeFixed(v, 2)} ${SU_SQ}` : DASH),
-  volFine: (v) => (ok(v) ? `${magnitudeFixed(v, 2)} ${SU_CU}` : DASH),
-  spacing: (v) => (ok(v) ? `${v.toFixed(3)} ${SU}` : DASH),
-  density: (v) => (ok(v) ? `${v.toFixed(1)} pts per square source unit` : DASH),
-};
+function sourceFormat(w: ReportWords): UnitFormat {
+  const { m1, i0, fx, style } = w;
+  const mag = (v: number, d: number): string => withDecimalMark(style, magnitudeFixed(v, d));
+  const SU = w.t('sourceUnits');
+  const SU_SQ = w.t('sourceUnitsSq');
+  const SU_CU = w.t('sourceUnitsCu');
+  return {
+    triple: (l, wd, h) => `${m1(l)} x ${m1(wd)} x ${m1(h)}  ${SU}`,
+    tripleBare: (l, wd, h) => `${m1(l)} x ${m1(wd)} x ${m1(h)}  ${SU}`,
+    len: (v) => (ok(v) ? `${fx(v, 1)} ${SU}` : DASH),
+    area: (v) => (ok(v) ? `${i0(v)} ${SU_SQ}` : DASH),
+    vol: (v) => (ok(v) ? `${i0(v)} ${SU_CU}` : DASH),
+    areaFine: (v) => (ok(v) ? `${mag(v, 2)} ${SU_SQ}` : DASH),
+    volFine: (v) => (ok(v) ? `${mag(v, 2)} ${SU_CU}` : DASH),
+    spacing: (v) => (ok(v) ? `${fx(v, 3)} ${SU}` : DASH),
+    density: (v) => (ok(v) ? w.t('densitySource', { v: fx(v, 1) }) : DASH),
+  };
+}
 
-const unitFormat = (scale: LinearUnitScale): UnitFormat =>
-  scale.known ? METRIC_FORMAT : SOURCE_FORMAT;
+const unitFormat = (scale: LinearUnitScale, w: ReportWords): UnitFormat =>
+  scale.known ? metricFormat(w) : sourceFormat(w);
 
 function toIso(at: Date | string | null | undefined): string {
   if (at instanceof Date) return at.toISOString();
@@ -255,21 +278,22 @@ function toIso(at: Date | string | null | undefined): string {
  * the reader to treat a display sample as the whole file. The file total is not
  * available at this layer, so no file-total claim is printed at all.
  */
-function captureSection(q: SpaceMetrics['quality'], f: UnitFormat): ReportSection {
+function captureSection(q: SpaceMetrics['quality'], f: UnitFormat, w: ReportWords): ReportSection {
+  const { t, i0 } = w;
   return {
-    title: 'Capture quality',
+    title: t('secCapture'),
     rows: [
       {
-        label: 'Points (measured / loaded)',
-        value: `${i0(q.sampledPointCount)} measured / ${i0(q.sourcePointCount)} loaded`,
+        label: t('points'),
+        value: t('pointsValue', { measured: i0(q.sampledPointCount), loaded: i0(q.sourcePointCount) }),
       },
-      { label: 'Density', value: f.density(q.densityPerM2) },
-      { label: 'Mean spacing', value: f.spacing(q.meanSpacingM) },
+      { label: t('density'), value: f.density(q.densityPerM2) },
+      { label: t('spacing'), value: f.spacing(q.meanSpacingM) },
       // HONESTY: coveragePct is occupied / (cols*rows) over the bounding-box
       // grid — a fill ratio of the extent, not a traced footprint. Label says so
       // (matches the ObjectPanel "Bounding area filled" row).
-      { label: 'Bounding area filled', value: `${Math.round(q.coveragePct)}%` },
-      { label: 'Colour (RGB)', value: q.hasRgb ? 'Yes' : 'No' },
+      { label: t('boundingFilled'), value: t('percent', { pct: Math.round(q.coveragePct) }) },
+      { label: t('colour'), value: q.hasRgb ? t('yes') : t('no') },
     ],
   };
 }
@@ -288,12 +312,12 @@ function isFootFactor(metresPerUnit: number): boolean {
  * unverified units. A KNOWN metre CRS prints "metres"; a known foot CRS prints
  * the feet→metres conversion; any other known factor prints the explicit factor.
  */
-function unitsLabel(scale: LinearUnitScale): string {
-  if (!scale.known) return 'source units (scale unverified — not asserted as metres)';
+function unitsLabel(scale: LinearUnitScale, w: ReportWords): string {
+  if (!scale.known) return w.t('unitsUnknown');
   const f = scale.metresPerUnit;
-  if (f === 1) return 'metres';
-  if (isFootFactor(f)) return 'feet (source) → metres';
-  return `source units × ${f} → metres`;
+  if (f === 1) return w.t('unitsMetres');
+  if (isFootFactor(f)) return w.t('unitsFeet');
+  return w.t('unitsFactor', { f: withDecimalMark(w.style, String(f)) });
 }
 
 /**
@@ -322,78 +346,73 @@ function reportScale(input: SpaceReportInput): LinearUnitScale {
 /**
  * Build the pure content model for the INTERIOR report from space metrics.
  */
-function interiorContent(input: SpaceReportInput, scale: LinearUnitScale): SpaceReportContent {
+function interiorContent(input: SpaceReportInput, scale: LinearUnitScale, w: ReportWords): SpaceReportContent {
+  const { t, i0 } = w;
   const space = input.space!;
   const d = space.dims;
   const p = space.planes;
-  const f = unitFormat(scale);
+  const f = unitFormat(scale, w);
   const dims: ReportSection = {
-    title: 'Dimensions',
+    title: t('secDimensions'),
     rows: [
-      { label: 'L x W x H', value: f.triple(d.lengthM, d.widthM, d.heightM) },
-      { label: 'Footprint area', value: f.area(space.floorAreaM2) },
-      { label: 'Ceiling height', value: f.len(space.ceilingHeightM) },
-      { label: 'Enclosed volume', value: f.vol(space.enclosedVolumeM3) },
-      { label: 'Storeys / levels', value: i0(space.storyCount) },
+      { label: t('lxwxh'), value: f.triple(d.lengthM, d.widthM, d.heightM) },
+      { label: t('footprint'), value: f.area(space.floorAreaM2) },
+      { label: t('ceilingHeight'), value: f.len(space.ceilingHeightM) },
+      { label: t('enclosedVolume'), value: f.vol(space.enclosedVolumeM3) },
+      { label: t('storeys'), value: i0(space.storyCount) },
     ],
   };
   const planes: ReportSection = {
-    title: 'Planes',
+    title: t('secPlanes'),
     rows: [
-      { label: 'Floor', value: p.floorPresent ? `Present  ${f.area(p.floorAreaM2)}` : 'Not detected' },
-      { label: 'Ceiling', value: p.ceilingPresent ? `Present  ${f.area(p.ceilingAreaM2)}` : 'Not detected' },
+      { label: t('floor'), value: p.floorPresent ? t('present', { area: f.area(p.floorAreaM2) }) : t('notDetected') },
+      { label: t('ceiling'), value: p.ceilingPresent ? t('present', { area: f.area(p.ceilingAreaM2) }) : t('notDetected') },
       {
-        label: 'Walls',
-        value: `${Math.round(p.wallCoveragePct)}% coverage / ~${p.dominantWallDirections} direction(s)`,
+        label: t('walls'),
+        value: t('wallsValue', { pct: Math.round(p.wallCoveragePct), n: p.dominantWallDirections }),
       },
     ],
   };
-  return assemble(input, space, 'Interior space', [dims, planes, captureSection(space.quality, f)], scale);
+  return assemble(input, space, t('scanInterior'), [dims, planes, captureSection(space.quality, f, w)], scale, w);
 }
 
 /**
  * Build the pure content model for the OBJECT report from object + space metrics
  * (space supplies the capture-quality block + reasons).
  */
-function objectContent(input: SpaceReportInput, scale: LinearUnitScale): SpaceReportContent {
+function objectContent(input: SpaceReportInput, scale: LinearUnitScale, w: ReportWords): SpaceReportContent {
+  const { t } = w;
   const o = input.object!;
   const space = input.space;
   const obb = o.obb;
   const aabb = o.aabb;
-  const f = unitFormat(scale);
+  const f = unitFormat(scale, w);
   const dims: ReportSection = {
-    title: 'Dimensions',
+    title: t('secDimensions'),
     rows: [
-      { label: 'Oriented (L x W x H)', value: f.triple(obb.lengthM, obb.widthM, obb.heightM) },
+      { label: t('oriented'), value: f.triple(obb.lengthM, obb.widthM, obb.heightM) },
       {
-        label: 'Axis-aligned (L x W x H)',
+        label: t('axisAligned'),
         value: f.tripleBare(aabb.lengthM, aabb.widthM, aabb.heightM),
       },
-      { label: 'Largest dimension (unvalidated)', value: f.len(o.longestDimensionM),
-        hint: OBJECT_ORIENTED_UNVALIDATED_HINT },
-      {
-        label: 'Envelope volume',
-        value: f.volFine(o.envelopeVolumeM3),
-        hint: OBJECT_ENVELOPE_VOLUME_HINT,
-      },
-      {
-        label: 'Bounding surface area',
-        value: f.areaFine(o.surfaceAreaM2),
-        hint: OBJECT_SURFACE_AREA_HINT,
-      },
+      // The hints are the panel's tooltips (objectMetrics.ts); the English
+      // catalog holds the same sentences, and a test keeps them equal.
+      { label: t('largest'), value: f.len(o.longestDimensionM), hint: t('hintLargest') },
+      { label: t('envelopeVolume'), value: f.volFine(o.envelopeVolumeM3), hint: t('hintEnvelopeVolume') },
+      { label: t('boundingSurface'), value: f.areaFine(o.surfaceAreaM2), hint: t('hintBoundingSurface') },
       // Was "Scan completeness ... % of directions", which read as capture
       // completeness. The figure bins directions about the centroid, so its
       // ceiling is the shape of the point set, not how much was captured.
       {
-        label: ANGULAR_COVERAGE_LABEL,
-        value: `${Math.round(o.completenessPct)}% of directions about the centroid`,
-        hint: ANGULAR_COVERAGE_HINT,
+        label: t('angularCoverage'),
+        value: t('angularValue', { pct: Math.round(o.completenessPct) }),
+        hint: t('hintAngular'),
       },
     ],
   };
   const sections: ReportSection[] = [dims];
-  if (space) sections.push(captureSection(space.quality, f));
-  return assemble(input, space, 'Object', sections, scale);
+  if (space) sections.push(captureSection(space.quality, f, w));
+  return assemble(input, space, t('scanObject'), sections, scale, w);
 }
 
 /** Common assembly: title, subtitle, provenance, provenance lines, caveats. */
@@ -403,29 +422,60 @@ function assemble(
   scanType: string,
   sections: ReportSection[],
   scale: LinearUnitScale,
+  w: ReportWords,
 ): SpaceReportContent {
-  const name = (input.name ?? '').trim() || 'Untitled scan';
+  const { t } = w;
+  const locale = input.locale ?? ENGLISH;
+  const name = (input.name ?? '').trim() || t('untitled');
   const provenance: SpaceReportProvenance = {
     software: SOFTWARE_NAME,
-    softwareVersion: input.softwareVersion ?? 'unknown',
-    metricVersion: input.metricVersion ?? 'unknown',
+    softwareVersion: input.softwareVersion ?? t('unknown'),
+    metricVersion: input.metricVersion ?? t('unknown'),
     generated: toIso(input.generatedAt),
     source: input.name ?? null,
     scanType,
-    units: unitsLabel(scale),
+    units: unitsLabel(scale, w),
     measuredPointCount: space?.quality.sampledPointCount ?? null,
     loadedPointCount: space?.quality.sourcePointCount ?? null,
     coverage: input.coverageNote?.trim() || null,
-    notSurveyGrade: NOT_SURVEY_GRADE_NOTE,
+    notSurveyGrade: t('notSurveyGrade'),
   };
   return {
     title: name,
     subtitle: scanType,
     sections,
     provenance,
-    provenanceLines: spaceProvenanceLines(provenance),
-    caveats: space ? [...space.reasons] : [],
+    provenanceLines: spaceProvenanceLines(provenance, locale),
+    caveats: space ? caveatsIn(space, w, locale) : [],
   };
+}
+
+/**
+ * The metrics' caveats in the report's language. English prints the metrics'
+ * own sentences, as it always has. Another language says each coded note in
+ * that language; a metrics object without notes (one built before notes
+ * existed, or by hand in a test) keeps its English sentences rather than lose
+ * a caveat.
+ */
+function caveatsIn(space: SpaceMetrics, w: ReportWords, locale: ExportLocale): string[] {
+  if (locale.lang === 'en' || !space.notes || space.notes.length !== space.reasons.length) return [...space.reasons];
+  return space.notes.map((n) => noteText(n, w));
+}
+
+/** One coded caveat in the report's language. */
+export function noteText(n: SpaceNote, w: ReportWords): string {
+  switch (n.code) {
+    case 'stream': return w.t('noteStream');
+    case 'stream-partial': return w.t('noteStreamPartial');
+    case 'unit-unverified': return w.t('noteUnitUnverified');
+    case 'too-few-points': return w.t('noteTooFewPoints');
+    case 'stray-excluded': return w.t('noteStrayExcluded', { count: w.i0(n.count) });
+    case 'density-scaled': return w.t('noteDensityScaled', { measured: w.i0(n.measured), loaded: w.i0(n.loaded) });
+    case 'ceiling-approximate': return w.t('noteCeilingApproximate');
+    case 'ceiling-missing': return w.t('noteCeilingMissing');
+    case 'walls-estimate': return w.t('noteWallsEstimate');
+    case 'open-object': return w.t('noteOpenObject');
+  }
 }
 
 /**
@@ -447,30 +497,33 @@ function assemble(
  */
 // The footer prints this under an "Evidence" key, so the sentence does not
 // repeat the word: the line read "Evidence   Evidence: unvalidated ...".
-export const SPACE_REPORT_EVIDENCE_NOTE =
-  'Unvalidated envelope estimate. The areas, volumes, angular ' +
-  'coverage and density here are bounding-envelope and grid estimates from the ' +
-  'loaded point sample. No registered claim covers them, so they carry no ' +
-  'cross-implementation and no field validation. Do not present this as a ' +
-  'validated deliverable.';
+export const SPACE_REPORT_EVIDENCE_NOTE = SPACE_REPORT_TEXT.en.evidence;
 
-/** Plain `Key  Value` provenance lines for the report footer. */
-export function spaceProvenanceLines(p: SpaceReportProvenance): string[] {
+/**
+ * Plain `Key  Value` provenance lines for the report footer. A report in a
+ * language other than English adds a Language line, which says when the
+ * translation has not been reviewed yet.
+ */
+export function spaceProvenanceLines(p: SpaceReportProvenance, locale: ExportLocale = ENGLISH): string[] {
+  const w = reportWords(locale);
+  const { t, i0 } = w;
   const KEY_W = 16;
   // Keys wider than the column still need a gutter (same guarantee as the
   // terrain provenance kv), or key and value jam into one token.
   const kv = (k: string, v: string): string => `${k.padEnd(Math.max(KEY_W, k.length + 2))}${v}`;
+  const info = languageInfo(locale.lang);
   return [
-    kv('Software', `${p.software} ${p.softwareVersion}`),
-    kv('Metric version', p.metricVersion),
-    kv('Generated', p.generated.slice(0, 16).replace('T', ' ') + ' UTC'),
-    kv('Source', p.source ?? 'unknown'),
-    kv('Scan type', p.scanType),
-    kv('Units', p.units),
-    kv('Points', `${i0(p.measuredPointCount)} measured / ${i0(p.loadedPointCount)} loaded in viewer`),
-    ...(p.coverage ? [kv('Coverage', `${p.coverage}. Figures are from the points read.`)] : []),
-    kv('Note', p.notSurveyGrade),
-    kv('Evidence', SPACE_REPORT_EVIDENCE_NOTE),
+    kv(t('kSoftware'), `${p.software} ${p.softwareVersion}`),
+    kv(t('kMetricVersion'), p.metricVersion),
+    kv(t('kGenerated'), p.generated.slice(0, 16).replace('T', ' ') + ' UTC'),
+    kv(t('kSource'), p.source ?? t('unknown')),
+    kv(t('kScanType'), p.scanType),
+    kv(t('kUnits'), p.units),
+    ...(locale.lang === 'en' ? [] : [kv(t('kLanguage'), info.reviewed ? info.name : t('languageDraft', { name: info.name }))]),
+    kv(t('kPoints'), t('pointsLine', { measured: i0(p.measuredPointCount), loaded: i0(p.loadedPointCount) })),
+    ...(p.coverage ? [kv(t('kCoverage'), t('coverageLine', { coverage: p.coverage }))] : []),
+    kv(t('kNote'), p.notSurveyGrade),
+    kv(t('kEvidence'), t('evidence')),
   ];
 }
 
@@ -481,17 +534,26 @@ export function spaceProvenanceLines(p: SpaceReportProvenance): string[] {
  */
 export function buildSpaceReportContent(input: SpaceReportInput): SpaceReportContent {
   const scale = reportScale(input);
+  const w = reportWords(input.locale ?? ENGLISH);
+  const { t } = w;
   if (!input.space) {
     return assemble(
       input,
       null,
-      input.object ? 'Object' : 'Interior space',
-      [{ title: 'Measurements', rows: [{ label: 'Status', value: 'No measurements available yet.' }] }],
+      input.object ? t('scanObject') : t('scanInterior'),
+      [{ title: t('secMeasurements'), rows: [{ label: t('status'), value: t('noMeasurements') }] }],
       scale,
+      w,
     );
   }
   if (input.space.spaceKind === 'object' || input.object) {
-    return objectContent(input, scale);
+    return objectContent(input, scale, w);
   }
-  return interiorContent(input, scale);
+  return interiorContent(input, scale, w);
 }
+
+/** The report's words for `locale`, for the PDF renderer's own labels. */
+export function spaceReportWords(locale: ExportLocale = ENGLISH): ReportWords {
+  return reportWords(locale);
+}
+export type { ReportWords };

@@ -143,7 +143,26 @@ export interface SpaceMetrics {
   readonly linearUnit: LinearUnitScale;
   /** Honesty caveats + basis strings. */
   readonly reasons: readonly string[];
+  /**
+   * The same caveats as codes with their figures, one per entry of
+   * {@link reasons} and in the same order, so a report in another language
+   * can say them in that language. The English sentences stay in `reasons`.
+   */
+  readonly notes?: readonly SpaceNote[];
 }
+
+/** One caveat of {@link SpaceMetrics.reasons}, as a code and its figures. */
+export type SpaceNote =
+  | { readonly code: 'stream' }
+  | { readonly code: 'stream-partial' }
+  | { readonly code: 'unit-unverified' }
+  | { readonly code: 'too-few-points' }
+  | { readonly code: 'stray-excluded'; readonly count: number }
+  | { readonly code: 'density-scaled'; readonly measured: number; readonly loaded: number }
+  | { readonly code: 'ceiling-approximate' }
+  | { readonly code: 'ceiling-missing' }
+  | { readonly code: 'walls-estimate' }
+  | { readonly code: 'open-object' };
 
 /**
  * Resolve the source frame's linear-unit scale from the CRS-authority flag,
@@ -345,12 +364,13 @@ export function spaceMetrics(
   const linearUnit = resolveLinearUnitScale(params.unitToMetres, params.unitKnown);
 
   const reasons: string[] = [params.residentOnly ? PARTIAL_STREAM_CAVEAT : STREAM_CAVEAT];
+  const notes: SpaceNote[] = [{ code: params.residentOnly ? 'stream-partial' : 'stream' }];
   // Fail closed on an unverified scale: when the caller knows the linear unit is
   // NOT resolved, every metre figure below is an assume-metres default, so
   // disclose it rather than let "X m" read as a confirmed metric claim. Pushed
   // after the stream caveat so `reasons[0]` (the partial-stream lead contract)
   // is untouched; the panel promotes this caveat to the visible lead itself.
-  if (params.unitKnown === false) reasons.push(UNVERIFIED_UNIT_CAVEAT);
+  if (params.unitKnown === false) { reasons.push(UNVERIFIED_UNIT_CAVEAT); notes.push({ code: 'unit-unverified' }); }
   const blankQuality: CaptureQuality = {
     sampledPointCount: 0, sourcePointCount, densityPerM2: 0,
     meanSpacingM: 0, coveragePct: 0, hasRgb,
@@ -362,6 +382,7 @@ export function spaceMetrics(
     planes: { floorPresent: false, floorAreaM2: null, ceilingPresent: false, ceilingAreaM2: null, wallCoveragePct: 0, dominantWallDirections: 0 },
     storyCount: 0, quality: blankQuality, linearUnit,
     reasons: [...reasons, 'Too few points to measure this space yet.'],
+    notes: [...notes, { code: 'too-few-points' }],
   };
   if (n < 16) return blank;
 
@@ -400,6 +421,7 @@ export function spaceMetrics(
     }
   }
   if (clippedCount > 0) {
+    notes.push({ code: 'stray-excluded', count: clippedCount });
     reasons.push(
       `${clippedCount.toLocaleString()} stray return(s) outside the dense footprint were excluded — dimensions describe the scanned space, matching the floor-plan sheet.`,
     );
@@ -655,6 +677,7 @@ export function spaceMetrics(
     sampledPointCount: m, sourcePointCount, densityPerM2, meanSpacingM, coveragePct, hasRgb,
   };
   if (sampleScale > 1) {
+    notes.push({ code: 'density-scaled', measured: m, loaded: sourcePointCount });
     reasons.push(
       `Density and spacing are scaled from a ${m.toLocaleString()}-point measured subset ` +
         `to the ${sourcePointCount.toLocaleString()}-point loaded sample ` +
@@ -666,12 +689,16 @@ export function spaceMetrics(
   if (spaceKind === 'interior') {
     if (ceilingPresent) {
       reasons.push('Ceilings are often sparsely captured — ceiling height and enclosed volume are approximate.');
+      notes.push({ code: 'ceiling-approximate' });
     } else {
       reasons.push('No clear ceiling captured yet — height and volume are unavailable until the top surface is scanned.');
+      notes.push({ code: 'ceiling-missing' });
     }
     reasons.push('Wall and plane figures are pragmatic estimates, not a certified survey.');
+    notes.push({ code: 'walls-estimate' });
   } else {
     reasons.push('Open object — enclosed volume is a bounding-box envelope, not a solid measurement.');
+    notes.push({ code: 'open-object' });
   }
 
   return {
@@ -683,6 +710,6 @@ export function spaceMetrics(
       ceilingAreaM2: ceilingPresent ? ceilCells * cellArea : null,
       wallCoveragePct, dominantWallDirections,
     },
-    storyCount, quality, linearUnit, reasons,
+    storyCount, quality, linearUnit, reasons, notes,
   };
 }

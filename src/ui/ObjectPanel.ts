@@ -42,6 +42,7 @@ import {
 } from './scanTypeControl';
 import { el } from './dom';
 import { sheetStyleControl } from './sheetStyleControl';
+import { exportLanguageControl } from './exportLanguageControl';
 
 /**
  * The user-tunable subset of the floor-plan extraction settings, surfaced as a
@@ -400,6 +401,12 @@ export class ObjectPanel {
     // The report and the floor plan follow this choice; it is the same one
     // the map sheet dialog and the Export tab show.
     this._body.append(sheetStyleControl());
+    // The report's language and number style, chosen apart from the app's.
+    this._body.append(exportLanguageControl(
+      withFloorPlan
+        ? 'The report is written in this language. The floor plan stays in English for now. Translations are drafts until reviewed.'
+        : 'The report is written in this language. Translations are drafts until reviewed.',
+    ));
     if (withFloorPlan) {
       // The compact options control for the preview export — wall snapping +
       // adaptive band — sits directly under the button it tunes.

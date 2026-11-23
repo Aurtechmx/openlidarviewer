@@ -2027,7 +2027,7 @@ function newObjectPanel(
   onExportReport: async () => {
     const ctx = routeCoordinator.spaceExport();
     if (!ctx) return;
-    const { buildSpaceReportPdf, sheetStyle } = await loadSpaceReportPdf();
+    const { buildSpaceReportPdf, sheetStyle, exportLocale } = await loadSpaceReportPdf();
     if (!spaceCtxCurrent(ctx)) throw new Error(SPACE_CONTEXT_MOVED);
     let floorPlan = null;
     if (ctx.spaceKind === 'interior') {
@@ -2057,8 +2057,8 @@ function newObjectPanel(
       unitToMetres: ctx.unitToMetres, coverageNote: ctx.coverageNote,
       floorPlan,
       // The embedded plan's dimension line follows the live measurement unit
-      // system, exactly like the standalone SVG sheet below.
-      unitSystem: viewer.measure.unitSystem,
+      // system, exactly like the standalone SVG sheet below; the language is the one chosen beside the button.
+      unitSystem: viewer.measure.unitSystem, locale: exportLocale(),
     }, { style: sheetStyle() });
     if (!spaceCtxCurrent(ctx)) throw new Error(SPACE_CONTEXT_MOVED); downloadFileBytes(`${ctx.basename}-space-report.pdf`, bytes, 'application/pdf'); // the build is an await too: a CRS change during it re-measured the panel
   },
