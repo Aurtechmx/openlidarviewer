@@ -132,3 +132,30 @@ describe('smaller points', () => {
   });
 });
 void vi;
+
+describe('glTF and E57 heights', () => {
+  it('declare metre heights, so reports print heights in m beside metre widths', async () => {
+    const { formatSpecificationCrs } = await import('../src/geo/CoordinateTypes');
+    const { heightUnitGapOf } = await import('../src/geo/height');
+    for (const format of ['glTF', 'E57'] as const) {
+      const crs = formatSpecificationCrs(format);
+      expect(crs.verticalUnitToMetres).toBe(1);
+      expect(crs.verticalLinearUnit).toBe('metre');
+      expect(heightUnitGapOf(crs.verticalUnitToMetres)).toBeNull();
+    }
+  });
+});
+
+describe('older glTF sessions', () => {
+  it('get metre heights back when the saved frame has none', async () => {
+    const { parseResolvedCrs } = await import('../src/io/sessionCrs');
+    const current = JSON.parse(JSON.stringify(resolvedFromCrsInfo(formatSpecificationCrs('glTF'), 'format-specification')));
+    expect(current.source).toBe('format-specification');
+    delete current.verticalUnitToMetres;
+    delete current.verticalLinearUnit;
+    const back = parseResolvedCrs(current);
+    expect(back).not.toBeNull();
+    expect(back?.verticalUnitToMetres).toBe(1);
+    expect(back?.verticalLinearUnit).toBe('metre');
+  });
+});

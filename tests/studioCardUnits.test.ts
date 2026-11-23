@@ -44,6 +44,9 @@ const GEOCENTRIC: CrsInfo = {
   source: 'epsg', name: 'WGS 84 (geocentric)', epsg: 4978,
   linearUnit: 'metre', linearUnitToMetres: 1, isGeographic: false, geocentric: true,
 };
+const LOCAL_METRES: CrsInfo = {
+  source: 'epsg', name: 'Local', linearUnit: 'metre', linearUnitToMetres: 1, isGeographic: false,
+};
 const UTM: CrsInfo = {
   source: 'epsg', name: 'WGS 84 / UTM zone 15N', epsg: 32615,
   linearUnit: 'metre', linearUnitToMetres: 1, isGeographic: false,
@@ -107,10 +110,34 @@ describe('Studio card ground-metre gating', () => {
     expect(val(captured[2]!.rows, 'Z range')).toBe('100.00 units – 150.00 units');
   });
 
+  it('a local frame with no CRS prints Width, Depth and Density in the height unit', () => {
+    const local = buildExportAdapter({
+      clouds: () => new Map([['a', entry([0, 0, 100])]]),
+      streaming: () => null,
+      // A GLB: no CRS name, metres by its format.
+      resolveCloudCrs: () => ({ ...resolvedExportCrs(null), resolved: resolvedFromCrsInfo(LOCAL_METRES, 'las-vlr') }),
+      elevationUnitLabel: () => 'm',
+    } as unknown as ExportAdapterHost);
+    const rows = baseReportRows(local, null);
+    expect(val(rows, 'Width')).toBe('2.00 km');
+    expect(val(rows, 'Height')).toBe('50.00 m');
+    expect(val(rows, 'Density')).toMatch(/ pts\/m² \(bounding-box estimate\)$/);
+    expect(val(rows, 'CRS')).toBeUndefined();
+  });
+
+  it('a local frame with no known unit keeps "units"', () => {
+    const local = buildExportAdapter({
+      clouds: () => new Map([['a', entry([0, 0, 100])]]),
+      streaming: () => null,
+      resolveCloudCrs: () => resolvedExportCrs(null),
+    } as unknown as ExportAdapterHost);
+    expect(val(baseReportRows(local, null), 'Width')).toBe('2000.0 units');
+  });
+
   it('a ground-metre frame keeps metres and density', () => {
     const rows = baseReportRows(adapterFor(UTM), null);
     expect(val(rows, 'Width')).toBe('2.00 km');
-    expect(val(rows, 'Density')).toBe('0.3 pts/m²');
+    expect(val(rows, 'Density')).toBe('0.3 pts/m² (bounding-box estimate)');
     expect(val(rows, 'Units')).not.toMatch(/Not ground metres/);
   });
 });

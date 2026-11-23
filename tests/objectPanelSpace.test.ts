@@ -53,7 +53,7 @@ describe('ObjectPanel — space / object routing', () => {
     panel.showSpace(space, shape);
     const text = (panel.element as unknown as FakeEl).textContent;
     for (const field of [
-      'Space scan', 'Dimensions (L×W×H)', 'Floor area', 'Ceiling height',
+      'Space scan', 'Dimensions (L×W×H)', 'Footprint area', 'Ceiling height',
       'Enclosed volume', 'Storeys', 'Planes', 'Walls', 'Capture quality',
       'currently loaded / streamed',
     ]) {

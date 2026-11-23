@@ -517,6 +517,12 @@ export interface RoundBandRequest {
   readonly mapX: (chainage: number) => number;
   /** Width one column needs, points, padding included. */
   readonly columnWpt: number;
+  /**
+   * Clear width the first round station needs from the start, in columns.
+   * Default 1.5, for a sheet that sets the start figure inward from the
+   * frame. A sheet that sets it left-aligned at the frame needs only 1.
+   */
+  readonly startClearColumns?: number;
 }
 
 export interface RoundBandLayout extends StationBandLayout {
@@ -561,7 +567,8 @@ export function buildRoundChainageBand(req: RoundBandRequest): RoundBandLayout {
   ) {
     chainages.pop();
   }
-  while (chainages.length > 1 && mapX(chainages[1]) - mapX(0) < endClear) chainages.splice(1, 1);
+  const startClear = req.columnWpt * (req.startClearColumns ?? 1.5);
+  while (chainages.length > 1 && mapX(chainages[1]) - mapX(0) < startClear) chainages.splice(1, 1);
   const omitted = roundCount - chainages.length;
   chainages.push(lengthM);
   const columns: StationBandColumn[] = chainages.map((c, i) => ({

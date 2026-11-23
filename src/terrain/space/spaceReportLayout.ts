@@ -331,7 +331,7 @@ function interiorContent(input: SpaceReportInput, scale: LinearUnitScale): Space
     title: 'Dimensions',
     rows: [
       { label: 'L x W x H', value: f.triple(d.lengthM, d.widthM, d.heightM) },
-      { label: 'Floor area', value: f.area(space.floorAreaM2) },
+      { label: 'Footprint area', value: f.area(space.floorAreaM2) },
       { label: 'Ceiling height', value: f.len(space.ceilingHeightM) },
       { label: 'Enclosed volume', value: f.vol(space.enclosedVolumeM3) },
       { label: 'Storeys / levels', value: i0(space.storyCount) },

@@ -123,11 +123,11 @@ export interface SpaceMetrics {
   readonly spaceKind: 'interior' | 'object';
   readonly up: Axis;
   readonly dims: SpaceDims;
-  /** Occupied-footprint (floor) area, m². */
+  /** Occupied-footprint area, m²: the plan cells any point covers (shown as "Footprint area"). */
   readonly floorAreaM2: number;
   /** Floor→ceiling height, m — null when no clear ceiling (open object). */
   readonly ceilingHeightM: number | null;
-  /** Floor area × ceiling height, m³; envelope fallback when no ceiling. */
+  /** Footprint area × ceiling height, m³; envelope fallback when no ceiling. */
   readonly enclosedVolumeM3: number | null;
   readonly planes: PlaneReport;
   /** Storey / level count from well-separated floor peaks (≥ ~2.2 m apart). */
@@ -495,7 +495,6 @@ export function spaceMetrics(
     for (let i = loB; i < hiB; i++) if (hist[i] > best) { best = hist[i]; bi = i; }
     return { bin: bi, count: best, level: minV + (bi + 0.5) * binW };
   };
-  const peakLevel = (loFrac: number, hiFrac: number): number => peakBin(loFrac, hiFrac).level;
 
   // ── Floor / ceiling planes ──
   // Per-cell band coverage (does each footprint cell carry a return near the very
@@ -535,9 +534,28 @@ export function spaceMetrics(
   // so a sparsely-captured (partial) ceiling or a clutter-occluded floor — which
   // a raw coverage test can miss — is still found by the mass it concentrates.
   const PEAK_MASS_FRACTION = 0.04; // ≥4% of points in one ~1/64-extent bin
-  const floorPeak = peakBin(0, 0.45);
-  const ceilPeak = peakBin(0.55, 1);
   const massThresh = PEAK_MASS_FRACTION * m;
+  /**
+   * The floor is the LOWEST strong peak of the lower band and the ceiling the
+   * HIGHEST strong peak of the upper band: a strong local maximum carrying at
+   * least `massThresh`. The single fullest bin is the fallback only. A bed or
+   * table top concentrates its mass in one bin while a floor that is not quite
+   * level spreads over two, so "fullest" took furniture for the floor and
+   * printed a 1.9 m ceiling height for a 2.45 m room.
+   */
+  const strongPeakBin = (loFrac: number, hiFrac: number, fromTop: boolean): { bin: number; count: number; level: number } => {
+    const loB = Math.floor(loFrac * B), hiB = Math.min(B, Math.ceil(hiFrac * B));
+    const isPeak = (i: number): boolean =>
+      hist[i] >= massThresh && (i === 0 || hist[i] >= hist[i - 1]) && (i === B - 1 || hist[i] >= hist[i + 1]);
+    if (fromTop) {
+      for (let i = hiB - 1; i >= loB; i--) if (isPeak(i)) return { bin: i, count: hist[i], level: minV + (i + 0.5) * binW };
+    } else {
+      for (let i = loB; i < hiB; i++) if (isPeak(i)) return { bin: i, count: hist[i], level: minV + (i + 0.5) * binW };
+    }
+    return peakBin(loFrac, hiFrac);
+  };
+  const floorPeak = strongPeakBin(0, 0.45, false);
+  const ceilPeak = strongPeakBin(0.55, 1, true);
   const floorPeakStrong = exV > 0 && floorPeak.count >= massThresh;
   const ceilPeakStrong = exV > 0 && ceilPeak.count >= massThresh && ceilPeak.bin > floorPeak.bin;
 
@@ -558,8 +576,8 @@ export function spaceMetrics(
   // ── Ceiling height from the density-weighted floor / ceiling peaks ──
   let ceilingHeightM: number | null = null;
   if (ceilingPresent) {
-    const floorLevel = peakLevel(0, 0.45);
-    const ceilingLevel = peakLevel(0.55, 1);
+    const floorLevel = floorPeak.level;
+    const ceilingLevel = ceilPeak.level;
     const h = ceilingLevel - floorLevel;
     if (h > 0) ceilingHeightM = h;
   }

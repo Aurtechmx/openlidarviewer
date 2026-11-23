@@ -756,16 +756,7 @@ export function extractFloorPlan(
       `${norm.demotedCount} free-standing mass(es) far thicker than the building's walls (likely large furniture) were demoted from the wall poché to contents hints.`,
     );
   }
-  if (contentsCount > 0) {
-    // Honest found-vs-drawn wording: when the speck filter + largest-N cap
-    // dropped some islands, say so rather than implying every island is drawn.
-    const undrawn = contentsCount - drawnContentsCount;
-    reasons.push(
-      undrawn > 0
-        ? `${contentsCount} compact island(s) at wall height (likely furniture or room contents, not walls) were lifted out of the wall poché; the ${drawnContentsCount} largest are drawn as light grey hints (simplified to their convex outline), the ${undrawn} smallest omitted to keep the sheet legible.`
-        : `${contentsCount} compact island(s) at wall height (likely furniture or room contents, not walls) were lifted out of the wall poché and drawn as light grey hints (simplified to their convex outline).`,
-    );
-  }
+  if (contentsCount > 0) reasons.push(contentsNote(contentsCount, drawnContentsCount));
   if (fromWallGraph) {
     reasons.push(
       `Walls reconstructed from the centerline wall graph (${graph.nodes.length} node(s), ${graph.edges.length} edge(s)) — one measured thickness per wall run, corners joined at junctions; no run was added that the skeleton did not trace.`,
@@ -832,4 +823,18 @@ export function extractFloorPlan(
     snappedToAxes: axes != null,
     reasons,
   };
+}
+
+/**
+ * The footer note for the compact islands lifted out of the wall poché, saying
+ * how many were found and how many are drawn. The speck filter and the
+ * largest-N cap can draw fewer than were found, or none.
+ */
+export function contentsNote(contentsCount: number, drawnContentsCount: number): string {
+  const found = `${contentsCount} compact island(s) at wall height (likely furniture or room contents, not walls) were lifted out of the wall poché`;
+  if (drawnContentsCount <= 0) return `${found}; all are too small to draw and are left off the sheet.`;
+  const undrawn = contentsCount - drawnContentsCount;
+  return undrawn > 0
+    ? `${found}; the ${drawnContentsCount} largest are drawn as light grey hints (simplified to their convex outline), the ${undrawn} smallest omitted to keep the sheet legible.`
+    : `${found} and drawn as light grey hints (simplified to their convex outline).`;
 }

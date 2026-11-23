@@ -246,7 +246,9 @@ export async function drawStyledProfileSheet(page: PDFPage, s: StyledProfileShee
   if (scales) {
     const stationsIn = s.stations.map((st) => ({ chainage: st.chainage, height: st.elevation }));
     const colW = Math.max(sheetTextWidth(s.formatStation(len), f.mono, SHEET_TYPE.tick, f), sheetTextWidth('0000.00', f.mono, SHEET_TYPE.tick, f)) + 10;
-    const band = buildRoundChainageBand({ stations: stationsIn, lengthM: len, k: s.k, mapX, columnWpt: colW });
+    // The start figure is set left-aligned at the frame, so the next round
+    // station needs one column of clear width, not a column and a half.
+    const band = buildRoundChainageBand({ stations: stationsIn, lengthM: len, k: s.k, mapX, columnWpt: colW, startClearColumns: 1 });
     const rowsY = [bandTop - bandRowH, bandTop - 2 * bandRowH, bandTop - 3 * bandRowH, bandTop - 4 * bandRowH];
     const heads = ['CHAINAGE', `${s.heightWord.toUpperCase()} ${s.unit}`, 'GRADE %', 'GROUND RETURNS'];
     page.drawRectangle({ x: left, y: bandBottom, width: drawW, height: bandTop - bandBottom, color: pdfColor(t.panel), borderColor: pdfColor(t.outline), borderWidth: t.weight.frame });

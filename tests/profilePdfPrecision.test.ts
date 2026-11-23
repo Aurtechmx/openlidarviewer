@@ -220,6 +220,18 @@ describe('round-chainage station band', () => {
     expect(none.omitted).toBe(0);
   });
 
+  it('keeps the first round station when the sheet needs only one column at the start', () => {
+    // 10 px per metre, 50 px columns: 10 m sits 100 px from the start. A column
+    // and a half (75 px) or one column (50 px) both keep it; at 6 px per metre
+    // it sits 60 px out, which one column keeps and a column and a half drops.
+    const tight = { stations, lengthM: 28.95, k: 1, mapX: (c: number) => 100 + c * 6, columnWpt: 50 };
+    const classic = buildRoundChainageBand(tight);
+    const styled = buildRoundChainageBand({ ...tight, startClearColumns: 1 });
+    expect(classic.columns[1].chainage).toBeGreaterThan(10);
+    expect(styled.columns[1].chainage).toBe(10);
+    expect(styled.omitted).toBe(classic.omitted - 1);
+  });
+
   it('widens the interval until the columns no longer touch', () => {
     const band = buildRoundChainageBand({
       stations,

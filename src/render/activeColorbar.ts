@@ -237,7 +237,8 @@ export interface ColorbarBurnInLayout {
  * Lay out the burn-in colorbar: a vertical bar hugging the RIGHT edge,
  * vertically centred. That corner is deliberately chosen against the other
  * snapshot furniture: the scale bar owns the bottom-left, the Studio's
- * scan-report card is composed onto the bottom-right AFTER the snapshot,
+ * scan-report card is composed onto the bottom-left AFTER the snapshot (a
+ * Studio capture draws no scale bar),
  * and the class-scope banner runs across the very top — the right-middle is
  * the one region none of them touch.
  */

@@ -469,9 +469,9 @@ export async function captureSnapshot(
     }
   }
 
-  // Colorbar legend burn-in — right edge, vertically centred, so it can
-  // never collide with the scale bar (bottom-left), the Studio's
-  // scan-report card (composed bottom-right after this snapshot), or the
+  // Colorbar legend burn-in — right edge, vertically centred, clear of the
+  // scale bar (bottom-left), the Studio's scan-report card (composed
+  // bottom-left after this snapshot, which draws no scale bar) and the
   // class-scope banner (top). Values and ramp come from the same
   // `activeColorbar()` spec the on-screen overlay shows.
   if (activeBar) {

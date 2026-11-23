@@ -60,7 +60,7 @@ describe('ObjectPanel still renders with the shared helper', () => {
     const panel = new ObjectPanel();
     panel.showSpace(space, shape);
     const text = (panel.element as unknown as FakeEl).textContent;
-    for (const field of ['Space scan', 'Floor area', 'Ceiling height', 'Capture quality']) {
+    for (const field of ['Space scan', 'Footprint area', 'Ceiling height', 'Capture quality']) {
       expect(text).toContain(field);
     }
   });

@@ -74,7 +74,7 @@ describe('buildSpaceReportContent — interior', () => {
     expect(content.subtitle).toBe('Interior space');
     const text = allText(content);
     for (const field of [
-      'House 360', 'Dimensions', 'L x W x H', 'Floor area', 'Ceiling height',
+      'House 360', 'Dimensions', 'L x W x H', 'Footprint area', 'Ceiling height',
       'Enclosed volume', 'Storeys', 'Planes', 'Floor', 'Ceiling', 'Walls',
       'Capture quality', 'Density', 'Bounding area filled', 'Colour (RGB)',
     ]) {
