@@ -32,7 +32,10 @@ export interface ContourPdfProvenance {
   readonly verticalUnit: string;
   readonly grid: string;
   readonly methodIds: readonly string[];
-  readonly sourceHash: string;
+  /** SHA-256 of the source file, or why none was recorded. */
+  readonly sourceSha256: string;
+  /** Content hash of the analysis record, which is not the file's. */
+  readonly recordHash: string;
 }
 
 export interface ContourPdfInput {
@@ -129,7 +132,8 @@ export function buildContourPdfModel(input: ContourPdfInput): ContourPdfModel {
   const provenancePage: ContourPdfPage = {
     title: 'Method and provenance',
     lines: [
-      `Source hash: ${input.provenance.sourceHash}`,
+      `Source SHA-256: ${input.provenance.sourceSha256}`,
+      `Analysis record: ${input.provenance.recordHash}`,
       `CRS: ${input.provenance.crs}`,
       `Vertical datum: ${input.provenance.verticalDatum}`,
       `Horizontal unit: ${input.provenance.horizontalUnit}`,

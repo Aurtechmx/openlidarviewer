@@ -58,6 +58,10 @@ export {
   gradeForConfidence,
 } from './displayGrade';
 
+/** Warning of a surface built with no CRS. */
+export const CRS_UNKNOWN_WARNING =
+  'CRS unknown — exports must resolve a CRS before they are usable downstream';
+
 /**
  * @deprecated Renamed to {@link ContourDisplayGrade} to stop display grade being
  * read as scientific evidence. Kept for one release for compatibility; migrate
@@ -468,7 +472,7 @@ export function buildDtmGrid(raster: DemRaster, params: CellConfidenceParams = {
   }
 
   if (params.crs == null) {
-    warnings.push('CRS unknown — exports must resolve a CRS before they are usable downstream');
+    warnings.push(CRS_UNKNOWN_WARNING);
   }
 
   return {
