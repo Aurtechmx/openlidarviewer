@@ -173,8 +173,9 @@ test('Export mode: the map sheet defaults to Light, with the relief and the shee
   // The relief raster and Figtree, loaded from the build's own font files.
   const { fonts, images } = await pdfResources(bytes);
   expect(images).toBeGreaterThan(0);
-  expect(fonts.some((f) => f.includes('Figtree'))).toBe(true);
-  expect(fonts).toContain('Courier');
+  // Figures are set in Figtree too: no standard font stands in.
+  expect(fonts.length).toBeGreaterThan(0);
+  expect(fonts.filter((f) => !f.includes('Figtree'))).toEqual([]);
   await expect(dialog).toBeHidden();
 
   // Dark is remembered for the next export in the session.
