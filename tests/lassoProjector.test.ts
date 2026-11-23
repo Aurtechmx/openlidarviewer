@@ -11,7 +11,7 @@
 
 import { describe, it, expect } from 'vitest';
 import * as THREE from 'three';
-import { makeLassoProjector } from '../src/render/measure/lassoProjector';
+import { isReversedProjection, makeLassoProjector, makeLassoUnprojector } from '../src/render/measure/lassoProjector';
 
 const W = 1280;
 const H = 720;
@@ -71,5 +71,55 @@ describe('makeLassoProjector', () => {
     // Distance along the view axis, not to the camera: a point on the axis has
     // both equal, so the near one pins the units as cloud units, not NDC.
     expect(near.depth!).toBeCloseTo(cam.position.distanceTo(new THREE.Vector3(0, 0, 2)), 3);
+  });
+});
+
+describe('the lasso under every depth convention', () => {
+  type Cam = THREE.PerspectiveCamera | THREE.OrthographicCamera;
+  const build = (kind: string, system: THREE.CoordinateSystem, reversed: boolean): Cam => {
+    const cam: Cam = kind === 'perspective'
+      ? new THREE.PerspectiveCamera(55, W / H, 0.01, 1000)
+      : new THREE.OrthographicCamera(-32, 32, 18, -18, 0.01, 1000);
+    cam.position.set(12, -30, 18);
+    cam.lookAt(0, 0, 2);
+    cam.coordinateSystem = system;
+    (cam as unknown as { _reversedDepth: boolean })._reversedDepth = reversed;
+    cam.updateMatrixWorld(true);
+    cam.updateProjectionMatrix();
+    return cam;
+  };
+  const cases = ['perspective', 'orthographic'].flatMap((kind) => [
+    { kind, name: 'WebGL', system: THREE.WebGLCoordinateSystem, reversed: false },
+    { kind, name: 'WebGPU', system: THREE.WebGPUCoordinateSystem, reversed: false },
+    { kind, name: 'reversed', system: THREE.WebGPUCoordinateSystem, reversed: true },
+    { kind, name: 'reversed WebGL 2', system: THREE.WebGLCoordinateSystem, reversed: true },
+  ]);
+
+  it.each(cases)('$kind, $name: keeps the scene, drops what is behind or past far', ({ kind, system, reversed }) => {
+    const cam = build(kind, system, reversed);
+    expect(isReversedProjection(cam.projectionMatrix.elements)).toBe(reversed);
+    const project = makeLassoProjector(cam.matrixWorldInverse.elements, cam.projectionMatrix.elements, W, H);
+    const along = (d: number): THREE.Vector3 => new THREE.Vector3(0, 0, -d).applyMatrix4(cam.matrixWorld);
+    for (const d of [0.5, 10, 900]) {
+      const p = along(d);
+      expect(project(p.x, p.y, p.z)?.depth, `${d} m ahead`).toBeCloseTo(d, 6);
+    }
+    for (const d of [-0.5, -10, -900, 1001, 1500]) {
+      const p = along(d);
+      expect(project(p.x, p.y, p.z), `${d} m`).toBeNull();
+    }
+  });
+
+  it.each(cases)('$kind, $name: unprojects to the plane ahead and refuses one behind', ({ kind, system, reversed }) => {
+    const cam = build(kind, system, reversed);
+    const unproject = makeLassoUnprojector(cam.matrixWorld.elements, cam.projectionMatrixInverse.elements, W, H);
+    const at = new THREE.Vector3(3, -2, 1);
+    const ndc = at.clone().project(cam);
+    const hit = unproject((ndc.x * 0.5 + 0.5) * W, (1 - (ndc.y * 0.5 + 0.5)) * H, 1)!;
+    expect(hit[0]).toBeCloseTo(3, 5);
+    expect(hit[1]).toBeCloseTo(-2, 5);
+    expect(hit[2]).toBeCloseTo(1, 8);
+    // The camera looks down from 18 m: a plane at 40 m is behind it.
+    expect(unproject(W / 2, H / 2, 40)).toBeNull();
   });
 });

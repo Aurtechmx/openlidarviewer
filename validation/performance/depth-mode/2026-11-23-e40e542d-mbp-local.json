@@ -1,0 +1,649 @@
+{
+  "benchmark": "depth-mode-v1",
+  "commit": "e40e542d",
+  "dirty": false,
+  "date": "2026-11-23",
+  "machine": "mbp-local",
+  "os": "darwin 25.5.0",
+  "browser": "chromium 158.0.8127.18",
+  "canvas": "1280x800, pixel ratio 1, MSAA",
+  "points": 3000000,
+  "pointSizePx": 3,
+  "near": 0.1,
+  "far": 5000000,
+  "runsPerArm": 3,
+  "storedResolutionM": [
+    {
+      "d": 1,
+      "standard": 5.960464358329774e-7,
+      "log": 0.00000105664334078982,
+      "reversed": 7.450580447912217e-8
+    },
+    {
+      "d": 10,
+      "standard": 0.00005960464358329774,
+      "log": 0.0000105664334078982,
+      "reversed": 9.313225559890272e-7
+    },
+    {
+      "d": 100,
+      "standard": 0.005960464358329773,
+      "log": 0.00010566433407898199,
+      "reversed": 0.000011641531949862839
+    },
+    {
+      "d": 1000,
+      "standard": 0.5960464358329773,
+      "log": 0.0010566433407898199,
+      "reversed": 0.00007275957468664274
+    },
+    {
+      "d": 10000,
+      "standard": 59.60464358329774,
+      "log": 0.0105664334078982,
+      "reversed": 0.0009094946835830343
+    },
+    {
+      "d": 50000,
+      "standard": 1490.1160895824432,
+      "log": 0.052832167039491,
+      "reversed": 0.005684341772393964
+    }
+  ],
+  "arms": {
+    "webgpu/standard": {
+      "info": {
+        "backend": "webgpu",
+        "requested": "standard",
+        "logarithmicDepthBuffer": false,
+        "reversedDepthBuffer": false,
+        "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/158.0.0.0 Safari/537.36"
+      },
+      "resolved": [
+        {
+          "d": 10,
+          "resolvedRelativeGap": 0.00001
+        },
+        {
+          "d": 100,
+          "resolvedRelativeGap": 0.0001
+        },
+        {
+          "d": 1000,
+          "resolvedRelativeGap": 0.0003
+        },
+        {
+          "d": 10000,
+          "resolvedRelativeGap": 0.0001
+        },
+        {
+          "d": 50000,
+          "resolvedRelativeGap": 0.0001
+        }
+      ],
+      "frames": {
+        "sheets-front-first/round": {
+          "medianMs": 10.599999994039536,
+          "p95Ms": 12.400000005960464,
+          "frames": 600,
+          "runMediansMs": [
+            10.900000005960464,
+            11.100000023841858,
+            10.200000017881393
+          ],
+          "failedRuns": 0
+        },
+        "sheets-front-first/square": {
+          "medianMs": 9.300000011920929,
+          "p95Ms": 10.300000011920929,
+          "frames": 600,
+          "runMediansMs": [
+            9.300000011920929,
+            9.600000023841858,
+            9.199999988079071
+          ],
+          "failedRuns": 0
+        },
+        "sheets-back-first/round": {
+          "medianMs": 13.400000005960464,
+          "p95Ms": 15.600000023841858,
+          "frames": 600,
+          "runMediansMs": [
+            13.199999988079071,
+            14.299999982118607,
+            13.200000017881393
+          ],
+          "failedRuns": 0
+        },
+        "sheets-back-first/square": {
+          "medianMs": 12.200000017881393,
+          "p95Ms": 13.900000005960464,
+          "frames": 600,
+          "runMediansMs": [
+            12.099999994039536,
+            12.900000005960464,
+            12
+          ],
+          "failedRuns": 0
+        },
+        "terrain/round": {
+          "medianMs": 9.900000005960464,
+          "p95Ms": 12.699999988079071,
+          "frames": 600,
+          "runMediansMs": [
+            10,
+            9.600000023841858,
+            10.099999994039536
+          ],
+          "failedRuns": 0
+        },
+        "terrain/square": {
+          "medianMs": 9.200000017881393,
+          "p95Ms": 12,
+          "frames": 600,
+          "runMediansMs": [
+            9.5,
+            9.199999988079071,
+            9.099999994039536
+          ],
+          "failedRuns": 0
+        }
+      }
+    },
+    "webgpu/log": {
+      "info": {
+        "backend": "webgpu",
+        "requested": "log",
+        "logarithmicDepthBuffer": true,
+        "reversedDepthBuffer": false,
+        "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/158.0.0.0 Safari/537.36"
+      },
+      "resolved": [
+        {
+          "d": 10,
+          "resolvedRelativeGap": 3e-7
+        },
+        {
+          "d": 100,
+          "resolvedRelativeGap": 0.000001
+        },
+        {
+          "d": 1000,
+          "resolvedRelativeGap": 0.000001
+        },
+        {
+          "d": 10000,
+          "resolvedRelativeGap": 0.000003
+        },
+        {
+          "d": 50000,
+          "resolvedRelativeGap": 0.000003
+        }
+      ],
+      "frames": {
+        "sheets-front-first/round": {
+          "medianMs": 17.299999982118607,
+          "p95Ms": 19.5,
+          "frames": 600,
+          "runMediansMs": [
+            17.399999976158142,
+            17.80000001192093,
+            16.599999994039536
+          ],
+          "failedRuns": 0
+        },
+        "sheets-front-first/square": {
+          "medianMs": 15.5,
+          "p95Ms": 18.399999976158142,
+          "frames": 600,
+          "runMediansMs": [
+            15.300000011920929,
+            16.099999994039536,
+            14.900000005960464
+          ],
+          "failedRuns": 0
+        },
+        "sheets-back-first/round": {
+          "medianMs": 17.200000017881393,
+          "p95Ms": 20.700000017881393,
+          "frames": 600,
+          "runMediansMs": [
+            16.69999998807907,
+            18.599999994039536,
+            16.599999994039536
+          ],
+          "failedRuns": 0
+        },
+        "sheets-back-first/square": {
+          "medianMs": 15.400000005960464,
+          "p95Ms": 18.600000023841858,
+          "frames": 600,
+          "runMediansMs": [
+            15.300000011920929,
+            15.800000011920929,
+            15.100000023841858
+          ],
+          "failedRuns": 0
+        },
+        "terrain/round": {
+          "medianMs": 28.099999994039536,
+          "p95Ms": 38.80000001192093,
+          "frames": 600,
+          "runMediansMs": [
+            28.400000005960464,
+            27.900000005960464,
+            27.80000001192093
+          ],
+          "failedRuns": 0
+        },
+        "terrain/square": {
+          "medianMs": 28.200000017881393,
+          "p95Ms": 36.30000001192093,
+          "frames": 600,
+          "runMediansMs": [
+            27.599999994039536,
+            29,
+            28.399999976158142
+          ],
+          "failedRuns": 0
+        }
+      }
+    },
+    "webgpu/reversed": {
+      "info": {
+        "backend": "webgpu",
+        "requested": "reversed",
+        "logarithmicDepthBuffer": false,
+        "reversedDepthBuffer": true,
+        "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/158.0.0.0 Safari/537.36"
+      },
+      "resolved": [
+        {
+          "d": 10,
+          "resolvedRelativeGap": 1e-7
+        },
+        {
+          "d": 100,
+          "resolvedRelativeGap": 1e-7
+        },
+        {
+          "d": 1000,
+          "resolvedRelativeGap": 1e-7
+        },
+        {
+          "d": 10000,
+          "resolvedRelativeGap": 1e-7
+        },
+        {
+          "d": 50000,
+          "resolvedRelativeGap": 1e-7
+        }
+      ],
+      "frames": {
+        "sheets-front-first/round": {
+          "medianMs": 10.5,
+          "p95Ms": 11.700000017881393,
+          "frames": 600,
+          "runMediansMs": [
+            11,
+            10.399999976158142,
+            10.400000005960464
+          ],
+          "failedRuns": 0
+        },
+        "sheets-front-first/square": {
+          "medianMs": 9.5,
+          "p95Ms": 10.900000005960464,
+          "frames": 600,
+          "runMediansMs": [
+            10.200000017881393,
+            9.399999976158142,
+            9.300000011920929
+          ],
+          "failedRuns": 0
+        },
+        "sheets-back-first/round": {
+          "medianMs": 13.400000005960464,
+          "p95Ms": 15.699999988079071,
+          "frames": 600,
+          "runMediansMs": [
+            14,
+            13.300000011920929,
+            13.099999994039536
+          ],
+          "failedRuns": 0
+        },
+        "sheets-back-first/square": {
+          "medianMs": 12.400000005960464,
+          "p95Ms": 13.700000017881393,
+          "frames": 600,
+          "runMediansMs": [
+            12.800000011920929,
+            12.300000011920929,
+            12
+          ],
+          "failedRuns": 0
+        },
+        "terrain/round": {
+          "medianMs": 10.300000011920929,
+          "p95Ms": 13.599999994039536,
+          "frames": 600,
+          "runMediansMs": [
+            10.800000011920929,
+            10.099999994039536,
+            10.100000023841858
+          ],
+          "failedRuns": 0
+        },
+        "terrain/square": {
+          "medianMs": 9.699999988079071,
+          "p95Ms": 12.800000011920929,
+          "frames": 600,
+          "runMediansMs": [
+            10.200000017881393,
+            9.699999988079071,
+            9.199999988079071
+          ],
+          "failedRuns": 0
+        }
+      }
+    },
+    "webgl2/standard": {
+      "info": {
+        "backend": "webgl2",
+        "requested": "standard",
+        "logarithmicDepthBuffer": false,
+        "reversedDepthBuffer": false,
+        "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/158.0.0.0 Safari/537.36"
+      },
+      "resolved": [
+        {
+          "d": 10,
+          "resolvedRelativeGap": 0.000003
+        },
+        {
+          "d": 100,
+          "resolvedRelativeGap": 0.0001
+        },
+        {
+          "d": 1000,
+          "resolvedRelativeGap": 0.001
+        },
+        {
+          "d": 10000,
+          "resolvedRelativeGap": 0.0001
+        },
+        {
+          "d": 50000,
+          "resolvedRelativeGap": 0.0001
+        }
+      ],
+      "frames": {
+        "sheets-front-first/round": {
+          "medianMs": 10.900000005960464,
+          "p95Ms": 12.400000005960464,
+          "frames": 600,
+          "runMediansMs": [
+            10.899999976158142,
+            11.100000023841858,
+            10.900000005960464
+          ],
+          "failedRuns": 0
+        },
+        "sheets-front-first/square": {
+          "medianMs": 9.699999988079071,
+          "p95Ms": 10.800000011920929,
+          "frames": 600,
+          "runMediansMs": [
+            9.599999994039536,
+            9.5,
+            10
+          ],
+          "failedRuns": 0
+        },
+        "sheets-back-first/round": {
+          "medianMs": 13.600000023841858,
+          "p95Ms": 15.599999994039536,
+          "frames": 600,
+          "runMediansMs": [
+            13.800000011920929,
+            13.699999988079071,
+            13.400000005960464
+          ],
+          "failedRuns": 0
+        },
+        "sheets-back-first/square": {
+          "medianMs": 13.099999994039536,
+          "p95Ms": 15,
+          "frames": 600,
+          "runMediansMs": [
+            13.5,
+            12.600000023841858,
+            13.200000017881393
+          ],
+          "failedRuns": 0
+        },
+        "terrain/round": {
+          "medianMs": 11,
+          "p95Ms": 14.099999994039536,
+          "frames": 600,
+          "runMediansMs": [
+            11.199999988079071,
+            10.900000005960464,
+            11
+          ],
+          "failedRuns": 0
+        },
+        "terrain/square": {
+          "medianMs": 10.299999982118607,
+          "p95Ms": 12.900000005960464,
+          "frames": 600,
+          "runMediansMs": [
+            10.400000005960464,
+            10.199999988079071,
+            10.299999982118607
+          ],
+          "failedRuns": 0
+        }
+      }
+    },
+    "webgl2/log": {
+      "info": {
+        "backend": "webgl2",
+        "requested": "log",
+        "logarithmicDepthBuffer": true,
+        "reversedDepthBuffer": false,
+        "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/158.0.0.0 Safari/537.36"
+      },
+      "resolved": [
+        {
+          "d": 10,
+          "resolvedRelativeGap": 3e-7
+        },
+        {
+          "d": 100,
+          "resolvedRelativeGap": 0.000001
+        },
+        {
+          "d": 1000,
+          "resolvedRelativeGap": 0.000001
+        },
+        {
+          "d": 10000,
+          "resolvedRelativeGap": 0.000003
+        },
+        {
+          "d": 50000,
+          "resolvedRelativeGap": 0.000003
+        }
+      ],
+      "frames": {
+        "sheets-front-first/round": {
+          "medianMs": 16.900000005960464,
+          "p95Ms": 19.299999982118607,
+          "frames": 600,
+          "runMediansMs": [
+            16.899999976158142,
+            17.30000001192093,
+            16.799999982118607
+          ],
+          "failedRuns": 0
+        },
+        "sheets-front-first/square": {
+          "medianMs": 16.400000005960464,
+          "p95Ms": 19.599999994039536,
+          "frames": 600,
+          "runMediansMs": [
+            16.900000005960464,
+            16.399999976158142,
+            16.200000017881393
+          ],
+          "failedRuns": 0
+        },
+        "sheets-back-first/round": {
+          "medianMs": 16.900000005960464,
+          "p95Ms": 20.099999994039536,
+          "frames": 600,
+          "runMediansMs": [
+            17.19999998807907,
+            16.900000005960464,
+            16.700000017881393
+          ],
+          "failedRuns": 0
+        },
+        "sheets-back-first/square": {
+          "medianMs": 16,
+          "p95Ms": 19.099999994039536,
+          "frames": 600,
+          "runMediansMs": [
+            16.400000005960464,
+            16,
+            15.599999994039536
+          ],
+          "failedRuns": 0
+        },
+        "terrain/round": {
+          "medianMs": 30.799999982118607,
+          "p95Ms": 42.5,
+          "frames": 600,
+          "runMediansMs": [
+            31.30000001192093,
+            31.200000017881393,
+            29.900000005960464
+          ],
+          "failedRuns": 0
+        },
+        "terrain/square": {
+          "medianMs": 29,
+          "p95Ms": 39.29999998211861,
+          "frames": 600,
+          "runMediansMs": [
+            30.69999998807907,
+            28,
+            29.5
+          ],
+          "failedRuns": 0
+        }
+      }
+    },
+    "webgl2/reversed": {
+      "info": {
+        "backend": "webgl2",
+        "requested": "reversed",
+        "logarithmicDepthBuffer": false,
+        "reversedDepthBuffer": true,
+        "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/158.0.0.0 Safari/537.36"
+      },
+      "resolved": [
+        {
+          "d": 10,
+          "resolvedRelativeGap": 1e-7
+        },
+        {
+          "d": 100,
+          "resolvedRelativeGap": 1e-7
+        },
+        {
+          "d": 1000,
+          "resolvedRelativeGap": 1e-7
+        },
+        {
+          "d": 10000,
+          "resolvedRelativeGap": 1e-7
+        },
+        {
+          "d": 50000,
+          "resolvedRelativeGap": 1e-7
+        }
+      ],
+      "frames": {
+        "sheets-front-first/round": {
+          "medianMs": 11.099999994039536,
+          "p95Ms": 12.400000005960464,
+          "frames": 600,
+          "runMediansMs": [
+            11.5,
+            11.099999994039536,
+            10.700000017881393
+          ],
+          "failedRuns": 0
+        },
+        "sheets-front-first/square": {
+          "medianMs": 9.599999994039536,
+          "p95Ms": 10.700000017881393,
+          "frames": 600,
+          "runMediansMs": [
+            10.099999994039536,
+            9.599999994039536,
+            9.399999976158142
+          ],
+          "failedRuns": 0
+        },
+        "sheets-back-first/round": {
+          "medianMs": 13.800000011920929,
+          "p95Ms": 16.200000017881393,
+          "frames": 600,
+          "runMediansMs": [
+            15,
+            13.5,
+            13.200000017881393
+          ],
+          "failedRuns": 0
+        },
+        "sheets-back-first/square": {
+          "medianMs": 13.199999988079071,
+          "p95Ms": 15.799999982118607,
+          "frames": 600,
+          "runMediansMs": [
+            14.5,
+            12.800000011920929,
+            12.900000005960464
+          ],
+          "failedRuns": 0
+        },
+        "terrain/round": {
+          "medianMs": 10.599999994039536,
+          "p95Ms": 13.400000005960464,
+          "frames": 600,
+          "runMediansMs": [
+            10.699999988079071,
+            10.300000011920929,
+            10.599999994039536
+          ],
+          "failedRuns": 0
+        },
+        "terrain/square": {
+          "medianMs": 10.199999988079071,
+          "p95Ms": 13.199999988079071,
+          "frames": 600,
+          "runMediansMs": [
+            10.5,
+            10.199999988079071,
+            10
+          ],
+          "failedRuns": 0
+        }
+      }
+    }
+  }
+}

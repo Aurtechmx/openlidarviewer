@@ -27,6 +27,7 @@
     "benchmarks/framework",
     "benchmarks/fixtures",
     "benchmarks/pipeline",
-    "scripts/bench/observatory-o11"
+    "scripts/bench/observatory-o11",
+    "scripts/bench/depth-mode"
   ]
 }

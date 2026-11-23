@@ -6,7 +6,7 @@
  * readable sense of 3D structure.
  *
  * This module has NO three.js or DOM dependency, so it is unit-tested in Node.
- * The GPU-side EDL node (in `Viewer.ts`) mirrors these exact formulas, so the
+ * The GPU-side EDL node (in `viewerRenderBootstrap.ts`) mirrors these exact formulas, so the
  * tests here pin down the behaviour the shader is expected to reproduce.
  */
 
@@ -45,10 +45,15 @@ const MIN_DIST = 1e-4;
 const LOG_DEPTH_NEAR_MIN = 1e-6;
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Logarithmic depth-buffer encoding
+// Depth-buffer encodings
 //
-// The Viewer constructs its renderer with `logarithmicDepthBuffer: true`, so
-// the depth texture the EDL pass samples is NOT standard perspective depth.
+// The depth texture the EDL pass samples holds one of three encodings. The
+// renderer asks for reversed depth, decoded by `perspectiveDepthToEyeDistance`;
+// an orthographic camera stores linear depth, decoded by
+// `orthographicDepthToEyeDistance`. Where reversed depth is unavailable
+// (WebGL 2 without EXT_clip_control) a perspective camera gets the logarithmic
+// buffer, described here.
+//
 // three.js's node pipeline (r184, `NodeMaterial.setupDepth` →
 // `viewZToLogarithmicDepth`) overwrites fragment depth with the Ulrich
 // near-anchored logarithmic encoding:
@@ -70,7 +75,7 @@ const LOG_DEPTH_NEAR_MIN = 1e-6;
 //     raw · log2(far / near') = log2(eyeDist / near')
 //     eyeDist                 = near' · 2^(raw · log2(far / near'))
 //
-// The GPU-side EDL node in `Viewer.ts` mirrors these formulas node-for-node;
+// The GPU-side EDL node (`viewerRenderBootstrap.ts`) mirrors these formulas node-for-node;
 // the unit tests on these CPU twins pin the maths down.
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -120,6 +125,24 @@ export function logDepthToEyeDistance(
 ): number {
   const n = Math.max(near, LOG_DEPTH_NEAR_MIN);
   return Math.max(n * Math.pow(2, raw * Math.log2(far / n)), MIN_DIST);
+}
+
+/**
+ * Invert a perspective depth-buffer sample to a positive eye-space distance.
+ * Standard depth runs 0 at near to 1 at far; reversed depth 1 to 0. The twin
+ * of three.js's `perspectiveDepthToViewZ`, negated, with the EDL floor.
+ */
+export function perspectiveDepthToEyeDistance(raw: number, near: number, far: number, reversed: boolean): number {
+  const denom = reversed ? near + (far - near) * raw : far - (far - near) * raw;
+  return Math.max((near * far) / denom, MIN_DIST);
+}
+
+/**
+ * Invert an orthographic depth-buffer sample, linear between near and far, to
+ * a positive eye-space distance. The twin of `orthographicDepthToViewZ`.
+ */
+export function orthographicDepthToEyeDistance(raw: number, near: number, far: number, reversed: boolean): number {
+  return Math.max(near + (far - near) * (reversed ? 1 - raw : raw), MIN_DIST);
 }
 
 /**

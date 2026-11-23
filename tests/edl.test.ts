@@ -4,7 +4,11 @@ import {
   edlDefaultEnabled,
   eyeDistanceToLogDepth,
   logDepthToEyeDistance,
+  orthographicDepthToEyeDistance,
+  perspectiveDepthToEyeDistance,
+  EDL_DEPTH_BIAS,
 } from '../src/render/edl';
+import * as THREE from 'three';
 
 // ────────────────────────────────────────────────────────────────────────────
 // edlObscurance — the log2(eye-distance) depth-discontinuity sum
@@ -103,10 +107,11 @@ describe('edlShade', () => {
 // ────────────────────────────────────────────────────────────────────────────
 // logDepthToEyeDistance — inverting the logarithmic depth-buffer encoding
 //
-// The renderer draws with `logarithmicDepthBuffer: true`, so the EDL pass
-// samples Ulrich near-anchored log depth, not standard perspective depth:
+// Where the renderer cannot reverse depth it draws with
+// `logarithmicDepthBuffer: true`, and the EDL pass samples Ulrich
+// near-anchored log depth, not perspective depth:
 //     raw = log2(eyeDist / near') / log2(far / near'),  near' = max(near, 1e-6)
-// These tests pin the CPU twin of the GPU inversion node in `Viewer.ts`.
+// These tests pin the CPU twin of the GPU inversion node in `viewerRenderBootstrap.ts`.
 // ────────────────────────────────────────────────────────────────────────────
 
 describe('logDepthToEyeDistance', () => {
@@ -197,5 +202,42 @@ describe('edlDefaultEnabled', () => {
   test('off by default on the WebGL 2 fallback backend', () => {
     expect(edlDefaultEnabled('webgl2', false)).toBe(false);
     expect(edlDefaultEnabled('webgl2', true)).toBe(false);
+  });
+});
+
+describe('perspective and orthographic depth inversions', () => {
+  const NEAR = 0.01;
+  const FAR = 4000;
+  const { PerspectiveCamera, OrthographicCamera, WebGPUCoordinateSystem, Vector3 } = THREE;
+  const cameras = (): [string, THREE.PerspectiveCamera | THREE.OrthographicCamera][] => [
+    ['perspective', new PerspectiveCamera(60, 1.5, NEAR, FAR)],
+    ['orthographic', new OrthographicCamera(-30, 30, 20, -20, NEAR, FAR)],
+  ];
+
+  test.each([false, true])('recover the distance three.js projects (reversed %s)', (reversed) => {
+    for (const [kind, cam] of cameras()) {
+      cam.coordinateSystem = WebGPUCoordinateSystem;
+      (cam as unknown as { _reversedDepth: boolean })._reversedDepth = reversed;
+      cam.updateProjectionMatrix();
+      for (const d of [0.5, 12, 250, 3900]) {
+        const raw = new Vector3(0, 0, -d).applyMatrix4(cam.projectionMatrix).z;
+        const decode = kind === 'perspective' ? perspectiveDepthToEyeDistance : orthographicDepthToEyeDistance;
+        expect(decode(raw, NEAR, FAR, reversed) / d, `${kind} ${d}`).toBeCloseTo(1, 5);
+      }
+    }
+  });
+
+  test('orthographic depth read as perspective loses the relief (the defect this guards)', () => {
+    // 100 m and 200 m away: one octave of distance, so one unit of log2.
+    const at = (d: number): number => 1 - (d - NEAR) / (FAR - NEAR);
+    const right = Math.log2(orthographicDepthToEyeDistance(at(200), NEAR, FAR, true) / orthographicDepthToEyeDistance(at(100), NEAR, FAR, true));
+    const wrong = Math.log2(perspectiveDepthToEyeDistance(at(200), NEAR, FAR, true) / perspectiveDepthToEyeDistance(at(100), NEAR, FAR, true));
+    expect(right).toBeCloseTo(1, 6);
+    expect(wrong).toBeLessThan(EDL_DEPTH_BIAS);
+  });
+
+  test('keep the distance floor', () => {
+    expect(perspectiveDepthToEyeDistance(1, 1e-6, 10, true)).toBe(1e-4);
+    expect(orthographicDepthToEyeDistance(1, 0, 10, true)).toBe(1e-4);
   });
 });

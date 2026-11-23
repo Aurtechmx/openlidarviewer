@@ -4,7 +4,7 @@
  * The renderer, scene, cameras and post pipeline a Viewer starts from,
  * built in one place with the same settings the Viewer's constructor held:
  * a WebGPU renderer with the WebGL 2 fallback the caller chose, a
- * logarithmic depth buffer, no tone mapping at exposure 1 with sRGB output,
+ * reversed (or logarithmic) depth buffer, no tone mapping at exposure 1 with sRGB output,
  * the Deep Navy background, the perspective camera with its orthographic
  * twin, and the Eye Dome Lighting pipeline keyed on the depth encoding the
  * renderer actually owns. The Viewer keeps every field this returns; nothing
@@ -24,12 +24,15 @@ import {
   exp,
   exp2,
   max,
+  orthographicDepthToViewZ,
   perspectiveDepthToViewZ,
+  select,
+  uniform,
 } from 'three/tsl';
 import { EDL_DEFAULTS, EDL_DEPTH_BIAS } from './edl';
 import { maxPixelRatio } from './quality/pixelRatioCeiling';
 import { makeOrthoCamera } from './camera/orthoCamera';
-import { CAMERA_FAR, CAMERA_NEAR, DEFAULT_FOV, SCENE_BACKGROUND, effectivePixelRatio, resolveDrawingBuffer, usesLogDepthOf } from './renderBootstrapPolicy';
+import { CAMERA_FAR, CAMERA_NEAR, DEFAULT_FOV, SCENE_BACKGROUND, depthOptionsFor, effectivePixelRatio, resolveDrawingBuffer, settleDepthMode, usesLogDepthOf } from './renderBootstrapPolicy';
 // The page-level backend choice rides the Viewer chunk with the renderer it picks.
 export { chooseRenderBackendForPage } from './renderBackendChoice';
 
@@ -74,6 +77,19 @@ export function currentPixelRatio(): number {
   return effectivePixelRatio(typeof window !== 'undefined' ? window.devicePixelRatio : 1, maxPixelRatio());
 }
 
+/** Whether this browser's WebGL 2 offers EXT_clip_control, asked of a throwaway context. */
+function webglHasClipControl(): boolean {
+  try {
+    const gl = document.createElement('canvas').getContext('webgl2');
+    if (!gl) return false;
+    const has = gl.getExtension('EXT_clip_control') !== null;
+    gl.getExtension('WEBGL_lose_context')?.loseContext();
+    return has;
+  } catch {
+    return false;
+  }
+}
+
 /**
  * Build the render core for `canvas`. `forceWebGL` is the backend the caller
  * already decided (WebGL 2 when the adapter probe found no WebGPU adapter).
@@ -84,10 +100,20 @@ export function createViewerRenderCore(canvas: HTMLCanvasElement, forceWebGL: bo
     forceWebGL,
     antialias: true,
     alpha: false,
-    // A logarithmic depth buffer spreads precision across orders of magnitude,
-    // so a 50 km tile and a 5 m room both render without z-fighting.
-    logarithmicDepthBuffer: true,
+    // Reversed float depth, or the logarithmic buffer where the WebGL 2
+    // fallback cannot reverse (renderBootstrapPolicy.depthOptionsFor). Either
+    // lets a 50 km tile and a 5 m room render without z-fighting.
+    ...depthOptionsFor(forceWebGL, forceWebGL && webglHasClipControl()),
   } as ConstructorParameters<typeof THREE.WebGPURenderer>[0]);
+  // Every caller awaits init() before the first render; settle the depth mode
+  // there, so a renderer that lost reversed depth inside three.js never draws
+  // with a plain 24-bit buffer.
+  const init = renderer.init.bind(renderer);
+  renderer.init = async () => {
+    const out = await init();
+    settleDepthMode(renderer as unknown as { reversedDepthBuffer?: boolean; logarithmicDepthBuffer?: boolean });
+    return out;
+  };
   renderer.setPixelRatio(currentPixelRatio());
   // updateStyle=false: the stylesheet owns the canvas display size; only the
   // drawing buffer is sized here, so the canvas keeps tracking its container
@@ -118,8 +144,9 @@ export function createViewerRenderCore(canvas: HTMLCanvasElement, forceWebGL: bo
   const orthoCamera = makeOrthoCamera(camera.near, camera.far);
 
   // The scene renders into a pass; the EDL node shades it from the pass's
-  // colour and depth. The depth encoding is read back off the renderer so the
-  // inversion matches what it wrote on either backend.
+  // colour and depth. The depth encoding is read off the renderer when the
+  // shader is built, after init() has settled it, so the inversion matches
+  // what the renderer writes on either backend.
   const scenePass = pass(scene, camera);
   const pipeline = new THREE.RenderPipeline(renderer);
   pipeline.outputNode = buildEdlOutputNode(
@@ -128,7 +155,6 @@ export function createViewerRenderCore(canvas: HTMLCanvasElement, forceWebGL: bo
     edl.near,
     edl.far,
     EDL_DEFAULTS.radiusPx,
-    usesLogDepthOf(renderer as unknown as { logarithmicDepthBuffer?: boolean }),
   ) as typeof pipeline.outputNode;
   return { renderer, scene, camera, orthoCamera, scenePass, pipeline };
 }
@@ -142,11 +168,11 @@ export function createViewerRenderCore(canvas: HTMLCanvasElement, forceWebGL: bo
  * `log2(eye distance)` so the cue is scale-invariant. Mirrors `edlObscurance`
  * and `edlShade` in `edl.ts`, which are unit-tested.
  *
- * @param usesLogDepth - Whether the renderer owns a logarithmic depth buffer,
- * read back off the renderer instance at construction. Decides which depth
- * inversion the node graph is built with (the graph is compiled once, and the
- * renderer's depth mode is fixed at construction, so a build-time branch is
- * correct, no per-pixel uniform needed).
+ * The depth inversion is chosen when the shader is built, from the renderer
+ * the builder carries. The renderer settles its depth mode in init() (it
+ * turns the logarithmic buffer off where reversed depth is active), which is
+ * after this graph is assembled and before it is compiled, so reading the
+ * mode any earlier can pick the wrong inversion.
  */
 export function buildEdlOutputNode(
   scenePass: ReturnType<typeof pass>,
@@ -154,7 +180,6 @@ export function buildEdlOutputNode(
   near: TslNode,
   far: TslNode,
   radiusPx: number,
-  usesLogDepth: boolean,
 ): TslNode {
   const colorNode: TslNode = scenePass.getTextureNode();
   const depthNode: TslNode = scenePass.getTextureNode('depth');
@@ -164,8 +189,8 @@ export function buildEdlOutputNode(
   //
   // The inversion MUST match the encoding the renderer actually wrote:
   //
-  //  • Logarithmic depth buffer (this app's default, see the renderer
-  //    construction): three's node pipeline (`NodeMaterial.setupDepth` →
+  //  • Logarithmic depth buffer, perspective camera (the WebGL 2 fallback
+  //    without EXT_clip_control): three's node pipeline (`NodeMaterial.setupDepth` →
   //    `viewZToLogarithmicDepth`) replaces fragment depth with the Ulrich
   //    near-anchored log encoding
   //        raw = log2(eyeDist / near') / log2(far / near'),
@@ -178,24 +203,34 @@ export function buildEdlOutputNode(
   //    (Deliberately NOT the legacy WebGLRenderer chunk
   //    `log2(1 + w) / log2(1 + far)`, that convention never runs here.)
   //
-  //  • Standard perspective depth otherwise: three's own
-  //    `perspectiveDepthToViewZ` (which internally also handles a reversed
-  //    depth buffer) recovers viewZ; negate for a positive distance.
+  //  • Perspective depth otherwise, reversed on every backend that can: three's
+  //    `perspectiveDepthToViewZ` picks the reversed formula itself and recovers
+  //    viewZ; negate for a positive distance. `perspectiveDepthToEyeDistance`
+  //    in `edl.ts` is its tested twin.
+  //
+  //  • Orthographic camera, in every mode: depth is linear between near and far
+  //    (three writes it so even with the logarithmic buffer), recovered by
+  //    `orthographicDepthToViewZ`; `orthographicDepthToEyeDistance` is its twin.
   //
   // Using the wrong inversion is not subtle: treating a log-encoded sample as
   // perspective depth computes obscurance in the wrong space, EDL reads far
   // too weak up close and erratic at range, silently defeating the
   // unit-tested maths in `edl.ts`. That was the v0.4.x audit defect.
-  const eyeDistAt = Fn(([sampleUv]: TslNode[]): TslNode => {
+  // Asked of the pass's camera per render: the app swaps that camera when the
+  // projection changes, and the compiled shader stays.
+  const orthographic: TslNode = uniform(0).onRenderUpdate(() =>
+    ((scenePass as unknown as { camera: THREE.Camera }).camera as THREE.OrthographicCamera).isOrthographicCamera ? 1 : 0);
+  const eyeDistAt = Fn(([sampleUv]: TslNode[], builder: { renderer: { logarithmicDepthBuffer?: boolean } }): TslNode => {
     const raw: TslNode = depthNode.sample(sampleUv).r;
-    if (usesLogDepth) {
+    const ortho: TslNode = orthographicDepthToViewZ(raw, near, far).negate();
+    let persp: TslNode;
+    if (usesLogDepthOf(builder.renderer)) {
       const nearClamped: TslNode = max(near, float(1e-6));
-      const eyeDist: TslNode = nearClamped.mul(
-        exp2(raw.mul(log2(far.div(nearClamped)))),
-      );
-      return max(eyeDist, float(1e-4));
+      persp = nearClamped.mul(exp2(raw.mul(log2(far.div(nearClamped)))));
+    } else {
+      persp = perspectiveDepthToViewZ(raw, near, far).negate();
     }
-    return max(perspectiveDepthToViewZ(raw, near, far).negate(), float(1e-4));
+    return max(select(orthographic.greaterThan(0.5), ortho, persp), float(1e-4));
   });
 
   return Fn((): TslNode => {

@@ -18,6 +18,10 @@ The format is based on Keep a Changelog and the project follows Semantic Version
 - A Sheet style choice (Light, Dark, Classic) on the Export tab and under the report buttons of a room or object scan, so those scans can pick a style without a terrain run. It shows the same session choice as the map sheet dialog.
 - A contour map PNG: "Contour map (PNG)" in the Export mode's terrain lane and a PNG button beside the map sheet PDF in Contour Studio. It is the contour SVG sheet in the style last chosen, drawn at twice its size, with the export provenance in the PNG's text chunks. It passes the same evidence permit as the other contour files.
 
+### Changed
+
+- The 3D view uses a reversed floating-point depth buffer where the graphics backend supports it (WebGPU, and WebGL 2 with EXT_clip_control), and keeps the logarithmic buffer elsewhere. On a 3-million-point test the point pass took 10 to 14 ms per frame with reversed depth against 15 to 31 ms with the logarithmic buffer, on both backends, and the reversed buffer separated surfaces ten times closer together (one part in ten million of the distance). The eye-dome lighting pass now reads the depth encoding when its shader is built. Eye-dome shading now has the right strength in orthographic views, where depth is linear, and a lasso on WebGPU no longer selects points behind an orthographic camera. `scripts/bench-depth-mode.mjs` reruns the measurement; the record is in `validation/performance/depth-mode`.
+
 ### Fixed
 
 - A browser older than the build supports (below Safari 16.4, Chrome 98 or Firefox 114) shows a message saying so, instead of a page that never loads a scan, and its failure is no longer treated as a stale deploy to reload. The README lists the minimum and full-layout versions.

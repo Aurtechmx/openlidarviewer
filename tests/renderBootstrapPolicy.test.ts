@@ -43,3 +43,29 @@ describe('render bootstrap policy', () => {
     expect(DEFAULT_FOV).toBeGreaterThan(0);
   });
 });
+
+describe('depth mode', () => {
+  it('asks for reversed depth where the backend can do it, the logarithmic buffer elsewhere, never both', async () => {
+    const { depthOptionsFor } = await import('../src/render/renderBootstrapPolicy');
+    expect(depthOptionsFor(false, false)).toEqual({ reversedDepthBuffer: true, logarithmicDepthBuffer: false });
+    expect(depthOptionsFor(true, true)).toEqual({ reversedDepthBuffer: true, logarithmicDepthBuffer: false });
+    expect(depthOptionsFor(true, false)).toEqual({ reversedDepthBuffer: false, logarithmicDepthBuffer: true });
+  });
+
+  it('gives a renderer that lost reversed depth in init the logarithmic buffer, never a plain one', async () => {
+    const { settleDepthMode } = await import('../src/render/renderBootstrapPolicy');
+    const lost = { reversedDepthBuffer: false, logarithmicDepthBuffer: false };
+    expect(settleDepthMode(lost)).toBe('log');
+    expect(lost.logarithmicDepthBuffer).toBe(true);
+    const kept = { reversedDepthBuffer: true, logarithmicDepthBuffer: false };
+    expect(settleDepthMode(kept)).toBe('reversed');
+    expect(kept.logarithmicDepthBuffer).toBe(false);
+  });
+
+  it('the EDL pass reads the depth mode when its shader is built, not when the graph is assembled', async () => {
+    const { readFileSync } = await import('node:fs');
+    const src = readFileSync(new URL('../src/render/viewerRenderBootstrap.ts', import.meta.url), 'utf8');
+    expect(src).toContain('usesLogDepthOf(builder.renderer)');
+    expect(src).not.toMatch(/usesLogDepthOf\(renderer as/);
+  });
+});
