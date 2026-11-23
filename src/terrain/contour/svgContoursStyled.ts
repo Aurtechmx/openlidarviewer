@@ -49,7 +49,6 @@ export interface SvgStyledParams {
 }
 
 const SANS = "font-family=\"Figtree, 'Helvetica Neue', Arial, sans-serif\"";
-const MONO = "font-family=\"'Courier New', Courier, monospace\"";
 
 /** Space between the data and the map frame, px. */
 const MAP_PAD = 14;
@@ -141,7 +140,7 @@ export function svgContoursStyled(model: ContourFeatureModel, params: SvgStyledP
       : `${x.toFixed(2)},${(y + r).toFixed(2)} ${(x + r).toFixed(2)},${(y - r * 0.8).toFixed(2)} ${(x - r).toFixed(2)},${(y - r * 0.8).toFixed(2)}`;
     out.push(`  <polygon points="${pts}" fill="${ink}" data-layer="${up ? 'highest' : 'lowest'}"/>`);
     out.push(
-      `  <text x="${(x + 6).toFixed(2)}" y="${(y + 3).toFixed(2)}" font-size="8" ${MONO} fill="${ink}" ` +
+      `  <text x="${(x + 6).toFixed(2)}" y="${(y + 3).toFixed(2)}" font-size="8" ${SANS} fill="${ink}" ` +
         `paint-order="stroke" stroke="${cssColor(t.halo)}" stroke-width="2.4">${(p.z + oz).toFixed(1)}</text>`,
     );
   };
@@ -195,7 +194,7 @@ export function svgContoursStyled(model: ContourFeatureModel, params: SvgStyledP
     bar.push(`<rect x="${(margin + i * segPx).toFixed(2)}" y="${by}" width="${segPx.toFixed(2)}" height="6" fill="${i % 2 === 0 ? ink : cssColor(t.panel)}" stroke="${ink}" stroke-width="0.5"/>`);
   }
   for (const [px, lbl] of [[margin, '0'], [margin + (D * scale) / 2, formatScaleTick(D / 2)], [margin + D * scale, `${formatScaleTick(D)} ${unit}`]] as const) {
-    bar.push(`<text x="${px.toFixed(2)}" y="${by - 3}" font-size="9" text-anchor="middle" fill="${ink}" ${MONO}>${lbl}</text>`);
+    bar.push(`<text x="${px.toFixed(2)}" y="${by - 3}" font-size="9" text-anchor="middle" fill="${ink}" ${SANS}>${lbl}</text>`);
   }
   // The map's +Y axis. On a known CRS that is grid north; without one the
   // frame is local and the arrow names the axis instead.

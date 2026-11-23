@@ -189,13 +189,14 @@ describe('relief', () => {
 });
 
 describe('sheet fonts', () => {
-  it('embeds Figtree from the font files and Courier for figures', async () => {
+  it('sets figures in Figtree too, so no figure depends on a font the PDF does not carry', async () => {
     const doc = await PDFDocument.create();
     const f = await embedSheetFonts(doc, fromDisk);
     expect(f.fallback).toBe(false);
     expect(f.sans.name).toContain('Figtree-Regular');
     expect(f.sansBold.name).toContain('Figtree-Bold');
-    expect(f.mono.name).toBe('Courier');
+    expect(f.mono).toBe(f.sans);
+    expect(f.monoBold).toBe(f.sansBold);
     expect(SHEET_FONT_FILES).toEqual(['figtree/Figtree-Regular.ttf', 'figtree/Figtree-Bold.ttf']);
   });
 
@@ -205,17 +206,29 @@ describe('sheet fonts', () => {
     expect(f.fallback).toBe(true);
     expect(f.sans.name).toBe('Helvetica');
     expect(f.sansBold.name).toBe('Helvetica-Bold');
+    expect(f.mono.name).toBe('Courier');
     // A sheet still draws with the fallback.
     const page = doc.addPage();
     expect(() => page.drawText(drawableText('Relief 1 846.4 – 2 005.6 m ≤ 3 m', f.sans, f), { x: 10, y: 10, size: 8, font: f.sans })).not.toThrow();
   });
 
-  it('drawableText keeps what Figtree can draw and transliterates for the standard fonts', async () => {
+  it('drawableText keeps what Figtree can draw and transliterates the rest', async () => {
     const doc = await PDFDocument.create();
     const f = await embedSheetFonts(doc, fromDisk);
     expect(drawableText('≤ 3 m', f.sans, f)).toBe('≤ 3 m');
-    expect(drawableText('2 × 3 — m', f.mono, f)).toBe('2 × 3 - m');
+    expect(drawableText('2 × 3 — m', f.mono, f)).toBe('2 × 3 — m');
     expect(drawableText('\u{1F600}', f.sans, f)).toBe('?');
+  });
+
+  it('gives a negative figure a minus sign and leaves names, dates and dashes alone', async () => {
+    const doc = await PDFDocument.create();
+    const f = await embedSheetFonts(doc, fromDisk);
+    expect(drawableText('-0.08', f.sans, f)).toBe('−0.08');
+    expect(drawableText('-46.16%', f.sans, f)).toBe('−46.16%');
+    for (const s of ['2026-11-23', '-', 'A-1', '-2 site', 'scan-01']) expect(drawableText(s, f.sans, f)).toBe(s);
+    const plain = await PDFDocument.create();
+    const g = await embedSheetFonts(plain, failing);
+    expect(drawableText('-0.08', g.sans, g)).toBe('-0.08');
   });
 });
 
@@ -230,19 +243,19 @@ async function sheet() {
 }
 
 describe('sheet furniture', () => {
-  it('data block: keys upper-case and dim, values in Courier, long values wrapped', async () => {
+  it('data block: keys as written, long values wrapped', async () => {
     const { spy, f, page } = await sheet();
     const t = sheetTokens('light');
     const end = drawDataBlock(page, [
-      { key: 'Crs', value: 'NAD83(2011) / Conus Albers' },
+      { key: 'RMSEz', value: 'NAD83(2011) / Conus Albers' },
       { key: 'Relief', value: '1846.4 – 2005.6 m' },
       { key: 'Note', value: 'a b c d e f g h i j k l m n o p q r s t u v w x y z a b c d e f g h' },
     ], 900, 400, 200, t, f);
     const keys = spy.texts.filter((x) => x.x === 900).map((x) => x.text);
-    expect(keys).toEqual(['CRS', 'RELIEF', 'NOTE']);
+    expect(keys).toEqual(['RMSEz', 'Relief', 'Note']);
     const values = spy.texts.filter((x) => x.x > 900);
     expect(values.every((v) => v.font === f.mono)).toBe(true);
-    expect(values.find((v) => v.text.startsWith('1846.4'))!.text).toBe('1846.4 - 2005.6 m');
+    expect(values.find((v) => v.text.startsWith('1846.4'))!.text).toBe('1846.4 – 2005.6 m');
     expect(values.length).toBeGreaterThan(3);
     expect(values.every((v) => v.x + v.width <= 1100 + 0.01)).toBe(true);
     expect(end).toBeLessThan(400 - values.length * 7);

@@ -7,7 +7,7 @@
  * Helpers that stack return the y below what they drew, so a side panel can
  * be laid out top to bottom.
  */
-import { degrees, rgb } from 'pdf-lib';
+import { degrees, rgb, setCharacterSpacing } from 'pdf-lib';
 import type { PDFFont, PDFPage, RGB } from 'pdf-lib';
 import { formatScaleTick, scaleBar } from '../../terrain/contour/mapSheetLayout';
 import { drawableText, type SheetFonts } from './fonts';
@@ -61,13 +61,23 @@ export function wrapSheetText(s: string, font: PDFFont, size: number, width: num
   return out;
 }
 
+/** Letterspacing of upper-case labels, as a fraction of the type size. */
+export const CAPS_TRACKING = 0.06;
+
+/** Draws `s` in letterspaced capitals with its left edge at x. */
+export function sheetCaps(page: PDFPage, s: string, x: number, y: number, o: TextOpts, f: SheetFonts): void {
+  page.pushOperators(setCharacterSpacing(o.size * CAPS_TRACKING));
+  sheetText(page, s.toUpperCase(), x, y, o, f);
+  page.pushOperators(setCharacterSpacing(0));
+}
+
 /** A small upper-case section heading with a rule above it. Returns the y below it. */
 export function drawSectionLabel(
   page: PDFPage, label: string, x: number, y: number, width: number, t: SheetTokens, f: SheetFonts, k = 1,
 ): number {
   page.drawLine({ start: { x, y }, end: { x: x + width, y }, thickness: t.weight.rule, color: pdfColor(t.rule) });
   const base = y - SHEET_SPACE.md * k;
-  sheetText(page, label.toUpperCase(), x, base, { font: f.sansBold, size: SHEET_TYPE.section * k, color: t.dim }, f);
+  sheetCaps(page, label, x, base, { font: f.sansBold, size: SHEET_TYPE.section * k, color: t.dim }, f);
   return base - SHEET_SPACE.md * k;
 }
 
@@ -146,8 +156,8 @@ export interface DataRow {
 }
 
 /**
- * Key and value rows: keys as small upper-case labels in the dim colour, so
- * they step back; values in Courier and ink, so the figures lead. A value too
+ * Key and value rows: keys in the dim colour, as written, so RMSEz stays
+ * RMSEz; values in ink with tabular numerals, so the figures lead. A value too
  * wide for its column wraps onto further lines. Returns the y below the block.
  */
 export function drawDataBlock(
@@ -157,7 +167,7 @@ export function drawDataBlock(
   const step = SHEET_TYPE.dataValue * 1.5 * k;
   let cy = y;
   for (const r of rows) {
-    sheetText(page, r.key.toUpperCase(), x, cy, { font: f.sansBold, size: SHEET_TYPE.dataKey * k, color: t.dim }, f);
+    sheetText(page, r.key, x, cy, { font: f.sans, size: SHEET_TYPE.dataKey * k, color: t.dim }, f);
     const lines = wrapSheetText(r.value, f.mono, SHEET_TYPE.dataValue * k, width - keyWidth * k, f);
     for (const ln of lines) {
       sheetText(page, ln, x + keyWidth * k, cy, { font: f.mono, size: SHEET_TYPE.dataValue * k, color: t.ink }, f);

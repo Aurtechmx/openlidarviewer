@@ -89,7 +89,7 @@ describe('the styled sheet one', () => {
   it('prints the headline figures, the scale statement and every general note', async () => {
     const { texts } = await drawn(base({ style: 'light', extras: { returns: returns(), plan: plan(), indexLevels: [110, 130] } }));
     const all = texts.join('\n');
-    for (const want of ['PROFILE', 'Profile A - B', 'LENGTH (M)', 'ENDPOINT GRADIENT (%)', 'STEEPEST OVER 10 M (%)', 'Vertical exaggeration', 'CHAINAGE', 'GRADE %']) {
+    for (const want of ['PROFILE', 'Profile A - B', 'LENGTH (M)', 'ENDPOINT GRADIENT (%)', 'STEEPEST OVER 10 M (%)', 'Vertical exaggeration', 'Chainage', 'Grade %']) {
       expect(all, want).toContain(want);
     }
     expect(all).toMatch(/Estimated, not measured/);
@@ -159,7 +159,7 @@ describe('the styled sheet one', () => {
     const classic = await sizeOf(base({ style: 'classic' }), 'Length (horizontal)');
     const styled = await sizeOf(base({ style: 'dark' }), 'Length (horizontal)');
     expect(classic).toBeGreaterThan(0);
-    expect(styled).toBeCloseTo(classic * 1.2, 5);
+    expect(styled).toBeCloseTo(classic * 1.08, 5);
     // The type factor is restored: a Classic build after a styled one is byte for byte the first.
     const before = await buildProfilePdf(base({ loadFont: undefined }));
     await buildProfilePdf(base({ style: 'light' }));
@@ -256,5 +256,22 @@ describe('returnsAgree', () => {
     expect(returnsAgree(c, Float64Array.from([101, 106, 109.5, 112, 108]), line)).toBe(true);
     expect(returnsAgree(c, Float64Array.from([1901, 1906, 1909.5, 1912, 1908]), line)).toBe(false);
     expect(returnsAgree(c, Float64Array.from([1, 2, 3, 4, 5]), [{ distance: 0, height: Number.NaN }])).toBe(false);
+  });
+});
+
+describe('the Classic sheet one', () => {
+  it('keeps the series key clear of the station band caption', async () => {
+    const drawnAt: Array<{ page: PDFPage; t: string; x: number; y: number; w: number }> = [];
+    const orig = PDFPage.prototype.drawText;
+    vi.spyOn(PDFPage.prototype, 'drawText').mockImplementation(function (this: PDFPage, t: string, o?: { x?: number; y?: number; size?: number; font?: { widthOfTextAtSize(t: string, s: number): number } }) {
+      drawnAt.push({ page: this, t, x: o?.x ?? 0, y: o?.y ?? 0, w: o?.font?.widthOfTextAtSize(t, o.size ?? 0) ?? 0 });
+      return orig.call(this, t, o as never);
+    });
+    await buildProfilePdf(base({ style: 'classic' }));
+    vi.restoreAllMocks();
+    const key = drawnAt.find((d) => d.t.endsWith('see general note 1'))!;
+    const sameLine = drawnAt.filter((d) => d !== key && d.page === key.page && Math.abs(d.y - key.y) < 6);
+    expect(drawnAt.some((d) => d.t.startsWith('Station data band'))).toBe(true);
+    for (const d of sameLine) expect(d.x >= key.x + key.w || d.x + d.w <= key.x, d.t).toBe(true);
   });
 });

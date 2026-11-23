@@ -5,7 +5,8 @@
  * instances kept in ./fonts, licensed under the SIL Open Font License 1.1 (see
  * docs/project/THIRD_PARTY_NOTICES.md for provenance and checksums). Each is
  * embedded as a subset, so the PDF carries only the glyphs it draws. Figures
- * in data blocks use the standard Courier fonts, which every PDF reader has.
+ * are set in Figtree with tabular numerals, so they align in columns; Courier
+ * stands in only when Figtree could not load.
  *
  * This module and @pdf-lib/fontkit belong to the export chunks. Nothing in the
  * startup path may import it. Tests pass their own `load` that reads the files
@@ -80,7 +81,7 @@ export interface SheetFonts {
   /** Labels, headings and notes: Figtree, or Helvetica when Figtree could not load. */
   readonly sans: PDFFont;
   readonly sansBold: PDFFont;
-  /** Figures in data blocks, scale and coordinate ticks: Courier. */
+  /** Figures in data blocks, scale and coordinate ticks: Figtree with tabular numerals, or Courier in the fallback. */
   readonly mono: PDFFont;
   readonly monoBold: PDFFont;
   /** True when Figtree could not be loaded and Helvetica stands in. */
@@ -116,10 +117,14 @@ export async function embedSheetFonts(
     sans = await doc.embedFont(StandardFonts.Helvetica);
     sansBold = await doc.embedFont(StandardFonts.HelveticaBold);
   }
+  if (bytes) return { sans, sansBold, mono: sans, monoBold: sansBold, fallback: false };
   const mono = await doc.embedFont(StandardFonts.Courier);
   const monoBold = await doc.embedFont(StandardFonts.CourierBold);
-  return { sans, sansBold, mono, monoBold, fallback: bytes === null };
+  return { sans, sansBold, mono, monoBold, fallback: true };
 }
+
+/** A negative figure, alone or with a unit. */
+const FIGURE = /^-\d[\d.,\u00a0]*( ?(%|m|ft|°))?$/;
 
 const CHARSETS = new WeakMap<PDFFont, Set<number>>();
 
@@ -130,8 +135,10 @@ const CHARSETS = new WeakMap<PDFFont, Set<number>>();
  * instead of failing the export.
  */
 export function drawableText(s: string, font: PDFFont, fonts: SheetFonts): string {
-  const standard = font === fonts.mono || font === fonts.monoBold || fonts.fallback;
-  if (standard) return winAnsiSafe(s);
+  if (fonts.fallback) return winAnsiSafe(s);
+  // A figure's sign is a minus, not a hyphen. Only a string that is nothing but
+  // a figure and its unit is touched, so names and dates print as given.
+  if (FIGURE.test(s)) s = s.replace('-', '−');
   let supported = CHARSETS.get(font);
   if (!supported) {
     supported = new Set(font.getCharacterSet());

@@ -239,7 +239,7 @@ const PLANE_COVER = 0.45;
 /** Min separation (m) between storeys. */
 const STOREY_SEP_M = 2.2;
 const STREAM_CAVEAT =
-  'Based on the points currently loaded / streamed — values may change as more data streams in.';
+  'Based on the points loaded in the viewer.';
 /**
  * Stronger caveat for a genuine PARTIAL stream (only the resident octree nodes
  * were measured). The dimensions/areas/volumes are computed on a coarse, partial

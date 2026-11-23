@@ -105,7 +105,7 @@ const EN = {
     'cross-implementation and no field validation. Do not present this as a ' +
     'validated deliverable.',
 
-  noteStream: 'Based on the points currently loaded / streamed — values may change as more data streams in.',
+  noteStream: 'Based on the points loaded in the viewer.',
   noteStreamPartial:
     'Preliminary — only the streamed-in part of the scan has been measured so far; dimensions, areas and volumes will change as more loads. Let the full cloud stream in, then re-run.',
   noteUnitUnverified:
@@ -125,6 +125,7 @@ const EN = {
 
   planTitle: 'Floor plan preview (walls traced from the scan)',
   notesTitle: 'Notes',
+  provenanceTitle: 'Provenance',
   continued: ' (continued)',
   roomImperial: 'Room {i} {area} sq ft',
   roomMetric: 'Room {i} {area} m2',
@@ -228,7 +229,7 @@ const ES: Catalog = {
     + 'entre implementaciones ni validación en campo. No presente este documento como un '
     + 'entregable validado.',
 
-  noteStream: 'Basado en los puntos cargados o transmitidos hasta ahora; los valores pueden cambiar al llegar más datos.',
+  noteStream: 'Basado en los puntos cargados en el visor.',
   noteStreamPartial:
     'Preliminar: hasta ahora solo se ha medido la parte del escaneo ya transmitida; las dimensiones, '
     + 'áreas y volúmenes cambiarán al cargar más. Deje que se transmita la nube completa y vuelva a calcular.',
@@ -251,6 +252,7 @@ const ES: Catalog = {
 
   planTitle: 'Vista previa del plano (muros trazados a partir del escaneo)',
   notesTitle: 'Notas',
+  provenanceTitle: 'Procedencia',
   continued: ' (continúa)',
   roomImperial: 'Cuarto {i} {area} ft2',
   roomMetric: 'Cuarto {i} {area} m2',
@@ -350,7 +352,7 @@ const PT: Catalog = {
     + 'afirmação registrada as cobre, portanto não têm validação cruzada entre implementações nem '
     + 'validação em campo. Não apresente este documento como um entregável validado.',
 
-  noteStream: 'Com base nos pontos carregados ou transmitidos até agora; os valores podem mudar à medida que chegam mais dados.',
+  noteStream: 'Com base nos pontos carregados no visualizador.',
   noteStreamPartial:
     'Preliminar: até agora só foi medida a parte da varredura já transmitida; dimensões, áreas e '
     + 'volumes vão mudar à medida que mais dados carregarem. Deixe a nuvem completa ser transmitida e calcule de novo.',
@@ -373,6 +375,7 @@ const PT: Catalog = {
 
   planTitle: 'Prévia da planta (paredes traçadas a partir da varredura)',
   notesTitle: 'Notas',
+  provenanceTitle: 'Proveniência',
   continued: ' (continua)',
   roomImperial: 'Ambiente {i} {area} ft2',
   roomMetric: 'Ambiente {i} {area} m2',
@@ -472,7 +475,7 @@ const FR: Catalog = {
     + "affirmation enregistrée ne les couvre : elles n'ont ni validation croisée entre "
     + "implémentations ni validation terrain. Ne présentez pas ce document comme un livrable validé.",
 
-  noteStream: 'Calculé sur les points chargés ou diffusés à ce stade ; les valeurs peuvent changer à mesure que les données arrivent.',
+  noteStream: 'Calculé sur les points chargés dans la visionneuse.',
   noteStreamPartial:
     "Provisoire : seule la partie déjà diffusée du scan a été mesurée ; dimensions, surfaces "
     + "et volumes changeront à mesure du chargement. Laissez le nuage complet se charger, puis relancez.",
@@ -495,6 +498,7 @@ const FR: Catalog = {
 
   planTitle: 'Aperçu du plan (murs tracés à partir du scan)',
   notesTitle: 'Notes',
+  provenanceTitle: 'Provenance',
   continued: ' (suite)',
   roomImperial: 'Pièce {i} {area} ft2',
   roomMetric: 'Pièce {i} {area} m2',
@@ -594,7 +598,7 @@ const DE: Catalog = {
     + 'daher haben sie weder eine Kreuzvalidierung zwischen Implementierungen noch eine '
     + 'Feldvalidierung. Dieses Dokument nicht als validiertes Lieferergebnis darstellen.',
 
-  noteStream: 'Beruht auf den bisher geladenen oder gestreamten Punkten; die Werte können sich ändern, wenn weitere Daten eintreffen.',
+  noteStream: 'Beruht auf den im Viewer geladenen Punkten.',
   noteStreamPartial:
     'Vorläufig: Bisher ist nur der bereits gestreamte Teil des Scans gemessen; Abmessungen, Flächen und '
     + 'Volumen ändern sich, wenn mehr geladen wird. Die ganze Wolke laden lassen und dann neu berechnen.',
@@ -617,6 +621,7 @@ const DE: Catalog = {
 
   planTitle: 'Grundrissvorschau (Wände aus dem Scan nachgezeichnet)',
   notesTitle: 'Hinweise',
+  provenanceTitle: 'Herkunft',
   continued: ' (Fortsetzung)',
   roomImperial: 'Raum {i} {area} ft2',
   roomMetric: 'Raum {i} {area} m2',

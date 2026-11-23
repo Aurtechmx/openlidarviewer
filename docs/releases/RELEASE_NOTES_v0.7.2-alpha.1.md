@@ -27,8 +27,26 @@ v0.6.6 remain available under MIT.
 - A true-north arrow on the Light and Dark map sheets of a projected CRS, turned by the meridian convergence at the map centre and labelled with the angle.
 - Measurements and annotations on the Light and Dark map sheets: measurements are lettered on the map and listed with their figure and support grade, and annotations are numbered and grouped by type. The measurement CSV and GeoJSON carry the support grade.
 - Contour map PNG, from the Export tab's terrain lane and from Contour Studio: the contour SVG sheet at twice its size, with the export provenance in the PNG text chunks. The contour SVG takes the chosen style, with the relief embedded.
-- Profile sheet: a plan strip along the line from the terrain analysis of the same scan, the corridor's returns under the ground line, the gaps in ground returns, index contour crossings, ground returns per metre and a grade chart over 10 m of chainage, beside the length, relief, gradient and steepest-grade figures. The plan strip is left out, with the reason, when the scan has no terrain run. On Light and Dark sets the notes, method and schedule sheets are set larger, and the section header states the print scales.
-- The terrain report, space report, Contour Studio PDF and scan report PDF take the chosen style's paper, ink and typefaces, with their content and page count unchanged. The floor plan SVG and the Studio image card take the style's colours.
+- Profile sheet: a plan strip along the line from the terrain analysis of the same scan, the corridor's returns under the ground line, the gaps in ground returns, index contour crossings, ground returns per metre and a grade chart over 10 m of chainage, beside the length, relief, gradient and steepest-grade figures. The plan strip is left out, with the reason, when the scan has no terrain run. On Light and Dark sets the notes, method and schedule sheets are set slightly larger, and the section header states the print scales.
+- The terrain report, space report, Contour Studio PDF and scan report PDF take the chosen style's paper, ink and typefaces, with the same content. Their provenance is set as a table, and the body uses the whole page. The floor plan SVG and the Studio image card take the style's colours.
+
+- Light and Dark sheets set their figures in Figtree with tabular numerals, so every font a sheet uses is embedded in the file.
+- Classic keeps the earlier layout with two corrections: the profile sheet's series key no longer prints over the station band caption, and the map sheet's grid labels and footer sit inside the outer border, clear of the paper edge.
+- The technical report says when its width and depth come from the display sample, the profile's method sheet says it read every loaded point, and a room report no longer says its values change as data streams in.
+
+## Rooms and objects
+
+- The ceiling height of a room is measured from the lowest strong height peak to the highest. A bed or table top is no longer read as the floor when the floor is not quite level. The enclosed volume follows.
+- glTF, GLB and E57 heights are in metres, as their specifications state. Reports used to print them in undeclared source units beside widths in metres. A session saved earlier gets the metre heights when it is opened.
+
+## Phones and browsers
+
+- A browser below Safari 16.4, Chrome 98 or Firefox 114 shows a message saying it is too old. The README lists the minimum versions.
+- On touch screens the export and dialog buttons are 44 px targets, and dialog text is large enough that iOS does not zoom the page when a field is tapped.
+- Large image exports are scaled to what a phone browser can allocate instead of failing, and download links stay valid for a minute.
+- On iPhone and iPad, the pickers for sessions, workflows and the batch converter no longer grey out their own file types.
+- Dropping a folder says it cannot be opened, and files dropped with it still open.
+- The offline copy includes the sheet typefaces.
 
 ## Scene lifecycle
 
@@ -101,6 +119,8 @@ v0.6.6 remain available under MIT.
 
 ## Performance
 
+- The 3D view uses a reversed floating-point depth buffer where the graphics backend supports it, and the logarithmic buffer elsewhere. On a 3-million-point test on one laptop the point pass took 10 to 14 ms per frame, against 15 to 31 ms before. The record is in `validation/performance/depth-mode`.
+- Eye-dome shading has the right strength in orthographic views, and a lasso on WebGPU no longer selects points behind an orthographic camera.
 - The 3D engine loads after the first screen. The entry chunk is 442 KiB (159.5 KiB gzipped), up from 412 KiB in v0.7.0, and the build fails if it exceeds 795 KiB.
 - Large scans reach their final display sample sooner (3 M points: 2.0 s to 1.4 s).
 - E57 integer fields decode a byte window at a time (10 M values: 1.8 to 9.3 s before, 0.08 to 0.29 s after).

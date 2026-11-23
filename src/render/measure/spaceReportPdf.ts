@@ -23,7 +23,7 @@ import { PDFDocument, rgb, type PDFFont, type PDFPage, type RGB } from 'pdf-lib'
 /** The session's sheet style, read by the caller that loads this chunk. */
 export { sheetStyle } from './mapSheetExportOptions';
 export { exportLocale } from '../../i18n/exportLocale';
-import { openReport } from '../../export/sheetKit/reportStyle';
+import { drawProvenanceRows, openReport, provenanceHeight, provenanceRows } from '../../export/sheetKit/reportStyle';
 import type { SheetStyle } from '../../export/sheetKit/tokens';
 import { metresToFeet, type SpaceMetrics } from '../../terrain/spaceMetrics';
 import type { ObjectMetrics } from '../../terrain/objectMetrics';
@@ -136,9 +136,13 @@ async function buildSpaceReportPdfStyled(
   );
   const note = wrapStampLine(bold, content.provenance.notSurveyGrade, footerW, 8, 0);
   const noteTop = M - 4 + (note.length - 1) * 11;
-  const fy0 = noteTop + 16 + (stamp.length - 1) * 10;
+  const rows = kit ? provenanceRows(content.provenanceLines, footerW, kit) : [];
+  let fy0 = kit ? noteTop + 22 + provenanceHeight(rows) : noteTop + 16 + (stamp.length - 1) * 10;
   /** Lowest baseline the body may use: clear of the footer rule above the stamp. */
-  const BODY_FLOOR = fy0 + 24;
+  const STAMP_TOP = fy0 + (kit ? 44 : 24);
+  // Light and Dark let the body use the page and move the stamp to the next
+  // page when they would meet; Classic keeps the stamp's room on every page.
+  const BODY_FLOOR = kit ? M + 12 : STAMP_TOP;
 
   let y = PH - M;
 
@@ -220,7 +224,7 @@ async function buildSpaceReportPdfStyled(
     const planTop = y;
     const planBox = { x: M, y: planTop - 180, w: PW - 2 * M, h: 176 };
     drawFloorPlan(page, planBox, input.floorPlan, font, bold, input.unitSystem ?? 'metric', words);
-    y = planBox.y - 12;
+    y = planBox.y - (kit ? 24 : 12);
   }
 
   // ── Caveats ──
@@ -242,9 +246,15 @@ async function buildSpaceReportPdfStyled(
   // joined it), and long lines wrap with a hanging indent instead of leaving
   // the sheet. The bold note keeps its bottom-margin slot (last line at
   // M - 4), wrapping upward from there.
-  page.drawLine({ start: { x: M, y: fy0 + 12 }, end: { x: PW - M, y: fy0 + 12 }, thickness: 0.75, color: FRAME });
+  if (kit && y < STAMP_TOP) {
+    page = doc.addPage([PW, PH]);
+    fy0 = PH - M - 20;
+  }
+  if (kit) text(words.t('provenanceTitle'), M, fy0 + 20, 11, bold, INK);
+  page.drawLine({ start: { x: M, y: fy0 + 12 }, end: { x: PW - M, y: fy0 + 12 }, thickness: kit ? 0.5 : 0.75, color: FRAME });
   let fy = fy0;
-  for (const s of stamp) {
+  if (kit) drawProvenanceRows(page, rows, M, fy - 2, kit);
+  else for (const s of stamp) {
     text(s.seg, s.x, fy, 7.5, font, DIM);
     fy -= 10;
   }
