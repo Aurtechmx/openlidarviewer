@@ -455,7 +455,7 @@ consecutive passes, counted by `scripts/ios-streak.mjs`.
 fails the build when either passes its recorded baseline, so a raise is a hand
 edit to `docs/validation/monolith-size-baseline.json` and always shows in the
 diff.
-Fan-out is 95 for the shell, 73 for the renderer, across 1247 modules with no
+Fan-out is 95 for the shell, 73 for the renderer, across 1248 modules with no
 dependency cycles. Fan-out counts the distinct modules a file imports with a
 value import, source files and external packages alike; type-only and dynamic
 imports are not counted. The shell and the renderer figures are held
@@ -1033,8 +1033,9 @@ large sheet.
 
 ## Export languages
 
-Only the space and object report is translated so far; the floor plan, the
-sheets and the other reports are in English. The Spanish, Portuguese, French
+Only the space and object report and the floor plan preview are translated so
+far; the map and profile sheets, the other reports and the Studio image card
+are in English. The Spanish, Portuguese, French
 and German text has not been reviewed by a geomatics reviewer, so each report
 in those languages carries a Language line that says the translation is not
 yet reviewed. A truncation note copied from the scan stays in English. The

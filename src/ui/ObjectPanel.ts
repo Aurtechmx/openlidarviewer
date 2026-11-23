@@ -404,7 +404,7 @@ export class ObjectPanel {
     // The report's language and number style, chosen apart from the app's.
     this._body.append(exportLanguageControl(
       withFloorPlan
-        ? 'The report is written in this language. The floor plan stays in English for now. Translations are drafts until reviewed.'
+        ? 'The report and the floor plan are written in this language. Translations are drafts until reviewed.'
         : 'The report is written in this language. Translations are drafts until reviewed.',
     ));
     if (withFloorPlan) {

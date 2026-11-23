@@ -214,7 +214,39 @@ export interface FloorPlanModel {
   readonly snappedToAxes: boolean;
   /** Honest basis / caveat strings (rendered on the artifacts). */
   readonly reasons: readonly string[];
+  /**
+   * The same notes as codes with their figures, one per entry of
+   * {@link reasons} and in the same order, so a sheet in another language can
+   * say them in that language. The English sentences stay in `reasons`.
+   */
+  readonly notes?: readonly FloorPlanNote[];
 }
+
+/** One note of {@link FloorPlanModel.reasons}, as a code and its figures. */
+export type FloorPlanNote =
+  | { readonly code: 'too-few'; readonly n: number; readonly min: number }
+  | { readonly code: 'unit-unverified' }
+  | { readonly code: 'no-wall-height' }
+  | { readonly code: 'slice-sparse' }
+  | { readonly code: 'no-outline' }
+  | { readonly code: 'suitability' }
+  | { readonly code: 'openings' }
+  | { readonly code: 'band-none' }
+  | { readonly code: 'band-floor'; readonly low: number; readonly high: number; readonly adapted: boolean }
+  | { readonly code: 'band-estimated'; readonly low: number; readonly high: number; readonly adapted: boolean }
+  | { readonly code: 'stray'; readonly count: number }
+  | { readonly code: 'snap-off' }
+  | { readonly code: 'snap-forced' }
+  | { readonly code: 'snap-axes' }
+  | { readonly code: 'snap-none' }
+  | { readonly code: 'echo'; readonly thickness: number; readonly removed: number }
+  | { readonly code: 'demoted'; readonly count: number }
+  | { readonly code: 'contents'; readonly found: number; readonly drawn: number }
+  | { readonly code: 'wall-graph'; readonly nodes: number; readonly edges: number }
+  | { readonly code: 'rooms'; readonly count: number; readonly doorways: number }
+  | { readonly code: 'open-plan'; readonly area: number }
+  | { readonly code: 'unsegmented' }
+  | { readonly code: 'gaps'; readonly doorways: number; readonly unknown: number; readonly shown: number };
 
 export interface FloorPlanParams {
   /** Detected up axis (from classifyScanShape). */
@@ -264,9 +296,9 @@ export interface FloorPlanParams {
   readonly minPoints?: number;
 }
 
-const SUITABILITY_NOTE =
+export const SUITABILITY_NOTE =
   'Derived from the point cloud — suitable for orientation and layout reference, not for construction, survey, or legal use.';
-const OPENINGS_NOTE =
+export const OPENINGS_NOTE =
   'Wall gaps are where the scan has no wall returns — doorways or unscanned runs; gaps wider than the door-keep threshold are never bridged.';
 
 /** Simplification tolerance in cells — recovers straight runs from the raster. */
@@ -416,7 +448,7 @@ export function limitUnknownGaps(gaps: ReadonlyArray<PlanGap>, cellM: number): P
   return out;
 }
 
-const emptyModel = (reasons: string[]): FloorPlanModel => ({
+const emptyModel = (reasons: string[], notes: FloorPlanNote[]): FloorPlanModel => ({
   wallRings: [],
   wallRingObservedFrac: [],
   floorRings: [],
@@ -446,6 +478,7 @@ const emptyModel = (reasons: string[]): FloorPlanModel => ({
   clipBbox: null,
   snappedToAxes: false,
   reasons,
+  notes,
 });
 
 /**
@@ -496,7 +529,7 @@ export function extractFloorPlan(
     return emptyModel([
       `Too few points (${n.toLocaleString()} < ${minPoints.toLocaleString()}) to trace walls — no plan extracted.`,
       SUITABILITY_NOTE,
-    ]);
+    ], [{ code: 'too-few', n, min: minPoints }, { code: 'suitability' }]);
   }
 
   // ── 0. The band is physical, so the scale must be real ──
@@ -515,7 +548,7 @@ export function extractFloorPlan(
       + 'the trace would sample the wrong height. Confirm the source CRS, then '
       + 'export again.',
       SUITABILITY_NOTE,
-    ]);
+    ], [{ code: 'unit-unverified' }, { code: 'suitability' }]);
   }
 
   // ── 1. Wall-height slice ──
@@ -529,13 +562,13 @@ export function extractFloorPlan(
     adaptiveBand: params.adaptiveBand,
   });
   if (slice.count < 64) {
-    return emptyModel(['No wall-height structure found in the scan.', SUITABILITY_NOTE]);
+    return emptyModel(['No wall-height structure found in the scan.', SUITABILITY_NOTE], [{ code: 'no-wall-height' }, { code: 'suitability' }]);
   }
 
   // ── 2. Density-thresholded wall mask + gap closing ──
   const rawGrid = buildOccupancyMask(slice.xs, slice.ys, slice.count);
   if (!rawGrid) {
-    return emptyModel(['Wall slice too sparse or degenerate to rasterise.', SUITABILITY_NOTE]);
+    return emptyModel(['Wall slice too sparse or degenerate to rasterise.', SUITABILITY_NOTE], [{ code: 'slice-sparse' }, { code: 'suitability' }]);
   }
   const cell = Math.max(rawGrid.cellX, rawGrid.cellY);
   const closedGrid = closeMask(rawGrid, closeRadiusCells(cell, keepOpenM));
@@ -602,7 +635,7 @@ export function extractFloorPlan(
     wallRingsRaw = axes ? vectorise(wallGrid, axes.thetaRad, true) : vectorise(wallGrid, null, true);
   }
   if (wallRingsRaw.length === 0) {
-    return emptyModel(['No coherent wall outline could be traced.', SUITABILITY_NOTE]);
+    return emptyModel(['No coherent wall outline could be traced.', SUITABILITY_NOTE], [{ code: 'no-outline' }, { code: 'suitability' }]);
   }
   // Vertex budget: walls carry the plan, so the cap is generous and only a
   // pathologically noisy mask ever trips it (proportional DP tightening).
@@ -713,6 +746,7 @@ export function extractFloorPlan(
   // reaches here carrying dimensions from an unconfirmed scale. There is no
   // caveat for that case because there is no plan to caveat.
   const reasons: string[] = [];
+  const notes: FloorPlanNote[] = [];
   // Basis line: the band offsets ACTUALLY used (the widened retry shows its
   // real numbers), and an honest distinction between a detected floor plane
   // and a percentile-estimated anchor.
@@ -730,7 +764,13 @@ export function extractFloorPlan(
     wallBandReason = `No dominant floor plane — floor level estimated from the lowest dense returns; walls traced from the ${slice.bandLowUsedM.toFixed(1)}–${slice.bandHighUsedM.toFixed(1)} m slice above it${adaptedNote}.`;
   }
   reasons.push(wallBandReason);
+  notes.push(
+    !slice.usedWallBand
+      ? { code: 'band-none' }
+      : { code: slice.floorBasis === 'histogram' ? 'band-floor' : 'band-estimated', low: slice.bandLowUsedM, high: slice.bandHighUsedM, adapted: bandAdapted },
+  );
   if (slice.clippedCount > 0) {
+    notes.push({ code: 'stray', count: slice.clippedCount });
     reasons.push(
       `${slice.clippedCount.toLocaleString()} stray return(s) outside the dense footprint were excluded as outliers.`,
     );
@@ -746,18 +786,25 @@ export function extractFloorPlan(
     snapReason = 'Wall directions left as traced — no two dominant perpendicular directions found, so no right angles were assumed.';
   }
   reasons.push(snapReason);
+  notes.push({ code: snap.mode === 'off' ? 'snap-off' : snap.forced && axes ? 'snap-forced' : axes ? 'snap-axes' : 'snap-none' });
   if (thicknessNormalized) {
+    notes.push({ code: 'echo', thickness: norm.medianThicknessM, removed: removedM2 });
     reasons.push(
       `Echo-fattened wall mass (a wall scanned from both sides reads double) was collapsed onto its centerline at the measured ~${norm.medianThicknessM.toFixed(2)} m wall thickness (${removedM2.toFixed(1)} m² removed).`,
     );
   }
   if (norm.demotedCount > 0) {
+    notes.push({ code: 'demoted', count: norm.demotedCount });
     reasons.push(
       `${norm.demotedCount} free-standing mass(es) far thicker than the building's walls (likely large furniture) were demoted from the wall poché to contents hints.`,
     );
   }
-  if (contentsCount > 0) reasons.push(contentsNote(contentsCount, drawnContentsCount));
+  if (contentsCount > 0) {
+    reasons.push(contentsNote(contentsCount, drawnContentsCount));
+    notes.push({ code: 'contents', found: contentsCount, drawn: drawnContentsCount });
+  }
   if (fromWallGraph) {
+    notes.push({ code: 'wall-graph', nodes: graph.nodes.length, edges: graph.edges.length });
     reasons.push(
       `Walls reconstructed from the centerline wall graph (${graph.nodes.length} node(s), ${graph.edges.length} edge(s)) — one measured thickness per wall run, corners joined at junctions; no run was added that the skeleton did not trace.`,
     );
@@ -765,12 +812,14 @@ export function extractFloorPlan(
   if (rooms.length > 0) {
     const doorwayNote =
       roomsDet.closedDoorways > 0 ? ` and ${roomsDet.closedDoorways} closed doorway span(s)` : '';
+    notes.push({ code: 'rooms', count: rooms.length, doorways: roomsDet.closedDoorways });
     reasons.push(
       `${rooms.length} room(s) segmented by flood fill bounded by the walls${doorwayNote}; unknown gaps are never closed, so an unscanned divider merges its regions instead of fabricating a wall. Room areas are measured on the region mask.`,
     );
   } else if (roomsDet.segmentation === 'open-space') {
     // HONESTY: one connected interior region dominates the floor — present it
     // as a single open space, NOT a numbered room schedule of flood pockets.
+    notes.push({ code: 'open-plan', area: roomsDet.dominantRegionAreaM2 });
     reasons.push(
       `Open-plan interior: the free space floods into one connected region (~${roomsDet.dominantRegionAreaM2.toFixed(0)} m²) — no interior partitions were reliably segmented, so the plan is presented as a single open space rather than numbered rooms.`,
     );
@@ -778,11 +827,13 @@ export function extractFloorPlan(
     // HONESTY: the flood found only micro-pockets between wall fragments that
     // together cover a sliver of the floor (a leaking open plan). Numbering
     // those as "rooms" would fabricate partitions the scan never saw.
+    notes.push({ code: 'unsegmented' });
     reasons.push(
       'Rooms could not be reliably segmented from the wall returns — the open floor leaks past unscanned boundary runs, leaving only wall-fragment pockets too small to be rooms. No room schedule is claimed; the wall poché, overall dimensions, and floor area still stand.',
     );
   }
   if (doorways.length > 0 || unknownGapsAll.length > 0) {
+    notes.push({ code: 'gaps', doorways: doorways.length, unknown: unknownGapsAll.length, shown: unknownGaps.length });
     reasons.push(
       `Of the wall gaps, ${doorways.length} show squared jamb evidence on both sides and read as doorways (left open); ${unknownGapsAll.length} other facing gap(s) lack that evidence — unscanned or unclassifiable, drawn as dashed lines` +
         (unknownGaps.length < unknownGapsAll.length
@@ -791,6 +842,7 @@ export function extractFloorPlan(
     );
   }
   reasons.push(OPENINGS_NOTE, SUITABILITY_NOTE);
+  notes.push({ code: 'openings' }, { code: 'suitability' });
 
   return {
     wallRings,
@@ -822,6 +874,7 @@ export function extractFloorPlan(
     clipBbox: slice.clipBbox,
     snappedToAxes: axes != null,
     reasons,
+    notes,
   };
 }
 

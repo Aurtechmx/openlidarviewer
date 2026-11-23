@@ -2069,7 +2069,7 @@ function newObjectPanel(
   onExportFloorPlan: async () => {
     const ctx = routeCoordinator.spaceExport();
     if (!ctx || ctx.spaceKind !== 'interior') return;
-    const { extractFloorPlan, floorPlanSvg, sheetStyle } = await loadFloorPlan();
+    const { extractFloorPlan, floorPlanSvg, sheetStyle, exportLocale } = await loadFloorPlan();
     if (!spaceCtxCurrent(ctx)) throw new Error(SPACE_CONTEXT_MOVED);
     // Fresh dense gather: the 60 k routing snapshot is too sparse for wall
     // tracing (see FLOORPLAN_GATHER_POINTS).
@@ -2082,7 +2082,7 @@ function newObjectPanel(
       // (defaults mirror FLOORPLAN_OPTIONS); spread last so they win.
       ...objectPanel.floorPlanOptions(),
     });
-    const svg = floorPlanSvg(plan, { title: ctx.basename, unitSystem: viewer.measure.unitSystem, style: sheetStyle() });
+    const svg = floorPlanSvg(plan, { title: ctx.basename, unitSystem: viewer.measure.unitSystem, style: sheetStyle(), locale: exportLocale() });
     downloadFileBytes(`${ctx.basename}-floorplan.svg`, new TextEncoder().encode(svg), 'image/svg+xml');
     // Surface a one-glance confidence read in the panel. Computed here, inside
     // the already-loaded lazy floor-plan chunk, so the panel needs only the
