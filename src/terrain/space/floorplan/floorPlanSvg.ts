@@ -24,9 +24,15 @@
  */
 
 import { cssColor, sheetTokens, type SheetRgb } from '../../../export/sheetKit/tokens';
-import { OBSERVED_FRAC_MIN, type FloorPlanModel } from './extractFloorPlan';
+import { OBSERVED_FRAC_MIN, type FloorPlanModel, type FloorPlanNote } from './extractFloorPlan';
+import { FLOOR_PLAN_TEXT, type FloorPlanKey } from '../../../i18n/deliverables/floorPlan';
+import { ENGLISH, type ExportLocale } from '../../../i18n/exportLocale';
+import { fill } from '../../../i18n/message';
+import { fixed, grouped, withDecimalMark, type NumberStyle } from '../../../i18n/numberStyle';
+import { languageInfo } from '../../../i18n/languages';
 /** The session's sheet style, read by the caller that loads this chunk. */
 export { sheetStyle } from '../../../render/measure/mapSheetExportOptions';
+export { exportLocale } from '../../../i18n/exportLocale';
 import { ringSignedArea, type Ring } from './vectorize';
 import { metresToFeet, sqMetresToSqFeet } from '../../spaceMetrics';
 import { UNIT_FACTORS } from '../../../units/units';
@@ -34,6 +40,82 @@ import { UNIT_FACTORS } from '../../../units/units';
 /** Mirrors the measurement panel's unit system; kept local so this pure
  * terrain module never imports from the render layer. */
 export type PlanUnitSystem = 'metric' | 'imperial';
+
+/** One footer line, with the English sentence its warning style is chosen from. */
+interface FooterLine {
+  readonly text: string;
+  readonly en: string;
+}
+
+/** The sheet's words and number writer for one draw. */
+interface PlanWords {
+  readonly lang: ExportLocale['lang'];
+  readonly style: NumberStyle;
+  readonly t: (key: FloorPlanKey, params?: Record<string, string | number>) => string;
+  readonly fx: (v: number, digits: number) => string;
+}
+
+function planWords(locale: ExportLocale): PlanWords {
+  const catalog = FLOOR_PLAN_TEXT[locale.lang];
+  return {
+    lang: locale.lang,
+    style: locale.numberStyle,
+    t: (key, params) => fill(catalog[key], params, key),
+    fx: (v, digits) => fixed(locale.numberStyle, v, digits),
+  };
+}
+
+/**
+ * The words of the sheet being drawn. Set for one synchronous draw and put
+ * back after, as the sheet colours are, so the unit helpers need no extra
+ * parameter. English with point decimals between draws.
+ */
+let words: PlanWords = planWords(ENGLISH);
+
+/**
+ * One extraction note in the sheet's language. Said in English it is the
+ * sentence the extractor wrote; a test holds the two equal.
+ */
+export function planNoteText(n: FloorPlanNote, w: PlanWords = words): string {
+  const { t, fx } = w;
+  const int = (v: number): string => grouped(w.style, v);
+  const adapted = (a: boolean): string => (a ? t('bandAdapted') : '');
+  switch (n.code) {
+    case 'too-few': return t('tooFew', { n: int(n.n), min: int(n.min) });
+    case 'unit-unverified': return t('unitUnverified', { low: fx(0.7, 1), high: fx(1.8, 1) });
+    case 'no-wall-height': return t('noWallHeight');
+    case 'slice-sparse': return t('sliceSparse');
+    case 'no-outline': return t('noOutline');
+    case 'suitability': return t('suitability');
+    case 'openings': return t('openings');
+    case 'band-none': return t('bandNone');
+    case 'band-floor': return t('bandFloor', { low: fx(n.low, 1), high: fx(n.high, 1), adapted: adapted(n.adapted) });
+    case 'band-estimated': return t('bandEstimated', { low: fx(n.low, 1), high: fx(n.high, 1), adapted: adapted(n.adapted) });
+    case 'stray': return t('stray', { count: int(n.count) });
+    case 'snap-off': return t('snapOff');
+    case 'snap-forced': return t('snapForced');
+    case 'snap-axes': return t('snapAxes');
+    case 'snap-none': return t('snapNone');
+    case 'echo': return t('echo', { thickness: fx(n.thickness, 2), removed: fx(n.removed, 1) });
+    case 'demoted': return t('demoted', { count: n.count });
+    case 'contents': {
+      const lead = t('contentsFound', { found: n.found });
+      if (n.drawn <= 0) return t('contentsNone', { lead });
+      const undrawn = n.found - n.drawn;
+      return undrawn > 0 ? t('contentsSome', { lead, drawn: n.drawn, undrawn }) : t('contentsAll', { lead });
+    }
+    case 'wall-graph': return t('wallGraph', { nodes: n.nodes, edges: n.edges });
+    case 'rooms': return t('rooms', { count: n.count, doorways: n.doorways > 0 ? t('roomsDoorways', { n: n.doorways }) : '' });
+    case 'open-plan': return t('openPlan', { area: fx(n.area, 0) });
+    case 'unsegmented': return t('unsegmented');
+    case 'gaps': return t('gaps', { doorways: n.doorways, unknown: n.unknown, tail: n.shown < n.unknown ? t('gapsShown', { shown: n.shown }) : t('gapsEnd') });
+  }
+}
+
+/** The English words, for tests that hold the notes to the extractor's sentences. */
+export function englishPlanWords(): PlanWords {
+  return planWords(ENGLISH);
+}
 
 export interface FloorPlanSvgOptions {
   /** Title printed at the top of the sheet (e.g. the scan name). */
@@ -46,6 +128,8 @@ export interface FloorPlanSvgOptions {
   readonly style?: 'light' | 'dark' | 'classic';
   /** Date printed in the title block (ISO yyyy-mm-dd). Default: today. */
   readonly dateText?: string;
+  /** The language and number style to write the sheet in; English when absent. */
+  readonly locale?: ExportLocale;
 }
 
 /** Near-black architectural ink — the sheet is always a white print sheet
@@ -150,7 +234,8 @@ export function escapeXml(s: string): string {
 
 /** Greedy word-wrap (the footer has no DOM to measure text with). */
 function wrapText(s: string, maxChars: number): string[] {
-  const words = s.split(/\s+/);
+  // A no-break space groups the digits of one figure and never breaks.
+  const words = s.split(/[^\S\u00A0]+/);
   const lines: string[] = [];
   let line = '';
   for (const w of words) {
@@ -164,6 +249,18 @@ function wrapText(s: string, maxChars: number): string[] {
   }
   if (line) lines.push(line);
   return lines;
+}
+
+/** Roughly how wide `s` is in a Helvetica-like face, in px: no metrics exist here. */
+function estimatedWidth(s: string, fontPx: number): number {
+  let em = 0;
+  for (const ch of s) {
+    if (/[ijlI.,:;'|!()\[\]/ \u00A0ftr-]/.test(ch)) em += 0.3;
+    else if (/[mwMW%]/.test(ch)) em += 0.85;
+    else if (/[A-ZÀ-Þ]/.test(ch)) em += 0.7;
+    else em += 0.555;
+  }
+  return em * fontPx;
 }
 
 /** A round-number scale-bar length ≤ maxLen, in the bar's own unit. */
@@ -180,17 +277,20 @@ function niceBar(maxLen: number): number {
 /** "10.0 m (32.8 ft)" or "32.8 ft (10.0 m)" per unit system. */
 function lengthLabel(metres: number, unitSystem: PlanUnitSystem): string {
   const ft = metresToFeet(metres);
+  const { fx } = words;
   return unitSystem === 'imperial'
-    ? `${ft.toFixed(1)} ft (${metres.toFixed(1)} m)`
-    : `${metres.toFixed(1)} m (${ft.toFixed(1)} ft)`;
+    ? `${fx(ft, 1)} ft (${fx(metres, 1)} m)`
+    : `${fx(metres, 1)} m (${fx(ft, 1)} ft)`;
 }
 
 /** "141.0 m² (1518 sq ft)" or "1518 sq ft (141.0 m²)" per unit system. */
 function areaLabel(m2: number, unitSystem: PlanUnitSystem): string {
   const sf = sqMetresToSqFeet(m2);
+  const { fx } = words;
+  const sq = words.t('sqft');
   return unitSystem === 'imperial'
-    ? `${sf.toFixed(0)} sq ft (${m2.toFixed(1)} m²)`
-    : `${m2.toFixed(1)} m² (${sf.toFixed(0)} sq ft)`;
+    ? `${fx(sf, 0)} ${sq} (${fx(m2, 1)} m²)`
+    : `${fx(m2, 1)} m² (${fx(sf, 0)} ${sq})`;
 }
 
 /** A 45° dimension tick (architectural convention) centred on (x, y). */
@@ -243,8 +343,8 @@ function pointInRing(p: readonly [number, number], ring: Ring): boolean {
 /** Short single-unit area text: "12.3 m²" or "132 sq ft" per unit system. */
 function areaShort(m2: number, unitSystem: PlanUnitSystem): string {
   return unitSystem === 'imperial'
-    ? `${sqMetresToSqFeet(m2).toFixed(0)} sq ft`
-    : `${m2.toFixed(1)} m²`;
+    ? `${words.fx(sqMetresToSqFeet(m2), 0)} ${words.t('sqft')}`
+    : `${words.fx(m2, 1)} m²`;
 }
 
 /**
@@ -253,13 +353,20 @@ function areaShort(m2: number, unitSystem: PlanUnitSystem): string {
  * — NOT true north; the footer says so).
  */
 export function floorPlanSvg(model: FloorPlanModel, opts: FloorPlanSvgOptions = {}): string {
-  // Light and Dark swap the colours for this synchronous build; Classic, or no style, is the sheet as before.
-  if (opts.style !== 'light' && opts.style !== 'dark') return floorPlanSvgDrawn(model, opts);
-  usePlanInk(planInkFor(opts.style));
+  // The sheet's language and number style hold for this synchronous build.
+  const previous = words;
+  words = planWords(opts.locale ?? ENGLISH);
   try {
-    return floorPlanSvgDrawn(model, opts);
+    // Light and Dark swap the colours for this synchronous build; Classic, or no style, is the sheet as before.
+    if (opts.style !== 'light' && opts.style !== 'dark') return floorPlanSvgDrawn(model, opts);
+    usePlanInk(planInkFor(opts.style));
+    try {
+      return floorPlanSvgDrawn(model, opts);
+    } finally {
+      usePlanInk(CLASSIC_PLAN_INK);
+    }
   } finally {
-    usePlanInk(CLASSIC_PLAN_INK);
+    words = previous;
   }
 }
 
@@ -339,47 +446,44 @@ function floorPlanSvgDrawn(model: FloorPlanModel, opts: FloorPlanSvgOptions): st
 
   // The standing experimental note leads the footer — the sheet must carry the
   // same caveat the panel button shows.
-  const footerReasons: string[] = [
-    'Experimental — requires visual validation.',
-    ...model.reasons,
-  ];
+  // Each line keeps its English sentence beside it: the bold warning style
+  // below is chosen from the English words, so a translated line keeps it.
+  const { t } = words;
+  const en = englishPlanWords();
+  const said = (key: FloorPlanKey, params?: Record<string, string | number>): FooterLine =>
+    ({ text: t(key, params), en: en.t(key, params) });
+  const modelLines: FooterLine[] =
+    (words.lang === 'en' && words.style === 'point') || !model.notes || model.notes.length !== model.reasons.length
+      ? model.reasons.map((r) => ({ text: r, en: r }))
+      : model.notes.map((n, i) => ({ text: planNoteText(n), en: model.reasons[i] }));
+  const footerReasons: FooterLine[] = [said('experimental'), ...modelLines];
   if (pocheRounded) {
-    footerReasons.push(
-      `Wall poché drawn at the ${MIN_WALL_RENDER_M.toFixed(2)} m architectural minimum for legibility — measured thickness ~${measuredWallM.toFixed(2)} m.`,
-    );
+    footerReasons.push(said('pocheMin', { min: words.fx(MIN_WALL_RENDER_M, 2), measured: words.fx(measuredWallM, 2) }));
   }
   if (regionAreasM2.length > 0) {
-    footerReasons.push(
-      `Approx. region areas (scanned-floor extents, not wall-measured rooms): ${regionAreasM2
-        .map((a) => areaShort(a, unitSystem))
-        .join(', ')}.`,
-    );
+    footerReasons.push(said('regions', { list: regionAreasM2.map((a) => areaShort(a, unitSystem)).join(words.style === 'comma' ? '; ' : ', ') }));
   }
   // Room schedule (rooms from the wall-graph flood fill — areas measured on
   // the region mask, doors kept distinct, unknown gaps never closed). Printed
   // ONLY for the 'rooms' outcome — the open-space / unsegmented cases print an
   // honest single line instead of a fabricated numbered schedule.
   if (model.rooms.length > 0) {
-    footerReasons.push(
-      `Room schedule (flood-fill of the wall graph, approx.): ${model.rooms
-        .map((r, i) => `Room ${i + 1} ${areaShort(r.areaM2, unitSystem)}`)
-        .join(' · ')}.`,
-    );
+    footerReasons.push(said('schedule', {
+      list: model.rooms.map((r, i) => t('scheduleItem', { i: i + 1, area: areaShort(r.areaM2, unitSystem) })).join(' · '),
+    }));
   } else if (model.roomSegmentation === 'open-space') {
-    footerReasons.push(
-      `Single open space (no interior partitions reliably segmented): ~${areaShort(model.openSpaceAreaM2, unitSystem)}.`,
-    );
+    footerReasons.push(said('openSpace', { area: areaShort(model.openSpaceAreaM2, unitSystem) }));
   }
   if (weakRings.length > 0) {
-    footerReasons.push(
-      `Tinted walls: interpolated from sparse evidence — under ${Math.round(OBSERVED_FRAC_MIN * 100)}% of their outline is backed by raw wall returns (morphological gap-closing filled the rest).`,
-    );
+    footerReasons.push(said('tinted', { pct: Math.round(OBSERVED_FRAC_MIN * 100) }));
   }
+
+  if (!languageInfo(words.lang).reviewed) footerReasons.push(said('draft'));
 
   // Footer: dims + scale bar + frame note + (wrapped) reasons. Wrap width is
   // sized for ~5.2 px/char at the footer font over the sheet's inner width.
   const wrapChars = Math.max(40, Math.floor((W - 2 * pad) / 5.2));
-  const reasonLines = footerReasons.flatMap((r) => wrapText(r, wrapChars));
+  const reasonLines = footerReasons.flatMap((r) => wrapText(r.text, wrapChars));
   const footerH = 64 + reasonLines.length * 14;
 
   const drawW = W - 2 * pad;
@@ -408,19 +512,17 @@ function floorPlanSvgDrawn(model: FloorPlanModel, opts: FloorPlanSvgOptions): st
   );
 
   // ── Title ──
-  const title = escapeXml((opts.title ?? 'Floor plan preview').trim() || 'Floor plan preview');
+  const title = escapeXml((opts.title ?? t('defaultTitle')).trim() || t('defaultTitle'));
   // Claim-accurate subtitle: "wall-graph reconstruction" only when the walls
   // really were re-extruded from the centerline graph; still a preview.
   parts.push(
     `<text x="${pad}" y="28" font-size="18" font-weight="bold" fill="${INK}">${title}</text>`,
-    `<text x="${pad}" y="46" font-size="11" fill="${DIM}">Floor Plan Preview — ${
-      model.fromWallGraph ? 'wall-graph reconstruction' : 'approximate wall-trace sketch'
-    } (top-down)</text>`,
+    `<text x="${pad}" y="46" font-size="11" fill="${DIM}">${escapeXml(t('subtitle', { kind: model.fromWallGraph ? t('kindGraph') : t('kindTrace') }))}</text>`,
   );
 
   if (model.wallRings.length === 0) {
     parts.push(
-      `<text x="${pad}" y="${drawTop + 40}" font-size="12" fill="${WARN}">No wall structure could be traced from this scan.</text>`,
+      `<text x="${pad}" y="${drawTop + 40}" font-size="12" fill="${WARN}">${escapeXml(words.t('noWalls'))}</text>`,
     );
   } else {
     // ── Scanned-floor interior (light), under the walls ──
@@ -539,7 +641,7 @@ function floorPlanSvgDrawn(model: FloorPlanModel, opts: FloorPlanSvgOptions): st
     if (model.rooms.length > 0) {
       const labels: string[] = [];
       model.rooms.forEach((room, i) => {
-        const txt = `Room ${i + 1} · ${areaShort(room.areaM2, unitSystem)}`;
+        const txt = words.t('roomLabel', { i: i + 1, area: areaShort(room.areaM2, unitSystem) });
         const wPx = txt.length * 5.6 + 6;
         let rMinX = Infinity, rMinY = Infinity, rMaxX = -Infinity, rMaxY = -Infinity;
         for (const [x, y] of room.ring) {
@@ -577,7 +679,7 @@ function floorPlanSvgDrawn(model: FloorPlanModel, opts: FloorPlanSvgOptions): st
       if (big) {
         const c = ringCentroid(big);
         const anchor = pointInRing(c, big) ? c : big[0];
-        const txt = `Open space · ~${areaShort(model.openSpaceAreaM2, unitSystem)}`;
+        const txt = words.t('openSpaceLabel', { area: areaShort(model.openSpaceAreaM2, unitSystem) });
         parts.push(
           `<g class="room-labels open-space" font-size="11" font-weight="bold" fill="${ROOM_LABEL}"><text x="${px(anchor[0]).toFixed(1)}" y="${(py(anchor[1]) + 4).toFixed(1)}" text-anchor="middle">${escapeXml(txt)}</text></g>`,
         );
@@ -630,10 +732,11 @@ function floorPlanSvgDrawn(model: FloorPlanModel, opts: FloorPlanSvgOptions): st
     // an L-shaped or partially scanned interior.
     const floorAreaTxt =
       model.floorAreaM2 != null
-        ? ` · Floor area ${escapeXml(areaLabel(model.floorAreaM2, unitSystem))}`
+        ? escapeXml(words.t('floorAreaInline', { area: areaLabel(model.floorAreaM2, unitSystem) }))
         : '';
+    const overallLine = escapeXml(words.t('overall', { w: lengthLabel(model.widthM, unitSystem), d: lengthLabel(model.depthM, unitSystem) }));
     parts.push(
-      `<text x="${pad}" y="${dimY}" font-size="12" fill="${INK}">Overall ${escapeXml(lengthLabel(model.widthM, unitSystem))} x ${escapeXml(lengthLabel(model.depthM, unitSystem))}${floorAreaTxt}</text>`,
+      `<text x="${pad}" y="${dimY}" font-size="12" fill="${INK}">${overallLine}${floorAreaTxt}</text>`,
     );
 
     // ── Scale bar (round number in the primary unit) ──
@@ -643,11 +746,11 @@ function floorPlanSvgDrawn(model: FloorPlanModel, opts: FloorPlanSvgOptions): st
       if (unitSystem === 'imperial') {
         barLen = niceBar(metresToFeet(maxBarM));
         barM = barLen * UNIT_FACTORS.M_PER_FT;
-        barText = `${barLen} ft`;
+        barText = `${withDecimalMark(words.style, String(barLen))} ft`;
       } else {
         barLen = niceBar(maxBarM);
         barM = barLen;
-        barText = `${barLen} m`;
+        barText = `${withDecimalMark(words.style, String(barLen))} m`;
       }
       if (barLen > 0) sheetBarText = barText;
       if (barLen > 0) {
@@ -665,13 +768,14 @@ function floorPlanSvgDrawn(model: FloorPlanModel, opts: FloorPlanSvgOptions): st
   // ── Local-frame note + the model's honesty caveats ──
   let fy = drawTop + drawH + 46;
   parts.push(
-    `<text x="${pad}" y="${fy}" font-size="10" fill="${DIM}">Orientation: local scan frame — not aligned to true north.</text>`,
+    `<text x="${pad}" y="${fy}" font-size="10" fill="${DIM}">${escapeXml(words.t('orientation'))}</text>`,
   );
   fy += 17;
   for (const reason of footerReasons) {
     // The suitability + experimental caveats must never be skimmed past.
-    const warn = /not for construction|no plan extracted|requires visual validation/i.test(reason);
-    for (const line of wrapText(reason, wrapChars)) {
+    // Chosen from the English sentence, so a translated line keeps its weight.
+    const warn = /not for construction|no plan extracted|requires visual validation/i.test(reason.en);
+    for (const line of wrapText(reason.text, wrapChars)) {
       parts.push(
         `<text x="${pad}" y="${fy}" font-size="${warn ? 10 : 9.5}" ${warn ? 'font-weight="bold"' : ''} fill="${warn ? WARN : DIM}">${escapeXml(line)}</text>`,
       );
@@ -687,29 +791,35 @@ function floorPlanSvgDrawn(model: FloorPlanModel, opts: FloorPlanSvgOptions): st
     const tbH = 76;
     const tbX = W - pad - tbW;
     const tbY = totalH - tbH - 8;
-    const rawTitle = (opts.title ?? 'Floor plan preview').trim() || 'Floor plan preview';
+    const rawTitle = (opts.title ?? words.t('defaultTitle')).trim() || words.t('defaultTitle');
     const tbTitle = rawTitle.length > 34 ? `${rawTitle.slice(0, 33)}…` : rawTitle;
     // 1 m = 96/0.0254 CSS px at 1:1 ⇒ nominal ratio = 3779.5 / (px per m).
     const ratio = scale > 0 ? Math.max(5, Math.round(3779.5 / scale / 5) * 5) : 0;
     const scaleTxt =
-      (ratio > 0 ? `Scale ~1:${ratio} (nominal)` : 'Scale: see bar') +
-      (sheetBarText ? ` · bar ${sheetBarText}` : '');
+      (ratio > 0 ? words.t('scaleRatio', { ratio }) : words.t('scaleSeeBar')) +
+      (sheetBarText ? words.t('scaleBar', { bar: sheetBarText }) : '');
     const dateTxt = (opts.dateText ?? new Date().toISOString().slice(0, 10)).trim();
     const areaTxt =
       model.floorAreaM2 != null
-        ? `Floor area ${areaLabel(model.floorAreaM2, unitSystem)} (approx.)`
-        : 'Floor area: not measured';
-    const overallTxt = `Overall ${lengthLabel(model.widthM, unitSystem)} x ${lengthLabel(model.depthM, unitSystem)}`;
-    const previewNote = `${dateTxt} · Floor plan preview — not for construction`;
+        ? words.t('floorArea', { area: areaLabel(model.floorAreaM2, unitSystem) })
+        : words.t('floorAreaNone');
+    const overallTxt = words.t('overall', { w: lengthLabel(model.widthM, unitSystem), d: lengthLabel(model.depthM, unitSystem) });
+    const previewNote = words.t('previewNote', { date: dateTxt });
+    // A translated line can run past the box (the sheet has no font metrics to
+    // wrap by); one estimated wider than the box is squeezed to its width.
+    // English lines are sized for the box and never get the attribute.
+    const room = tbW - 16;
+    const fitBox = (line: string): string =>
+      words.lang !== 'en' && estimatedWidth(line, 8.5) > room ? ` textLength="${room}" lengthAdjust="spacingAndGlyphs"` : '';
     parts.push(
       `<g class="title-block">` +
         `<rect x="${tbX}" y="${tbY}" width="${tbW}" height="${tbH}" fill="${PAPER}" stroke="${INK}" stroke-width="1"/>` +
         `<line x1="${tbX}" y1="${tbY + 21}" x2="${tbX + tbW}" y2="${tbY + 21}" stroke="${INK}" stroke-width="0.55"/>` +
         `<text x="${tbX + 8}" y="${tbY + 15}" font-size="11" font-weight="bold" fill="${INK}">${escapeXml(tbTitle)}</text>` +
-        `<text x="${tbX + 8}" y="${tbY + 34}" font-size="8.5" fill="${INK}">${escapeXml(overallTxt)}</text>` +
-        `<text x="${tbX + 8}" y="${tbY + 46}" font-size="8.5" fill="${INK}">${escapeXml(areaTxt)}</text>` +
-        `<text x="${tbX + 8}" y="${tbY + 58}" font-size="8.5" fill="${INK}">${escapeXml(scaleTxt)}</text>` +
-        `<text x="${tbX + 8}" y="${tbY + 70}" font-size="8.5" fill="${DIM}">${escapeXml(previewNote)}</text>` +
+        `<text x="${tbX + 8}" y="${tbY + 34}" font-size="8.5" fill="${INK}"${fitBox(overallTxt)}>${escapeXml(overallTxt)}</text>` +
+        `<text x="${tbX + 8}" y="${tbY + 46}" font-size="8.5" fill="${INK}"${fitBox(areaTxt)}>${escapeXml(areaTxt)}</text>` +
+        `<text x="${tbX + 8}" y="${tbY + 58}" font-size="8.5" fill="${INK}"${fitBox(scaleTxt)}>${escapeXml(scaleTxt)}</text>` +
+        `<text x="${tbX + 8}" y="${tbY + 70}" font-size="8.5" fill="${DIM}"${fitBox(previewNote)}>${escapeXml(previewNote)}</text>` +
         `</g>`,
     );
   }

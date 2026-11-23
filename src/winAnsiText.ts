@@ -65,7 +65,7 @@ export interface CappedText {
  * cap (wrapping collapses it anyway).
  */
 export function capFieldText(s: string, cap: number = PDF_FIELD_CHAR_CAP): CappedText {
-  const text = s.replace(/\s+/g, ' ').trim();
+  const text = s.replace(/[^\S\u00A0]+/g, ' ').trim();
   if (text.length <= cap) return { text, omitted: 0 };
   let end = cap;
   const last = text.charCodeAt(end - 1);
@@ -94,7 +94,7 @@ export function mayCapField(label: string): boolean {
 export function pdfParagraphs(text: string): string[] {
   const trimmed = text.trim();
   if (trimmed === '') return [];
-  return trimmed.split(/\r\n|[\r\n\u2028\u2029]/).map((p) => p.replace(/\s+/g, ' ').trim());
+  return trimmed.split(/\r\n|[\r\n\u2028\u2029]/).map((p) => p.replace(/[^\S\u00A0]+/g, ' ').trim());
 }
 
 /** The line printed in place of the characters {@link capFieldText} left out. */
@@ -104,7 +104,7 @@ export function omissionMarker(omitted: number): string {
 
 /**
  * Break `text` into lines no wider than `maxWidth` as measured by `measure`.
- * Breaks at whitespace; a word wider than the line on its own is hard-broken
+ * Breaks at whitespace, never at a no-break space; a word wider than the line on its own is hard-broken
  * character by character, so every line fits and the loop always ends. The
  * caller passes text that is already WinAnsi-safe, so the measured string is
  * the drawn string. Returns no lines for blank input.
@@ -116,7 +116,7 @@ export function wrapToWidth(
 ): string[] {
   const lines: string[] = [];
   let line = '';
-  for (const word of text.split(/\s+/)) {
+  for (const word of text.split(/[^\S\u00A0]+/)) {
     if (word.length === 0) continue;
     const candidate = line ? `${line} ${word}` : word;
     if (measure(candidate) <= maxWidth) {

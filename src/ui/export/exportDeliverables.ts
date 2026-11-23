@@ -14,6 +14,7 @@
 
 import { el } from '../dom';
 import { sheetStyleControl } from '../sheetStyleControl';
+import { exportLanguageControl } from '../exportLanguageControl';
 import { collapsibleSection } from '../collapsibleSection';
 import type { ExportFormat } from '../../io/exporters';
 import type { ExportMode } from '../../export/types';
@@ -246,6 +247,7 @@ export function buildExportDeliverables(cb: ExportDeliverablesCallbacks): Export
   const element = el('div', {}, [
     formatSection,
     sheetStyleControl(),
+    exportLanguageControl('The image card follows this language; the PDF report is in English for now. Translations are drafts until reviewed.'),
     collapsibleSection('Image export', imageRow),
     collapsibleSection('PDF report', reportRow),
   ]);

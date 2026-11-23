@@ -73,9 +73,11 @@ export async function openReport(
   title: string,
   date: Parameters<typeof pdfInfoDate>[0],
   render: { readonly style?: SheetStyle | null; readonly loadFont?: (name: string) => Promise<Uint8Array> },
+  /** BCP 47 tag of the report's language; English (United States) by default. */
+  languageTag = 'en-US',
 ): Promise<OpenedReport> {
   doc.setTitle(title, { showInWindowTitleBar: true });
-  doc.setLanguage('en-US');
+  doc.setLanguage(languageTag);
   doc.setAuthor('OpenLiDARViewer');
   const infoStamp = pdfInfoDate(date);
   doc.setCreationDate(infoStamp);

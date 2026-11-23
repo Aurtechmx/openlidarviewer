@@ -23,7 +23,8 @@ describe('report row layout', () => {
   });
 
   it('gives the picker the elastic share', () => {
-    const rule = /\.olv-report-select \{([^}]*)\}/.exec(css('56-inspector-panels.css'))?.[1] ?? '';
+    // The rule may be shared with other selectors (the export language picker).
+    const rule = /\.olv-report-select(?:,\s*[^{]+)? \{([^}]*)\}/.exec(css('56-inspector-panels.css'))?.[1] ?? '';
     expect(rule).toMatch(/flex:\s*1/);
     expect(rule).toMatch(/min-width:\s*0/);
   });

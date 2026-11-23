@@ -3096,7 +3096,7 @@ body:has(.olv-right-rail.olv-right-collapsed) .olv-navbar { --olv-nb-r: 0px; }
  * is `width: 100%` with a top margin for a button on its own row; here it sat beside
  * the picker at the full row width, squeezed the picker to 13px and ran off the panel. */
 .olv-report-row .olv-export-btn { flex: 0 0 auto; width: auto; margin-top: 0; }
-.olv-report-select {
+.olv-report-select, .olv-export-lang-select {
   flex: 1; min-width: 0;
   font-size: var(--text-xs); color: var(--text-dim);
   background: rgba(255, 255, 255, 0.04);
@@ -3105,9 +3105,9 @@ body:has(.olv-right-rail.olv-right-collapsed) .olv-navbar { --olv-nb-r: 0px; }
   transition: border-color var(--dur-fast) var(--ease-standard);
 }
 /* iOS zooms the page when a field under 16px is tapped; --text-xl is 16px. */
-@media (pointer: coarse) { .olv-report-select { font-size: var(--text-xl); } }
-.olv-report-select:hover:not(:disabled) { border-color: var(--accent); }
-.olv-report-select:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+@media (pointer: coarse) { .olv-report-select, .olv-export-lang-select { font-size: var(--text-xl); } }
+.olv-report-select:hover:not(:disabled), .olv-export-lang-select:hover { border-color: var(--accent); }
+.olv-report-select:focus-visible, .olv-export-lang-select:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .olv-report-select:disabled { opacity: 0.42; cursor: not-allowed; }
 
 /* Saved views (Inspector) */
@@ -10002,6 +10002,7 @@ details[open] > :is(.olv-why-summary, .olv-fit-caveats-summary, .olv-analyse-wor
 }
 .olv-object-dl:hover { color: var(--text); border-color: var(--accent); }
 .olv-object-dl:disabled { opacity: 0.4; cursor: default; }
+.olv-export-lang { display: flex; flex-direction: column; gap: var(--space-sm); margin: var(--space-sm) 0; }
 @media (pointer: coarse) {
   .olv-object-dl { min-height: 44px; }
   .olv-fp-toggle { min-height: 44px; }

@@ -2027,7 +2027,7 @@ function newObjectPanel(
   onExportReport: async () => {
     const ctx = routeCoordinator.spaceExport();
     if (!ctx) return;
-    const { buildSpaceReportPdf, sheetStyle } = await loadSpaceReportPdf();
+    const { buildSpaceReportPdf, sheetStyle, exportLocale } = await loadSpaceReportPdf();
     if (!spaceCtxCurrent(ctx)) throw new Error(SPACE_CONTEXT_MOVED);
     let floorPlan = null;
     if (ctx.spaceKind === 'interior') {
@@ -2057,8 +2057,8 @@ function newObjectPanel(
       unitToMetres: ctx.unitToMetres, coverageNote: ctx.coverageNote,
       floorPlan,
       // The embedded plan's dimension line follows the live measurement unit
-      // system, exactly like the standalone SVG sheet below.
-      unitSystem: viewer.measure.unitSystem,
+      // system, exactly like the standalone SVG sheet below; the language is the one chosen beside the button.
+      unitSystem: viewer.measure.unitSystem, locale: exportLocale(),
     }, { style: sheetStyle() });
     if (!spaceCtxCurrent(ctx)) throw new Error(SPACE_CONTEXT_MOVED); downloadFileBytes(`${ctx.basename}-space-report.pdf`, bytes, 'application/pdf'); // the build is an await too: a CRS change during it re-measured the panel
   },
@@ -2069,7 +2069,7 @@ function newObjectPanel(
   onExportFloorPlan: async () => {
     const ctx = routeCoordinator.spaceExport();
     if (!ctx || ctx.spaceKind !== 'interior') return;
-    const { extractFloorPlan, floorPlanSvg, sheetStyle } = await loadFloorPlan();
+    const { extractFloorPlan, floorPlanSvg, sheetStyle, exportLocale } = await loadFloorPlan();
     if (!spaceCtxCurrent(ctx)) throw new Error(SPACE_CONTEXT_MOVED);
     // Fresh dense gather: the 60 k routing snapshot is too sparse for wall
     // tracing (see FLOORPLAN_GATHER_POINTS).
@@ -2082,7 +2082,7 @@ function newObjectPanel(
       // (defaults mirror FLOORPLAN_OPTIONS); spread last so they win.
       ...objectPanel.floorPlanOptions(),
     });
-    const svg = floorPlanSvg(plan, { title: ctx.basename, unitSystem: viewer.measure.unitSystem, style: sheetStyle() });
+    const svg = floorPlanSvg(plan, { title: ctx.basename, unitSystem: viewer.measure.unitSystem, style: sheetStyle(), locale: exportLocale() });
     downloadFileBytes(`${ctx.basename}-floorplan.svg`, new TextEncoder().encode(svg), 'image/svg+xml');
     // Surface a one-glance confidence read in the panel. Computed here, inside
     // the already-loaded lazy floor-plan chunk, so the panel needs only the

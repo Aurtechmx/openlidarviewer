@@ -455,7 +455,7 @@ consecutive passes, counted by `scripts/ios-streak.mjs`.
 fails the build when either passes its recorded baseline, so a raise is a hand
 edit to `docs/validation/monolith-size-baseline.json` and always shows in the
 diff.
-Fan-out is 95 for the shell, 73 for the renderer, across 1242 modules with no
+Fan-out is 95 for the shell, 73 for the renderer, across 1251 modules with no
 dependency cycles. Fan-out counts the distinct modules a file imports with a
 value import, source files and external packages alike; type-only and dynamic
 imports are not counted. The shell and the renderer figures are held
@@ -1030,6 +1030,16 @@ angle. A georeferenced sheet whose CRS has no projection definition in OLV
 keeps the Grid N arrow, and a local frame says that north is unknown. The
 angle is the convergence at the map centre; it changes slightly across a
 large sheet.
+
+## Export languages
+
+Only the space and object report, the floor plan preview and the Studio image
+card are translated so far; the map and profile sheets and the other reports
+are in English. ASPRS class names in a class-filter note stay in English. The Spanish, Portuguese, French
+and German text has not been reviewed by a geomatics reviewer, so each report
+in those languages carries a Language line that says the translation is not
+yet reviewed. A truncation note copied from the scan stays in English. The
+app itself is in English.
 
 ## Sheet styles
 
