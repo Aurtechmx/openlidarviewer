@@ -82,6 +82,8 @@ export interface SchedulerCallbacks {
 export interface SchedulerView {
   /** Column-major view-projection matrix (16 numbers). */
   viewProjection: ArrayLike<number>;
+  /** Whether `viewProjection` stores reversed depth (`camera.reversedDepth`). */
+  reversedDepth?: boolean;
   /** Camera position. */
   cameraPosition: [number, number, number];
   /**
@@ -1219,7 +1221,7 @@ export class StreamingScheduler {
       scored = this._lastScored as { node: StreamingNode; candidate: ScoredCandidate }[];
       wanted = this._lastWanted as ReadonlySet<string>;
     } else {
-      const planes = frustumPlanesFromViewProjection(view.viewProjection);
+      const planes = frustumPlanesFromViewProjection(view.viewProjection, view.reversedDepth);
       // Score every visible node.
       const freshScored: { node: StreamingNode; candidate: ScoredCandidate }[] = [];
       // Walk the store's zero-allocation node iterator rather than `nodes()`,

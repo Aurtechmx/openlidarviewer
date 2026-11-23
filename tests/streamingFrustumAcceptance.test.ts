@@ -166,3 +166,22 @@ describe('the plane derivation is shared, not duplicated', () => {
     expect(() => planesFromTuples([[1, 0, 0, 0]])).toThrow(/expected 6/);
   });
 });
+
+describe('reversed depth', () => {
+  const reversedPlanes = (camera: THREE.PerspectiveCamera | THREE.OrthographicCamera): ReturnType<typeof planesFromTuples> => {
+    camera.coordinateSystem = THREE.WebGPUCoordinateSystem;
+    (camera as unknown as { _reversedDepth: boolean })._reversedDepth = true;
+    camera.updateProjectionMatrix();
+    camera.updateMatrixWorld();
+    const vp = new THREE.Matrix4().multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse);
+    return planesFromTuples(frustumPlanesFromViewProjection(vp.elements, camera.reversedDepth));
+  };
+
+  it.each([['perspective', perspective], ['orthographic', orthographic]] as const)('%s: culls past far and behind the camera, keeps the rest', (_kind, make) => {
+    const planes = reversedPlanes(make());
+    expect(boxIntersectsFrustum(box(0, 0, 0), planes)).toBe(true);
+    expect(boxIntersectsFrustum(box(0, 0, -900), planes)).toBe(true);
+    expect(boxIntersectsFrustum(box(0, 0, -1000), planes)).toBe(false);
+    expect(boxIntersectsFrustum(box(0, 0, 60), planes)).toBe(false);
+  });
+});

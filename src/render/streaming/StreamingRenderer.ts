@@ -395,7 +395,7 @@ export class StreamingRenderer {
     camera.updateMatrixWorld();
     viewProj.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse);
     this.applyFrustumVisibility(
-      planesFromTuples(frustumPlanesFromViewProjection(viewProj.elements)),
+      planesFromTuples(frustumPlanesFromViewProjection(viewProj.elements, camera.reversedDepth)),
       this._renderOrigin,
     );
   }

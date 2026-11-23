@@ -4920,7 +4920,7 @@ export class Viewer {
     // front of the camera and blocked close inspection. The far plane
     // still scales with the cloud so a coarse fly-around stays framed.
     //
-    // `logarithmicDepthBuffer: true` keeps a 1 cm near plane usable out to far (see `edl.ts`).
+    // The reversed (or logarithmic) depth buffer keeps a 1 cm near plane usable out to far (see `edl.ts`).
     this._camera.near = 0.01;
     this._camera.far = Math.max(size * 16, 1000);
     this._camera.updateProjectionMatrix();
@@ -5707,7 +5707,7 @@ export class Viewer {
     // DPR consumer, so one flag turns the whole phase behaviour off.
     const canvas = this._canvas;
     this._streaming.scheduler.update({
-      viewProjection: this._streamingViewProj.elements,
+      viewProjection: this._streamingViewProj.elements, reversedDepth: this._activeCamera().reversedDepth,
       cameraPosition: this._streamingCamPos,
       frameTimeMs: frameMs > 0 ? frameMs : undefined,
       refinementPhase: this._refinementPhasesEnabled ? this._phases.phase : undefined,

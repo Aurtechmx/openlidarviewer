@@ -24,8 +24,12 @@ export type FrustumPlanes = readonly Plane[];
  * Extract the six frustum planes from a column-major view-projection matrix
  * (e.g. three.js `Matrix4.elements`), via the Gribb–Hartmann method. The
  * planes are not normalised — only the sign matters for inside/outside tests.
+ *
+ * `reversedDepth` is the camera's own flag: such a matrix maps near to z = w
+ * and far to z = 0, so its depth planes are `w - z` and `z`. Read through the
+ * standard pair, far would become a plane nothing is ever behind.
  */
-export function frustumPlanesFromViewProjection(m: ArrayLike<number>): FrustumPlanes {
+export function frustumPlanesFromViewProjection(m: ArrayLike<number>, reversedDepth = false): FrustumPlanes {
   // Row i of a column-major 4×4 is [m[i], m[i+4], m[i+8], m[i+12]].
   const row = (i: number): Plane => [m[i], m[i + 4], m[i + 8], m[i + 12]];
   const r0 = row(0);
@@ -49,8 +53,8 @@ export function frustumPlanesFromViewProjection(m: ArrayLike<number>): FrustumPl
     sub(r3, r0), // right
     add(r3, r1), // bottom
     sub(r3, r1), // top
-    add(r3, r2), // near
-    sub(r3, r2), // far
+    reversedDepth ? sub(r3, r2) : add(r3, r2), // near
+    reversedDepth ? r2 : sub(r3, r2), // far
   ];
 }
 
