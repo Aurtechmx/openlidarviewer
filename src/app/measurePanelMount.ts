@@ -17,7 +17,7 @@
  * module is safe to statically import from the shell: only the TYPE is eager.
  */
 
-export { sheetMeasurements } from './sheetMeasurements';
+export { sheetAnnotations, sheetMeasurements } from './sheetMeasurements';
 import type { ProfileTerrainRef } from './profileSheetExtras';
 import { aggregate as aggregateMeasurements } from '../render/measure/measurementChains';
 import { positionStepsResolver } from './measurementPositionSteps';
@@ -31,6 +31,7 @@ import { buildMeasureConfidenceContext } from './measureConfidenceContext';
 import { profileExportContext, profileWorkbenchSource, type ProfileExportContext, type ProfileSourceDeps, type ProfileSourcePurpose } from './profileExportSource';
 import { datasetIdentity } from '../geo/CrsService';
 import { buildResultModel } from './measureResultModel';
+import type { OwnedItem } from './measurementOwnership';
 import { copyToClipboard } from '../ui/clipboard';
 import { loadMeasurePanel, loadProfileWorkbenchRuntime, loadProfileSheetExtras } from '../lazyChunks';
 import { retryableOnce, mountPanelOnce } from './lazySurfaceLoad';
@@ -65,8 +66,8 @@ type MeasurePanelCtor = Awaited<ReturnType<typeof loadMeasurePanel>>['MeasurePan
  */
 export interface MeasurePanelMountDeps {
   getViewer: () => Viewer;
-  /** A fresh terrain analysis of the scan with this stable layer id, for the profile sheet's plan strip. */
-  terrainFor?: (stableLayerId: string | null) => ProfileTerrainRef | null;
+  /** A fresh terrain analysis of the one scan this profile was picked on, for the profile sheet's plan strip. */
+  terrainFor?: (m: OwnedItem) => ProfileTerrainRef | null;
   crsService: CrsService;
   getExportPanel: () => { refresh(): void };
   exportSession: () => unknown;

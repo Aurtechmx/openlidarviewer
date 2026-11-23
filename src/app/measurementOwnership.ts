@@ -192,6 +192,8 @@ export function partitionSessionWork<T extends OwnedItem>(
 export interface RelabelableWork {
   owner?: { readonly layerId?: string; readonly frame: 'source-local' | 'project'; readonly inferred?: boolean };
   pickLayers?: string[];
+  /** A profile's record of the sources it was sampled from. */
+  profileProvenance?: { readonly sources: ReadonlyArray<{ readonly layerId: string }> };
 }
 
 /**
@@ -212,6 +214,11 @@ export function relabelWorkLayer(items: readonly RelabelableWork[], from: string
     if (item.pickLayers?.includes(from)) {
       const next = item.pickLayers.map((id) => (id === from ? to : id));
       item.pickLayers = [...new Set(next)];
+      changed = true;
+    }
+    const prov = item.profileProvenance;
+    if (prov?.sources.some((s) => s.layerId === from)) {
+      item.profileProvenance = { ...prov, sources: prov.sources.map((s) => (s.layerId === from ? { ...s, layerId: to } : s)) };
       changed = true;
     }
     if (changed) n++;

@@ -101,6 +101,8 @@ export interface ComposeReportInputs {
    * Measurements heading; omitted when nothing was withheld.
    */
   readonly measurementsWithheld?: string | null;
+  /** The same for annotations, printed under the Annotations heading. */
+  readonly annotationsWithheld?: string | null;
   readonly technicalNotes?: string;
   /**
    * Provenance fingerprint from the classifier. When supplied AND the
@@ -173,6 +175,7 @@ export function composeReportInputs(input: ComposeReportInputs): ReportInputs {
       input.measurementValues,
     ),
     ...(input.measurementsWithheld ? { measurementsWithheld: input.measurementsWithheld } : {}),
+    ...(input.annotationsWithheld ? { annotationsWithheld: input.annotationsWithheld } : {}),
     technicalNotes: input.technicalNotes,
     provenance: input.provenance,
     sourceMetadata: input.sourceMetadata,

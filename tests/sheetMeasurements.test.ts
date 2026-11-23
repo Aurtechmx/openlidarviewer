@@ -8,9 +8,10 @@ import { join } from 'node:path';
 import { PDFDocument, PDFPage } from 'pdf-lib';
 import { buildMapSheetPdf, type MapSheetInput } from '../src/render/measure/mapSheetPdf';
 import { buildContourSheetPdf, measurementLetter } from '../src/render/measure/mapSheetStyled';
-import { measurementsOptionState } from '../src/render/measure/mapSheetExportOptions';
+import { annotationsOptionState, measurementsOptionState } from '../src/render/measure/mapSheetExportOptions';
 import { supportWord, type SheetMeasurement } from '../src/export/sheetKit/sheetMeasurement';
-import { sheetMeasurements } from '../src/app/sheetMeasurements';
+import type { OwnershipView } from '../src/app/measurementOwnership';
+import { sheetAnnotations, sheetMeasurements } from '../src/app/sheetMeasurements';
 import { measurementsToCsv, measurementsToGeoJSON, type MeasurementExportContext } from '../src/export/measurementExport';
 import type { Measurement, Vec3 } from '../src/render/measure/types';
 import type { ContourFeatureModel } from '../src/terrain/contour/contourFeatureModel';
@@ -135,24 +136,45 @@ describe('measurements on the styled map sheet', () => {
 });
 
 describe('sheetMeasurements', () => {
-  const m = (id: string, owner?: string): Measurement => ({ id, kind: 'distance', name: id, points: [[0, 0, 0], [1, 0, 0]], ...(owner ? { owner: { layerId: owner, frame: 'source-local' } } : {}) } as Measurement);
-  const viewer = (ms: Measurement[], scans = 1) => ({
-    clouds: () => Array.from({ length: scans }, () => ({})),
+  const m = (id: string, owner?: string, picks?: string[]): Measurement => ({ id, kind: 'distance', name: id, points: [[0, 0, 0], [1, 0, 0]], ...(owner ? { owner: { layerId: owner, frame: 'project' } } : {}), ...(picks ? { pickLayers: picks } : {}) } as Measurement);
+  const viewer = (ms: Measurement[], notes: Annotation[] = []) => ({
     measure: {
       getMeasurements: () => ms,
       getSummaries: () => ms.map((x) => ({ id: x.id, name: x.name, kind: x.kind, value: '1.00 m', trust: { grade: 'green', caption: 'Supported' } })),
     },
+    annotate: { getAnnotations: () => notes },
   }) as never;
+  const view = (active: string, ...ids: string[]): OwnershipView => ({ activeViewerId: active, layers: ids.map((id, i) => ({ viewerId: `v${i}:${id}`, stableId: id, name: `${id}.las` })) });
+  const L1 = view('v0:L1', 'L1'), both = view('v0:L1', 'L1', 'L2');
+  const names = (ms: Measurement[], v: OwnershipView): string[] => sheetMeasurements(viewer(ms), v).map((x) => x.name);
 
   it('offers unowned work and work on the analysed scan only', () => {
-    const out = sheetMeasurements(viewer([m('free'), m('mine', 'L1'), m('other', 'L2')]), 'L1');
+    const out = sheetMeasurements(viewer([m('free'), m('mine', 'L1'), m('other', 'L2')]), L1);
     expect(out.map((x) => x.name)).toEqual(['free', 'mine']);
     expect(out[0]).toMatchObject({ value: '1.00 m', grade: 'green', support: 'Supported', closed: false });
   });
 
   it('leaves unowned work off when several scans are open', () => {
-    const out = sheetMeasurements(viewer([m('free'), m('mine', 'L1')], 2), 'L1');
-    expect(out.map((x) => x.name)).toEqual(['mine']);
+    expect(names([m('free'), m('mine', 'L1')], both)).toEqual(['mine']);
+  });
+
+  it('follows the scan the points were picked on, not the one that was active', () => {
+    const work = [m('on B, A active', 'L1', ['L2']), m('on A, B active', 'L2', ['L1'])];
+    expect(names(work, both)).toEqual(['on A, B active']);
+    expect(names(work, view('v1:L2', 'L1', 'L2'))).toEqual(['on B, A active']);
+  });
+
+  it('leaves off work across two scans, on a closed scan, and on an identity two layers claim', () => {
+    expect(names([m('mixed', 'L1', ['L1', 'L2']), m('closed', 'L9', ['L9'])], both)).toEqual([]);
+    expect(names([m('twice', 'L1', ['L1'])], view('v0:L1', 'L1', 'L1'))).toEqual([]);
+  });
+
+  it('offers the analysed scan\'s annotations, in order, and no other scan\'s', () => {
+    const note = (id: string, layerId?: string): Annotation => ({ ...ANN[0]!, id, title: id, ...(layerId ? { owner: { layerId, frame: 'project' } } : {}) } as Annotation);
+    const notes = [note('B only', 'L2'), note('A1', 'L1'), note('free'), note('A2', 'L1')];
+    expect(sheetAnnotations(viewer([], notes), both).map((a) => a.id)).toEqual(['A1', 'A2']);
+    expect(annotationsOptionState(sheetAnnotations(viewer([], [notes[0]!]), both).length).disabled).toBe(true);
+    expect(sheetAnnotations(viewer([], [note('free')]), L1)).toHaveLength(1);
   });
 });
 

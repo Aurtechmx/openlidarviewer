@@ -33,6 +33,7 @@ import { contourShapeStyleLabel } from './contourShapeStyle';
 import { provenanceLines, type ExportProvenance } from '../export/exportProvenance';
 import { NOT_SURVEY_GRADE_NOTE } from '../export/exportNotes';
 import { formatScaleTick } from './mapSheetLayout';
+import { scaleBarSpan, svgSheetLayout } from './svgSheetLayout';
 
 /** Options for {@link svgContours}. */
 export interface SvgContourParams {
@@ -113,7 +114,7 @@ export function niceRound(v: number): number {
 
 /** A graphic scale bar: 4 alternating segments over a round ground distance. */
 function scaleBar(x: number, y: number, scale: number, worldW: number, unit: string, stroke: string): string {
-  const D = niceRound(Math.max(worldW / 4, 1e-6));
+  const D = scaleBarSpan(niceRound(Math.max(worldW / 4, 1e-6)), scale);
   const segs = 4;
   const segPx = (D * scale) / segs;
   const h = 6;
@@ -148,14 +149,15 @@ function northArrow(cx: number, top: number, stroke: string): string {
 }
 
 /** Legend rows: one line sample per line kind + index weight, drawn as the map draws them. */
-const LEGEND_ROWS = 5;
+const LEGEND_LABELS = ['Index contour', 'Intermediate', 'Sparse ground (measured)', 'Interpolated', 'Low-confidence gap'] as const;
+const LEGEND_ROWS = LEGEND_LABELS.length;
 function legend(x: number, y: number, stroke: string, indexW: number, baseW: number): string {
   const rows: Array<[string, string]> = [
-    [lineStroke('measured', stroke, indexW), 'Index contour'],
-    [lineStroke('measured', stroke, baseW), 'Intermediate'],
-    [lineStroke('sparse', stroke, baseW), 'Sparse ground (measured)'],
-    [lineStroke('interpolated', stroke, baseW), 'Interpolated'],
-    [lineStroke('gap', stroke, baseW), 'Low-confidence gap'],
+    [lineStroke('measured', stroke, indexW), LEGEND_LABELS[0]],
+    [lineStroke('measured', stroke, baseW), LEGEND_LABELS[1]],
+    [lineStroke('sparse', stroke, baseW), LEGEND_LABELS[2]],
+    [lineStroke('interpolated', stroke, baseW), LEGEND_LABELS[3]],
+    [lineStroke('gap', stroke, baseW), LEGEND_LABELS[4]],
   ];
   return rows
     .map(([attrs, label], i) => {
@@ -232,9 +234,14 @@ export function svgContours(model: ContourFeatureModel, params: SvgContourParams
   const mapW = worldW * scale;
   const mapH = worldH * scale;
 
+  const labelDecimals = decimalsForInterval(model.intervalM);
+  const tLines = titleLines(model, prov, unit, labelDecimals);
+  const layout = svgSheetLayout({ mapW, mapH, margin, legend: LEGEND_LABELS, title: tLines });
+  const { frameW, frameH, frameX } = layout;
+
   // World → sheet. North up: svgY grows downward, world +Y is up.
-  const sx = (x: number): number => margin + (x - minX) * scale;
-  const sy = (y: number): number => margin + (maxY - y) * scale;
+  const sx = (x: number): number => frameX + layout.padX + (x - minX) * scale;
+  const sy = (y: number): number => margin + layout.padY + (maxY - y) * scale;
 
   // ── contour paths ─────────────────────────────────────────────────────────
   const paths: string[] = [];
@@ -253,7 +260,6 @@ export function svgContours(model: ContourFeatureModel, params: SvgContourParams
   }
 
   // ── haloed elevation labels ───────────────────────────────────────────────
-  const labelDecimals = decimalsForInterval(model.intervalM);
   const labels: string[] = [];
   for (const lab of params.labels ?? []) {
     const lx = sx(lab.x).toFixed(2);
@@ -271,23 +277,24 @@ export function svgContours(model: ContourFeatureModel, params: SvgContourParams
   }
 
   // ── marginalia layout ─────────────────────────────────────────────────────
-  const tLines = titleLines(model, prov, unit, labelDecimals);
-  const footerTop = margin + mapH + 18;
+  const footerTop = margin + frameH + 18;
   const legendBottom = footerTop + 44 + (LEGEND_ROWS - 1) * 16 + 6;
-  const titleBottom = footerTop + 12 + tLines.length * 14;
+  const titleTop = layout.stacked ? legendBottom + 22 : footerTop + 12;
+  const titleBottom = titleTop + tLines.length * 14;
   const footerBottom = Math.max(legendBottom, titleBottom);
-  const W = mapW + margin * 2;
+  const W = layout.pageW;
   const H = footerBottom + margin;
 
-  const neatLine = `<rect x="${margin}" y="${margin}" width="${mapW.toFixed(2)}" height="${mapH.toFixed(2)}" fill="none" stroke="${stroke}" stroke-width="0.8"/>`;
-  const north = northArrow(margin + mapW - 22, margin + 10, stroke);
+  const neatLine = `<rect x="${Number.isInteger(frameX) ? frameX : frameX.toFixed(2)}" y="${margin}" width="${frameW.toFixed(2)}" height="${frameH.toFixed(2)}" fill="none" stroke="${stroke}" stroke-width="0.8"/>`;
+  const north = northArrow(frameX + frameW - 22, margin + 10, stroke);
   const bar = scaleBar(margin, footerTop + 24, scale, worldW, unit, stroke);
   const leg = legend(margin, footerTop + 44, stroke, indexW, baseW);
-  const xRight = (W - margin).toFixed(1);
+  const titleX = (layout.stacked ? margin : W - margin).toFixed(1);
+  const titleAnchor = layout.stacked ? 'start' : 'end';
   const title = tLines
     .map((ln, i) => {
       const weight = i === 0 && prov?.source ? ' font-weight="600"' : '';
-      return `<text x="${xRight}" y="${(footerTop + 12 + i * 14).toFixed(1)}" font-size="10" text-anchor="end" fill="${stroke}" font-family="sans-serif"${weight}>${xmlEscape(ln)}</text>`;
+      return `<text x="${titleX}" y="${(titleTop + i * 14).toFixed(1)}" font-size="10" text-anchor="${titleAnchor}" fill="${stroke}" font-family="sans-serif"${weight}>${xmlEscape(ln)}</text>`;
     })
     .join('');
 

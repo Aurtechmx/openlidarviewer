@@ -23,6 +23,7 @@ import { provenanceLines, type ExportProvenance } from '../export/exportProvenan
 import { NOT_SURVEY_GRADE_NOTE } from '../export/exportNotes';
 import { formatScaleTick } from './mapSheetLayout';
 import { MAP_TARGET_PX, commentText, niceRound, titleLines, xmlEscape } from './svgContours';
+import { scaleBarSpan, svgSheetLayout } from './svgSheetLayout';
 import { cssColor, type SheetTokens } from '../../export/sheetKit/tokens';
 import { styledContourStroke, type SpotHeight } from '../../export/sheetKit/contourSheetModel';
 
@@ -61,6 +62,9 @@ function strokeAttrs(t: SheetTokens, isIndex: boolean, kind: ContourLineKind, k:
   return `stroke="${cssColor(st.color)}" stroke-width="${Math.max(st.width * k, minPx).toFixed(3)}" fill="none" stroke-opacity="${st.opacity}"${dash}`;
 }
 
+/** A coordinate as it always printed: a whole number bare, else two decimals. */
+const num = (v: number): string => (Number.isInteger(v) ? String(v) : v.toFixed(2));
+
 /** Render the contour model as a Light or Dark SVG sheet. */
 export function svgContoursStyled(model: ContourFeatureModel, params: SvgStyledParams): string {
   const t = params.tokens;
@@ -87,9 +91,29 @@ export function svgContoursStyled(model: ContourFeatureModel, params: SvgStyledP
   const mapW = worldW * scale, mapH = worldH * scale;
   // The frame sits MAP_PAD outside the data, so the footprint and the spot
   // height labels never touch or cross it.
-  const frameW = mapW + 2 * MAP_PAD, frameH = mapH + 2 * MAP_PAD;
-  const sx = (x: number): number => margin + MAP_PAD + (x - box.minX) * scale;
-  const sy = (y: number): number => margin + MAP_PAD + (box.maxY - y) * scale;
+  const dec = decimalsForInterval(model.intervalM);
+  const tLines = titleLines(model, prov, unit, dec);
+  const kinds = new Set(model.features.map((f) => contourLineKind(f)));
+  type Row = [string, string];
+  const legendRows: Row[] = [];
+  legendRows.push([strokeAttrs(t, true, 'measured', k, LEGEND_MIN_PX), 'Index contour, labelled']);
+  legendRows.push([strokeAttrs(t, false, 'measured', k, LEGEND_MIN_PX), 'Contour']);
+  if (kinds.has('sparse')) legendRows.push([strokeAttrs(t, false, 'sparse', k, LEGEND_MIN_PX), 'Sparse measured ground']);
+  if (kinds.has('interpolated')) legendRows.push([strokeAttrs(t, false, 'interpolated', k, LEGEND_MIN_PX), 'Contour over filled cells']);
+  if (kinds.has('gap')) legendRows.push([strokeAttrs(t, false, 'gap', k, LEGEND_MIN_PX), 'Low-confidence gap']);
+  if (rel) legendRows.push([`stroke="${cssColor(t.outline)}" stroke-width="${Math.max(t.weight.outline * 0.75 * k, LEGEND_MIN_PX).toFixed(3)}" fill="none"`, 'Scan footprint']);
+  const extraLabels = [
+    ...(rel?.hasHoles ? ['No ground data inside the footprint'] : []),
+    ...(rel?.highest ? ['Highest measured ground'] : []),
+    ...(rel?.lowest ? ['Lowest measured ground'] : []),
+  ];
+  const layout = svgSheetLayout({
+    mapW: mapW + 2 * MAP_PAD, mapH: mapH + 2 * MAP_PAD, margin,
+    legend: [...legendRows.map(([, label]) => label), ...extraLabels], title: tLines,
+  });
+  const { frameW, frameH, frameX } = layout;
+  const sx = (x: number): number => frameX + layout.padX + MAP_PAD + (x - box.minX) * scale;
+  const sy = (y: number): number => margin + layout.padY + MAP_PAD + (box.maxY - y) * scale;
 
   const out: string[] = [];
   // ── relief and footprint ─────────────────────────────────────────────────
@@ -118,7 +142,6 @@ export function svgContoursStyled(model: ContourFeatureModel, params: SvgStyledP
     );
   }
   // ── labels on a halo ─────────────────────────────────────────────────────
-  const dec = decimalsForInterval(model.intervalM);
   for (const lab of params.labels ?? []) {
     const lx = sx(lab.x).toFixed(2), ly = sy(lab.y).toFixed(2);
     let deg = (-lab.angleRad * 180) / Math.PI;
@@ -147,23 +170,14 @@ export function svgContoursStyled(model: ContourFeatureModel, params: SvgStyledP
   if (rel) { spot(rel.highest, true); spot(rel.lowest, false); }
 
   // ── marginalia ───────────────────────────────────────────────────────────
-  const tLines = titleLines(model, prov, unit, dec);
-  type Row = [string, string];
-  const legendRows: Row[] = [];
-  const kinds = new Set(model.features.map((f) => contourLineKind(f)));
-  legendRows.push([strokeAttrs(t, true, 'measured', k, LEGEND_MIN_PX), 'Index contour, labelled']);
-  legendRows.push([strokeAttrs(t, false, 'measured', k, LEGEND_MIN_PX), 'Contour']);
-  if (kinds.has('sparse')) legendRows.push([strokeAttrs(t, false, 'sparse', k, LEGEND_MIN_PX), 'Sparse measured ground']);
-  if (kinds.has('interpolated')) legendRows.push([strokeAttrs(t, false, 'interpolated', k, LEGEND_MIN_PX), 'Contour over filled cells']);
-  if (kinds.has('gap')) legendRows.push([strokeAttrs(t, false, 'gap', k, LEGEND_MIN_PX), 'Low-confidence gap']);
-  if (rel) legendRows.push([`stroke="${cssColor(t.outline)}" stroke-width="${Math.max(t.weight.outline * 0.75 * k, LEGEND_MIN_PX).toFixed(3)}" fill="none"`, 'Scan footprint']);
-  const extraRows = (rel?.hasHoles ? 1 : 0) + (rel?.highest ? 1 : 0) + (rel?.lowest ? 1 : 0);
+  const extraRows = extraLabels.length;
   const footerTop = margin + frameH + 18;
   const legendTop = footerTop + 44;
   const legendBottom = legendTop + (legendRows.length + extraRows - 1) * 16 + 6;
-  const titleBottom = footerTop + 12 + tLines.length * 14;
+  const titleTop = layout.stacked ? legendBottom + 22 : footerTop + 12;
+  const titleBottom = titleTop + tLines.length * 14;
   const H = Math.max(legendBottom, titleBottom) + margin;
-  const W = frameW + margin * 2;
+  const W = layout.pageW;
 
   const leg: string[] = legendRows.map(([attrs, label], i) => {
     const ry = legendTop + i * 16;
@@ -186,7 +200,7 @@ export function svgContoursStyled(model: ContourFeatureModel, params: SvgStyledP
   }
 
   // Scale bar: four segments over a round ground distance.
-  const D = niceRound(Math.max(worldW / 4, 1e-6));
+  const D = scaleBarSpan(niceRound(Math.max(worldW / 4, 1e-6)), scale);
   const segPx = (D * scale) / 4;
   const by = footerTop + 24;
   const bar: string[] = [];
@@ -198,14 +212,15 @@ export function svgContoursStyled(model: ContourFeatureModel, params: SvgStyledP
   }
   // The map's +Y axis. On a known CRS that is grid north; without one the
   // frame is local and the arrow names the axis instead.
-  const nx = margin + frameW - 22, ny = margin + 10;
+  const nx = frameX + frameW - 22, ny = margin + 10;
   const northLabel = prov && !prov.crsKnown ? '+Y' : 'Grid N';
   const north = `<polygon points="${nx},${ny} ${nx - 6},${ny + 26} ${nx},${ny + 19} ${nx + 6},${ny + 26}" fill="${ink}"/>` +
     `<text x="${nx}" y="${ny + 37}" font-size="11" text-anchor="middle" fill="${ink}" ${SANS}>${northLabel}</text>`;
-  const xRight = (W - margin).toFixed(1);
+  const titleX = (layout.stacked ? margin : W - margin).toFixed(1);
+  const titleAnchor = layout.stacked ? 'start' : 'end';
   const title = tLines.map((ln, i) => {
     const weight = i === 0 && prov?.source ? ' font-weight="600"' : '';
-    return `<text x="${xRight}" y="${(footerTop + 12 + i * 14).toFixed(1)}" font-size="10" text-anchor="end" fill="${i === 0 ? ink : dim}" ${SANS}${weight}>${xmlEscape(ln)}</text>`;
+    return `<text x="${titleX}" y="${(titleTop + i * 14).toFixed(1)}" font-size="10" text-anchor="${titleAnchor}" fill="${i === 0 ? ink : dim}" ${SANS}${weight}>${xmlEscape(ln)}</text>`;
   }).join('');
   const caption =
     Number.isFinite(model.interpolatedFraction) && model.interpolatedFraction > 0
@@ -217,9 +232,9 @@ export function svgContoursStyled(model: ContourFeatureModel, params: SvgStyledP
     provStamp,
     caption,
     `<rect x="0" y="0" width="${W.toFixed(2)}" height="${H.toFixed(2)}" fill="${cssColor(t.paper)}"/>`,
-    `<rect x="${margin}" y="${margin}" width="${frameW.toFixed(2)}" height="${frameH.toFixed(2)}" fill="${cssColor(t.panel)}"/>`,
+    `<rect x="${num(frameX)}" y="${margin}" width="${frameW.toFixed(2)}" height="${frameH.toFixed(2)}" fill="${cssColor(t.panel)}"/>`,
     ...out,
-    `<rect x="${margin}" y="${margin}" width="${frameW.toFixed(2)}" height="${frameH.toFixed(2)}" fill="none" stroke="${cssColor(t.outline)}" stroke-width="0.8"/>`,
+    `<rect x="${num(frameX)}" y="${margin}" width="${frameW.toFixed(2)}" height="${frameH.toFixed(2)}" fill="none" stroke="${cssColor(t.outline)}" stroke-width="0.8"/>`,
     north,
     bar.join(''),
     leg.join(''),

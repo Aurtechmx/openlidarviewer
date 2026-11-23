@@ -1070,6 +1070,7 @@ export async function buildProfilePdf(input: ProfilePdfInput): Promise<Uint8Arra
     ...(coverage
       ? [`Coverage: ${coverage}. The profile is sampled from the points read, not the whole file.`]
       : []),
+    ...(styled && input.extras?.returnsNote ? [`Returns under the line: ${input.extras.returnsNote}.`] : []),
     describeSampleNote(input.withheld ?? null, reduction, input.method ?? null, residentOnly),
     NOT_SURVEY_GRADE_NOTE +
       (residentOnly

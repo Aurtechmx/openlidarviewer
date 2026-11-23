@@ -44,6 +44,7 @@ const VERSION = 'olv-shell-0.7.2-alpha.1';
 const SHELL = [
   './',
   './index.html',
+  './browser-check.js',
   './manifest.webmanifest',
   './favicon.svg',
   './brand-mark.svg',

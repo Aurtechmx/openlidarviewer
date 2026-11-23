@@ -174,7 +174,7 @@ import { frameTopDownOrtho } from './export/orthoFraming';
 import { planFigureRender } from './export/figureFraming';
 import { MeasureController } from './measure/MeasureController';
 import {
-  createProfileSectionSeam,
+  createProfileSectionSeam, STREAMING_SOURCE_ID,
   type ProfileSectionSeam,
 } from './measure/profileSectionSeam';
 import { gatherVolumeBuffers, samplePolygonVolume, cloudReduction, CUT_FILL_VOLUME_METHOD, type VolumeResult } from './measure/polygonVolumeSample';
@@ -643,7 +643,7 @@ export class Viewer {
    * and the raw returns inside the same corridor. Held here because the scene
    * it reads is held here; requested from the app layer, not the render loop.
    */
-  readonly profileSeam: ProfileSectionSeam;
+  readonly profileSeam: ProfileSectionSeam; layerSourceId: ((cloud: unknown) => string | null) | null = null; // the stable layer id profile sources are recorded by
   /** The active clip box (GPU size-graph fold + CPU kept-count), or null. */
   private _clip: ClipBox | null = null;
   /** The GPU half of the clip: a per-point keep multiplier in the size graph; and the box drawn in the scene. */
@@ -1097,7 +1097,7 @@ export class Viewer {
           compatibility: e.compatibility,
           mounted: e.mounted,
           placement: e.placement,
-          id: e.cloud.name,
+          id: this.layerSourceId?.(e.cloud) ?? e.cloud.name, displayName: e.cloud.name,
           positions: e.cloud.positions,
           // Named field by field: the channels are getters on the class, so a
           // spread would drop the ones the series and section read.
@@ -1124,7 +1124,7 @@ export class Viewer {
       // The configured world up, not a hardcoded [0,0,1]: a Y-up phone scan
       // gets cut along the wrong axis otherwise (v0.4.4 audit, B1).
       worldUp: (): Vec3 => this._measure.worldUp, // the scene's, or the measurement's own layer's while it samples
-      streamingCoverage: () => this._streamingCoverage(),
+      streamingCoverage: () => this._streamingCoverage(), streamingSourceId: () => (this._streaming ? `${STREAMING_SOURCE_ID}:${this._streaming.cloud.name}` : STREAMING_SOURCE_ID),
     });
     this._measure.setProfileSampler((a, b, opts) => this.profileSeam.sampleSeries(a, b, opts)); this._measure.profileChartRefusal = () => sharedDatumRefusal(this._clouds.values());
     // Volume sampler: visible, unlocked clouds plus resident streaming nodes,

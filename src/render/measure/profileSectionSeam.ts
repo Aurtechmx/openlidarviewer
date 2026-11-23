@@ -130,6 +130,8 @@ export interface ProfileSectionSeamDeps {
   worldUp: () => Vec3;
   /** Node coverage of the open streaming source, or null when none is open. */
   streamingCoverage: () => StreamingCoverage | null;
+  /** What the open streaming source is recorded as. Absent = {@link STREAMING_SOURCE_ID}. */
+  streamingSourceId?: () => string;
 }
 
 /**
@@ -181,6 +183,8 @@ export interface ProfileSectionSourceRef {
   readonly kind: 'static' | 'resident';
   /** Layer id, or octree key. */
   readonly id: string;
+  /** A static layer's display name, when it differs from the id. */
+  readonly name?: string;
   readonly pointCount: number;
 }
 
@@ -211,6 +215,8 @@ export interface ProfileSectionResult {
   /** Null when the streaming source's node count is not known. */
   readonly streamingComplete: boolean | null;
   readonly sources: readonly ProfileSectionSourceRef[];
+  /** What a profile record names the streaming source, when resident nodes were read. */
+  readonly streamingSourceId?: string;
   /** The token this extraction ran under; -1 for an independent read. */
   readonly generation: number;
   /** True when the scan stopped early because the signal aborted. */
@@ -568,7 +574,7 @@ export function createProfileSectionSeam(deps: ProfileSectionSeamDeps): ProfileS
           ...(residents.length > 0
             ? [{
                 slot: statics.length,
-                layerId: STREAMING_SOURCE_ID,
+                layerId: deps.streamingSourceId?.() ?? STREAMING_SOURCE_ID,
                 displayName: `Streaming source (${formatInt(residents.length)} resident nodes)`,
                 classification: streamingClassified ? ('producer' as const) : ('absent' as const),
                 streaming: true,
@@ -607,7 +613,7 @@ export function createProfileSectionSeam(deps: ProfileSectionSeamDeps): ProfileS
       const slot = sources.length;
       sources.push(viewOf(slot, pos, layer.channels, layer.bounds, layer.placement));
       if (alignedClassification(layer.channels, pos.length) !== undefined) classifiedSources++;
-      refs.push({ slot, kind: 'static', id: layer.id, pointCount: pos.length / 3 });
+      refs.push({ slot, kind: 'static', id: layer.id, ...(layer.displayName != null && layer.displayName !== layer.id ? { name: layer.displayName } : {}), pointCount: pos.length / 3 });
     }
     for (const { node, pos } of residents) {
       const slot = sources.length;
@@ -657,6 +663,7 @@ export function createProfileSectionSeam(deps: ProfileSectionSeamDeps): ProfileS
       leftOutScans: [...deps.layers()].filter((l) => l.mesh.visible && !l.locked).length - integrableClouds(deps.layers()).length,
       streamingComplete: complete,
       sources: refs,
+      ...(residents.length > 0 ? { streamingSourceId: deps.streamingSourceId?.() ?? STREAMING_SOURCE_ID } : {}),
       generation: token,
       aborted: step.value.aborted,
       skippedSlots: step.value.skippedSlots,

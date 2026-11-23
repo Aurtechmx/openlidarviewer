@@ -198,7 +198,7 @@ export function profileDetailSources(
           streamingNodeKey: s.id,
           ...(readXYZ ? { readXYZ } : {}),
         }
-      : { slot: s.slot, layerId: s.id, layerName: s.id, ...(readXYZ ? { readXYZ } : {}) };
+      : { slot: s.slot, layerId: s.id, layerName: s.name ?? s.id, ...(readXYZ ? { readXYZ } : {}) };
   });
 }
 

@@ -109,11 +109,11 @@ function world(aCrs: CrsInfo, bCrs: CrsInfo = utm, opts: { active?: 'a' | 'b'; m
 }
 
 /** Run the PDF assembly and capture the composer input. */
-async function pdfInputs(w: ReturnType<typeof world>, withOwnership = true): Promise<Record<string, any>> {
+async function pdfInputs(w: ReturnType<typeof world>, withOwnership = true, notes: object[] = []): Promise<Record<string, any>> {
   let captured: Record<string, any> = {};
   const deps = {
     viewerReady: Promise.resolve(),
-    getViewer: () => ({ streamingCloud: null, annotate: { getAnnotations: () => [] }, measure: w.measure }),
+    getViewer: () => ({ streamingCloud: null, annotate: { getAnnotations: () => notes }, measure: w.measure }),
     scans: { activeId: w.active, activeCloud: () => w.clouds.get(w.active) },
     crsCurrent: () => w.svc.current(),
     classScopeStamp: () => '',
@@ -193,6 +193,15 @@ describe('owner context is never borrowed', () => {
     expect(onB.measurementsWithheld).toMatch(/^1 measurement withheld: taken on a\.las; make that scan active/);
     const onA = await pdfInputs(world(utm, foot, { active: 'a' }));
     expect(rowsOf(onA)[0]!.value).toMatch(/^10\.00+ m$/);
+  });
+
+  test('PDF holds the active scan\'s annotations and says which were left out', async () => {
+    const w = world(utm, foot, { active: 'b' });
+    const ids = w.ownership().layers;
+    const note = (viewerId: string) => ({ id: viewerId, owner: { layerId: ids.find((l) => l.viewerId === viewerId)!.stableId, frame: 'project' } });
+    const c = await pdfInputs(w, true, [note('a'), note('b')]);
+    expect(c.annotations.map((x: { id: string }) => x.id)).toEqual(['b']);
+    expect(c.annotationsWithheld).toMatch(/^1 annotation withheld: placed on a\.las/);
   });
 
   // The row builder takes the frame's vertical permission

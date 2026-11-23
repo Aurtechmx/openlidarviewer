@@ -69,8 +69,10 @@ export interface ProfileSheetPlan {
 export interface ProfileSheetExtras {
   readonly returns?: ProfileSheetReturns | null;
   readonly plan?: ProfileSheetPlan | null;
-  /** Index contour heights (metres, the samples' frame), for the crossing marks. */
-  readonly indexLevels?: readonly number[] | null;
+  /** Why the returns are left out, when they are. */
+  readonly returnsNote?: string | null;
+  /** Where the line meets an index contour on the ground: chainage and the contour's height, in the samples' frame. */
+  readonly indexCrossings?: ReadonlyArray<{ readonly chainage: number; readonly height: number }> | null;
 }
 
 /** Everything the styled sheet one is drawn from. Worked out by profilePdf.ts. */
@@ -105,7 +107,7 @@ export interface StyledProfileSheet {
   /** The sheet's notes, every one of them, in order. */
   readonly notes: readonly string[];
   readonly groundLineLabel: string;
-  /** Ground-return count per metre at each station, when recorded. */
+  /** Accepted returns per metre (per source unit when the unit is unverified) at each station, when recorded. */
   readonly countsPerStation: ReadonlyArray<number | null>;
   /** Why the plan strip is missing, printed in its place. Null when it is drawn. */
   readonly planMissingNote: string | null;
@@ -210,11 +212,12 @@ export async function drawStyledProfileSheet(page: PDFPage, s: StyledProfileShee
       run.forEach(([x, y], i) => { d += `${i === 0 ? 'M' : 'L'}${x.toFixed(2)} ${(PH - y).toFixed(2)} `; });
       page.drawSvgPath(d, { x: 0, y: PH, borderColor: pdfColor(t.index), borderWidth: 1.4 });
     }
-    // Index contour crossings on the ground line.
-    for (const c of indexCrossings(s.stations, s.extras?.indexLevels ?? [])) {
+    // Where an index contour crosses the line, at the contour's height.
+    for (const c of s.extras?.indexCrossings ?? []) {
+      if (c.height < scales.axisLoM || c.height > scales.axisHiM) continue;
       page.drawCircle({ x: mapX(c.chainage), y: mapY(c.height), size: 2.2, color: pdfColor(t.panel), borderColor: pdfColor(t.index), borderWidth: 0.8 });
     }
-    // Highest and lowest ground.
+    // Highest and lowest on the line.
     const known = s.stations.filter((st) => st.elevation != null) as Array<{ chainage: number; elevation: number }>;
     if (known.length) {
       const hi = known.reduce((a, b) => (b.elevation > a.elevation ? b : a), known[0]!);
@@ -250,7 +253,10 @@ export async function drawStyledProfileSheet(page: PDFPage, s: StyledProfileShee
     // station needs one column of clear width, not a column and a half.
     const band = buildRoundChainageBand({ stations: stationsIn, lengthM: len, k: s.k, mapX, columnWpt: colW, startClearColumns: 1 });
     const rowsY = [bandTop - bandRowH, bandTop - 2 * bandRowH, bandTop - 3 * bandRowH, bandTop - 4 * bandRowH];
-    const heads = ['Chainage', `${s.heightWord} ${s.unit}`, 'Grade %', 'Returns per m'];
+    // The count is of every return the sampler kept, whatever its class.
+    const per = s.unitsVerified === false ? 'unit' : 'm';
+    // The section heading above carries the reference in full; the row head has the margin's width.
+    const heads = ['Chainage', `${s.heightWord.replace(/ \(.*\)$/, '')} ${s.unit}`, 'Grade %', `Returns per ${per}`];
     page.drawRectangle({ x: left, y: bandBottom, width: drawW, height: bandTop - bandBottom, color: pdfColor(t.panel), borderColor: pdfColor(t.outline), borderWidth: t.weight.frame });
     for (let r = 1; r < 4; r++) page.drawLine({ start: { x: left, y: rowsY[r - 1]! }, end: { x: left + drawW, y: rowsY[r - 1]! }, thickness: 0.4, color: rule });
     heads.forEach((h, r) => sheetTextRight(page, h, left - 5, rowsY[r]! + 5, { font: f.sans, size: SHEET_TYPE.tick, color: t.dim }, f));
@@ -272,7 +278,7 @@ export async function drawStyledProfileSheet(page: PDFPage, s: StyledProfileShee
       }
       if (i > 0) page.drawLine({ start: { x: c.x, y: rowsY[2]! }, end: { x: c.x, y: rowsY[2]! + bandRowH }, thickness: 0.4, color: rule });
     });
-    // Ground returns per metre, as a bar per station.
+    // Accepted returns per metre (or per source unit), as a bar per station.
     const counts = s.countsPerStation;
     const peak = Math.max(0, ...counts.map((c) => c ?? 0));
     if (peak > 0) {
@@ -284,7 +290,7 @@ export async function drawStyledProfileSheet(page: PDFPage, s: StyledProfileShee
         page.drawRectangle({ x: x0, y: rowsY[3]! + 2, width: Math.max(0.3, x1 - x0 - 0.3), height: (c / peak) * barMax, color: dim, opacity: 0.6 });
       }
       // Under the band, clear of the bars it describes.
-      sheetTextRight(page, `ground returns per m, tallest bar ${peak.toFixed(0)}`, left + drawW, bandBottom - 10, { font: f.mono, size: SHEET_TYPE.tick, color: t.dim }, f);
+      sheetTextRight(page, `accepted returns per ${per}, tallest bar ${peak.toFixed(peak < 1 ? 2 : 0)}`, left + drawW, bandBottom - 10, { font: f.mono, size: SHEET_TYPE.tick, color: t.dim }, f);
     }
   }
 
@@ -378,7 +384,7 @@ function drawProfilePanel(page: PDFPage, s: StyledProfileSheet, box: { x: number
   // Legend.
   const legend: Array<[LegendKey, string]> = [
     [{ kind: 'line', color: t.index, width: 1.4 }, s.groundLineLabel],
-    [{ kind: 'line', color: t.index, width: 0.8, dash: [3, 2] }, 'Across a gap in ground returns'],
+    [{ kind: 'line', color: t.index, width: 0.8, dash: [3, 2] }, 'Across a gap with no accepted returns'],
   ];
   if (s.extras?.returns?.ground) {
     legend.push([{ kind: 'marker', color: t.ink, shape: 'dot' }, 'Ground returns']);
@@ -386,10 +392,10 @@ function drawProfilePanel(page: PDFPage, s: StyledProfileSheet, box: { x: number
   } else if (s.extras?.returns) {
     legend.push([{ kind: 'marker', color: t.minor, shape: 'dot' }, 'Returns in the corridor']);
   }
-  if ((s.extras?.indexLevels?.length ?? 0) > 0) legend.push([{ kind: 'marker', color: t.index, shape: 'dot' }, 'Crosses an index contour']);
+  if ((s.extras?.indexCrossings?.length ?? 0) > 0) legend.push([{ kind: 'marker', color: t.index, shape: 'dot' }, 'Crosses an index contour']);
   if (hasPlan) legend.push([{ kind: 'line', color: t.accent, width: 1.2 }, 'Profile line and corridor (plan)']);
-  legend.push([{ kind: 'marker', color: t.ink, shape: 'up' }, 'Highest ground']);
-  legend.push([{ kind: 'marker', color: t.ink, shape: 'down' }, 'Lowest ground']);
+  legend.push([{ kind: 'marker', color: t.ink, shape: 'up' }, 'Highest on the line']);
+  legend.push([{ kind: 'marker', color: t.ink, shape: 'down' }, 'Lowest on the line']);
   y = drawSectionLabel(page, 'Legend', x, y, w, t, f);
   for (const [key, label] of legend) y = drawLegendRow(page, key, label, x, y, t, f);
   y += legendRowHeight() - 6;
@@ -446,25 +452,6 @@ export function gradeSeries(
     out.push({ chainage: c0 + GRADE_BASE_M / 2, grade: h0 == null || h1 == null || broken ? null : (100 * (h1 - h0)) / GRADE_BASE_M });
   }
   return out;
-}
-
-/** Where the ground line crosses each index contour height. */
-export function indexCrossings(
-  stations: ReadonlyArray<{ readonly chainage: number; readonly elevation: number | null }>,
-  levels: readonly number[],
-): Array<{ chainage: number; height: number }> {
-  const out: Array<{ chainage: number; height: number }> = [];
-  for (let i = 1; i < stations.length; i++) {
-    const a = stations[i - 1]!, b = stations[i]!;
-    if (a.elevation == null || b.elevation == null) continue;
-    for (const lv of levels) {
-      const lo = Math.min(a.elevation, b.elevation), hi = Math.max(a.elevation, b.elevation);
-      if (lv < lo || lv >= hi || hi === lo) continue;
-      const u = (lv - a.elevation) / (b.elevation - a.elevation);
-      out.push({ chainage: a.chainage + u * (b.chainage - a.chainage), height: lv });
-    }
-  }
-  return out.sort((p, q) => p.chainage - q.chainage);
 }
 
 /**
@@ -597,11 +584,16 @@ export function profileInkFor(t: SheetTokens): ProfileInk {
   };
 }
 
-/** Returns per metre behind each sample, from its recorded count and the spacing to the next sample. */
+/**
+ * Returns per metre behind each sample, from its recorded count and the spacing
+ * to the next sample. The first and last stations have none: they also hold the
+ * returns within the corridor's width beyond the ends of the line, so their
+ * count is not one spacing's.
+ */
 export function countsPerStation(samples: ReadonlyArray<ProfileChartSample>): Array<number | null> {
   return samples.map((smp, i) => {
     const next = samples[i + 1];
-    if (smp.count == null || !next) return null;
+    if (smp.count == null || !next || i === 0) return null;
     const dx = next.distance - smp.distance;
     return dx > 0 ? smp.count / dx : null;
   });

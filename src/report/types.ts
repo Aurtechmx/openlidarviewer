@@ -233,6 +233,8 @@ export interface ReportInputs {
    * scan's units, frame or permissions.
    */
   readonly measurementsWithheld?: string;
+  /** Why annotations were left out, on the same rule. */
+  readonly annotationsWithheld?: string;
   /** Free-form Markdown-ish notes appended to the report. Optional. */
   readonly technicalNotes?: string;
   /**

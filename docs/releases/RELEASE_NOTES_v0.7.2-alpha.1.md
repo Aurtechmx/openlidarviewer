@@ -27,7 +27,7 @@ v0.6.6 remain available under MIT.
 - A true-north arrow on the Light and Dark map sheets of a projected CRS, turned by the meridian convergence at the map centre and labelled with the angle.
 - Measurements and annotations on the Light and Dark map sheets: measurements are lettered on the map and listed with their figure and support grade, and annotations are numbered and grouped by type. The measurement CSV and GeoJSON carry the support grade.
 - Contour map PNG, from the Export tab's terrain lane and from Contour Studio: the contour SVG sheet at twice its size, with the export provenance in the PNG text chunks. The contour SVG takes the chosen style, with the relief embedded.
-- Profile sheet: a plan strip along the line from the terrain analysis of the same scan, the corridor's returns under the ground line, the gaps in ground returns, index contour crossings, ground returns per metre and a grade chart over 10 m of chainage, beside the length, relief, gradient and steepest-grade figures. The plan strip is left out, with the reason, when the scan has no terrain run. On Light and Dark sets the notes, method and schedule sheets are set slightly larger, and the section header states the print scales.
+- Profile sheet: a plan strip along the line from the terrain analysis of the same scan, the corridor's returns under the sampled line, the gaps with no accepted returns, the points where an index contour meets the line, accepted returns per metre (per unit when the unit is unverified) and a grade chart over 10 m of chainage, beside the length, relief, gradient and steepest-grade figures. The plan strip is left out, with the reason, when the scan has no terrain run. On Light and Dark sets the notes, method and schedule sheets are set slightly larger, and the section header states the print scales.
 - The terrain report, space report, Contour Studio PDF and scan report PDF take the chosen style's paper, ink and typefaces, with the same content. Their provenance is set as a table, and the body uses the whole page. The floor plan SVG and the Studio image card take the style's colours.
 
 - Light and Dark sheets set their figures in Figtree with tabular numerals, so every font a sheet uses is embedded in the file.
@@ -35,6 +35,11 @@ v0.6.6 remain available under MIT.
 - The technical report says when its width and depth come from the display sample, the profile's method sheet says it read every loaded point, and a room report no longer says its values change as data streams in.
 
 - The complete contour package's DXF is written at its real coordinates; in v0.7.1 and earlier it left out the scan's origin. Its PDF states the same support shares as its README and support raster.
+
+- With several scans open, each export holds the work of its own scan. The map sheet lists only measurements picked on the analysed scan and annotations placed on it; in v0.7.1 and earlier it could list another open scan's annotations. The scan report leaves out other scans' annotations and says how many.
+- A profile sheet draws only the returns of the scans the profile was sampled from. When one of them is hidden or closed the returns are left out and the sheet says so. Two scans of one file name are told apart.
+- A contour SVG or PNG of a long, narrow site is widened to hold its legend, scale bar and title.
+- The offline copy includes the browser check script.
 
 ## Rooms and objects
 
