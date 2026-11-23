@@ -606,11 +606,12 @@ export class ObjectPanel {
       this._row('Dimensions (L×W×H)',
         f.triple(d.lengthM, d.widthM, d.heightM),
         dimsHint === '' ? undefined : dimsHint),
-      this._row('Floor area', f.area(space.floorAreaM2)),
+      this._row('Footprint area', f.area(space.floorAreaM2),
+        'Plan area the scanned points cover, walls and furniture included. The floor plane below is the floor alone.'),
       this._row('Ceiling height', space.ceilingHeightM != null ? f.len(space.ceilingHeightM) : '—',
         'Floor→ceiling gap from the height histogram peaks.'),
       this._row('Enclosed volume', space.enclosedVolumeM3 != null ? f.vol(space.enclosedVolumeM3) : '—',
-        'Floor area × ceiling height — an envelope, not a watertight solid volume.'),
+        'Footprint area × ceiling height: an envelope, not a watertight solid volume.'),
       this._row('Storeys / levels', i0(space.storyCount)),
     );
     this._body.append(el('div', { className: 'olv-object-subhead', text: 'Planes' }));

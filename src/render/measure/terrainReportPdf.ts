@@ -288,9 +288,20 @@ async function buildTerrainReportPdfStyled(
   const note = wrapStampLine(bold, content.notSurveyGrade, footerW, NOTE_SIZE, 0);
   const noteTop = M - 4 + (note.length - 1) * NOTE_LEAD;
   // First stamp baseline: as low as possible while every line clears the note.
-  const fy0 = noteTop + 16 + (stamp.length - 1) * STAMP_LEAD;
-  if (y - 16 < fy0 + 12) newPage();
-  page.drawLine({ start: { x: M, y: fy0 + 12 }, end: { x: PW - M, y: fy0 + 12 }, thickness: 0.75, color: FRAME });
+  let fy0 = noteTop + 16 + (stamp.length - 1) * STAMP_LEAD;
+  let headed = false;
+  if (y - 16 < fy0 + 12) {
+    newPage();
+    // Light and Dark: a page that holds only the stamp opens with a heading
+    // and sets the stamp from the top, so it reads as the provenance page
+    // rather than an empty page with a footer. Classic keeps its layout.
+    if (kit) {
+      text('Provenance', M, y, 12, bold, INK);
+      fy0 = y - 20;
+      headed = true;
+    }
+  }
+  page.drawLine({ start: { x: M, y: fy0 + 12 }, end: { x: PW - M, y: fy0 + 12 }, thickness: headed ? 0.5 : 0.75, color: FRAME });
   let fy = fy0;
   for (const s of stamp) {
     text(s.seg, s.x, fy, STAMP_SIZE, font, DIM);

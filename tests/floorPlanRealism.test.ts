@@ -535,3 +535,14 @@ describe('contents-hint cap — a cluttered interior is not stippled with specks
     );
   });
 });
+
+describe('contents note', () => {
+  it('says none are drawn when every island is too small, never "the 0 largest"', async () => {
+    const { contentsNote } = await import('../src/terrain/space/floorplan/extractFloorPlan');
+    const none = contentsNote(3, 0);
+    expect(none).toMatch(/^3 compact island\(s\).*all are too small to draw and are left off the sheet\.$/);
+    expect(none).not.toMatch(/\b0 largest/);
+    expect(contentsNote(5, 2)).toMatch(/the 2 largest are drawn.*the 3 smallest omitted/);
+    expect(contentsNote(2, 2)).toMatch(/and drawn as light grey hints/);
+  });
+});

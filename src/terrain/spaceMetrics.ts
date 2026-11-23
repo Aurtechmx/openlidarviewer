@@ -123,11 +123,11 @@ export interface SpaceMetrics {
   readonly spaceKind: 'interior' | 'object';
   readonly up: Axis;
   readonly dims: SpaceDims;
-  /** Occupied-footprint (floor) area, m². */
+  /** Occupied-footprint area, m²: the plan cells any point covers (shown as "Footprint area"). */
   readonly floorAreaM2: number;
   /** Floor→ceiling height, m — null when no clear ceiling (open object). */
   readonly ceilingHeightM: number | null;
-  /** Floor area × ceiling height, m³; envelope fallback when no ceiling. */
+  /** Footprint area × ceiling height, m³; envelope fallback when no ceiling. */
   readonly enclosedVolumeM3: number | null;
   readonly planes: PlaneReport;
   /** Storey / level count from well-separated floor peaks (≥ ~2.2 m apart). */

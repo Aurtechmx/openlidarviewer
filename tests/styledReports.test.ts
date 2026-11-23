@@ -188,3 +188,23 @@ describe('scan report and Studio image', () => {
     setSheetStyle(before);
   });
 });
+
+describe('terrain report provenance page', () => {
+  const headed = (text: string): boolean => /(^|\n)Provenance\nSoftware/.test(text);
+  // This fixture leaves no room for the stamp under its definitions, so the
+  // stamp takes a page of its own. Two dozen warnings shift the break so the
+  // stamp fits under the body on the last page.
+  const fitting = (): AnalyseContoursResult => ({
+    ...terrainResult(),
+    warnings: Array.from({ length: 24 }, (_, i) => `Warning ${i + 1}: a long line of app-written text that wraps across the page width at least once in the report.`),
+  }) as unknown as AnalyseContoursResult;
+
+  it('Light and Dark head a stamp-only page with Provenance; Classic and a fitting stamp do not', async () => {
+    const { pdfText } = await import('./e2e/pdfText');
+    for (const style of ['light', 'dark'] as const) {
+      expect(headed(await pdfText(await buildTerrainReportPdf(terrainResult(), TERRAIN_OPTS, { style, loadFont })))).toBe(true);
+      expect(headed(await pdfText(await buildTerrainReportPdf(fitting(), TERRAIN_OPTS, { style, loadFont })))).toBe(false);
+    }
+    expect(headed(await pdfText(await buildTerrainReportPdf(terrainResult(), TERRAIN_OPTS, {})))).toBe(false);
+  }, 120_000);
+});

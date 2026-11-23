@@ -31,6 +31,7 @@ import {
   parseAccentColor,
   resolveTheme,
   isSheetTheme,
+  isSheetPalette,
   type ParsedColor,
   type ReportThemePalette,
 } from './ReportBranding';
@@ -713,6 +714,23 @@ function drawLabelValueRow(
     return drawWrappedField(cursor, value, valueStyle, body, ctx, { cap, onNewPage });
   }
 
+  // Light and Dark: the label wraps inside its own column and the value
+  // starts beside its first line, so a key and its value read on one row.
+  // A label too long for three lines in its column keeps the layout below.
+  if (isSheetPalette(ctx.theme) && labelField.omitted === 0) {
+    const labelColW = LABEL_VALUE_GUTTER_X - labelX - 6;
+    const labelLines = wrapText(cleanLabel, bold, BODY_FONT_SIZE, labelColW);
+    if (labelLines.length <= 3) {
+      cursor = ensureSpace(cursor, leading * labelLines.length, ctx.doc, ctx.accent, ctx.theme, ctx.organisation);
+      const top = cursor;
+      const labelBottom = drawLines(top, labelLines, labelStyle, ctx);
+      const valueStyle: LineStyle = {
+        x: LABEL_VALUE_GUTTER_X, font: body, size: BODY_FONT_SIZE, leading, color: ctx.theme.bodyText,
+      };
+      const after = drawWrappedField(top, value, valueStyle, body, ctx, { cap, onNewPage });
+      return after.page === labelBottom.page && labelBottom.y < after.y ? labelBottom : after;
+    }
+  }
   // Label too wide: it wraps across the content width (capped like the value
   // when the row is capped), and the value flows below it, indented one grid
   // track.

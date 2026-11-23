@@ -136,3 +136,8 @@ export function resolveTheme(name?: ReportBranding['theme']): ReportThemePalette
   if (!name) return PALETTES['light-technical'];
   return PALETTES[name] ?? PALETTES['light-technical'];
 }
+
+/** Whether a resolved palette is one of the Light and Dark sheet styles. */
+export function isSheetPalette(palette: ReportThemePalette): boolean {
+  return palette === PALETTES['sheet-light'] || palette === PALETTES['sheet-dark'];
+}

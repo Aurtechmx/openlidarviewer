@@ -17,6 +17,16 @@ The format is based on Keep a Changelog and the project follows Semantic Version
 - A Sheet style choice (Light, Dark, Classic) on the Export tab and under the report buttons of a room or object scan, so those scans can pick a style without a terrain run. It shows the same session choice as the map sheet dialog.
 - A contour map PNG: "Contour map (PNG)" in the Export mode's terrain lane and a PNG button beside the map sheet PDF in Contour Studio. It is the contour SVG sheet in the style last chosen, drawn at twice its size, with the export provenance in the PNG's text chunks. It passes the same evidence permit as the other contour files.
 
+### Fixed
+
+- The Studio image card sits in the bottom-left corner, so it no longer covers the colour bar's notes on the right.
+- On a scan with no CRS, the Studio card prints Width, Depth and Density in the unit its Height uses (metres for a GLB) instead of "units".
+- The space report and the Objects & Space panel call the occupied plan area "Footprint area". It counts walls and furniture, so it can be larger than the floor plane listed under Planes.
+- The floor plan note says when every furniture island is too small to draw, instead of "the 0 largest are drawn".
+- The Light and Dark profile sheet keeps the first round chainage (for example 0+020) beside the start figure.
+- On the Light and Dark technical report, a long label wraps in its own column with its value beside it.
+- On the Light and Dark terrain report, a page that holds only the provenance stamp opens with a Provenance heading.
+
 ## [0.7.2-alpha.1] - 2026-11-17
 
 A development cut on the way to v0.7.2. It carries no DOI, and its test figures

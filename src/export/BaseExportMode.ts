@@ -269,7 +269,15 @@ export function baseReportRows(
   // in source units and no density is printed (the scan reports' gate).
   const frame = adapter.groundFrame?.() ?? null;
   const groundRefusal = frame && !frame.groundMetres ? frame.groundRefusal : null;
-  const unit: LinearUnit = groundRefusal ? 'unknown' : linearUnitOf(adapter.crsLabel()?.unit);
+  // A scan with no CRS is in one local frame, so its horizontal unit is the
+  // one the height rows print (a GLB is metres by its format). Without this,
+  // Width and Depth printed "units" beside a Height in metres.
+  const crs = adapter.crsLabel();
+  const unit: LinearUnit = groundRefusal
+    ? 'unknown'
+    : crs
+      ? linearUnitOf(crs.unit)
+      : verticalUnitOf(adapter);
   const uLabel = linearUnitLabel(unit);
   const source = adapter.sourcePointCount();
   const rows: ScanReportRow[] = [
@@ -342,7 +350,6 @@ export function baseReportRows(
   // CRS provenance, when the source file declares one. This
   // is the row that makes the export research-grade: an analyst reading the
   // PNG later knows the datum and the linear unit the dimensions are in.
-  const crs = adapter.crsLabel();
   if (crs) rows.push({ label: 'CRS', value: crs.name });
   if (groundRefusal) rows.push({ label: 'Units', value: `Not ground metres. ${groundRefusal}` });
   else if (crs) rows.push({ label: 'Units', value: crs.unit });
@@ -416,7 +423,7 @@ export function buildScanReport(
  *         fails), `adapter.snapshot()` captures the live view through the
  *         live camera + EDL pipeline with optional measurement and
  *         annotation overlays baked in — the WYSIWYG guarantee.
- *   3. Compose the scan-report card into the bottom-right corner.
+ *   3. Compose the scan-report card into the bottom-left corner.
  *   4. Embed figure provenance (build / CRS / colormap / camera / clip) as
  *      PNG text chunks — LAST, so no later re-encode strips it.
  *   5. Return the final `ExportResult` Blob reporting the ACTUAL rendered
@@ -514,7 +521,10 @@ export async function runStudioExport(
   // export stays byte-identical to the pre-feature image.
   const classScopeStamp = context.classScopeStamp ?? '';
   const report = buildScanReport(reportTitle, context.adapter, extraReportRows, classScopeStamp, colorMode);
-  const withReport = await composeScanReportOntoBlob(blob, report, 'bottom-right');
+  // Bottom-left: the colour bar and its notes hold the right edge, and a card
+  // as tall as this one covered the notes on any image shorter than ~1000 px.
+  // Studio captures draw no scale bar, so the bottom-left is free.
+  const withReport = await composeScanReportOntoBlob(blob, report, 'bottom-left');
   // Draw the "showing N of M classes" caveat banner across the top of the
   // raster while a filter is active — the escape-hatch closure: a filtered
   // image can't leave the app without a class-scope stamp.
