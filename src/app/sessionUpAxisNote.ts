@@ -68,8 +68,9 @@ export function heldCutAxes<M extends {
 }>(measurements: readonly M[], recorded: SessionUpFrame | undefined, recordedLayerId: string | null): M[] {
   return measurements.map((m) => {
     if (m.derivedUpAxis || !(m.profileChart || m.volume)) return m;
-    const layer = m.owner?.layerId ?? null;
-    if (recorded && recorded.basis !== 'unresolved' && layer !== null && layer === recordedLayerId) {
+    // The layers it was picked on, else its owner: the axis it was cut along is theirs.
+    const ids = m.pickLayers && m.pickLayers.length > 0 ? m.pickLayers : m.owner?.layerId ? [m.owner.layerId] : [];
+    if (recorded && recorded.basis !== 'unresolved' && ids.length > 0 && ids.every((id) => id === recordedLayerId)) {
       return { ...m, derivedUpAxis: recorded.axis };
     }
     const what = m.kind === 'profile' ? 'Profile chart' : 'Cut and fill';

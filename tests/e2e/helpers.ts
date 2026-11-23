@@ -761,7 +761,7 @@ export function terrainResultDigest(page: Page, tag: string): Promise<{ digest: 
  * The dense-grid surface as a LAS 1.4 in EPSG:32633 with a NAVD88 metre
  * vertical axis, so the vertical unit resolves and the tier can reach T3.
  */
-export async function dropDenseGridUtmLas(page: Page): Promise<void> {
+export async function dropDenseGridUtmLas(page: Page, opts: { name?: string; dz?: number } = {}): Promise<void> {
   (globalThis as Record<string, unknown>).__BUILD_IDENTITY__ ??= {
     version: '0.0.0-test', commit: 'unknown', dirty: false, builtAt: '1970-01-01T00:00:00.000Z',
   };
@@ -776,16 +776,16 @@ export async function dropDenseGridUtmLas(page: Page): Promise<void> {
     const v = (k % N) / (N - 1);
     x[k] = 500_000 + u * 10;
     y[k] = 5_000_000 + v * 10;
-    z[k] = 200 + Math.sin(u * Math.PI) * Math.cos(v * Math.PI) * 1.5;
+    z[k] = 200 + (opts.dz ?? 0) + Math.sin(u * Math.PI) * Math.cos(v * Math.PI) * 1.5;
   }
   const bytes = writeLas14({ count: N * N, x, y, z }, {
     wkt: wktForEpsg(32633), epsg: 32633, linearUnitCode: 9001, verticalEpsg: 5703, verticalUnitCode: 9001,
   });
-  const dt = await page.evaluateHandle((b) => {
+  const dt = await page.evaluateHandle(({ b, name }) => {
     const d = new DataTransfer();
-    d.items.add(new File([new Uint8Array(b)], 'dense-grid-utm.las'));
+    d.items.add(new File([new Uint8Array(b)], name));
     return d;
-  }, [...bytes]);
+  }, { b: [...bytes], name: opts.name ?? 'dense-grid-utm.las' });
   await waitForLoadIdle(page);
   await page.dispatchEvent('body', 'drop', { dataTransfer: dt });
 }

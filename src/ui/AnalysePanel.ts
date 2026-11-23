@@ -278,13 +278,13 @@ export interface AnalysePanelCallbacks {
    */
   getDatasetIntelligence?: () => DatasetIntelligence | null;
   /**
-   * The scan's placed annotations, in list order, for the (opt-in) annotation
-   * layer on the map sheet. The marker index is the 1-based list position, so
-   * the host must return them in the SAME order the Annotations panel shows.
+   * The annotations placed on the scan `scanId` names (never another open
+   * scan's), in the Annotations panel's order, for the (opt-in) annotation layer
+   * on the map sheet. The marker index is the 1-based position in this list.
    * Omitted / empty ⇒ the sheet's annotation checkbox is disabled and no layer
    * is drawn.
    */
-  getAnnotations?: () => ReadonlyArray<Annotation>;
+  getAnnotations?: (scanId: string | null) => ReadonlyArray<Annotation>;
   /** Measurements on the analysed scan, for the map sheet; see app/sheetMeasurements.ts. */
   getSheetMeasurements?: (scanId: string | null) => readonly SheetMeasurement[];
   /**
@@ -3109,8 +3109,10 @@ export class AnalysePanel {
     // DISABLED when the scan carries none, so the option is discoverable but
     // clearly unavailable — the enable/label logic is the pure
     // `annotationsOptionState` so the dialog and its unit tests agree.
-    const annotationCount = this._cb.getAnnotations?.().length ?? 0;
-    const annoState = annotationsOptionState(annotationCount);
+    // The checkbox count, the list and the markers are one collection: the
+    // analysed scan's annotations, read once here.
+    const sheetAnns = this._cb.getAnnotations?.(this._resultScanId) ?? [];
+    const annoState = annotationsOptionState(sheetAnns.length);
     // Default ON when the scan actually has annotations, so a map sheet includes
     // them without the user hunting for the toggle — the reported "annotations
     // missing from the map sheet" was this box sitting unchecked. A scan with no
@@ -3251,7 +3253,7 @@ export class AnalysePanel {
             generatedAt,
             // A disabled checkbox can never be checked, so a scan with no
             // annotations always exports the plain sheet.
-            includeAnnotations: annoCheck.checked,
+            annotations: annoCheck.checked ? sheetAnns : null,
             measurements: measCheck.checked ? sheetMs : null,
             permit,
             purpose,
@@ -3306,7 +3308,7 @@ export class AnalysePanel {
       worldOrigin: { x: number; y: number; z?: number } | null;
       generatedAt: Date;
       /** Draw the (opt-in) annotation layer on the sheet. */
-      includeAnnotations: boolean;
+      annotations: ReadonlyArray<Annotation> | null;
       measurements: readonly SheetMeasurement[] | null;
       /** The §19 permit minted for this dialog, or null when none reached it. */
       permit: ContourExportPermit | null;
@@ -3341,9 +3343,8 @@ export class AnalysePanel {
     const mapCtx = this._cb.getMapContext?.();
     const linearUnit = mapCtx?.linearUnit;
     const sheetBasename = this._cb.getExportBasename?.() ?? undefined;
-    // Annotations only when opted in, in the panel's order, read with the rest of
-    // the sheet's inputs; the up-axis is the gather's own (annotationMapProjection.ts).
-    const annotations = opts.includeAnnotations ? this._cb.getAnnotations?.() ?? [] : [];
+    // Only when opted in; the up-axis is the gather's own (annotationMapProjection.ts).
+    const annotations = opts.annotations ?? [];
     const sceneUpAxis = mapCtx?.sceneUpAxis ?? 'z';
     const { buildContourSheetPdf } = await loadMapSheetPdf();
     // The styled sheets draw the analysed grid under the contours and, on a
@@ -3391,7 +3392,7 @@ export class AnalysePanel {
       sheet: opts.sheet,
       orientation: opts.orientation,
       generatedAt: opts.generatedAt,
-      includeAnnotations: opts.includeAnnotations,
+      includeAnnotations: opts.annotations !== null,
       annotations,
       sceneUpAxis,
       // Purpose deliverable facts (Studio path) so the sheet renders purpose-

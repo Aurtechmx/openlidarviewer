@@ -1413,6 +1413,10 @@ function renderAnnotations(
     doc, accent, theme, organisation,
   );
   cursor = drawSectionHeader(cursor, `Annotations (${inputs.annotations.length})`, accent, bold);
+  if (inputs.annotationsWithheld) {
+    cursor = ensureSpace(cursor, sectionKeepTogetherSpace(inputs.annotationsWithheld, body), doc, accent, theme, organisation);
+    cursor = drawBodyLine(cursor, inputs.annotationsWithheld, body, ctx);
+  }
   if (inputs.annotations.length === 0) {
     cursor = drawBodyLine(cursor, aPlaceholder, body, ctx);
     return { page: cursor.page, y: cursor.y - 10 };

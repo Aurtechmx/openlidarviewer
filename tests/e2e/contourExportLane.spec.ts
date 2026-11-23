@@ -233,6 +233,53 @@ test('Export mode: the map sheet offers the scan\'s measurements, checked', asyn
   await expect(dialog).toBeHidden();
 });
 
+test('Export mode: the map sheet offers no work picked on another open scan', async ({ page }) => {
+  test.setTimeout(180_000);
+  const layers = page.locator('.olv-layer');
+  await page.goto('/?test=1');
+  await dropDenseGridUtmLas(page, { name: 'survey-b.las', dz: 3 });
+  await expect(layers).toHaveCount(1, { timeout: 20_000 });
+  // A opens second, so it is active while the distance is picked on B.
+  await dropDenseGridUtmLas(page, { name: 'survey-a.las' });
+  await expect(layers).toHaveCount(2, { timeout: 20_000 });
+  const distanceOn = (layer: string) => page.evaluate((l) => {
+    const api = (window as unknown as { __OLV_TEST_API__: { setMeasureMode(on: boolean): void; setMeasureKind(k: string): void; placeMeasurementPoint(p: { x: number; y: number; z: number; layer?: string }): void } }).__OLV_TEST_API__;
+    api.setMeasureMode(true);
+    api.setMeasureKind('distance');
+    api.placeMeasurementPoint({ x: 2, y: 2, z: 1, layer: l });
+    api.placeMeasurementPoint({ x: 6, y: 5, z: 1, layer: l });
+    api.setMeasureMode(false);
+  }, layer);
+  const taken = () => page.evaluate(() => (window as unknown as { __OLV_TEST_API__: { getMeasurementCount(): number } }).__OLV_TEST_API__.getMeasurementCount());
+  await distanceOn('survey-b.las');
+  expect(await taken()).toBe(1);
+  await openAnalysePanel(page);
+  await page.locator('.olv-analyse-run').click();
+  await expect(page.locator('.olv-fit-verdict-text')).toBeVisible({ timeout: 30_000 });
+  const openDialog = async () => {
+    const group = await openContourLane(page);
+    await group.getByRole('button', { name: 'Contour map sheet (PDF)' }).click();
+    const dialog = page.locator('.olv-modal[role="dialog"]');
+    await expect(dialog).toBeVisible({ timeout: 20_000 });
+    return dialog;
+  };
+  let dialog = await openDialog();
+  const boxes = dialog.locator('input[type="checkbox"]');
+  await expect(boxes).toHaveCount(2);
+  await expect(boxes.nth(1)).toBeDisabled();
+  await expect(boxes.nth(1)).not.toBeChecked();
+  await dialog.getByRole('button', { name: 'Cancel' }).click();
+  await expect(dialog).toBeHidden();
+  // A's own distance is offered.
+  await distanceOn('survey-a.las');
+  expect(await taken()).toBe(2);
+  dialog = await openDialog();
+  await expect(boxes.nth(1)).toBeEnabled();
+  await expect(boxes.nth(1)).toBeChecked();
+  const [download] = await Promise.all([page.waitForEvent('download', { timeout: 60_000 }), dialog.getByRole('button', { name: 'Export PDF' }).click()]);
+  expect(readFileSync((await download.path())!).subarray(0, 5).toString('latin1')).toBe('%PDF-');
+});
+
 test('Export mode: a map sheet that cannot be written says why', async ({ page }) => {
   test.setTimeout(120_000);
   await analyseFixture(page);

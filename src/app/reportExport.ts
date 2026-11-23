@@ -59,13 +59,13 @@ import { streamingFormatToken } from '../render/streaming/StreamingSource';
 import { classificationCoverage } from '../render/class/classificationCoverage';
 import { cloudClassShareBasis, unclassifiedShare } from '../model/classShareBasis';
 import { truncationNote, truncationOf, truncationText } from '../io/truncation';
-import { measurementsOwnedByActive, type OwnershipView } from './measurementOwnership';
+import { annotationsOwnedByActive, measurementsOwnedByActive, type OwnershipView } from './measurementOwnership';
 import { withholdUnresolvedUp } from './layerUpFrames';
 import { measurementRowText } from './measureResultModel';
 import { analysedBasisLine, type AnalysedBasis } from '../terrain/export/analysedBasis';
 
 /** Re-exported so the shell wires report and KML ownership from one import. */
-export { ownershipViewOf, handOverLayerWork } from './measurementOwnership';
+export { ownershipOf, ownershipViewOf, handOverLayerWork } from './measurementOwnership';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Pure decisions the extraction exposes — decidable without a Viewer, the report
@@ -594,9 +594,11 @@ export async function generateReportPdf(templateId: string, deps: ReportExportDe
   // this scan's conversion factor.
   // A measurement on a layer with no resolved up axis (a glTF under a CRS) has
   // no vertical to print any figure along; it is withheld with the reason.
+  const ownership = deps.measurementOwnership ? deps.measurementOwnership() : { layers: [], activeViewerId: deps.scans.activeId ?? null };
+  const notes = annotationsOwnedByActive(viewer.annotate.getAnnotations(), ownership);
   const owned = withholdUnresolvedUp(measurementsOwnedByActive(
     viewer.measure.getMeasurements(),
-    deps.measurementOwnership ? deps.measurementOwnership() : { layers: [], activeViewerId: deps.scans.activeId ?? null },
+    ownership,
   ), (m) => viewer.measure.unitFrameOf?.(m).upRefusal);
   // The Technical Report's terrain section, from the analysis on screen (static scans only).
   const terrain = staticCloud ? deps.terrainResult?.() ?? null : null;
@@ -605,7 +607,8 @@ export async function generateReportPdf(templateId: string, deps: ReportExportDe
     ...(terrain && staticCloud ? { terrainSummaryFacts: terrainSummaryFacts(terrain, staticCloud, deps.terrainAnalysedBasis?.()) } : {}),
     subtitle: metadata.fileName,
     visuals: [],          // user-pre-rendered Studio exports
-    annotations: viewer.annotate.getAnnotations().map((a) => structuredClone(a)),
+    annotations: notes.own.map((a) => structuredClone(a)),
+    annotationsWithheld: notes.withheld,
     measurements: owned.own.map((m) => structuredClone(m)),
     measurementsWithheld: owned.withheld,
     // Each row as the Measurements panel prints it, so the PDF and the panel

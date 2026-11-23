@@ -7,9 +7,9 @@ import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { PDFDocument, PDFPage } from 'pdf-lib';
 import { buildProfilePdf, type ProfilePdfInput } from '../src/render/measure/profilePdf';
-import { countsPerStation, gradeSeries, indexCrossings, notesForRoom, profileInkFor } from '../src/render/measure/profileSheetStyled';
+import { countsPerStation, gradeSeries, notesForRoom, profileInkFor } from '../src/render/measure/profileSheetStyled';
 import { DEFAULT_PROFILE_IMAGE_THEME, profileImageThemeFor } from '../src/render/measure/profileSectionImage';
-import { returnsAgree, sampleFrame } from '../src/app/profileSheetExtras';
+import { contourCrossings, profileSheetExtras, RETURNS_NOT_READ, RETURNS_UNRECORDED, returnsAgree, sampleFrame } from '../src/app/profileSheetExtras';
 import { sheetTokens } from '../src/export/sheetKit/tokens';
 import type { ProfileChartSample } from '../src/render/measure/types';
 
@@ -70,7 +70,7 @@ describe('style dispatch', () => {
 
   for (const style of ['light', 'dark'] as const) {
     it(`${style}: deterministic, and every station and note row printed`, async () => {
-      const input = base({ style, extras: { returns: returns(), plan: plan(), indexLevels: [110, 130] } });
+      const input = base({ style, extras: { returns: returns(), plan: plan(), indexCrossings: [{ chainage: 30, height: 110 }, { chainage: 95, height: 130 }] } });
       const { texts, bytes: a } = await drawn(input);
       vi.restoreAllMocks();
       const b = await buildProfilePdf(input);
@@ -87,7 +87,7 @@ describe('style dispatch', () => {
 
 describe('the styled sheet one', () => {
   it('prints the headline figures, the scale statement and every general note', async () => {
-    const { texts } = await drawn(base({ style: 'light', extras: { returns: returns(), plan: plan(), indexLevels: [110, 130] } }));
+    const { texts } = await drawn(base({ style: 'light', extras: { returns: returns(), plan: plan(), indexCrossings: [{ chainage: 30, height: 110 }, { chainage: 95, height: 130 }] } }));
     const all = texts.join('\n');
     for (const want of ['PROFILE', 'Profile A - B', 'LENGTH (M)', 'ENDPOINT GRADIENT (%)', 'STEEPEST OVER 10 M (%)', 'Vertical exaggeration', 'Chainage', 'Grade %']) {
       expect(all, want).toContain(want);
@@ -103,7 +103,7 @@ describe('the styled sheet one', () => {
   }, 120_000);
 
   it('lists only what it draws in the legend', async () => {
-    const withAll = (await drawn(base({ style: 'dark', extras: { returns: returns(), plan: plan(), indexLevels: [110] } }))).texts;
+    const withAll = (await drawn(base({ style: 'dark', extras: { returns: returns(), plan: plan(), indexCrossings: [{ chainage: 30, height: 110 }] } }))).texts;
     expect(withAll).toEqual(expect.arrayContaining(['Ground returns', 'Other returns', 'Crosses an index contour', 'Profile line and corridor (plan)']));
     vi.restoreAllMocks();
     const bare = (await drawn(base({ style: 'dark', extras: null }))).texts;
@@ -195,9 +195,19 @@ describe('the styled sheet one', () => {
 describe('figures', () => {
   const st = (pairs: Array<[number, number | null]>) => pairs.map(([chainage, elevation]) => ({ chainage, elevation }));
 
-  it('index crossings land where the ground line passes each level, never across a gap', () => {
-    const c = indexCrossings(st([[0, 95], [10, 105], [20, 115], [30, null], [40, 125]]), [100, 110, 120]);
-    expect(c.map((x) => [x.chainage, x.height])).toEqual([[5, 100], [15, 110]]);
+  it('a crossing is where the contour meets the line on the ground, not where the profile reaches its height', () => {
+    const f = (coordinates: Array<[number, number]>, over: object = {}) => ({ value: 5, isIndex: true, grade: 'solid', meanConfidence: 90, closed: false, coordinates, ...over }) as never;
+    const at = (...fs: never[]) => contourCrossings([0, 0], [10, 0], fs).map((c) => [c.along, c.value]);
+    expect(at(f([[100, 100], [120, 100]]))).toEqual([]);
+    expect(at(f([[4, -1], [4, 1]]))).toEqual([[4, 5]]);
+    expect(at(f([[4, -1], [4, 0], [4, 1]]))).toEqual([[4, 5]]);
+    expect(at(f([[12, -1], [12, 1]]))).toEqual([]);
+    expect(at(f([[4, -1], [4, 1]], { isIndex: false }))).toEqual([]);
+    expect(at(f([[2, 0], [8, 0]]))).toEqual([]);
+    // A ring is closed by its last side; the disjoint part at the same value adds nothing.
+    expect(at(f([[2, -1], [6, -1], [6, 1], [2, 1]], { closed: true }))).toEqual([[2, 5], [6, 5]]);
+    expect(at(f([[4, -1], [4, 1]]), f([[50, 50], [60, 50]]))).toEqual([[4, 5]]);
+    expect(contourCrossings([1, 1], [1, 1], [f([[0, 0], [2, 2]])])).toEqual([]);
   });
 
   it('grade over 10 m is null where a gap breaks the base', () => {
@@ -207,8 +217,8 @@ describe('figures', () => {
     expect(g.at(-1)).toEqual({ chainage: 25, grade: 20 });
   });
 
-  it('returns per metre follow the sample counts and spacing', () => {
-    expect(countsPerStation([{ distance: 0, height: 1, count: 10 }, { distance: 2, height: 1, count: 6 }, { distance: 3, height: 1 }])).toEqual([5, 6, null]);
+  it('returns per metre follow the sample counts and spacing, and leave out the ends', () => {
+    expect(countsPerStation([{ distance: 0, height: 1, count: 10 }, { distance: 2, height: 1, count: 6 }, { distance: 3, height: 1 }])).toEqual([null, 6, null]);
   });
 
   it('the support sheets take the style colours', () => {
@@ -274,4 +284,90 @@ describe('the Classic sheet one', () => {
     expect(drawnAt.some((d) => d.t.startsWith('Station data band'))).toBe(true);
     for (const d of sameLine) expect(d.x >= key.x + key.w || d.x + d.w <= key.x, d.t).toBe(true);
   });
+});
+
+describe('profile extras and the scans they are read from', () => {
+  const line: ProfileChartSample[] = [0, 2, 4, 6, 8, 10].map((d) => ({ distance: d, height: d, count: 1 }));
+  const src = (layerId: string, over: object = {}) => ({ layerId, displayName: `${layerId}.las`, classification: 'absent', streaming: false, acceptedCount: 3, contributed: true, residency: null, ...over });
+  interface Ref { kind?: string; id: string; name?: string }
+  async function run(o: { sources?: object[]; refs: Ref[]; owner?: string; picks?: string[]; open?: Array<[id: string, name: string]>; streamingSourceId?: string; heights?: number[] }) {
+    // Slot 0 holds heights 2 and 8, slot 1 holds 9 and 15, and so on.
+    const slots: number[] = [], heights: number[] = [], chainage: number[] = [];
+    o.refs.forEach((_, s) => { [2, 8].forEach((c, k) => { slots.push(s); chainage.push(c); heights.push(o.heights?.[s * 2 + k] ?? (s === 0 ? c : c + 7)); }); });
+    const m = { id: 'p', kind: 'profile', profileChart: line, points: [[0, 0, 0], [10, 0, 10]], ...(o.owner ? { owner: { layerId: o.owner, frame: 'project' } } : {}), ...(o.picks ? { pickLayers: o.picks } : {}), ...(o.sources ? { profileProvenance: { sources: o.sources } } : {}) };
+    const open = o.open ?? [['A', 'A.las'], ['B', 'B.las']];
+    const asked: unknown[] = [];
+    const viewer = {
+      clouds: () => open.map(([id]) => id), getCloud: (id: string) => ({ name: open.find((l) => l[0] === id)![1], id }), layerSourceId: (c: { id: string }) => c.id,
+      measure: { getMeasurements: () => [m], unitFrameOf: () => ({ unitToMetres: 1 }) },
+      profileSeam: { *sectionChunks() { return { points: { count: slots.length, chainage, height: heights, sourceSlot: slots, classification: null }, sources: o.refs.map((r, slot) => ({ kind: 'static', slot, ...r })), ...(o.streamingSourceId ? { streamingSourceId: o.streamingSourceId } : {}) }; } },
+    };
+    const terrain = { sceneUpAxis: 'z', result: { dtm: {}, model: { features: [{ isIndex: true, value: 5, coordinates: [[100, 100], [120, 100]] }] } } };
+    const x = await profileSheetExtras(viewer as never, 'p', { profileChart: line, profileCorridorWidthM: 1 } as never, (q) => { asked.push(q); return terrain as never; });
+    return { heights: x!.returns ? Array.from(x!.returns.heightM) : null, note: x!.returnsNote ?? null, asked, x: x! };
+  }
+
+  it('draws the recorded scan only, when another is shown over it', async () => {
+    expect(await run({ sources: [src('A')], refs: [{ id: 'A' }, { id: 'B' }] })).toMatchObject({ heights: [2, 8], note: null });
+  });
+  it('draws nothing of another scan when the recorded one is hidden, and says why', async () => {
+    expect(await run({ sources: [src('A')], refs: [{ id: 'B' }] })).toMatchObject({ heights: null, note: RETURNS_NOT_READ });
+    expect(await run({ sources: [src('A'), src('B')], refs: [{ id: 'A' }] })).toMatchObject({ heights: null, note: RETURNS_NOT_READ });
+  });
+  it('a recorded scan that gave no return is not needed', async () => {
+    expect(await run({ sources: [src('A'), src('B', { contributed: false, acceptedCount: 0 })], refs: [{ id: 'A' }] })).toMatchObject({ heights: [2, 8] });
+  });
+  it('two scans of one file name are told apart by identity', async () => {
+    const refs = [{ id: 'id1', name: 'scan.las' }, { id: 'id2', name: 'scan.las' }];
+    const open: Array<[string, string]> = [['id1', 'scan.las'], ['id2', 'scan.las']];
+    expect(await run({ sources: [src('id1', { displayName: 'scan.las' })], refs, open })).toMatchObject({ heights: [2, 8] });
+    // A record that only names the file cannot say which.
+    expect(await run({ sources: [src('scan.las', { displayName: 'scan.las' })], refs, open })).toMatchObject({ heights: null, note: RETURNS_NOT_READ });
+    expect(await run({ sources: [src('scan.las', { displayName: 'scan.las' })], refs: [refs[1]!], open })).toMatchObject({ heights: null });
+  });
+  it('a hidden scan is not replaced by another of the same name', async () => {
+    const open: Array<[string, string]> = [['id1', 'scan.las'], ['id2', 'other.las']];
+    expect(await run({ sources: [src('id1', { displayName: 'other.las' })], refs: [{ id: 'id2', name: 'other.las' }], open })).toMatchObject({ heights: null, note: RETURNS_NOT_READ });
+  });
+  it('an id from an earlier session, or a record by file name, matches the one open scan of that name', async () => {
+    const o = { refs: [{ id: 'A', name: 'A.las' }] };
+    expect(await run({ ...o, sources: [src('old-id', { displayName: 'A.las' })] })).toMatchObject({ heights: [2, 8] });
+    expect(await run({ ...o, sources: [src('A.las', { displayName: 'A.las' })] })).toMatchObject({ heights: [2, 8] });
+    expect(await run({ ...o, sources: [src('old-id', { displayName: 'A.las' })], owner: 'closed' })).toMatchObject({ heights: null, note: RETURNS_NOT_READ });
+    expect(await run({ ...o, sources: [src('old-id', { displayName: 'A.las' }), src('old-2', { displayName: 'B.las' })] })).toMatchObject({ heights: null });
+  });
+  it('a profile with no record draws returns only while one scan is open', async () => {
+    expect(await run({ refs: [{ id: 'A' }], open: [['A', 'A.las']] })).toMatchObject({ heights: [2, 8] });
+    expect(await run({ refs: [{ id: 'A' }] })).toMatchObject({ heights: null, note: RETURNS_UNRECORDED });
+  });
+  it('a stream is matched by its own identity, and an older record only for work that names no scan', async () => {
+    const st = (layerId: string) => src(layerId, { streaming: true });
+    const refs = [{ kind: 'resident', id: '0-0-0-0' }];
+    const o = { refs, open: [], streamingSourceId: 'streaming:one' };
+    expect(await run({ ...o, sources: [st('streaming:one')] })).toMatchObject({ heights: [2, 8] });
+    expect(await run({ ...o, sources: [st('streaming:two')] })).toMatchObject({ heights: null, note: RETURNS_NOT_READ });
+    expect(await run({ ...o, sources: [st('streaming')] })).toMatchObject({ heights: [2, 8] });
+    expect(await run({ ...o, sources: [st('streaming')], owner: 'retired-scan' })).toMatchObject({ heights: null });
+  });
+  it('asks for the terrain of the picked scan, and marks no contour the line does not meet', async () => {
+    const r = await run({ sources: [src('A')], refs: [{ id: 'A' }], owner: 'A', picks: ['B'] });
+    expect(r.asked).toMatchObject([{ pickLayers: ['B'] }]);
+    expect(r.x.indexCrossings).toEqual([]);
+  });
+  it('the sheet prints why the returns are missing', async () => {
+    const { texts } = await drawn(base({ style: 'light', extras: { returns: null, returnsNote: RETURNS_NOT_READ } }));
+    expect(texts.join(' ')).toContain('Returns under the line: not drawn');
+  }, 120_000);
+});
+
+describe('station band labels', () => {
+  for (const [system, per] of [['metric', 'm'], ['unverified', 'unit']] as const) {
+    it(`counts accepted returns per ${per} (${system})`, async () => {
+      const { texts } = await drawn(base({ style: 'light', unitSystem: system }));
+      expect(texts).toContain(`Returns per ${per}`);
+      expect(texts.some((t) => t.startsWith(`accepted returns per ${per}, tallest bar`))).toBe(true);
+      expect(texts.some((t) => /ground returns per/i.test(t))).toBe(false);
+      expect(texts).toContain('Across a gap with no accepted returns');
+    }, 120_000);
+  }
 });

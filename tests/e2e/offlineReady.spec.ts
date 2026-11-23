@@ -55,11 +55,19 @@ test('app shell reloads offline and opens a local file', async ({ page, context,
   // More than the fixed shell list: the build's hashed bundles were cached.
   expect(await countOffline()).toBeGreaterThan(50);
 
+  // Only the worker's copies may answer, not the HTTP cache.
+  if (browserName === 'chromium') {
+    const cdp = await context.newCDPSession(page);
+    await cdp.send('Network.clearBrowserCache');
+  }
+  const failed: string[] = [];
+  page.on('requestfailed', (r) => { if (r.resourceType() === 'script') failed.push(r.url()); });
   await context.setOffline(true);
   try {
     await page.reload();
     await expect(page.locator('.olv-empty')).toBeVisible({ timeout: 30_000 });
 
+    expect(failed.filter((u) => u.endsWith('/browser-check.js'))).toEqual([]);
     await dropTinyPly(page);
     await expect(page.locator('.olv-empty')).toBeHidden({ timeout: 30_000 });
     // tiny.ply decoded and reached the scene: the class legend reveals in its

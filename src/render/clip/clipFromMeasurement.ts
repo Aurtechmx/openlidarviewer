@@ -7,8 +7,8 @@
  *
  * Rules, in order:
  *   - the measurement must exist and be a Box with two finite corners;
- *   - ownership: when the measurement names an owning layer, that layer must be
- *     the active one. A measurement with no owner is accepted only while a
+ *   - ownership: when the measurement names an owning layer, that layer, or one
+ *     its corners were picked on, must be the active one. A measurement with no owner is accepted only while a
  *     single layer is open (the session's one origin is that layer's), because
  *     with several layers open nothing says which scan its corners belong to.
  *     Coordinates are never copied across datasets;
@@ -53,6 +53,8 @@ export interface BoxMeasurementLike {
   readonly kind: string;
   readonly points: readonly Vec3[];
   readonly owner?: { readonly layerId?: string };
+  /** The layers its corners were picked on, when recorded. */
+  readonly pickLayers?: readonly string[];
 }
 
 /** Where the clip will be applied. */
@@ -114,7 +116,10 @@ export function clipFromBoxMeasurement(
   if (ctx.layerCount < 1) return { ok: false, reason: 'Open a scan to clip.' };
   const ownerId = m.owner?.layerId;
   if (ownerId !== undefined) {
-    if (ownerId !== ctx.activeLayerId) {
+    // The owner is the layer that was active; a corner picked on the active
+    // layer makes the box one drawn on it too.
+    const active = ctx.activeLayerId;
+    if (ownerId !== active && !(active !== null && m.pickLayers?.includes(active))) {
       return { ok: false, reason: 'This box was drawn on another scan. Switch to that scan to clip with it.' };
     }
   } else if (ctx.layerCount > 1) {
