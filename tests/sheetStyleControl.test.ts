@@ -1,9 +1,9 @@
 /**
  * sheetStyleControl.test.ts
  *
- * The Sheet style control sets the session style the exports read, every
- * control on the page follows a change made in another one, and a control
- * that has left the page stops listening.
+ * The Sheet style control sets the session style the exports read, and every
+ * control follows a change made in another one. Controls are held weakly, so
+ * a panel that rebuilds its body leaves nothing behind.
  */
 import { afterEach, beforeAll, describe, expect, it } from 'vitest';
 
@@ -80,15 +80,24 @@ describe('sheet style control', () => {
     expect(checkedValue(row)).toBe('classic');
   });
 
-  it('a control taken off the page stops listening', async () => {
+  it('a control off the page still shows the current style when it is put back', async () => {
     const { sheetStyleControl } = await import('../src/ui/sheetStyleControl');
     const { setSheetStyle } = await import('../src/export/sheetKit/sessionStyle');
     const row = sheetStyleControl() as unknown as Node0;
-    setSheetStyle('dark');
     row.isConnected = false;
     setSheetStyle('classic');
     row.isConnected = true;
-    setSheetStyle('light');
-    expect(checkedValue(row)).toBe('dark');
+    expect(checkedValue(row)).toBe('classic');
+  });
+
+  it('holds each control weakly behind one subscription', async () => {
+    const { sheetStyleControl, sheetStyleControlCount } = await import('../src/ui/sheetStyleControl');
+    const before = sheetStyleControlCount();
+    sheetStyleControl();
+    sheetStyleControl();
+    expect(sheetStyleControlCount()).toBe(before + 2);
+    const src = (await import('node:fs')).readFileSync(new URL('../src/ui/sheetStyleControl.ts', import.meta.url), 'utf8');
+    expect(src).toContain('new WeakRef(row)');
+    expect(src.match(/onSheetStyleChange\(/g)).toHaveLength(1);
   });
 });

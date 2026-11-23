@@ -22,11 +22,29 @@ export const SHEET_STYLE_CHOICES: ReadonlyArray<{ value: SheetStyleChoice; label
 let controlCount = 0;
 
 /**
- * A labelled segmented control bound to the session sheet style. It drops its
- * subscription the first time a change arrives while it is off the page, so a
- * panel that rebuilds its body leaves no listeners behind.
+ * Every control built so far, held weakly: a panel that rebuilds its body
+ * drops its old control, and the collector takes it with its inputs. One
+ * subscription serves them all, so nothing piles up per control.
+ */
+const controls = new Set<WeakRef<HTMLElement>>();
+const inputsOf = new WeakMap<HTMLElement, readonly HTMLInputElement[]>();
+let subscribed = false;
+
+function showStyle(style: SheetStyleChoice): void {
+  for (const ref of controls) {
+    const row = ref.deref();
+    if (!row) { controls.delete(ref); continue; }
+    for (const input of inputsOf.get(row) ?? []) input.checked = input.value === style;
+  }
+}
+
+/**
+ * A labelled segmented control bound to the session sheet style. Every copy
+ * shows the current choice, whether it is on the page, waiting to be placed,
+ * or put back after a panel rebuild.
  */
 export function sheetStyleControl(): HTMLElement {
+  if (!subscribed) { onSheetStyleChange(showStyle); subscribed = true; }
   const row = el('div', { className: 'olv-fp-opt-row olv-sheet-style' });
   row.append(el('span', { className: 'olv-fp-opt-label', text: 'Sheet style' }));
   const seg = document.createElement('div');
@@ -55,11 +73,12 @@ export function sheetStyleControl(): HTMLElement {
     seg.append(input, label);
   }
   row.append(seg);
-  let attached = false;
-  const unsubscribe = onSheetStyleChange((style) => {
-    if (attached && !row.isConnected) { unsubscribe(); return; }
-    if (row.isConnected) attached = true;
-    for (const input of inputs) input.checked = input.value === style;
-  });
+  inputsOf.set(row, inputs);
+  controls.add(new WeakRef(row));
   return row;
+}
+
+/** How many controls are still held, for tests. Collected ones are pruned on the next change. */
+export function sheetStyleControlCount(): number {
+  return controls.size;
 }

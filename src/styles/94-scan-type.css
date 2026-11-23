@@ -160,6 +160,12 @@
 .olv-fp-seg-input:focus-visible + .olv-fp-seg-label {
   outline: 2px solid var(--accent); outline-offset: -2px;
 }
+/* Touch screens: each segment is a 44 px target, as the app's other controls are. */
+@media (pointer: coarse) {
+  .olv-fp-seg-label {
+    min-height: 44px; display: flex; align-items: center; justify-content: center;
+  }
+}
 .olv-fp-toggle {
   display: flex; align-items: center; gap: var(--space-sm); cursor: pointer;
 }
