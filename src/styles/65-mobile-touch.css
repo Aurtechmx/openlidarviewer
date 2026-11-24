@@ -525,8 +525,11 @@
   .olv-height-trim-slider {
     height: 28px;
   }
+  /* Each sun slider is a 44 px target, track included. */
+  .olv-sun-slider { height: 44px; }
   .olv-wb-slider::-webkit-slider-thumb,
-  .olv-height-trim-slider::-webkit-slider-thumb {
+  .olv-height-trim-slider::-webkit-slider-thumb,
+  .olv-sun-slider::-webkit-slider-thumb {
     -webkit-appearance: none;
     appearance: none;
     width: 26px; height: 26px;
@@ -537,7 +540,8 @@
     cursor: pointer;
   }
   .olv-wb-slider::-moz-range-thumb,
-  .olv-height-trim-slider::-moz-range-thumb {
+  .olv-height-trim-slider::-moz-range-thumb,
+  .olv-sun-slider::-moz-range-thumb {
     width: 26px; height: 26px;
     border-radius: 50%;
     background: var(--accent);

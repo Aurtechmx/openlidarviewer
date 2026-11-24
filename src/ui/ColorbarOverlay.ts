@@ -152,7 +152,7 @@ export class ColorbarOverlay {
       return;
     }
     const s = active.spec;
-    const key = [active.mode, s.palette, s.min, s.max, s.unit ?? '', active.note ?? ''].join('|');
+    const key = [active.mode, s.palette, s.min, s.max, s.unit ?? '', active.note ?? '', active.shading ?? ''].join('|');
     this._last = active;
     if (key === this._lastKey && (active.cloud?.[0] ?? null) === this._histSample) {
       this._setVisible(true);
@@ -176,8 +176,9 @@ export class ColorbarOverlay {
     const unitSuffix = s.unit ? ` ${s.unit}` : '';
     this._range.textContent =
       `${formatColorbarValue(s.min)} – ${formatColorbarValue(s.max)}${unitSuffix}`;
-    this._note.textContent = active.note ?? '';
-    this._note.classList.toggle('olv-hidden', !active.note);
+    const note = [active.note, active.shading].filter(Boolean).join(' · ');
+    this._note.textContent = note;
+    this._note.classList.toggle('olv-hidden', !note);
     this._setVisible(true);
   }
 

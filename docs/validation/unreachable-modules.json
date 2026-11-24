@@ -133,13 +133,6 @@
       "review": "2027-03-31"
     },
     {
-      "path": "src/render/hillshadeColors.ts",
-      "status": "staged",
-      "why": "Sun-direction shading over the elevation ramp. src/render/inspectionPresets.ts states the matching fact from the other side: the preset it belongs to has \"no runtime setter behind\" it and \"there is no live hillshade renderer to switch\".",
-      "graduation": "A hillshade colour mode exists in colorModes and the Viewer can switch it on.",
-      "review": "2027-02-28"
-    },
-    {
       "path": "src/render/continuity/continuityFailure.ts",
       "status": "staged",
       "why": "Decides what to run after a continuity pass fails, and wraps a pass so a throw cannot reach the render loop. No pass runs, so nothing fails and nothing is wrapped.",

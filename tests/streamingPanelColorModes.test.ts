@@ -15,6 +15,7 @@
 
 import { describe, it, expect, beforeAll, vi } from 'vitest';
 import { FakeEl, installPanelDom } from './support/streamingPanelDom';
+import { SUN_STREAMING_REASON } from '../src/render/sunShading/streamingReason';
 import type { ColorMode } from '../src/render/colorModes';
 
 beforeAll(installPanelDom);
@@ -63,6 +64,16 @@ describe('what the chip row reports as active', () => {
     modeChip('Height').click();
     expect(panel.activeColorMode()).toBe('elevation');
     expect(cb.onColorMode).toHaveBeenCalledWith('elevation');
+  });
+
+  it('says why sun shading is off with Height, and only then', async () => {
+    const { panel, modeChip } = await panelWith(callbacks());
+    panel.setColorModes(WITH_COLOUR, 'rgb');
+    const find = (e: FakeEl): FakeEl | undefined => (e.ownText === SUN_STREAMING_REASON ? e : e.children.map((c) => find(c as FakeEl)).find(Boolean));
+    const note = find(panel.element as unknown as FakeEl)!;
+    expect(note.classList.contains('olv-hidden')).toBe(true);
+    modeChip('Height').click();
+    expect(note.classList.contains('olv-hidden')).toBe(false);
   });
 
   it('reports null when the selected mode is not one the row offers', async () => {

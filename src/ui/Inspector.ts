@@ -26,6 +26,7 @@ import {
   loadRenderCrs,
   loadRenderProvenance,
   loadRenderReport,
+  loadSunShading,
 } from '../lazyChunks';
 import type { LayerHealthCard } from './LayerHealthCard';
 import type {
@@ -110,6 +111,8 @@ export interface InspectorCallbacks {
    * restores per-cloud windows. Only surfaced with ≥2 frame-sharing clouds.
    */
   onProjectSharedElevation?: (on: boolean) => void;
+  /** What sun shading works on, once the viewer is up; null before. */
+  sunShadingHost?: () => Parameters<Awaited<ReturnType<typeof loadSunShading>>['mountSunShading']>[1] | null;
   /**
    * Elevation filter (v0.5.6): a world-space `[min, max]` height window, or
    * `null` to clear. Points outside the window are hidden.
@@ -601,6 +604,9 @@ export class Inspector {
   private readonly _heightTrimRow = el('div', {
     className: 'olv-height-trim-row olv-hidden',
   });
+  /** Sun shading controls mount here (lazy, lazyChunks `loadSunShading`). */
+  private readonly _sunSlot = el('div', { className: 'olv-hidden' });
+  private _sunState: 'none' | 'loading' | 'mounted' = 'none';
   private readonly _heightTrimSlider = (() => {
     const slider = el('input', {
       type: 'range',
@@ -1160,6 +1166,7 @@ export class Inspector {
       this._chips,
       this._chipsNote,
       this._heightTrimRow,
+      this._sunSlot,
       this._projectScaleRow,
     ]);
     this._colorBySection = section('Colour by', colorByBody);
@@ -2147,8 +2154,7 @@ export class Inspector {
         // v0.3.7 final-polish — show the trim slider when the analyst
         // picks Height. Other modes don't honour the slider so hiding
         // it removes the cognitive overhead.
-        this._heightTrimRow.classList.toggle('olv-hidden', mode !== 'elevation');
-        this._syncProjectScaleRow();
+        this._syncHeightRows();
       });
       this._chips.append(chip);
     }
@@ -2165,8 +2171,7 @@ export class Inspector {
     this._chipsNote.textContent = note;
     this._chipsNote.classList.toggle('olv-hidden', note === '');
     // Initial visibility for the trim row — track the active mode.
-    this._heightTrimRow.classList.toggle('olv-hidden', this._activeMode !== 'elevation');
-    this._syncProjectScaleRow();
+    this._syncHeightRows();
   }
 
   /**
@@ -2178,6 +2183,27 @@ export class Inspector {
     this._projectScaleAvailable = available;
     this._projectScaleCheckbox.checked = on;
     this._syncProjectScaleRow();
+  }
+
+  /** The rows that belong to the Height colours; the sun controls load with the first use. */
+  private _syncHeightRows(): void {
+    const height = this._activeMode === 'elevation';
+    this._heightTrimRow.classList.toggle('olv-hidden', !height);
+    this._sunSlot.classList.toggle('olv-hidden', !height);
+    this._syncProjectScaleRow();
+    if (!height || this._sunState !== 'none' || !this._cb.sunShadingHost?.()) return;
+    this._sunState = 'loading';
+    void loadSunShading()
+      .then((m) => {
+        const host = this._cb.sunShadingHost?.();
+        if (host) m.mountSunShading(this._sunSlot, host);
+        this._sunState = host ? 'mounted' : 'none';
+      })
+      .catch((err) => {
+        // The colours work without it; picking Height again retries.
+        this._sunState = 'none';
+        console.warn('[sun shading] controls failed to load:', err);
+      });
   }
 
   /** Show the toggle only while colouring by elevation with ≥2 in-frame layers. */

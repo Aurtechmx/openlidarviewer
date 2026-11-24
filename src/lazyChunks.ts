@@ -403,6 +403,9 @@ export const loadHelpOverlay = () => import('./ui/HelpOverlay');
  */
 export const loadColorbarOverlay = () => import('./ui/ColorbarOverlay');
 
+/** Load the sun shading controls and worker client, the first time Height colours are picked. */
+export const loadSunShading = () => import('./app/sunShading');
+
 /**
  * Load the batch format converter (its modal UI plus the conversion engine and
  * proj4). Only reached when the user opens the converter, so proj4 and the LAS

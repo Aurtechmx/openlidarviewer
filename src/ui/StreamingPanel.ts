@@ -20,6 +20,7 @@ import { streamingViewStatus, type StreamingViewStatus } from './streamingViewSt
 import { CURATED_LICENSE_LABELS, curatedCreditFor } from '../io/catalog/curatedLocations';
 import { formatByteSize as formatBytes } from '../io/formatByteSize';
 import type { ColorMode } from '../render/colorModes';
+import { SUN_STREAMING_REASON } from '../render/sunShading/streamingReason';
 import type { StreamingQuality } from '../render/streaming/streamingBudget';
 import type { CrsLinearUnit } from '../io/crs';
 import type { StreamingDiagnostics } from '../render/streaming/streamingDiagnostics';
@@ -319,6 +320,8 @@ export class StreamingPanel {
   private readonly _stats: HTMLDetailsElement;
   private _statsTouched = false;
   private readonly _modeRow: HTMLElement;
+  /** Shown with Height: why sun shading is not offered here. */
+  private readonly _sunNote: HTMLElement;
   private readonly _qualityRow: HTMLElement;
   private readonly _pause: HTMLButtonElement;
   // Full-cloud grade: a button that decodes a representative octree
@@ -377,6 +380,7 @@ export class StreamingPanel {
     ]);
     this._stats.open = true;
     this._modeRow = el('div', { className: 'olv-streaming-chips' });
+    this._sunNote = el('p', { className: 'olv-chips-note olv-hidden', text: SUN_STREAMING_REASON });
     this._qualityRow = el('div', { className: 'olv-streaming-chips' });
     for (const quality of QUALITIES) {
       const chip = el('button', {
@@ -481,6 +485,7 @@ export class StreamingPanel {
       this._stats,
       el('div', { className: 'olv-streaming-label', text: 'Colour' }),
       this._modeRow,
+      this._sunNote,
       el('div', { className: 'olv-streaming-label', text: 'Quality' }),
       this._qualityRow,
       el('div', { className: 'olv-streaming-label', text: 'Full-cloud check' }),
@@ -852,6 +857,7 @@ export class StreamingPanel {
     // Recorded from what the row can actually show, not from what was asked
     // for, so `activeColorMode()` and the highlighted chip cannot disagree.
     this._activeMode = this._modeButtons.has(mode) ? mode : null;
+    this._sunNote.classList.toggle('olv-hidden', this._activeMode !== 'elevation');
     for (const [m, chip] of this._modeButtons) {
       const active = m === mode;
       chip.classList.toggle('olv-chip-active', active);

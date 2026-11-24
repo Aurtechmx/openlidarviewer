@@ -757,6 +757,7 @@ function drawScaleBar(
 export function colorbarBurnInNotes(active: ActiveColorbar): readonly string[] {
   const notes: string[] = [];
   if (active.note) notes.push(active.note);
+  if (active.shading) notes.push(active.shading);
   if (isDerivedColorMode(active.mode)) notes.push(DERIVED_COLOR_NOTE);
   return notes;
 }

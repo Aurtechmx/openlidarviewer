@@ -365,13 +365,6 @@
       "why": "Numeric kernel over one buffer. Static callers pass source-local and the streaming range seed passes render-local; the percentile band is meaningful in either, provided the buffer is all one frame."
     },
     {
-      "file": "src/render/hillshadeColors.ts",
-      "symbol": "hillshadeShading",
-      "frame": "source-local",
-      "reads": 1,
-      "why": "Numeric kernel: slope shading from local gradients, which a translation cannot change. It is handed a single layer buffer in that layer own frame."
-    },
-    {
       "file": "src/render/InspectTool.ts",
       "symbol": "InspectTool._buildWitnessSection",
       "frame": "source-local",

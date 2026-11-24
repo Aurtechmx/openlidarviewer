@@ -1024,7 +1024,7 @@ const inspector = new Inspector({
   onProjectSharedElevation: (on) => {
     viewer.setProjectSharedElevation(on);
     syncProjectElevationScale();
-  },
+  }, sunShadingHost: () => (viewerReady ? { viewer, crs: crsService, activeId: () => scans.activeId } : null),
   onElevationFilter: (range) => {
     viewer.setElevationFilter(range ?? undefined);
     activeElevFilter = range;
