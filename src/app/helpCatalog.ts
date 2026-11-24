@@ -31,7 +31,7 @@ export const HELP_TOPICS: readonly HelpTopic[] = [
     title: 'Getting started',
     summary: 'Open a scan, look around, and find the tools.',
     paragraphs: [
-      'Drop a point-cloud file (LAS or LAZ, E57, PLY, COPC) on the page, or use Open scan. Files you open stay on your device: nothing is uploaded. Remote datasets are downloaded from their hosts.',
+      'Drop a point-cloud file (LAS, LAZ, E57, PLY and more) on the page, or use Open scan. The start page lists every format. Files you open stay on your device: nothing is uploaded. Remote datasets are downloaded from their hosts.',
       'The tool dock along the bottom holds the tools. The left tabs (Data, Tools, Analyse, Export) switch the panel column. The command palette lists every action by name.',
     ],
     actionIds: ['camera.frame-all', 'tour.replay', 'help.shortcuts', 'help.copy-diagnostics', 'help.offline-save', 'help.offline-remove'],
@@ -42,8 +42,8 @@ export const HELP_TOPICS: readonly HelpTopic[] = [
     title: 'Navigation',
     summary: 'Orbit, walk, fly or pan; frame and focus.',
     paragraphs: [
-      'Drag to rotate and scroll to zoom. Keys 1 to 4 pick the mode: orbit, walk, fly, pan. WASD and the arrows move in walk and fly. Space and C raise and lower; Shift sprints.',
-      'R frames the whole scan and F focuses its centre; a double-click focuses a point. Hold Space while a tool is active to rotate or pan, then release to resume. Right-click opens a quick menu to focus, frame or snap to a view.',
+      'Drag to orbit and scroll to zoom. Keys 1 to 4 pick the mode: orbit, walk, fly, pan. WASD and the arrows move in walk and fly. Space and C raise and lower; Shift sprints.',
+      'R frames the whole scan and F focuses its centre; a double-click focuses a point. Hold Space while a tool is active to orbit or pan, then release to resume. Right-click opens a quick menu to focus, frame or snap to a view.',
       'The Navigation panel holds the camera presets, the six views, Ortho and Plan. It starts closed. Press H or the Navigation button beside the mode triangle to show or hide it.',
       'B shows a reference plane, a grid at an elevation you set in the View panel. It is a visual reference, not measured terrain, and nothing measures or snaps to it.',
     ],
@@ -66,7 +66,7 @@ export const HELP_TOPICS: readonly HelpTopic[] = [
     title: 'Analyse',
     summary: 'Terrain analysis, contours, classification, the Dataset Story.',
     paragraphs: [
-      'Terrain analysis classifies ground and builds the DTM. It checks the surface against held-out returns (an internal check, not checkpoint accuracy) and states what the result can support. Contour Studio runs on that core. A derived classification is a heuristic the app computed, never a producer classification.',
+      'Terrain analysis classifies ground and builds the digital terrain model (DTM). It checks the surface against held-out returns (an internal check, not checkpoint accuracy) and states what the result can support. Contour Studio runs on that core. The Field Simulation Labs, Flow Pulse and Terrain Access, run a model over the same surface; their results are model output, not observations. A derived classification is a heuristic the app computed, never a producer classification.',
     ],
     actionIds: ['analyse.run', 'analyse.contours', 'analyse.flowPulse', 'analyse.observatory', 'tool.classify', 'tool.fillUnclassified', 'story.dataset'],
     keywords: ['terrain', 'dtm', 'contour', 'ground', 'classification', 'derived', 'analysis', 'story'],
@@ -100,7 +100,7 @@ export const HELP_TOPICS: readonly HelpTopic[] = [
     title: 'Export and scientific trust',
     summary: 'What leaves the app, and what it may claim.',
     paragraphs: [
-      'Snapshot writes the view to a PNG with placed measurements and annotations burned in. A session file carries the whole inspection. Every export carries its provenance, and the export health check states the scope, the classification, the frame (CRS and datum), the density and the readiness before anything leaves.',
+      'Snapshot writes the view to a PNG with placed measurements and annotations burned in. A session file carries the measurements, annotations, saved views, camera and render settings. It holds no points, and class edits are not stored. Every export carries its provenance, and the export health check states the scope, the classification, the coordinate system (CRS and datum), the density and the readiness before anything leaves.',
       'Some measurements and exports stay unavailable until the coordinate system and its units are known. A figure in an unknown unit is never labelled metres.',
     ],
     actionIds: ['tool.snapshot', 'tool.share', 'export.health', 'report.verify'],
@@ -117,7 +117,7 @@ export const HELP_TOPICS: readonly HelpTopic[] = [
       ['Preview', 'Incomplete evidence, such as a streaming source that is not fully resident, a display sample of the points, or gaps in the footprint. The figure is shown with its reason and is not a measurement.'],
       ['Measured', 'The computation had sufficient permitted evidence for its declared scope.'],
       ['Review', 'A result exists, but one or more conditions ask for attention before it is relied on.'],
-      ['Blocked', 'The app refuses the requested scientific claim; the reason names what is missing.'],
+      ['Blocked', 'The requested scientific claim is withheld; the reason names what is missing.'],
       ['Derived classification', 'Computed by the app with a heuristic, not supplied by the producer of the file. Validate before relying on it.'],
       ['Full source vs resident subset', 'The points currently visible or resident are not automatically the complete dataset; a resident-only analysis reads whatever is resident when it runs.'],
       ['CRS and units', 'Some measurements and exports stay unavailable until the coordinate system and its units are established; a figure is never dressed in a unit the file did not declare.'],

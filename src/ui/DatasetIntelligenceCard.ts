@@ -428,7 +428,7 @@ export class DatasetIntelligenceCard {
     const rows = [
       this._detailRow('Coverage', intel.details.coverageMode),
       this._detailRow('Source Points', formatPoints(intel.details.sourcePointCount)),
-      this._detailRow('Analyzed Points', formatPoints(intel.details.analyzedPointCount)),
+      this._detailRow('Analysed Points', formatPoints(intel.details.analyzedPointCount)),
       this._detailRow(
         'Terrain Engine',
         intel.details.engineStatus === 'active' ? 'Active' : 'Idle',

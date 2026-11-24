@@ -25,9 +25,22 @@ import { buildFlowNetwork, networkWithin, type FlowNetwork } from './flowNetwork
 import { traceDivide, type TracedDivide } from './divideTrace';
 import { catchmentMorphometrics, type Figure, type Morphometrics } from './catchmentMorphometrics';
 import { mainChannel, type MainChannel } from './mainChannel';
+import { languageInfo } from '../../../i18n/languages';
+import type { NumberStyle } from '../../../i18n/numberStyle';
 import { catchmentQuality, type CatchmentQuality } from './catchmentQuality';
 
 export type ReportLanguage = 'en' | 'es';
+
+/** The language a report is written in and, apart from it, how its numbers are. */
+export interface ReportLocale {
+  readonly lang: ReportLanguage;
+  readonly numberStyle: NumberStyle;
+}
+
+/** The locale a model was built for. */
+export function reportLocale(m: Pick<WatershedReportModel, 'language' | 'numberStyle'>): ReportLocale {
+  return { lang: m.language, numberStyle: m.numberStyle };
+}
 
 export interface ReportOutlet {
   readonly cell: number;
@@ -166,6 +179,7 @@ function maskEdgeInflowShare(grid: FlowGrid, receiver: Int32Array, mask: Uint8Ar
 
 export interface WatershedReportModel {
   readonly language: ReportLanguage;
+  readonly numberStyle: NumberStyle;
   readonly title: string;
   readonly partition: WatershedPartition;
   readonly network: FlowNetwork;
@@ -217,6 +231,8 @@ export function buildWatershedReportModel(input: {
   dtm: DtmGrid;
   outlets: readonly ReportOutlet[];
   language: ReportLanguage;
+  /** Default: the language's usual style. */
+  numberStyle?: NumberStyle;
   title: string;
   thresholdM2: number;
   verticalToMetres: number | null;
@@ -299,6 +315,7 @@ export function buildWatershedReportModel(input: {
 
   return {
     language: input.language,
+    numberStyle: input.numberStyle ?? languageInfo(input.language).numberStyle,
     title: input.title,
     partition,
     network,

@@ -27,6 +27,7 @@ import { createLas14Check, formatAfterLas14Block } from './las14Check';
 import { buildZip, assessZipDownload } from '../convert/zipStore';
 import {
   CONVERT_FORMATS,
+  LAZ_UNAVAILABLE,
   LEGACY_ACQUISITION_LOSS_HINT,
   LEGACY_ACQUISITION_LOSS_OPT_IN,
   LEGACY_CLASS_REINTERPRETATION_HINT,
@@ -308,8 +309,7 @@ export class BatchConverter {
     this._formatRow.replaceChildren();
     // The reason an unavailable format is disabled — shared between the pill's
     // (hover-only) title and the visible footnote so touch users see it too.
-    const unavailableReason =
-      'LAZ is not available: this browser build cannot write LAZ compression yet. Choose LAS, or LAS with Compress (.las.gz).';
+    const unavailableReason = `${LAZ_UNAVAILABLE} Choose LAS. For .las.gz, use Compress in the Export panel.`;
     let anyUnavailable = false;
     (Object.keys(CONVERT_FORMATS) as ConvertFormat[]).forEach((fmt) => {
       const spec = CONVERT_FORMATS[fmt];
@@ -536,7 +536,7 @@ export class BatchConverter {
     header.append(
       el('span', {
         className: 'olv-bc-results-summary',
-        text: `${sum.ok} converted${failedNote} · ${sum.points.toLocaleString()} points`,
+        text: `${sum.ok} converted${failedNote} · ${sum.points.toLocaleString('en-US')} points`,
       }),
     );
     if (this._produced.length > 1) {
@@ -569,7 +569,7 @@ export class BatchConverter {
       top.append(
         el('span', { className: 'olv-bc-row-icon', text: ok ? '●' : '▲' }),
         el('span', { className: 'olv-bc-row-name', text: r.source, title: r.source }),
-        el('span', { className: 'olv-bc-row-meta', text: ok ? `${r.report.pointCount.toLocaleString()} pts · ${r.report.crsNote}` : 'failed' }),
+        el('span', { className: 'olv-bc-row-meta', text: ok ? `${r.report.pointCount.toLocaleString('en-US')} pts · ${r.report.crsNote}` : 'failed' }),
       );
       if (ok && r.file) {
         const dl = el('button', {

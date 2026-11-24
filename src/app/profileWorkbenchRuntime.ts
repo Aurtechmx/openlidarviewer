@@ -18,6 +18,14 @@
  */
 
 import { createProfileWorkbenchLauncher } from './profileWorkbenchLauncher';
+import {
+  beginReturnsSection,
+  exportProfileReturns,
+  finishReturnsSection,
+  ProfileReturnsRefusal,
+  type ProfileReturnsPorts,
+  type ProfileReturnsSnapshot,
+} from './profileReturnsExport';
 import { createStageProfileWorkbench } from './profileWorkbenchStage';
 import {
   exportProfileSectionImagePng,
@@ -89,6 +97,8 @@ export interface ProfileWorkbenchRuntimeDeps {
   exportPdf?: (id: string) => Promise<void>;
   /** The base name of the scan a profile was measured on, for the PNG's file name; null or absent when unknown. */
   scanBaseName?: (id: string) => string | null;
+  /** What the returns export reads. Absent means the dock renders no returns control. */
+  returns?: ProfileReturnsPorts;
   /**
    * Told about a rejected panel chunk, or a fill that threw. Defaults to a
    * console record: the user already has the focus view, so nothing about the
@@ -159,7 +169,9 @@ export function createProfileWorkbenchRuntime(
   // the PNG export composes from the same state rather than re-extracting the
   // section. One dock at a time, so one slot: it is cleared when the dock's
   // presentation is released.
-  let live: { plot: WorkbenchSectionPlot; name: string } | null = null;
+  // `returns` is fixed when the section finished and kept across a re-filter.
+  let live: { plot: WorkbenchSectionPlot; name: string; returns: ProfileReturnsSnapshot | null } | null = null;
+  const returns = deps.returns;
 
   // The live dock's raw-scatter re-filter, handed over when its plot is ready
   // and cleared when it is released. One dock at a time, so one slot.
@@ -197,11 +209,34 @@ export function createProfileWorkbenchRuntime(
         fileName: profileExportFileName(deps.scanBaseName?.(request.id), request.name, 'png') ?? undefined,
       });
     },
+    ...(returns
+      ? {
+          exportReturns: async (request, onProgress): Promise<string | null> => {
+            const current = live;
+            if (!current?.returns) throw new ProfileReturnsRefusal('The section is still being read. Export again when it has finished.');
+            const saved = await exportProfileReturns(returns, {
+              id: request.id,
+              plot: current.plot,
+              snapshot: current.returns,
+              // A re-filter replaces the plot over the same section; only a new
+              // section or a closed dock cancels.
+              cancelled: () => live?.returns !== current.returns,
+              onProgress,
+            });
+            return saved?.message ?? null;
+          },
+        }
+      : {}),
     onRawScope: (scope): void => setRawFilter?.(rawFilterRequestForScope(scope)),
     present: (handle, request) => {
+      const before = returns ? beginReturnsSection(returns, request.id) : null;
       const dispose = presentWorkbenchSection(handle, request.id, scene, {
         onReady: (plot) => {
-          live = { plot, name: request.name };
+          live = {
+            plot,
+            name: request.name,
+            returns: live?.returns ?? (returns && before ? finishReturnsSection(returns, request.id, before, new Date().toISOString()) : null),
+          };
         },
         onControls: (controls) => {
           setRawFilter = controls.setRawFilter;

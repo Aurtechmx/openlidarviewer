@@ -20,6 +20,7 @@
  */
 
 import type { SheetStyle } from '../../export/sheetKit/tokens';
+import type { ExportLocale } from '../../i18n/exportLocale';
 import { safeEntryName } from '../../export/safeText';
 import type { ExportDigests } from '../../science/exportDigestRecord';
 import type { AnalysedBasis } from './analysedBasis';
@@ -51,9 +52,14 @@ import { assembleContourDeliverable } from './contourDeliverablePackage';
 
 const enc = (s: string): Uint8Array => new TextEncoder().encode(s);
 
+/** The session's export language, from this lazy chunk so the panel need not load it. */
+export { exportLocale } from '../../i18n/exportLocale';
+
 export interface DeliverableBuildOptions {
   /** Sheet style of the package's PDF; Classic or none keeps it as before. */
   readonly sheetStyle?: SheetStyle | null;
+  /** Language and number style of the package's PDF; English when absent. The other files stay as they are. */
+  readonly locale?: ExportLocale;
   /** Source-file digest and CRS origin for the provenance record. */
   readonly digests?: ExportDigests | null;
   /** The granted export decision (from the §19 permit). */
@@ -455,6 +461,7 @@ export async function buildContourDeliverableFromResultAsync(
 
   const pdfModel = buildContourPdfModel({
     title: `${g.basename} - Contour deliverable`,
+    name: g.basename,
     provenance: {
       software: g.provenance.software,
       softwareVersion: g.provenance.softwareVersion,
@@ -489,7 +496,7 @@ export async function buildContourDeliverableFromResultAsync(
     // The bundled geometry is labelled by its actual style; the other variant is
     // not shipped in this package, so analyticalAvailable stays false.
     geometry: { cartographic: !g.isAnalytical, analyticalAvailable: false },
-  });
+  }, opts.locale);
 
   const pdfBytes = await buildContourStudioPdf(pdfModel, { style: opts.sheetStyle });
   g.bytes.set('contour-map-pdf', pdfBytes);

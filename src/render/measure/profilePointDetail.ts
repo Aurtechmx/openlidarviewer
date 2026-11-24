@@ -174,6 +174,11 @@ function provenanceText(p: ClassificationProvenance): string | null {
       return 'Producer supplied';
     case 'derived':
       return 'Derived (heuristic)';
+    case 'edited':
+      return 'Edited in the app';
+    case 'cleared':
+      return 'Cleared in the app';
+    case 'unknown':
     case 'none':
       return null;
   }

@@ -53,7 +53,7 @@ The grid covers the scan and one scan size around it. Lines are drawn at full st
 
 ## Navigating
 
-Switch modes with the Orbit | Walk | Fly | Pan control at the bottom centre, or the `1` / `2` / `3` / `4` keys. Orbit lets you drag to rotate, scroll to zoom, and double-click to focus. Walk is first-person, with WASD on the level and Space/C for height. Fly is free flight, where WASD follows where you look. Pan (`4`, or `G` from any mode) is the hand tool, which drags the scene under the pointer. The Plan chip looks straight down in parallel projection with the hand tool on the drag, and turning it off restores the view you had.
+Switch modes with the Orbit | Walk | Fly | Pan control at the bottom centre, or the `1` / `2` / `3` / `4` keys. Orbit lets you drag around the scan, scroll to zoom, and double-click to focus. Walk is first-person, with WASD on the level and Space/C for height. Fly is free flight, where WASD follows where you look. Pan (`4`, or `G` from any mode) drags the scene under the pointer. The Plan chip looks straight down in parallel projection with a drag that pans, and turning it off restores the view you had.
 
 In Walk and Fly, click the scan to capture the cursor for mouse-look, and press `Esc` to release it. See [navigation.md](navigation.md).
 
@@ -91,7 +91,7 @@ You can also link an annotation to a measurement: when the scan has measurements
 
 The Annotations panel lists every placed marker with its category badge, title, and when it was last edited. Sort the list by created time, recent edit, category, or title, and use the search box to filter by title, note, or type. Each row jumps the camera to its annotation (restoring the saved viewpoint when one was captured) and offers Edit and delete; Clear all empties the list with a confirm step. Hovering a row highlights the matching marker in the scene.
 
-Files you open stay on your device: nothing is uploaded. Remote datasets are downloaded from their hosts. Export the session (see Exporting) to save the whole inspection (measurements, annotations, and named views) to a JSON file and reload it later.
+Files you open stay on your device: nothing is uploaded. Remote datasets are downloaded from their hosts. Export the session (see Exporting) to save the measurements, annotations, saved views, camera and render settings to a JSON file and reload it later. It holds no points, and class edits are not stored.
 
 ## Inspecting a point
 
@@ -103,7 +103,7 @@ The picking tools (Measure, Inspect, Annotate, and Probe) are mutually exclusive
 
 ## Saved views
 
-In the Saved views section of the panel, click Save current view (or press `V`) to store a named view state: the camera plus the display state you are looking at. That state covers the clip box and colour mode, the class and elevation/intensity filters, and the render settings. Each saved view can be renamed in place; click Go to glide the camera back and reapply that state, or the `×` to delete it. Saved views are kept in the session file, so they survive an export and import, which means a report or paper can cite a view state by name ("Figure 3 is the 'north-scarp' state") and a reader with the same scan regenerates it. Views saved by older versions carry only a camera and restore exactly as they always did. One honest caveat for streamed scans (COPC/EPT): a restored view reproduces the same settings over whatever detail is resident at that moment, so expect the same picture, not necessarily the same individual points.
+In the Saved views section of the panel, click Save current view (or press `V`) to store a named saved view: the camera plus the display state you are looking at. It covers the clip box and colour mode, the class and elevation/intensity filters, and the render settings. Each saved view can be renamed in place; click Go to glide the camera back and reapply that state, or the `×` to delete it. Saved views are kept in the session file, so they survive an export and import, which means a report or paper can cite a saved view by name ("Figure 3 is the 'north-scarp' view") and a reader with the same scan regenerates it. Views saved by older versions carry only a camera and restore exactly as they always did. One honest caveat for streamed scans (COPC/EPT): a restored view reproduces the same settings over whatever detail is resident at that moment, so expect the same picture, not necessarily the same individual points.
 
 ## Keyboard shortcuts
 
@@ -127,7 +127,7 @@ Session round-trip (`.olvsession`). The session Export saves the full working st
 1. Open OpenLiDARViewer on your phone.
 2. Tap "Open scan."
 3. Choose a compatible file from device storage or a cloud file provider.
-4. Use touch gestures to navigate: drag to rotate, pinch to zoom, two fingers to pan.
+4. Use touch gestures to navigate: drag to orbit, pinch to zoom, two fingers to pan.
 5. Tap Measure to measure between points, or Annotate to mark and note a point of interest. Measure and Annotate are in the dock, and Analyse, Help, Save a snapshot and Copy view link sit under the ••• button.
 6. Open the View tab in the bottom sheet to see the Scan report with the scan metadata.
 7. Save a snapshot from the dock, or export a supported file format from the Export tab.

@@ -262,7 +262,7 @@ describe('runFullCloudGrade — host is a plain object, not a Viewer (render-F5)
       panel: panel as any,
       context: spatialContextFrom(null as never),
     });
-    expect(panel.setGradeError).toHaveBeenCalledWith('Grade failed: short chunk');
+    expect(panel.setGradeError).toHaveBeenCalledWith('Check failed: short chunk');
     expect(panel.setGradeCancelled).not.toHaveBeenCalled();
   });
 

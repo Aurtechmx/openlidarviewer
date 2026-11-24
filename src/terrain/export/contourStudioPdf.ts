@@ -111,11 +111,11 @@ async function buildContourStudioPdfStyled(
   render: { readonly style?: SheetStyle | null; readonly loadFont?: (name: string) => Promise<Uint8Array> },
 ): Promise<Uint8Array> {
   const doc = await PDFDocument.create();
-  const pdfTitle = model.titleBlock[0]?.trim() || 'Contour Studio Deliverable';
+  const pdfTitle = model.titleBlock[0]?.trim() || model.fallbackTitle || 'Contour Studio Deliverable';
   // Info dictionary, accessibility hooks and faces. Light and Dark: the sheet
   // kit's fonts and colours. No await follows until the save, so the swapped
   // colours are this build's alone.
-  const { kit, font, bold } = await openReport(doc, pdfTitle, undefined, render);
+  const { kit, font, bold } = await openReport(doc, pdfTitle, undefined, render, model.languageTag);
   if (kit) {
     const k = kit, t = kit.tokens;
     useInk({ INK: k.color(t.ink), DIM: k.color(t.dim), RULE: k.color(t.outline), WATERMARK: k.mix(t.warn, t.paper, 0.35) });

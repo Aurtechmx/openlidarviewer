@@ -2,12 +2,12 @@ import { test, expect, type Page } from '@playwright/test';
 import { dropTinyPly, dropTinyLas, openClassesPage } from './helpers';
 
 /**
- * Classify (derive) — unsupervised classification of an UNclassified scan.
+ * Auto-classify scan (derive) — unsupervised classification of an UNclassified scan.
  *
  * The pure classifier + the worker/fallback bridge are covered by unit tests
  * (deriveClassification.test.ts, deriveClassificationAsync.test.ts). This spec
  * exercises the real user surface: a class-less cloud, the command-palette
- * "Classify (derive)" action, and the result landing in the legend as DERIVED
+ * "Auto-classify scan (derive)" action, and the result landing in the legend as DERIVED
  * (honest caption) with filterable class rows.
  *
  * Fixture choice:
@@ -31,10 +31,10 @@ const DERIVED = '.olv-cl-derived';
 async function runClassify(page: Page): Promise<void> {
   await page.keyboard.press('ControlOrMeta+KeyK');
   await expect(page.locator('.olv-palette')).toBeVisible();
-  await page.locator('.olv-palette-input').fill('Classify');
+  await page.locator('.olv-palette-input').fill('Auto-classify');
   // The action row must exist before we fire it.
   await expect(
-    page.locator('.olv-palette-row', { hasText: 'Classify (derive)' }),
+    page.locator('.olv-palette-row', { hasText: 'Auto-classify scan (derive)' }),
   ).toBeVisible();
   await page.locator('.olv-palette-input').press('Enter');
   await expect(page.locator('.olv-palette')).toBeHidden();

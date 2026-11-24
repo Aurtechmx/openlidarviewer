@@ -66,7 +66,11 @@ test('typed bounds wait for Enter; arrow keys step and apply at once; the drawn 
   expect(o0!.box).toEqual(before);
 
   // Typing "0.5" one character at a time applies nothing until Enter.
-  await xMax.click({ clickCount: 3 });
+  // The section has just opened and can still be moving, so the press is made again until it lands.
+  await expect(async () => {
+    await xMax.click({ clickCount: 3 });
+    await expect(xMax).toBeFocused({ timeout: 300 });
+  }).toPass({ timeout: 10_000 });
   for (const ch of ['0', '.', '5']) {
     await page.keyboard.type(ch);
     await page.waitForTimeout(150);

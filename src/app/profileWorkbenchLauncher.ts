@@ -105,6 +105,15 @@ export interface ProfileWorkbenchLauncherDeps {
    */
   exportImage?: (request: ProfileWorkbenchLaunchRequest) => Promise<void>;
   /**
+   * Save every return the section holds, as CSV with its receipt. Resolves to
+   * the line to announce, or null when the dock closed first. Absent means the
+   * dock renders no returns control.
+   */
+  exportReturns?: (
+    request: ProfileWorkbenchLaunchRequest,
+    onProgress: (fraction: number) => void,
+  ) => Promise<string | null>;
+  /**
    * Show or hide the 3D sample-corridor outline for the section a dock is
    * plotting. Absent means the dock renders no corridor control (and the 3D
    * corridor stays off).
@@ -187,6 +196,7 @@ export function createProfileWorkbenchLauncher(
     const rename = deps.rename;
     const exportPdf = deps.exportPdf;
     const exportImage = deps.exportImage;
+    const exportReturns = deps.exportReturns;
     const onToggleCorridor = deps.onToggleCorridor;
     const onRawScope = deps.onRawScope;
     let mounted: ProfileWorkbenchHandle;
@@ -197,6 +207,9 @@ export function createProfileWorkbenchLauncher(
       ...(rename ? { onRename: (name: string) => rename(request.id, name) } : {}),
       ...(exportPdf ? { onExportPdf: () => exportPdf(request.id) } : {}),
       ...(exportImage ? { onExportImage: () => exportImage(request) } : {}),
+      ...(exportReturns
+        ? { onExportReturns: (onProgress: (fraction: number) => void) => exportReturns(request, onProgress) }
+        : {}),
       ...(onToggleCorridor ? { onToggleCorridor } : {}),
       ...(onRawScope ? { onRawScope } : {}),
       onClose: () => {

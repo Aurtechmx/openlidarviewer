@@ -18,6 +18,7 @@
  */
 
 export { sheetAnnotations, sheetMeasurements } from './sheetMeasurements';
+import { RELOAD_ADVICE } from '../io/loadErrors';
 import type { ProfileTerrainRef } from './profileSheetExtras';
 import { aggregate as aggregateMeasurements } from '../render/measure/measurementChains';
 import { positionStepsResolver } from './measurementPositionSteps';
@@ -222,7 +223,7 @@ export function createMeasurePanelMount(deps: MeasurePanelMountDeps): MeasurePan
    */
   function workbenchFailed(error: unknown): void {
     console.error('OpenLiDARViewer: the profile workbench failed to open.', error);
-    deps.toast?.('The Profile Workbench could not open, so this shows the focus view. Reload the page to try again.');
+    deps.toast?.(`The Profile Workbench could not open, so this shows the focus view. ${RELOAD_ADVICE}`);
   }
 
   function closeWorkbench(): void {
@@ -245,6 +246,16 @@ export function createMeasurePanelMount(deps: MeasurePanelMountDeps): MeasurePan
           const src = profileSource(id, true, 'export');
           if (src.refused) throw new Error(src.refused);
           return src.scanName;
+        },
+        // The returns export reads the live scene at each press; one whose source cannot be settled is not written.
+        returns: {
+          measure: () => deps.getViewer().measure,
+          source: (id) => profileSource(id, true, 'export'),
+          layers: () => layerSource,
+          classificationEpoch: (viewerId) => deps.getViewer().classificationEpoch(viewerId),
+          returnReaders: () => deps.getViewer().profileSeam.returnReaders(),
+          crs: () => deps.crsService.current() ?? null,
+          metresPerUnit: () => profileMetresPerUnit(deps.crsService.context()),
         },
         markerHost: () => deps.getViewer().derivedLayerHost(),
         // The pose pair, not a focus call: the workbench composes the move so
@@ -399,7 +410,7 @@ export function createMeasurePanelMount(deps: MeasurePanelMountDeps): MeasurePan
       // scan's selection does not relabel it. Local and unknown frames return
       // nulls and the PDF keeps its "— (not georeferenced)" fallback.
       getProfileExportContext: profileSource,
-      getProfileSheet: (id) => viewer.measure.getMeasurements().find((m) => m.id === id)?.sheet,
+      getProfileOwner: (id) => viewer.measure.getMeasurements().find((m) => m.id === id),
       onProfileSheet: (id, fields) => {
         const m = viewer.measure.getMeasurements().find((x) => x.id === id);
         if (!m) return;
@@ -490,7 +501,7 @@ export function createMeasurePanelMount(deps: MeasurePanelMountDeps): MeasurePan
       if (!mountFailureSaid) {
         mountFailureSaid = true;
         markChunkFailureReported();
-        deps.toast?.(`The Measurements list could not load. Your measurements are kept. ${browserOnline() ? 'Reload the page to try again; a reload closes open scans, so save your session first if you can.' : 'You are offline. Try again when back online.'}`, chunkReloadAction());
+        deps.toast?.(`The Measurements list could not load. Your measurements are kept. ${browserOnline() ? RELOAD_ADVICE : 'You are offline. Try again when back online.'}`, chunkReloadAction());
       }
       throw err;
     }),

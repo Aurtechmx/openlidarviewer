@@ -34,7 +34,7 @@ describe('MeasurePanel volume estimate caveat', () => {
   it('shows the caveat under a volume result', () => {
     const root = mount({ id: 'v1', kind: 'volume', name: 'Pile A', value: '12.00 m³' } as MeasurementSummary);
     expect(notes(root)).toEqual([VOLUME_ESTIMATE_NOTICE]);
-    expect(VOLUME_ESTIMATE_NOTICE).toMatch(/not survey-grade/);
+    expect(VOLUME_ESTIMATE_NOTICE).toMatch(/not survey-grade\. Validate before relying on it for quantities or payment\.$/);
   });
 
   it('keeps it alongside the resident-node caveat', () => {

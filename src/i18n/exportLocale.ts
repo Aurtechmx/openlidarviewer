@@ -20,6 +20,15 @@ export const ENGLISH: ExportLocale = { lang: 'en', numberStyle: 'point' };
 let current: ExportLocale = ENGLISH;
 const listeners = new Set<(locale: ExportLocale) => void>();
 
+/**
+ * The locale for a deliverable written only in `offered` languages: English
+ * when the session's language is another one, with the number style as chosen.
+ */
+export function offeredLocale<L extends ExportLanguage>(locale: ExportLocale, offered: readonly L[]): { readonly lang: L | 'en'; readonly numberStyle: NumberStyle } {
+  const lang = offered.find((l) => l === locale.lang) ?? 'en';
+  return { lang, numberStyle: locale.numberStyle };
+}
+
 /** The language and number style the next export uses. */
 export function exportLocale(): ExportLocale {
   return current;

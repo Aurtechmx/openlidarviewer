@@ -545,7 +545,7 @@ export function buildScanFitness(inp: FitnessInputs): ScanFitness {
   } else if (inp.status === 'Limited') {
     verdict = limiterClause ? `Limited${limiterClause}.` : 'Limited — not export-ready as-is.';
   } else if (inp.status === 'Preview') {
-    verdict = limiterClause ? `Preview only${limiterClause}.` : 'Preview — re-run on the full cloud for a settled grade.';
+    verdict = limiterClause ? `Preview only${limiterClause}.` : 'Preview — re-run on the full cloud for a settled result.';
   } else if (reviews.length === 0) {
     verdict = dimensions.some((d) => d.ungraded)
       ? 'Ready for terrain products: coverage and hold-out residuals pass. Ground density is stated from a sample and is not graded.'

@@ -20,6 +20,7 @@ import { streamingViewStatus, type StreamingViewStatus } from './streamingViewSt
 import { CURATED_LICENSE_LABELS, curatedCreditFor } from '../io/catalog/curatedLocations';
 import { formatByteSize as formatBytes } from '../io/formatByteSize';
 import type { ColorMode } from '../render/colorModes';
+import { SUN_STREAMING_REASON } from '../render/sunShading/streamingReason';
 import type { StreamingQuality } from '../render/streaming/streamingBudget';
 import type { CrsLinearUnit } from '../io/crs';
 import type { StreamingDiagnostics } from '../render/streaming/streamingDiagnostics';
@@ -156,8 +157,8 @@ const MODE_TIP: Record<ColorMode, string> = {
 const QUALITIES: StreamingQuality[] = ['low', 'balanced', 'high'];
 
 /** Grade button labels — it toggles between starting and cancelling a run. */
-const GRADE_LABEL = 'Grade full cloud';
-const GRADE_CANCEL_LABEL = 'Cancel grade';
+const GRADE_LABEL = 'Check full cloud';
+const GRADE_CANCEL_LABEL = 'Cancel check';
 
 /** Render a world dimension — coarse for large extents, finer for small ones. */
 function formatDim(n: number): string {
@@ -196,7 +197,7 @@ export function spacingRowFor(
   if (format === 'ept') {
     return {
       label: 'Node budget',
-      value: `~${Math.round(spacing).toLocaleString()} pts/node`,
+      value: `~${Math.round(spacing).toLocaleString('en-US')} pts/node`,
       title: 'EPT octree resolution — target points per node, not a metric spacing.',
     };
   }
@@ -259,15 +260,8 @@ export interface StreamingProgress {
   readonly determinate: boolean;
   /** Compact "X / Y nodes resident" line. */
   readonly nodesLabel: string;
-  /** Tabular "X.XM / Y.YM pts" line (millions, one decimal). */
+  /** Tabular "4.1K / 4.2M pts" line, in the same format as the Points row. */
   readonly pointsLabel: string;
-}
-
-/** Format a raw point count as "X.XM" (millions, one decimal). */
-function pointsMillions(n: number): string {
-  // Sub-100k reads as "0.0M", which is honest at this scale and keeps the two
-  // sides of the ratio in the SAME unit (no "12k / 4.2M" mixed-unit row).
-  return `${(Math.max(0, n) / 1_000_000).toFixed(1)}M`;
 }
 
 /**
@@ -286,8 +280,8 @@ export function streamingProgress(status: StreamingStatus): StreamingProgress {
     fraction,
     determinate,
     nodesLabel: `${status.loadedNodes} / ${determinate ? known : '?'} nodes resident`,
-    pointsLabel: `${pointsMillions(status.displayedPoints)} / ${
-      status.sourcePoints === null ? '?' : pointsMillions(status.sourcePoints)
+    pointsLabel: `${formatCount(Math.max(0, status.displayedPoints))} / ${
+      status.sourcePoints === null ? '?' : formatCount(status.sourcePoints)
     } pts`,
   };
 }
@@ -312,11 +306,22 @@ export class StreamingPanel {
   private readonly _progressFill: HTMLElement;
   private readonly _progressNodes: HTMLElement;
   private readonly _progressPoints: HTMLElement;
+  /** Shown only while the Scan section has rows. */
+  private readonly _scanLabel = el('div', { className: 'olv-streaming-label olv-hidden', text: 'Scan' });
   private readonly _summary: HTMLElement;
   private readonly _nodes: HTMLElement;
   private readonly _points: HTMLElement;
   private readonly _cache: HTMLElement;
+  /**
+   * The Nodes, Points and Cache rows. Closed when the view is ready: the
+   * headline and the counts beside the bar stay. Open again when the view is
+   * incomplete. Once the user has opened or closed it, it is left alone.
+   */
+  private readonly _stats: HTMLDetailsElement;
+  private _statsTouched = false;
   private readonly _modeRow: HTMLElement;
+  /** Shown with Height: why sun shading is not offered here. */
+  private readonly _sunNote: HTMLElement;
   private readonly _qualityRow: HTMLElement;
   private readonly _pause: HTMLButtonElement;
   // Full-cloud grade: a button that decodes a representative octree
@@ -363,7 +368,19 @@ export class StreamingPanel {
     this._nodes = el('span', { className: 'olv-streaming-stat', text: '—' });
     this._points = el('span', { className: 'olv-streaming-stat', text: '—' });
     this._cache = el('span', { className: 'olv-streaming-stat', text: '—' });
+    const statsHead = el('summary', { className: 'olv-streaming-label olv-section-summary', text: 'Streaming' });
+    statsHead.addEventListener('click', () => { this._statsTouched = true; });
+    this._stats = el('details', { className: 'olv-section-collapsible' }, [
+      statsHead,
+      el('div', { className: 'olv-streaming-rows' }, [
+        this._statRow('Nodes', this._nodes),
+        this._statRow('Points', this._points),
+        this._statRow('Cache', this._cache),
+      ]),
+    ]);
+    this._stats.open = true;
     this._modeRow = el('div', { className: 'olv-streaming-chips' });
+    this._sunNote = el('p', { className: 'olv-chips-note olv-hidden', text: SUN_STREAMING_REASON });
     this._qualityRow = el('div', { className: 'olv-streaming-chips' });
     for (const quality of QUALITIES) {
       const chip = el('button', {
@@ -463,19 +480,15 @@ export class StreamingPanel {
       head,
       this._phase,
       this._progress,
-      el('div', { className: 'olv-streaming-label', text: 'Scan' }),
+      this._scanLabel,
       this._summary,
-      el('div', { className: 'olv-streaming-label', text: 'Streaming' }),
-      el('div', { className: 'olv-streaming-rows' }, [
-        this._statRow('Nodes', this._nodes),
-        this._statRow('Points', this._points),
-        this._statRow('Cache', this._cache),
-      ]),
+      this._stats,
       el('div', { className: 'olv-streaming-label', text: 'Colour' }),
       this._modeRow,
+      this._sunNote,
       el('div', { className: 'olv-streaming-label', text: 'Quality' }),
       this._qualityRow,
-      el('div', { className: 'olv-streaming-label', text: 'Full-cloud grade' }),
+      el('div', { className: 'olv-streaming-label', text: 'Full-cloud check' }),
       el('div', { className: 'olv-streaming-actions' }, [this._gradeBtn]),
       this._gradeResult,
       el('div', { className: 'olv-streaming-actions' }, [this._pause]),
@@ -505,6 +518,7 @@ export class StreamingPanel {
     // new one replaced them.
     this._title.textContent = DEFAULT_TITLE;
     this._summary.replaceChildren();
+    this._scanLabel.classList.add('olv-hidden');
     // Reset the progress treatment for the next scan.
     // Drops the busy scan too; the next open starts its own.
     this._setPlainLine('');
@@ -525,6 +539,8 @@ export class StreamingPanel {
    * title are the new scan's and are left to its open.
    */
   resetForScan(): void {
+    this._stats.open = true;
+    this._statsTouched = false;
     this._paused = false;
     this._pause.textContent = 'Pause';
     this._gradeRunning = false;
@@ -627,6 +643,10 @@ export class StreamingPanel {
       this._openScan = null;
       this._setPlainLine(view.headline);
     }
+    if (!this._statsTouched) {
+      if (view.state === 'settled') this._stats.open = false;
+      else if (view.state === 'incomplete') this._stats.open = true;
+    }
     this._progress.classList.remove('olv-hidden');
     this._progressNodes.textContent = view.detail;
     if (view.determinate && view.fraction != null) {
@@ -692,6 +712,7 @@ export class StreamingPanel {
       ),
     );
     this._summary.replaceChildren(...rows);
+    this._scanLabel.classList.toggle('olv-hidden', rows.length === 0);
   }
 
   /**
@@ -785,7 +806,7 @@ export class StreamingPanel {
   /** Neutral end state for a user-cancelled grade (not an error). */
   setGradeCancelled(): void {
     this._endGradeRun();
-    this._showGrade(false, this._gradeLine('Grade cancelled.'));
+    this._showGrade(false, this._gradeLine('Check cancelled.'));
   }
 
   /** One grade-result line. */
@@ -810,7 +831,7 @@ export class StreamingPanel {
   /** Update the live status numbers + the determinate progress treatment. */
   setStatus(status: StreamingStatus): void {
     this._nodes.textContent = `${status.loadedNodes} / ${status.knownNodes}`;
-    this._points.textContent = `${formatCount(status.displayedPoints)} / ${
+    this._points.textContent = `${formatCount(Math.max(0, status.displayedPoints))} / ${
       status.sourcePoints === null ? 'Unknown' : formatCount(status.sourcePoints)
     }`;
     this._cache.textContent = formatBytes(status.cacheBytes);
@@ -836,6 +857,7 @@ export class StreamingPanel {
     // Recorded from what the row can actually show, not from what was asked
     // for, so `activeColorMode()` and the highlighted chip cannot disagree.
     this._activeMode = this._modeButtons.has(mode) ? mode : null;
+    this._sunNote.classList.toggle('olv-hidden', this._activeMode !== 'elevation');
     for (const [m, chip] of this._modeButtons) {
       const active = m === mode;
       chip.classList.toggle('olv-chip-active', active);

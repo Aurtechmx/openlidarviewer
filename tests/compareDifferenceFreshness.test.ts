@@ -6,7 +6,7 @@
 //  - A raster that comes back after its scan was closed and reopened.
 
 import { describe, it, expect } from 'vitest';
-import { beginCompareRun, CompareRunGuard, createCompareDifference, createComparePairPicker, type ComparePairSelection, type HeldDifference } from '../src/app/comparePair';
+import { beginCompareRun, CompareRunGuard, createCompareDifference, createComparePairPicker, COMPARE_INPUTS_CHANGED, type ComparePairSelection, type HeldDifference } from '../src/app/comparePair';
 
 function scene(names: string[]) {
   const layers = new Map<string, object>(names.map((n) => [n, { n }]));
@@ -163,5 +163,39 @@ describe('the Before/After picker', () => {
     (p.element as unknown as El).find('olv-compare-after')!.change('C');
     expect(calls).toBe(1);
     expect(p.selection()).toEqual({ before: 'A', after: 'C' });
+  });
+});
+
+describe('a change to what the comparison read', () => {
+  it('drops the difference when a layer CRS or its classes change, before a read or a download', () => {
+    const layers = new Map<string, object>([['A', {}], ['B', {}]]);
+    const key = new Map([['A', 'EPSG:32613#0'], ['B', 'EPSG:32613#0']]);
+    let result: readonly string[] = [];
+    const slot: { lastDifference: HeldDifference | null } = { lastDifference: null };
+    const diff = createCompareDifference({
+      slot, ids: () => [...layers.keys()], selection: () => ({ before: 'A', after: 'B' }), lookup: (id) => layers.get(id),
+      stableIdFor: (id) => id, inputKeyFor: (id) => key.get(id) ?? '', setDifferenceAvailable: () => {}, setCompareResult: (l) => { result = l; },
+    });
+    const hold = (): void => {
+      diff.begin(['A', 'B'], layers.get('A'), layers.get('B'));
+      diff.hold({ stem: 'a-to-b', asc: () => 'ncols 1' });
+    };
+    hold();
+    expect(diff.current()?.stem).toBe('a-to-b');
+    key.set('B', 'EPSG:2263#0');
+    diff.dropStale();
+    expect(result).toEqual([COMPARE_INPUTS_CHANGED]);
+    expect(diff.current()).toBeNull();
+    hold();
+    key.set('A', 'EPSG:32613#1');
+    const files: string[] = [];
+    diff.download((f) => files.push(f));
+    expect(files).toEqual([]);
+    expect(slot.lastDifference).toBeNull();
+    // A closed scan is not reported as a change of classes.
+    hold();
+    layers.delete('A');
+    diff.dropStale();
+    expect(result).toEqual([]);
   });
 });

@@ -18,6 +18,7 @@
 
 import { INTENSITY_PERCENTILE_TRIM, rampRangeForMode, type ColorMode } from './colorModes';
 import { buildActiveColorbarSpec, type ActiveColorbar } from './activeColorbar';
+import { elevationShadeNote } from './sunShading/elevationShade';
 import { cloudUpAxisIndex } from './layerUpRegistry';
 import { ATTR_INTENSITY_INVALID, type PointCloud } from '../model/PointCloud';
 import type { StreamingColorRanges } from './streaming/streamingColors';
@@ -178,6 +179,7 @@ export function buildColorLegend(host: ColorLegendHost): ColorLegend {
         fullRange: range.fullRange,
         elevationUnit: host.elevationUnitLabel(),
         cloud: shared ? undefined : [cloud, upAxis],
+        shading: mode === 'elevation' ? elevationShadeNote(cloud) : null,
       });
     },
 

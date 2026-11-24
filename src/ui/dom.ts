@@ -198,7 +198,8 @@ export function chip(props: ChipProps): HTMLSpanElement {
 
 /** Format a point count compactly: 4_200_000 → "4.2M", 1_100 → "1.1K". */
 export function formatCount(n: number): string {
-  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
+  // From 999,950 the K band would round to "1000.0K".
+  if (n >= 999_950) return `${(n / 1_000_000).toFixed(1)}M`;
   if (n >= 1_000) return `${(n / 1_000).toFixed(1)}K`;
   return String(n);
 }

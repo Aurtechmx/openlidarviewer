@@ -36,6 +36,9 @@ export const CONVERT_FORMATS: Record<
   asc: { label: 'ASC', ext: 'asc', binary: false, available: true },
 };
 
+/** Why LAZ output is not offered. Each surface adds the alternatives it has. */
+export const LAZ_UNAVAILABLE = 'LAZ is not available yet: this browser build cannot write LAZ compression.';
+
 /** How the converter should treat the coordinate reference system. */
 export type CrsMode =
   /** Leave coordinates and any source CRS tag untouched. */

@@ -127,6 +127,12 @@ describe('renderContourStudioWorkspace', () => {
     expect(root.byClass('olv-cs-export-group-label')).toHaveLength(4);
   });
 
+  it('offers the export language with the export products', () => {
+    const c = createContourStudioController();
+    const root = renderContourStudioWorkspace({ controller: c, launch: AVAILABLE, onExport: vi.fn() }) as unknown as FakeEl;
+    expect(root.byClass('olv-export-lang')).toHaveLength(1);
+  });
+
   it('an available launch fires onExport for a chosen product', () => {
     const c = createContourStudioController();
     const onExport = vi.fn();

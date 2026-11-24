@@ -50,7 +50,7 @@ has re-opened the divergence this closes.
   `carrier` path must be free of the deprecated predicates listed below.
 - Reads: the context fields it now uses.
 
-## Inventory (20 consumers)
+## Inventory (21 consumers)
 
 | # | Consumer | Status | Routes through | Reads |
 |---|----------|--------|----------------|-------|
@@ -74,6 +74,7 @@ has re-opened the divergence this closes.
 | 18 | State strip providers | migrated | `src/process/stateProviders.ts`, `src/app/stateStrip/stripReads.ts`, `src/app/stateStrip/stateStripMount.ts` | `crsName`, `epsg`, `linearUnit`, `linearUnitKnown`, `metricSeverity`, `verticalReference`, `verticalReferenceKnown`, `verticalDatum`, `verticalEpsg` |
 | 19 | Reference plane | migrated | `src/render/workplane/workplaneReadout.ts`, `src/app/workplaneController.ts` | `isGeographic`, `metricClaimsPermitted`, `linearUnit`, `verticalMetresPerUnit` |
 | 20 | Draw precision check | migrated | `src/app/precisionCheck.ts` | `groundMetresPermitted`, `linearUnitToMetres`, `verticalUnitToMetres`, `verticalScaleState`, `epsg`, `upAxis` |
+| 21 | Sun shading of height colours | migrated | `src/app/sunShading.ts` | `verticalMetresPerUnit`, `linearUnitToMetres` (the height to horizontal ratio only; display, no figure is stated) |
 
 ## Deprecated predicates
 

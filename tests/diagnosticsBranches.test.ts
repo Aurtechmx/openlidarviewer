@@ -270,7 +270,7 @@ describe('Help: Copy diagnostics action', () => {
     const notify = vi.fn();
     find(contributeHelpActions({ ...baseDeps, notify })).run();
     await flush();
-    expect(notify).toHaveBeenCalledWith('Could not load the diagnostics report. Nothing was changed. Reload the page and try again.');
+    expect(notify).toHaveBeenCalledWith('Could not load the diagnostics report. Nothing was changed. Reload the page to try again; a reload closes open scans, so save your session first if you can.');
   });
 
   it('swallows a shortcut-sheet load failure', async () => {

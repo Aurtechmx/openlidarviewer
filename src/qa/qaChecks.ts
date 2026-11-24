@@ -43,7 +43,7 @@ function fileIntegrity(f: ScanFacts): QaCheck {
   if (f.pointCount <= 0) {
     return { id: 'FILE_INTEGRITY', label: 'File integrity', status: 'block', reason: 'No points are present in the scan.' };
   }
-  return { id: 'FILE_INTEGRITY', label: 'File integrity', status: 'pass', reason: `${f.pointCount.toLocaleString()} points present.` };
+  return { id: 'FILE_INTEGRITY', label: 'File integrity', status: 'pass', reason: `${f.pointCount.toLocaleString('en-US')} points present.` };
 }
 
 /** Spatial reference: is the horizontal unit known? Unknown blocks metric work. */

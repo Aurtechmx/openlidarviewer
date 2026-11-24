@@ -12,7 +12,7 @@ import { degrees, LineCapStyle, rgb } from 'pdf-lib';
 import type { PDFFont, PDFPage, RGB } from 'pdf-lib';
 import type { Morphometrics } from '../../simulation/flowPulse/watershed/catchmentMorphometrics';
 import type { MainChannel } from '../../simulation/flowPulse/watershed/mainChannel';
-import type { ReportLanguage } from '../../simulation/flowPulse/watershed/watershedReportModel';
+import type { ReportLocale } from '../../simulation/flowPulse/watershed/watershedReportModel';
 import { formatNumber, t } from '../../simulation/flowPulse/watershed/watershedStrings';
 import { withheldText } from '../../simulation/flowPulse/watershed/watershedNarrative';
 import { PALETTE, drawRuns, splitRuns, widthOf } from './pageKit';
@@ -176,12 +176,12 @@ export function drawHypsometricCurve(
   page: PDFPage,
   box: Box,
   h: Morphometrics['hypsometry'],
-  lang: ReportLanguage,
+  loc: ReportLocale,
   fonts: ReportFonts,
 ): void {
-  const top = chartHeader(page, box, t(lang, 'figures.hypsometricCurve'), t(lang, 'figures.hypsometricCaption'), fonts);
+  const top = chartHeader(page, box, t(loc.lang, 'figures.hypsometricCurve'), t(loc.lang, 'figures.hypsometricCaption'), fonts);
   if ('withheld' in h) {
-    withheldNote(page, box, top, t(lang, 'chart.withheld', { reason: withheldText(lang, h.withheld) }), fonts);
+    withheldNote(page, box, top, t(loc.lang, 'chart.withheld', { reason: withheldText(loc.lang, h.withheld) }), fonts);
     return;
   }
   const p: Plot = { x: box.x + 26, y: box.y + 20, w: box.width - 26 - 6, h: top - box.y - 20 - 2 };
@@ -208,15 +208,15 @@ export function drawHypsometricCurve(
   axes(page, p);
 
   for (const v of [0, 0.5, 1]) {
-    const s = formatNumber(lang, v, v === 0.5 ? 1 : 0);
+    const s = formatNumber(loc.numberStyle, v, v === 0.5 ? 1 : 0);
     tickLabel(page, s, X(v), p.y - TICK - 2, box.x, box.x + box.width, fonts);
     const w = widthOf(s, fonts.body, TICK, fonts);
     drawRuns(page, s, p.x - 3 - w, Y(v) - TICK / 2 + 0.5, { font: fonts.body, size: TICK, color: PALETTE.mute }, fonts);
   }
-  axisTitles(page, box, p, t(lang, 'chart.hypso.x'), t(lang, 'chart.hypso.y'), fonts);
+  axisTitles(page, box, p, t(loc.lang, 'chart.hypso.x'), t(loc.lang, 'chart.hypso.y'), fonts);
 
   // Integral label, top right of the plot on a paper knock-out.
-  const label = t(lang, 'chart.hypso.integral', { value: formatNumber(lang, integral, 2) });
+  const label = t(loc.lang, 'chart.hypso.integral', { value: formatNumber(loc.numberStyle, integral, 2) });
   const ls = fitSize(label, fonts.bodyBold, 11.9, p.w - 8, fonts);
   const lw = widthOf(label, fonts.bodyBold, ls, fonts);
   const lx = p.x + p.w - lw - 5;
@@ -238,12 +238,12 @@ export function verticalExaggeration(lengthM: number, reliefM: number, plotW: nu
   return Math.max(niceFloor(raw), 1e-3);
 }
 
-function veText(lang: ReportLanguage, ve: number): string {
+function veText(loc: ReportLocale, ve: number): string {
   const digits = ve >= 1 ? 0 : decimalsFor(ve);
-  return formatNumber(lang, ve, digits);
+  return formatNumber(loc.numberStyle, ve, digits);
 }
 
-export function drawChannelProfile(page: PDFPage, box: Box, ch: MainChannel, lang: ReportLanguage, fonts: ReportFonts): void {
+export function drawChannelProfile(page: PDFPage, box: Box, ch: MainChannel, loc: ReportLocale, fonts: ReportFonts): void {
   const { distanceM, elevationM, interpolated } = ch.profile;
   const n = distanceM.length;
   let ok = n >= 2;
@@ -256,9 +256,9 @@ export function drawChannelProfile(page: PDFPage, box: Box, ch: MainChannel, lan
   }
   const L = ok ? distanceM[n - 1]! - distanceM[0]! : 0;
   if (!ok || !(L > 0)) {
-    const top = chartHeader(page, box, t(lang, 'figures.profile'), '', fonts);
+    const top = chartHeader(page, box, t(loc.lang, 'figures.profile'), '', fonts);
     const reason = 'withheld' in ch.lengthM ? ch.lengthM.withheld : 'vertical-unresolved';
-    withheldNote(page, box, top, t(lang, 'chart.withheld', { reason: withheldText(lang, reason) }), fonts);
+    withheldNote(page, box, top, t(loc.lang, 'chart.withheld', { reason: withheldText(loc.lang, reason) }), fonts);
     return;
   }
 
@@ -267,14 +267,14 @@ export function drawChannelProfile(page: PDFPage, box: Box, ch: MainChannel, lan
   const padB = 28;
   const plotW = box.width - padL - 8;
   const headerProbe = (factor: string) => {
-    const caption = t(lang, 'figures.profileCaption', { factor });
+    const caption = t(loc.lang, 'figures.profileCaption', { factor });
     const lines = wrapText(caption, fonts.body, CAPTION, box.width, fonts).length;
     return TITLE + 3 + lines * (CAPTION + 1) + 6;
   };
   const relief = zMax - zMin;
   const plotH0 = box.height - headerProbe('10') - padB - 2;
   const ve = verticalExaggeration(L, relief, plotW, plotH0);
-  const top = chartHeader(page, box, t(lang, 'figures.profile'), t(lang, 'figures.profileCaption', { factor: veText(lang, ve) }), fonts);
+  const top = chartHeader(page, box, t(loc.lang, 'figures.profile'), t(loc.lang, 'figures.profileCaption', { factor: veText(loc, ve) }), fonts);
   const p: Plot = { x: box.x + padL, y: box.y + padB, w: plotW, h: top - box.y - padB - 2 };
   if (p.w <= 10 || p.h <= 10) return;
   const xs = p.w / L;
@@ -336,7 +336,7 @@ export function drawChannelProfile(page: PDFPage, box: Box, ch: MainChannel, lan
   // runs above a concave profile, so this side stays clear).
   for (const r of ch.reachSlopes) {
     const dm = distanceM[0]! + (r.fromM + r.toM) / 2;
-    const s = `${formatNumber(lang, r.slope * 100, 1)}\u00a0%`;
+    const s = `${formatNumber(loc.numberStyle, r.slope * 100, 1)}\u00a0%`;
     const w = widthOf(s, fonts.bodyBold, 9.8, fonts);
     const lx = Math.max(p.x + 2, Math.min(p.x + p.w - w - 2, X(dm) - w / 2));
     const ly = Math.max(p.y + 3, Math.min(p.y + p.h - 7 - TICK - 4, Y(at(dm)) - 12));
@@ -346,7 +346,7 @@ export function drawChannelProfile(page: PDFPage, box: Box, ch: MainChannel, lan
 
   // Key for the 10-85 chord, top right of the plot.
   if ('value' in ch.slope1085) {
-    const s = `${t(lang, 'figures.slope1085')} ${formatNumber(lang, ch.slope1085.value * 100, 1)}\u00a0%`;
+    const s = `${t(loc.lang, 'figures.slope1085')} ${formatNumber(loc.numberStyle, ch.slope1085.value * 100, 1)}\u00a0%`;
     const sz = fitSize(s, fonts.body, 9.8, p.w - 40, fonts);
     const w = widthOf(s, fonts.body, sz, fonts);
     const kx = p.x + p.w - w - 6;
@@ -366,18 +366,18 @@ export function drawChannelProfile(page: PDFPage, box: Box, ch: MainChannel, lan
   for (let d = 0; d <= L + 1e-9; d += stepX) {
     page.drawLine({ start: { x: X(distanceM[0]! + d), y: p.y }, end: { x: X(distanceM[0]! + d), y: p.y - 2 }, thickness: 0.5, color: PALETTE.ink });
     if (L - d < stepX * 0.45 && d > 0) continue;
-    tickLabel(page, formatNumber(lang, d, dec), X(distanceM[0]! + d), p.y - TICK - 3, box.x, box.x + box.width, fonts);
+    tickLabel(page, formatNumber(loc.numberStyle, d, dec), X(distanceM[0]! + d), p.y - TICK - 3, box.x, box.x + box.width, fonts);
   }
-  tickLabel(page, formatNumber(lang, L, dec), X(distanceM[0]! + L), p.y - TICK - 3, box.x, box.x + box.width, fonts);
+  tickLabel(page, formatNumber(loc.numberStyle, L, dec), X(distanceM[0]! + L), p.y - TICK - 3, box.x, box.x + box.width, fonts);
   const stepY = relief > 0 ? niceStep(relief, 4) : 1;
   const hDec = decimalsFor(stepY);
   for (let v = 0; v <= relief + 1e-9; v += stepY) {
     const z = zMin + v;
-    const s = formatNumber(lang, z, hDec);
+    const s = formatNumber(loc.numberStyle, z, hDec);
     const sz = fitSize(s, fonts.body, TICK, padL - 14, fonts);
     const w = widthOf(s, fonts.body, sz, fonts);
     page.drawLine({ start: { x: p.x, y: Y(z) }, end: { x: p.x - 2, y: Y(z) }, thickness: 0.5, color: PALETTE.ink });
     drawRuns(page, s, p.x - 3 - w, Y(z) - sz / 2 + 0.5, { font: fonts.body, size: sz, color: PALETTE.mute }, fonts);
   }
-  axisTitles(page, box, p, t(lang, 'chart.profile.x'), t(lang, 'chart.profile.y'), fonts);
+  axisTitles(page, box, p, t(loc.lang, 'chart.profile.x'), t(loc.lang, 'chart.profile.y'), fonts);
 }

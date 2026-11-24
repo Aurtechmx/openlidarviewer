@@ -61,6 +61,8 @@ export interface ActionRegistryDeps {
   observatoryEntry: ObservatoryEntryDeps;
   runFillUnclassified: () => Promise<void>;
   runTool: (tool: SceneTool) => void;
+  /** Open a tool's page without toggling the tool. */
+  openToolPage?: (page: 'measure') => void;
   buildCurrentStoryInputs: () => ScanStoryInputs;
   startWorkflowRecording: () => void;
   dispatchWorkflowEvent: (event: WorkflowEvent) => void;
@@ -112,6 +114,7 @@ export function buildActionRegistry(deps: ActionRegistryDeps): Action[] {
     showLassoToast: deps.showLassoToast,
     runTool: deps.runTool,
     hasScan: deps.hasScan,
+    openToolPage: deps.openToolPage,
   });
   const analysis = contributeAnalysisActions({
     terrainAnalysisEntry: deps.terrainAnalysisEntry,

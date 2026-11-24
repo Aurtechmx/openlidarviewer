@@ -86,6 +86,10 @@ describe('profile sampler controls — the percentile is not called bare earth',
     expect(copy).not.toContain('Ground percentile');
   });
 
+  it('spells the percentile out in the Reset tooltip', () => {
+    expect(copyOf(mount())).toContain('25th elevation percentile, 64 samples');
+  });
+
   it('states that the class gate needs a source classification', () => {
     const copy = copyOf(mount());
     expect(copy).toContain('Per-bin elevation percentile over the corridor returns');

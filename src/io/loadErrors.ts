@@ -86,6 +86,12 @@ export async function graphicsReady(ready: Promise<unknown> | undefined): Promis
   }
 }
 
+/** What a reload costs, as the second half of a sentence. */
+export const RELOAD_COST = 'a reload closes open scans, so save your session first if you can.';
+
+/** The one sentence that tells the user to reload, and what it costs. */
+export const RELOAD_ADVICE = `Reload the page to try again; ${RELOAD_COST}`;
+
 /** The clear, user-facing message for each failure category. */
 const CATEGORY_MESSAGE: Record<LoadErrorCategory, string> = {
   'unsupported-format': "This file type isn't supported yet.",
@@ -95,7 +101,7 @@ const CATEGORY_MESSAGE: Record<LoadErrorCategory, string> = {
     "This scan exceeds what this device's GPU can display; it was reduced.",
   'decode-failure': 'Decoding failed — the file may be corrupt or truncated.',
   'resource-load':
-    'Part of the viewer could not be loaded. Check your connection and reload the page.',
+    `Part of the viewer could not be loaded. Check your connection. ${RELOAD_ADVICE}`,
 };
 
 /** The user-facing message for a known failure category. */

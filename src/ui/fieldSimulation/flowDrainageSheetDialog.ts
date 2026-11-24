@@ -13,7 +13,9 @@ import type {
   DrainageLinearUnit, DrainageSheetSection, FlowDrainageSheetOptions, buildFlowDrainageSheetPdf,
 } from '../../export/flowDrainageSheetPdf';
 import type { FlowPulseGeoref } from './flowPulseLab';
-import { UNIT_TO_METRES } from '../../export/flowDrainageSheetUnits';
+import { DRAINAGE_SHEET_LANGUAGES, UNIT_TO_METRES } from '../../export/flowDrainageSheetUnits';
+import { exportLocale, offeredLocale } from '../../i18n/exportLocale';
+import { exportLanguageControl, notOfferedText } from '../exportLanguageControl';
 import type { DtmGrid } from '../../terrain/ground/cellConfidence';
 
 /** Metres per vertical unit for the study: metres, or feet when the horizontal frame names which foot. */
@@ -73,6 +75,7 @@ export function drainageSheetDialog(opts: DrainageDialogOptions): HTMLElement {
   const root = el('div', { className: 'olv-flow-drainage-dialog' }, [
     el('p', { className: 'olv-flow-drainage-title', text: 'Drainage sheet: sections to include' }),
     ...items,
+    exportLanguageControl('The sheet is written in this language. Translations are drafts until reviewed. The Flow Pulse package stays in English.', DRAINAGE_SHEET_LANGUAGES),
     el('div', { className: 'olv-lab-actions' }, [exportBtn, cancel]),
   ]);
   root.setAttribute('role', 'dialog');
@@ -128,6 +131,7 @@ export function drainageSheetOptions(req: DrainageSheetRequest):
       linearUnit: req.linearUnit,
       dtm: req.dtm ?? null,
       verticalToMetres: req.verticalToMetres ?? null,
+      locale: offeredLocale(exportLocale(), DRAINAGE_SHEET_LANGUAGES),
     },
   };
 }
@@ -140,7 +144,8 @@ export async function exportDrainageSheet(
 ): Promise<string> {
   const o = drainageSheetOptions(req);
   if (!o.ok) return `Export refused: ${o.reason}`;
+  const missing = notOfferedText(exportLocale().lang, DRAINAGE_SHEET_LANGUAGES);
   const bytes = await build(o.result, o.options);
   download(`${req.basename}-drainage.pdf`, bytes, 'application/pdf');
-  return 'Drainage sheet downloaded.';
+  return `Drainage sheet downloaded.${missing ? ` ${missing}` : ''}`;
 }

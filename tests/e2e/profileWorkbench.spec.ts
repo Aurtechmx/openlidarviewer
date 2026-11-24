@@ -1,5 +1,6 @@
+import { readFileSync } from 'node:fs';
 import { test, expect, type Page } from '@playwright/test';
-import { openToolPage, placeProfile, showWorkspaceMode } from './helpers';
+import { dropDenseGridUtmLas, openToolPage, placeProfile, showWorkspaceMode } from './helpers';
 
 /**
  * Profile workbench acceptance flows.
@@ -248,6 +249,28 @@ test.describe('profile workbench', () => {
     await page.locator('.olv-layer-name', { hasText: 'tiny' }).click();
     await expect(page.locator('.olv-workbench')).toHaveCount(0);
     await expect(reason).toContainText("Profile Workbench closed: select the profile's source");
+  });
+});
+
+test.describe('the returns export', () => {
+  test('saves the CSV and its receipt in one ZIP, offline', async ({ page, context }) => {
+    await placeProfile(page, dropDenseGridUtmLas);
+    await openWorkbench(page);
+    const shown = await page.locator('.olv-workbench-detail-row', { hasText: 'Returns in corridor' }).locator('.olv-workbench-detail-value').textContent();
+    const returns = Number(shown!.replaceAll(/\D/g, ''));
+    expect(returns).toBeGreaterThan(0);
+    await context.setOffline(true);
+
+    const download = page.waitForEvent('download');
+    await page.locator('.olv-workbench-btn', { hasText: 'Export returns' }).click();
+    const file = await download;
+    expect(file.suggestedFilename()).toMatch(/^dense-grid-utm-profile-1-returns\.zip$/);
+    // A store-only ZIP, so both entries read as text.
+    const text = readFileSync((await file.path())!, 'utf8');
+    expect(text).toContain('.receipt.json');
+    expect(text).toContain('"kind": "profile-returns"');
+    expect(text).toContain(`"acceptedCount": ${returns}`);
+    await expect(page.locator('.olv-workbench-status')).toContainText('Saved dense-grid-utm-profile-1-returns.zip');
   });
 });
 

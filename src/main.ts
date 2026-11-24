@@ -595,7 +595,7 @@ const lassoVolumeTool = new LassoVolumeTool(stage.canvas, {
     const crsCaveat = volumeUnitCaveat(ctx);
     showLassoToast(
       `${stock?.headline ?? `Volume · net ${formatVolumeNumber(out.result.net * vol)} m³`} · ` +
-        `footprint ${areaM2} m² · ${out.selectedCount.toLocaleString()} points${budgetCaption}${crsCaveat} · ${out.selectionBasis.clause}.${stock?.suffix ?? ''} Estimate from the point cloud, not survey-grade.`,
+        `footprint ${areaM2} m² · ${out.selectedCount.toLocaleString('en-US')} points${budgetCaption}${crsCaveat} · ${out.selectionBasis.clause}.${stock?.suffix ?? ''} Estimate from the point cloud, not survey-grade.`,
       pendingLassoSave && crsVerdict.canSaveMeasurement
         ? { label: 'Save to session', onClick: saveLassoVolumeIfPending }
         : undefined,
@@ -1024,7 +1024,7 @@ const inspector = new Inspector({
   onProjectSharedElevation: (on) => {
     viewer.setProjectSharedElevation(on);
     syncProjectElevationScale();
-  },
+  }, sunShadingHost: () => (viewerReady ? { viewer, crs: crsService, activeId: () => scans.activeId } : null),
   onElevationFilter: (range) => {
     viewer.setElevationFilter(range ?? undefined);
     activeElevFilter = range;
@@ -1044,7 +1044,7 @@ const inspector = new Inspector({
   onToggleLock: (id, locked) => viewer.setCloudLocked(id, locked),
   onCompareLayers: compareLoadedLayers,
   onExportDifference: () => inspector.compareDifference.download(downloadText),
-  compareScene: { slot: layers, ids: () => viewer.clouds(), lookup: (id) => viewer.getCloud(id), stableIdFor: (id) => runtime.layerIdentity.stableIdFor(id) },
+  compareScene: { slot: layers, ids: () => viewer.clouds(), lookup: (id) => viewer.getCloud(id), stableIdFor: (id) => runtime.layerIdentity.stableIdFor(id), inputKeyFor: (id) => { const c = viewer.getCloud(id); return c ? JSON.stringify([crsService.resolveFor({ name: c.name, detected: c.metadata?.crs ?? undefined, source: 'las-vlr', identity: datasetIdentity(c) }), viewer.classificationEpoch(id)]) : ''; } },
   onSaveView: saveCurrentView,
   onApplyView: (index) => applyView(index),
   onRenameView: (index, name) => {
@@ -1131,8 +1131,8 @@ const inspector = new Inspector({
 // write path for the CRS section, and `CrsService.current()` is the
 // single source of truth.
 crsService.subscribe((resolved) => {
-  if (resolved) inspector.setCrs(resolved);
-  else inspector.clearCrs();
+  if (resolved) inspector.setCrs(resolved); else inspector.clearCrs();
+  inspector.compareDifference.dropStale(); // a comparison read the CRS before this
 });
 
 // Inspector load-time card refreshers (Provenance + Dataset Intelligence) and
@@ -1368,7 +1368,7 @@ const ensureActionRegistry = retryableOnce((): Promise<Action[]> => loadActionRe
   runDeriveClassification,
   runFillUnclassified,
   runTool,
-  buildCurrentStoryInputs,
+  openToolPage: (p) => workspaceShell?.openToolPage(p), buildCurrentStoryInputs,
   startWorkflowRecording,
   dispatchWorkflowEvent,
   ensureWorkflowConfigPanel,
@@ -2179,7 +2179,7 @@ const terrainRunner = createTerrainAnalysisRunner({
 // counts; `noteClassificationEdited` drops the cache, caveats the result and
 // recounts. An undo of a first attach also returns the legend to empty.
 void viewerLoaded.then((v) => {
-  v.onClassificationEdited = (id) => { noteClassificationEdited({
+  v.onClassificationEdited = (id) => { inspector.compareDifference.dropStale(); noteClassificationEdited({
     classification: v.getCloud(id)?.classification, provenance: v.getCloud(id)?.classificationProvenance, active: id === scans.activeId,
     legend: classLegendPanel,
     clearTerrainCache: () => terrainRunner.abortAndClearCache(),

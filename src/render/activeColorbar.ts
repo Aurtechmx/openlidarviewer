@@ -91,6 +91,8 @@ export interface ActiveColorbarSource {
    * own percentile pass (streaming, project-shared scale).
    */
   readonly cloud?: readonly [PointCloud, 1 | 2];
+  /** Elevation only: the sun-shading sentence, when the points are shaded. */
+  readonly shading?: string | null;
 }
 
 /** A ready-to-render colorbar: the generator spec plus the honesty note. */
@@ -101,6 +103,8 @@ export interface ActiveColorbar {
   readonly spec: ColorbarSpec;
   /** Honest sub-caption (trim window / normalisation), when one applies. */
   readonly note?: string;
+  /** Set while the points are sun shaded, so a colour need not equal the ramp. */
+  readonly shading?: string;
   /** Cloud behind the elevation window (see ActiveColorbarSource.cloud). */
   readonly cloud?: readonly [PointCloud, 1 | 2];
 }
@@ -149,6 +153,7 @@ export function buildActiveColorbarSpec(source: ActiveColorbarSource): ActiveCol
           unit: source.elevationUnit || undefined,
         },
         note: sampleNote ?? undefined,
+        shading: source.shading ?? undefined,
         cloud: source.cloud,
       };
     }

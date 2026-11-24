@@ -28,6 +28,7 @@ import {
   type PurposeMeta,
 } from '../terrain/contourStudio/contourStudioPurpose';
 import { el } from './dom';
+import { exportLanguageControl } from './exportLanguageControl';
 
 /**
  * The export products Contour Studio can offer. Defined here (the lower module)
@@ -291,6 +292,8 @@ function renderExportBar(
     group.append(btns);
     wrap.append(group);
   }
+  // The same session choice the Export tab shows beside Sheet style.
+  wrap.append(exportLanguageControl('The intelligence report and the PDF in the complete package follow this language; the other files do not. Translations are drafts until reviewed.'));
   if (blocked) {
     wrap.append(el('p', {
       className: 'olv-cs-export-note',
@@ -318,7 +321,7 @@ export function renderContourStudioWorkspace(
   header.append(
     el('p', {
       className: 'olv-cs-subtitle',
-      text: 'Create a contour deliverable from the analyzed terrain surface. Validation limits stay visible in the export.',
+      text: 'Create a contour deliverable from the analysed terrain surface. Validation limits stay visible in the export.',
     }),
   );
   root.append(header);

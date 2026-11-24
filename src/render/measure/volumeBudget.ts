@@ -122,8 +122,8 @@ export function decideVolumeBudget(
   if (candidates > ceiling) {
     stride = Math.ceil(candidates / ceiling);
     reason =
-      `Cloud has ${candidates.toLocaleString()} candidate points — above the ` +
-      `${tier} ceiling of ${ceiling.toLocaleString()}. Walking every ${stride}-th point.`;
+      `Cloud has ${candidates.toLocaleString('en-US')} candidate points — above the ` +
+      `${tier} ceiling of ${ceiling.toLocaleString('en-US')}. Walking every ${stride}-th point.`;
   }
 
   // Density check — only matters for small footprints where a deep
@@ -140,7 +140,7 @@ export function decideVolumeBudget(
     if (densityStride > stride) {
       stride = densityStride;
       reason =
-        `Footprint is dense (${Math.round(candidates / area).toLocaleString()} ` +
+        `Footprint is dense (${Math.round(candidates / area).toLocaleString('en-US')} ` +
         `pts/m²). Walking every ${stride}-th point keeps the read fast.`;
     }
   }

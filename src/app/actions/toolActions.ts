@@ -9,7 +9,9 @@ import type { Viewer } from '../../render/Viewer';
 import type { WorkflowController } from '../../ui/WorkflowController';
 import type { LassoVolumeTool } from '../../ui/LassoVolumeTool';
 import type { SceneTool } from '../toggleTool';
+import type { MeasurementKind } from '../../render/measure/types';
 import { keyDisplayFor } from '../../ui/keyBindings';
+import { canFocusClip, focusClip, NO_CLIP_TO_FOCUS } from '../clipFocus';
 import { actionTitle } from '../../ui/actionDescriptors';
 
 export interface ToolActionDeps {
@@ -27,7 +29,22 @@ export interface ToolActionDeps {
    */
   runTool: (tool: SceneTool) => void;
   hasScan?: () => boolean;
+  /** Open a tool's page without toggling the tool. */
+  openToolPage?: (page: 'measure') => void;
 }
+
+/** A palette row per kind of measurement; the titles read as the kind first, so typing it finds it. */
+const MEASURE_KINDS: ReadonlyArray<readonly [kind: MeasurementKind, title: string, hint: string, keywords: readonly string[]]> = [
+  ['distance', 'Distance measurement', 'Straight line between two points.', ['length', 'distance']],
+  ['polyline', 'Polyline measurement', 'Length of a path of several points.', ['path', 'polyline']],
+  ['area', 'Area measurement', 'Area of a drawn polygon.', ['polygon', 'area']],
+  ['height', 'Height measurement', 'Vertical difference between two points.', ['vertical', 'height']],
+  ['angle', 'Angle measurement', 'Angle at a point between two arms.', ['corner', 'angle']],
+  ['slope', 'Slope measurement', 'Rise over run between two points.', ['grade', 'slope']],
+  ['profile', 'Profile measurement', 'Ground profile along a drawn line.', ['section', 'cross-section', 'profile']],
+  ['box', 'Box measurement', 'Size and volume of a box.', ['cuboid', 'box']],
+  ['volume', 'Volume measurement', 'Cut and fill inside a drawn polygon.', ['stockpile', 'cut and fill', 'fill', 'volume']],
+];
 
 export function contributeToolActions(deps: ToolActionDeps): Action[] {
   const actions: Action[] = [];
@@ -44,6 +61,22 @@ export function contributeToolActions(deps: ToolActionDeps): Action[] {
         deps.runTool('measure');
       },
     },
+    ...MEASURE_KINDS.map(([kind, title, hint, keywords]): Action => ({
+      id: `tool.measure.${kind}`,
+      get unavailable() { return scanRequired(deps.hasScan); },
+      title,
+      section: 'Tools',
+      hint,
+      keywords,
+      searchOnly: true,
+      run: () => {
+        const viewer = deps.getViewer();
+        // Measure stays on when it already is; the controller says what a change of kind discards.
+        if (viewer.measureMode) deps.openToolPage?.('measure');
+        else deps.runTool('measure');
+        viewer.measure.setKind(kind);
+      },
+    })),
     {
       id: 'tool.inspect',
       get unavailable() { return scanRequired(deps.hasScan); },
@@ -83,8 +116,17 @@ export function contributeToolActions(deps: ToolActionDeps): Action[] {
       },
     },
     {
+      id: 'tool.clip-focus',
+      get unavailable() { return scanRequired(deps.hasScan) ?? (canFocusClip(deps.getViewer()) ? undefined : NO_CLIP_TO_FOCUS); },
+      title: 'Focus clipped region',
+      section: 'Tools',
+      hint: 'Move the view to the part of the scan the clip keeps.',
+      keywords: ['clip', 'frame', 'zoom', 'box'],
+      run: () => focusClip(deps.getViewer(), deps.showLassoToast),
+    },
+    {
       id: 'tool.classify',
-      title: 'Classify (derive)',
+      title: 'Auto-classify scan (derive)',
       section: 'Tools',
       hint: 'Derive a ground / vegetation / building classification for an unclassified scan (heuristic).',
       keywords: ['classification', 'ground', 'vegetation', 'building', 'segment', 'auto'],

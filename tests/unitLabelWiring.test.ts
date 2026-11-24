@@ -86,7 +86,7 @@ describe('MeasurePanel profile CSV buttons on a geographic CRS', () => {
     p.setGeographicNotice(true);
     p.update([summary()]);
     const expand = (p.element as unknown as FakeEl)
-      .querySelectorAll('button')
+      .querySelectorAll('div.olv-mp-chart-wrap')
       .find((b) => (b.getAttribute('aria-label') ?? '').includes('Expand'));
     expand!.dispatchEvent({ type: 'click', stopPropagation: () => {} });
     const opts = openResultFocus.mock.calls[0]![0] as { render: (c: unknown) => void };

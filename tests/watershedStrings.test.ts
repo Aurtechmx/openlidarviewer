@@ -74,23 +74,23 @@ describe('watershed catalog', () => {
 });
 
 describe('formatNumber', () => {
-  it('formats 2067.4 as "2 067,4" in Spanish and "2,067.4" in English', () => {
-    expect(formatNumber('es', 2067.4, 1)).toBe('2 067,4');
-    expect(formatNumber('en', 2067.4, 1)).toBe('2,067.4');
+  it('formats 2067.4 as "2 067,4" in the comma style and "2,067.4" in the point style', () => {
+    expect(formatNumber('comma', 2067.4, 1)).toBe('2 067,4');
+    expect(formatNumber('point', 2067.4, 1)).toBe('2,067.4');
   });
   it('rounds and keeps small numbers ungrouped', () => {
-    expect(formatNumber('es', 0.031, 3)).toBe('0,031');
-    expect(formatNumber('en', 412, 0)).toBe('412');
-    expect(formatNumber('en', -1234567.891, 2)).toBe('-1,234,567.89');
+    expect(formatNumber('comma', 0.031, 3)).toBe('0,031');
+    expect(formatNumber('point', 412, 0)).toBe('412');
+    expect(formatNumber('point', -1234567.891, 2)).toBe('-1,234,567.89');
   });
 });
 
 describe('formatArea', () => {
   it('uses hectares above 1 ha and square metres below', () => {
-    expect(formatArea('en', 48_200)).toBe('4.82\u00a0ha');
-    expect(formatArea('es', 48_200)).toBe('4,82\u00a0ha');
-    expect(formatArea('en', 310)).toBe('310\u00a0m²');
-    expect(formatArea('es', 4_310, 'minimum')).toBe('≥ 4\u00a0310\u00a0m²');
+    expect(formatArea('point', 48_200)).toBe('4.82\u00a0ha');
+    expect(formatArea('comma', 48_200)).toBe('4,82\u00a0ha');
+    expect(formatArea('point', 310)).toBe('310\u00a0m²');
+    expect(formatArea('comma', 4_310, 'minimum')).toBe('≥ 4\u00a0310\u00a0m²');
   });
 });
 

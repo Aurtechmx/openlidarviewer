@@ -25,6 +25,7 @@ import {
   type ContourFeature,
   type ContourLineKind,
 } from '../../terrain/contour/contourFeatureModel';
+import { CONTOUR_SHARE_BASIS, contourShareParts } from '../../terrain/contour/evidenceGrade';
 import { decimalsForInterval } from '../../terrain/contour/labelPlacement';
 import { placeContourLabels } from '../../terrain/contourStudio/contourLabelEngine';
 import { fitTransform, gridTicks, niceStep, tickDecimals, type Box } from '../../terrain/contour/mapSheetLayout';
@@ -47,10 +48,12 @@ import {
   drawNorthArrow,
   drawPaper,
   drawScaleBar,
-  drawSectionLabel,
+  drawSectionLines,
   dataBlockHeight,
   legendRowHeight,
-  sectionLabelHeight,
+  sectionLinesHeight,
+  wrapSectionLabel,
+  FOOTER_NOTE_DROP,
   pdfColor,
   sheetText,
   sheetTextWidth,
@@ -61,6 +64,9 @@ import {
 } from '../../export/sheetKit/primitives';
 import { SHEET_SPACE, SHEET_TYPE, sheetTokens, tintAt, type SheetRgb, type SheetTokens } from '../../export/sheetKit/tokens';
 import { scaleBarUnit } from './scaleBar';
+import { mapSheetWords, type MapSheetWords } from '../../export/localizeMapSheet';
+import type { MapSheetKey } from '../../i18n/deliverables/mapSheet';
+import { grouped } from '../../i18n/numberStyle';
 import { drawStyledPurposeAppendix } from './mapSheetStyledAppendix';
 import {
   annotationColor, annotationLines, continuationPages, drawMarkLines, drawMarksContinuation, markLinesHeight,
@@ -68,6 +74,7 @@ import {
 } from './mapSheetStyledMarks';
 
 export { measurementLetter } from './mapSheetStyledMarks';
+export { exportLocale } from '../../i18n/exportLocale';
 import {
   buildMapSheetPdf,
   contourShareSheetLines,
@@ -80,6 +87,9 @@ import {
 
 /** Thinnest legend swatch, points. */
 const LEGEND_MIN_WIDTH = 0.5;
+
+/** Where a legend label starts, right of its swatch, points. */
+const LEGEND_TEXT_X = 34;
 
 const SHEET_PT: Record<NonNullable<MapSheetInput['sheet']>, readonly [number, number]> = {
   letter: [612, 792],
@@ -123,8 +133,9 @@ export async function buildStyledMapSheetPdf(
   opts: { readonly loadFont?: (name: string) => Promise<Uint8Array> } = {},
 ): Promise<Uint8Array> {
   const doc = await PDFDocument.create();
-  doc.setTitle(input.title ?? 'Contour Map', { showInWindowTitleBar: true });
-  doc.setLanguage('en-US');
+  const words = mapSheetWords(input.locale, input.onUntranslated);
+  doc.setTitle(input.title == null ? words.say('title') : words.made(input.title), { showInWindowTitleBar: true });
+  doc.setLanguage(words.tag);
   doc.setAuthor('OpenLiDARViewer');
   if (input.provenance) {
     const p = input.provenance;
@@ -149,7 +160,7 @@ export async function buildStyledMapSheetPdf(
     facts: mapSheetFacts(input, 0), tr: null, offMap: { measurements: 0, annotations: 0 },
     listed: { measurements: input.measurements?.length ?? 0, annotations: annotationRowsOf(input).length },
   };
-  const blocks = panelBlocks(page, input, ctx, relief, t, fonts, size, orient);
+  const blocks = panelBlocks(page, input, ctx, relief, t, fonts, size, orient, words);
   const noMap = !area || (input.model.features.length === 0 && !relief?.extent);
   // When the panel cannot hold every listed mark, list fewer on sheet one and
   // continue the rest on sheets of their own, until a layout fits.
@@ -164,12 +175,12 @@ export async function buildStyledMapSheetPdf(
 
   page.drawRectangle({ x: frame.x, y: frame.y, width: frame.w, height: frame.h, color: pdfColor(t.panel) });
   if (noMap || !area) {
-    sheetText(page, 'No contours to map.', frame.x + 12, frame.y + frame.h - 20, { font: fonts.sans, size: 11, color: t.dim }, fonts);
+    sheetText(page, words.say('noContours'), frame.x + 12, frame.y + frame.h - 20, { font: fonts.sans, size: 11, color: t.dim }, fonts);
   } else {
     const inner = innerOf(frame);
     const fit = fitTransform(area, inner);
     ctx.tr = { area, scale: fit.scale, ox: fit.ox, oy: fit.oy };
-    await drawMapLayers(doc, page, input, t, fonts, frame, inner, ctx.tr, relief);
+    await drawMapLayers(doc, page, input, t, fonts, frame, inner, ctx.tr, relief, words);
   }
   page.drawRectangle({ x: frame.x, y: frame.y, width: frame.w, height: frame.h, borderColor: pdfColor(t.outline), borderWidth: t.weight.frame });
 
@@ -184,21 +195,23 @@ export async function buildStyledMapSheetPdf(
     measurementStart: ctx.listed.measurements,
     annotations: annotationRowsOf(input).slice(ctx.listed.annotations),
   };
-  const more = rest.measurements.length + rest.annotations.length > 0 ? continuationPages(rest, [PW, PH], MARGIN, t, fonts) : 0;
+  const more = rest.measurements.length + rest.annotations.length > 0 ? continuationPages(rest, [PW, PH], MARGIN, t, fonts, words) : 0;
   const pages = 1 + more + (purpose ? 1 : 0);
   const buildText = input.provenance?.build ? `  ·  ${input.provenance.build}` : '';
-  const footerLeft = `OpenLiDARViewer - terrain analysis${buildText}`;
-  drawFooter(page, footerLeft, `1 / ${pages}`, M, PW - M, M, t, fonts);
-  if (more > 0) drawMarksContinuation(doc, rest, [PW, PH], MARGIN, footerLeft, 2, pages, t, fonts);
+  const footerLeft = `${words.say('footApp')}${buildText}`;
+  drawFooter(page, footerLeft, `1 / ${pages}`, M, PW - M, M, t, fonts, words.draft);
+  if (more > 0) drawMarksContinuation(doc, rest, [PW, PH], MARGIN, footerLeft, 2, pages, t, fonts, words);
   if (purpose) {
-    const label = `Deliverable - ${purpose.label}`;
+    const label = words.say('deliverable', { t_label: purpose.label });
     const w = sheetTextWidth(label, fonts.sansBold, SHEET_TYPE.footer, fonts);
-    sheetText(page, label, PW - M - w - 40, M, { font: fonts.sansBold, size: SHEET_TYPE.footer, color: t.dim }, fonts);
+    // A translated label is longer, so it takes the right of the draft note's line.
+    const [lx, ly] = words.translated ? [PW - M - w, M - FOOTER_NOTE_DROP] : [PW - M - w - 40, M];
+    sheetText(page, label, lx, ly, { font: fonts.sansBold, size: SHEET_TYPE.footer, color: t.dim }, fonts);
   }
 
   if (purpose) {
     const content = purposeAppendixContent(purpose, input, { hillshade: relief != null, tint: relief != null && t.tintAlpha > 0 });
-    drawStyledPurposeAppendix(doc, content, [PW, PH], M, footerLeft, `${pages} / ${pages}`, t, fonts);
+    drawStyledPurposeAppendix(doc, content, [PW, PH], M, footerLeft, `${pages} / ${pages}`, t, fonts, words);
   }
   return doc.save();
 }
@@ -213,6 +226,7 @@ async function drawMapLayers(
   inner: Frame,
   tr: MapTransform,
   relief: ContourSheetRelief | null,
+  words: MapSheetWords,
 ): Promise<void> {
   const pageX = (x: number): number => tr.ox + (x - tr.area.minX) * tr.scale;
   const pageY = (y: number): number => tr.oy + (y - tr.area.minY) * tr.scale;
@@ -237,7 +251,7 @@ async function drawMapLayers(
   const stepY = niceStep(wMaxY - wMinY, 5);
   const decX = tickDecimals(stepX), decY = tickDecimals(stepY);
   const labelGrid = input.worldOrigin != null;
-  const fmt = (v: number, dec: number, suffix: string): string => (labelGrid ? `${groupThousands(v.toFixed(dec))}${georef ? suffix : ''}` : '');
+  const fmt = (v: number, dec: number, suffix: string): string => (labelGrid ? `${words.num(groupThousands(v.toFixed(dec)))}${georef ? suffix : ''}` : '');
   const xs = gridTicks(wMinX, wMaxX, stepX).map((w) => ({ at: pageX(w - origin.x), label: fmt(w, decX, ' E') }));
   const ys = gridTicks(wMinY, wMaxY, stepY).map((w) => ({ at: pageY(w - origin.y), label: fmt(w, decY, ' N') }));
   drawCoordinateTicks(page, frame, xs, ys, t, fonts);
@@ -290,7 +304,7 @@ async function drawMapLayers(
       indexOnly: input.purpose?.labelsIndexOnly ?? true,
       maxLabels: 60,
       repeatEveryLen: extent * 0.28,
-      formatValue: (v) => (v + labelOz).toFixed(dec),
+      formatValue: (v) => words.num((v + labelOz).toFixed(dec)),
     }).labels;
     const font = fonts.sansBold;
     for (const lab of labels) {
@@ -321,7 +335,7 @@ async function drawMapLayers(
       const px = pageX(p.x), py = pageY(p.y);
       if (px < inner.x || px > inner.x + inner.w || py < inner.y || py > inner.y + inner.h) return;
       drawMarker(page, shape, px, py, 3, t.ink);
-      const label = (p.z + oz).toFixed(1);
+      const label = words.num((p.z + oz).toFixed(1));
       const o = { font: fonts.mono, size: SHEET_TYPE.tick, color: t.ink };
       const w = sheetTextWidth(label, fonts.mono, o.size, fonts);
       const lx = px + 5 + w > inner.x + inner.w ? px - 5 - w : px + 5;
@@ -369,9 +383,17 @@ function innerOf(frame: Frame): Frame {
 }
 
 /** The line a panel block ends with when some of its marks fall off the map. */
-function offMapLine(n: number, what: 'measurement' | 'annotation'): string {
-  return `${n} ${what}${n === 1 ? '' : 's'} outside the map extent: listed, not plotted.`;
+function offMapLine(n: number, what: 'measurement' | 'annotation', words: MapSheetWords): string {
+  if (what === 'measurement') return n === 1 ? words.say('offMeasurement') : words.say('offMeasurements', { n });
+  return n === 1 ? words.say('offAnnotation') : words.say('offAnnotations', { n });
 }
+
+/** The sheet's name in the scale line, by size and orientation. */
+const SHEET_NAME: Readonly<Record<NonNullable<MapSheetInput['sheet']>, Readonly<Record<NonNullable<MapSheetInput['orientation']>, MapSheetKey>>>> = {
+  letter: { portrait: 'letterPortrait', landscape: 'letterLandscape' },
+  a4: { portrait: 'a4Portrait', landscape: 'a4Landscape' },
+  a3: { portrait: 'a3Portrait', landscape: 'a3Landscape' },
+};
 
 const MARGIN = 30;
 const FOOTER_H = 18;
@@ -477,23 +499,30 @@ function panelBlocks(
   relief: ContourSheetRelief | null,
   t: SheetTokens,
   f: SheetFonts,
-  size: string,
-  orient: string,
+  size: NonNullable<MapSheetInput['sheet']>,
+  orient: NonNullable<MapSheetInput['orientation']>,
+  words: MapSheetWords,
 ): PanelBlock[] {
   const unit = mapLinearUnitLabel(input.linearUnit);
   const vSuffix = ctx.facts.verticalSuffix;
-  // A resolved unit is a short word (" m", " ft"); the unverified hedge is a parenthesis.
-  const zUnit = vSuffix.trim().startsWith('(') ? '' : vSuffix.trim();
+  const zUnit = ctx.facts.verticalUnit;
   const oz = input.worldOrigin?.z ?? 0;
   const blocks: PanelBlock[] = [];
-  const SL = sectionLabelHeight;
+  // A translated heading or legend label that is too long for its column wraps.
+  const headingLines = (label: string, w: number, k: number): string[] => (words.translated ? wrapSectionLabel(label, w, f, k) : [label]);
+  const SL = (label: string, w: number, k: number): number => sectionLinesHeight(headingLines(label, w, k).length, k);
+  const heading = (label: string, x: number, y: number, w: number, k: number): number =>
+    drawSectionLines(page, headingLines(label, w, k), x, y, w, t, f, k);
+  /** Width of the key column that holds `keys`, at type scale 1, never below `least`. */
+  const keyWidth = (least: number, keys: readonly string[]): number =>
+    (words.translated ? Math.max(least, ...keys.map((key) => sheetTextWidth(key, f.sans, SHEET_TYPE.dataKey, f) + 8)) : least);
   const noteStep = (k: number): number => SHEET_TYPE.note * k * 1.4;
 
   // ── header ───────────────────────────────────────────────────────────────
-  const title = input.title ?? 'Contour Map';
+  const title = input.title == null ? words.say('title') : words.made(input.title);
   const subtitle = input.relief
-    ? `Contours from the analysed ground surface, ${fmtNum(input.relief.cellSize)} ${unit} cells`
-    : 'Contours from the analysed ground surface';
+    ? words.say('subtitleCells', { n: fmtNum(input.relief.cellSize), t_unit: unit })
+    : words.say('subtitle');
   const titleLines = (w: number, k: number): { lines: string[]; size: number } => {
     let sz = SHEET_TYPE.title * k;
     while (sz > 11 * k && sheetTextWidth(title, f.sansBold, sz, f) > w) sz -= 0.5;
@@ -507,7 +536,7 @@ function panelBlocks(
     },
     draw: (x, y, w, k) => {
       let cy = y - SHEET_TYPE.kicker * k;
-      sheetText(page, 'CONTOUR MAP', x, cy, { font: f.sansBold, size: SHEET_TYPE.kicker * k, color: t.accent }, f);
+      sheetText(page, words.say('kicker'), x, cy, { font: f.sansBold, size: SHEET_TYPE.kicker * k, color: t.accent }, f);
       cy -= 6 * k;
       const tl = titleLines(w, k);
       for (const ln of tl.lines) {
@@ -533,32 +562,41 @@ function panelBlocks(
     return { kind: 'line', color: st.color, width: Math.max(st.width, LEGEND_MIN_WIDTH), opacity: st.opacity, ...(st.dash ? { dash: st.dash } : {}) };
   };
   const indexOnly = input.purpose?.labelsIndexOnly ?? true;
-  legend.push([line(true, 'measured'), indexOnly ? 'Index contour, labelled' : 'Index contour']);
-  legend.push([line(false, 'measured'), `Contour interval ${ctx.facts.interval}${indexOnly ? '' : ', labelled'}`]);
-  if (kinds.has('sparse')) legend.push([line(false, 'sparse'), 'Sparse measured ground']);
-  if (kinds.has('interpolated')) legend.push([line(false, 'interpolated'), 'Contour over filled cells']);
-  if (kinds.has('gap')) legend.push([line(false, 'gap'), 'Low-confidence gap']);
-  if (relief) legend.push([{ kind: 'line', color: t.outline, width: t.weight.outline * 0.75 }, 'Scan footprint']);
-  if (relief?.hasHoles) legend.push([{ kind: 'hatch', color: t.hatch, background: t.nodata }, 'No ground data inside the footprint']);
-  if (relief?.highest) legend.push([{ kind: 'marker', color: t.ink, shape: 'up' }, 'Highest measured ground']);
-  if (relief?.lowest) legend.push([{ kind: 'marker', color: t.ink, shape: 'down' }, 'Lowest measured ground']);
-  if ((input.measurements?.length ?? 0) > 0) legend.push([{ kind: 'line', color: t.area, width: t.weight.area }, 'Measurement, lettered as listed']);
-  if (input.includeAnnotations && (input.annotations?.length ?? 0) > 0) legend.push([{ kind: 'marker', color: t.accent, shape: 'dot' }, 'Annotation, numbered as listed']);
+  legend.push([line(true, 'measured'), words.say(indexOnly ? 'indexLabelled' : 'index')]);
+  legend.push([line(false, 'measured'), words.say(indexOnly ? 'interval' : 'intervalLabelled', { u_v: words.translate(ctx.facts.interval) })]);
+  if (kinds.has('sparse')) legend.push([line(false, 'sparse'), words.say('sparse')]);
+  if (kinds.has('interpolated')) legend.push([line(false, 'interpolated'), words.say('filled')]);
+  if (kinds.has('gap')) legend.push([line(false, 'gap'), words.say('gap')]);
+  if (relief) legend.push([{ kind: 'line', color: t.outline, width: t.weight.outline * 0.75 }, words.say('footprint')]);
+  if (relief?.hasHoles) legend.push([{ kind: 'hatch', color: t.hatch, background: t.nodata }, words.say('hole')]);
+  if (relief?.highest) legend.push([{ kind: 'marker', color: t.ink, shape: 'up' }, words.say('highest')]);
+  if (relief?.lowest) legend.push([{ kind: 'marker', color: t.ink, shape: 'down' }, words.say('lowest')]);
+  if ((input.measurements?.length ?? 0) > 0) legend.push([{ kind: 'line', color: t.area, width: t.weight.area }, words.say('measurementKey')]);
+  if (input.includeAnnotations && (input.annotations?.length ?? 0) > 0) legend.push([{ kind: 'marker', color: t.accent, shape: 'dot' }, words.say('annotationKey')]);
+  const legendStep = (k: number): number => SHEET_TYPE.legend * 1.25 * k;
+  const legendLines = (label: string, w: number, k: number): string[] =>
+    (words.translated ? wrapSheetText(label, f.sans, SHEET_TYPE.legend * k, w - LEGEND_TEXT_X, f) : [label]);
   blocks.push({
-    height: (_w, k) => SL(k) + legend.length * legendRowHeight(k) - legendRowHeight(k) + SHEET_TYPE.legend * k,
+    height: (w, k) => SL(words.say('legend'), w, k) + legend.length * legendRowHeight(k) - legendRowHeight(k) + SHEET_TYPE.legend * k
+      + legend.reduce((a, [, label]) => a + (legendLines(label, w, k).length - 1) * legendStep(k), 0),
     draw: (x, y, w, k) => {
-      let cy = drawSectionLabel(page, 'Legend', x, y, w, t, f, k);
-      for (const [key, label] of legend) cy = drawLegendRow(page, key, label, x, cy, t, f, k);
+      let cy = heading(words.say('legend'), x, y, w, k);
+      for (const [key, label] of legend) {
+        const [first, ...more] = legendLines(label, w, k);
+        more.forEach((ln, i) => sheetText(page, ln, x + LEGEND_TEXT_X, cy - (i + 1) * legendStep(k), { font: f.sans, size: SHEET_TYPE.legend * k, color: t.ink }, f));
+        cy = drawLegendRow(page, key, first!, x, cy, t, f, k) - more.length * legendStep(k);
+      }
     },
   });
 
   // ── elevation ramp with histogram ────────────────────────────────────────
   if (relief && t.tintAlpha > 0 && Number.isFinite(relief.zMin) && relief.zMax > relief.zMin) {
+    const elevation = zUnit ? words.say('elevationUnit', { t_unit: zUnit }) : words.say('elevation');
     blocks.push({
-      height: (_w, k) => SL(k) + 34 * k,
+      height: (w, k) => SL(elevation, w, k) + 34 * k,
       draw: (x, y, w, k) => {
-        const cy = drawSectionLabel(page, zUnit ? `Elevation (${zUnit})` : 'Elevation', x, y, w, t, f, k);
-        drawRamp(page, relief, x, cy + 4 * k, w, k, oz, t, f);
+        const cy = heading(elevation, x, y, w, k);
+        drawRamp(page, relief, x, cy + 4 * k, w, k, oz, t, f, words);
       },
     });
   }
@@ -566,49 +604,66 @@ function panelBlocks(
   // ── scale and north ──────────────────────────────────────────────────────
   const georef = isGeoreferenced(input);
   const north: NorthSpec = !georef ? { kind: 'local' } : input.trueNorth ? { kind: 'true', convergenceDeg: input.trueNorth.convergenceDeg } : { kind: 'grid' };
+  const northWords = {
+    grid: words.say('northGrid'), true: words.say('northTrue'), localUp: words.say('northLocal'), unknown: words.say('northUnknown'),
+    angle: (n: string, east: boolean): string => words.say(east ? 'northEast' : 'northWest', { n }),
+  };
+  const plain = words.locale.lang === 'en' && words.locale.numberStyle === 'point';
+  // The arrow's words end at the panel's edge; the scale bar and its unit keep clear of them.
+  const northRoom = !words.translated ? 95 : 35 + Math.max(60, ...(north.kind === 'local'
+    ? [sheetTextWidth(northWords.localUp, f.sansBold, SHEET_TYPE.legend, f), sheetTextWidth(northWords.unknown, f.sans, SHEET_TYPE.note, f)]
+    : [sheetTextWidth(northWords[north.kind], f.sansBold, SHEET_TYPE.legend, f)]));
   blocks.push({
-    height: (_w, k) => SL(k) + 44 * k,
+    height: (w, k) => SL(words.say('scale'), w, k) + 44 * k,
     draw: (x, y, w, k) => {
-      const cy = drawSectionLabel(page, 'Scale', x, y, w, t, f, k);
+      const cy = heading(words.say('scale'), x, y, w, k);
       let by = cy;
       if (ctx.tr) {
-        by = drawScaleBar(page, { scalePtPerWorld: ctx.tr.scale, maxBarPt: Math.max(60, w - 95), unitFor: (g) => scaleBarUnit(g, input.linearUnit) }, x, cy + 2 * k, t, f);
+        by = drawScaleBar(page, { scalePtPerWorld: ctx.tr.scale, maxBarPt: Math.max(60, w - northRoom), num: words.num, unitFor: (g) => { const u = scaleBarUnit(g, input.linearUnit); return { ...u, unit: words.translate(u.unit) }; } }, x, cy + 2 * k, t, f);
       }
-      const sheetName = `${size === 'a3' ? 'A3' : size === 'a4' ? 'A4' : 'Letter'} ${orient}`;
-      const ratio = ctx.facts.scaleLabel.startsWith('1:') ? `${ctx.facts.scaleLabel} at ${sheetName}` : `Scale: ${ctx.facts.scaleLabel}`;
+      const n = ctx.facts.scaleN;
+      const ratio = n == null ? words.say('scaleUnknown') : n > 0
+        ? words.say('scaleAt', { u_ratio: plain ? ctx.facts.scaleLabel : `1:${grouped(words.locale.numberStyle, n)}`, u_sheet: words.say(SHEET_NAME[size][orient]) })
+        : words.say('scaleNone');
       sheetText(page, ratio, x, by - 4 * k, { font: f.mono, size: SHEET_TYPE.tick, color: t.dim }, f);
-      drawNorthArrow(page, north, x + w - 34, cy - 16 * k, t, f);
+      drawNorthArrow(page, north, x + w - 34, cy - 16 * k, t, f, words.translated ? { ...northWords, right: x + w } : undefined);
     },
   });
 
   // ── data block ───────────────────────────────────────────────────────────
   const rows = (): DataRow[] => {
     const out: DataRow[] = [
-      { key: 'CRS', value: ctx.facts.crs },
-      { key: 'Vertical', value: ctx.facts.datum },
+      { key: words.say('kCrs'), value: ctx.facts.crsNamed ? ctx.facts.crs : words.translate(ctx.facts.crs) },
+      { key: words.say('kVertical'), value: ctx.facts.datumNamed ? ctx.facts.datum : words.translate(ctx.facts.datum) },
     ];
-    if (input.relief) out.push({ key: 'Grid', value: `${fmtNum(input.relief.cellSize)} ${unit} cells` });
-    out.push({ key: 'Interval', value: ctx.facts.interval });
+    if (input.relief) out.push({ key: words.say('kGrid'), value: words.say('gridCells', { n: fmtNum(input.relief.cellSize), t_unit: unit }) });
+    out.push({ key: words.say('kInterval'), value: words.translate(ctx.facts.interval) });
     if (relief && Number.isFinite(relief.zMin)) {
-      out.push({ key: 'Relief', value: `${(relief.zMin + oz).toFixed(1)} – ${(relief.zMax + oz).toFixed(1)}${vSuffix}` });
+      out.push({ key: words.say('kRelief'), value: words.translate(`${(relief.zMin + oz).toFixed(1)} – ${(relief.zMax + oz).toFixed(1)}${vSuffix}`) });
       const drawn = relief.measuredCells + relief.filledCells;
-      if (drawn > 0) out.push({ key: 'Ground', value: `${pct(relief.measuredCells, drawn)} measured, ${pct(relief.filledCells, drawn)} filled (dashed)` });
+      if (drawn > 0) out.push({ key: words.say('kGround'), value: words.say('groundShares', { n: pct(relief.measuredCells, drawn), m: pct(relief.filledCells, drawn) }) });
     }
-    out.push({ key: 'Style', value: ctx.facts.styleLabel });
-    if (relief) out.push({ key: 'Shading', value: 'Four-light hillshade, NW key' });
-    out.push({ key: 'Generated', value: ctx.facts.generated });
-    out.push({ key: 'Prepared by', value: ctx.facts.preparedBy });
+    out.push({ key: words.say('kStyle'), value: words.translate(ctx.facts.styleLabel) });
+    if (relief) out.push({ key: words.say('kShading'), value: words.say('shading') });
+    out.push({ key: words.say('kGenerated'), value: ctx.facts.generated });
+    out.push({ key: words.say('kPrepared'), value: ctx.facts.preparedBy });
     return out;
   };
-  const shareLines = (w: number, k: number): string[] =>
-    contourShareSheetLines(modelLengthShares(input.model), w, SHEET_TYPE.note * k, (s, sz) => sheetTextWidth(s, f.sans, sz, f));
+  const dataKeyW = (): number => keyWidth(64, rows().map((row) => row.key));
+  const shares = modelLengthShares(input.model);
+  const shareText = (): string => (Number.isFinite(shares.interpolated)
+    ? `${contourShareParts(shares).map((part) => words.translate(part)).join(' · ')} ${words.translate(CONTOUR_SHARE_BASIS)}`
+    : words.say('sharesNone'));
+  const shareLines = (w: number, k: number): string[] => words.translated
+    ? wrapSheetText(shareText(), f.sans, SHEET_TYPE.note * k, w, f)
+    : contourShareSheetLines(shares, w, SHEET_TYPE.note * k, (s, sz) => sheetTextWidth(s, f.sans, sz, f));
   const basisLines = (w: number, k: number): string[] =>
-    ctx.facts.analysedBasis ? wrapSheetText(`Analysed basis: ${ctx.facts.analysedBasis}`, f.sans, SHEET_TYPE.note * k, w, f).slice(0, 4) : [];
+    ctx.facts.analysedBasis ? wrapSheetText(words.translate(`Analysed basis: ${ctx.facts.analysedBasis}`), f.sans, SHEET_TYPE.note * k, w, f).slice(0, words.translated ? undefined : 4) : [];
   blocks.push({
-    height: (w, k) => SL(k) + dataBlockHeight(rows(), w, f, 64, k) + SHEET_SPACE.xs * k + (shareLines(w, k).length + basisLines(w, k).length) * noteStep(k),
+    height: (w, k) => SL(words.say('data'), w, k) + dataBlockHeight(rows(), w, f, dataKeyW(), k) + SHEET_SPACE.xs * k + (shareLines(w, k).length + basisLines(w, k).length) * noteStep(k),
     draw: (x, y, w, k) => {
-      let cy = drawSectionLabel(page, 'Data', x, y, w, t, f, k);
-      cy = drawDataBlock(page, rows(), x, cy, w, t, f, 64, k);
+      let cy = heading(words.say('data'), x, y, w, k);
+      cy = drawDataBlock(page, rows(), x, cy, w, t, f, dataKeyW(), k);
       cy += SHEET_TYPE.dataValue * 1.5 * k - noteStep(k) - SHEET_SPACE.xs * k;
       for (const ln of [...shareLines(w, k), ...basisLines(w, k)]) {
         cy -= noteStep(k);
@@ -623,7 +678,7 @@ function panelBlocks(
   // are. The off-map line keeps its room at the widest count it could print.
   const listTail = (more: string | null, offAtMost: number, what: 'measurement' | 'annotation', w: number, k: number): string[] => [
     ...(more ? wrapSheetText(more, f.sans, SHEET_TYPE.note * k, w, f) : []),
-    ...(offAtMost > 0 ? wrapSheetText(offMapLine(offAtMost, what), f.sans, SHEET_TYPE.note * k, w, f) : []),
+    ...(offAtMost > 0 ? wrapSheetText(offMapLine(offAtMost, what, words), f.sans, SHEET_TYPE.note * k, w, f) : []),
   ];
   const tailHeight = (lines: number, k: number): number => (lines > 0 ? SHEET_SPACE.sm * k + lines * noteStep(k) : 0);
   const drawTail = (x: number, cy: number, w: number, k: number, more: string | null, off: number, what: 'measurement' | 'annotation'): void => {
@@ -635,18 +690,19 @@ function panelBlocks(
 
   const ms = input.measurements ?? [];
   if (ms.length > 0) {
-    const lines = (w: number, k: number) => measurementLines(ms.slice(0, ctx.listed.measurements), 0, w, k, t, f);
+    const header = words.say('measurementsN', { n: ms.length });
+    const lines = (w: number, k: number) => measurementLines(ms.slice(0, ctx.listed.measurements), 0, w, k, t, f, words);
     const more = (): string | null => {
       const n = ctx.listed.measurements;
       if (n >= ms.length) return null;
       return n === ms.length - 1
-        ? `Measurement ${measurementLetter(n)} is listed on the next sheet.`
-        : `Measurements ${measurementLetter(n)} to ${measurementLetter(ms.length - 1)} are listed on the next sheet.`;
+        ? words.say('moreMeasurement', { u_a: measurementLetter(n) })
+        : words.say('moreMeasurements', { u_a: measurementLetter(n), u_b: measurementLetter(ms.length - 1) });
     };
     blocks.push({
-      height: (w, k) => SL(k) + markLinesHeight(lines(w, k), k) + tailHeight(listTail(more(), ms.length, 'measurement', w, k).length, k),
+      height: (w, k) => SL(header, w, k) + markLinesHeight(lines(w, k), k) + tailHeight(listTail(more(), ms.length, 'measurement', w, k).length, k),
       draw: (x, y, w, k) => {
-        const top = drawSectionLabel(page, `Measurements (${ms.length})`, x, y, w, t, f, k) + noteStep(k);
+        const top = heading(header, x, y, w, k) + noteStep(k);
         const cy = lines(w, k).length > 0 ? drawMarkLines(page, lines(w, k), x, top, k, t.area, f) : top;
         drawTail(x, cy, w, k, more(), ctx.offMap.measurements, 'measurement');
       },
@@ -655,17 +711,17 @@ function panelBlocks(
 
   const annRows = annotationRowsOf(input);
   if (annRows.length > 0) {
-    const header = buildAnnotationReport(sheetAnnotations(input), {}).header;
-    const lines = (w: number, k: number) => annotationLines(annRows.slice(0, ctx.listed.annotations), w, k, t, f);
+    const header = words.translate(buildAnnotationReport(sheetAnnotations(input), {}).header);
+    const lines = (w: number, k: number) => annotationLines(annRows.slice(0, ctx.listed.annotations), w, k, t, f, words);
     const more = (): string | null => {
       const n = annRows.length - ctx.listed.annotations;
       if (n <= 0) return null;
-      return n === 1 ? '1 more annotation is listed on the next sheet.' : `${n} more annotations are listed on the next sheet.`;
+      return n === 1 ? words.say('moreAnnotation') : words.say('moreAnnotations', { n });
     };
     blocks.push({
-      height: (w, k) => SL(k) + markLinesHeight(lines(w, k), k) + tailHeight(listTail(more(), annRows.length, 'annotation', w, k).length, k),
+      height: (w, k) => SL(header, w, k) + markLinesHeight(lines(w, k), k) + tailHeight(listTail(more(), annRows.length, 'annotation', w, k).length, k),
       draw: (x, y, w, k) => {
-        const top = drawSectionLabel(page, header, x, y, w, t, f, k) + noteStep(k);
+        const top = heading(header, x, y, w, k) + noteStep(k);
         const cy = lines(w, k).length > 0 ? drawMarkLines(page, lines(w, k), x, top, k, t.ink, f) : top;
         drawTail(x, cy, w, k, more(), ctx.offMap.annotations, 'annotation');
       },
@@ -677,25 +733,30 @@ function panelBlocks(
   // note, readiness and evidence follow as sentences.
   const ACC_KEY_W = 128;
   interface Ln { text: string; color: SheetRgb; font: PDFFont }
-  const accRows = (_w: number, k: number): DataRow[] => ctx.facts.accuracyRows.map(([label, value, short]) => ({
-    key: short && sheetTextWidth(label, f.sans, SHEET_TYPE.dataKey * k, f) > ACC_KEY_W * k - 6 ? short : label,
-    value,
-  }));
+  const accRows = (_w: number, k: number): DataRow[] => ctx.facts.accuracyRows.map(([label, value, short]) => {
+    const full = words.translate(label);
+    return {
+      key: short && sheetTextWidth(full, f.sans, SHEET_TYPE.dataKey * k, f) > ACC_KEY_W * k - 6 ? words.translate(short) : full,
+      value: words.translate(value),
+    };
+  });
+  const accKeyW = (w: number, k: number): number => keyWidth(ACC_KEY_W, accRows(w, k).map((row) => row.key));
+  const accHeading = (): string => words.translate(ctx.facts.accuracyHeading);
   const accText = (w: number, k: number): Ln[] => {
     const facts = ctx.facts;
     const sz = SHEET_TYPE.note * k;
     const out: Ln[] = [];
-    if (facts.accuracySampleNote) for (const ln of wrapSheetText(facts.accuracySampleNote, f.sans, sz, w, f)) out.push({ text: ln, color: t.dim, font: f.sans });
+    if (facts.accuracySampleNote) for (const ln of wrapSheetText(words.translate(facts.accuracySampleNote), f.sans, sz, w, f)) out.push({ text: ln, color: t.dim, font: f.sans });
     const readyColor = facts.readiness === 'ready' ? t.ink : t.warn;
-    for (const ln of wrapSheetText(facts.readinessNote, f.sansBold, sz, w, f)) out.push({ text: ln, color: readyColor, font: f.sansBold });
-    for (const ln of wrapSheetText(facts.evidenceLine, f.sans, sz, w, f)) out.push({ text: ln, color: facts.evidenceValidated ? t.dim : t.warn, font: f.sans });
+    for (const ln of wrapSheetText(words.translate(facts.readinessNote), f.sansBold, sz, w, f)) out.push({ text: ln, color: readyColor, font: f.sansBold });
+    for (const ln of wrapSheetText(words.translate(facts.evidenceLine), f.sans, sz, w, f)) out.push({ text: ln, color: facts.evidenceValidated ? t.dim : t.warn, font: f.sans });
     return out;
   };
   blocks.push({
-    height: (w, k) => SL(k) + dataBlockHeight(accRows(w, k), w, f, ACC_KEY_W, k) + SHEET_SPACE.xs * k + accText(w, k).length * noteStep(k),
+    height: (w, k) => SL(accHeading(), w, k) + dataBlockHeight(accRows(w, k), w, f, accKeyW(w, k), k) + SHEET_SPACE.xs * k + accText(w, k).length * noteStep(k),
     draw: (x, y, w, k) => {
-      let cy = drawSectionLabel(page, ctx.facts.accuracyHeading, x, y, w, t, f, k);
-      cy = drawDataBlock(page, accRows(w, k), x, cy, w, t, f, ACC_KEY_W, k) - SHEET_SPACE.xs * k + noteStep(k);
+      let cy = heading(accHeading(), x, y, w, k);
+      cy = drawDataBlock(page, accRows(w, k), x, cy, w, t, f, accKeyW(w, k), k) - SHEET_SPACE.xs * k + noteStep(k);
       for (const ln of accText(w, k)) {
         cy -= noteStep(k);
         sheetText(page, ln.text, x, cy, { font: ln.font, size: SHEET_TYPE.note * k, color: ln.color }, f);
@@ -704,13 +765,13 @@ function panelBlocks(
   });
 
   // ── notes ────────────────────────────────────────────────────────────────
-  const notes = (input.notes ?? '').trim();
+  const notes = words.made((input.notes ?? '').trim());
   if (notes) {
     const noteLines = (w: number, k: number): string[] => wrapSheetText(notes, f.sans, SHEET_TYPE.note * k, w, f).slice(0, 4);
     blocks.push({
-      height: (w, k) => SL(k) + noteLines(w, k).length * noteStep(k),
+      height: (w, k) => SL(words.say('projectNotes'), w, k) + noteLines(w, k).length * noteStep(k),
       draw: (x, y, w, k) => {
-        let cy = drawSectionLabel(page, 'Project / notes', x, y, w, t, f, k) + noteStep(k);
+        let cy = heading(words.say('projectNotes'), x, y, w, k) + noteStep(k);
         for (const ln of noteLines(w, k)) {
           cy -= noteStep(k);
           sheetText(page, ln, x, cy, { font: f.sans, size: SHEET_TYPE.note * k, color: t.ink }, f);
@@ -721,7 +782,7 @@ function panelBlocks(
   return blocks;
 }
 
-function drawRamp(page: PDFPage, relief: ContourSheetRelief, x: number, yTop: number, w: number, k: number, oz: number, t: SheetTokens, f: SheetFonts): void {
+function drawRamp(page: PDFPage, relief: ContourSheetRelief, x: number, yTop: number, w: number, k: number, oz: number, t: SheetTokens, f: SheetFonts, words: MapSheetWords): void {
   const histH = 12 * k, rampH = 10 * k;
   const bins = relief.histogram.length;
   const peak = Math.max(1, ...relief.histogram);
@@ -749,7 +810,7 @@ function drawRamp(page: PDFPage, relief: ContourSheetRelief, x: number, yTop: nu
   let lastRight = -Infinity;
   for (const v of gridTicks(lo, hi, step)) {
     const px = x + ((v - lo) / (hi - lo)) * w;
-    const s = v.toFixed(dec);
+    const s = words.num(v.toFixed(dec));
     const tw = sheetTextWidth(s, f.mono, o.size, f);
     const lx = Math.min(x + w - tw, Math.max(x, px - tw / 2));
     if (lx < lastRight + 4) continue;
@@ -763,7 +824,7 @@ function fmtNum(v: number): string {
 }
 
 function pct(n: number, d: number): string {
-  return `${((100 * n) / d).toFixed(1)} %`;
+  return ((100 * n) / d).toFixed(1);
 }
 
 

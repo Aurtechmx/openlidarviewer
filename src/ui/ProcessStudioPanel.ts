@@ -50,7 +50,7 @@ const EXPORT_LOCATION: Readonly<Partial<Record<ProductId, string>>> = {
 };
 
 const PRODUCTS: ReadonlyArray<{ id: ProductId; label: string }> = [
-  { id: 'classify-gaps', label: 'Classify gaps' },
+  { id: 'classify-gaps', label: 'Fill unclassified' },
   { id: 'dtm', label: 'DTM' },
   { id: 'dsm', label: 'DSM' },
   { id: 'contours', label: 'Contours' },

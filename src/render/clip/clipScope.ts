@@ -83,7 +83,7 @@ export function subscribeClipScope(fn: () => void): () => void {
 
 /** "Clipped: 16,739 of 31,839 points". */
 export function clipScopeText(s: ClipScope): string {
-  return `Clipped: ${s.kept.toLocaleString()} of ${s.total.toLocaleString()} points`;
+  return `Clipped: ${s.kept.toLocaleString('en-US')} of ${s.total.toLocaleString('en-US')} points`;
 }
 
 /**
@@ -93,6 +93,6 @@ export function clipScopeText(s: ClipScope): string {
  */
 export function clipStatusText(s: ClipScope): string {
   return s.kept === s.total && s.total > 0
-    ? `Clip on: keeps all ${s.total.toLocaleString()} points`
+    ? `Clip on: keeps all ${s.total.toLocaleString('en-US')} points`
     : clipScopeText(s);
 }

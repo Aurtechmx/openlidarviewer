@@ -18,6 +18,7 @@ import { sourcePositions } from '../model/pointFrames';
 import { densityForChunk, densityCellSizeFor } from './densityColors';
 import { computeElevationRange, computeScalarRange } from './elevationRange';
 import { writeFloatColorsInto } from './colorEncode';
+import { shadeElevation } from './sunShading/elevationShade';
 import {
   coverageColorForConfidence,
   COVERAGE_NONE,
@@ -997,7 +998,7 @@ export function colorForMode(
       // the colorbar labels exactly the window these colours ramp across.
       const upAxis = opts?.upAxis ?? 2;
       const range = mustRampRange(rampRangeForMode('elevation', cloud, opts), 'elevation');
-      return colorByElevation(sourcePositions(cloud), n, range.min, range.max, undefined, upAxis);
+      return shadeElevation(cloud, colorByElevation(sourcePositions(cloud), n, range.min, range.max, undefined, upAxis));
     }
 
     // ── normal ──────────────────────────────────────────────────────────────

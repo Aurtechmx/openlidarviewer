@@ -178,6 +178,19 @@ test('the dialog prints what the user adds, in the language chosen, and keeps it
   await page.keyboard.press('Escape');
   await expect(dialog).toBeHidden();
   await expect(page.locator('.olv-mp-profile-pdf', { hasText: 'Export PDF' }).first()).toBeFocused();
+  // What was typed and not exported is there again, says so, and Discard puts the saved details back.
+  dialog = await openProfileDialog(page);
+  await expect(dialog.getByText('Unexported details from last time.')).toHaveCount(0);
+  await dialog.getByLabel('Title', { exact: true }).fill('Not exported');
+  await page.keyboard.press('Escape');
+  dialog = await openProfileDialog(page);
+  await expect(dialog.getByText('Unexported details from last time.')).toBeVisible();
+  await expect(dialog.getByLabel('Title', { exact: true })).toHaveValue('Not exported');
+  expect(await page.evaluate(() => Object.values(localStorage).some((v) => String(v).includes('Not exported')))).toBe(false);
+  await dialog.getByRole('button', { name: 'Discard' }).click();
+  await expect(dialog.getByLabel('Title', { exact: true })).toHaveValue('Río Bravo, sección 4');
+  await expect(dialog.getByLabel('Title', { exact: true })).toBeFocused();
+  await page.keyboard.press('Escape');
   // Text selected by dragging out of the dialog does not close it.
   dialog = await openProfileDialog(page);
   const box = (await dialog.getByLabel('Title', { exact: true }).boundingBox())!;
@@ -211,4 +224,51 @@ test('the dialog prints what the user adds, in the language chosen, and keeps it
   await page.evaluate(() => (window as unknown as { __read: () => void }).__read());
   await page.waitForTimeout(300);
   await expect(dialog.locator('.olv-pe-logo')).toBeHidden();
+});
+
+/** A profile between two points, with the Measure tool open. */
+async function placeLine(page: Page, dy: number): Promise<void> {
+  await page.goto('/?test=1');
+  await dropDenseGridUtmLas(page);
+  await expect(page.locator('.olv-empty')).toBeHidden({ timeout: 20_000 });
+  await page.locator('.olv-tool', { hasText: 'Measure' }).click();
+  await page.evaluate((y) => {
+    const api = (window as unknown as { __OLV_TEST_API__: { setMeasureKind(k: string): void; placeMeasurementPoint(p: { x: number; y: number; z: number }): void; finishMeasurement?(): void } }).__OLV_TEST_API__;
+    api.setMeasureKind('profile');
+    api.placeMeasurementPoint({ x: -4, y: 0, z: 0 });
+    api.placeMeasurementPoint({ x: 4, y, z: 0 });
+    api.finishMeasurement?.();
+  }, dy);
+  await expect(page.locator('.olv-mp-row')).toHaveCount(1, { timeout: 5_000 });
+}
+
+test('the length of the line as the dialog shows it can be marked', async ({ page }) => {
+  test.setTimeout(120_000);
+  await placeLine(page, 0.5);
+  const dialog = await openProfileDialog(page);
+  const closed = dialog.locator('details:not([open]) > summary');
+  while ((await closed.count()) > 0) await closed.first().click();
+  await dialog.getByRole('button', { name: 'Add a marked point' }).click();
+  await dialog.getByLabel('Text, marked point 1').fill('End peg');
+  await dialog.getByLabel('Chainage, marked point 1').fill('99');
+  await dialog.getByRole('button', { name: 'Export PDF' }).click();
+  const shown = /end of the line \(([\d.]+) /.exec((await dialog.getByRole('alert').textContent()) ?? '')![1]!;
+  // The line is the square root of 64.25 long, which is shown rounded up.
+  expect(Number(shown)).toBeGreaterThan(Math.sqrt(64.25));
+  await dialog.getByLabel('Chainage, marked point 1').fill(shown);
+  await Promise.all([page.waitForEvent('download', { timeout: 60_000 }), dialog.getByRole('button', { name: 'Export PDF' }).click()]);
+  await expect(dialog).toBeHidden({ timeout: 10_000 });
+});
+
+test('code that cannot be loaded is said so in the dialog, and nothing is saved', async ({ page }) => {
+  test.setTimeout(120_000);
+  await placeLine(page, 0);
+  const dialog = await openProfileDialog(page);
+  await page.route(/\/assets\/profilePdf-[^/]*\.js/, (r) => r.abort());
+  let saved = 0;
+  page.on('download', () => { saved++; });
+  await dialog.getByRole('button', { name: 'Export PDF' }).click();
+  await expect(dialog.getByRole('alert')).toContainText('PDF export could not load', { timeout: 30_000 });
+  await expect(dialog.getByRole('button', { name: 'Export PDF' })).toBeEnabled();
+  expect(saved).toBe(0);
 });

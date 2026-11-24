@@ -4,7 +4,7 @@
  * The touch-gesture hint gets out of the way once it has been acted on.
  *
  * It used to hide on a 6.5 s timer and nothing else, so someone who read
- * "Drag to rotate" and immediately dragged kept the banner over the scan for
+ * "Drag to orbit" and immediately dragged kept the banner over the scan for
  * the rest of its countdown, the one moment it is provably no longer needed.
  * The hint now also retires shortly after a drag on the scan completes, and the
  * timer stays as the fallback for someone who reads it and does nothing.

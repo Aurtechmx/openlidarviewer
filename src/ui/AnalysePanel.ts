@@ -27,7 +27,7 @@
  * Mounted in `main.ts` next to the Measurements and Annotations panels.
  */
 
-import { chunkFailureText, classifyLoadError, reportChunkFailure } from '../app/staleChunkReload';
+import { RELOAD_ADVICE, chunkFailureText, classifyLoadError, reportChunkFailure } from '../app/staleChunkReload';
 import { chunkFailureNote } from './chunkFailureNote';
 import { blockedCiClause } from '../terrain/validate/holdoutCiText';
 import type { LocalToLonLatSourceZ } from '../export/lonLatMapper';
@@ -104,7 +104,7 @@ import {
 } from '../terrain/contour/contourShapeStyle';
 import type { ContourGeneralizeMode } from '../terrain/contour/terrainAwareTolerance';
 import {
-  loadMapSheetPdf,
+  loadMapSheetPdf, loadMapSheetLanguage,
   loadSheetInputs,
   loadSvgSheet,
   loadSvgRaster,
@@ -144,10 +144,11 @@ import {
   sanitizeMapFilename,
   ensurePdfExtension,
   defaultMapTitle,
-  defaultMapNotes,
+  mapNotes,
+  mapPreparedBy,
   defaultMapFilename,
   annotationsOptionState,
-} from '../render/measure/mapSheetExportOptions';
+} from './mapSheetFields';
 import { TERRAIN_METRIC_VERSION } from '../terrain/datasetIntelligence';
 import { scopeForSampledBasis, terrainAssessment, type SupportingMetric } from '../terrain/contour/terrainAssessment';
 import { recommendedWorkflows } from '../terrain/contour/recommendedWorkflow';
@@ -365,16 +366,14 @@ function section(text: string): HTMLElement {
   return el('div', { className: 'olv-analyse-section', text });
 }
 
-/** Prompt shown in a raster tile's sample readout before the user clicks. */
-
 /**
  * The panel's resting status line: what it says with no result. The panel
- * only shows with a scan open, so the line points at the Run button rather
- * than asking for a file. Named once because `update(null)` has to put it
- * BACK. Without that, the status kept whatever the last run wrote, so closing
- * a scan left the panel reading "Analysing…" over an empty state.
+ * only shows with a scan open, so the line points at Run rather than asking
+ * for a file, without repeating the button label. Named once because
+ * `update(null)` has to put it BACK. Without that, the status kept whatever the
+ * last run wrote, so closing a scan left the panel reading "Analysing…" over an empty state.
  */
-const IDLE_STATUS = 'No terrain result yet. Run terrain analysis to check whether this scan can support a terrain surface.';
+const IDLE_STATUS = 'No terrain result yet. Use Run to check whether this scan can support a terrain surface.';
 
 /**
  * Shown while a clip box is active. The clip limits what is drawn, picked and
@@ -384,7 +383,7 @@ const IDLE_STATUS = 'No terrain result yet. Run terrain analysis to check whethe
  * leave points out, as they do without a clip.
  */
 export const CLIP_SCOPE_NOTE =
-  'A clip box is active. Terrain analysis does not use it: it reads the loaded points of the visible scans inside and outside the box. Results and terrain exports are not limited to the box, and on a large or streaming scan they cover a sample of the file.';
+  'A clip box is on, but terrain analysis ignores it and reads the loaded points of the visible scans inside and outside the box. Results and terrain exports are not limited to the box; on a large or streaming scan they cover a sample of the file.';
 
 /** Resting tooltip for the Intelligence Report button; swapped for the reason when disabled. */
 const REPORT_BUTTON_TITLE =
@@ -392,13 +391,11 @@ const REPORT_BUTTON_TITLE =
 
 // Session-remembered MAP PDF dialog choices. Module-level by design (per the
 // brief — NOT localStorage): they persist across opens within this tab session
-// only, so the next export pre-fills the user's last Prepared by / Sheet /
-// Orientation / Notes without leaking anything to disk.
-let lastPreparedBy = '';
+// only, so the next export pre-fills the user's last Sheet / Orientation; the
+// options module keeps typed Prepared by and Notes. Nothing goes to disk.
 let lastSheet: SheetSize = 'letter';
 let lastOrientation: SheetOrientation = 'portrait';
 type MapSheetStyleChoice = SheetStyleChoice;
-let lastNotes: string | null = null;
 
 /** Whether a terrain product can run from the Export mode, and why not. */
 export interface TerrainProductStatus { readonly ready: boolean; readonly reason: string }
@@ -408,7 +405,7 @@ export type TerrainProductOutcome = { readonly ok: true } | { readonly ok: false
 const NO_TERRAIN_RESULT = 'Run a terrain analysis first.';
 
 /** The map sheet's own code failed, which is not a choice the user still has to make. */
-const MAP_SHEET_LOAD_FAILED = 'The map sheet could not load, so nothing was exported. Reload the page and try again.';
+const MAP_SHEET_LOAD_FAILED = `The map sheet could not load, so nothing was exported. ${RELOAD_ADVICE}`;
 
 /** Shown when the map sheet cannot start from the Export mode. */
 const MAP_SHEET_OPEN_STUDIO =
@@ -441,7 +438,7 @@ type MapSheetOutcome = { readonly ok: true } | { readonly ok: false; readonly re
 
 /** Shown in the map sheet dialog when no granted evidence permit reached it. */
 const MAP_SHEET_NO_PERMIT =
-  'Map sheet not exported. It needs an evidence permit, which Contour Studio grants. '
+  'Map sheet withheld. It needs an evidence permit, which Contour Studio grants. '
   + 'Open Contour Studio on the Contours page, choose a purpose, then export the PDF there.';
 // The contour shape style is remembered on the panel instance (so it drives all
 // exports), but the MAP-PDF dialog also seeds from the panel's current choice.
@@ -718,7 +715,7 @@ export class AnalysePanel {
     const runBtn = el('button', {
       className: 'olv-analyse-run',
       text: 'Run terrain analysis',
-      title: 'Classify ground, build the DTM, validate it, and check contour readiness',
+      title: 'Classify ground, build the digital terrain model (DTM), validate it, and check contour readiness',
     });
     runBtn.addEventListener('click', () => {
       runBtn.blur();
@@ -804,8 +801,6 @@ export class AnalysePanel {
       this._readinessRow,
       this._recommendRow,
       this._qualityRow,
-      section('Validation detail'),
-      this._validationRow,
       section('Surface models'),
       this._surfaceRow,
       this._legend,
@@ -1092,7 +1087,6 @@ export class AnalysePanel {
   /** Toggle the busy state — disables the run button and shows a status. */
   setBusy(busy: boolean, text = 'Analysing…'): void {
     this._runBtn.disabled = busy;
-    this._runBtn.textContent = busy ? 'Analysing…' : this._runLabel();
     if (busy) {
       this.setStatus(text);
       showBusyScan(this._status, text, 'emblem');
@@ -1833,36 +1827,25 @@ export class AnalysePanel {
     const analysisSample = basis?.coverage === 'full' && isSampledBasis(basis);
     const metrics = scopeForSampledBasis(a.supportingMetrics, basis?.coverage === 'sampled' || analysisSample,
       analysisSample ? 'full load, analysis sample' : 'display sample');
-    this._assessmentRow.append(...this._renderAssessMetrics(metrics));
+    const [primary, stats] = this._renderAssessMetrics(metrics);
+    this._assessmentRow.append(primary, stats);
 
-    // Derived complexity metrics (v0.5.4) — one compact line under the
-    // assessment: VRM median [IQR] with its window, TPI dominant class with
-    // its radius, units always stated. The strings are pre-formatted by the
-    // (already lazily-loaded) analysis chunk that computed them, so the
-    // panel stays a passthrough and every surface prints the same words.
-    // The cited density-reliability caveat renders with the standard
-    // `.olv-caveat` honesty treatment; nothing renders when the run
-    // measured nothing (no fabricated band).
+    // Derived complexity: VRM median [IQR] with its window and TPI dominant
+    // class with its radius, as the analysis chunk formatted them. A surface
+    // model stat, so it sits in that disclosure. Its density-reliability caveat
+    // stays outside, visible at rest, and names the figure it qualifies.
     const cx = this._result.complexity;
     if (cx?.band) {
-      // Collapsed by default: the VRM/TPI detail and its cited reliability
-      // caveat are deep metrics, kept one tap away so the assessment reads at
-      // a glance instead of ending in a wall of statistics.
-      const details = el('details', { className: 'olv-analyse-derived' });
-      details.append(
-        el('summary', { className: 'olv-analyse-derived-label', text: 'Derived complexity' }),
-        el('div', {
-          className: 'olv-analyse-derived-value',
-          text: `${cx.bandLabel} — ${cx.detail}`,
-        }),
-      );
+      stats.append(el('div', {
+        className: 'olv-analyse-derived-value',
+        text: `Derived complexity: ${cx.bandLabel} — ${cx.detail}`,
+      }));
       const caveat = cx.warnings.find((w) => w.includes('reliability threshold'));
       if (caveat) {
-        details.append(
-          el('div', { className: 'olv-caveat olv-analyse-derived-caveat', text: caveat }),
+        this._assessmentRow.append(
+          el('div', { className: 'olv-caveat olv-analyse-derived-caveat', text: `Derived complexity: ${caveat}` }),
         );
       }
-      this._assessmentRow.append(details);
     }
   }
 
@@ -1875,7 +1858,7 @@ export class AnalysePanel {
    * so the panel reads less dense at a glance. Returns the primary row and the
    * disclosure as siblings, so the primary row is never inside a closed details.
    */
-  private _renderAssessMetrics(metrics: ReadonlyArray<SupportingMetric>): HTMLElement[] {
+  private _renderAssessMetrics(metrics: ReadonlyArray<SupportingMetric>): [HTMLElement, HTMLElement] {
     // Surface model stats are secondary to the verdict and the products, so the
     // whole block sits behind one disclosure; the chips are all still here.
     const wrap = el('details', { className: 'olv-analyse-assess-metricwrap' });
@@ -1995,8 +1978,8 @@ export class AnalysePanel {
     );
     if (isPreview) {
       head.title = this._result!.dtm.coverageMode === 'resident-only'
-        ? 'Provisional: scored on the streamed-in part so far. Let the full cloud stream in, then re-run for a settled grade.'
-        : 'Provisional: scored on a preview-grade surface. Re-run on the full cloud for a settled grade.';
+        ? 'Provisional: scored on the streamed-in part so far. Let the full cloud stream in, then re-run for a settled score.'
+        : 'Provisional: scored on a preview-grade surface. Re-run on the full cloud for a settled score.';
     }
     this._scoreRow.append(head);
     // The six weighted COMPONENTS (Coverage / Confidence / Validation / Density /
@@ -2345,19 +2328,13 @@ export class AnalysePanel {
     this._body.replaceChildren();
     if (!this._result) return;
     this._body.append(
-      this._hint(
-        el('div', {
-          className: 'olv-analyse-caption',
-          text: contourShareCaption(this._result.model),
-        }),
-        'Sparse ground: measured, but with fewer ground returns than a typical cell. Interpolated: filled from nearby ground. Gap: too little support to trust.',
-      ),
+      el('div', { className: 'olv-analyse-caption', text: contourShareCaption(this._result.model) }),
     );
     if (this._result.excludedByClassification > 0) {
       this._body.append(
         el('div', {
           className: 'olv-analyse-caption is-dim',
-          text: `Excluded ${this._result.excludedByClassification.toLocaleString()} classified vegetation/building/noise return(s) before ground filtering.`,
+          text: `Excluded ${this._result.excludedByClassification.toLocaleString('en-US')} classified vegetation/building/noise return(s) before ground filtering.`,
         }),
       );
     }
@@ -2833,12 +2810,12 @@ export class AnalysePanel {
             generalizeToleranceCells: intent.generalizeToleranceCells,
           })
         : this._result;
-      const { buildContourDeliverableFromResultAsync } = await loadContourDeliverableBuild();
+      const { buildContourDeliverableFromResultAsync, exportLocale } = await loadContourDeliverableBuild();
       // Same re-verification as the vector exports: a scan opened during the
       // rebuild means this bundle is no longer the one the user is looking at.
       if (this._refuseForeignScanExport()) return;
       const bytes = await buildContourDeliverableFromResultAsync(result, {
-        digests: await terrainExportDigests(this._cb, result), sheetStyle: sheetStyle(),
+        digests: await terrainExportDigests(this._cb, result), sheetStyle: sheetStyle(), locale: exportLocale(),
         decision: permit.decision,
         basename,
         worldOrigin: ctx.worldOrigin ?? null,
@@ -2900,7 +2877,7 @@ export class AnalysePanel {
     // Statistics — the two facts above were hoisted and this one was not.
     const intelligence = this._cb.getDatasetIntelligence?.() ?? null;
     try {
-      const { buildTerrainReportPdf } = await loadTerrainReportPdf();
+      const { buildTerrainReportPdf, exportLocale } = await loadTerrainReportPdf();
       // At the selected export style, the field the map sheet also reads, so
       // both documents state one contour style (cache hit; core unchanged).
       const rep = await this._resultForExport();
@@ -2931,7 +2908,7 @@ export class AnalysePanel {
         // real unit ('ft' / 'degrees') instead of a hard-coded metre.
         linearUnit: mapCtx.linearUnit,
         isGeographic: mapCtx.isGeographic,
-      }, { style: sheetStyle() });
+      }, { style: sheetStyle(), locale: exportLocale() });
       triggerDownload(new Blob([bytes as BlobPart], { type: 'application/pdf' }), `${basename}-terrain-report.pdf`);
     } catch (err) {
       // eslint-disable-next-line no-console
@@ -2985,7 +2962,6 @@ export class AnalysePanel {
     // Two different quantities: what the contours on the sheet ARE spaced at,
     // and what was asked for. The sheet's note describes the first; the picker
     // and the "did it change" test are about the request.
-    const currentInterval = r.model.intervalM;
     const requestedInterval = r.requestedIntervalM ?? r.model.intervalM;
     const currentStyle = r.model.contourStyle;
     const canRegen = typeof this._cb.buildResultForExport === 'function';
@@ -3015,22 +2991,17 @@ export class AnalysePanel {
     const preparedInput = document.createElement('input');
     preparedInput.type = 'text';
     preparedInput.className = 'olv-modal-input';
-    preparedInput.value = lastPreparedBy;
+    const prepared = mapPreparedBy();
+    preparedInput.value = prepared.shown;
     preparedInput.placeholder = 'Name or organisation (optional)';
 
     const notesInput = document.createElement('textarea');
     notesInput.className = 'olv-modal-input olv-modal-textarea';
     notesInput.rows = 3;
-    notesInput.value =
-      lastNotes ??
-      defaultMapNotes({
-        basename,
-        intervalM: currentInterval,
-        crs: r.model.crs,
-        // The interval is a source VERTICAL-unit value — label it from the CRS so
-        // a foot / unresolved frame never seeds a false 'm'.
-        verticalUnitToMetres: ctx.verticalUnitToMetres,
-      });
+    // The interval is a source VERTICAL-unit value: labelled from the CRS as it is
+    // when asked, so a foot / unresolved frame never seeds a false 'm'.
+    const notes = mapNotes(this._resultScanId, basename, r.model, () => (this._cb.getMapContext?.() ?? ctx).verticalUnitToMetres);
+    notesInput.value = notes.shown;
 
     const sheetSel = document.createElement('select');
     sheetSel.className = 'olv-modal-input';
@@ -3052,6 +3023,7 @@ export class AnalysePanel {
       sheetStyleSel.append(o);
     }
 
+    const languageSlot = el('div'); loadMapSheetLanguage().then((m) => languageSlot.append(m.mapSheetLanguage(sheetStyleSel)), () => languageSlot.remove());
     const orientSel = document.createElement('select');
     orientSel.className = 'olv-modal-input';
     for (const opt of ORIENTATION_OPTIONS) {
@@ -3126,10 +3098,9 @@ export class AnalysePanel {
     editable.append(
       field('Title', titleInput),
       field('Prepared by', preparedInput),
-      field('Project / Notes', notesInput, 'Free text printed in the title block.'),
+      field('Project / Notes', notesInput, 'Free text printed in the title block. Left as it is, it states the interval drawn.'),
       field('Sheet style', sheetStyleSel, 'Light and Dark draw shaded relief under the contours. Classic draws the lines only.'),
-      field('Sheet size', sheetSel),
-      field('Orientation', orientSel),
+      languageSlot, field('Sheet size', sheetSel), field('Orientation', orientSel),
       field(
         'Contour interval',
         intervalSel,
@@ -3244,7 +3215,7 @@ export class AnalysePanel {
           const outcome = await this._buildAndDownloadMapPdf(result, {
             title: titleInput.value,
             preparedBy: preparedInput.value,
-            notes: notesInput.value,
+            notes: notes.print(notesInput.value, result.model),
             sheet: sheetSel.value as SheetSize,
             orientation: orientSel.value as SheetOrientation,
             style: sheetStyleSel.value as MapSheetStyleChoice,
@@ -3274,16 +3245,16 @@ export class AnalysePanel {
           this._contourStyle = chosenStyle;
           this._contourGeneralizeToleranceCells = undefined;
           // Remember the user's choices for the rest of the session.
-          lastPreparedBy = preparedInput.value;
+          prepared.keep(preparedInput.value);
           lastSheet = sheetSel.value as SheetSize;
           lastOrientation = orientSel.value as SheetOrientation;
           setSheetStyle(sheetStyleSel.value as MapSheetStyleChoice);
-          lastNotes = notesInput.value;
+          notes.keep(notesInput.value);
           handle.close();
         } catch (err) {
           // eslint-disable-next-line no-console
           console.error('OpenLiDARViewer: map sheet export failed.', err);
-          errLine.textContent = 'The PDF could not be made, so nothing was saved. Reload the page and try again.';
+          errLine.textContent = `The PDF could not be made, so nothing was saved. ${RELOAD_ADVICE}`;
           errLine.style.display = '';
           exportBtn.disabled = false;
           cancelBtn.disabled = false;
@@ -3346,7 +3317,7 @@ export class AnalysePanel {
     // Only when opted in; the up-axis is the gather's own (annotationMapProjection.ts).
     const annotations = opts.annotations ?? [];
     const sceneUpAxis = mapCtx?.sceneUpAxis ?? 'z';
-    const { buildContourSheetPdf } = await loadMapSheetPdf();
+    const { buildContourSheetPdf, exportLocale } = await loadMapSheetPdf();
     // The styled sheets draw the analysed grid under the contours and, on a
     // projected CRS, a true-north arrow. Classic reads neither.
     const { relief, trueNorth } = (await loadSheetInputs()).styledSheetInputs(opts.style, result.dtm, result.model.bbox, opts.worldOrigin);
@@ -3398,7 +3369,7 @@ export class AnalysePanel {
       // Purpose deliverable facts (Studio path) so the sheet renders purpose-
       // specific content. Null on any other path ⇒ byte-identical sheet.
       purpose,
-      style: opts.style,
+      style: opts.style, locale: exportLocale(),
       measurements: opts.measurements,
       relief,
       trueNorth,
@@ -3555,6 +3526,7 @@ export class AnalysePanel {
     checks.append(
       el('summary', { className: 'olv-fit-caveats-summary', text: `Validation detail (${f.dimensions.length} checks)` }),
       grid,
+      this._validationRow,
     );
     this._fitnessMore.append(checks);
 
@@ -3681,6 +3653,10 @@ export class AnalysePanel {
         }),
       );
     });
+    legend.append(el('div', {
+      className: 'olv-analyse-legend-item',
+      text: 'Sparse ground: measured, but with fewer ground returns than a typical cell. Interpolated: filled from nearby ground. Gap: too little support to trust.',
+    }));
     return legend;
   }
 }

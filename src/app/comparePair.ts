@@ -5,6 +5,7 @@
  * still publish its result.
  */
 
+
 export interface CompareChoice {
   readonly id: string;
   readonly name: string;
@@ -125,13 +126,16 @@ export interface CompareParticipant {
   readonly stableId: string | null;
   /** The loaded layer object, so a replaced scan in the same slot does not match. */
   readonly layer: unknown;
+  /** The layer's resolved CRS and class-edit state when compared; absent when the host states none. */
+  readonly inputKey?: string;
 }
 
 /**
  * True while a finished comparison still describes the pair the panel names:
  * the selection resolves to the same two viewer ids, and both are still the
- * same loaded layers with the same stable ids. Anything else (a pair change, a
- * participant closed or replaced) makes the result stale.
+ * same loaded layers with the same stable ids and the same inputs. Anything
+ * else (a pair change, a participant closed or replaced, its CRS reassigned or
+ * its classes edited) makes the result stale.
  */
 export function compareResultCurrent(
   held: { readonly before: CompareParticipant; readonly after: CompareParticipant },
@@ -139,11 +143,12 @@ export function compareResultCurrent(
   selection: ComparePairSelection,
   lookup: (id: string) => unknown,
   stableIdFor: (id: string) => string | null,
+  inputKeyFor?: (id: string) => string,
 ): boolean {
   const pair = resolveComparePair(ids, selection);
   if (!pair.ok || pair.beforeId !== held.before.viewerId || pair.afterId !== held.after.viewerId) return false;
   return [held.before, held.after].every(
-    (p) => ids.includes(p.viewerId) && lookup(p.viewerId) === p.layer && stableIdFor(p.viewerId) === p.stableId,
+    (p) => ids.includes(p.viewerId) && lookup(p.viewerId) === p.layer && stableIdFor(p.viewerId) === p.stableId && inputKeyFor?.(p.viewerId) === p.inputKey,
   );
 }
 
@@ -217,11 +222,16 @@ export interface CompareDifferenceDeps {
   readonly selection: () => ComparePairSelection;
   readonly lookup: (id: string) => unknown;
   readonly stableIdFor: (id: string) => string | null;
+  /** See {@link CompareParticipant.inputKey}. */
+  readonly inputKeyFor?: (id: string) => string;
   readonly setDifferenceAvailable: (on: boolean) => void;
   readonly setCompareResult: (lines: readonly string[]) => void;
   /** Retire the run in flight, so a run on a pair no longer named never publishes. */
   readonly retireRun?: () => void;
 }
+
+/** Shown in place of a comparison whose scans' coordinate system or classes changed. */
+export const COMPARE_INPUTS_CHANGED = 'The comparison was cleared: the coordinate system or the classes of a compared scan changed. Compare again.';
 
 /**
  * Binds the shown comparison and its difference raster to the pair they were
@@ -230,7 +240,7 @@ export interface CompareDifferenceDeps {
  * replaced. Restoring the pair does not bring them back.
  */
 export function createCompareDifference(deps: CompareDifferenceDeps) {
-  const participant = (viewerId: string, layer: unknown): CompareParticipant => ({ viewerId, stableId: deps.stableIdFor(viewerId), layer });
+  const participant = (viewerId: string, layer: unknown): CompareParticipant => ({ viewerId, stableId: deps.stableIdFor(viewerId), layer, inputKey: deps.inputKeyFor?.(viewerId) });
   // The pair whose result the panel shows, from the start of its run.
   let shown: { before: CompareParticipant; after: CompareParticipant } | null = null;
   return {
@@ -240,24 +250,31 @@ export function createCompareDifference(deps: CompareDifferenceDeps) {
       shown = { before: participant(ids[0], before), after: participant(ids[1], after) };
     },
     /** The run's difference raster is ready to download. */
-    hold(file: { readonly stem: string; readonly asc: () => string; readonly sidecars?: readonly { readonly suffix: string; readonly text: string }[] }): void {
+    hold(file: Omit<HeldDifference, 'before' | 'after'>): void {
       if (shown) deps.slot.lastDifference = { ...file, ...shown };
     },
     /** Whether the shown result was computed on this scan. */
     involves(viewerId: string): boolean {
       return !!shown && (shown.before.viewerId === viewerId || shown.after.viewerId === viewerId);
     },
+    /** The held difference while it is current; a stale one is dropped first. */
+    current(): HeldDifference | null {
+      this.dropStale();
+      return deps.slot.lastDifference;
+    },
     dropStale(): void {
-      if (!shown || compareResultCurrent(shown, deps.ids(), deps.selection(), deps.lookup, deps.stableIdFor)) return;
+      if (!shown || compareResultCurrent(shown, deps.ids(), deps.selection(), deps.lookup, deps.stableIdFor, deps.inputKeyFor)) return;
+      // The pair is still there and named: what the comparison read of it changed.
+      const inputsChanged = compareResultCurrent(shown, deps.ids(), deps.selection(), deps.lookup, deps.stableIdFor, (id) => [shown!.before, shown!.after].find((p) => p.viewerId === id)?.inputKey ?? '');
       shown = null;
       deps.retireRun?.();
       deps.slot.lastDifference = null;
       deps.setDifferenceAvailable(false);
-      deps.setCompareResult([]);
+      deps.setCompareResult(inputsChanged ? [COMPARE_INPUTS_CHANGED] : []);
     },
     /** Download the held difference as an ESRI ASCII grid. */
     download(downloadText: (filename: string, text: string) => void): void {
-      const held = deps.slot.lastDifference;
+      const held = this.current();
       if (!held) return;
       downloadText(`${held.stem}.asc`, held.asc());
       for (const side of held.sidecars ?? []) downloadText(`${held.stem}${side.suffix}`, side.text);

@@ -134,7 +134,7 @@ export function makeDecodeNode(
     const positions = renderLocalPositions(decoded);
     if (positions.length % 3 !== 0) {
       throw new Error(
-        `Full-cloud grade: node ${id} decoded ${positions.length} position floats, not a multiple of 3.`,
+        `Full-cloud check: node ${id} decoded ${positions.length} position floats, not a multiple of 3.`,
       );
     }
     return positions;
@@ -168,7 +168,7 @@ function statesPointTotal(source: GradeNodeSource): boolean {
  * representative sample within budget, decode it through `decoder`, and grade
  * the assembled points with `grade` (the terrain pipeline at the call site).
  *
- * This is the single entry the "Grade full cloud" UI action invokes — it owns
+ * This is the single entry the "Check full cloud" UI action invokes — it owns
  * the adapter glue (enumerate + decode) so the panel only has to supply the
  * source, a decoder, the grade, and an optional progress/abort. A graded
  * outcome carries the honest coverage label (`run.coverage.label`, e.g.

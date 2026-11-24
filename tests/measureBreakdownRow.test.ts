@@ -13,7 +13,7 @@
  */
 
 import { describe, it, expect } from 'vitest';
-import { breakdownParts, type BreakdownFormatters } from '../src/ui/measureBreakdownRow';
+import { SLANT_NOTE, breakdownParts, type BreakdownFormatters } from '../src/ui/measureBreakdownRow';
 import { lineBreakdown, areaBreakdown } from '../src/render/measure/measureBreakdown';
 import type { Vec3 } from '../src/render/navMath';
 
@@ -46,10 +46,11 @@ const ring = (verticalToMetres = 1) =>
   );
 
 describe('breakdownParts — a distance', () => {
-  it('names the run, the rise, the slant and the grade', () => {
+  it('names the run, the rise and the grade, and leaves the slant to the headline', () => {
     const r = breakdownParts({ kind: 'distance', lineMetrics: line() }, 'metric', FMT);
     expect(r).not.toBeNull();
-    expect(r!.text).toBe('Run 3.00m · Rise 4.00m · Slant 5.00m · Grade 133.3% (53.1deg)');
+    expect(r!.text).toBe('Run 3.00m · Rise 4.00m · Grade 133.3% (53.1deg)');
+    expect(SLANT_NOTE).toMatch(/slant: the straight line through space/);
   });
 
   it('omits the grade for a vertical pair rather than printing infinity', () => {
@@ -147,7 +148,7 @@ describe('one unit per breakdown line', () => {
       formatGrade: f.formatGrade,
       formatAngle: f.formatAngle,
     });
-    expect(out!.text).toMatch(/Run 30\.0+ cm · Rise 40\.0+ cm · Slant 50\.0+ cm/);
+    expect(out!.text).toMatch(/Run 30\.0+ cm · Rise 40\.0+ cm · Grade/);
   });
 });
 

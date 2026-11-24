@@ -59,7 +59,7 @@ live node and point counts, the cache size, and controls:
 
 - Colour: RGB (when the data carries colour), Height, Intensity, and Class for COPC and EPT. A 3D Tiles tileset adds Normal when its tiles carry normals.
 - Quality: Low, Balanced, or High; raises or lowers the point budget.
-- Grade full cloud: samples the whole octree rather than only what is on screen and shows a grade with summary lines. A label says whether the result is exact or a sample of the cloud.
+- Check full cloud: samples the whole octree rather than only what is on screen and shows summary lines for density and extent. A label says whether the result is exact or a sample of the cloud.
 - Pause / Resume: stop or resume loading new detail.
 - Clear cache: drop the cached compressed chunks.
 

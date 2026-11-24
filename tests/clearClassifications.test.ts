@@ -393,7 +393,7 @@ describe('runDeriveClassification', () => {
     const { toasts, applied } = await run(cloud());
     expect(derive).not.toHaveBeenCalled();
     expect(applied).toHaveLength(0);
-    expect(toasts.join(' ')).toMatch(/carries producer classes, so they stay as they are\. Press Clear classes first/);
+    expect(toasts.join(' ')).toMatch(/Auto-classify · this scan carries producer classes, so they stay as they are\. Press Clear classes first/);
   });
 
   it('runs on a cleared scan and stamps the registry method id@version', async () => {
@@ -412,7 +412,7 @@ describe('runDeriveClassification', () => {
   it('says a streaming scan needs a fully loaded scan', async () => {
     const { toasts } = await run(undefined, true);
     expect(derive).not.toHaveBeenCalled();
-    expect(toasts[0]).toBe('Classify needs a fully loaded scan and does not run on a streaming one.');
+    expect(toasts[0]).toBe('Auto-classify needs a fully loaded scan and does not run on a streaming one.');
   });
 
   it('drops the result when the classes changed while it ran', async () => {
@@ -423,6 +423,6 @@ describe('runDeriveClassification', () => {
     derive.mockImplementation(async () => { epoch++; return result; });
     const { toasts, applied } = await run(pc, false, () => epoch);
     expect(applied).toHaveLength(0);
-    expect(toasts.at(-1)).toBe('Classify · the classes changed while it ran, so it left them as they are. Run it again.');
+    expect(toasts.at(-1)).toBe('Auto-classify · the classes changed while it ran, so it left them as they are. Run it again.');
   });
 });

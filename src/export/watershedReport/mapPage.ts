@@ -32,8 +32,9 @@ import { depressionMembers, type DepressionEntry } from '../../simulation/flowPu
 import { douglasPeucker, traceDivide, type Ring } from '../../simulation/flowPulse/watershed/divideTrace';
 import type { FlowNetwork } from '../../simulation/flowPulse/watershed/flowNetwork';
 import type { WatershedPartition } from '../../simulation/flowPulse/watershed/watershedPartition';
+import { reportLocale } from '../../simulation/flowPulse/watershed/watershedReportModel';
 import type {
-  CatchmentSection, ReportLanguage, WatershedReportModel,
+  CatchmentSection, WatershedReportModel,
 } from '../../simulation/flowPulse/watershed/watershedReportModel';
 import { formatNumber, t } from '../../simulation/flowPulse/watershed/watershedStrings';
 import { scaleBarUnit } from '../../render/measure/scaleBar';
@@ -479,7 +480,8 @@ export async function drawMapPage(
   fonts: ReportFonts,
   encodePng: (rgba: Uint8Array, w: number, h: number) => Promise<Uint8Array>,
 ): Promise<PageCursor> {
-  const lang: ReportLanguage = model.language;
+  const lang = model.language;
+  const loc = reportLocale(model);
   const { grid, focus } = layers;
   const { cols, cellMetresX: sx, cellMetresY: sy, valid } = grid;
   const part = focus ? undefined : layers.partition;
@@ -729,7 +731,7 @@ export async function drawMapPage(
   page.drawRectangle({ x: frame.x - 2.5, y: frame.y - 2.5, width: frame.w + 5, height: frame.h + 5, borderColor: PALETTE.ink, borderWidth: 0.3 });
   const step = niceStep(Math.max(wM, hM), 6);
   const dec = decimalsFor(step);
-  const label = (v: number) => formatNumber(lang, v, dec);
+  const label = (v: number) => formatNumber(loc.numberStyle, v, dec);
   let lastRight = -Infinity;
   for (let v = Math.ceil(wx0 / step) * step; v <= wx0 + wM + 1e-9; v += step) {
     const x = frame.x + (v - wx0) * scale;
@@ -773,12 +775,12 @@ export async function drawMapPage(
     const vdec = decimalsFor(segVal);
     for (let k = 0; k <= segsN; k++) {
       if (segPt < 22 && k !== 0 && k !== segsN) continue;
-      const s = formatNumber(lang, segVal * k, vdec);
+      const s = formatNumber(loc.numberStyle, segVal * k, vdec);
       const w = widthOf(s, fonts.body, TICK_LABEL, fonts);
       drawRuns(page, s, bx + k * segPt - (k === 0 ? 0 : w / 2), by + 8, { font: fonts.body, size: TICK_LABEL, color: PALETTE.ink }, fonts);
     }
     drawRuns(page, unit, bx + barPt + 5, by, { font: fonts.body, size: TICK_LABEL, color: PALETTE.ink2 }, fonts);
-    const ratio = `1:${formatNumber(lang, scaleRatio(scale), 0)}`;
+    const ratio = `1:${formatNumber(loc.numberStyle, scaleRatio(scale), 0)}`;
     let y = by - 16;
     const sline = t(lang, 'map.scale', { ratio });
     drawRuns(page, sline, bx, y, { font: fonts.bodyBold, size: 10.5, color: PALETTE.ink }, fonts);

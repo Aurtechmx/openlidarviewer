@@ -53,7 +53,7 @@ const LEAD = 1.4;
 export interface PageContext {
   readonly doc: PDFDocument;
   readonly size: PageSize;
-  readonly spine: { readonly id: string; readonly section: string; readonly pageNo: number; readonly status?: string | null };
+  readonly spine: { readonly id: string; readonly section: string; readonly pageNo: number; readonly status?: string | null; readonly note?: string | null };
   readonly fonts: ReportFonts;
   readonly footer: string;
 }
@@ -205,7 +205,7 @@ export function fitFooter(footer: string, room: number, fonts: ReportFonts): str
 export function newPage(
   doc: PDFDocument,
   size: PageSize,
-  spine: { readonly id: string; readonly section: string; readonly pageNo: number; readonly status?: string | null },
+  spine: { readonly id: string; readonly section: string; readonly pageNo: number; readonly status?: string | null; readonly note?: string | null },
   fonts: ReportFonts,
   footer: string,
 ): PageCursor {
@@ -244,6 +244,8 @@ export function newPage(
   const footText = fitFooter(footer, right - left - statusW, fonts);
   drawRuns(page, footText, left, 28, { font: fonts.body, size: SZ.caption, color: PALETTE.mute }, fonts);
   if (spine.status) drawRight(page, spine.status, right, 28, { font: fonts.bodyBold, size: SZ.caption, color: PALETTE.earth }, fonts);
+  // The translation's draft notice, under the footer so a long status cannot crowd it out.
+  if (spine.note) drawRuns(page, spine.note, left, 16, { font: fonts.body, size: 8.5, color: PALETTE.mute }, fonts);
   return { page, y: h - MARGIN_TOP, left, right, bottom: BOTTOM, ctx };
 }
 

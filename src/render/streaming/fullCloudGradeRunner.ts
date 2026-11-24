@@ -161,8 +161,8 @@ export async function runFullCloudGrade<G>(args: {
     const declared = declaredById.get(id) ?? 0;
     if (chunk.length !== declared * 3) {
       throw new FullCloudGradeShortDecodeError(
-        `Full-cloud grade: node ${id} decoded ${chunk.length / 3} points, but its header ` +
-          `declared ${declared}. Hierarchy counts are exact; refusing to grade an ` +
+        `Full-cloud check: node ${id} decoded ${chunk.length / 3} points, but its header ` +
+          `declared ${declared}. Hierarchy counts are exact; refusing to check an ` +
           `inconsistent sample rather than report a coverage it never decoded.`,
       );
     }

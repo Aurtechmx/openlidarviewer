@@ -483,13 +483,13 @@ export class RangeWorkbench {
       const tr = el('tr');
       tr.append(
         el('th', { text: CELL_STATE_LABEL[state] }),
-        el('td', { text: share.count.toLocaleString() }),
+        el('td', { text: share.count.toLocaleString('en-US') }),
         el('td', { text: pct(share.fraction) }),
       );
       table.append(tr);
     }
     const total = el('tr', { className: 'olv-range-total' });
-    total.append(el('th', { text: 'Cells' }), el('td', { text: summary.validity.cells.toLocaleString() }), el('td'));
+    total.append(el('th', { text: 'Cells' }), el('td', { text: summary.validity.cells.toLocaleString('en-US') }), el('td'));
     table.append(total);
     validity.append(table);
     this._stats.append(validity);
@@ -504,9 +504,9 @@ export class RangeWorkbench {
         tr.append(el('th', { text: name }), el('td', { text: value }));
         rt.append(tr);
       };
-      row('Cells with a range', r.finiteCount.toLocaleString());
-      row('Returns with no representable range', r.excludedNonFinite.toLocaleString());
-      row('Cells that never carried a range', r.cellsWithoutRange.toLocaleString());
+      row('Cells with a range', r.finiteCount.toLocaleString('en-US'));
+      row('Returns with no representable range', r.excludedNonFinite.toLocaleString('en-US'));
+      row('Cells that never carried a range', r.cellsWithoutRange.toLocaleString('en-US'));
       row('Nearest', rangeNum(r.min));
       row('Farthest', rangeNum(r.max));
       row('Median', rangeNum(r.median));

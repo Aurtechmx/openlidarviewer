@@ -83,6 +83,7 @@ export interface ResultsShelfSources {
   readonly viewer: {
     readonly measure: MeasurementReader;
     clouds(): string[];
+    isCloudVisible?(id: string): boolean;
     getCloud(id: string): { readonly name: string; readonly acquisitionStations?: { readonly stations: readonly unknown[] } } | undefined;
     getCameraPose(): Pose;
     applyCameraPose(pose: Pose): void;
@@ -135,6 +136,8 @@ export function mountResultsShelf(
   navigate: (route: WorkspaceRoute) => void,
   runAction?: (id: string) => void,
   openWorkbench?: (measurementId: string) => boolean,
+  exportProfile?: (measurementId: string) => Promise<void>,
+  notify?: (message: string) => void,
 ): MountedResultsShelf {
   const src = {
     viewer: host.viewer,
@@ -211,7 +214,16 @@ export function mountResultsShelf(
       }
       : undefined,
     layerName: (id) => src.viewer.getCloud(id)?.name ?? null,
+    layerHidden: (id) => src.viewer.clouds().includes(id) && src.viewer.isCloudVisible?.(id) === false,
+    ...(notify ? { notify } : {}),
     ...(openWorkbench ? { openWorkbench } : {}),
+    ...(exportProfile ? { exportProfile: (id: string) => {
+      const summary = src.viewer.measure.getSummaries?.().find((s) => s.id === id);
+      if (summary && (summary.profileChart?.length ?? 0) < 2) {
+        return Promise.reject(Object.assign(new Error('Not exported: it has no chart. Its row on the Measure page says why.'), { name: 'ProfileExportRefusal' }));
+      }
+      return exportProfile(id);
+    } } : {}),
   });
   const offIndex = index.subscribe(() => {
     const has = terrainExports.ready();

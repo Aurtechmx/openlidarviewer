@@ -87,7 +87,7 @@ export function checkGridBudget(req: GridBudgetRequest): GridBudgetResult {
   // Hard ceiling → blocked: this is a bad request, not a fine grid to coarsen.
   if (cellCount >= hardMaxCells || !Number.isSafeInteger(cellCount)) {
     return { verdict: 'blocked', cellCount, cpuBytes, gpuBytes,
-      reason: `Grid ${cols}×${rows} = ${cellCount.toLocaleString()} cells is at or over the hard ceiling of ${hardMaxCells.toLocaleString()}; no reasonable grid is this large.` };
+      reason: `Grid ${cols}×${rows} = ${cellCount.toLocaleString('en-US')} cells is at or over the hard ceiling of ${hardMaxCells.toLocaleString('en-US')}; no reasonable grid is this large.` };
   }
 
   // GPU buffer limits are hard device limits — over them the allocation would
@@ -96,16 +96,16 @@ export function checkGridBudget(req: GridBudgetRequest): GridBudgetResult {
     if (gpuBytes > req.gpu.maxBufferSizeBytes || gpuBytes > req.gpu.maxStorageBufferBindingSizeBytes) {
       const limit = Math.min(req.gpu.maxBufferSizeBytes, req.gpu.maxStorageBufferBindingSizeBytes);
       return { verdict: 'blocked', cellCount, cpuBytes, gpuBytes,
-        reason: `GPU buffer of ${gpuBytes.toLocaleString()} bytes exceeds the device limit of ${limit.toLocaleString()}; coarsen the grid or use the CPU path.` };
+        reason: `GPU buffer of ${gpuBytes.toLocaleString('en-US')} bytes exceeds the device limit of ${limit.toLocaleString('en-US')}; coarsen the grid or use the CPU path.` };
     }
   }
 
   // Soft budget → coarsen: the grid is representable but too fine for comfort.
   if (cellCount > softMaxCells || cpuBytes > softMaxCpuBytes) {
     return { verdict: 'coarsen', cellCount, cpuBytes, gpuBytes,
-      reason: `Grid ${cols}×${rows} = ${cellCount.toLocaleString()} cells (${(cpuBytes / (1024 * 1024)).toFixed(0)} MiB) is over the working budget; a coarser cell size is recommended.` };
+      reason: `Grid ${cols}×${rows} = ${cellCount.toLocaleString('en-US')} cells (${(cpuBytes / (1024 * 1024)).toFixed(0)} MiB) is over the working budget; a coarser cell size is recommended.` };
   }
 
   return { verdict: 'ready', cellCount, cpuBytes, gpuBytes,
-    reason: `Grid ${cols}×${rows} = ${cellCount.toLocaleString()} cells (${(cpuBytes / (1024 * 1024)).toFixed(1)} MiB) is within budget.` };
+    reason: `Grid ${cols}×${rows} = ${cellCount.toLocaleString('en-US')} cells (${(cpuBytes / (1024 * 1024)).toFixed(1)} MiB) is within budget.` };
 }

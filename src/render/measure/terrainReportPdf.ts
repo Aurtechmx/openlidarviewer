@@ -36,6 +36,11 @@ import {
   type TerrainReportContentOptions,
 } from '../../terrain/export/terrainReportContent';
 import { NO_RESOLVED_VERTICAL_SCALE } from '../../terrain/export/exportProvenance';
+import { localizeTerrainReport } from '../../terrain/export/localizeTerrainReport';
+import type { ExportLocale } from '../../i18n/exportLocale';
+
+// The session's export language, from this lazy chunk so the panel need not load it.
+export { exportLocale } from '../../i18n/exportLocale';
 import {
   clipWithSuffix,
   mayCapField,
@@ -90,6 +95,13 @@ function isContent(x: unknown): x is TerrainReportContent {
   );
 }
 
+/** How the report is drawn: its sheet style, and its language (English when absent). */
+export interface TerrainReportRender {
+  readonly style?: SheetStyle | null;
+  readonly loadFont?: (name: string) => Promise<Uint8Array>;
+  readonly locale?: ExportLocale;
+}
+
 /**
  * Build the Terrain Intelligence Report PDF and return its bytes. Accepts either
  * a pre-built {@link TerrainReportContent} (preferred when the caller already
@@ -105,7 +117,7 @@ function isContent(x: unknown): x is TerrainReportContent {
 export async function buildTerrainReportPdf(
   input: TerrainReportContent | AnalyseContoursResult,
   opts: TerrainReportContentOptions = NO_RESOLVED_VERTICAL_SCALE,
-  render: { readonly style?: SheetStyle | null; readonly loadFont?: (name: string) => Promise<Uint8Array> } = {},
+  render: TerrainReportRender = {},
 ): Promise<Uint8Array> {
   try {
     return await buildTerrainReportPdfStyled(input, opts, render);
@@ -117,15 +129,15 @@ export async function buildTerrainReportPdf(
 async function buildTerrainReportPdfStyled(
   input: TerrainReportContent | AnalyseContoursResult,
   opts: TerrainReportContentOptions,
-  render: { readonly style?: SheetStyle | null; readonly loadFont?: (name: string) => Promise<Uint8Array> },
+  render: TerrainReportRender,
 ): Promise<Uint8Array> {
-  const content = isContent(input) ? input : buildTerrainReportContent(input, opts);
+  const { content, words } = localizeTerrainReport(isContent(input) ? input : buildTerrainReportContent(input, opts), render.locale);
 
   const doc = await PDFDocument.create();
   // Info dictionary, accessibility hooks and faces. Light and Dark: the sheet
   // kit's fonts and colours. No await follows until the save, so the swapped
   // colours are this build's alone.
-  const { kit, font, bold } = await openReport(doc, content.title, undefined, render);
+  const { kit, font, bold } = await openReport(doc, content.title, undefined, render, words.tag);
   if (kit) {
     const k = kit, t = kit.tokens;
     useInk({ INK: k.color(t.ink), DIM: k.color(t.dim), FRAME: k.color(t.outline), WARN: k.color(t.warn), GOOD: k.color(t.good), CAUTION: k.color(t.caution) });
@@ -191,6 +203,7 @@ async function buildTerrainReportPdfStyled(
   const valueX = M + 170;
   const valueW = PW - M - valueX;
   const labelW = valueX - labelX - 8;
+  const omitted = (n: number): string => words.say('omitted', { n: n.toLocaleString('en-US') });
   for (const sec of content.sections) {
     // Keep a section header with at least its first row on the same page.
     ensure(34);
@@ -205,14 +218,14 @@ async function buildTerrainReportPdfStyled(
       // across pages repeats its label as "(continued)" on the new page.
       // A row value may copy file-derived text (the scan name) and is capped,
       // unless its label marks a CRS, datum, digest or unit.
-      const cap = mayCapField(row.label);
-      const labelLines = wrapReportField(row.label, bold, 9.5, labelW, cap);
-      const valueLines = wrapReportField(row.value, font, 9.5, valueW, cap);
+      const cap = mayCapField(row.capLabel ?? row.label);
+      const labelLines = wrapReportField(row.label, bold, 9.5, labelW, cap, omitted);
+      const valueLines = wrapReportField(row.value, font, 9.5, valueW, cap, omitted);
       const startPage = page;
       const startY = y;
       for (let i = 0; i < Math.max(labelLines.length, valueLines.length); i++) {
         if (broke(12.5) && i >= labelLines.length) {
-          const cont = clipWithSuffix(labelLines.join(' '), ' (continued)', (t) => bold.widthOfTextAtSize(t, 9.5), labelW);
+          const cont = clipWithSuffix(labelLines.join(' '), words.say('continued'), (t) => bold.widthOfTextAtSize(t, 9.5), labelW);
           page.drawText(cont, { x: labelX, y, size: 9.5, font: bold, color: DIM });
         }
         if (i < labelLines.length) page.drawText(labelLines[i], { x: labelX, y, size: 9.5, font: bold, color: DIM });
@@ -226,13 +239,13 @@ async function buildTerrainReportPdfStyled(
 
   // ── Warnings ─────────────────────────────────────────────────────────────
   ensure(34);
-  text('Warnings', M, y, 12, bold, INK);
+  text(words.say('hWarnings'), M, y, 12, bold, INK);
   y -= 6;
   page.drawLine({ start: { x: M, y }, end: { x: PW - M, y }, thickness: 0.5, color: FRAME });
   y -= 14;
   if (content.warnings.length === 0) {
     ensure(14);
-    text('None.', M, y, 9.5, font, DIM);
+    text(words.say('noWarnings'), M, y, 9.5, font, DIM);
     y -= 14;
   } else {
     for (const w of content.warnings) {
@@ -246,7 +259,7 @@ async function buildTerrainReportPdfStyled(
   // ── How to improve (only present when the surface is not fully-good) ──────
   if (content.howToImprove.length > 0) {
     ensure(34);
-    text('How to improve', M, y, 12, bold, INK);
+    text(words.say('hImprove'), M, y, 12, bold, INK);
     y -= 6;
     page.drawLine({ start: { x: M, y }, end: { x: PW - M, y }, thickness: 0.5, color: FRAME });
     y -= 14;
@@ -261,7 +274,7 @@ async function buildTerrainReportPdfStyled(
   // ── Definitions — the panel's metric tooltips, single-sourced ─────────────
   if (content.definitions.length > 0) {
     ensure(34);
-    text('Definitions', M, y, 12, bold, INK);
+    text(words.say('hDefinitions'), M, y, 12, bold, INK);
     y -= 6;
     page.drawLine({ start: { x: M, y }, end: { x: PW - M, y }, thickness: 0.5, color: FRAME });
     y -= 14;
@@ -304,7 +317,7 @@ async function buildTerrainReportPdfStyled(
     }
   }
   if (kit) {
-    text('Provenance', M, fy0 + 20, 12, bold, INK);
+    text(words.say('hProvenance'), M, fy0 + 20, 12, bold, INK);
     headed = true;
   }
   page.drawLine({ start: { x: M, y: fy0 + 12 }, end: { x: PW - M, y: fy0 + 12 }, thickness: headed ? 0.5 : 0.75, color: FRAME });

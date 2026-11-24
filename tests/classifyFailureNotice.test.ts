@@ -43,7 +43,7 @@ describe('reportClassifyFailure', () => {
     const toasts: string[] = [];
     const legend = surface();
     reportClassifyFailure(new Error('grid build failed'), (m) => void toasts.push(m), legend);
-    expect(toasts[0]).toBe('Classify · failed: grid build failed');
+    expect(toasts[0]).toBe('Auto-classify · failed: grid build failed');
     expect(legend.notices).toEqual([]);
   });
 

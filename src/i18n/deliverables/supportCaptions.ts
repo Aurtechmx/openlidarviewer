@@ -1,0 +1,17 @@
+/**
+ * supportCaptions.ts: the captions measurementTrust.ts writes for a support
+ * grade, in each export language. The contour map sheet and the profile sheet
+ * print them, from this one set of rows.
+ */
+export const SUPPORT_CAPTION_TEXT = {
+  sClose: ['Supported — close to measured points', 'Con respaldo: cerca de puntos medidos', 'Com suporte: perto de pontos medidos', 'Étayé : proche de points mesurés', 'Gestützt: nahe an gemessenen Punkten'],
+  sCentroid: ['Caution: snapped to the reduced display sample, not returns', 'Precaución: ajustado a la muestra de visualización reducida, no a retornos', 'Cautela: ajustado à amostra de exibição reduzida, não a retornos', "Prudence : accroché à l'échantillon d'affichage réduit, pas à des retours", 'Vorsicht: auf die reduzierte Anzeigestichprobe gefangen, nicht auf Echos'],
+  sLoose: ['Caution — loosely supported or unverified scale', 'Precaución: poco respaldo o escala sin verificar', 'Cautela: pouco suporte ou escala não verificada', 'Prudence : appui faible ou échelle non vérifiée', 'Vorsicht: schwach gestützt oder Maßstab ungeprüft'],
+  sVoid: ['Unverified — an endpoint has no points to measure', 'Sin verificar: un extremo no tiene puntos que medir', 'Não verificado: uma extremidade não tem pontos a medir', "Non vérifié : une extrémité n'a aucun point à mesurer", 'Ungeprüft: an einem Endpunkt gibt es keine Punkte zu messen'],
+  sNoUp: ['Unverified — this layer has no resolved up axis', 'Sin verificar: esta capa no tiene un eje vertical resuelto', 'Não verificado: esta camada não tem eixo vertical resolvido', "Non vérifié : l'axe vertical de cette couche n'est pas établi", 'Ungeprüft: Diese Ebene hat keine festgelegte Hochachse'],
+  sUpConflict: ['Unverified — the points sit on layers with different up axes', 'Sin verificar: los puntos están en capas con ejes verticales distintos', 'Não verificado: os pontos estão em camadas com eixos verticais diferentes', 'Non vérifié : les points sont sur des couches aux axes verticaux différents', 'Ungeprüft: Die Punkte liegen auf Ebenen mit verschiedenen Hochachsen'],
+  sNoVertical: ['Unverified — this frame has no local vertical (geocentric or depth-down)', 'Sin verificar: este marco no tiene vertical local (geocéntrico o profundidad hacia abajo)', 'Não verificado: este referencial não tem vertical local (geocêntrico ou profundidade para baixo)', "Non vérifié : ce repère n'a pas de verticale locale (géocentrique ou profondeur vers le bas)", 'Ungeprüft: Dieses System hat keine lokale Vertikale (geozentrisch oder Tiefe nach unten)'],
+  sDegrees: ['Unverified — degrees are not distances (geographic CRS)', 'Sin verificar: los grados no son distancias (SRC geográfico)', 'Não verificado: graus não são distâncias (SRC geográfico)', 'Non vérifié : des degrés ne sont pas des distances (SCR géographique)', 'Ungeprüft: Grad sind keine Strecken (geographisches KBS)'],
+  sHeightUnit: ['Unverified — the height unit could not be interpreted', 'Sin verificar: no se pudo interpretar la unidad de altura', 'Não verificado: não foi possível interpretar a unidade de altura', "Non vérifié : l'unité de hauteur n'a pas pu être interprétée", 'Ungeprüft: Die Höheneinheit konnte nicht gedeutet werden'],
+  sNotMeasurable: ['Not measurable', 'No se puede medir', 'Não mensurável', 'Non mesurable', 'Nicht messbar'],
+} as const satisfies Record<string, readonly [en: string, es: string, pt: string, fr: string, de: string]>;

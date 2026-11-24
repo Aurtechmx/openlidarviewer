@@ -80,8 +80,8 @@ export interface ReservedPresetCapabilities {
   readonly elevationPalette: ElevationPalette;
   /**
    * Terrain relief shading. Hillshade is an analysis product derived from a
-   * DEM, not a live point-cloud render control, so a preset field cannot
-   * switch it on: there is no live hillshade renderer to switch.
+   * DEM. The Height colours' sun shading is the user's own control and no
+   * preset switches it.
    */
   readonly hillshade: boolean;
 }

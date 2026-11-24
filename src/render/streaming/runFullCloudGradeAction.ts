@@ -140,7 +140,7 @@ export async function runFullCloudGrade(deps: {
     }
     if (debug) console.warn('[full-cloud grade] failed', err);
     panel.setGradeError(
-      err instanceof Error ? `Grade failed: ${err.message}` : 'Grade failed.',
+      err instanceof Error ? `Check failed: ${err.message}` : 'Check failed.',
     );
   }
 }

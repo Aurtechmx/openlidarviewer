@@ -48,6 +48,10 @@ export interface ClipPanelCallbacks {
   onApply: (clip: ClipBox | null) => void;
   /** The visible scans' bounds, to seed the box from "Fit to scan". */
   fitBounds: () => BoxBounds | null;
+  /** Move the camera to the region the clip keeps. Without it there is no Focus button. */
+  onFocus?: () => void;
+  /** Whether `onFocus` has a region to move to. */
+  canFocus?: () => boolean;
   /** Exact kept/total count for a clip against the visible scans (CPU), or null when it cannot be counted. */
   keptCount: (clip: ClipBox) => ClipKeptCount | null;
   /** Draw the box in the scene (`null` hides it); `active` is true while the clip is on. */
@@ -103,6 +107,7 @@ export class ClipPanel {
   private readonly _draw: HTMLButtonElement;
   private readonly _drawHint: HTMLElement;
   private readonly _turnOff: HTMLButtonElement;
+  private readonly _focus: HTMLButtonElement;
   private _onDrawBox: (() => void) | null = null;
   /** The Clip page is the one on screen: the box is drawn even while the clip is off. */
   private _pageOpen = false;
@@ -175,9 +180,14 @@ export class ClipPanel {
       title: 'Turn the clip off and show the whole scan. The box and its bounds stay.',
     }) as HTMLButtonElement;
     this._turnOff.addEventListener('click', () => this.clear());
+    this._focus = el('button', {
+      className: `olv-bc-pill olv-clip-focus${callbacks.onFocus ? '' : ' olv-hidden'}`, type: 'button', text: 'Focus clipped region',
+      title: 'Move the view to the part of the scan the clip keeps. Needs a Keep inside clip that is on and reaches the scan.',
+    }) as HTMLButtonElement;
+    this._focus.addEventListener('click', () => { this._cb.onFocus?.(); this._syncActions(); });
     // The state strip's Turn off runs the same clear.
     setClipTurnOff(() => this.clear());
-    const actions = el('div', { className: 'olv-bc-pills olv-clip-actions' }, [fit, this._turnOff]);
+    const actions = el('div', { className: 'olv-bc-pills olv-clip-actions' }, [fit, this._focus, this._turnOff]);
 
     this._draw = el('button', {
       className: 'olv-bc-pill olv-clip-draw olv-hidden', type: 'button', text: 'Draw clipping box',
@@ -277,6 +287,7 @@ export class ClipPanel {
     if (this._pageOpen === open) return;
     this._pageOpen = open;
     this._paintFrame();
+    this._syncActions();
     this._syncOutline();
   }
 
@@ -364,6 +375,7 @@ export class ClipPanel {
   invalidateCount(): void {
     this._cancelCount();
     this._paintFrame();
+    this._syncActions();
     if (this._enabled) {
       this._markCounting();
       this._scheduleCount();
@@ -641,7 +653,7 @@ export class ClipPanel {
     this._cancelCount();
     this._cb.onApply(this._enabled ? clip : null);
     this._syncOutline();
-    this._syncTurnOff();
+    this._syncActions();
     this._emit();
     if (this._enabled) {
       // The clip scope keeps its last value until the new count lands, so its
@@ -657,17 +669,20 @@ export class ClipPanel {
     }
   }
 
-  /** Turn off has nothing to do while the clip is off. */
-  private _syncTurnOff(): void {
+  /** Turn off has nothing to do while the clip is off, nor Focus with no kept region to move to. */
+  private _syncActions(): void {
     this._turnOff.disabled = !this._enabled;
     this._turnOff.classList.toggle('is-disabled', !this._enabled);
+    const focus = this._enabled && this._mode === 'keep-inside' && this._cb.canFocus?.() === true;
+    this._focus.disabled = !focus;
+    this._focus.classList.toggle('is-disabled', !focus);
   }
 
   private _renderOff(): void {
     this._readout.classList.remove('is-stale');
     this._readout.removeAttribute('aria-busy');
     this._readout.textContent = OFF_TEXT;
-    this._syncTurnOff();
+    this._syncActions();
   }
 
   /** The count is being redone: dim the last figure, or say it is counting when there is none. */
@@ -702,7 +717,7 @@ export class ClipPanel {
     this._readout.removeAttribute('aria-busy');
     this._readout.textContent = clipReadoutText(c, this._mode);
     this._hasCount = c !== null;
-    this._syncTurnOff();
+    this._syncActions();
     setClipScope(c ? { kept: c.kept, total: c.total, mode: this._mode } : null);
     // A streamed scan has no count, but the clip is on and the strip says so.
     setClipOn(this._enabled ? this._mode : null);

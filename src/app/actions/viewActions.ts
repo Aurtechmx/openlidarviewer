@@ -115,22 +115,22 @@ export function contributeViewActions(deps: ViewActionDeps): Action[] {
     },
     {
       id: 'view.save-state',
-      title: 'Save view state',
+      title: 'Save current view',
       section: 'View',
       keys: keyDisplayFor('save-view'),
-      hint: 'Bookmark the camera plus clip box, colour mode, class filter, point filters, and render settings as a named, restorable state.',
+      hint: 'Save the camera plus clip box, colour mode, class filter, point filters and render settings as a named saved view.',
       keywords: ['bookmark', 'viewpoint', 'saved view', 'figure', 'state', 'capture'],
       run: () => saveViewWithNotice(deps),
     },
     {
       id: 'view.restore-state',
-      title: 'Restore view state',
+      title: 'Restore last saved view',
       section: 'View',
-      hint: 'Reapply the most recently saved view state — the panel list restores any of them by name.',
+      hint: 'Reapply the most recently saved view. The Saved views list restores any of them by name.',
       keywords: ['bookmark', 'viewpoint', 'saved view', 'figure', 'state', 'apply', 'go to'],
       run: () => {
         if (deps.bookmarks.count() === 0) {
-          deps.showLassoToast('No saved view states yet — save one first (V).');
+          deps.showLassoToast('No saved views yet. Save one first (V).');
           return;
         }
         deps.applyView(deps.bookmarks.count() - 1);

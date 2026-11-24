@@ -16,8 +16,8 @@
  * Drafts until a geomatics reviewer signs them off (`reviewed` in
  * languages.ts); until then every sheet says so in its footer.
  */
-import type { ExportLanguage } from '../languages';
 import { NOT_SURVEY_GRADE_NOTE } from '../../terrain/export/exportNotes';
+import { SUPPORT_CAPTION_TEXT } from './supportCaptions';
 
 type Row = readonly [en: string, es: string, pt: string, fr: string, de: string];
 const rows = <K extends string>(r: Record<K, Row>): Readonly<Record<K, Row>> => r;
@@ -36,6 +36,15 @@ export const PROFILE_SHEET_TEXT = rows({
   subtitle: ['Longitudinal section {u_a} to {u_b}, corridor {w} each side', 'Sección longitudinal de {u_a} a {u_b}, corredor de {w} a cada lado', 'Seção longitudinal de {u_a} a {u_b}, corredor de {w} de cada lado', 'Profil en long de {u_a} à {u_b}, corridor de {w} de chaque côté', 'Längsschnitt {u_a} bis {u_b}, Korridor {w} je Seite'],
   subtitleAuto: ['Longitudinal section {u_a} to {u_b}, automatic corridor', 'Sección longitudinal de {u_a} a {u_b}, corredor automático', 'Seção longitudinal de {u_a} a {u_b}, corredor automático', 'Profil en long de {u_a} à {u_b}, corridor automatique', 'Längsschnitt {u_a} bis {u_b}, automatischer Korridor'],
   notGeoreferenced: ['not georeferenced', 'sin georreferencia', 'não georreferenciado', 'non géoréférencé', 'nicht georeferenziert'],
+
+  // ── support grade ──────────────────────────────────────────────────────
+  supportHead: ['Support grade: {t_v}', 'Grado de respaldo: {t_v}', 'Grau de suporte: {t_v}', "Niveau d'appui : {t_v}", 'Stützungsgrad: {t_v}'],
+  supportItem: ['Support grade', 'Grado de respaldo', 'Grau de suporte', "Niveau d'appui", 'Stützungsgrad'],
+  supportRed: ['red. {t_c}', 'rojo. {t_c}', 'vermelho. {t_c}', 'rouge. {t_c}', 'rot. {t_c}'],
+  supportYellow: ['yellow. {t_c}', 'amarillo. {t_c}', 'amarelo. {t_c}', 'jaune. {t_c}', 'gelb. {t_c}'],
+  supportGreen: ['green. {t_c}', 'verde. {t_c}', 'verde. {t_c}', 'vert. {t_c}', 'grün. {t_c}'],
+  rSupport: ['How well the picked points sit on measured points, and whether the scale is known. It does not grade the sampled heights.', 'Qué tan cerca están los puntos elegidos de puntos medidos, y si se conoce la escala. No califica las alturas muestreadas.', 'O quanto os pontos escolhidos estão sobre pontos medidos, e se a escala é conhecida. Não avalia as alturas amostradas.', "Si les points choisis sont proches de points mesurés, et si l'échelle est connue. Les hauteurs échantillonnées ne sont pas évaluées.", 'Wie nah die gewählten Punkte an gemessenen Punkten liegen und ob der Maßstab bekannt ist. Die abgetasteten Höhen werden nicht bewertet.'],
+  ...SUPPORT_CAPTION_TEXT,
 
   // ── sheet one ──────────────────────────────────────────────────────────
   plan: ['Plan', 'Planta', 'Planta', 'Plan', 'Lageplan'],
@@ -337,10 +346,3 @@ export const PROFILE_SHEET_TEXT = rows({
 });
 
 export type ProfileSheetKey = keyof typeof PROFILE_SHEET_TEXT;
-
-const COLUMN: Readonly<Record<ExportLanguage, 0 | 1 | 2 | 3 | 4>> = { en: 0, es: 1, pt: 2, fr: 3, de: 4 };
-
-/** The template for `key` in `lang`. */
-export function profileSheetTemplate(lang: ExportLanguage, key: ProfileSheetKey): string {
-  return PROFILE_SHEET_TEXT[key][COLUMN[lang]];
-}

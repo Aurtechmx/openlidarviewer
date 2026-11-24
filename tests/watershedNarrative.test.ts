@@ -4,7 +4,7 @@
  */
 import { describe, expect, it } from 'vitest';
 import { catchmentNarrative, headline, qualityReasons } from '../src/simulation/flowPulse/watershed/watershedNarrative';
-import type { CatchmentSection } from '../src/simulation/flowPulse/watershed/watershedReportModel';
+import type { CatchmentSection, ReportLocale } from '../src/simulation/flowPulse/watershed/watershedReportModel';
 
 type Mutable = Record<string, unknown>;
 
@@ -56,9 +56,12 @@ function openSection(): CatchmentSection {
   });
 }
 
+const EN: ReportLocale = { lang: 'en', numberStyle: 'point' };
+const ES: ReportLocale = { lang: 'es', numberStyle: 'comma' };
+
 describe('catchmentNarrative', () => {
   it('tells the flow in order: starts, gathers, joins, leaves', () => {
-    const p = catchmentNarrative(section(), 'en');
+    const p = catchmentNarrative(section(), EN);
     expect(p.map((x) => x.lead)).toEqual(['narrative.lead.starts', 'narrative.lead.gathers', 'narrative.lead.joins', 'narrative.lead.leaves']);
     const text = p.map((x) => x.text).join(' ');
     expect(text).toContain('283\u00a0m north-east of the outlet');
@@ -74,14 +77,14 @@ describe('catchmentNarrative', () => {
   });
 
   it('does not restate the KPI or table figures', () => {
-    const text = catchmentNarrative(section(), 'en').map((x) => x.text).join(' ');
+    const text = catchmentNarrative(section(), EN).map((x) => x.text).join(' ');
     // relief 18.6 m, channel 412 m, slope 3.1 %, the fall, flow-line length and order
     for (const figure of ['18.6', '412', '3.1', '12.8', 'Strahler', 'minute']) expect(text, figure).not.toContain(figure);
   });
 
   it('writes the ponds sentence only when the catchment has depressions', () => {
-    expect(catchmentNarrative(section(), 'en').some((x) => x.lead === 'narrative.lead.ponds')).toBe(false);
-    const wet = catchmentNarrative(section({ depressions: [pond(1, 310, 0.4, true), pond(2, 85, 0.2, false)] }), 'en');
+    expect(catchmentNarrative(section(), EN).some((x) => x.lead === 'narrative.lead.ponds')).toBe(false);
+    const wet = catchmentNarrative(section({ depressions: [pond(1, 310, 0.4, true), pond(2, 85, 0.2, false)] }), EN);
     const ponds = wet.find((x) => x.lead === 'narrative.lead.ponds');
     expect(ponds?.text).toContain('2 hollows');
     expect(ponds?.text).not.toContain('310');
@@ -89,7 +92,7 @@ describe('catchmentNarrative', () => {
   });
 
   it('says an open divide is shown in part and adds no separate open paragraph', () => {
-    const p = catchmentNarrative(openSection(), 'en');
+    const p = catchmentNarrative(openSection(), EN);
     expect(p.some((x) => x.lead === 'narrative.lead.leaves')).toBe(true);
     expect(p[0].text).toContain('only in part');
     expect(p.map((x) => x.text).join(' ')).not.toMatch(/minute|at least/);
@@ -98,14 +101,14 @@ describe('catchmentNarrative', () => {
   it('does not say no flow line forms when a flow line cell of zero length lies inside', () => {
     const s = section() as unknown as Mutable;
     const edge = section({ network: { ...(s.network as Mutable), maxOrder: 2, lengthM: 0 }, geometry: { ...(s.geometry as Mutable), channelHead: null } });
-    const text = catchmentNarrative(edge, 'en', 2500).map((x) => x.text).join(' ');
+    const text = catchmentNarrative(edge, EN, 2500).map((x) => x.text).join(' ');
     expect(text).not.toMatch(/No flow line forms/);
   });
 
   it('describes hollows as features of the surface model, not as ponding', () => {
-    for (const lang of ['en', 'es'] as const) {
-      const one = catchmentNarrative(section({ depressions: [pond(1, 310, 0.4, true, true)] }), lang);
-      const many = catchmentNarrative(section({ depressions: [pond(1, 310, 0.4, true), pond(2, 85, 0.2, true), pond(3, 9, 0.1, false)] }), lang);
+    for (const loc of [EN, ES]) {
+      const one = catchmentNarrative(section({ depressions: [pond(1, 310, 0.4, true, true)] }), loc);
+      const many = catchmentNarrative(section({ depressions: [pond(1, 310, 0.4, true), pond(2, 85, 0.2, true), pond(3, 9, 0.1, false)] }), loc);
       const text = [...one, ...many].map((x) => x.text).join(' ');
       expect(text).not.toMatch(/pond|hold water|holds water|water stops|retiene|encharca|se detiene/i);
     }
@@ -114,14 +117,14 @@ describe('catchmentNarrative', () => {
   it('names the threshold when no flow line forms', () => {
     const s = section() as unknown as Mutable;
     const dry = section({ network: { ...(s.network as Mutable), maxOrder: 0, lengthM: 0 } });
-    const p = catchmentNarrative(dry, 'en', 2500);
+    const p = catchmentNarrative(dry, EN, 2500);
     expect(p.map((x) => x.lead)).not.toContain('narrative.lead.joins');
     expect(p[1].text).toBe('No flow line forms inside this catchment at the 2,500\u00a0m² threshold.');
     expect(p.map((x) => x.text).join(' ')).not.toMatch(/sheet|lámina/);
   });
 
   it('uses SCT vocabulary in Spanish', () => {
-    const text = catchmentNarrative(section(), 'es').map((x) => x.text).join(' ');
+    const text = catchmentNarrative(section(), ES).map((x) => x.text).join(' ');
     expect(text).toContain('parteaguas');
     expect(text).toContain('cauce principal');
     expect(text).toContain('al noreste de la salida');
@@ -131,26 +134,26 @@ describe('catchmentNarrative', () => {
 
 describe('headline', () => {
   it('names shape, drainage and area', () => {
-    expect(headline(section(), 'en')).toBe('A near-circular catchment of 4.82\u00a0ha drained by a branching network of stream order 3');
-    expect(headline(section(), 'es')).toBe('Una cuenca casi circular de 4,82\u00a0ha drenada por una red ramificada de orden 3');
+    expect(headline(section(), EN)).toBe('A near-circular catchment of 4.82\u00a0ha drained by a branching network of stream order 3');
+    expect(headline(section(), ES)).toBe('Una cuenca casi circular de 4,82\u00a0ha drenada por una red ramificada de orden 3');
   });
   it('takes the shape word from the elongation ratio Re alone', () => {
     const s = section() as unknown as Mutable;
     // Kc says "not compact" but Re 0.99 reads near-circular: Re decides.
     const c = section({ morph: { ...(s.morph as Mutable), gravelius: { value: 1.29 }, elongation: { value: 0.99 } } });
-    expect(headline(c, 'en')).toMatch(/^A near-circular/);
+    expect(headline(c, EN)).toMatch(/^A near-circular/);
     const h = section({ morph: { ...(s.morph as Mutable), gravelius: { value: 1.0 }, elongation: { value: 0.6 } }, network: { lengthM: 1, maxOrder: 2, byOrder: new Map() } });
-    expect(headline(h, 'en')).toBe('An elongated catchment of 4.82\u00a0ha drained by one branching channel');
-    expect(headline(h, 'es')).toBe('Una cuenca alargada de 4,82\u00a0ha drenada por un cauce ramificado');
+    expect(headline(h, EN)).toBe('An elongated catchment of 4.82\u00a0ha drained by one branching channel');
+    expect(headline(h, ES)).toBe('Una cuenca alargada de 4,82\u00a0ha drenada por un cauce ramificado');
     const m = section({ morph: { ...(s.morph as Mutable), elongation: { value: 0.8 } }, network: { lengthM: 1, maxOrder: 1, byOrder: new Map() } });
-    expect(headline(m, 'en')).toBe('An oval catchment of 4.82\u00a0ha drained by a single line');
+    expect(headline(m, EN)).toBe('An oval catchment of 4.82\u00a0ha drained by a single line');
   });
   it('omits a withheld shape word and opens with "at least" for an open catchment', () => {
     const s = section() as unknown as Mutable;
     const w = section({ morph: { ...(s.morph as Mutable), elongation: { withheld: 'too-small' } } });
-    expect(headline(w, 'en')).toBe('A catchment of 4.82\u00a0ha drained by a branching network of stream order 3');
-    expect(headline(openSection(), 'en')).toBe('An open catchment of at least 4.82\u00a0ha');
-    expect(headline(openSection(), 'es')).toBe('Una cuenca abierta de al menos 4,82\u00a0ha');
+    expect(headline(w, EN)).toBe('A catchment of 4.82\u00a0ha drained by a branching network of stream order 3');
+    expect(headline(openSection(), EN)).toBe('An open catchment of at least 4.82\u00a0ha');
+    expect(headline(openSection(), ES)).toBe('Una cuenca abierta de al menos 4,82\u00a0ha');
   });
 });
 
@@ -158,12 +161,12 @@ describe('quality and range wording', () => {
   it('words every quality reason the grade can give, with its threshold as a figure', () => {
     const q = section().quality as unknown as Mutable;
     const all = ['measured-share-below-0.90', 'channel-interpolated-over-0.10', 'channel-far-interpolated-run', 'channel-touches-hole', 'catchment-open'];
-    const es = qualityReasons({ ...q, reasons: all } as never, 'es');
+    const es = qualityReasons({ ...q, reasons: all } as never, ES);
     expect(es).toHaveLength(5);
     expect(es[0]).toContain('90\u00a0%');
     expect(es[1]).toContain('10\u00a0%');
     expect(es[2]).toContain('5');
-    expect(qualityReasons({ ...q, reasons: [] } as never, 'en')).toHaveLength(1);
+    expect(qualityReasons({ ...q, reasons: [] } as never, EN)).toHaveLength(1);
   });
 });
 
@@ -171,9 +174,9 @@ describe('headline without an area', () => {
   it('leaves a withheld area out instead of printing zero', () => {
     const s = section() as unknown as Mutable;
     const m = s.morph as Mutable;
-    expect(headline(section({ morph: { ...m, areaM2: { withheld: 'too-small' } } }), 'en')).toBe('A near-circular catchment drained by a branching network of stream order 3');
+    expect(headline(section({ morph: { ...m, areaM2: { withheld: 'too-small' } } }), EN)).toBe('A near-circular catchment drained by a branching network of stream order 3');
     const open = section({ morph: { ...m, areaM2: { withheld: 'open-catchment' } }, quality: { ...(s.quality as Mutable), complete: false } });
-    expect(headline(open, 'en')).toBe('An open catchment');
-    expect(headline(open, 'es')).toBe('Una cuenca abierta');
+    expect(headline(open, EN)).toBe('An open catchment');
+    expect(headline(open, ES)).toBe('Una cuenca abierta');
   });
 });

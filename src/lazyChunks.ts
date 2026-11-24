@@ -264,6 +264,9 @@ export const loadProfileExport = () => import('./ui/profileExportFlow');
  */
 export const loadMapSheetPdf = () => import('./render/measure/mapSheetStyled');
 
+/** Load the map sheet dialog's language choice, when the dialog opens. */
+export const loadMapSheetLanguage = () => import('./ui/mapSheetLanguage');
+
 /** Load the profile sheet's returns, plan and crossing builder, on a styled profile export. */
 export const loadProfileSheetExtras = () => import('./app/profileSheetExtras');
 
@@ -399,6 +402,9 @@ export const loadHelpOverlay = () => import('./ui/HelpOverlay');
  * source-transform must never see the import literal.
  */
 export const loadColorbarOverlay = () => import('./ui/ColorbarOverlay');
+
+/** Load the sun shading controls and worker client, the first time Height colours are picked. */
+export const loadSunShading = () => import('./app/sunShading');
 
 /**
  * Load the batch format converter (its modal UI plus the conversion engine and

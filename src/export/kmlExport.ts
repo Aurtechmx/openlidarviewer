@@ -31,6 +31,7 @@ import {
   geographicFilter,
   refusalNote,
   measurementMetrics,
+  supportVerdict,
   plainDecimal,
   areaWithheldNote,
   angleWithheldNote,
@@ -430,8 +431,10 @@ function measurementPlacemark(m: Measurement, input: KmlExportInput): string | n
   // Guarded: the degenerate-geometry checks below run after this, and a
   // zero-point measurement would otherwise be converted here.
   const first = m.points.length > 0 ? input.toLonLat(m.points[0]) : null;
+  const support = supportVerdict(m);
   const lines = [
     metricsLine(m, input),
+    support ? `Support grade: ${support}` : '',
     `Kind: ${m.kind}`,
     m.kind === 'volume' && m.volume?.method ? `Volume method: ${m.volume.method}` : '',
     first ? sourceElevationLine(input, first[2]) : '',

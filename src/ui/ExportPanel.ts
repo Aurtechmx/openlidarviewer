@@ -11,6 +11,7 @@
  * consistency with the splash batch converter.
  */
 
+import { RELOAD_ADVICE } from '../io/loadErrors';
 import { showBusyScan } from './busyScan';
 
 /** Only the clip limits a point-cloud write; the class filter does not. */
@@ -27,6 +28,7 @@ import { loadConvertEngine, loadFindingsPanel, loadLegacyClassGuard, loadSession
 import { createLas14Check, formatAfterLas14Block } from './las14Check';
 import {
   CONVERT_FORMATS,
+  LAZ_UNAVAILABLE,
   LEGACY_ACQUISITION_LOSS_HINT,
   LEGACY_ACQUISITION_LOSS_OPT_IN,
   LEGACY_CLASS_REINTERPRETATION_HINT,
@@ -79,7 +81,7 @@ import { buildReportSigningControls } from './reportSigningControls';
 
 /** Why the measurement deliverables are inert: shown as the group hint AND each button's tooltip. */
 /** Why the LAZ pill is greyed, shown beside it and on hover. */
-const LAZ_UNAVAILABLE = 'LAZ is not available yet: this browser build cannot write LAZ compression. Choose LAS, or tick Compress (.las.gz).';
+const LAZ_PILL_NOTE = `${LAZ_UNAVAILABLE} Choose LAS, or tick Compress (.las.gz).`;
 const NO_MEASUREMENTS_HINT = 'Unavailable: no measurements yet. Place measurements, then export them as open vector formats.';
 
 /**
@@ -1014,7 +1016,7 @@ export class ExportPanel {
           count > 0,
           () => this._cb.exportIntegrityReport?.(),
           NO_MEASUREMENTS_HINT,
-          'Save the measurements with a SHA-256 digest. The digest alone cannot prove who made the file; turn on signing below to add a signature.',
+          'Save the measurements with a verification checksum (a SHA-256 digest). The digest alone cannot prove who made the file; turn on signing below to add a signature.',
         );
         btn.setAttribute('data-testid', 'export-integrity-report');
         measureRow.append(btn, buildReportSigningControls());
@@ -1261,7 +1263,7 @@ export class ExportPanel {
         const again = el('p', { className: 'olv-findings-load-failed olv-export-fullres-hint', text: `${chunkFailureText('Saved findings')} ` });
         const reload = chunkReloadAction();
         if (reload) {
-          const b = el('button', { className: 'olv-bc-pill olv-export-product-btn', text: reload.label, title: 'Reload the page to load this part again. Reloading closes open scans.' }) as HTMLButtonElement;
+          const b = el('button', { className: 'olv-bc-pill olv-export-product-btn', text: reload.label, title: RELOAD_ADVICE }) as HTMLButtonElement;
           b.type = 'button';
           b.addEventListener('click', reload.onClick);
           again.append(b);
@@ -1407,7 +1409,7 @@ export class ExportPanel {
       pill.setAttribute('aria-pressed', String(this._format === fmt));
       if (!spec.available) {
         pill.disabled = true;
-        pill.title = LAZ_UNAVAILABLE;
+        pill.title = LAZ_PILL_NOTE;
         pill.setAttribute('aria-describedby', 'olv-export-laz-note');
       } else if (fmt === 'las14' && this._las14Block != null) {
         pill.disabled = true;
@@ -1427,7 +1429,7 @@ export class ExportPanel {
     });
     // A greyed pill says why in words, not only on hover.
     if ((Object.values(CONVERT_FORMATS) as { available: boolean }[]).some((f) => !f.available)) {
-      const note = el('p', { className: 'olv-export-laz-note', text: LAZ_UNAVAILABLE });
+      const note = el('p', { className: 'olv-export-laz-note', text: LAZ_PILL_NOTE });
       note.id = 'olv-export-laz-note';
       this._formatRow.append(note);
     }
@@ -1701,7 +1703,7 @@ export class ExportPanel {
         this._setStatus(
           entries.length > 0
             ? exportedLine(report.pointCount, entries.length, warningSummary(entries), `${sampleNote}${clipNote}`, report.crsNote)
-            : `Exported ${report.pointCount.toLocaleString()} points${sampleNote}${clipNote} · ${report.crsNote}`,
+            : `Exported ${report.pointCount.toLocaleString('en-US')} points${sampleNote}${clipNote} · ${report.crsNote}`,
           hasWarning || sampleNote ? 'warn' : 'info',
         );
         this._showNotes(conversionNotes(report));

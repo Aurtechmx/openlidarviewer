@@ -22,7 +22,7 @@ v0.6.6 remain available under MIT.
 ## Export sheets
 
 - A profile's Export PDF asks for the title, job, company, your own logo, people, drawing number, status, issues, end names, marked points and notes the sheets should carry, all optional. Company, logo and people stay on the device and only when asked for. Measured figures and caveats cannot be edited.
-- The space and object report, the profile sheets, the floor plan preview and the Studio image card can be written in Spanish (Mexico), Portuguese (Brazil), French or German, with a choice of 1,234.5 or 1 234,5 for numbers. The translations are drafts until reviewed, and the report says so.
+- The space and object report, the profile and contour map sheets, the Terrain Intelligence report, the Contour Studio PDF, the floor plan preview and the Studio image card can be written in Spanish (Mexico), Portuguese (Brazil), French or German, with a choice of 1,234.5 or 1 234,5 for numbers. The translations are drafts until reviewed, and the report says so.
 - Exports come in three sheet styles: Light (the default), Dark and Classic. The style is chosen in the map sheet dialog, on the Export tab, or next to the report buttons of a room or object scan. The choice holds for the session and is not saved. Classic keeps the earlier layout of each export.
 - Contour map sheet PDF: shaded relief with a faint elevation tint under the contours, cut to the scan footprint, with areas inside the footprint that have no ground hatched, the footprint outlined, and the highest and lowest measured ground marked. A side panel holds the legend, the accuracy figures and the notes.
 - A true-north arrow on the Light and Dark map sheets of a projected CRS, turned by the meridian convergence at the map centre and labelled with the angle.
@@ -79,6 +79,7 @@ v0.6.6 remain available under MIT.
 
 ## Scans and layers
 
+- Height colours of a loaded scan can be sun shaded. Off by default, and display only.
 - Pressing a layer's name makes it the active scan. A Created layers list on the Data tab shows or hides contours, drainage lines and the access map, and a session keeps those choices.
 - After a scan is removed, the contour map sheet, the Terrain Intelligence report and the other terrain exports name the active scan. A kept terrain result keeps the name of the scan it was computed on.
 - Each scan keeps its own Auto-classify caption and class counts while another scan is active. Notes stay with the scan they were placed on, and a note whose scan was closed is not saved.
@@ -137,6 +138,14 @@ v0.6.6 remain available under MIT.
 
 ## Measuring, saving and messages
 
+- The Profile Workbench exports every return a section accepted, as a CSV with a JSON receipt.
+- The map sheet's notes are made again for each scan and interval. Details typed in the profile export dialog are kept until you export, discard them or close the scan.
+- Focus clipped region moves the view to what a clip keeps, and the command palette arms each kind of measurement.
+- The PDF report, KML, findings, integrity report and chain totals state a measurement's support grade; a chain total counts the members graded red.
+- The Analyse and Measure panels show each control and figure once. A profile is removed with Clear profile.
+- Full-cloud grade is now Full-cloud check, Classify (derive) is Auto-classify scan (derive), and Save view state is Save current view.
+- Grouped numbers no longer follow the browser's language.
+- Export on a profile in the Results list opens that profile's PDF export.
 - Clear deletes every measurement and offers Undo for 8 seconds. Esc during a vertex drag puts the vertex back.
 - The result card has Delete, and each Measurements row has Copy, which carries the caveat with the value.
 - Polygon volumes show their base level, the median of the outline's vertex heights. The CSV and GeoJSON exports write it as `base_level`.
@@ -170,6 +179,7 @@ v0.6.6 remain available under MIT.
 
 ## Flow Pulse
 
+- The drainage sheet can be written in Spanish (Mexico). The translation is a draft until reviewed, and every page says so.
 - TERRAIN-FLOW-PULSE moves from E3 to E4 after a comparison with TauDEM 5.3.8 and GRASS GIS 8.3.2 on public DEMs. The conditioned elevation matched TauDEM on all 119,119 distinct cells. Against GRASS, 99.21% of D8 directions agreed, the catchment Jaccard index was 0.9990 and 95.2% of accumulations were within 5%.
 - TERRAIN-FLOW-DEPRESSION-INVENTORY moves from E2 to E3, from TauDEM's filled depressions and a synthetic suite with hand-derived values.
 - Six RichDEM test grids agree with Flow Pulse as corroboration. No level changes from them.

@@ -1,5 +1,5 @@
 {
-  "total": 170,
+  "total": 169,
   "files": {
     "src/app/classifyActions.ts": 1,
     "src/app/epochFramePrep.ts": 2,
@@ -42,7 +42,6 @@
     "src/render/densityColors.ts": 1,
     "src/render/densityPointSize.ts": 1,
     "src/render/elevationRange.ts": 2,
-    "src/render/hillshadeColors.ts": 1,
     "src/render/localDensitySize.ts": 1,
     "src/render/measure/classificationEditor.ts": 1,
     "src/render/measure/lassoVolume.ts": 11,

@@ -38,6 +38,8 @@ export interface ProfileExportRequest {
   readonly capture: () => ProfileExportSource;
   readonly extras: (s: MeasurementSummary) => Promise<ProfileSheetExtras | null>;
   readonly fields: ProfileSheetFields | undefined;
+  /** The measurement itself: unexported details are held against it and go when it does. */
+  readonly draftOwner?: object;
   /** Keep the profile's own words on its measurement. */
   readonly saveFields?: (f: ProfileSheetFields) => void;
   readonly download: (blob: Blob, name: string) => void;
@@ -57,7 +59,7 @@ export async function exportProfileSheet(r: ProfileExportRequest): Promise<boole
   const chart = s.profileChart ?? [];
   return openProfileExportDialog({
     profileName: s.name, scanName: context?.scanName ?? null, lengthM: chart[chart.length - 1]?.distance ?? 0,
-    unitSystem, fields: r.fields ?? {}, defaultFileName: fallback, returnFocusTo: r.returnFocusTo,
+    unitSystem, fields: r.fields ?? {}, defaultFileName: fallback, returnFocusTo: r.returnFocusTo, draftOwner: r.draftOwner,
   }, async (c, closed) => {
     const now = r.capture();
     // The choice between metres and feet stands only while the unit is known.

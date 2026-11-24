@@ -9,7 +9,6 @@
 
 import { classifyLoadError, reportChunkFailure } from '../app/staleChunkReload';
 import { el, focusIfLost } from './dom';
-import { ICON_EXPAND } from './dockIcons';
 import { openResultFocus } from './ResultFocus';
 import { triggerDownload } from '../io/download';
 // Guarded localStorage access — bare getItem/setItem throws in sandboxed
@@ -71,7 +70,7 @@ import {
   GEOGRAPHIC_CRS_MEASURE_NOTICE,
   VOLUME_ESTIMATE_NOTICE,
 } from '../render/measure/format';
-import { breakdownParts } from './measureBreakdownRow';
+import { SLANT_NOTE, breakdownParts } from './measureBreakdownRow';
 // Measurement context state — every displayed value states what kind of
 // number it is (viewer measurement with a resolved datum / approximate
 // scene-local figure / no shared basis), so a screenshot of the panel can
@@ -269,8 +268,8 @@ export interface MeasurePanelCallbacks {
    * v0.3.10 Profile-as-Deliverable stream.
    */
   getUnitSystem?: () => 'metric' | 'imperial';
-  /** The user's own words for a profile's sheets, kept on its measurement. */
-  getProfileSheet?: (id: string) => ProfileSheetFields | undefined;
+  /** The profile's measurement, which keeps the user's own words for its sheets. */
+  getProfileOwner?: (id: string) => { sheet?: ProfileSheetFields } | undefined;
   onProfileSheet?: (id: string, fields: ProfileSheetFields) => void;
   /** What a Light or Dark profile sheet draws beyond the ground line; null when nothing more can be drawn. */
   getProfileSheetExtras?: (id: string, s: MeasurementSummary) => Promise<ProfileSheetExtras | null>;
@@ -821,7 +820,7 @@ export class MeasurePanel {
    * shows the failure in its own vocabulary.
    */
   private async _buildProfileSheet(s: MeasurementSummary, from: HTMLElement | null = null): Promise<void> {
-    const { exportProfileSheet, ProfileExportRefusal } = await loadProfileExport();
+    const { exportProfileSheet, ProfileExportRefusal } = await loadProfileExport(), owner = this._cb.getProfileOwner?.(s.id);
     const refuse = (why: string): never => { throw new ProfileExportRefusal(why); };
     // Read together, before anything is awaited, each time the flow asks: a scan
     // swap in between would label this profile with the next scan's frame.
@@ -835,7 +834,7 @@ export class MeasurePanel {
       return why ? refuse(why) : { summary: now, context, unitSystem: this._displayUnits(now) };
     };
     await exportProfileSheet({
-      capture, fields: this._cb.getProfileSheet?.(s.id), saveFields: (f) => this._cb.onProfileSheet?.(s.id, f),
+      capture, fields: owner?.sheet, draftOwner: owner, saveFields: (f) => this._cb.onProfileSheet?.(s.id, f),
       extras: (now) => this._cb.getProfileSheetExtras?.(now.id, now) ?? Promise.resolve(null), download: triggerDownload, returnFocusTo: from,
     });
   }
@@ -1180,7 +1179,7 @@ export class MeasurePanel {
     const resetBtn = el('button', {
       className: 'olv-mp-sampler-reset',
       text: 'Reset',
-      title: 'Back to the defaults: auto corridor (5% of length, at most 5 m on a scan with a metre scale), p25, 64 samples',
+      title: 'Back to the defaults: auto corridor (5% of length, at most 5 m on a scan with a metre scale), 25th elevation percentile, 64 samples',
       ariaLabel: `Reset sampling parameters for ${s.name}`,
     });
     resetBtn.addEventListener('click', () => {
@@ -1394,6 +1393,7 @@ export class MeasurePanel {
     let committed = s.name; // a rename does not rebuild the row, so s.name goes stale
 
     const value = el('span', { className: 'olv-mp-value', text: s.value });
+    if (s.lineMetrics) value.title = SLANT_NOTE;
 
     const del = el('button', {
       className: 'olv-mp-del',
@@ -1461,13 +1461,15 @@ export class MeasurePanel {
       if (!t.presentable) {
         value.style.opacity = '0.55';
         value.style.textDecoration = 'underline dotted';
-        value.title = t.caption;
+        value.title = value.title ? `${value.title}\n${t.caption}` : t.caption;
       }
       // Insert just after the value so the dot reads as the number's verdict.
       children.splice(children.indexOf(value) + 1, 0, badge);
     }
 
-    const headRow = el('div', { className: 'olv-mp-row' }, children);
+    // A profile row with a chart is removed by its labelled "Clear profile" button.
+    const charted = s.kind === 'profile' && s.profileChart !== undefined && s.profileChart.length >= 2;
+    const headRow = el('div', { className: 'olv-mp-row' }, charted ? children.filter((c) => c !== del) : children);
     headRow.setAttribute('data-measurement-id', s.id);
 
     // Measurement-context line: what kind of number the value above it is.
@@ -1540,9 +1542,7 @@ export class MeasurePanel {
       const chart = renderProfileChart(s.profileChart, vex, system, stationCoupling, scaleKnown);
       // The chart is where the eye lands, so it carries the primary "expand"
       // affordance: click (or Enter / Space) anywhere on it to open the whole
-      // result in the shared focus surface. An always-visible corner badge marks
-      // it interactive — the faint header-row icon it replaces stayed invisible
-      // until hovered, so nobody found it.
+      // result. The labelled workbench button below opens the same surface.
       // What Expand opens is not one surface any more, so the promise it makes
       // is not one sentence any more. A wide viewport with a stage gets the
       // docked section workbench, which carries neither the station table nor
@@ -1568,45 +1568,14 @@ export class MeasurePanel {
       const openProfileFocus = (): void => this._openProfileFocus(s, chartWrap);
       chartWrap.addEventListener('click', openProfileFocus);
       chartWrap.addEventListener('keydown', (e) => {
-        // Only when the wrapper itself has focus. The expand button sits inside
-        // it, and a bubbling Enter used to be preventDefault()ed here before the
-        // browser could synthesise the button's click: the view still opened,
-        // but through the wrapper, so focus returned to the wrapper instead of
-        // the control the user actually activated.
+        // Only when the wrapper itself has focus, so a key pressed on a control
+        // inside the chart stays with that control.
         if (e.target !== chartWrap) return;
         if (e.key === 'Enter' || e.key === ' ') {
           e.preventDefault();
           openProfileFocus();
         }
       });
-      // The corner mark used to be a decorative span with `pointer-events: none`
-      // — a hint that looked like a control and was not one. That is why a
-      // labelled Expand button went into the chip strip below, and that button
-      // needed 233px in a panel whose content box is 192px, so it clipped every
-      // row it shared a panel with.
-      //
-      // Promoting the mark to a real button fixes both: the affordance people
-      // look for is now the affordance that works, and the strip goes back to
-      // holding only zoom chips. It sits top-right; the native resize grip is
-      // bottom-right, so they do not compete for the same corner.
-      const chartExpand = el('button', {
-        className: 'olv-mp-chart-expand',
-        unsafeHtml: ICON_EXPAND,
-        title: expandTitle,
-        ariaLabel: expandName,
-      });
-      // Not a second tab stop: chartWrap already carries this exact action as
-      // role="button" + tabIndex=0, so a focusable child button with the same
-      // accessible name would give keyboard/screen-reader users two consecutive
-      // stops for one action. It stays a real, mouse-clickable button — only
-      // pulled out of the accessibility tree and the tab order.
-      chartExpand.tabIndex = -1;
-      chartExpand.setAttribute('aria-hidden', 'true');
-      chartExpand.addEventListener('click', (e) => {
-        e.stopPropagation();
-        this._openProfileFocus(s, chartExpand);
-      });
-      chartWrap.append(chartExpand);
       // VEX chip strip — sits beneath the chart wrapper. Clicking a
       // chip writes the new VEX to localStorage and triggers a
       // re-render of the whole measurements list, so every profile
@@ -1617,9 +1586,6 @@ export class MeasurePanel {
       // that amounts to. The PDF computes its own paper ratios.
       const vexStrip = el('div', {
         className: 'olv-mp-vex-strip',
-        title:
-          'Vertical stretch of the chart: 1:1 draws heights at the horizontal scale, ' +
-          'a multiple exaggerates them that many times, and Fit fills the height with the relief.',
         ariaLabel: 'Vertical stretch',
       });
       vexStrip.setAttribute('role', 'radiogroup');
@@ -1855,14 +1821,9 @@ export class MeasurePanel {
           }),
         );
       }
-      // v0.3.10: explicit "Clear profile" action under the
-      // chart. The per-row `×` delete button already removed any
-      // measurement (including profiles), but it's a small icon at the
-      // far right of the headline row and users reported they couldn't
-      // find an obvious way to dismiss a finished profile. A bigger,
-      // labelled button in the destructive rose vocabulary makes the
-      // dismiss path discoverable at the moment of "I'm done with this
-      // profile." Wires to the same controller delete callback.
+      // "Clear profile" under the chart is the row's one way to remove it: a
+      // labelled button in the destructive rose vocabulary, in place of the
+      // small `×` the other rows carry. Same controller delete callback.
       // v0.4.0 Profile-as-Deliverable — a full-page PDF (scaled chart +
       // station/elevation/grade table + civil summary) an engineer can
       // print and measure off. pdf-lib is dynamic-imported on click so it
@@ -1900,11 +1861,12 @@ export class MeasurePanel {
         el('button', {
           className: 'olv-mp-profile-clear',
           text: 'Clear profile',
-          title: `Remove this profile (${s.name})`,
+          title: 'Remove this profile',
           ariaLabel: `Clear profile ${s.name}`,
         }),
       ]);
       const clearBtn = clearAction.lastElementChild as HTMLButtonElement;
+      named.push([clearBtn, 'Clear profile']);
       clearBtn.addEventListener('click', () => {
         clearBtn.blur();
         this._cb.onDelete(s.id);

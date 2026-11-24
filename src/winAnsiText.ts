@@ -210,11 +210,11 @@ export function wrapStampLine(font: TextMeasurer, s: string, maxW: number, sz: n
  * cut there with a marker line; app-written text and CRS, digest or unit rows
  * pass false.
  */
-export function wrapReportField(s: string, font: TextMeasurer, sz: number, maxW: number, cap: boolean): string[] {
+export function wrapReportField(s: string, font: TextMeasurer, sz: number, maxW: number, cap: boolean, marker: (omitted: number) => string = omissionMarker): string[] {
   const field = cap ? capFieldText(s) : { text: s, omitted: 0 };
   const measure = (t: string): number => font.widthOfTextAtSize(t, sz);
   // A line break starts a new line and a tab is a space (never '?').
   const lines = pdfParagraphs(field.text).flatMap((p) => wrapToWidth(winAnsiSafe(p), measure, maxW));
-  if (field.omitted > 0) lines.push(...wrapToWidth(winAnsiSafe(omissionMarker(field.omitted)), measure, maxW));
+  if (field.omitted > 0) lines.push(...wrapToWidth(winAnsiSafe(marker(field.omitted)), measure, maxW));
   return lines;
 }

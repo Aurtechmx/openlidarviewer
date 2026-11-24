@@ -572,7 +572,7 @@ describe('buildActionRegistry — view and navigation', () => {
     h.hasScan = false;
     h.run('view.save-state');
     expect(h.saveCurrentView).not.toHaveBeenCalled();
-    expect(h.toast).toHaveBeenCalledWith('Load a scan first — a view state captures the open scan.');
+    expect(h.toast).toHaveBeenCalledWith('Open a scan first. A saved view captures the open scan.');
   });
 
   it('names the toast after the view state it just saved', () => {
@@ -585,7 +585,7 @@ describe('buildActionRegistry — view and navigation', () => {
     h.run('view.save-state');
     expect(h.saveCurrentView).toHaveBeenCalledTimes(1);
     expect(h.toast).toHaveBeenCalledWith(
-      'View state saved — “South wall” (rename it in the panel list).',
+      'View saved: “South wall” (rename it in Saved views).',
     );
   });
 
@@ -594,7 +594,7 @@ describe('buildActionRegistry — view and navigation', () => {
     h.hasScan = true;
     h.bookmarkNames = [];
     h.run('view.save-state');
-    expect(h.toast).toHaveBeenCalledWith('View state saved — “View” (rename it in the panel list).');
+    expect(h.toast).toHaveBeenCalledWith('View saved: “View” (rename it in Saved views).');
   });
 
   it('refuses to restore from an empty view-state list', () => {
@@ -602,7 +602,7 @@ describe('buildActionRegistry — view and navigation', () => {
     h.bookmarkNames = [];
     h.run('view.restore-state');
     expect(h.applyView).not.toHaveBeenCalled();
-    expect(h.toast).toHaveBeenCalledWith('No saved view states yet — save one first (V).');
+    expect(h.toast).toHaveBeenCalledWith('No saved views yet. Save one first (V).');
   });
 
   it('restores the most recently saved view state', () => {
@@ -879,10 +879,10 @@ describe('saveViewWithNotice: the V key and the palette say the same', () => {
     const deps = { hasScan: () => false, saveCurrentView: vi.fn(() => { names.push('View 1'); }), bookmarks: { count: () => names.length, get: (i: number) => ({ name: names[i]! }) }, showLassoToast: toast };
     saveViewWithNotice(deps as never);
     expect(deps.saveCurrentView).not.toHaveBeenCalled();
-    expect(toast).toHaveBeenLastCalledWith('Load a scan first — a view state captures the open scan.');
+    expect(toast).toHaveBeenLastCalledWith('Open a scan first. A saved view captures the open scan.');
     deps.hasScan = () => true;
     saveViewWithNotice(deps as never);
-    expect(toast).toHaveBeenLastCalledWith('View state saved — “View 1” (rename it in the panel list).');
+    expect(toast).toHaveBeenLastCalledWith('View saved: “View 1” (rename it in Saved views).');
   });
 
   it('the key handler goes through it, keeping its open dialog guard', () => {

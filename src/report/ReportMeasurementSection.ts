@@ -46,6 +46,7 @@ import {
   boxVolumeWithheldNote,
   measurementMetrics,
   reducedSampleCaveat,
+  supportVerdict,
   refusalNote,
   unresolvedNote,
   HEADLINE_METRIC_KEY,
@@ -416,6 +417,7 @@ export function buildMeasurementRows(
       unresolved !== undefined && unresolvedMetricKeys(m, worldUp, f, vf, steps).includes(HEADLINE_METRIC_KEY[m.kind]);
     const note = refusalNote(m, geographicCrs, verticalRefused, verticalScaleInvalid) ?? (headlineUnresolved ? unresolved! : null);
     const refused = note !== null;
+    const support = supportVerdict(m);
     return {
       name: m.name,
       kind: m.kind,
@@ -427,6 +429,7 @@ export function buildMeasurementRows(
         : !refused && unresolved
           ? { note: unresolved }
           : {}),
+      ...(support ? { support } : {}),
       profileExtras: m.kind === 'profile' && !refused
         ? buildProfileExtras(m, unitSystem, f, worldUp, vf, unitsVerified, steps)
         : undefined,

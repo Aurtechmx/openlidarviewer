@@ -62,6 +62,7 @@ import type { ClaimId } from '../../validation/evidenceRegistry';
 import type { SheetStyle } from '../../export/sheetKit/tokens';
 import type { SheetReliefInput } from '../../export/sheetKit/contourSheetModel';
 import type { SheetMeasurement } from '../../export/sheetKit/sheetMeasurement';
+import type { ExportLocale } from '../../i18n/exportLocale';
 
 /**
  * The claim a crisp contour map sheet stands on (§19): CONTOURS, whose E4 rests
@@ -236,6 +237,13 @@ export interface MapSheetInput {
    * panel words them. Ignored by Classic.
    */
   readonly measurements?: readonly SheetMeasurement[] | null;
+  /**
+   * Language and number style of a Light or Dark sheet; absent is English with
+   * point decimals. Ignored by Classic, which is in English.
+   */
+  readonly locale?: ExportLocale;
+  /** Told of a sentence that has no translation, which a test turns into a failure. */
+  readonly onUntranslated?: (text: string) => void;
 }
 
 /**
@@ -427,7 +435,7 @@ export function rotatedLabelOrigin(px: number, py: number, w: number, lift: numb
  */
 export function mapScaleLabel(scaleN: number, linearUnit: MapSheetInput['linearUnit']): string {
   if (linearUnit == null || linearUnit === 'unknown') return 'units unknown';
-  return scaleN > 0 ? `1:${scaleN.toLocaleString()}` : '—';
+  return scaleN > 0 ? `1:${scaleN.toLocaleString('en-US')}` : '—';
 }
 
 /** A drawn line of the sheet's right-hand accuracy column, baseline `y`. */
@@ -592,11 +600,14 @@ export interface AppendixLine {
   readonly tone: 'warn' | 'dim' | 'ink';
 }
 
+/** What a setting decides; the styled page groups the settings by it. */
+export type SettingGroup = 'line' | 'labels' | 'appearance' | 'packaging';
+
 /** What the purpose appendix page states, before any drawing. */
 export interface PurposeAppendixContent {
   readonly title: string;
   readonly statement: string;
-  readonly settings: ReadonlyArray<readonly [string, string]>;
+  readonly settings: ReadonlyArray<readonly [key: string, value: string, group: SettingGroup]>;
   /** The internal-validation lines, or null when the purpose does not require them. */
   readonly validation: readonly AppendixLine[] | null;
 }
@@ -629,22 +640,22 @@ export function purposeAppendixContent(
     purpose.generalizeToleranceCells > 0
       ? `tolerance ${purpose.generalizeToleranceCells} x cell (Douglas-Peucker)`
       : 'exact - no generalization';
-  const settings: Array<readonly [string, string]> = [
-    ['Geometry', geometry],
-    ['Cartographic smoothing', onOff(purpose.cartographicSmoothing)],
-    ['Generalization', generalization],
-    ['Contour index interval', `every ${purpose.indexEvery}`],
-    ['Labels', purpose.labelsIndexOnly ? 'index only' : 'all contours'],
+  const settings: Array<readonly [string, string, SettingGroup]> = [
+    ['Geometry', geometry, 'line'],
+    ['Cartographic smoothing', onOff(purpose.cartographicSmoothing), 'line'],
+    ['Generalization', generalization, 'line'],
+    ['Contour index interval', `every ${purpose.indexEvery}`, 'labels'],
+    ['Labels', purpose.labelsIndexOnly ? 'index only' : 'all contours', 'labels'],
     // The Classic sheet draws no raster and says so. A styled sheet states
     // what it drew, whatever the purpose's own setting.
     ['Hillshade', drawn
       ? (drawn.hillshade ? 'drawn on this sheet (four-light, north-west key)' : 'not drawn (no terrain grid supplied)')
-      : `${onOff(purpose.hillshade)} (documented; raster not rendered on this sheet)`],
+      : `${onOff(purpose.hillshade)} (documented; raster not rendered on this sheet)`, 'appearance'],
     ['Hypsometric tint', drawn
       ? (drawn.tint ? 'drawn on this sheet (faint elevation tint)' : 'not drawn')
-      : `${onOff(purpose.hypsometricTint)} (documented; raster not rendered on this sheet)`],
-    ['Exploratory output allowed', yesNo(purpose.allowExploratory)],
-    ['Complete package', yesNo(purpose.completePackage)],
+      : `${onOff(purpose.hypsometricTint)} (documented; raster not rendered on this sheet)`, 'appearance'],
+    ['Exploratory output allowed', yesNo(purpose.allowExploratory), 'packaging'],
+    ['Complete package', yesNo(purpose.completePackage), 'packaging'],
   ];
   // HONESTY (§6.3): the validation lines record the sheet's INTERNAL validation
   // state, the same evidence-ladder verdict every export of this scan carries.
@@ -1145,12 +1156,20 @@ function clipToWidth(
 export interface MapSheetFacts {
   readonly sheetClaim: ClaimId;
   readonly crs: string;
+  /** False when {@link crs} states that there is none, rather than naming one. */
+  readonly crsNamed: boolean;
   readonly datum: string;
+  /** False when {@link datum} states that it is unknown, rather than naming one. */
+  readonly datumNamed: boolean;
   readonly generated: string;
   readonly interval: string;
   /** The vertical unit as the interval prints it: " m", " ft", or a hedge when unverified. */
   readonly verticalSuffix: string;
+  /** The resolved vertical unit, or null when it is unverified. */
+  readonly verticalUnit: string | null;
   readonly scaleLabel: string;
+  /** N of the 1:N scale; 0 when no map is drawn, null when the units are unknown. */
+  readonly scaleN: number | null;
   readonly preparedBy: string;
   readonly styleLabel: string;
   readonly analysedBasis: string | null;
@@ -1176,7 +1195,8 @@ export function mapSheetFacts(input: MapSheetInput, mapScale: number): MapSheetF
   // label, never the horizontal one. Routing it through the horizontal helper
   // printed "5 m" while this sheet's own notes said "(vertical unit
   // unverified)" for the same number.
-  const verticalSuffix = verticalSuffixFromLabel(prov?.verticalUnitLabel ?? prov?.contourIntervalUnit ?? prov?.complexity?.zUnit);
+  const verticalLabel = prov?.verticalUnitLabel ?? prov?.contourIntervalUnit ?? prov?.complexity?.zUnit;
+  const verticalSuffix = verticalSuffixFromLabel(verticalLabel);
   const interval =
     intervalValue != null && Number.isFinite(intervalValue)
       ? `${intervalValue}${verticalSuffix}`
@@ -1258,11 +1278,15 @@ export function mapSheetFacts(input: MapSheetInput, mapScale: number): MapSheetF
   return {
     sheetClaim,
     crs,
+    crsNamed: prov ? prov.crsKnown : input.crs != null,
     datum,
+    datumNamed: prov ? prov.datumKnown : input.verticalDatum != null,
     generated,
     interval,
     verticalSuffix,
+    verticalUnit: verticalSuffix === verticalSuffixFromLabel(null) ? null : verticalLabel ?? null,
     scaleLabel: mapScaleLabel(scaleN, input.linearUnit),
+    scaleN: input.linearUnit == null || input.linearUnit === 'unknown' ? null : scaleN,
     preparedBy: input.preparedBy ?? '—',
     styleLabel,
     analysedBasis: prov ? prov.analysedBasisLine : null,

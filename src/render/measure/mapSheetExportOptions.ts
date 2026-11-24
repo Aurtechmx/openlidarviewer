@@ -14,6 +14,8 @@
 
 import type { SheetSize, SheetOrientation } from './mapSheetPdf';
 import { verticalUnitSuffix } from '../../units/units';
+import { made } from '../../i18n/generatedText';
+import { companyDetails, isEmptyFields, type CompanyDetails } from '../../model/deliverableFields';
 
 /** Sheet-size choices offered in the dialog (value drives {@link SheetSize}). */
 export const SHEET_OPTIONS: ReadonlyArray<{ value: SheetSize; label: string }> = [
@@ -68,15 +70,18 @@ export function ensurePdfExtension(name: string): string {
   return /\.pdf$/i.test(name) ? name.replace(/\.pdf$/i, '.pdf') : `${name}.pdf`;
 }
 
+const TITLE_SUFFIX = ' — Contours';
+
 /**
  * Default sheet title — the host's map context title when present (the
  * `<scan> — Contours` string), else derived from the export basename so the
  * field is never blank.
  */
 export function defaultMapTitle(p: { title?: string | null; basename: string }): string {
-  if (p.title?.trim()) return p.title.trim();
+  const given = p.title?.trim();
+  if (given) return given.endsWith(TITLE_SUFFIX) ? made(given, { base: given.slice(0, -TITLE_SUFFIX.length) }) : given;
   const base = (p.basename ?? '').trim();
-  return base ? `${base} — Contours` : 'Contours';
+  return made(base ? `${base}${TITLE_SUFFIX}` : 'Contours', { base });
 }
 
 /**
@@ -99,8 +104,58 @@ export function defaultMapNotes(p: {
     p.intervalM != null && Number.isFinite(p.intervalM)
       ? `${p.intervalM}${verticalUnitSuffix(p.verticalUnitToMetres)}`
       : 'auto';
-  const crs = p.crs?.trim() ? p.crs.trim() : 'no CRS';
-  return `Contours from ${base} · interval ${interval} · ${crs}`;
+  const crs = p.crs?.trim() || null;
+  return made(`Contours from ${base} · interval ${interval} · ${crs ?? 'no CRS'}`, { base, interval, crs });
+}
+
+/** Notes the user typed, by the scan they were typed for. This tab only. */
+const typedNotes = new Map<string, string>();
+/** The Prepared by the user typed, '' when they cleared it, null when they left the suggestion. This tab only. */
+let typedPreparedBy: string | null = null;
+
+/** What the notes describe: the contours drawn and the frame they are drawn in. */
+interface DrawnContours {
+  readonly intervalM: number;
+  readonly crs: string | null;
+}
+
+/**
+ * The dialog's Notes. What the user typed for this scan is shown again; anything
+ * else is made afresh from the scan, its CRS and the interval drawn. `print` is
+ * what the sheet carries: text left as it was shown states the interval of the
+ * contours that were drawn, which need not be the one the dialog opened on.
+ * `keep` is called once a sheet was written. With no scan id nothing is kept.
+ */
+export function mapNotes(
+  scanId: string | null,
+  basename: string,
+  model: DrawnContours,
+  verticalUnitToMetres: () => number | null | undefined,
+): { readonly shown: string; print(text: string, drawn: DrawnContours): string; keep(text: string): void } {
+  const generate = (d: DrawnContours): string =>
+    defaultMapNotes({ basename, intervalM: d.intervalM, crs: d.crs, verticalUnitToMetres: verticalUnitToMetres() });
+  const seeded = generate(model);
+  return {
+    shown: (scanId === null ? undefined : typedNotes.get(scanId)) ?? seeded,
+    print: (text, drawn) => (text === seeded ? generate(drawn) : text),
+    keep: (text) => {
+      if (scanId === null) return;
+      if (text === seeded) typedNotes.delete(scanId);
+      else typedNotes.set(scanId, text);
+    },
+  };
+}
+
+/**
+ * The dialog's Prepared by: what the user typed here before, else the person or
+ * company they gave with a profile export, else the one this device remembers.
+ * Read only: nothing typed here goes to the company details.
+ */
+export function mapPreparedBy(remembered: CompanyDetails | null): { readonly shown: string; keep(text: string): void } {
+  const who = isEmptyFields(companyDetails()) && remembered ? remembered : companyDetails();
+  const suggested = who.preparedBy ?? who.company ?? '';
+  const shown = typedPreparedBy ?? suggested;
+  return { shown, keep: (text) => { if (text !== shown) typedPreparedBy = text; } };
 }
 
 /** Default output filename (without extension): a sanitised `<basename>-map`. */

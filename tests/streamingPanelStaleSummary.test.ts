@@ -54,6 +54,20 @@ async function panelWith(summary: Parameters<
   return { panel, root: panel.element as unknown as FakeEl };
 }
 
+describe('the Scan heading', () => {
+  it('shows only while the section has rows', async () => {
+    const { StreamingPanel } = await import('../src/ui/StreamingPanel');
+    const panel = new StreamingPanel(noopPanelCallbacks());
+    const label = (panel as unknown as { _scanLabel: FakeEl })._scanLabel;
+    const hidden = (): boolean => label.classList.contains('olv-hidden');
+    expect(label.className).toContain('olv-hidden');
+    panel.setSummary(COPC_SUMMARY);
+    expect(hidden()).toBe(false);
+    panel.hide();
+    expect(hidden()).toBe(true);
+  });
+});
+
 describe('hide() drops the closed scan', () => {
   it('clears the summary rows so the next scan cannot inherit them', async () => {
     const { panel, root } = await panelWith(COPC_SUMMARY);

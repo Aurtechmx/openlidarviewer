@@ -115,7 +115,7 @@ describe('point basis', () => {
   it('the export summary writes the source count and the full-file basis when full resolution is on', () => {
     const f = synth('strided');
     const on = buildExportSummary({ pointCount: f.resident, sourcePointCount: f.declared, format: 'las14', crsMode: 'keep', viewDecimated: true, fullRes: true });
-    expect(on.pointCountLabel).toBe(`${f.declared!.toLocaleString()} points`);
+    expect(on.pointCountLabel).toBe(`${f.declared!.toLocaleString('en-US')} points`);
     expect(on.basisLabel).toBe(pointBasisLine(true, f.declared!, null));
     const off = buildExportSummary({ pointCount: f.resident, sourcePointCount: f.declared, format: 'las14', crsMode: 'keep', viewDecimated: true, fullRes: false });
     expect(off.basisLabel).toBe(pointBasisLine(false, f.resident, f.declared));

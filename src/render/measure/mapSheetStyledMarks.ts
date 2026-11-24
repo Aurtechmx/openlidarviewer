@@ -10,6 +10,8 @@ import { supportWord, type SheetMeasurement } from '../../export/sheetKit/sheetM
 import { SHEET_SCALE, SHEET_SPACE, SHEET_TYPE, type SheetRgb, type SheetTokens } from '../../export/sheetKit/tokens';
 import { drawFooter, drawPaper, drawSectionLabel, sectionLabelHeight, sheetText, wrapSheetText } from '../../export/sheetKit/primitives';
 import type { AnnotationReportRow } from './annotationReportTable';
+import type { MapSheetWords } from '../../export/localizeMapSheet';
+import type { MapSheetKey } from '../../i18n/deliverables/mapSheet';
 
 /** A measurement's letter: A to Z, then AA, AB and on. */
 export function measurementLetter(i: number): string {
@@ -42,11 +44,11 @@ export interface MarkLine {
 /** Width of the letter column in the measurement list, points at scale 1. */
 const LETTER_W = 18;
 const ANNOTATION_ORDER = ['issue', 'warning', 'note', 'info'] as const;
-const GROUP_NAME: Record<string, string> = { issue: 'Issues', warning: 'Warnings', note: 'Notes', info: 'Information' };
+const GROUP_KEY: Record<(typeof ANNOTATION_ORDER)[number], MapSheetKey> = { issue: 'typeIssue', warning: 'typeWarning', note: 'typeNote', info: 'typeInfo' };
 
 /** The lines of `ms`, lettered from `start`, at width `w` and scale `k`. */
 export function measurementLines(
-  ms: readonly SheetMeasurement[], start: number, w: number, k: number, t: SheetTokens, f: SheetFonts,
+  ms: readonly SheetMeasurement[], start: number, w: number, k: number, t: SheetTokens, f: SheetFonts, words: MapSheetWords,
 ): MarkLine[] {
   const out: MarkLine[] = [];
   const sz = SHEET_TYPE.note * k;
@@ -54,9 +56,9 @@ export function measurementLines(
   ms.forEach((m, i) => {
     const lines: Array<[string, PDFFont, SheetRgb]> = [];
     for (const ln of wrapSheetText(m.name, f.sansBold, sz, tw, f)) lines.push([ln, f.sansBold, t.ink]);
-    for (const ln of wrapSheetText(m.value, f.mono, sz, tw, f)) lines.push([ln, f.mono, t.ink]);
-    for (const ln of wrapSheetText(`Support: ${m.support ?? supportWord(m.grade)}`, f.sans, sz, tw, f)) lines.push([ln, f.sans, m.grade === 'green' ? t.dim : t.warn]);
-    for (const note of m.notes) for (const ln of wrapSheetText(note, f.sans, sz, tw, f)) lines.push([ln, f.sans, t.dim]);
+    for (const ln of wrapSheetText(words.value(m.value), f.mono, sz, tw, f)) lines.push([ln, f.mono, t.ink]);
+    for (const ln of wrapSheetText(words.say('support', { t_word: m.support ?? supportWord(m.grade) }), f.sans, sz, tw, f)) lines.push([ln, f.sans, m.grade === 'green' ? t.dim : t.warn]);
+    for (const note of m.notes) for (const ln of wrapSheetText(words.translate(note), f.sans, sz, tw, f)) lines.push([ln, f.sans, t.dim]);
     lines.forEach(([text, font, color], j) => out.push({
       label: j === 0 ? measurementLetter(start + i) : null, text, font, color, indent: LETTER_W, gap: j === 0 && i > 0 ? SHEET_SPACE.sm : 0, start: j === 0,
     }));
@@ -70,13 +72,13 @@ export function orderedAnnotationRows(rows: readonly AnnotationReportRow[]): Ann
 }
 
 /** The lines of annotation `rows` (already in list order), each group under its heading. */
-export function annotationLines(rows: readonly AnnotationReportRow[], w: number, k: number, t: SheetTokens, f: SheetFonts): MarkLine[] {
+export function annotationLines(rows: readonly AnnotationReportRow[], w: number, k: number, t: SheetTokens, f: SheetFonts, words: MapSheetWords): MarkLine[] {
   const out: MarkLine[] = [];
   const sz = SHEET_TYPE.note * k;
   for (const type of ANNOTATION_ORDER) {
     const group = rows.filter((r) => r.type === type);
     if (group.length === 0) continue;
-    out.push({ label: null, text: `${GROUP_NAME[type]} (${group.length})`, font: f.sansBold, color: annotationColor(t, type), indent: 0, gap: out.length > 0 ? SHEET_SPACE.xs : 0, start: true });
+    out.push({ label: null, text: words.say(GROUP_KEY[type], { n: group.length }), font: f.sansBold, color: annotationColor(t, type), indent: 0, gap: out.length > 0 ? SHEET_SPACE.xs : 0, start: true });
     for (const r of group) {
       const body = r.note ? `${r.title}: ${r.note}${r.noteTruncated ? '...' : ''}` : r.title;
       wrapSheetText(`${r.index}. ${body}`, f.sans, sz, w - 8 * k, f).forEach((ln, j) => out.push({ label: null, text: ln, font: f.sans, color: t.ink, indent: 8, gap: 0, start: j === 0 }));
@@ -118,7 +120,7 @@ type Column = Array<{ readonly heading: string | null; readonly lines: MarkLine[
  * Lays the remaining lists into pages of columns at scale 1. A list carries on
  * into the next column, and the next page, under a repeated heading.
  */
-function paginate(sections: readonly Section[], cols: number, colH: number): Column[][] {
+function paginate(sections: readonly Section[], cols: number, colH: number, words: MapSheetWords): Column[][] {
   const pages: Column[][] = [];
   let page: Column[] = [];
   let col: Column = [];
@@ -145,7 +147,7 @@ function paginate(sections: readonly Section[], cols: number, colH: number): Col
       if (used + h > colH && block.lines.length > 0) {
         col.push(block);
         nextCol();
-        block = { heading: `${s.heading} (continued)`, lines: [] };
+        block = { heading: words.say('continued', { u_heading: s.heading }), lines: [] };
         used = headH;
       }
       // A unit taller than a whole column still breaks, line by line.
@@ -153,7 +155,7 @@ function paginate(sections: readonly Section[], cols: number, colH: number): Col
         if (used + lineH(l) > colH && block.lines.length > 0) {
           col.push(block);
           nextCol();
-          block = { heading: `${s.heading} (continued)`, lines: [] };
+          block = { heading: words.say('continued', { u_heading: s.heading }), lines: [] };
           used = headH;
         }
         block.lines.push(l);
@@ -168,11 +170,11 @@ function paginate(sections: readonly Section[], cols: number, colH: number): Col
 }
 
 /** The sheets a continuation needs on a page of `pageSize`, before any is drawn. */
-export function continuationPages(c: MarksContinuation, pageSize: readonly [number, number], margin: number, t: SheetTokens, f: SheetFonts): number {
-  return layoutContinuation(c, pageSize, margin, t, f).pages.length;
+export function continuationPages(c: MarksContinuation, pageSize: readonly [number, number], margin: number, t: SheetTokens, f: SheetFonts, words: MapSheetWords): number {
+  return layoutContinuation(c, pageSize, margin, t, f, words).pages.length;
 }
 
-function layoutContinuation(c: MarksContinuation, pageSize: readonly [number, number], margin: number, t: SheetTokens, f: SheetFonts) {
+function layoutContinuation(c: MarksContinuation, pageSize: readonly [number, number], margin: number, t: SheetTokens, f: SheetFonts, words: MapSheetWords) {
   const [PW, PH] = pageSize;
   const cols = PW > PH ? 3 : 2;
   const gutter = SHEET_SPACE.xl;
@@ -180,9 +182,9 @@ function layoutContinuation(c: MarksContinuation, pageSize: readonly [number, nu
   const top = PH - margin - SHEET_TYPE.kicker - SHEET_SPACE.sm - SHEET_SCALE.lead - SHEET_SPACE.xl;
   const bottom = margin + 24;
   const sections: Section[] = [];
-  if (c.measurements.length > 0) sections.push({ heading: 'Measurements', lines: measurementLines(c.measurements, c.measurementStart, colW, 1, t, f) });
-  if (c.annotations.length > 0) sections.push({ heading: 'Annotations', lines: annotationLines(c.annotations, colW, 1, t, f) });
-  return { pages: paginate(sections, cols, top - bottom), colW, gutter, top };
+  if (c.measurements.length > 0) sections.push({ heading: words.say('measurements'), lines: measurementLines(c.measurements, c.measurementStart, colW, 1, t, f, words) });
+  if (c.annotations.length > 0) sections.push({ heading: words.say('annotations'), lines: annotationLines(c.annotations, colW, 1, t, f, words) });
+  return { pages: paginate(sections, cols, top - bottom, words), colW, gutter, top };
 }
 
 /**
@@ -191,17 +193,17 @@ function layoutContinuation(c: MarksContinuation, pageSize: readonly [number, nu
  */
 export function drawMarksContinuation(
   doc: PDFDocument, c: MarksContinuation, pageSize: readonly [number, number], margin: number,
-  footerLeft: string, firstPage: number, pageCount: number, t: SheetTokens, f: SheetFonts,
+  footerLeft: string, firstPage: number, pageCount: number, t: SheetTokens, f: SheetFonts, words: MapSheetWords,
 ): void {
-  const { pages, colW, gutter, top } = layoutContinuation(c, pageSize, margin, t, f);
+  const { pages, colW, gutter, top } = layoutContinuation(c, pageSize, margin, t, f, words);
   const [PW, PH] = pageSize;
   pages.forEach((cols, p) => {
     const page = doc.addPage([PW, PH]);
     drawPaper(page, t);
     let y = PH - margin - SHEET_TYPE.kicker;
-    sheetText(page, 'CONTOUR MAP', margin, y, { font: f.sansBold, size: SHEET_TYPE.kicker, color: t.accent }, f);
+    sheetText(page, words.say('kicker'), margin, y, { font: f.sansBold, size: SHEET_TYPE.kicker, color: t.accent }, f);
     y -= SHEET_SPACE.sm + SHEET_SCALE.lead;
-    sheetText(page, 'Measurements and annotations, continued', margin, y, { font: f.sansBold, size: SHEET_SCALE.lead, color: t.ink }, f);
+    sheetText(page, words.say('marksContinued'), margin, y, { font: f.sansBold, size: SHEET_SCALE.lead, color: t.ink }, f);
     cols.forEach((col, ci) => {
       const x = margin + ci * (colW + gutter);
       let cy = top;
@@ -211,6 +213,6 @@ export function drawMarksContinuation(
         cy = drawMarkLines(page, block.lines, x, cy, 1, t.area, f);
       });
     });
-    drawFooter(page, footerLeft, `${firstPage + p} / ${pageCount}`, margin, PW - margin, margin, t, f);
+    drawFooter(page, footerLeft, `${firstPage + p} / ${pageCount}`, margin, PW - margin, margin, t, f, words.draft);
   });
 }

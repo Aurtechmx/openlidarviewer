@@ -2,6 +2,7 @@
  * profileExportFlow.test.ts: the sheet is of the profile as it is when Export
  * is pressed, a refusal reaches the user, and a closed dialog saves nothing.
  */
+import { readFileSync } from 'node:fs';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 const h = vi.hoisted(() => ({ opened: null as null | { input: Record<string, unknown>; run: (c: object, closed: () => boolean) => Promise<void> }, built: [] as Array<Record<string, unknown>> }));
@@ -28,9 +29,9 @@ describe('exportProfileSheet', () => {
   it('reads the profile and its frame again as Export is pressed', async () => {
     let now = source();
     await exportProfileSheet(request(() => now));
-    now = source({ summary: { ...source().summary, name: 'Renamed' } as never, context: { crs: 'EPSG:2', verticalDatum: null, scanName: 'scan' } as never });
+    now = source({ summary: { ...source().summary, name: 'Renamed', trust: { grade: 'red', caption: 'Unverified', reasons: [], presentable: false } } as never, context: { crs: 'EPSG:2', verticalDatum: null, scanName: 'scan' } as never });
     await h.opened!.run(choice, () => false);
-    expect(h.built[0]).toMatchObject({ name: 'Renamed', crs: 'EPSG:2', unitSystem: 'imperial' });
+    expect(h.built[0]).toMatchObject({ name: 'Renamed', support: { grade: 'red', caption: 'Unverified' }, crs: 'EPSG:2', unitSystem: 'imperial' });
     expect(files).toEqual(['x.pdf']);
     expect(saved).toEqual([{ title: 'T' }]);
   });
@@ -47,6 +48,14 @@ describe('exportProfileSheet', () => {
     gone = true;
     await expect(h.opened!.run(choice, () => false)).rejects.toThrow('This profile is no longer open.');
     expect(files).toEqual([]);
+  });
+  it('hands the dialog the measurement its unexported details are held against', async () => {
+    const draftOwner = {};
+    await exportProfileSheet({ ...request(() => source()), draftOwner });
+    expect(h.opened!.input.draftOwner).toBe(draftOwner);
+    // The panel passes the measurement itself, which a closed scan or an imported session replaces.
+    expect(readFileSync('src/ui/MeasurePanel.ts', 'utf8')).toMatch(/owner = this\._cb\.getProfileOwner\?\.\(s\.id\)[\s\S]*fields: owner\?\.sheet, draftOwner: owner,/);
+    expect(readFileSync('src/app/measurePanelMount.ts', 'utf8')).toContain('getProfileOwner: (id) => viewer.measure.getMeasurements().find((m) => m.id === id),');
   });
   it('closing while the sheet is made saves nothing', async () => {
     await exportProfileSheet(request(() => source()));

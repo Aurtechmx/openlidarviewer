@@ -346,6 +346,12 @@ export const STANDARD_SCALE_DENOMINATORS = [100, 200, 250, 500, 1000, 1250, 2000
 /** Standard vertical exaggerations, largest first. */
 export const STANDARD_EXAGGERATIONS = [100, 50, 25, 20, 10, 5, 2.5, 2, 1] as const;
 
+/** Decimals that write every multiple of `step` exactly: 0.25 takes two. At least one, at most three. */
+export function tickDecimals(step: number): number {
+  for (let d = 1; d < 3; d++) if (Math.abs(step * 10 ** d - Math.round(step * 10 ** d)) < 1e-6) return d;
+  return 3;
+}
+
 /** Round elevation tick steps, one decade; others scale by powers of ten. */
 const TICK_STEPS = [1, 2, 2.5, 5] as const;
 

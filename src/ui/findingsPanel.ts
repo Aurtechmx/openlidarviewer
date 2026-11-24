@@ -51,8 +51,8 @@ export interface MountedFindingsPanel {
 
 /** Format a finding's value + unit, with its ± band when present. */
 function formatValue(f: ReportFinding): string {
-  const v = f.value !== null && Number.isFinite(f.value) ? f.value.toLocaleString(undefined, { maximumFractionDigits: 2 }) : '—';
-  const band = f.sigma != null && Number.isFinite(f.sigma) ? ` ± ${f.sigma.toLocaleString(undefined, { maximumFractionDigits: 2 })}` : '';
+  const v = f.value !== null && Number.isFinite(f.value) ? f.value.toLocaleString('en-US', { maximumFractionDigits: 2 }) : '—';
+  const band = f.sigma != null && Number.isFinite(f.sigma) ? ` ± ${f.sigma.toLocaleString('en-US', { maximumFractionDigits: 2 })}` : '';
   return `${v}${band} ${f.unit}`.trim();
 }
 
@@ -72,7 +72,7 @@ export function buildFindingsPanel(deps: FindingsPanelDeps): MountedFindingsPane
   addBtn.title = 'Append the placed measurements to the saved findings, each with its band and caveats.';
   const exportBtn = el('button', { className: 'olv-bc-pill olv-export-product-btn olv-findings-export', text: 'Export findings report' });
   exportBtn.type = 'button';
-  exportBtn.title = 'Export the saved findings as the integrity report (JSON, SHA-256 content digest).';
+  exportBtn.title = 'Export the saved findings as the integrity report (JSON) with its verification checksum (a SHA-256 digest).';
   const clearBtn = el('button', { className: 'olv-bc-pill olv-export-product-btn olv-findings-clear', text: 'Clear all' });
   clearBtn.type = 'button';
   clearBtn.title = 'Empty the saved findings for this scan. Undo is offered afterwards. Exported reports are unaffected.';

@@ -18,6 +18,9 @@
 import { el } from './dom';
 import type { DerivedLayer, DerivedLayerStore, DerivedLayerType } from '../model/DerivedLayer';
 
+/** Types whose Show and Opacity live in a block of their own on the same page. */
+const OWN_CONTROLS: ReadonlySet<DerivedLayerType> = new Set(['contours']);
+
 /** Human label for a layer type, so a row reads as a product not an enum. */
 const TYPE_LABEL: Record<DerivedLayerType, string> = {
   'dtm-mesh': 'Terrain (DTM)',
@@ -49,9 +52,20 @@ export interface DerivedLayersList {
   dispose(): void;
 }
 
-/** One layer's row: name, type, honesty chip, Show toggle, opacity. */
+/**
+ * One layer's row: name, type, honesty chip, Show toggle, opacity. The tag is
+ * left out when it only repeats the name, and the controls when the layer has
+ * its own block.
+ */
 function renderRow(layer: DerivedLayer, deps: DerivedLayersListDeps): HTMLElement {
   const row = el('div', { className: 'olv-analyse-layer-row' });
+
+  const tag = layer.evidenceExploratory ? `${TYPE_LABEL[layer.type]} · exploratory` : TYPE_LABEL[layer.type];
+  const meta = tag !== layer.name ? [el('span', { className: 'olv-analyse-layer-tag', text: tag })] : [];
+  if (OWN_CONTROLS.has(layer.type)) {
+    row.append(el('span', { className: 'olv-analyse-layer-name', text: layer.name }), ...meta);
+    return row;
+  }
 
   const label = el('label', { className: 'olv-analyse-layer-toggle' });
   const cb = document.createElement('input');
@@ -64,11 +78,6 @@ function renderRow(layer: DerivedLayer, deps: DerivedLayersListDeps): HTMLElemen
     deps.onSetVisible(layer, cb.checked);
   });
   label.append(cb, el('span', { text: layer.name }));
-
-  const meta = el('span', {
-    className: 'olv-analyse-layer-tag',
-    text: layer.evidenceExploratory ? `${TYPE_LABEL[layer.type]} · exploratory` : TYPE_LABEL[layer.type],
-  });
 
   const opRow = el('label', { className: 'olv-analyse-layer-slider' });
   const opVal = el('span', {
@@ -87,7 +96,7 @@ function renderRow(layer: DerivedLayer, deps: DerivedLayersListDeps): HTMLElemen
   });
   opRow.append(el('span', { className: 'olv-analyse-layer-tag', text: 'Opacity' }), opInput, opVal);
 
-  row.append(label, meta, opRow);
+  row.append(label, ...meta, opRow);
   return row;
 }
 

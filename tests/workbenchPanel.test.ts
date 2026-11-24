@@ -604,3 +604,52 @@ describe('Profile Workbench — teardown', () => {
     expect(host.root.children).toHaveLength(0);
   });
 });
+
+describe('Profile Workbench: the returns export', () => {
+  const settle = async (done: () => boolean): Promise<void> => {
+    for (let i = 0; i < 50 && !done(); i++) await Promise.resolve();
+  };
+  const button = (root: FakeEl): FakeEl => root.findByText('Export returns')[0]!;
+  const refusal = (): Error => {
+    const e = new Error('Not exported: draw a shorter profile.');
+    e.name = 'ProfileReturnsRefusal';
+    return e;
+  };
+
+  it('is absent where the host offers none', async () => {
+    const { root } = await mount(new FakeHost(1000));
+    expect(root.findByText('Export returns')).toHaveLength(0);
+  });
+
+  it('runs once per press, shows progress, and announces what was saved', async () => {
+    let finish!: (v: string) => void;
+    let runs = 0;
+    let progress!: (f: number) => void;
+    const { root } = await mount(new FakeHost(1000), {
+      onExportReturns: (p) => { runs++; progress = p; return new Promise((r) => { finish = r; }); },
+    });
+    const btn = button(root);
+    btn.dispatch('click', {});
+    btn.dispatch('click', {});
+    expect(runs).toBe(1);
+    progress(0.42);
+    expect(btn.textContent).toContain('42%');
+    finish('Saved it.');
+    const status = root.tree().find((n) => n.getAttribute('role') === 'status')!;
+    await settle(() => status.textContent === 'Saved it.');
+    expect(status.textContent).toBe('Saved it.');
+    await settle(() => btn.textContent === 'Export returns');
+    expect(btn.textContent).toBe('Export returns');
+  });
+
+  it('shows the sentence of a refusal as it is', async () => {
+    const { root } = await mount(new FakeHost(1000), { onExportReturns: () => Promise.reject(refusal()) });
+    const btn = button(root);
+    btn.dispatch('click', {});
+    const status = root.tree().find((n) => n.getAttribute('role') === 'status')!;
+    await settle(() => status.textContent !== '');
+    expect(status.textContent).toBe('Not exported: draw a shorter profile.');
+    await settle(() => btn.textContent === 'Export returns');
+    expect(btn.textContent).toBe('Export returns');
+  });
+});

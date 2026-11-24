@@ -257,13 +257,13 @@ export function reportClassifyFailure(
   legend?: ClassifyNoticeSurface,
 ): string | null {
   if (err instanceof SyncFallbackRefusedError) {
-    toast(`Classify · ${err.userMessage}`);
+    toast(`Auto-classify · ${err.userMessage}`);
     legend?.setUnavailableNotice(err.userMessage);
     legend?.show();
     return err.userMessage;
   }
   const msg = err instanceof Error ? err.message : String(err);
   if (/abort/i.test(msg)) return null;
-  toast(`Classify · failed: ${msg}`);
+  toast(`Auto-classify · failed: ${msg}`);
   return msg;
 }

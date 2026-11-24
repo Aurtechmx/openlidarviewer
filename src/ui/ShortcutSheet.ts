@@ -194,7 +194,8 @@ export class ShortcutSheet {
 
   /** Re-rank against the current filter and re-render. */
   private _refresh(): void {
-    const ranked = rankActions(this._input.value, this._actions);
+    const query = this._input.value;
+    const ranked = rankActions(query, this._actions.filter((a) => query.trim() !== '' || !a.searchOnly));
     this._render(ranked);
   }
 

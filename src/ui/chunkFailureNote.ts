@@ -3,6 +3,7 @@
  * load. The first failure may offer Try again, because Firefox recovers with it.
  * A repeat, or a part with no retry, says a reload is needed and what it costs.
  */
+import { RELOAD_ADVICE } from '../io/loadErrors';
 import { chunkFailureText, chunkReloadAction, countChunkFailure } from '../app/staleChunkReload';
 import { el } from './dom';
 
@@ -20,7 +21,7 @@ export interface ChunkFailureNoteOpts {
 export function chunkFailureNote(opts: ChunkFailureNoteOpts): HTMLElement {
   const note = el('div', { className: 'olv-report-empty olv-chunk-failure' });
   const button = (text: string, onClick: () => void): void => {
-    const b = el('button', { className: 'olv-inline-retry', text, title: text === 'Try again' ? 'Try loading this part again.' : 'Reload the page to load this part again. Reloading closes open scans.' }) as HTMLButtonElement;
+    const b = el('button', { className: 'olv-inline-retry', text, title: text === 'Try again' ? 'Try loading this part again.' : RELOAD_ADVICE }) as HTMLButtonElement;
     b.type = 'button';
     b.addEventListener('click', onClick);
     note.append(b);

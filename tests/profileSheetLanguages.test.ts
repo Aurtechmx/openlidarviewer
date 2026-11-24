@@ -15,6 +15,9 @@ import { templateParams } from '../src/i18n/message';
 import { profileWords } from '../src/export/localizeProfile';
 import type { ExportLocale } from '../src/i18n/exportLocale';
 import type { ProfileChartSample } from '../src/render/measure/types';
+import { gradeMeasurement, type MeasurementTrust, type MeasurementTrustInput } from '../src/render/measure/measurementTrust';
+import { supportVerdict } from '../src/export/supportVerdict';
+import { profilePdfInputFor } from '../src/ui/profilePdfInput';
 import type { ProfileDeliverable } from '../src/model/deliverableFields';
 
 const loadFont = async (n: string): Promise<Uint8Array> => new Uint8Array(await readFile(join(process.cwd(), 'src', 'export', 'sheetKit', 'fonts', n)));
@@ -198,6 +201,83 @@ describe('the profile set in every export language', () => {
     const all = ts.map((t) => t.text).join('\n');
     for (const v of ['Elevation', 'FOR REVIEW', 'PL-014', 'For comment', 'Endpoint gradient']) expect(all).toContain(v);
     expect(all).not.toContain('Allgemeine Hinweise');
+  });
+});
+
+describe('the support grade', () => {
+  const near = { snappedToPoint: true, pointsWithinRadius: 99 };
+  const grade = (over: Partial<MeasurementTrustInput>): MeasurementTrust => gradeMeasurement({ vertices: [near], crsKnown: true, ...over });
+  /** One input per caption gradeMeasurement writes. */
+  const GRADES = [
+    grade({}), grade({ crsKnown: false }), grade({ vertices: [] }), grade({ vertices: [{ snappedToPoint: false, pointsWithinRadius: 0 }] }), grade({ vertices: [{ ...near, onReducedSample: true }] }),
+    grade({ upConflict: true }), grade({ upRefusal: 'x' }), grade({ verticalRefused: true }), grade({ geographicCrs: true }), grade({ verticalScaleInvalid: true }),
+  ];
+  const LONGEST = grade({ verticalRefused: true });
+
+  it('the list above holds every caption the grading can write', async () => {
+    const src = await readFile(join(process.cwd(), 'src/render/measure/measurementTrust.ts'), 'utf8');
+    const written = [...src.matchAll(/caption(?: =|:) '([^']+)'/g)].map((m) => m[1]!);
+    expect(written.length).toBeGreaterThan(8);
+    expect(new Set(GRADES.map((g) => g.caption))).toEqual(new Set(written));
+  });
+
+  for (const locale of LOCALES) for (const style of ['light', 'dark'] as const) {
+    it(`${locale.lang} ${style}: is at the head of sheet one and on the technical notes, whole, on both papers`, async () => {
+      const w = profileWords(locale);
+      for (const support of style === 'light' ? GRADES : [LONGEST]) for (const paper of support.caption === LONGEST.caption ? ['a3', 'tabloid'] as const : ['a3'] as const) {
+        const { ts, missed } = await drawn(base({ locale, style, support, deliverable: OWN, paper }));
+        expect(missed).toEqual([]);
+        noOverlap(ts);
+        const [first, second] = [...new Set(ts.map((t) => t.page))];
+        const H = paper === 'a3' ? 841.89 : 792, W = paper === 'a3' ? 1190.55 : 1224;
+        for (const t of ts) { expect(t.right, t.text).toBeLessThanOrEqual(W - 6); expect(t.y + t.size * 0.7, t.text).toBeLessThanOrEqual(H - 6); }
+        const verdict = w.translate(supportVerdict({ trust: support })!);
+        const head = ts.filter((t) => t.page === first && t.y > H - 42 && t.right > W - 60).map((t) => t.text);
+        expect(head.length).toBeLessThanOrEqual(2);
+        expect(head.join(' ')).toBe(w.say('supportHead', { t_v: supportVerdict({ trust: support })! }));
+        const notes = ts.filter((t) => t.page === second).map((t) => t.text);
+        expect(notes).toContain(w.say('supportItem'));
+        expect(notes.join(' ')).toContain(verdict);
+        if (locale.lang !== 'en') expect(`${head.join(' ')} ${notes.join(' ')}`).not.toContain(support.caption);
+        expect(ts.map((t) => t.text)).not.toContain(w.say('technicalNotesMore'));
+      }
+    }, 120_000);
+  }
+
+  it('is set on a plate only when it is red', async () => {
+    const plates = async (support: MeasurementTrust | null): Promise<number> => {
+      let n = 0;
+      const orig = PDFPage.prototype.drawRectangle;
+      vi.spyOn(PDFPage.prototype, 'drawRectangle').mockImplementation(function (this: PDFPage, o) { if ((o?.y ?? 0) > 841.89 - 42) n++; return orig.call(this, o); });
+      await drawn(base({ support }));
+      return n;
+    };
+    expect(await plates(null)).toBe(await plates(grade({})));
+    expect(await plates(LONGEST)).toBe(await plates(null) + 1);
+  });
+
+  it('an ungraded profile prints nothing about it, and Classic is the same bytes', async () => {
+    for (const style of ['light', 'dark', 'classic'] as const) {
+      const own = style === 'classic' ? { style, loadFont: undefined } : { style };
+      const a = await buildProfilePdf(base(own)), b = await buildProfilePdf(base({ ...own, support: null }));
+      expect(Buffer.from(a).equals(Buffer.from(b))).toBe(true);
+      expect((await drawn(base(own))).ts.some((t) => /support grade/i.test(t.text))).toBe(false);
+    }
+  });
+
+  it('a graded Classic set states it on the technical notes', async () => {
+    const { ts } = await drawn(base({ style: 'classic', loadFont: undefined, support: LONGEST }));
+    const pages = [...new Set(ts.map((t) => t.page))];
+    const on = (t: string): number => pages.indexOf(ts.find((q) => q.text.startsWith(t))!.page);
+    expect(on('Support grade')).toBe(on('Length (horizontal)'));
+    const row = ts.filter((t) => t.page === pages[on('Support grade')]).map((t) => t.text).join(' ');
+    expect(row).toContain('red. Unverified');
+  });
+
+  it('comes from the captured summary', () => {
+    const at = { context: null, unitSystem: 'metric' as const, generatedAt: new Date(0) };
+    expect(profilePdfInputFor({ name: 'P', trust: LONGEST } as never, at).support).toMatchObject({ grade: 'red', caption: LONGEST.caption });
+    expect(profilePdfInputFor({ name: 'P' } as never, at).support).toBeNull();
   });
 });
 

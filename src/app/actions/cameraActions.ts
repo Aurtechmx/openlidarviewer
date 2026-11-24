@@ -86,7 +86,7 @@ export function contributeCameraActions(deps: CameraActionDeps): Action[] {
     get unavailable() { return scanRequired(deps.hasScan); },
     title: actionTitle('camera.plan-view'),
     section: 'Camera',
-    hint: 'Look straight down in parallel projection, with the hand tool on the drag.',
+    hint: 'Look straight down in parallel projection, with a drag that pans.',
     keywords: ['plan', 'top', 'ortho', 'orthographic', 'parallel', '2d', 'map', 'pan'],
     run: () => deps.planView.togglePlanView(),
   });

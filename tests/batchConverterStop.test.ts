@@ -56,6 +56,15 @@ async function converter(): Promise<Converter> {
 
 const text = (e: FakeEl): string => e.findByClass('olv-bc-results-summary').map((s) => s.textContent).join('|') + e.findByClass('olv-bc-stopped').map((s) => s.textContent).join('|');
 
+describe('the format note', () => {
+  it('gives the LAZ refusal as the Export panel words it, with advice the batch has', async () => {
+    const { LAZ_UNAVAILABLE } = await import('../src/convert/types');
+    const note = (await converter() as unknown as { _formatNote: FakeEl })._formatNote.textContent;
+    expect(LAZ_UNAVAILABLE).toBe('LAZ is not available yet: this browser build cannot write LAZ compression.');
+    expect(note).toBe(`${LAZ_UNAVAILABLE} Choose LAS. For .las.gz, use Compress in the Export panel.`);
+  });
+});
+
 describe('stopping a batch', () => {
   it('Cancel says how many files were not converted and keeps what finished', async () => {
     const bc = await converter();

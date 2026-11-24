@@ -33,8 +33,15 @@
  * io/exporters.ts states the rule this follows: a CSV never gets comment
  * lines, because a naive parser must see the header row first.
  *
- * Pure and deterministic. `generatedAt` is a parameter, so the same inputs
- * always produce the same bytes.
+ *   - A coordinate is the one the scene holds now for that source point, and
+ *     it is written only while it is still the return the section recorded.
+ *     A source that has been evicted, removed or hidden, or a point that no
+ *     longer matches its recorded chainage and height, leaves the x/y/z cells
+ *     blank, and the receipt counts those rows by reason.
+ *
+ * The rows come out of a generator, so a caller can build a large section in
+ * slices. Pure and deterministic. `generatedAt` is a parameter, so the same
+ * inputs always produce the same bytes.
  */
 
 import type { UnitSystem } from './types';
@@ -42,24 +49,28 @@ import { formatStation } from './profileSummary';
 import { classificationLabel } from '../pointInfo';
 import { heightLabel, heightReferenceNote, type VerticalReference } from '../../geo/height';
 import { profileSectionHas, type ProfileSectionPoints } from './profileSectionBuilder';
+import { ATTR_COLOUR_INVALID, ATTR_INTENSITY_INVALID } from '../../model/PointCloud';
 import type { WithheldReadCounts } from '../../science/withheldCounts';
 
 /**
  * Receipt/format version stamped into the sidecar. 2 adds `withheld`: the
- * section walk leaves Withheld points out, so the receipt says how many.
+ * section walk leaves Withheld points out, so the receipt says how many. 3 adds
+ * the coordinate accounting, the display filter, the read scope and the
+ * provenance record.
  */
-export const PROFILE_RETURNS_RECEIPT_VERSION = 2;
+export const PROFILE_RETURNS_RECEIPT_VERSION = 3;
 
 /**
  * Where a source's classification codes came from.
  *
  * `source` = the producer wrote them; `derived` = OLV's heuristic classifier
- * did. Taken from the layer's own metadata (`classificationIsDerived` on the
+ * did; `edited` = the producer's codes, changed by hand in the app; `cleared` =
+ * the producer's codes were cleared in the app; `unknown` = not settled. Taken from the layer's own metadata (`classificationIsDerived` on the
  * cloud), never inferred from the codes themselves: a derived classifier
  * emits the same ASPRS numbers a producer does, so the value carries no
  * evidence about its own origin. `none` = the layer classifies nothing.
  */
-export type ClassificationProvenance = 'source' | 'derived' | 'none';
+export type ClassificationProvenance = 'source' | 'derived' | 'edited' | 'cleared' | 'none' | 'unknown';
 
 /** One contributing layer, keyed by the slot its returns were pushed under. */
 export interface ProfileReturnsSource {
@@ -79,9 +90,48 @@ export interface ProfileReturnsSource {
    * is the one the caller resolved rather than whatever a raw buffer happens
    * to hold. Absent means the caller supplied no coordinates for this layer,
    * and the x/y/z cells stay blank rather than being reconstructed from the
-   * section frame.
+   * section frame. `row` is the section row being written, so a caller can
+   * refuse a coordinate that is no longer the return recorded there.
    */
-  readonly readXYZ?: (index: number, out: Float64Array) => boolean;
+  readonly readXYZ?: (index: number, out: Float64Array, row?: number) => boolean;
+  /** Why this source has no coordinate to read, when it is gone as a whole. */
+  readonly missing?: 'evicted' | 'unavailable';
+  /**
+   * The source's own per-point validity mask (`PointCloud.attributeInvalid`).
+   * A value it flags is not a measurement and leaves its cell blank.
+   */
+  readonly attributeInvalid?: Uint8Array;
+  /** Set when the stored intensity was rescaled at load, and how. */
+  readonly intensityNote?: string | null;
+  /** How this source's points were read, and its file digest, for the receipt. */
+  readonly basis?: ProfileReturnsSourceBasis;
+}
+
+/** What the receipt states about one source beyond its name. */
+export interface ProfileReturnsSourceBasis {
+  /** "Point basis: ..." */
+  readonly pointBasis: string | null;
+  readonly sourceSha256: string | null;
+  readonly sourceSha256Note: string | null;
+}
+
+/** What the viewer was drawing when the export was taken. Never removes a row. */
+export interface ProfileReturnsDisplay {
+  /** The display filter's active rules; empty when nothing was filtered. */
+  readonly filters: readonly string[];
+  /** Returns the filter kept, before thinning. */
+  readonly keptCount: number;
+}
+
+/** Rows with a coordinate, and rows left blank by reason. */
+export interface ProfileReturnsCoordinates {
+  readonly written: number;
+  /** The streaming node is no longer resident. */
+  readonly blankEvicted: number;
+  /** The source is closed, hidden or no longer eligible, or supplied none. */
+  readonly blankUnavailable: number;
+  /** The source point no longer matches the recorded chainage and height. */
+  readonly blankUnmatched: number;
 }
 
 export interface ProfileReturnsCsvOptions {
@@ -118,14 +168,24 @@ export interface ProfileReturnsCsvOptions {
   readonly displayedIndices?: ArrayLike<number>;
   /** The section's Withheld accounting (`ProfileSectionResult.withheld`). */
   readonly withheld?: WithheldReadCounts;
+  /** The display filter in force. Recorded, and read for nothing else. */
+  readonly display?: ProfileReturnsDisplay;
+  /** Sources the section read; more than `sources` when some contributed nothing. */
+  readonly sourcesRead?: number;
+  /** Metres per height unit, only when the source declares a vertical unit. */
+  readonly verticalUnitToMetres?: number | null;
+  /** Facts carried into the receipt as they are. */
+  readonly record?: Readonly<Record<string, unknown>>;
 }
 
 export interface ProfileReturnsSourceReceipt {
   readonly slot: number;
   readonly layerId: string;
   readonly layerName: string;
-  readonly classificationSource: ClassificationProvenance | 'unknown';
+  readonly classificationSource: ClassificationProvenance;
   readonly streamingNodeKey?: string;
+  readonly intensityNote?: string;
+  readonly basis?: ProfileReturnsSourceBasis;
   /** Returns this layer contributed to the accepted set. */
   readonly acceptedCount: number;
 }
@@ -149,6 +209,10 @@ export interface ProfileReturnsReceipt {
   /** Points examined, Withheld left out, points read; null when not supplied. */
   readonly withheld: WithheldReadCounts | null;
   readonly visualLodInUse: boolean;
+  /** The display filter, or null when the caller stated none. */
+  readonly display: ProfileReturnsDisplay | null;
+  readonly sourcesRead: number;
+  readonly coordinates: ProfileReturnsCoordinates;
   readonly vertical: {
     readonly reference: VerticalReference;
     readonly column: 'height' | 'elevation';
@@ -159,10 +223,12 @@ export interface ProfileReturnsReceipt {
     readonly system: UnitSystem;
     readonly unitName: string | null;
     readonly metresPerUnit: number | null;
+    readonly verticalMetresPerUnit: number | null;
     readonly crs: string | null;
   };
   readonly columns: readonly string[];
   readonly generatedAt: string;
+  readonly record: Readonly<Record<string, unknown>>;
 }
 
 export interface ProfileReturnsCsvResult {
@@ -202,6 +268,22 @@ function csvInt(v: number): string {
 /** Millimetre precision, matching `coord()` in io/exporters.ts. */
 const COORD_DECIMALS = 3;
 
+/**
+ * A world coordinate at the precision it is held, as plain decimal text. A
+ * fixed three decimals would round away what a fine source scale records.
+ */
+function csvExact(v: number): string {
+  if (!Number.isFinite(v)) return '';
+  const s = String(v);
+  return s.includes('e') ? v.toFixed(20).replace(/\.?0+$/, '') : s;
+}
+
+/** Rows per yielded chunk. */
+export const CHUNK_ROWS = 2048;
+
+/** The provenances a row may name. */
+const NAMED_CLASS_SOURCES: ReadonlySet<string> = new Set(['source', 'derived', 'edited', 'cleared', 'unknown']);
+
 function normalise(up: readonly [number, number, number]): [number, number, number] {
   const len = Math.hypot(up[0], up[1], up[2]);
   if (!Number.isFinite(len) || len === 0) return [0, 0, 1];
@@ -209,16 +291,17 @@ function normalise(up: readonly [number, number, number]): [number, number, numb
 }
 
 /**
- * Build the returns CSV and its sidecar receipt.
+ * The returns CSV as text chunks, with the receipt as the return value.
  *
  * Every column is present only when the inputs support it: a channel no
  * source carried is left out of the header entirely, and a channel some but
  * not all sources carried is present with blank cells where it is absent.
  */
-export function buildProfileReturnsCsv(
+export function* profileReturnsCsvChunks(
   points: ProfileSectionPoints,
   options: ProfileReturnsCsvOptions,
-): ProfileReturnsCsvResult {
+  chunkRows: number = CHUNK_ROWS,
+): Generator<string, ProfileReturnsReceipt, void> {
   const n = points.count;
   const system: UnitSystem = options.system ?? 'metric';
   const metresPerUnit =
@@ -228,8 +311,27 @@ export function buildProfileReturnsCsv(
       ? options.unitToMetres
       : null;
 
-  const bySlot = new Map<number, ProfileReturnsSource>();
-  for (const s of options.sources) bySlot.set(s.slot, s);
+  // Text cells are escaped once per source rather than once per row.
+  interface SlotRow {
+    readonly src: ProfileReturnsSource | null;
+    readonly names: string;
+    readonly key: string;
+    readonly classSource: string;
+    accepted: number;
+  }
+  const slotRow = (src: ProfileReturnsSource | null): SlotRow => ({
+    src,
+    names: src ? `${csvText(src.layerId)},${csvText(src.layerName)}` : ',',
+    key: src?.streamingNodeKey ? csvText(src.streamingNodeKey) : '',
+    classSource:
+      src?.classificationSource !== undefined && NAMED_CLASS_SOURCES.has(src.classificationSource)
+        ? src.classificationSource
+        : '',
+    accepted: 0,
+  });
+  const bySlot = new Map<number, SlotRow>();
+  for (const s of options.sources) bySlot.set(s.slot, slotRow(s));
+  const classCells = new Map<number, string>();
 
   // Only an orthometric reference asserts a sea-level datum, so only it earns
   // the name `elevation`. Ellipsoidal, depth, local and unknown all write
@@ -238,17 +340,13 @@ export function buildProfileReturnsCsv(
     options.verticalReference === 'orthometric' ? 'elevation' : 'height';
 
   const hasStation = metresPerUnit !== null;
-  const hasXyz = options.sources.some((s) => s.readXYZ !== undefined);
+  const hasXyz = options.sources.some((s) => s.readXYZ !== undefined || s.missing !== undefined);
   // Reused across every row, so a full export allocates nothing per point.
   const xyzScratch = new Float64Array(3);
   const hasStreamingKey = options.sources.some((s) => s.streamingNodeKey !== undefined);
   const hasIntensity = points.intensity !== undefined;
   const hasClassification = points.classification !== undefined;
-  const hasClassSource =
-    hasClassification &&
-    options.sources.some(
-      (s) => s.classificationSource === 'source' || s.classificationSource === 'derived',
-    );
+  const hasClassSource = hasClassification && [...bySlot.values()].some((r) => r.classSource !== '');
   const hasReturnNumber = points.returnNumber !== undefined;
   const hasReturnCount = points.returnCount !== undefined;
   const hasPointSourceId = points.pointSourceId !== undefined;
@@ -265,7 +363,8 @@ export function buildProfileReturnsCsv(
     'source_point_index',
     ...(hasStreamingKey ? ['streaming_node_key'] : []),
     ...(hasXyz ? ['x', 'y', 'z'] : []),
-    ...(hasIntensity ? ['intensity'] : []),
+    // An intensity rescaled at load is a display mapping, named as toXyz names it.
+    ...(hasIntensity ? [options.sources.some((s) => s.intensityNote) ? 'intensity_normalised' : 'intensity'] : []),
     ...(hasClassification ? ['classification', 'classification_label'] : []),
     ...(hasClassSource ? ['classification_source'] : []),
     ...(hasReturnNumber ? ['return_number'] : []),
@@ -275,15 +374,21 @@ export function buildProfileReturnsCsv(
     ...(hasRgb ? ['r', 'g', 'b'] : []),
   ];
 
-  const lines: string[] = [columns.join(',')];
-  const acceptedPerSlot = new Map<number, number>();
+  let text = columns.join(',') + '\n';
+  let pending = 0;
+  let written = 0;
+  let blankEvicted = 0;
+  let blankUnavailable = 0;
+  let blankUnmatched = 0;
 
   for (let i = 0; i < n; i++) {
     const slot = points.sourceSlot[i]!;
-    const src = bySlot.get(slot);
+    let entry = bySlot.get(slot);
+    if (!entry) bySlot.set(slot, (entry = slotRow(null)));
+    const src = entry.src;
     const idx = points.pointIndex[i]!;
     const chainage = points.chainage[i]!;
-    acceptedPerSlot.set(slot, (acceptedPerSlot.get(slot) ?? 0) + 1);
+    entry.accepted++;
 
     const row: string[] = [];
     if (hasStation) {
@@ -294,40 +399,49 @@ export function buildProfileReturnsCsv(
     row.push(csvNumber(chainage, COORD_DECIMALS));
     row.push(csvNumber(points.height[i]!, COORD_DECIMALS));
     row.push(csvNumber(points.lateralOffset[i]!, COORD_DECIMALS));
-    row.push(src ? csvText(src.layerId) : '');
-    row.push(src ? csvText(src.layerName) : '');
+    row.push(entry.names);
     row.push(csvInt(idx));
 
-    if (hasStreamingKey) row.push(src?.streamingNodeKey ? csvText(src.streamingNodeKey) : '');
+    if (hasStreamingKey) row.push(entry.key);
 
     if (hasXyz) {
       // A reader that declines the index writes blanks rather than putting a
       // neighbouring point's coordinates into this row.
-      const ok = src?.readXYZ !== undefined && src.readXYZ(idx, xyzScratch);
-      row.push(ok ? csvNumber(xyzScratch[0]!, COORD_DECIMALS) : '');
-      row.push(ok ? csvNumber(xyzScratch[1]!, COORD_DECIMALS) : '');
-      row.push(ok ? csvNumber(xyzScratch[2]!, COORD_DECIMALS) : '');
+      const ok =
+        src?.readXYZ !== undefined &&
+        src.readXYZ(idx, xyzScratch, i) &&
+        Number.isFinite(xyzScratch[0]!) && Number.isFinite(xyzScratch[1]!) && Number.isFinite(xyzScratch[2]!);
+      if (ok) {
+        written++;
+        row.push(csvExact(xyzScratch[0]!), csvExact(xyzScratch[1]!), csvExact(xyzScratch[2]!));
+      } else {
+        if (src?.missing === 'evicted') blankEvicted++;
+        else if (src?.readXYZ !== undefined) blankUnmatched++;
+        else blankUnavailable++;
+        row.push('', '', '');
+      }
     }
 
+    const mask = src?.attributeInvalid;
+    const invalid = mask && idx < mask.length ? mask[idx]! : 0;
     if (hasIntensity) {
-      row.push(
-        profileSectionHas(points, i, 'intensity') ? csvInt(points.intensity![i]!) : '',
-      );
+      const present = profileSectionHas(points, i, 'intensity') && (invalid & ATTR_INTENSITY_INVALID) === 0;
+      row.push(present ? csvInt(points.intensity![i]!) : '');
     }
 
     if (hasClassification) {
       const present = profileSectionHas(points, i, 'classification');
       const code = points.classification![i]!;
-      row.push(present ? csvInt(code) : '');
-      row.push(present ? csvText(classificationLabel(code)) : '');
+      let cells = ',';
+      if (present) {
+        cells = classCells.get(code) ?? `${csvInt(code)},${csvText(classificationLabel(code))}`;
+        classCells.set(code, cells);
+      }
+      row.push(cells);
     }
 
     if (hasClassSource) {
-      const provenance = src?.classificationSource;
-      const usable =
-        profileSectionHas(points, i, 'classification') &&
-        (provenance === 'source' || provenance === 'derived');
-      row.push(usable ? provenance : '');
+      row.push(profileSectionHas(points, i, 'classification') ? entry.classSource : '');
     }
 
     if (hasReturnNumber) {
@@ -349,16 +463,24 @@ export function buildProfileReturnsCsv(
       row.push(profileSectionHas(points, i, 'gpsTime') ? csvNumber(points.gpsTime![i]!, 6) : '');
     }
     if (hasRgb) {
-      const present = profileSectionHas(points, i, 'rgb');
+      const present = profileSectionHas(points, i, 'rgb') && (invalid & ATTR_COLOUR_INVALID) === 0;
       row.push(present ? csvInt(points.rgb![i * 3]!) : '');
       row.push(present ? csvInt(points.rgb![i * 3 + 1]!) : '');
       row.push(present ? csvInt(points.rgb![i * 3 + 2]!) : '');
     }
 
-    lines.push(row.join(','));
+    text += row.join(',') + '\n';
+    if (++pending >= chunkRows) {
+      yield text;
+      text = '';
+      pending = 0;
+    }
   }
+  if (text !== '') yield text;
+  // Without x/y/z columns no row has a coordinate to count.
+  if (!hasXyz) blankUnavailable = n;
 
-  const receipt: ProfileReturnsReceipt = {
+  return {
     kind: 'profile-returns',
     version: PROFILE_RETURNS_RECEIPT_VERSION,
     measurement: { id: options.measurementId, name: options.measurementName },
@@ -371,12 +493,17 @@ export function buildProfileReturnsCsv(
       layerName: s.layerName,
       classificationSource: s.classificationSource ?? 'unknown',
       ...(s.streamingNodeKey !== undefined ? { streamingNodeKey: s.streamingNodeKey } : {}),
-      acceptedCount: acceptedPerSlot.get(s.slot) ?? 0,
+      ...(s.intensityNote ? { intensityNote: s.intensityNote } : {}),
+      ...(s.basis ? { basis: s.basis } : {}),
+      acceptedCount: bySlot.get(s.slot)?.accepted ?? 0,
     })),
     acceptedCount: n,
     displayedCount: options.displayedIndices ? options.displayedIndices.length : null,
     withheld: options.withheld ?? null,
     visualLodInUse: options.visualLodInUse ?? false,
+    display: options.display ?? null,
+    sourcesRead: options.sourcesRead ?? options.sources.length,
+    coordinates: { written, blankEvicted, blankUnavailable, blankUnmatched },
     vertical: {
       reference: options.verticalReference,
       column: heightColumn,
@@ -387,15 +514,31 @@ export function buildProfileReturnsCsv(
       system,
       unitName: options.unitName ?? null,
       metresPerUnit,
+      verticalMetresPerUnit: options.verticalUnitToMetres ?? null,
       crs: options.crsName ?? null,
     },
     columns,
     generatedAt: options.generatedAt,
+    record: options.record ?? {},
   };
+}
 
-  return {
-    csv: lines.join('\n') + '\n',
-    receipt,
-    receiptJson: JSON.stringify(receipt, null, 2),
-  };
+/** The sidecar text: pretty-printed, like the GeoJSON export. */
+export function profileReturnsReceiptJson(receipt: ProfileReturnsReceipt): string {
+  return JSON.stringify(receipt, null, 2);
+}
+
+/** {@link profileReturnsCsvChunks} run to completion, as one string. */
+export function buildProfileReturnsCsv(
+  points: ProfileSectionPoints,
+  options: ProfileReturnsCsvOptions,
+): ProfileReturnsCsvResult {
+  const it = profileReturnsCsvChunks(points, options);
+  let csv = '';
+  let step = it.next();
+  while (!step.done) {
+    csv += step.value;
+    step = it.next();
+  }
+  return { csv, receipt: step.value, receiptJson: profileReturnsReceiptJson(step.value) };
 }

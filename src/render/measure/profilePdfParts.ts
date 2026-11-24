@@ -7,6 +7,8 @@ import type { PDFDocument, PDFImage } from 'pdf-lib';
 import { heightLabel, type VerticalReference } from '../../geo/height';
 import { cleanLogo } from '../../model/deliverableFields';
 import type { SourceReduction, WithheldReadCounts } from '../../science/withheldCounts';
+import { supportVerdict } from '../../export/supportVerdict';
+import type { MeasurementTrust } from './measurementTrust';
 import type { DerivedSurfaceLegend } from './profileDerivedLegend';
 import { DATUM_CONFLICT_MEASURE_NOTICE } from './format';
 import { drawMethodSheets, drawNotesSheet, drawScheduleSheets, drawSetFooters, type ProfileSetContext } from './profileSheetPages';
@@ -40,8 +42,21 @@ export async function embedLogo(doc: PDFDocument, url: string | undefined): Prom
   }
 }
 
+/** The panel's support grade for the measurement and its caption. */
+export type ProfileSupport = Pick<MeasurementTrust, 'grade' | 'caption'> | null;
+
+/** The support grade as a technical note, in Classic and in a styled set; none for an ungraded profile. */
+export function supportRows(support: ProfileSupport | undefined): Array<{ item: string; value: string; remark: string; limit: boolean }> {
+  const value = supportVerdict({ trust: support });
+  return value === null ? [] : [{
+    item: 'Support grade', value, limit: support?.grade !== 'green',
+    remark: 'How well the picked points sit on measured points, and whether the scale is known. It does not grade the sampled heights.',
+  }];
+}
+
 /** The group a technical note is set under on a styled sheet. */
 export function noteGroup(item: string): 'groupGeometry' | 'groupGrade' | 'groupSampling' | 'groupReference' {
+  if (/^support/i.test(item)) return 'groupGeometry';
   if (/grad(e|ient)|^steepest/i.test(item)) return 'groupGrade';
   if (/^(samples|corridor|sources|derived|class|read)/i.test(item)) return 'groupSampling';
   if (/^(vertical|horizontal)/i.test(item)) return 'groupReference';

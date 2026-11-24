@@ -67,6 +67,15 @@ import type { LayerSpatialTransform } from '../../geo/ProjectSpatialFrame';
 import type { ProfileChartSample, Vec3 } from './types';
 import { combinedTruncationNote, type Truncation } from '../../io/truncation';
 
+/** Where a layer's class codes came from. Cleared codes are no classes, unless some were assigned by hand after. */
+function classesOrigin(c: ProfileSeamLayer['classes'], codes: ArrayLike<number>): 'producer' | 'derived' | 'absent' {
+  if (!c || c.provenance === 'none') return 'producer';
+  if (c.provenance === 'source') return c.epoch > 0 ? 'derived' : 'producer';
+  if (c.provenance !== 'cleared') return 'derived';
+  for (let i = 0; i < codes.length; i++) if (codes[i] !== 1) return 'derived';
+  return 'absent';
+}
+
 /**
  * One loaded static layer offered to the seam.
  *
@@ -87,8 +96,8 @@ export interface ProfileSeamLayer extends IntegrableEntry {
   readonly placement?: LayerSpatialTransform | null;
   /** Display name for the provenance record. Absent = the id. */
   readonly displayName?: string;
-  /** Where the class codes came from; absent = from the file when a channel is present. */
-  readonly classificationSource?: 'producer' | 'derived';
+  /** The cloud's class provenance and edit count, read as the section is. Absent = classes from the file. */
+  readonly classes?: { readonly provenance: string; readonly epoch: number };
   /** The source file's truncation, or null / absent for a complete read. */
   readonly truncation?: Truncation | null;
   /**
@@ -287,6 +296,12 @@ export interface ProfileSectionSeam {
    * missing source is never reported as `linked`.
    */
   locateReturn(ref: ProfileReturnRef, out: Float64Array): ProfileReturnLocation;
+  /**
+   * One walk of the scene, then a reader per source: the bulk form of
+   * {@link locateReturn}, for a caller reading many returns of each source.
+   * The buffers and placements are held for as long as the lookup is.
+   */
+  returnReaders(): (kind: 'static' | 'resident', id: string) => ProfileReturnReader;
   /** Refuse every outstanding and future extraction. Permanent. */
   abandon(): void;
 }
@@ -299,6 +314,11 @@ export interface ProfileReturnRef {
   /** The point's index in its own source. */
   readonly pointIndex: number;
 }
+
+/** Reads one source's current project-frame coordinates, or why it cannot. */
+export type ProfileReturnReader =
+  | ((pointIndex: number, out: Float64Array) => boolean)
+  | Exclude<ProfileReturnLocation, 'linked'>;
 
 /** Whether a recorded return still has a live coordinate, and if not, why. */
 export type ProfileReturnLocation = 'linked' | 'evicted' | 'unavailable';
@@ -565,9 +585,7 @@ export function createProfileSectionSeam(deps: ProfileSectionSeamDeps): ProfileS
             layerId: layer.id,
             displayName: layer.displayName ?? layer.id,
             classification:
-              alignedClassification(layer.channels, pos.length) === undefined
-                ? ('absent' as const)
-                : (layer.classificationSource ?? 'producer'),
+              ((codes) => (codes === undefined ? ('absent' as const) : classesOrigin(layer.classes, codes)))(alignedClassification(layer.channels, pos.length)),
             streaming: false,
             truncation: layer.truncation ?? null,
           })),
@@ -690,47 +708,48 @@ export function createProfileSectionSeam(deps: ProfileSectionSeamDeps): ProfileS
    * is still resident but holds no coordinate at that index is `unavailable`.
    */
   function locateReturn(ref: ProfileReturnRef, out: Float64Array): ProfileReturnLocation {
+    const reader = returnReaders()(ref.kind, ref.id);
+    if (typeof reader === 'string') return reader;
+    return reader(ref.pointIndex, out) ? 'linked' : 'unavailable';
+  }
+
+  function returnReaders(): (kind: 'static' | 'resident', id: string) => ProfileReturnReader {
     // The SAME walk an extraction runs, so a return the section accepted and a
     // marker placed on it can never come from different scenes. Static layers
     // come through `integrableClouds`: a layer hidden since the section was
     // taken is off the screen, and a marker on it would point into a scan the
     // user cannot see.
     const { statics, residents } = walkScene(deps);
-    const index = ref.pointIndex;
-    const usable = (pos: Float32Array): boolean =>
-      Number.isInteger(index) && index >= 0 && index * 3 + 2 < pos.length;
-    const base = index * 3;
-
-    if (ref.kind === 'resident') {
-      // Residency is decided by the node KEY, never by arrival order or by
-      // what a buffer happens to hold.
-      for (const { node, pos } of residents) {
-        if (node.key !== ref.id) continue;
-        if (!usable(pos)) return 'unavailable';
-        out[0] = pos[base]!;
-        out[1] = pos[base + 1]!;
-        out[2] = pos[base + 2]!;
-        return 'linked';
+    const combined = deps.streamingMayCombine(statics.length);
+    const layers = new Map<string, StaticSource>();
+    for (const source of statics) if (!layers.has(source.layer.id)) layers.set(source.layer.id, source);
+    const nodes = new Map<string, ResidentSource>();
+    for (const source of residents) if (!nodes.has(source.node.key)) nodes.set(source.node.key, source);
+    // Folded exactly once, through the same view the extraction reads, so a
+    // mounted layer's mark lands where its returns were read from rather than
+    // at its unplaced source position.
+    const reader = (pos: Float32Array, placement: LayerSpatialTransform | null | undefined): ProfileReturnReader => {
+      const view = viewOf(0, pos, null, null, placement);
+      return (index, out) => {
+        if (!Number.isInteger(index) || index < 0 || index * 3 + 2 >= pos.length) return false;
+        view.readProjectXYZ(index, out);
+        return true;
+      };
+    };
+    return (kind, id) => {
+      if (kind === 'resident') {
+        // Residency is decided by the node KEY, never by arrival order or by
+        // what a buffer happens to hold.
+        const node = nodes.get(id);
+        if (node) return reader(node.pos, null);
+        // A stream the host is not combining is not an eviction: the node may
+        // well still be loaded, and saying it was evicted would name the wrong
+        // reason for the missing mark.
+        return combined ? 'evicted' : 'unavailable';
       }
-      // A stream the host is not combining is not an eviction: the node may
-      // well still be loaded, and saying it was evicted would name the wrong
-      // reason for the missing mark.
-      return deps.streamingMayCombine(statics.length) ? 'evicted' : 'unavailable';
-    }
-
-    for (const { layer, pos } of statics) {
-      if (layer.id !== ref.id) continue;
-      if (!usable(pos)) return 'unavailable';
-      // Folded exactly once, through the same helper the extraction's reader
-      // uses, so a mounted layer's mark lands where its returns were read from
-      // rather than at its unplaced source position.
-      const [dx, dy, dz] = accumulatorOffset(layer.placement);
-      out[0] = pos[base]! + dx;
-      out[1] = pos[base + 1]! + dy;
-      out[2] = pos[base + 2]! + dz;
-      return 'linked';
-    }
-    return 'unavailable';
+      const source = layers.get(id);
+      return source ? reader(source.pos, source.layer.placement) : 'unavailable';
+    };
   }
 
   return {
@@ -744,6 +763,7 @@ export function createProfileSectionSeam(deps: ProfileSectionSeamDeps): ProfileS
     sampleSeries,
     sectionChunks,
     locateReturn,
+    returnReaders,
     section(req) {
       const it = sectionChunks(req);
       let step = it.next();

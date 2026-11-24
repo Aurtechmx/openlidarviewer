@@ -211,6 +211,11 @@ export interface ReportMeasurementRow {
    * Absent on every row that needs none.
    */
   readonly note?: string;
+  /**
+   * The support grade and the panel's caption for it, printed beneath the row.
+   * Absent on a measurement that carries no grade.
+   */
+  readonly support?: string;
 }
 
 /**

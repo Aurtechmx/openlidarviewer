@@ -88,7 +88,9 @@ describe('validation row units', () => {
     // The row must really exist: a slope stratum named steep with a figure, then the unit.
     expect(text).toMatch(new RegExp(`RMSE by slope:.*steep [\\d.]+${NB}m`));
     // No number is followed by a plain space and the unit in these rows.
-    expect(text).not.toMatch(/(?:Vertical RMSE|RMSE by slope|RMSE by zone|Blocked RMSE):[^|]*\d m\b/);
+    const rows = text.slice(text.indexOf('Validation detail ('), text.indexOf('Notes ('));
+    expect(rows).toContain('Blocked RMSE:');
+    expect(rows).not.toMatch(/(?:Vertical RMSE|RMSE by slope|RMSE by zone|Blocked RMSE):[^|]*\d m\b/);
   });
 });
 

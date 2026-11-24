@@ -10,7 +10,8 @@
 import type { Figure, WithheldReason } from './catchmentMorphometrics';
 import type { CatchmentQuality } from './catchmentQuality';
 import { MAX_FAR_INTERPOLATED_RUN, SUPPORTED_CHANNEL_INTERPOLATED_SHARE, SUPPORTED_MEASURED_SHARE } from './catchmentQuality';
-import type { CatchmentSection, ReportLanguage } from './watershedReportModel';
+import type { CatchmentSection, ReportLanguage, ReportLocale } from './watershedReportModel';
+import type { NumberStyle } from '../../../i18n/numberStyle';
 import { DEFAULT_NETWORK_THRESHOLD_M2 } from './flowNetwork';
 import { UNIT_GAP, compassOf, formatArea, formatNumber, t, type StringKey } from './watershedStrings';
 
@@ -23,16 +24,16 @@ export interface NarrativeParagraph {
 export const RE_NEAR_CIRCULAR_MIN = 0.9;
 export const RE_OVAL_MIN = 0.7;
 
-export function formatLength(lang: ReportLanguage, m: number): string {
-  return `${formatNumber(lang, m, 0)}${UNIT_GAP}m`;
+export function formatLength(style: NumberStyle, m: number): string {
+  return `${formatNumber(style, m, 0)}${UNIT_GAP}m`;
 }
 
-export function formatPercent(lang: ReportLanguage, fraction: number, digits = 1): string {
-  return `${formatNumber(lang, fraction * 100, digits)}${UNIT_GAP}%`;
+export function formatPercent(style: NumberStyle, fraction: number, digits = 1): string {
+  return `${formatNumber(style, fraction * 100, digits)}${UNIT_GAP}%`;
 }
 
-export function formatHeight(lang: ReportLanguage, m: number): string {
-  return `${formatNumber(lang, m, 1)}${UNIT_GAP}m`;
+export function formatHeight(style: NumberStyle, m: number): string {
+  return `${formatNumber(style, m, 1)}${UNIT_GAP}m`;
 }
 
 /** The catalog's reason for a withheld figure. */
@@ -47,12 +48,12 @@ function join(...parts: string[]): string {
 // The story places the water; it does not restate the KPI or table figures
 // (relief, channel length, slopes, flow-line length).
 
-function starts(s: CatchmentSection, lang: ReportLanguage): string {
-  const first = t(lang, s.quality.complete ? 'narrative.starts.closed' : 'narrative.starts.open');
+function starts(s: CatchmentSection, loc: ReportLocale): string {
+  const first = t(loc.lang, s.quality.complete ? 'narrative.starts.closed' : 'narrative.starts.open');
   const h = s.geometry.highPoint;
-  const second = h.dxM === 0 && h.dyM === 0 ? '' : t(lang, 'narrative.starts.highPoint', {
-    distance: formatLength(lang, Math.hypot(h.dxM, h.dyM)),
-    direction: compassOf(h.dxM, h.dyM, lang),
+  const second = h.dxM === 0 && h.dyM === 0 ? '' : t(loc.lang, 'narrative.starts.highPoint', {
+    distance: formatLength(loc.numberStyle, Math.hypot(h.dxM, h.dyM)),
+    direction: compassOf(h.dxM, h.dyM, loc.lang),
   });
   return join(first, second);
 }
@@ -62,44 +63,44 @@ function hasLines(s: CatchmentSection): boolean {
   return s.network.maxOrder >= 1;
 }
 
-function gathers(s: CatchmentSection, lang: ReportLanguage, thresholdM2: number): string {
-  if (!hasLines(s)) return t(lang, 'narrative.gathers.none', { threshold: formatArea(lang, thresholdM2) });
+function gathers(s: CatchmentSection, loc: ReportLocale, thresholdM2: number): string {
+  if (!hasLines(s)) return t(loc.lang, 'narrative.gathers.none', { threshold: formatArea(loc.numberStyle, thresholdM2) });
   const head = s.geometry.channelHead;
-  if (head === null || (head.dxM === 0 && head.dyM === 0)) return t(lang, 'narrative.gathers.lines');
-  return t(lang, 'narrative.gathers.head', {
-    distance: formatLength(lang, head.distFromDivideM),
-    headDistance: formatLength(lang, Math.hypot(head.dxM, head.dyM)),
-    direction: compassOf(head.dxM, head.dyM, lang),
+  if (head === null || (head.dxM === 0 && head.dyM === 0)) return t(loc.lang, 'narrative.gathers.lines');
+  return t(loc.lang, 'narrative.gathers.head', {
+    distance: formatLength(loc.numberStyle, head.distFromDivideM),
+    headDistance: formatLength(loc.numberStyle, Math.hypot(head.dxM, head.dyM)),
+    direction: compassOf(head.dxM, head.dyM, loc.lang),
   });
 }
 
-function joins(s: CatchmentSection, lang: ReportLanguage): string {
+function joins(s: CatchmentSection, loc: ReportLocale): string {
   const head = s.geometry.channelHead;
-  if (head === null || (head.dxM === 0 && head.dyM === 0)) return t(lang, 'narrative.joins.plain');
+  if (head === null || (head.dxM === 0 && head.dyM === 0)) return t(loc.lang, 'narrative.joins.plain');
   // From the channel head the water runs back towards the outlet.
-  return t(lang, 'narrative.joins.toward', { direction: compassOf(-head.dxM, -head.dyM, lang) });
+  return t(loc.lang, 'narrative.joins.toward', { direction: compassOf(-head.dxM, -head.dyM, loc.lang) });
 }
 
-function ponds(s: CatchmentSection, lang: ReportLanguage): string | null {
+function ponds(s: CatchmentSection, loc: ReportLocale): string | null {
   const list = s.depressions;
   if (list.length === 0) return null;
-  const first = list.length === 1 ? t(lang, 'narrative.ponds.one') : t(lang, 'narrative.ponds.many', { count: list.length });
+  const first = list.length === 1 ? t(loc.lang, 'narrative.ponds.one') : t(loc.lang, 'narrative.ponds.many', { count: list.length });
   const on = list.filter((d) => d.onFlowLine).length;
   let second = '';
-  if (list.length === 1 && on === 1) second = t(lang, 'narrative.ponds.onChannelOnly');
-  else if (on === 1) second = t(lang, 'narrative.ponds.onChannelOne');
-  else if (on > 1) second = t(lang, 'narrative.ponds.onChannelMany', { count: on });
+  if (list.length === 1 && on === 1) second = t(loc.lang, 'narrative.ponds.onChannelOnly');
+  else if (on === 1) second = t(loc.lang, 'narrative.ponds.onChannelOne');
+  else if (on > 1) second = t(loc.lang, 'narrative.ponds.onChannelMany', { count: on });
   return join(first, second);
 }
 
-function leaves(s: CatchmentSection, lang: ReportLanguage): string {
-  const first = t(lang, 'narrative.leaves.outlet', { label: s.label });
+function leaves(s: CatchmentSection, loc: ReportLocale): string {
+  const first = t(loc.lang, 'narrative.leaves.outlet', { label: s.label });
   const d = s.geometry.downstream;
   const third = d === null || (d.dxM === 0 && d.dyM === 0)
-    ? t(lang, 'narrative.leaves.atEdge')
-    : t(lang, 'narrative.leaves.downstream', {
-      distance: formatLength(lang, d.lengthM),
-      direction: compassOf(d.dxM, d.dyM, lang),
+    ? t(loc.lang, 'narrative.leaves.atEdge')
+    : t(loc.lang, 'narrative.leaves.downstream', {
+      distance: formatLength(loc.numberStyle, d.lengthM),
+      direction: compassOf(d.dxM, d.dyM, loc.lang),
     });
   return join(first, third);
 }
@@ -112,17 +113,17 @@ function isOpen(s: CatchmentSection): boolean {
 /** The flow story: starts, gathers, joins, ponds (when there are hollows), leaves. */
 export function catchmentNarrative(
   section: CatchmentSection,
-  lang: ReportLanguage,
+  loc: ReportLocale,
   thresholdM2: number = DEFAULT_NETWORK_THRESHOLD_M2,
 ): readonly NarrativeParagraph[] {
   const out: NarrativeParagraph[] = [
-    { lead: 'narrative.lead.starts', text: starts(section, lang) },
-    { lead: 'narrative.lead.gathers', text: gathers(section, lang, thresholdM2) },
+    { lead: 'narrative.lead.starts', text: starts(section, loc) },
+    { lead: 'narrative.lead.gathers', text: gathers(section, loc, thresholdM2) },
   ];
-  if (hasLines(section)) out.push({ lead: 'narrative.lead.joins', text: joins(section, lang) });
-  const pondText = ponds(section, lang);
+  if (hasLines(section)) out.push({ lead: 'narrative.lead.joins', text: joins(section, loc) });
+  const pondText = ponds(section, loc);
   if (pondText !== null) out.push({ lead: 'narrative.lead.ponds', text: pondText });
-  out.push({ lead: 'narrative.lead.leaves', text: leaves(section, lang) });
+  out.push({ lead: 'narrative.lead.leaves', text: leaves(section, loc) });
   return out;
 }
 
@@ -135,46 +136,46 @@ function shapeKey(g: Figure<number>): StringKey | null {
 }
 
 /** One line naming the catchment's shape, drainage and area. */
-export function headline(section: CatchmentSection, lang: ReportLanguage): string {
+export function headline(section: CatchmentSection, loc: ReportLocale): string {
   const a = section.morph.areaM2;
   // A withheld area is left out of the headline rather than printed as zero.
-  const areaOf = (key: StringKey) => ('value' in a ? t(lang, key, { area: formatArea(lang, a.value) }) : '');
-  if (isOpen(section)) return t(lang, 'headline.open', { area: areaOf('headline.ofAtLeast') }).replace(/ +/g, ' ').trim();
+  const areaOf = (key: StringKey) => ('value' in a ? t(loc.lang, key, { area: formatArea(loc.numberStyle, a.value) }) : '');
+  if (isOpen(section)) return t(loc.lang, 'headline.open', { area: areaOf('headline.ofAtLeast') }).replace(/ +/g, ' ').trim();
 
   const shape = shapeKey(section.morph.elongation);
   const order = section.network.maxOrder;
   const words: string[] = [];
-  if (shape) words.push(t(lang, shape));
+  if (shape) words.push(t(loc.lang, shape));
   let drainage: string | null = null;
   // Channel order only: soil drainage is not something the scan measures.
-  if (order >= 3) drainage = t(lang, 'headline.drain.network', { order: String(order) });
-  else if (order === 2) drainage = t(lang, 'headline.drain.branching');
-  else if (order === 1) drainage = t(lang, 'headline.drain.single');
+  if (order >= 3) drainage = t(loc.lang, 'headline.drain.network', { order: String(order) });
+  else if (order === 2) drainage = t(loc.lang, 'headline.drain.branching');
+  else if (order === 1) drainage = t(loc.lang, 'headline.drain.single');
 
-  const joined = words.join(t(lang, 'headline.join'));
-  const article = t(lang, lang === 'en' && /^[aeiou]/i.test(joined) ? 'headline.an' : 'headline.a');
+  const joined = words.join(t(loc.lang, 'headline.join'));
+  const article = t(loc.lang, loc.lang === 'en' && /^[aeiou]/i.test(joined) ? 'headline.an' : 'headline.a');
   const area = areaOf('headline.of');
   const text = drainage === null
-    ? t(lang, 'headline.closed', { article, words: joined, area })
-    : t(lang, 'headline.closedDrained', { article, words: joined, area, drainage });
+    ? t(loc.lang, 'headline.closed', { article, words: joined, area })
+    : t(loc.lang, 'headline.closedDrained', { article, words: joined, area, drainage });
   return text.replace(/ +/g, ' ').trim();
 }
 
 /** The quality reasons in words, or the all-clear line when there are none. */
-export function qualityReasons(quality: CatchmentQuality, lang: ReportLanguage): readonly string[] {
-  if (quality.reasons.length === 0) return [t(lang, 'quality.none')];
+export function qualityReasons(quality: CatchmentQuality, loc: ReportLocale): readonly string[] {
+  if (quality.reasons.length === 0) return [t(loc.lang, 'quality.none')];
   return quality.reasons.map((reason) => {
     switch (reason) {
       case 'measured-share-below-0.90':
-        return t(lang, 'quality.measured-share-below-0.90', { threshold: formatPercent(lang, SUPPORTED_MEASURED_SHARE, 0) });
+        return t(loc.lang, 'quality.measured-share-below-0.90', { threshold: formatPercent(loc.numberStyle, SUPPORTED_MEASURED_SHARE, 0) });
       case 'channel-interpolated-over-0.10':
-        return t(lang, 'quality.channel-interpolated-over-0.10', { threshold: formatPercent(lang, SUPPORTED_CHANNEL_INTERPOLATED_SHARE, 0) });
+        return t(loc.lang, 'quality.channel-interpolated-over-0.10', { threshold: formatPercent(loc.numberStyle, SUPPORTED_CHANNEL_INTERPOLATED_SHARE, 0) });
       case 'channel-far-interpolated-run':
-        return t(lang, 'quality.channel-far-interpolated-run', { cells: MAX_FAR_INTERPOLATED_RUN });
+        return t(loc.lang, 'quality.channel-far-interpolated-run', { cells: MAX_FAR_INTERPOLATED_RUN });
       case 'channel-touches-hole':
-        return t(lang, 'quality.channel-touches-hole');
+        return t(loc.lang, 'quality.channel-touches-hole');
       case 'catchment-open':
-        return t(lang, 'quality.catchment-open');
+        return t(loc.lang, 'quality.catchment-open');
       default:
         throw new RangeError(`watershed narrative: no wording for quality reason ${reason}`);
     }

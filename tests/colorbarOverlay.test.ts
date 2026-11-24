@@ -170,6 +170,18 @@ describe('ColorbarOverlay', () => {
     expect(note.textContent).toContain('p5–p95');
   });
 
+  it('adds and drops the sun shading sentence as the shading changes', async () => {
+    const overlay = await makeOverlay();
+    root = overlay.element as unknown as FakeEl;
+    const note = (): string => root.findByClass('olv-colorbar-note')[0].textContent;
+    overlay.update(elevationBar());
+    const plain = note();
+    overlay.update({ ...elevationBar(), shading: 'sun shading on' });
+    expect(note()).toBe(`${plain} · sun shading on`);
+    overlay.update(elevationBar());
+    expect(note()).toBe(plain);
+  });
+
   it('omits the unit from the range line when the unit is unknown', async () => {
     const overlay = await makeOverlay();
     root = overlay.element as unknown as FakeEl;

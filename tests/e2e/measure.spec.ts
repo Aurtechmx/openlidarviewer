@@ -113,14 +113,14 @@ test(
 );
 
 // The Distance and Area rows carry a breakdown line under the headline: the run,
-// rise, slant and grade a two-point pick already fixes, and the planimetric area,
+// rise and grade a two-point pick already fixes, and the planimetric area,
 // plane area, perimeter and vertex count a closed ring fixes. The arithmetic is
 // covered by tests/measureBreakdown.test.ts; what only a browser can show is that
 // the line reaches the panel at all, and that the ring's plane area is never
 // labelled a surface area, which would claim a draped terrain measurement that is
 // not computed.
 test(
-  'a distance row shows the run, rise and slant it already fixes',
+  'a distance row shows the run and rise it already fixes, and the headline is the slant',
   async ({ page }) => {
     await page.goto('/?test=1');
     await dropDenseGridPly(page);
@@ -148,11 +148,12 @@ test(
     const text = (await breakdown.textContent()) ?? '';
     expect(text).toContain('Run');
     expect(text).toContain('Rise');
-    expect(text).toContain('Slant');
+    // The headline length is the slant; the line does not repeat it.
+    expect(text).not.toContain('Slant');
+    await expect(page.locator('.olv-mp-value')).toHaveAttribute('title', /slant/);
     expect(text).toContain('Grade');
     // Every part carries a number, so an empty or dash-filled line fails here.
     expect(text).toMatch(/Run\s+[\d.]/);
-    expect(text).toMatch(/Slant\s+[\d.]/);
   },
 );
 

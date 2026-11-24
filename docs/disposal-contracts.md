@@ -55,6 +55,8 @@ disposal runs immediately. It is covered by `tests/appLifetime.test.ts`.
 | Streaming heartbeat (`VisibleHeartbeat`, 200 ms) | `Viewer._streamingHeartbeat` | Per streaming scan, and only while the document is visible | `visibilitychange` to hidden clears the interval (resumes on visible); `viewer.detachStreamingCloud()` → `stop()` |
 | Streaming scheduler / renderer pair | `Viewer._streaming` | Per streaming scan | `viewer.detachStreamingCloud()` → scheduler.dispose() + renderer.dispose() |
 | HTTP range-source pending fetches | `HttpRangeSource` | Per streaming scan | `streamingSource.abort()` on detach |
+| Sun shading direction codes (two bytes a point) | `createSunShading` in `src/app/sunShading.ts` | Until the layer closes, its CRS or up axis changes, or the page ends | The next colour-context change after `viewer.removeCloud(id)` drops the entry and aborts its pass |
+| Sun shading worker | `computeSunNormals` in `src/render/sunShading/sunNormalsWorkerClient.ts` | One pass over one layer | `worker.terminate()` in `finally`: on completion, failure, Cancel and abort |
 | Color attribute snapshots | `Viewer._selectionSnapshots` | Per highlight | `viewer.clearSelectionHighlight()` |
 | MeasureOverlay SVG element | `MeasureController` | Per Viewer instance | `viewer.dispose()` → overlay.remove() |
 | LassoVolumeTool SVG overlay | `LassoVolumeTool` | While armed | `lassoVolumeTool.disable()` → SVG removed, listeners detached |

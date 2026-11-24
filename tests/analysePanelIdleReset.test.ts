@@ -36,10 +36,13 @@ async function freshPanel() {
 }
 
 describe('the Analyse panel returns to rest when its result is cleared', () => {
-  it('starts with the prompt that points at Run terrain analysis', async () => {
-    const { status } = await freshPanel();
+  it('starts with the resting prompt and one Run terrain analysis', async () => {
+    const { status, runBtn } = await freshPanel();
     expect(status).toBeDefined();
-    expect(status.ownText).toMatch(/^No terrain result yet\. Run terrain analysis/);
+    expect(runBtn!.title).toContain('digital terrain model (DTM)');
+    expect(runBtn!.ownText).toBe('Run terrain analysis');
+    expect(status.ownText).not.toContain('Run terrain analysis');
+    expect(status.ownText).toMatch(/^No terrain result yet\. Use Run to check whether this scan can support a terrain surface/);
     expect(status.ownText).not.toMatch(/Load a|analyze/);
   });
 
@@ -51,7 +54,7 @@ describe('the Analyse panel returns to rest when its result is cleared', () => {
     panel.update(null);
     // The pre-fix panel showed the status again without rewriting it, so this
     // read "Analysing…" on a panel with no scan.
-    expect(status.ownText).toMatch(/^No terrain result yet\. Run terrain analysis/);
+    expect(status.ownText).toMatch(/^No terrain result yet\. Use Run to check whether this scan can support a terrain surface/);
     expect(status.ownText).not.toMatch(/Load a|analyze/);
     expect(status.ownText).not.toContain('Analysing');
   });
@@ -61,6 +64,8 @@ describe('the Analyse panel returns to rest when its result is cleared', () => {
     expect(runBtn).toBeDefined();
     panel.setBusy(true);
     expect(runBtn!.disabled).toBe(true);
+    // The status line says the run is busy; the button only goes disabled.
+    expect(runBtn!.ownText).toBe('Run terrain analysis');
 
     panel.update(null);
     expect(runBtn!.disabled).toBe(false);

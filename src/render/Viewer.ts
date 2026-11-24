@@ -1091,7 +1091,7 @@ export class Viewer {
     // The Viewer contributes accessors onto what it holds and nothing else.
     this.profileSeam = createProfileSectionSeam({
       layers: () =>
-        [...this._clouds.values()].map((e) => ({
+        [...this._clouds].map(([cloudId, e]) => ({
           mesh: e.mesh,
           locked: e.locked,
           compatibility: e.compatibility,
@@ -1112,7 +1112,7 @@ export class Viewer {
             normals: e.cloud.normals,
             classificationFlags: e.cloud.classificationFlags,
           },
-          bounds: null, truncation: e.cloud.metadata?.truncation ?? null, reductionSource: e.cloud,
+          bounds: null, truncation: e.cloud.metadata?.truncation ?? null, reductionSource: e.cloud, classes: { provenance: e.cloud.classificationProvenance, epoch: this._classEpochs.current(cloudId) },
         })),
       residentNodes: () =>
         [...this._streamingPickData.values()].map((e) => ({

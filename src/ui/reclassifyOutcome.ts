@@ -34,12 +34,12 @@ export function reclassifyOutcome(
     const revealed = revealedTarget
       ? ` Class ${targetClass} was hidden by the class filter; showing it so the edit is visible.`
       : '';
-    return `Reclassified ${changed.toLocaleString()} points → class ${targetClass}.${revealed}`;
+    return `Reclassified ${changed.toLocaleString('en-US')} points → class ${targetClass}.${revealed}`;
   }
   const hidden = result.hiddenByFilters ?? 0;
   if (hidden > 0) {
     return (
-      `Reclassify · ${hidden.toLocaleString()} points inside the lasso are hidden right now, ` +
+      `Reclassify · ${hidden.toLocaleString('en-US')} points inside the lasso are hidden right now, ` +
       'so they were left alone. Clear the class, elevation or intensity filter ' +
       '(or the clip box) and draw again.'
     );

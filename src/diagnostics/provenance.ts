@@ -297,7 +297,7 @@ function classifyHeuristic(signals: ScanSignals): ProvenanceFingerprint {
     signals: [
       `Source format: ${signals.sourceFormat || 'unknown'}`,
       signals.pointCount > 0
-        ? `Point count: ${signals.pointCount.toLocaleString()}`
+        ? `Point count: ${signals.pointCount.toLocaleString('en-US')}`
         : 'Point count unknown',
     ],
     bounds: [],
@@ -617,7 +617,7 @@ function matchNumeric(signals: ScanSignals): ProvenanceFingerprint | null {
       signals.pointCount > 1_000_000
     ) {
       return terrestrialFingerprint('medium', [
-        `Density: ${signals.densityPerSqM.toFixed(1)} pts/m² with ${signals.pointCount.toLocaleString()} points`,
+        `Density: ${signals.densityPerSqM.toFixed(1)} pts/m² with ${signals.pointCount.toLocaleString('en-US')} points`,
       ]);
     }
   }

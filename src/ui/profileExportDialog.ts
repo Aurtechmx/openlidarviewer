@@ -20,6 +20,7 @@ import { chunkFailureText, classifyLoadError, reportChunkFailure } from '../app/
 import { el } from './dom';
 import { exportLanguageControl } from './exportLanguageControl';
 import { openModal } from './Modal';
+import { lastProfilePaper, openProfileDraft, setLastProfilePaper } from './profileExportDraft';
 import { sheetStyleControl } from './sheetStyleControl';
 
 export interface ProfileExportDialogInput {
@@ -31,6 +32,8 @@ export interface ProfileExportDialogInput {
   readonly fields: ProfileSheetFields;
   readonly defaultFileName: string;
   readonly returnFocusTo?: HTMLElement | null;
+  /** What unexported details are held against; none are held without it. */
+  readonly draftOwner?: object;
 }
 
 export interface ProfileExportChoice {
@@ -170,6 +173,7 @@ function section(title: string, open: boolean, children: HTMLElement[]): HTMLEle
 interface RowList<R> {
   readonly element: HTMLElement;
   rows(): R[];
+  set(values: readonly R[]): void;
 }
 
 /** A short list of rows the user adds and removes, with one input per column. */
@@ -209,7 +213,10 @@ function rowList(o: {
   for (const v of o.values) addRow(v, false);
   add.addEventListener('click', () => addRow([], true));
   sync();
-  return { element: el('div', { className: 'olv-modal-field' }, [list, add]), rows: () => rows.map((r) => r.map((i) => i.value)) };
+  return {
+    element: el('div', { className: 'olv-modal-field' }, [list, add]), rows: () => rows.map((r) => r.map((i) => i.value)),
+    set: (values) => { list.replaceChildren(); rows.length = 0; for (const v of values) addRow(v, false); sync(); },
+  };
 }
 
 /**
@@ -241,7 +248,7 @@ export function openProfileExportDialog(p: ProfileExportDialogInput, run: (c: Pr
   notes.maxLength = FIELD_LIMITS.notes;
   notes.rows = 4;
   notes.value = f.notes ?? '';
-  const paper = choose([['a3', 'A3'], ['tabloid', 'Tabloid (11 x 17 in)']], 'a3');
+  const paper = choose([['a3', 'A3'], ['tabloid', 'Tabloid (11 x 17 in)']], lastProfilePaper());
   const units = p.unitSystem === 'unverified'
     ? choose([['unverified', 'Source units (unverified)']], 'unverified')
     : choose([['metric', 'Metres'], ['imperial', 'Feet']], p.unitSystem);
@@ -289,16 +296,16 @@ export function openProfileExportDialog(p: ProfileExportDialogInput, run: (c: Pr
       syncGo();
     });
   });
-  logoDrop.addEventListener('click', () => {
+  const setLogo = (url: string | undefined): void => {
     logoTurn++;
     logoReading = false;
-    logo = undefined;
+    logo = url;
     logoFile.value = '';
     logoSay.textContent = '';
     showLogo();
     syncGo();
-    logoFile.focus();
-  });
+  };
+  logoDrop.addEventListener('click', () => { setLogo(undefined); logoFile.focus(); });
   showLogo();
   const logoField = field('Logo', logoFile, 'PNG, JPEG, WebP or SVG. Printed at the head of every Light and Dark sheet, on white on a Dark one.');
   logoField.append(logoShow, logoDrop, logoSay);
@@ -323,6 +330,11 @@ export function openProfileExportDialog(p: ProfileExportDialogInput, run: (c: Pr
     values: (f.marks ?? []).map((m) => [toShown(m.chainage), m.text]), max: MAX_MARKS, addLabel: 'Add a marked point', rowLabel: 'marked point',
   });
   const marksHint = el('p', { className: 'olv-modal-hint', text: `Distance along the line in ${unitOf[p.unitSystem]}, as a number or a station. Numbered on the section and listed on the method sheet.` });
+
+  // ── unexported details ─────────────────────────────────────────────────
+  const boxes: Record<string, HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement> = {
+    title, subtitle, project, client, location, company, prepared, checked, approved, drawing, revision, date, status, endA, endB, notes, paper, units, fileName,
+  };
 
   // ── output ─────────────────────────────────────────────────────────────
   const classicHint = el('p', { className: 'olv-modal-hint', text: 'Classic is in English on A3, and prints the title, project, status, drawing number, revision and issues.' });
@@ -358,27 +370,61 @@ export function openProfileExportDialog(p: ProfileExportDialogInput, run: (c: Pr
     section('Output', true, [sheetStyleControl(), classicHint, lang, field('Units', units), paperField, field('File name', fileName, 'A single .pdf is added on download.')]),
   ]);
 
+  // What the file will be of, in one line: the profile, its survey, the units and the page.
+  const what = el('p', { className: 'olv-modal-hint olv-pe-what' });
+  const sayWhat = (): void => {
+    const u = { metric: 'metres', imperial: 'feet', unverified: 'source units (unverified)' }[shownUnit()];
+    const page = paper.value === 'a3' || sheetStyle() === 'classic' ? 'A3' : 'Tabloid';
+    what.textContent = `Profile: ${p.profileName} · Survey: ${p.scanName ?? 'not identified'} · Units: ${u} · Page: ${page}`;
+  };
+  sayWhat();
+  body.prepend(what);
+  for (const ev of ['change', 'click']) body.addEventListener(ev, sayWhat);
+
   const err = el('p', { className: 'olv-modal-error' });
   err.setAttribute('role', 'alert');
   err.hidden = true;
   const chars = el('p', { className: 'olv-modal-hint', text: 'Some characters may print as “?”: the sheet fonts cover Latin scripts.' });
   chars.hidden = true;
   const textBoxes = (): string => [...body.querySelectorAll<HTMLInputElement | HTMLTextAreaElement>('input[type="text"], textarea')].map((i) => i.value).join('');
-  body.addEventListener('input', () => { chars.hidden = !unusualCharacters(textBoxes()); });
-  chars.hidden = !unusualCharacters(textBoxes());
-  const cancel = el('button', { className: 'olv-modal-btn olv-modal-cancel', text: 'Cancel', tip: 'Close without exporting' }) as HTMLButtonElement;
+  const sayChars = (): void => { chars.hidden = !unusualCharacters(textBoxes()); };
+  body.addEventListener('input', sayChars);
+  const cancel = el('button', { className: 'olv-modal-btn olv-modal-cancel', text: 'Cancel', tip: 'Close without exporting. What you typed is kept while this scan is open.' }) as HTMLButtonElement;
   const go = el('button', { className: 'olv-modal-btn olv-modal-cta', text: 'Export PDF', tip: 'Make the PDF with these details' }) as HTMLButtonElement;
   cancel.type = go.type = 'button';
+  const draft = openProfileDraft(p.draftOwner, {
+    scanName: p.scanName, unit: p.unitSystem, boxes, rows: { issues, marks }, logo: { get: () => logo, set: setLogo },
+    parse: parseChainage, show: toShown, unitLabel: unitOf[p.unitSystem],
+  });
+  const discard = el('button', { className: 'olv-modal-btn olv-modal-cancel olv-pe-add', text: 'Discard', tip: 'Put the fields back as they were before these details' }) as HTMLButtonElement;
+  discard.type = 'button';
+  const heldSay = el('p', { className: 'olv-modal-hint', text: draft.said ?? '' });
+  heldSay.id = `olv-pe-held-${++nextId}`;
+  const held = el('div', { className: 'olv-pe-held' }, [heldSay, discard]);
+  if (draft.said !== null) body.prepend(held);
+  for (const k of draft.restored) ({ issues: issues.element, marks: marks.element, logo: logoFile }[k] ?? boxes[k])?.closest('.olv-modal-details')?.setAttribute('open', '');
+  sayWhat();
+  sayChars();
   const footer = el('div', { className: 'olv-modal-actions' }, [err, chars, cancel, go]);
+  discard.addEventListener('click', () => {
+    if (busy) return;
+    draft.discard();
+    held.remove();
+    err.hidden = true;
+    sayWhat();
+    sayChars();
+    title.focus();
+  });
 
   return new Promise<boolean>((resolve) => {
     let made = false, closed = false;
     const fail = (m: string): void => { err.textContent = m; err.hidden = false; };
     const handle = openModal({
       title: 'Export profile (PDF)', body, footer, returnFocusTo: p.returnFocusTo ?? null,
-      onClose: () => { closed = true; off(); resolve(made); },
+      onClose: () => { closed = true; off(); if (made) draft.drop(); else draft.keep(); resolve(made); },
     });
     handle.element.classList.add('olv-pe');
+    if (draft.said !== null) handle.element.querySelector('.olv-modal')?.setAttribute('aria-describedby', heldSay.id);
     cancel.addEventListener('click', () => handle.close());
 
     /** The marked points as typed, or the reason one cannot be used. */
@@ -407,11 +453,14 @@ export function openProfileExportDialog(p: ProfileExportDialogInput, run: (c: Pr
       });
       const j = cleanJob({ project: project.value, client: client.value, location: location.value, date: date.value, status: status.value as DeliverableStatus });
       const c = cleanCompany({ company: company.value, logoDataUrl: logo, preparedBy: prepared.value, checkedBy: checked.value, approvedBy: approved.value });
+      // Classic is always A3, whatever the disabled picker shows.
+      const onPaper = paper.disabled ? null : paper.value as ProfilePaper;
       busy = true;
       go.disabled = cancel.disabled = true;
       go.textContent = 'Exporting…';
       void run({ deliverable: { ...c, ...j, ...fields }, fields, fileName: fileName.value, paper: paper.value as ProfilePaper, unitSystem: shownUnit() }, () => closed).then(() => {
         if (closed) return;
+        if (onPaper) setLastProfilePaper(onPaper);
         // Kept only once a sheet was made with them.
         setJobDetails(j);
         setCompanyDetails(c);

@@ -177,7 +177,7 @@ export function isMaterialAcquisitionLoss(loss: AcquisitionLoss): boolean {
 }
 
 function pts(n: number): string {
-  return `${n.toLocaleString()} point${n === 1 ? '' : 's'}`;
+  return `${n.toLocaleString('en-US')} point${n === 1 ? '' : 's'}`;
 }
 
 /** The refusal returned when the request has not allowed the loss. */
