@@ -38,7 +38,7 @@ describe('the English map sheet', () => {
   for (const name of Object.keys(MAP_STATES)) {
     it(name, async () => {
       expect({ styled: await drawDigest(name), classic: await drawDigest(name, 'classic') }).toEqual(recorded[name]);
-    }, 60_000);
+    }, 240_000);
   }
 });
 

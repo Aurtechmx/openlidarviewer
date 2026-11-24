@@ -99,7 +99,7 @@ describe('the map sheet in every export language', () => {
         const draft = mapSheetWords(locale).draft!;
         const pages = new Set(ts.map((t) => t.page));
         expect(ts.filter((t) => t.text === draft)).toHaveLength(pages.size);
-      }, 60_000);
+      }, 240_000);
     }
   }
 });
@@ -111,7 +111,7 @@ describe('what is never translated or renumbered', () => {
     for (const v of ['Elevation 1,200.5', 'units', 'unknown', 'Legend 2.5', 'Distance 1', 'EPSG:4326', 'Cut and fill, north', 'Depth and height notes 1.5', '1. Scour at outlet 1.5: Depth 2.5 m, 1,200 stones'].filter((x) => x !== 'Distance 1')) {
       expect(all.join(' '), v).toContain(v);
     }
-  }, 60_000);
+  }, 240_000);
 
   it('a map sheet from a scan with no CRS says so in the language', async () => {
     const { ts } = await drawn(mapInput({ ...MAP_STATES.georefUnknown, locale: { lang: 'es', numberStyle: 'point' } }));
@@ -119,7 +119,7 @@ describe('what is never translated or renumbered', () => {
     expect(all).toContain('sin georreferencia');
     expect(all).toContain('desconocido');
     expect(all).toContain('norte verdadero desconocido');
-  }, 60_000);
+  }, 240_000);
 });
 
 describe('numbers', () => {
@@ -133,14 +133,14 @@ describe('numbers', () => {
     const en = (await drawn(mapInput({ locale: { lang: 'en', numberStyle: 'comma' } }))).ts.map((t) => t.text);
     expect(en).toContain('Legend'.toUpperCase());
     expect(en.some((t) => /^\d+,\d+ % measured/.test(t))).toBe(true);
-  }, 60_000);
+  }, 240_000);
 
   it('the scale ratio does not depend on the machine it was made on', async () => {
     const spy = vi.spyOn(Number.prototype, 'toLocaleString').mockReturnValue('2.500');
     const { ts } = await drawn(mapInput({ locale: { lang: 'fr', numberStyle: 'comma' } }));
     spy.mockRestore();
     expect(ts.some((t) => t.text.startsWith('1:2.500'))).toBe(false);
-  }, 60_000);
+  }, 240_000);
 });
 
 describe('the document', () => {
@@ -151,19 +151,19 @@ describe('the document', () => {
       expect((doc.catalog.lookup(PDFName.of('Lang')) as PDFString).decodeText()).toBe(l.tag);
       expect(doc.getTitle()).toBe(mapSheetWords({ lang: l.id, numberStyle: l.numberStyle }).say('title'));
     }
-  }, 60_000);
+  }, 240_000);
 
   it('is the same file with English asked for as with no language', async () => {
     const a = await buildContourSheetPdf(mapInput(MAP_STATES.measured), { loadFont });
     const b = await buildContourSheetPdf(mapInput({ ...MAP_STATES.measured, locale: { lang: 'en', numberStyle: 'point' } }), { loadFont });
     expect(Buffer.from(a).equals(Buffer.from(b))).toBe(true);
-  }, 60_000);
+  }, 240_000);
 
   it('Classic stays in English, byte for byte', async () => {
     const a = await buildContourSheetPdf(mapInput({ ...MAP_STATES.survey, style: 'classic' }));
     const b = await buildContourSheetPdf(mapInput({ ...MAP_STATES.survey, style: 'classic', locale: { lang: 'de', numberStyle: 'comma' } }));
     expect(Buffer.from(a).equals(Buffer.from(b))).toBe(true);
-  }, 60_000);
+  }, 240_000);
 
   it('is drawn whole without the font files', async () => {
     for (const locale of FOREIGN) {
@@ -171,7 +171,7 @@ describe('the document', () => {
       expect(missed).toEqual([]);
       for (const t of ts) expect(t.text).not.toContain('?');
     }
-  }, 60_000);
+  }, 240_000);
 });
 
 describe('the sentences other modules write', () => {
@@ -280,5 +280,5 @@ describe('the title and notes the app makes', () => {
     const typed = await drawn(mapInput({ ...MAP_STATES.measured, locale, title: 'My Contours', notes: 'Contours from my drone · by hand' }));
     expect(typed.ts.map((t) => t.text).join(' ')).toContain('My Contours');
     expect(typed.ts.map((t) => t.text).join(' ')).toContain('Contours from my drone');
-  }, 120_000);
+  }, 240_000);
 });

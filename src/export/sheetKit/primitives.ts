@@ -39,9 +39,19 @@ export function sheetTextRight(page: PDFPage, s: string, right: number, y: numbe
   page.drawText(t, { x: right - o.font.widthOfTextAtSize(t, o.size), y, size: o.size, font: o.font, color: pdfColor(o.color) });
 }
 
+/** Widths at size 1000, per font: laying text out is slow, and fitting a sheet measures the same lines many times. */
+const unitWidths = new WeakMap<PDFFont, Map<string, number>>();
+function unitWidth(text: string, font: PDFFont): number {
+  let widths = unitWidths.get(font);
+  if (!widths) unitWidths.set(font, (widths = new Map()));
+  let w = widths.get(text);
+  if (w === undefined) widths.set(text, (w = font.widthOfTextAtSize(text, 1000)));
+  return w;
+}
+
 /** Width of `s` as it would be drawn. */
 export function sheetTextWidth(s: string, font: PDFFont, size: number, fonts: SheetFonts): number {
-  return font.widthOfTextAtSize(drawableText(s, font, fonts), size);
+  return unitWidth(drawableText(s, font, fonts), font) * (size / 1000);
 }
 
 /** {@link wrapSheetText}, with a word wider than the line cut where the line ends. For text the user types. */
