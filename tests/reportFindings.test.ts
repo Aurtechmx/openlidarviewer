@@ -251,3 +251,21 @@ describe('Georeference finding and unit status', () => {
     expect(detail(base)).toBe('Linear unit: metre.');
   });
 });
+
+describe('buildInspectionSummary — small footprints', () => {
+  const area = (width: number, depth: number) =>
+    buildInspectionSummary(meta({ width, depth, sourcePointCount: 55_288 }), undefined);
+
+  it('keeps two significant figures below 10 m² instead of rounding to "0 m²"', () => {
+    const s = area(0.6, 0.55);
+    expect(s.headline).toBe('Point cloud — 0.33 m², 55,288 points.');
+    expect(find(s, 'Bounding-box extent')?.value).toBe('0.6 m × 0.6 m, 0.33 m², not surveyed area');
+    expect(area(3.7, 2).headline).toBe('Point cloud — 7.4 m², 55,288 points.');
+  });
+
+  it('leaves whole-metre areas at 10 m² and above unchanged', () => {
+    const s = area(26, 20);
+    expect(s.headline).toBe('Point cloud — 520 m², 55,288 points.');
+    expect(find(s, 'Bounding-box extent')?.value).toBe('26.0 m × 20.0 m, 520 m², not surveyed area');
+  });
+});

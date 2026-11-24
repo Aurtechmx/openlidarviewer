@@ -141,6 +141,9 @@ function formatArea(m2: number | undefined): string | null {
   if (m2 === undefined || !Number.isFinite(m2) || m2 <= 0) return null;
   if (m2 >= 1_000_000) return `${(m2 / 1_000_000).toFixed(2)} km²`;
   if (m2 >= 10_000) return `${(m2 / 10_000).toFixed(2)} ha`;
+  // Below 10 m² a whole-metre round loses the figure (a 0.33 m² object scan
+  // read "0 m²"), so keep two significant figures there.
+  if (m2 < 10) return `${m2.toLocaleString('en-US', { maximumSignificantDigits: 2 })} m²`;
   return `${Math.round(m2)} m²`;
 }
 
