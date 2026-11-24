@@ -5,11 +5,11 @@
   "releaseChannel": "development",
   "releaseAuthoritative": false,
   "tag": null,
-  "commit": "839872d91f1d27cce7ffd67f30ccaaee3155e603",
+  "commit": "c6d9b55af272bfff9b537405b0ceaab2c34d053a",
   "source": "git",
   "identityFrom": "git",
   "repository": null,
-  "generatedAt": "2026-11-24T12:07:19.664Z",
+  "generatedAt": "2026-11-24T18:47:48.640Z",
   "nodeVersion": "v26.13.0",
   "npmVersion": "11.20.0",
   "platform": "darwin-arm64",
@@ -19,7 +19,7 @@
   "workflowSha": null,
   "gateExit": 0,
   "gateLog": "release/gate.log",
-  "gateLogSha256": "f620866a2ce0e84f3737c4954f2f7a187280a3b1fc7859dc8124dbe49ca61d19",
+  "gateLogSha256": "4b42ace0f2ac4a32de33e27eb18df64e35fd6b3cdd2792692a1f67479c60c981",
   "stages": {
     "mutation": "not-executed"
   },
@@ -54,12 +54,12 @@
   },
   "buckets": {
     "unit": {
-      "passed": 17172,
+      "passed": 17174,
       "skipped": 44,
       "runs": 3
     },
     "export": {
-      "passed": 1813,
+      "passed": 1815,
       "skipped": 0,
       "runs": 1
     },
@@ -80,7 +80,7 @@
     }
   },
   "total": {
-    "passed": 27724,
+    "passed": 27728,
     "skipped": 52
   },
   "bundle": {
