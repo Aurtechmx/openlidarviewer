@@ -254,3 +254,11 @@ export function politeStatus<T extends HTMLElement>(node: T): T {
   node.setAttribute('aria-atomic', 'true');
   return node;
 }
+
+/**
+ * Focus `e` when nothing else has it. A control disabled while its dialog is
+ * open cannot take the focus back as the dialog closes, so it does once enabled.
+ */
+export function focusIfLost(e: HTMLElement): void {
+  if (!document.activeElement || document.activeElement === document.body) e.focus();
+}

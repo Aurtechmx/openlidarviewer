@@ -15,6 +15,7 @@ import type { LayerUpBasis } from '../../geo/frame/layerUpFrame';
 import type { Vec3 } from '../navMath';
 import type { MeasurementTrust } from './measurementTrust';
 import type { ProfileProvenance } from './profileProvenance';
+import type { ProfileSheetFields } from '../../model/deliverableFields';
 import type { WithheldReadCounts } from '../../science/withheldCounts';
 import type { WorkOwnership } from '../../model/workOwnership';
 
@@ -442,6 +443,8 @@ export interface Measurement {
    * through these layers rather than the owner.
    */
   pickLayers?: string[];
+  /** Profile only: the words the user gave its exported sheets (see `model/deliverableFields.ts`). */
+  sheet?: ProfileSheetFields;
 }
 
 /** Minimum vertex count for a measurement of each kind to be meaningful. */

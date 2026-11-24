@@ -74,7 +74,7 @@ const pos = room();
 const shape = classifyScanShape(pos);
 const space = spaceMetrics(pos, { upAxis: shape.up, spaceKind: 'interior', hasRgb: true });
 const floorPlan = extractFloorPlan(pos, { upAxis: shape.up });
-const spaceInput = { space, name: 'Room', softwareVersion: '0.4.3', metricVersion: 'v0.4.1', floorPlan };
+const spaceInput = { space, name: 'Room', softwareVersion: '0.4.3', metricVersion: 'v0.4.1', floorPlan, generatedAt: '2026-06-05T00:00:00.000Z' };
 
 /** The base font names a PDF embeds. */
 async function fontNames(bytes: Uint8Array): Promise<string[]> {

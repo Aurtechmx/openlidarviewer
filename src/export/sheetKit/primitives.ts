@@ -44,6 +44,19 @@ export function sheetTextWidth(s: string, font: PDFFont, size: number, fonts: Sh
   return font.widthOfTextAtSize(drawableText(s, font, fonts), size);
 }
 
+/** {@link wrapSheetText}, with a word wider than the line cut where the line ends. For text the user types. */
+export function wrapWithin(s: string, font: PDFFont, size: number, width: number, fonts: SheetFonts): string[] {
+  return wrapSheetText(s, font, size, width, fonts).flatMap((line) => {
+    if (sheetTextWidth(line, font, size, fonts) <= width) return [line];
+    const out: string[] = [];
+    let part = '';
+    for (const ch of line) {
+      if (part !== '' && sheetTextWidth(part + ch, font, size, fonts) > width) { out.push(part); part = ch; } else part += ch;
+    }
+    return [...out, part];
+  });
+}
+
 /** Splits `s` into lines no wider than `width`, breaking at spaces. A word longer than the line stays whole. */
 export function wrapSheetText(s: string, font: PDFFont, size: number, width: number, fonts: SheetFonts): string[] {
   const out: string[] = [];

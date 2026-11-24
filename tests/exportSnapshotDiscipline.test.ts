@@ -135,10 +135,17 @@ describe('figure and report exports describe the scan they captured', () => {
 
   it('the profile sheet captures its CRS and unit system first', () => {
     const body = memberBody(MEASUREPANEL, 'private async _buildProfileSheet(');
-    const awaitAt = body.indexOf('await loadProfilePdf()');
-    expect(awaitAt).toBeGreaterThan(-1);
-    expect(body.slice(awaitAt)).not.toMatch(/getProfileExportContext\(\)/);
-    expect(body.slice(awaitAt)).not.toMatch(/getUnitSystem\(\)/);
+    // The panel hands the flow one capture that awaits nothing; the flow calls
+    // it as Export is pressed, before its first await, and reads nothing itself.
+    const capture = body.slice(body.indexOf('const capture = ()'), body.indexOf('await exportProfileSheet('));
+    expect(capture).toMatch(/getProfileExportContext\(now\.id\)/);
+    expect(capture).toMatch(/_displayUnits\(now\)/);
+    expect(capture).not.toMatch(/\bawait\b/);
+    const flow = readFileSync(new URL('../src/ui/profileExportFlow.ts', import.meta.url), 'utf8');
+    expect(flow).not.toMatch(/getProfileExportContext|getUnitSystem/);
+    const run = flow.slice(flow.indexOf('async (c, closed) =>'));
+    expect(run.indexOf('r.capture()')).toBeGreaterThan(0);
+    expect(run.indexOf('r.capture()')).toBeLessThan(run.indexOf('await'));
   });
 
   it('the terrain report captures the Inspector summary first', () => {

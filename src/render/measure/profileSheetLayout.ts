@@ -294,7 +294,7 @@ export function crsDisplayLabel(crs: string | null | undefined): string | null {
  */
 export function verticalScaleStatement(vex: number): string {
   return Math.round(vex * 10) / 10 < 1
-    ? `Vertical compression ${vex.toFixed(1)}:1, slopes look flatter than they are`
+    ? `Vertical compression ${vex.toFixed(vex < 0.05 ? 3 : 1)}:1, slopes look flatter than they are`
     : `Vertical exaggeration ${vex.toFixed(1)}:1`;
 }
 
@@ -349,11 +349,11 @@ export const STANDARD_EXAGGERATIONS = [100, 50, 25, 20, 10, 5, 2.5, 2, 1] as con
 /** Round elevation tick steps, one decade; others scale by powers of ten. */
 const TICK_STEPS = [1, 2, 2.5, 5] as const;
 
-/** The smallest standard denominator not below `min`. */
-export function standardScaleAtLeast(min: number): number {
-  if (!Number.isFinite(min) || min <= STANDARD_SCALE_DENOMINATORS[0]) return STANDARD_SCALE_DENOMINATORS[0];
+/** The smallest denominator in `steps` (the standard ones by default) not below `min`. */
+export function standardScaleAtLeast(min: number, steps: readonly number[] = STANDARD_SCALE_DENOMINATORS): number {
+  if (!Number.isFinite(min) || min <= steps[0]!) return steps[0]!;
   for (let decade = 1; decade < 1e9; decade *= 10) {
-    for (const d of STANDARD_SCALE_DENOMINATORS) {
+    for (const d of steps) {
       if (d * decade >= min * (1 - 1e-9)) return d * decade;
     }
   }
@@ -389,6 +389,8 @@ export interface ProfileScaleRequest {
   readonly k: number;
   /** A vertical exaggeration asked for by the caller; used when it is standard and fits. */
   readonly requestedExaggeration?: number | null;
+  /** Horizontal 1:N steps, one decade, ascending. The standard ones by default. */
+  readonly denominators?: readonly number[];
 }
 
 export interface ProfileScales {
@@ -422,7 +424,7 @@ export interface ProfileScales {
  */
 export function chooseProfileScales(req: ProfileScaleRequest): ProfileScales {
   const { lengthM, plotWpt, plotHpt, k } = req;
-  const horizontal = standardScaleAtLeast((lengthM * PT_PER_PAPER_M) / plotWpt);
+  const horizontal = standardScaleAtLeast((lengthM * PT_PER_PAPER_M) / plotWpt, req.denominators);
   const drawnWpt = (lengthM / horizontal) * PT_PER_PAPER_M;
 
   const minD = req.minM * k;

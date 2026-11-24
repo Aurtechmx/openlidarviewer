@@ -245,8 +245,13 @@ export function openModal(opts: ModalOptions): ModalHandle {
   };
 
   closeBtn.addEventListener('click', () => close());
+  // A press that began inside the dialog, such as a text selection dragged out
+  // of a field, ends as a click on the backdrop; it does not close the dialog.
+  let pressedInside = false;
+  backdrop.addEventListener('pointerdown', (e) => { pressedInside = e.target !== backdrop; });
   backdrop.addEventListener('click', (e) => {
-    if (e.target === backdrop) close();
+    if (e.target === backdrop && !pressedInside) close();
+    pressedInside = false;
   });
   // Escape closes; Tab / Shift+Tab cycle within the dialog.
   const unstack = stackDialog(dialog, close);

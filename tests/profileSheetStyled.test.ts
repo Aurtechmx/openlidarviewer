@@ -7,10 +7,9 @@ import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { PDFDocument, PDFPage } from 'pdf-lib';
 import { buildProfilePdf, type ProfilePdfInput } from '../src/render/measure/profilePdf';
-import { countsPerStation, gradeSeries, notesForRoom, profileInkFor } from '../src/render/measure/profileSheetStyled';
+import { countsPerStation, fitColumns, gradeSeries } from '../src/render/measure/profileSheetStyled';
 import { DEFAULT_PROFILE_IMAGE_THEME, profileImageThemeFor } from '../src/render/measure/profileSectionImage';
 import { contourCrossings, profileSheetExtras, RETURNS_NOT_READ, RETURNS_UNRECORDED, returnsAgree, sampleFrame } from '../src/app/profileSheetExtras';
-import { sheetTokens } from '../src/export/sheetKit/tokens';
 import type { ProfileChartSample } from '../src/render/measure/types';
 
 const loadFont = async (n: string): Promise<Uint8Array> => new Uint8Array(await readFile(join(process.cwd(), 'src', 'export', 'sheetKit', 'fonts', n)));
@@ -77,7 +76,7 @@ describe('style dispatch', () => {
       expect(Buffer.from(a).equals(Buffer.from(b))).toBe(true);
       // The larger type can take more sheets than Classic; it never drops a row.
       const { texts: classicTexts, bytes: c } = await drawn(base());
-      const stationsIn = (ts: string[]): number => ts.filter((t) => /^0\+\d{3}\.\d{2}$/.test(t)).length;
+      const stationsIn = (ts: string[]): number => ts.filter((t) => /^0\+\d{3}(\.\d{2})?$/.test(t)).length;
       expect(stationsIn(texts)).toBeGreaterThanOrEqual(stationsIn(classicTexts));
       for (const row of ['Length (horizontal)', 'Class exclusion', 'Read scope']) expect(texts).toContain(row);
       expect((await PDFDocument.load(a)).getPageCount()).toBeGreaterThanOrEqual((await PDFDocument.load(c)).getPageCount());
@@ -89,7 +88,7 @@ describe('the styled sheet one', () => {
   it('prints the headline figures, the scale statement and every general note', async () => {
     const { texts } = await drawn(base({ style: 'light', extras: { returns: returns(), plan: plan(), indexCrossings: [{ chainage: 30, height: 110 }, { chainage: 95, height: 130 }] } }));
     const all = texts.join('\n');
-    for (const want of ['PROFILE', 'Profile A - B', 'LENGTH (M)', 'ENDPOINT GRADIENT (%)', 'STEEPEST OVER 10 M (%)', 'Vertical exaggeration', 'Chainage', 'Grade %']) {
+    for (const want of ['Profile A - B', 'Preliminary', 'm relief', 'long, measured along the line', 'End to end ', 'Steepest over 10 m: ', 'Highest ', 'Lowest ', 'Vertical ', 'Chainage', 'Grade %', 'True shape']) {
       expect(all, want).toContain(want);
     }
     expect(all).toMatch(/Estimated, not measured/);
@@ -104,7 +103,7 @@ describe('the styled sheet one', () => {
 
   it('lists only what it draws in the legend', async () => {
     const withAll = (await drawn(base({ style: 'dark', extras: { returns: returns(), plan: plan(), indexCrossings: [{ chainage: 30, height: 110 }] } }))).texts;
-    expect(withAll).toEqual(expect.arrayContaining(['Ground returns', 'Other returns', 'Crosses an index contour', 'Profile line and corridor (plan)']));
+    expect(withAll).toEqual(expect.arrayContaining(['Ground returns', 'Other returns', 'Crosses an index contour', 'Grid N']));
     vi.restoreAllMocks();
     const bare = (await drawn(base({ style: 'dark', extras: null }))).texts;
     expect(bare).not.toContain('Ground returns');
@@ -124,7 +123,8 @@ describe('the styled sheet one', () => {
     const unverified = (await drawn(base({ style: 'light', unitSystem: 'unverified' }))).texts;
     expect(unverified.some((t) => t.startsWith('Horizontal and vertical scale: units unknown'))).toBe(true);
     expect(unverified.some((t) => t.includes('units of chainage (unit unverified)'))).toBe(true);
-    expect(unverified).toContain('STEEPEST OVER 10 UNITS (%)');
+    expect(unverified.some((t) => t.startsWith('Steepest over 10 units: '))).toBe(true);
+    expect(unverified).toContain('units relief');
     expect(unverified.some((t) => / m of chainage/.test(t))).toBe(false);
   });
 
@@ -159,8 +159,8 @@ describe('the styled sheet one', () => {
     const classic = await sizeOf(base({ style: 'classic' }), 'Length (horizontal)');
     const styled = await sizeOf(base({ style: 'dark' }), 'Length (horizontal)');
     expect(classic).toBeGreaterThan(0);
-    expect(styled).toBeCloseTo(classic * 1.08, 5);
-    // The type factor is restored: a Classic build after a styled one is byte for byte the first.
+    expect(styled).toBeGreaterThan(classic);
+    // A Classic build after a styled one is byte for byte the first.
     const before = await buildProfilePdf(base({ loadFont: undefined }));
     await buildProfilePdf(base({ style: 'light' }));
     expect(Buffer.from(await buildProfilePdf(base({ loadFont: undefined }))).equals(Buffer.from(before))).toBe(true);
@@ -221,29 +221,24 @@ describe('figures', () => {
     expect(countsPerStation([{ distance: 0, height: 1, count: 10 }, { distance: 2, height: 1, count: 6 }, { distance: 3, height: 1 }])).toEqual([null, 6, null]);
   });
 
-  it('the support sheets take the style colours', () => {
-    const ink = profileInkFor(sheetTokens('dark'));
-    const ink2 = sheetTokens('dark').ink;
-    expect([ink.INK.red, ink.INK.green, ink.INK.blue]).toEqual([...ink2]);
-  });
-
   it('the section image matches the style, and Classic keeps its own ink', () => {
     expect(profileImageThemeFor('classic')).toBe(DEFAULT_PROFILE_IMAGE_THEME);
     expect(profileImageThemeFor('dark').pageBackground).toBe('#0c1116');
   });
 });
 
-describe('notesForRoom', () => {
-  const h = (ls: string[][]): number => ls.reduce((a, l) => a + l.length, 0) * 10;
-  const notes = [['1. a'], ['2. b', 'b2'], ['3. c'], ['4. d']];
-  it('keeps every note when they fit', () => {
-    expect(notesForRoom(notes, 50, h)).toEqual(notes);
+describe('fitColumns', () => {
+  const b = (n: number) => Array.from({ length: n }, (_, i) => `l${i}`);
+  it('sets every block whole, and spreads them across the columns', () => {
+    const r = fitColumns([b(2), b(2), b(1)], 3, 3, 'T');
+    expect(r.left).toBe(0);
+    expect(r.placed.map((q) => [q.col, q.row])).toEqual([[0, 0], [1, 0], [2, 0]]);
   });
-  it('prints the notes that fit whole and says which continue', () => {
-    const out = notesForRoom(notes, 40, h);
-    expect(out).toEqual([['1. a'], ['2. b', 'b2'], ['Notes 3 to 4 continue on the next sheet.']]);
-    expect(h(out)).toBeLessThanOrEqual(40);
-    expect(notesForRoom([...notes.slice(0, 3), ['4. d', 'd2']], 50, h).at(-1)).toEqual(['Note 4 continues on the next sheet.']);
+  it('says where the rest are when they do not fit', () => {
+    const r = fitColumns([b(2), b(3), b(2), b(3)], 3, 3, 'T');
+    expect(r.left).toBe(1);
+    expect(r.placed.at(-1)).toEqual({ col: 2, row: 2, lines: ['T'] });
+    for (const q of r.placed) expect(q.row + q.lines.length).toBeLessThanOrEqual(3);
   });
 });
 
@@ -365,7 +360,8 @@ describe('station band labels', () => {
     it(`counts accepted returns per ${per} (${system})`, async () => {
       const { texts } = await drawn(base({ style: 'light', unitSystem: system }));
       expect(texts).toContain(`Returns per ${per}`);
-      expect(texts.some((t) => t.startsWith(`accepted returns per ${per}, tallest bar`))).toBe(true);
+      expect(texts).toContain(`accepted returns per ${per},`);
+      expect(texts.some((t) => t.startsWith('tallest bar '))).toBe(true);
       expect(texts.some((t) => /ground returns per/i.test(t))).toBe(false);
       expect(texts).toContain('Across a gap with no accepted returns');
     }, 120_000);

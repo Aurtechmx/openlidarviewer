@@ -27,7 +27,7 @@
  * what lets the whole panel be driven by a plain object in a test.
  */
 
-import { el } from './dom';
+import { el, focusIfLost } from './dom';
 import { PROFILE_RAW_SCOPES, type ProfileRawScope } from '../render/measure/profileRawFilter';
 import {
   PROFILE_WORKBENCH_DOCK_KEY,
@@ -547,6 +547,7 @@ class ProfileWorkbench {
     if (this._closed) return;
     btn.textContent = EXPORT_LABEL;
     btn.disabled = false;
+    focusIfLost(btn);
   }
 
   /**

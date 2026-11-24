@@ -22,7 +22,9 @@
 import type { Viewer } from '../render/Viewer';
 import type { ProfileChartSample } from '../render/measure/types';
 import type { MeasurementSummary } from '../render/measure/MeasureController';
-import type { ProfileSheetExtras, ProfileSheetReturns } from '../render/measure/profileSheetStyled';
+import { quantileSorted } from '../terrain/quantile';
+import { NON_GROUND_CLASSES } from '../terrain/ground/classificationFilter';
+import type { ProfileSheetExtras, ProfileSheetReturns, ProfileStationSample } from '../render/measure/profileSheetStyled';
 import type { ProfileSectionResult } from '../render/measure/profileSectionSeam';
 import { STREAMING_SOURCE_ID } from '../render/measure/profileSectionSeam';
 import type { ProfileProvenance } from '../render/measure/profileProvenance';
@@ -175,6 +177,65 @@ export function contourCrossings(
   return out.sort((x, y) => x.along - y.along);
 }
 
+/** Most heights kept for the one-station drawing. */
+const MAX_STATION_HEIGHTS = 1500;
+/** The one-station drawing is made only when its percentile gives the sampled height to this, in raw units. */
+const STATION_MATCH = 0.005;
+
+/**
+ * The accepted returns of the station at `index`, and the height they give, in
+ * the raw frame; null unless that height is the one the profile recorded. The
+ * section keeps every class, so the sampler's class rule is applied again, and
+ * only a station whose own percentile comes back is worth showing.
+ */
+export function stationReturns(
+  raw: readonly ProfileChartSample[],
+  index: number,
+  percentile: number,
+  pts: { readonly count: number; readonly chainage: ArrayLike<number>; readonly height: ArrayLike<number>; readonly classification?: ArrayLike<number> | null },
+  accept: (i: number) => boolean,
+): { heights: Float64Array; kept: number } | null {
+  const at = raw[index], next = raw[index + 1] ?? raw[index - 1];
+  if (!at || !next || !Number.isFinite(at.height)) return null;
+  const step = Math.abs(next.distance - at.distance);
+  if (!(step > 0)) return null;
+  const drop = new Set<number>(NON_GROUND_CLASSES);
+  const hs: number[] = [];
+  for (let i = 0; i < pts.count; i++) {
+    if (!accept(i) || (pts.classification && drop.has(pts.classification[i]!))) continue;
+    // The sampler's own binning: the nearest station.
+    if (Math.round(pts.chainage[i]! / step) === index) hs.push(pts.height[i]!);
+  }
+  if (hs.length < 8 || (at.count != null && at.count !== hs.length)) return null;
+  const heights = Float64Array.from(hs).sort();
+  const kept = quantileSorted(heights, percentile / 100);
+  return Math.abs(kept - at.height) <= STATION_MATCH ? { heights, kept } : null;
+}
+
+/** The lowest station clear of the ends, with its returns, converted to the sheet's frame. */
+function lowestStation(
+  raw: readonly ProfileChartSample[],
+  percentile: number | null,
+  pts: Parameters<typeof stationReturns>[3],
+  accept: (i: number) => boolean,
+  frame: SampleFrame,
+): ProfileStationSample | null {
+  if (percentile == null) return null;
+  let low = -1;
+  for (let i = 1; i < raw.length - 1; i++) {
+    if (Number.isFinite(raw[i]!.height) && (low < 0 || raw[i]!.height < raw[low]!.height)) low = i;
+  }
+  if (low < 0) return null;
+  const got = stationReturns(raw, low, percentile, pts, accept);
+  if (!got) return null;
+  const up = (h: number): number => (h + frame.datum) * frame.vf;
+  const stride = Math.max(1, Math.ceil(got.heights.length / MAX_STATION_HEIGHTS));
+  return {
+    chainageM: raw[low]!.distance * frame.f, keptM: up(got.kept), percentile, accepted: got.heights.length,
+    heightsM: Float64Array.from(got.heights.filter((_, i) => i % stride === 0), up),
+  };
+}
+
 /** Yield to the browser between chunks of a corridor walk. */
 const nextTick = (): Promise<void> => new Promise((r) => setTimeout(r, 0));
 
@@ -198,6 +259,7 @@ export async function profileSheetExtras(
   // The corridor's returns, walked in chunks so a dense corridor does not hold the page.
   let returns: ProfileSheetReturns | null = null;
   let returnsNote: string | null = null;
+  let station: ProfileStationSample | null = null;
   const half = summary.profileCorridorWidthM != null ? summary.profileCorridorWidthM / frame.f : null;
   // Cut along the profile's own up axis, as its samples were, not the active layer's.
   // Independent, so this read and the workbench's section never cancel each other.
@@ -235,15 +297,17 @@ export async function profileSheetExtras(
       // they do not, the two were read in different frames: leave them off
       // rather than draw them in the wrong place.
       if (n > 0) {
-        if (returnsAgree(chainageM, heightM, summary.profileChart)) returns = { count: n, chainageM, heightM, ground };
-        else returnsNote = RETURNS_OFF_LINE;
+        if (returnsAgree(chainageM, heightM, summary.profileChart)) {
+          returns = { count: n, chainageM, heightM, ground };
+          station = lowestStation(m.profileChart, m.profileGroundPercentile ?? null, pts, (i) => own.slots.has(pts.sourceSlot[i]!), frame);
+        } else returnsNote = RETURNS_OFF_LINE;
       }
     }
   }
 
   // The plan strip and the index crossings, from a fresh analysis of this scan.
   const terrain = terrainFor(m);
-  if (!terrain) return { returns, returnsNote, plan: null, indexCrossings: null };
+  if (!terrain) return { returns, returnsNote, station, plan: null, indexCrossings: null };
   const t = terrain.result;
   const up = terrain.sceneUpAxis ?? 'z';
   const xyz = (p: readonly [number, number, number]) => ({ x: p[0], y: p[1], z: p[2] });
@@ -253,9 +317,10 @@ export async function profileSheetExtras(
   return {
     returns,
     returnsNote,
+    station,
     plan: {
       relief: { cols: t.dtm.cols, rows: t.dtm.rows, cellSize: t.dtm.cellSizeM, originX: t.dtm.originH1, originY: t.dtm.originH2, z: t.dtm.z, coverage: t.dtm.coverage },
-      a: [a.x, a.y], b: [b.x, b.y], unitToMetres: frame.f, contours: t.model,
+      a: [a.x, a.y], b: [b.x, b.y], unitToMetres: frame.f, corridorM: summary.profileCorridorWidthM ?? null, contours: t.model,
     },
     indexCrossings,
   };

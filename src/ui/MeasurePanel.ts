@@ -8,7 +8,7 @@
  */
 
 import { classifyLoadError, reportChunkFailure } from '../app/staleChunkReload';
-import { el } from './dom';
+import { el, focusIfLost } from './dom';
 import { ICON_EXPAND } from './dockIcons';
 import { openResultFocus } from './ResultFocus';
 import { triggerDownload } from '../io/download';
@@ -19,9 +19,9 @@ import { PROFILE_CHART_ASSUMED_BOX, profileVexChipLabel, readProfileVex, PROFILE
 // Static import of the loader thunk — the dynamic import() itself lives in
 // lazyChunks.ts (excluded from the live source-transform) so its literal is
 // never scrambled. Importing the thunk pulls nothing heavy into the shell.
-import { loadProfilePdf } from '../lazyChunks';
+import { loadProfileExport } from '../lazyChunks';
 import type { ProfileSheetExtras } from '../render/measure/profileSheetStyled';
-import { profilePdfInputFor, withSheetStyle } from './profilePdfInput';
+import type { ProfileSheetFields } from '../model/deliverableFields';
 import type { MeasurementSummary, ProfileResampleParams } from '../render/measure/MeasureController';
 import {
   DIMENSION_LABEL,
@@ -269,6 +269,9 @@ export interface MeasurePanelCallbacks {
    * v0.3.10 Profile-as-Deliverable stream.
    */
   getUnitSystem?: () => 'metric' | 'imperial';
+  /** The user's own words for a profile's sheets, kept on its measurement. */
+  getProfileSheet?: (id: string) => ProfileSheetFields | undefined;
+  onProfileSheet?: (id: string, fields: ProfileSheetFields) => void;
   /** What a Light or Dark profile sheet draws beyond the ground line; null when nothing more can be drawn. */
   getProfileSheetExtras?: (id: string, s: MeasurementSummary) => Promise<ProfileSheetExtras | null>;
   /**
@@ -793,9 +796,9 @@ export class MeasurePanel {
     if (!s.profileChart || s.profileChart.length < 2) return;
     const label = btn.textContent ?? 'Export PDF';
     btn.disabled = true;
-    btn.textContent = 'Building…';
+    btn.textContent = 'Exporting…';
     try {
-      await this._buildProfileSheet(s);
+      await this._buildProfileSheet(s, btn);
     } catch (err) {
       console.error('OpenLiDARViewer: profile PDF export failed.', err);
       if (classifyLoadError(err) === 'stale-chunk') reportChunkFailure('PDF export');
@@ -808,6 +811,7 @@ export class MeasurePanel {
     }
     btn.textContent = label;
     btn.disabled = false;
+    focusIfLost(btn);
   }
 
   /**
@@ -816,32 +820,24 @@ export class MeasurePanel {
    * Throws on failure rather than reporting it, so each control that calls it
    * shows the failure in its own vocabulary.
    */
-  private async _buildProfileSheet(s: MeasurementSummary): Promise<void> {
-    if (!s.profileChart || s.profileChart.length < 2) return;
-    // The sheet prints grades and chainages, which a geographic frame refuses,
-    // exactly as the profile CSV is refused. The docked workbench comes through
-    // here too, so the refusal covers both controls.
-    const refusal = this._profileFrameRefusal(s);
-    if (refusal) throw new Error(refusal);
-    // The frame the section was measured in, captured with it. Both were read
-    // after the chunk await, so a scan swap while pdf-lib loaded labelled this
-    // profile's geometry with the next scan's CRS and unit system.
-    const context = this._cb.getProfileExportContext ? this._cb.getProfileExportContext(s.id) : null;
-    if (context?.refused) throw new Error(context.refused);
-    const unitSystem = this._displayUnits(s);
-    const { buildProfilePdf } = await loadProfilePdf();
-    // Assembled in ONE place, shared with the docked workbench's own export
-    // control. What a second assembly drops is the CRS, the unit system and
-    // the provenance record, which is exactly what a reader of the file
-    // cannot recover from anywhere else.
-    // The clock is read HERE, at the app boundary. The builder takes the
-    // stamp as a parameter so the same sheet is the same bytes.
-    const extras = () => this._cb.getProfileSheetExtras?.(s.id, s) ?? Promise.resolve(null);
-    const bytes = await buildProfilePdf(await withSheetStyle(profilePdfInputFor(s, { context, unitSystem, generatedAt: new Date() }), extras));
-    triggerDownload(
-      new Blob([bytes as BlobPart], { type: 'application/pdf' }),
-      profileExportFileName(context?.scanName, s.name, 'pdf') ?? `${safeFileName(s.name)}-profile.pdf`,
-    );
+  private async _buildProfileSheet(s: MeasurementSummary, from: HTMLElement | null = null): Promise<void> {
+    const { exportProfileSheet, ProfileExportRefusal } = await loadProfileExport();
+    const refuse = (why: string): never => { throw new ProfileExportRefusal(why); };
+    // Read together, before anything is awaited, each time the flow asks: a scan
+    // swap in between would label this profile with the next scan's frame.
+    const capture = () => {
+      const now = this._summaries.find((x) => x.id === s.id);
+      if (!now?.profileChart || now.profileChart.length < 2) return refuse('This profile is no longer open.');
+      // A geographic frame refuses the sheet's grades and chainages, as it refuses the CSV.
+      const refusal = this._profileFrameRefusal(now);
+      const context = this._cb.getProfileExportContext ? this._cb.getProfileExportContext(now.id) : null;
+      const why = refusal ?? context?.refused;
+      return why ? refuse(why) : { summary: now, context, unitSystem: this._displayUnits(now) };
+    };
+    await exportProfileSheet({
+      capture, fields: this._cb.getProfileSheet?.(s.id), saveFields: (f) => this._cb.onProfileSheet?.(s.id, f),
+      extras: (now) => this._cb.getProfileSheetExtras?.(now.id, now) ?? Promise.resolve(null), download: triggerDownload, returnFocusTo: from,
+    });
   }
 
   /**
