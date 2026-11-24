@@ -6,6 +6,7 @@ The format is based on Keep a Changelog and the project follows Semantic Version
 
 ### Added
 
+- Height colours of a loaded scan can be sun shaded, with a strength, direction and height for the sun. It is off by default and changes the display only; the colour legend and exported colourbar say when it is on.
 - The Profile Workbench can export every return a section accepted, as a CSV with a JSON receipt in one ZIP. The receipt states the sources and their digests, class provenance, Withheld counts, display filter and units.
 - Light and Dark profile sheets print the measurement's support grade and its caption at the head of sheet one and on the technical notes. Classic prints them on the technical notes.
 - Focus clipped region, on the Clip page and in the command palette, moves the view to what a Keep inside clip keeps.

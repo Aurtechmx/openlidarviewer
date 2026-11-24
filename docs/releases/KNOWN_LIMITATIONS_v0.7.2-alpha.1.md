@@ -455,7 +455,7 @@ consecutive passes, counted by `scripts/ios-streak.mjs`.
 fails the build when either passes its recorded baseline, so a raise is a hand
 edit to `docs/validation/monolith-size-baseline.json` and always shows in the
 diff.
-Fan-out is 95 for the shell, 73 for the renderer, across 1277 modules with no
+Fan-out is 95 for the shell, 73 for the renderer, across 1284 modules with no
 dependency cycles. Fan-out counts the distinct modules a file imports with a
 value import, source files and external packages alike; type-only and dynamic
 imports are not counted. The shell and the renderer figures are held
@@ -1039,6 +1039,14 @@ A returns export of a streamed scan holds the points loaded when the section
 was read; rows whose node has since been unloaded have no x, y, z. A section
 whose CSV would pass 1 GiB is refused. A negative station is written with a
 leading apostrophe, because a spreadsheet would evaluate it.
+
+## Sun shading is a display aid for loaded scans
+
+Sun shading works on loaded scans only, in a projected frame with a readable
+height unit. It lights relief as if twice as steep, leaves vegetation and
+near-vertical faces at their ramp colour where it can tell them apart, and gets
+coarser on very large or heavily wooded scans. Noise in the scan shows as fine
+texture at full strength. Its setting is not saved in a session.
 
 ## Export languages
 

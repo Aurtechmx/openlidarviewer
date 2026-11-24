@@ -79,6 +79,7 @@ v0.6.6 remain available under MIT.
 
 ## Scans and layers
 
+- Height colours of a loaded scan can be sun shaded. Off by default, and display only.
 - Pressing a layer's name makes it the active scan. A Created layers list on the Data tab shows or hides contours, drainage lines and the access map, and a session keeps those choices.
 - After a scan is removed, the contour map sheet, the Terrain Intelligence report and the other terrain exports name the active scan. A kept terrain result keeps the name of the scan it was computed on.
 - Each scan keeps its own Auto-classify caption and class counts while another scan is active. Notes stay with the scan they were placed on, and a note whose scan was closed is not saved.
