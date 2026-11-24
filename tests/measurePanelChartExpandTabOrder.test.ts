@@ -1,10 +1,8 @@
 /**
  * measurePanelChartExpandTabOrder.test.ts
  *
- * ANALYSIS-F9: the profile chart's `chartWrap` (`role="button"`, `tabIndex=0`)
- * and the `chartExpand` button nested inside it shared the same accessible
- * name and the same `_openProfileFocus` action, so a keyboard/screen-reader
- * user tabbed through two consecutive stops for one control.
+ * The profile chart (`role="button"`, `tabIndex=0`) opens the larger view.
+ * It holds no nested control, so it stays one tab stop for that action.
  *
  * Reads the source rather than the DOM — the panel needs a live viewer to
  * render (see tests/measurePanelExpandAffordance.test.ts, same file, same
@@ -24,22 +22,11 @@ describe('the profile chart expander is one tab stop, not two', () => {
     expect(PANEL).toMatch(/chartWrap\.tabIndex = 0;/);
   });
 
-  it('pulls the nested chartExpand button out of the tab order', () => {
-    expect(PANEL).toMatch(/chartExpand\.tabIndex = -1;/);
-  });
-
-  it('pulls the nested chartExpand button out of the accessibility tree', () => {
-    expect(PANEL).toMatch(/chartExpand\.setAttribute\('aria-hidden', 'true'\);/);
-  });
-
-  it('keeps chartExpand mouse-clickable (the fix removes a tab stop, not the control)', () => {
-    expect(PANEL).toMatch(/chartExpand\.addEventListener\('click', \(e\) => \{\s*e\.stopPropagation\(\);/);
+  it('nests no second control in the chart', () => {
+    expect(PANEL).not.toMatch(/chartExpand|chartWrap\.append/);
   });
 
   it('never removes chartWrap itself from the tab order to compensate', () => {
-    // Two legitimate fixes exist (drop chartWrap's own role/tabIndex, or hide
-    // chartExpand); this file took the second. Pin that choice so a future
-    // edit cannot silently swap in the other one without a matching readout.
     expect(PANEL).not.toMatch(/chartWrap\.tabIndex = -1;/);
   });
 });

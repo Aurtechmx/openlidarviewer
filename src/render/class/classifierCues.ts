@@ -5,7 +5,7 @@
  * from a cloud — RGB (greenness) and LAS return number/count (multi-return ⇒
  * vegetation). Each is included only when it is actually present, so a bare XYZ
  * cloud degrades to geometry-only. Pure: no mutation, no DOM. Kept out of
- * main.ts so both the "Classify (derive)" and "Fill unclassified" call sites
+ * main.ts so both the "Auto-classify scan (derive)" and "Fill unclassified" call sites
  * share one honest assembly, and so it is unit-testable.
  */
 

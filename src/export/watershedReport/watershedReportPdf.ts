@@ -25,10 +25,12 @@ import type { Verdict } from '../../simulation/flowPulse/watershed/catchmentQual
 import {
   catchmentNarrative, formatHeight, formatLength, formatPercent, headline, qualityReasons, withheldText,
 } from '../../simulation/flowPulse/watershed/watershedNarrative';
+import { reportLocale } from '../../simulation/flowPulse/watershed/watershedReportModel';
 import type {
-  CatchmentSection, ReportLanguage, WatershedReportModel,
+  CatchmentSection, ReportLanguage, ReportLocale, WatershedReportModel,
 } from '../../simulation/flowPulse/watershed/watershedReportModel';
-import { UNIT_GAP, formatArea, formatNumber, t, type StringKey } from '../../simulation/flowPulse/watershed/watershedStrings';
+import { UNIT_GAP, formatArea, formatNumber, formulaText, t, type StringKey } from '../../simulation/flowPulse/watershed/watershedStrings';
+import { languageInfo } from '../../i18n/languages';
 import { embedReportFonts, type ReportFonts } from '../sheetKit/fonts';
 import { clampNotes } from './watershedReportOptions';
 import {
@@ -93,38 +95,44 @@ export async function buildWatershedReportPdf(model: WatershedReportModel, opts:
 // --- Formatting -----------------------------------------------------------------
 
 /** A figure's value in words, "≥ " before a minimum, or the catalog's reason when withheld. */
-function fig(lang: ReportLanguage, f: Figure<number>, fmt: (v: number) => string, approx = false): string {
-  if ('withheld' in f) return withheldText(lang, f.withheld);
+function fig(loc: ReportLocale, f: Figure<number>, fmt: (v: number) => string, approx = false): string {
+  if ('withheld' in f) return withheldText(loc.lang, f.withheld);
   return `${approx ? APPROX : ''}${f.bound === 'minimum' ? '≥\u00a0' : ''}${fmt(f.value)}`;
 }
 
 /** Marks every figure of a catchment the data do not support. */
 const APPROX = '~\u00a0';
 
-function formatDate(lang: ReportLanguage, d: Date): string {
-  return new Intl.DateTimeFormat(lang === 'es' ? 'es-MX' : 'en-GB', {
+/** The translation's draft notice, printed on the cover and every page; null once the language is reviewed. */
+function draftNote(loc: ReportLocale): string | null {
+  const info = languageInfo(loc.lang);
+  return info.reviewed ? null : t(loc.lang, 'draft.note', { language: info.name });
+}
+
+function formatDate(loc: ReportLocale, d: Date): string {
+  return new Intl.DateTimeFormat(loc.lang === 'es' ? 'es-MX' : 'en-GB', {
     day: 'numeric', month: 'long', year: 'numeric', timeZone: 'UTC',
   }).format(d);
 }
 
-function cellText(lang: ReportLanguage, [sx, sy]: readonly [number, number]): string {
-  const a = formatNumber(lang, sx, 2);
-  return sx === sy ? `${a}${UNIT_GAP}m` : `${a} × ${formatNumber(lang, sy, 2)}${UNIT_GAP}m`;
+function cellText(loc: ReportLocale, [sx, sy]: readonly [number, number]): string {
+  const a = formatNumber(loc.numberStyle, sx, 2);
+  return sx === sy ? `${a}${UNIT_GAP}m` : `${a} × ${formatNumber(loc.numberStyle, sy, 2)}${UNIT_GAP}m`;
 }
 
 const verdictKey = (v: Verdict) => `verdict.${v}` as StringKey;
 
 /** Ground returns per m²; withheld with its reason when the scale is unknown or no counts were recorded. */
-function densityText(lang: ReportLanguage, d: number | null): string {
-  if (d === null) return t(lang, 'quality.noScale');
-  if (!(d > 0)) return t(lang, 'quality.noCounts');
-  return formatNumber(lang, d, 1);
+function densityText(loc: ReportLocale, d: number | null): string {
+  if (d === null) return t(loc.lang, 'quality.noScale');
+  if (!(d > 0)) return t(loc.lang, 'quality.noCounts');
+  return formatNumber(loc.numberStyle, d, 1);
 }
 
 /** Below 0.1 m a hollow's depth prints as "< 0.1 m" rather than rounding to zero. */
-function depthText(lang: ReportLanguage, m: number | null): string {
-  if (m === null) return withheldText(lang, 'vertical-unresolved');
-  return m < 0.1 ? `< ${formatHeight(lang, 0.1)}` : formatHeight(lang, m);
+function depthText(loc: ReportLocale, m: number | null): string {
+  if (m === null) return withheldText(loc.lang, 'vertical-unresolved');
+  return m < 0.1 ? `< ${formatHeight(loc.numberStyle, 0.1)}` : formatHeight(loc.numberStyle, m);
 }
 
 function isOpen(s: CatchmentSection): boolean {
@@ -258,16 +266,17 @@ export async function renderWatershedReport(
   model: WatershedReportModel,
   opts: WatershedReportOptions,
 ): Promise<{ bytes: Uint8Array; pages: readonly ReportPageTag[] }> {
-  const lang = model.language;
+  const loc = reportLocale(model);
   const doc = await PDFDocument.create();
   doc.setTitle(model.title, { showInWindowTitleBar: true });
-  doc.setLanguage(lang === 'es' ? 'es-MX' : 'en-US');
+  doc.setLanguage(languageInfo(loc.lang).tag);
   doc.setAuthor('OpenLiDARViewer');
-  doc.setSubject(t(lang, 'cover.kicker'));
+  doc.setSubject(t(loc.lang, 'cover.kicker'));
   doc.setCreator(model.provenance.software);
   doc.setProducer('OpenLiDARViewer');
   doc.setCreationDate(model.provenance.generatedAt);
   doc.setModificationDate(model.provenance.generatedAt);
+  const draft = draftNote(loc);
   let fonts: ReportFonts;
   try {
     fonts = opts.loadFont ? await embedReportFonts(doc, opts.loadFont) : await embedReportFonts(doc);
@@ -280,12 +289,12 @@ export async function renderWatershedReport(
   const tag = (part: ReportPart, label: string | null) => {
     while (pages.length < doc.getPageCount()) pages.push({ part, label });
   };
-  const footReport = t(lang, 'footer.report', { title: model.title });
+  const footReport = t(loc.lang, 'footer.report', { title: model.title });
   const start = (id: string, section: StringKey, footer: string) =>
-    newPage(doc, opts.size, { id, section: t(lang, section), pageNo: doc.getPageCount() + 1, status: opts.status ?? null }, fonts, footer);
+    newPage(doc, opts.size, { id, section: t(loc.lang, section), pageNo: doc.getPageCount() + 1, status: opts.status ?? null, note: draft }, fonts, footer);
   const hooks: ReportHooks = {
     doc, fonts, size: opts.size,
-    start: (id, section) => newPage(doc, opts.size, { id, section, pageNo: doc.getPageCount() + 1, status: opts.status ?? null }, fonts, footReport),
+    start: (id, section) => newPage(doc, opts.size, { id, section, pageNo: doc.getPageCount() + 1, status: opts.status ?? null, note: draft }, fonts, footReport),
     tag: (label) => tag('drainage', label),
   };
   const layers = { sections: model.sections, network: model.network, grid: opts.raster.grid, coverage: opts.raster.coverage, filled: opts.raster.filled };
@@ -296,27 +305,27 @@ export async function renderWatershedReport(
   await onePage(doc, async (sc) => {
     const c = start(SPINE_ID.guide, 'spine.guideMap', footReport);
     const below = await drawMapPage(c, doc, model, { ...layers, partition: model.partition, bottomY: pageH * (0.26 + sc.attempt * 0.035) }, fonts, opts.encodePng);
-    drawGuide(below, lang, fonts, sc);
+    drawGuide(below, loc, fonts, sc);
   });
   tag('guide', null);
   await opts.afterSiteMap?.(hooks);
 
   for (const s of model.sections) {
-    const foot = t(lang, 'footer.catchment', { title: model.title, label: s.label });
-    await onePage(doc, (sc) => drawSummary(start(s.label, 'spine.summary', foot), s, lang, fonts, sc, displayName(s.label, opts.catchmentNames), model.network.thresholdM2));
+    const foot = t(loc.lang, 'footer.catchment', { title: model.title, label: s.label });
+    await onePage(doc, (sc) => drawSummary(start(s.label, 'spine.summary', foot), s, loc, fonts, sc, displayName(s.label, opts.catchmentNames), model.network.thresholdM2));
     tag('summary', s.label);
     await onePage(doc, async (sc) => {
       const c = start(s.label, 'spine.details', foot);
       const below = await drawMapPage(c, doc, model, { ...layers, focus: s, focusTitle: displayName(s.label, opts.catchmentNames), bottomY: pageH * (0.3 + sc.attempt * 0.05) }, fonts, opts.encodePng);
-      drawDetails(below, s, model, lang, fonts, sc);
+      drawDetails(below, s, model, loc, fonts, sc);
     });
     tag('details', s.label);
   }
 
   await opts.beforeQuality?.(hooks);
-  await onePage(doc, (sc) => drawQuality(start(SPINE_ID.quality, 'spine.quality', footReport), model, lang, fonts, sc, opts.catchmentNames));
+  await onePage(doc, (sc) => drawQuality(start(SPINE_ID.quality, 'spine.quality', footReport), model, loc, fonts, sc, opts.catchmentNames));
   tag('quality', null);
-  await onePage(doc, (sc) => drawAppendix(start(SPINE_ID.appendix, 'spine.appendix', footReport), lang, fonts, sc));
+  await onePage(doc, (sc) => drawAppendix(start(SPINE_ID.appendix, 'spine.appendix', footReport), loc, fonts, sc));
   tag('appendix', null);
 
   const bytes = await doc.save({ useObjectStreams: false });
@@ -326,7 +335,7 @@ export async function renderWatershedReport(
 // --- Cover ----------------------------------------------------------------------
 
 async function drawCover(doc: PDFDocument, model: WatershedReportModel, opts: WatershedReportOptions, fonts: ReportFonts): Promise<void> {
-  const lang = model.language;
+  const loc = reportLocale(model);
   const [W, H] = opts.size === 'a4' ? [595.28, 841.89] : [612, 792];
   const page = doc.addPage([W, H]);
   page.drawRectangle({ x: 0, y: 0, width: W, height: H, color: PALETTE.paper });
@@ -336,7 +345,7 @@ async function drawCover(doc: PDFDocument, model: WatershedReportModel, opts: Wa
 
   // Heading.
   let y = H - 64;
-  drawRuns(page, t(lang, 'cover.kicker').toUpperCase(), L, y, { font: fonts.bodyBold, size: 10.5, color: PALETTE.water }, fonts);
+  drawRuns(page, t(loc.lang, 'cover.kicker').toUpperCase(), L, y, { font: fonts.bodyBold, size: 10.5, color: PALETTE.water }, fonts);
   y -= 8;
   for (const line of wrapText(model.title, fonts.titleBold, 18, maxW, fonts)) {
     y -= 18;
@@ -345,7 +354,7 @@ async function drawCover(doc: PDFDocument, model: WatershedReportModel, opts: Wa
   }
   const watersheds = model.partition.watersheds.filter((w) => !w.minor).length;
   const minor = model.partition.watersheds.length - watersheds;
-  const counts = t(lang, 'cover.counts', { watersheds, minor, share: DEFAULT_MINOR_SHARE * 100, catchments: model.sections.length });
+  const counts = t(loc.lang, 'cover.counts', { watersheds, minor, share: DEFAULT_MINOR_SHARE * 100, catchments: model.sections.length });
   wrapText(counts, fonts.body, 11, maxW, fonts).forEach((line, k) => {
     y -= k === 0 ? 13 : 14;
     drawRuns(page, line, L, y, { font: fonts.body, size: 11, color: PALETTE.ink2 }, fonts);
@@ -355,6 +364,12 @@ async function drawCover(doc: PDFDocument, model: WatershedReportModel, opts: Wa
       y -= 16;
       drawRuns(page, line, L, y, { font: fonts.bodyBold, size: 11, color: PALETTE.earth }, fonts);
     }
+  }
+
+  const draft = draftNote(loc);
+  if (draft) {
+    y -= 14;
+    drawRuns(page, draft, L, y, { font: fonts.body, size: 9.5, color: PALETTE.mute }, fonts);
   }
 
   // Site map with a hairline frame and the studied catchments outlined.
@@ -391,25 +406,25 @@ async function drawCover(doc: PDFDocument, model: WatershedReportModel, opts: Wa
 
   // Data quality, right under the map.
   y = iy - 26;
-  const dq = drawRuns(page, t(lang, 'cover.dataQuality').toUpperCase(), L, y, { font: fonts.bodyBold, size: 10.5, color: PALETTE.mute }, fonts);
+  const dq = drawRuns(page, t(loc.lang, 'cover.dataQuality').toUpperCase(), L, y, { font: fonts.bodyBold, size: 10.5, color: PALETTE.mute }, fonts);
   let x = dq + 12;
   for (const s of model.sections) {
     x = drawRuns(page, displayName(s.label, opts.catchmentNames), x, y, { font: fonts.bodyBold, size: 11.25, color: PALETTE.ink }, fonts) + 5;
-    x += chip(page, x, y, s.quality.verdict, t(lang, verdictKey(s.quality.verdict)), fonts) + 14;
+    x += chip(page, x, y, s.quality.verdict, t(loc.lang, verdictKey(s.quality.verdict)), fonts) + 14;
   }
-  drawRuns(page, t(lang, 'cover.measuredShare', { share: formatPercent(lang, model.site.measuredShare), data: formatPercent(lang, model.site.gridDataShare) }), L, y - 18, { font: fonts.body, size: 10.6, color: PALETTE.ink2 }, fonts);
+  drawRuns(page, t(loc.lang, 'cover.measuredShare', { share: formatPercent(loc.numberStyle, model.site.measuredShare), data: formatPercent(loc.numberStyle, model.site.gridDataShare) }), L, y - 18, { font: fonts.body, size: 10.6, color: PALETTE.ink2 }, fonts);
 
   // Title block: hairlines only, a label over each value.
   const site = model.site;
   const cells: [string, string][] = [
-    [t(lang, 'cover.project'), model.title],
-    [t(lang, 'cover.file'), opts.sourceName ?? t(lang, 'method.notGiven')],
-    [t(lang, 'cover.groundData'), t(lang, 'cover.sourceNoFile', { points: formatNumber(lang, site.pointCount, 0), area: formatArea(lang, site.analysedAreaM2), cell: cellText(lang, site.cellSizeM) })],
-    [t(lang, 'method.crs'), site.crsName ?? t(lang, 'quality.crsUnknown')],
-    [t(lang, 'cover.heights'), t(lang, site.elevationsRelative ? 'cover.heightsRelative' : 'cover.heightsRecorded')],
-    [t(lang, 'cover.issued'), t(lang, 'cover.date', { date: formatDate(lang, model.provenance.generatedAt), software: model.provenance.software })],
-    [t(lang, 'cover.preparedBy'), opts.preparedBy?.trim() ?? ''],
-    [t(lang, 'cover.checkedBy'), opts.checkedBy?.trim() ?? ''],
+    [t(loc.lang, 'cover.project'), model.title],
+    [t(loc.lang, 'cover.file'), opts.sourceName ?? t(loc.lang, 'method.notGiven')],
+    [t(loc.lang, 'cover.groundData'), t(loc.lang, 'cover.sourceNoFile', { points: formatNumber(loc.numberStyle, site.pointCount, 0), area: formatArea(loc.numberStyle, site.analysedAreaM2), cell: cellText(loc, site.cellSizeM) })],
+    [t(loc.lang, 'method.crs'), site.crsName ?? t(loc.lang, 'quality.crsUnknown')],
+    [t(loc.lang, 'cover.heights'), t(loc.lang, site.elevationsRelative ? 'cover.heightsRelative' : 'cover.heightsRecorded')],
+    [t(loc.lang, 'cover.issued'), t(loc.lang, 'cover.date', { date: formatDate(loc, model.provenance.generatedAt), software: model.provenance.software.replace(/ · built (?=\S+$)/, ` · ${t(loc.lang, 'software.built')} `) })],
+    [t(loc.lang, 'cover.preparedBy'), opts.preparedBy?.trim() ?? ''],
+    [t(loc.lang, 'cover.checkedBy'), opts.checkedBy?.trim() ?? ''],
   ];
   const colW = maxW / 2;
   const top = base + blockH;
@@ -420,13 +435,16 @@ async function drawCover(doc: PDFDocument, model: WatershedReportModel, opts: Wa
     const cyTop = top - row * 40;
     drawRuns(page, label.toUpperCase(), cx, cyTop - 12, { font: fonts.bodyBold, size: 9.1, color: PALETTE.mute }, fonts);
     const vs = fitSize(value, fonts.body, 11.25, colW - 12, fonts);
-    if (value) drawRuns(page, value, cx, cyTop - 29, { font: fonts.body, size: vs, color: PALETTE.ink }, fonts);
+    // A translation longer than the cell at the smallest size takes two lines; English is drawn as it always was.
+    if (loc.lang !== 'en' && widthOf(value, fonts.body, vs, fonts) > colW - 12) {
+      wrapText(value, fonts.body, 8.5, colW - 12, fonts).forEach((line, k) => drawRuns(page, line, cx, cyTop - 24 - k * 10.5, { font: fonts.body, size: 8.5, color: PALETTE.ink }, fonts));
+    } else if (value) drawRuns(page, value, cx, cyTop - 29, { font: fonts.body, size: vs, color: PALETTE.ink }, fonts);
     if (i % 2 === 1) page.drawLine({ start: { x: L, y: cyTop - 40 }, end: { x: R, y: cyTop - 40 }, thickness: 0.4, color: PALETTE.rule });
   });
   page.drawLine({ start: { x: L + colW - 6, y: top }, end: { x: L + colW - 6, y: top - blockH }, thickness: 0.4, color: PALETTE.rule });
   if (noteLines.length > 0) {
     let ny = base - 12;
-    drawRuns(page, t(lang, 'cover.notes').toUpperCase(), L, ny, { font: fonts.bodyBold, size: 9.1, color: PALETTE.mute }, fonts);
+    drawRuns(page, t(loc.lang, 'cover.notes').toUpperCase(), L, ny, { font: fonts.bodyBold, size: 9.1, color: PALETTE.mute }, fonts);
     ny -= 4;
     for (const line of noteLines) {
       ny -= 14.5;
@@ -437,30 +455,30 @@ async function drawCover(doc: PDFDocument, model: WatershedReportModel, opts: Wa
 
 // --- Reading guide (under the site map) ------------------------------------------------
 
-function drawGuide(c: PageCursor, lang: ReportLanguage, fonts: ReportFonts, sc: Scale): void {
+function drawGuide(c: PageCursor, loc: ReportLocale, fonts: ReportFonts, sc: Scale): void {
   const mid = Math.round((c.left + c.right) / 2);
   const size = sc.body;
   let left: PageCursor = { ...c, right: mid - 10, y: c.y - 4 };
-  left = sectionTitle(left, t(lang, 'guide.fiveThings'), fonts);
-  left = numbered(left, (['guide.item1', 'guide.item2', 'guide.item3'] as const).map((k) => t(lang, k)), fonts, size);
+  left = sectionTitle(left, t(loc.lang, 'guide.fiveThings'), fonts);
+  left = numbered(left, (['guide.item1', 'guide.item2', 'guide.item3'] as const).map((k) => t(loc.lang, k)), fonts, size);
 
   let right: PageCursor = { ...c, left: mid + 10, y: c.y - 4 };
-  right = sectionTitle(right, t(lang, 'glossary.title'), fonts);
+  right = sectionTitle(right, t(loc.lang, 'glossary.title'), fonts);
   right = definitions(right, (['catchment', 'watershed', 'divide', 'open'] as const).map((k) => [
-    t(lang, `glossary.${k}.term` as StringKey), t(lang, `glossary.${k}.def` as StringKey),
+    t(loc.lang, `glossary.${k}.term` as StringKey), t(loc.lang, `glossary.${k}.def` as StringKey),
   ] as const), fonts, size);
-  caption(right, t(lang, 'guide.footnote'), fonts);
+  caption(right, t(loc.lang, 'guide.footnote'), fonts);
 }
 
 // --- Catchment page A: summary and profile ------------------------------------------------
 
-function drawSummary(c: PageCursor, s: CatchmentSection, lang: ReportLanguage, fonts: ReportFonts, sc: Scale, name: string, thresholdM2: number): void {
+function drawSummary(c: PageCursor, s: CatchmentSection, loc: ReportLocale, fonts: ReportFonts, sc: Scale, name: string, thresholdM2: number): void {
   const v = s.quality.verdict;
-  let cur = pageHeading(c, t(lang, 'summary.kicker', { label: name }), headline(s, lang), null, fonts);
-  const x = drawRuns(cur.page, t(lang, 'verdict.title').toUpperCase(), cur.left, cur.y - 9, { font: fonts.bodyBold, size: 10.5, color: PALETTE.mute }, fonts);
-  const cw = chip(cur.page, x + 8, cur.y - 9, v, t(lang, verdictKey(v)), fonts);
+  let cur = pageHeading(c, t(loc.lang, 'summary.kicker', { label: name }), headline(s, loc), null, fonts);
+  const x = drawRuns(cur.page, t(loc.lang, 'verdict.title').toUpperCase(), cur.left, cur.y - 9, { font: fonts.bodyBold, size: 10.5, color: PALETTE.mute }, fonts);
+  const cw = chip(cur.page, x + 8, cur.y - 9, v, t(loc.lang, verdictKey(v)), fonts);
   // The verdict's sentence sits beside the chip, or on its own line when it is too long for that.
-  const lede = t(lang, `verdict.${v}.lede` as StringKey);
+  const lede = t(loc.lang, `verdict.${v}.lede` as StringKey);
   const ledeX = x + 16 + cw;
   if (ledeX + widthOf(lede, fonts.body, 11, fonts) <= cur.right) {
     drawRuns(cur.page, lede, ledeX, cur.y - 9, { font: fonts.body, size: 11, color: PALETTE.ink2 }, fonts);
@@ -470,52 +488,52 @@ function drawSummary(c: PageCursor, s: CatchmentSection, lang: ReportLanguage, f
   }
   // An open catchment says so once, here, with the share of its divide on the data edge.
   const open = isOpen(s);
-  if (open) cur = caption({ ...cur, y: cur.y + 6 }, t(lang, 'summary.edgeShare', { share: formatPercent(lang, s.edgeInflowShare, 0) }), fonts);
+  if (open) cur = caption({ ...cur, y: cur.y + 6 }, t(loc.lang, 'summary.edgeShare', { share: formatPercent(loc.numberStyle, s.edgeInflowShare, 0) }), fonts);
   cur.page.drawLine({ start: { x: cur.left, y: cur.y + 4 }, end: { x: cur.right, y: cur.y + 4 }, thickness: 0.5, color: PALETTE.rule });
   cur = { ...cur, y: cur.y - 8 };
 
   const m = s.morph;
   // A value that cannot be derived shows a dash; the footnote under the row explains it.
   const dash = { value: '—', detail: '' };
-  const notGiven = t(lang, 'kpi.withheld');
+  const notGiven = t(loc.lang, 'kpi.withheld');
   const approx = v === 'not-supported';
   const area = m.areaM2;
   const areaKpi = 'value' in area
-    ? { value: fig(lang, area, (x) => formatArea(lang, x), approx), detail: area.bound === 'minimum' ? t(lang, 'summary.kpi.areaOpen') : t(lang, 'summary.kpi.areaBand', { band: formatArea(lang, m.areaBandM2) }) }
-    : open ? dash : { value: notGiven, detail: withheldText(lang, area.withheld) };
+    ? { value: fig(loc, area, (x) => formatArea(loc.numberStyle, x), approx), detail: area.bound === 'minimum' ? t(loc.lang, 'summary.kpi.areaOpen') : t(loc.lang, 'summary.kpi.areaBand', { band: formatArea(loc.numberStyle, m.areaBandM2) }) }
+    : open ? dash : { value: notGiven, detail: withheldText(loc.lang, area.withheld) };
   const L = s.channel.lengthM;
   const S = s.channel.slope1085;
-  const slopeDetail = 'value' in S ? t(lang, 'summary.kpi.channelSlope', { slope: formatPercent(lang, S.value) }) : open ? '' : withheldText(lang, S.withheld);
+  const slopeDetail = 'value' in S ? t(loc.lang, 'summary.kpi.channelSlope', { slope: formatPercent(loc.numberStyle, S.value) }) : open ? '' : withheldText(loc.lang, S.withheld);
   const channelKpi = 'value' in L
-    ? { value: fig(lang, L, (x) => formatLength(lang, x), approx), detail: slopeDetail }
-    : open ? dash : { value: notGiven, detail: withheldText(lang, L.withheld) };
+    ? { value: fig(loc, L, (x) => formatLength(loc.numberStyle, x), approx), detail: slopeDetail }
+    : open ? dash : { value: notGiven, detail: withheldText(loc.lang, L.withheld) };
   const R = m.reliefM;
   const reliefKpi = 'value' in R
-    ? { value: fig(lang, R, (x) => formatHeight(lang, x), approx), detail: t(lang, 'formula.relief') }
-    : open ? dash : { value: notGiven, detail: withheldText(lang, R.withheld) };
+    ? { value: fig(loc, R, (x) => formatHeight(loc.numberStyle, x), approx), detail: t(loc.lang, 'formula.relief') }
+    : open ? dash : { value: notGiven, detail: withheldText(loc.lang, R.withheld) };
   const orderKpi = open
     ? dash
-    : { value: `${approx ? APPROX : ''}${s.network.maxOrder}`, detail: t(lang, 'summary.kpi.orderDetail', { length: formatLength(lang, s.network.lengthM) }) };
+    : { value: `${approx ? APPROX : ''}${s.network.maxOrder}`, detail: t(loc.lang, 'summary.kpi.orderDetail', { length: formatLength(loc.numberStyle, s.network.lengthM) }) };
   cur = kpiRow(cur, [
-    { ...areaKpi, label: t(lang, 'summary.kpi.area') },
-    { ...channelKpi, label: t(lang, 'summary.kpi.channel') },
-    { ...reliefKpi, label: t(lang, 'summary.kpi.relief') },
-    { ...orderKpi, label: t(lang, 'summary.kpi.order') },
+    { ...areaKpi, label: t(loc.lang, 'summary.kpi.area') },
+    { ...channelKpi, label: t(loc.lang, 'summary.kpi.channel') },
+    { ...reliefKpi, label: t(loc.lang, 'summary.kpi.relief') },
+    { ...orderKpi, label: t(loc.lang, 'summary.kpi.order') },
   ], fonts, { muted: v !== 'supported' });
-  if (open) cur = caption({ ...cur, y: cur.y + 2 }, t(lang, 'summary.kpi.openNote'), fonts);
-  if (approx) cur = caption({ ...cur, y: cur.y + 2 }, t(lang, 'figures.notSupportedNote'), fonts);
+  if (open) cur = caption({ ...cur, y: cur.y + 2 }, t(loc.lang, 'summary.kpi.openNote'), fonts);
+  if (approx) cur = caption({ ...cur, y: cur.y + 2 }, t(loc.lang, 'figures.notSupportedNote'), fonts);
 
-  cur = sectionTitle({ ...cur, y: cur.y - 2 }, t(lang, 'summary.flowTitle'), fonts);
-  for (const p of catchmentNarrative(s, lang, thresholdM2)) cur = stepParagraph(cur, t(lang, p.lead), p.text, fonts, sc.body);
+  cur = sectionTitle({ ...cur, y: cur.y - 2 }, t(loc.lang, 'summary.flowTitle'), fonts);
+  for (const p of catchmentNarrative(s, loc, thresholdM2)) cur = stepParagraph(cur, t(loc.lang, p.lead), p.text, fonts, sc.body);
 
   const d = s.checkOnSite;
   if (d) {
-    const body = t(lang, 'checkOnSite.body', {
-      area: d.areaM2 !== null ? formatArea(lang, d.areaM2) : withheldText(lang, 'not-applicable'),
-      depth: depthText(lang, d.maxFillDepth),
+    const body = t(loc.lang, 'checkOnSite.body', {
+      area: d.areaM2 !== null ? formatArea(loc.numberStyle, d.areaM2) : withheldText(loc.lang, 'not-applicable'),
+      depth: depthText(loc, d.maxFillDepth),
     });
     // The box's name sits above it as a label, so the text reads as plain sentences.
-    drawRuns(cur.page, t(lang, 'checkOnSite.title').toUpperCase(), cur.left, cur.y - 11, { font: fonts.bodyBold, size: 9.8, color: PALETTE.ink }, fonts);
+    drawRuns(cur.page, t(loc.lang, 'checkOnSite.title').toUpperCase(), cur.left, cur.y - 11, { font: fonts.bodyBold, size: 9.8, color: PALETTE.ink }, fonts);
     cur = callout({ ...cur, y: cur.y - 16 }, body, 'warn', fonts);
   }
 
@@ -528,29 +546,29 @@ function drawSummary(c: PageCursor, s: CatchmentSection, lang: ReportLanguage, f
   }
   // The chart takes the rest of the page, so the page ends filled.
   const h = Math.min(room, 380);
-  if (h > 60) drawChannelProfile(cur.page, { x: cur.left, y: cur.y - 4 - h, width: cur.right - cur.left, height: h }, s.channel, lang, fonts);
+  if (h > 60) drawChannelProfile(cur.page, { x: cur.left, y: cur.y - 4 - h, width: cur.right - cur.left, height: h }, s.channel, loc, fonts);
 }
 
 // --- Catchment page B: map, figures, network and timing -----------------------------------
 
-function drawDetails(c: PageCursor, s: CatchmentSection, model: WatershedReportModel, lang: ReportLanguage, fonts: ReportFonts, sc: Scale): void {
+function drawDetails(c: PageCursor, s: CatchmentSection, model: WatershedReportModel, loc: ReportLocale, fonts: ReportFonts, sc: Scale): void {
   // The figures column is the wider one; the order and hollow tables fit the narrower.
   const mid = Math.round(c.left + (c.right - c.left) * 0.54);
   const m = s.morph;
   const ch = s.channel;
   const open = isOpen(s);
   const notSupported = s.quality.verdict === 'not-supported';
-  const n2 = (x: number) => formatNumber(lang, x, 2);
-  const n1 = (x: number) => formatNumber(lang, x, 1);
-  const n0 = (x: number) => formatNumber(lang, x, 0);
-  const pct = (x: number) => formatNumber(lang, x * 100, 1);
+  const n2 = (x: number) => formatNumber(loc.numberStyle, x, 2);
+  const n1 = (x: number) => formatNumber(loc.numberStyle, x, 1);
+  const n0 = (x: number) => formatNumber(loc.numberStyle, x, 0);
+  const pct = (x: number) => formatNumber(loc.numberStyle, x * 100, 1);
   const hypso: Figure<number> = 'value' in m.hypsometry ? { value: m.hypsometry.value.integral } : m.hypsometry;
   const openFig: Figure<number> = { withheld: 'open-catchment' };
   const a = m.areaM2;
   const inHa = 'value' in a && a.value >= 10_000;
   // Parameter, figure, number format, unit.
   const rows: [StringKey, Figure<number>, (x: number) => string, string][] = [
-    ['figures.area', a, inHa ? (x) => formatNumber(lang, x / 10_000, 2) : n0, inHa ? 'ha' : 'm²'],
+    ['figures.area', a, inHa ? (x) => formatNumber(loc.numberStyle, x / 10_000, 2) : n0, inHa ? 'ha' : 'm²'],
     ['figures.perimeter', m.perimeterM, n0, 'm'],
     ['figures.gravelius', m.gravelius, n2, ''],
     ['figures.elongation', m.elongation, n2, ''],
@@ -570,103 +588,103 @@ function drawDetails(c: PageCursor, s: CatchmentSection, model: WatershedReportM
 
   // Left column: the basin figures. Withheld ones are listed once under their reason.
   let left: PageCursor = { ...c, right: mid - 9, y: c.y - 2 };
-  left = sectionTitle(left, t(lang, 'figures.title'), fonts);
+  left = sectionTitle(left, t(loc.lang, 'figures.title'), fonts);
   const shown = rows.filter(([, f]) => 'value' in f);
-  left = table(left, cols(left, [[t(lang, 'table.parameter'), 'left', 0.6], [t(lang, 'table.value'), 'right', 0.17], ['', 'left', 0.03], [t(lang, 'table.unit'), 'left', 0.2]]),
-    shown.map(([k, f, fmt, unit]) => [t(lang, k), fig(lang, f, fmt, notSupported), '', unit]), fonts, { size: sc.table });
-  if (notSupported) left = caption(left, t(lang, 'figures.notSupportedNote'), fonts);
+  left = table(left, cols(left, [[t(loc.lang, 'table.parameter'), 'left', 0.6], [t(loc.lang, 'table.value'), 'right', 0.17], ['', 'left', 0.03], [t(loc.lang, 'table.unit'), 'left', 0.2]]),
+    shown.map(([k, f, fmt, unit]) => [t(loc.lang, k), fig(loc, f, fmt, notSupported), '', unit]), fonts, { size: sc.table });
+  if (notSupported) left = caption(left, t(loc.lang, 'figures.notSupportedNote'), fonts);
   const byReason = new Map<string, string[]>();
   for (const [k, f] of rows) {
     if (!('withheld' in f)) continue;
     const list = byReason.get(f.withheld) ?? [];
-    list.push(t(lang, k));
+    list.push(t(loc.lang, k));
     byReason.set(f.withheld, list);
   }
   if (open) {
     // One line for an open catchment instead of a list of withheld figures.
     byReason.delete('open-catchment');
-    left = caption(left, t(lang, 'figures.openNote'), fonts);
+    left = caption(left, t(loc.lang, 'figures.openNote'), fonts);
   }
   for (const [reason, items] of byReason) {
-    left = caption(left, t(lang, 'figures.withheldList', { items: items.join(', '), reason: withheldText(lang, reason as WithheldReason) }), fonts);
+    left = caption(left, t(loc.lang, 'figures.withheldList', { items: items.join(', '), reason: withheldText(loc.lang, reason as WithheldReason) }), fonts);
   }
 
   // Right column: flow lines by order, hollows, time of concentration and peak flow.
   let right: PageCursor = { ...c, left: mid + 9, y: c.y - 2 };
   const orders = [...s.network.byOrder.entries()].sort((a, b) => a[0] - b[0]);
   // An open catchment's network is not derived (see the note in the left column).
-  if (!open) right = sectionTitle(right, t(lang, 'network.ordersTitle'), fonts);
+  if (!open) right = sectionTitle(right, t(loc.lang, 'network.ordersTitle'), fonts);
   if (open) {
     // Nothing to list.
   } else if (orders.length === 0) {
-    right = caption(right, t(lang, 'network.noLines', { threshold: formatArea(lang, model.network.thresholdM2) }), fonts);
+    right = caption(right, t(loc.lang, 'network.noLines', { threshold: formatArea(loc.numberStyle, model.network.thresholdM2) }), fonts);
   } else {
-    right = table(right, cols(right, [[t(lang, 'table.order'), 'left', 0.3], [t(lang, 'table.segments'), 'right', 0.3], [`${t(lang, 'table.length')} (m)`, 'right', 0.4]]),
-      orders.map(([o, v]) => [String(o), String(v.segments), formatNumber(lang, v.lengthM, 0)]), fonts, { size: sc.table });
+    right = table(right, cols(right, [[t(loc.lang, 'table.order'), 'left', 0.3], [t(loc.lang, 'table.segments'), 'right', 0.3], [`${t(loc.lang, 'table.length')} (m)`, 'right', 0.4]]),
+      orders.map(([o, v]) => [String(o), String(v.segments), formatNumber(loc.numberStyle, v.lengthM, 0)]), fonts, { size: sc.table });
   }
 
-  right = sectionTitle(right, t(lang, 'network.hollowsTitle'), fonts);
+  right = sectionTitle(right, t(loc.lang, 'network.hollowsTitle'), fonts);
   // Hollows at least 0.1 m deep (or of unknown depth) are listed; the shallower rest are counted. With none listed, the largest is.
   const hollows = [...s.depressions].sort((a, b) => b.cells - a.cells || a.rank - b.rank);
   if (hollows.length === 0) {
-    right = caption(right, t(lang, 'network.noHollows'), fonts);
+    right = caption(right, t(loc.lang, 'network.noHollows'), fonts);
   } else {
     let listed = hollows.filter((d) => d.maxFillDepth === null || d.maxFillDepth >= 0.1);
     if (listed.length === 0) listed = [hollows[0]!];
     const rest = hollows.length - listed.length;
     const rows = listed.map((d) => [
       String(d.rank),
-      d.areaM2 !== null ? formatNumber(lang, d.areaM2, 0) : withheldText(lang, 'not-applicable'),
-      d.maxFillDepth === null ? withheldText(lang, 'vertical-unresolved') : d.maxFillDepth < 0.1 ? `< ${formatNumber(lang, 0.1, 1)}` : formatNumber(lang, d.maxFillDepth, 1),
-      t(lang, d.onFlowLine ? 'table.yes' : 'table.no'),
+      d.areaM2 !== null ? formatNumber(loc.numberStyle, d.areaM2, 0) : withheldText(loc.lang, 'not-applicable'),
+      d.maxFillDepth === null ? withheldText(loc.lang, 'vertical-unresolved') : d.maxFillDepth < 0.1 ? `< ${formatNumber(loc.numberStyle, 0.1, 1)}` : formatNumber(loc.numberStyle, d.maxFillDepth, 1),
+      t(loc.lang, d.onFlowLine ? 'table.yes' : 'table.no'),
     ]);
     // The depth column is the widest, so the count row sits there.
-    if (rest > 0) rows.push(['', '', t(lang, 'network.plusShallower', { count: rest, depth: formatHeight(lang, 0.1) }), '']);
-    right = table(right, cols(right, [[t(lang, 'table.rank'), 'left', 0.17], [`${t(lang, 'table.area')} (m²)`, 'right', 0.22], [`${t(lang, 'table.depth')} (m)`, 'right', 0.33], [t(lang, 'table.onChannel'), 'right', 0.28]]),
+    if (rest > 0) rows.push(['', '', t(loc.lang, 'network.plusShallower', { count: rest, depth: formatHeight(loc.numberStyle, 0.1) }), '']);
+    right = table(right, cols(right, [[t(loc.lang, 'table.rank'), 'left', 0.17], [`${t(loc.lang, 'table.area')} (m²)`, 'right', 0.22], [`${t(loc.lang, 'table.depth')} (m)`, 'right', 0.33], [t(loc.lang, 'table.onChannel'), 'right', 0.28]]),
       rows, fonts, { size: sc.table });
   }
 }
 
 // --- Quality, method and limits -----------------------------------------------------------
 
-function drawQuality(c: PageCursor, model: WatershedReportModel, lang: ReportLanguage, fonts: ReportFonts, sc: Scale, names?: Readonly<Record<string, string>>): void {
-  let cur = pageHeading(c, t(lang, 'quality.kicker'), t(lang, 'quality.title'), null, fonts);
+function drawQuality(c: PageCursor, model: WatershedReportModel, loc: ReportLocale, fonts: ReportFonts, sc: Scale, names?: Readonly<Record<string, string>>): void {
+  let cur = pageHeading(c, t(loc.lang, 'quality.kicker'), t(loc.lang, 'quality.title'), null, fonts);
   const p = model.provenance;
   const ts = { size: sc.table };
 
-  cur = sectionTitle(cur, t(lang, 'quality.verdictsTitle'), fonts);
+  cur = sectionTitle(cur, t(loc.lang, 'quality.verdictsTitle'), fonts);
   if (model.sections.length === 0) {
-    cur = paragraph(cur, t(lang, 'quality.noCatchment'), fonts, { size: sc.body });
+    cur = paragraph(cur, t(loc.lang, 'quality.noCatchment'), fonts, { size: sc.body });
   } else {
-    cur = paragraph(cur, t(lang, 'quality.rule', {
-      measured: formatPercent(lang, SUPPORTED_MEASURED_SHARE, 0),
-      channel: formatPercent(lang, SUPPORTED_CHANNEL_INTERPOLATED_SHARE, 0),
+    cur = paragraph(cur, t(loc.lang, 'quality.rule', {
+      measured: formatPercent(loc.numberStyle, SUPPORTED_MEASURED_SHARE, 0),
+      channel: formatPercent(loc.numberStyle, SUPPORTED_CHANNEL_INTERPOLATED_SHARE, 0),
       cells: MAX_FAR_INTERPOLATED_RUN,
     }), fonts, { size: sc.body });
     cur = table(cur, cols(cur, [
-      [t(lang, 'table.catchment'), 'left', 0.16], [t(lang, 'table.verdict'), 'left', 0.17],
-      [`${t(lang, 'quality.measuredShare')} (%)`, 'right', 0.19], [`${t(lang, 'quality.channelInterpolated')} (%)`, 'right', 0.27],
-      [t(lang, 'quality.pointDensity'), 'right', 0.21],
+      [t(loc.lang, 'table.catchment'), 'left', 0.16], [t(loc.lang, 'table.verdict'), 'left', 0.17],
+      [`${t(loc.lang, 'quality.measuredShare')} (%)`, 'right', 0.19], [`${t(loc.lang, 'quality.channelInterpolated')} (%)`, 'right', 0.27],
+      [t(loc.lang, 'quality.pointDensity'), 'right', 0.21],
     ]), model.sections.map((s) => [
-      displayName(s.label, names), t(lang, verdictKey(s.quality.verdict)), formatNumber(lang, s.quality.measuredShare * 100, 1),
-      formatNumber(lang, s.quality.channelInterpolatedShare * 100, 1),
-      densityText(lang, s.quality.groundPointsPerM2),
+      displayName(s.label, names), t(loc.lang, verdictKey(s.quality.verdict)), formatNumber(loc.numberStyle, s.quality.measuredShare * 100, 1),
+      formatNumber(loc.numberStyle, s.quality.channelInterpolatedShare * 100, 1),
+      densityText(loc, s.quality.groundPointsPerM2),
     ]), fonts, ts);
     for (const s of model.sections) {
-      const parts = [...qualityReasons(s.quality, lang)];
-      if (isOpen(s)) parts.push(t(lang, 'summary.edgeShare', { share: formatPercent(lang, s.edgeInflowShare, 0) }));
+      const parts = [...qualityReasons(s.quality, loc)];
+      if (isOpen(s)) parts.push(t(loc.lang, 'summary.edgeShare', { share: formatPercent(loc.numberStyle, s.edgeInflowShare, 0) }));
       cur = paragraph(cur, parts.join(' '), fonts, { lead: `${s.label}.`, size: sc.body });
     }
   }
 
-  cur = sectionTitle(cur, t(lang, 'limits.title'), fonts);
+  cur = sectionTitle(cur, t(loc.lang, 'limits.title'), fonts);
   // The catchment pages are the ones that omit a time of concentration, so a
   // sheet with no studied catchment has no such pages to describe.
   const limits = [
-    t(lang, 'limits.terrainOnly'), t(lang, 'limits.d8', { bias: formatPercent(lang, D8_BIAS, 1) }), t(lang, 'limits.filled'),
-    t(lang, 'limits.interpolated'), t(lang, 'limits.open'),
-    ...(model.sections.length > 0 ? [t(lang, 'limits.notComputed')] : []),
-    t(lang, 'limits.screening'),
+    t(loc.lang, 'limits.terrainOnly'), t(loc.lang, 'limits.d8', { bias: formatPercent(loc.numberStyle, D8_BIAS, 1) }), t(loc.lang, 'limits.filled'),
+    t(loc.lang, 'limits.interpolated'), t(loc.lang, 'limits.open'),
+    ...(model.sections.length > 0 ? [t(loc.lang, 'limits.notComputed')] : []),
+    t(loc.lang, 'limits.screening'),
   ];
   // Two columns of numbered limits, numbered down the left column first.
   const mid = Math.round((cur.left + cur.right) / 2);
@@ -675,15 +693,15 @@ function drawQuality(c: PageCursor, model: WatershedReportModel, lang: ReportLan
   const colR = numberedFrom(half + 1, { ...cur, left: mid + 10 }, limits.slice(half), fonts, sc.body);
   cur = { ...cur, y: Math.min(colL.y, colR.y) };
 
-  cur = sectionTitle(cur, t(lang, 'method.title'), fonts);
-  table(cur, cols(cur, [[t(lang, 'table.parameter'), 'left', 0.28], [t(lang, 'table.value'), 'left', 0.72]]), [
-    [t(lang, 'method.methods'), t(lang, 'method.methodsList')],
-    [t(lang, 'method.threshold'), formatArea(lang, model.network.thresholdM2)],
+  cur = sectionTitle(cur, t(loc.lang, 'method.title'), fonts);
+  table(cur, cols(cur, [[t(loc.lang, 'table.parameter'), 'left', 0.28], [t(loc.lang, 'table.value'), 'left', 0.72]]), [
+    [t(loc.lang, 'method.methods'), t(loc.lang, 'method.methodsList')],
+    [t(loc.lang, 'method.threshold'), formatArea(loc.numberStyle, model.network.thresholdM2)],
     // The methods line already names Priority-Flood filling, so depression handling has no row of its own.
-    [t(lang, 'method.vertical'), t(lang, model.site.verticalResolved ? 'method.verticalMetres' : 'method.verticalUnresolved')],
-    [t(lang, 'method.runDigest'), halves(p.runDigest)],
-    [t(lang, 'method.fieldDigest'), halves(p.fieldDigest)],
-    ...(p.sourceSha256 ? [[t(lang, 'method.sourceSha256'), halves(p.sourceSha256)]] : []),
+    [t(loc.lang, 'method.vertical'), t(loc.lang, model.site.verticalResolved ? 'method.verticalMetres' : 'method.verticalUnresolved')],
+    [t(loc.lang, 'method.runDigest'), halves(p.runDigest)],
+    [t(loc.lang, 'method.fieldDigest'), halves(p.fieldDigest)],
+    ...(p.sourceSha256 ? [[t(loc.lang, 'method.sourceSha256'), halves(p.sourceSha256)]] : []),
   ], fonts, { size: sc.table });
 }
 
@@ -699,10 +717,10 @@ const APPENDIX_ROWS = [
   'hypsometry', 'meanSlope', 'channelLength', 'slope1085', 'taylorSchwarz', 'strahler', 'fill', 'edge',
 ] as const;
 
-function drawAppendix(c: PageCursor, lang: ReportLanguage, fonts: ReportFonts, sc: Scale): void {
-  const cur = pageHeading(c, t(lang, 'appendix.kicker'), t(lang, 'appendix.title'), null, fonts);
-  table(cur, cols(cur, [[t(lang, 'table.term'), 'left', 0.19], [t(lang, 'table.definition'), 'left', 0.46], [t(lang, 'table.source'), 'left', 0.35]]),
+function drawAppendix(c: PageCursor, loc: ReportLocale, fonts: ReportFonts, sc: Scale): void {
+  const cur = pageHeading(c, t(loc.lang, 'appendix.kicker'), t(loc.lang, 'appendix.title'), null, fonts);
+  table(cur, cols(cur, [[t(loc.lang, 'table.term'), 'left', 0.19], [t(loc.lang, 'table.definition'), 'left', 0.46], [t(loc.lang, 'table.source'), 'left', 0.35]]),
     APPENDIX_ROWS.map((id) => [
-      t(lang, `appendix.${id}.term` as StringKey), t(lang, `appendix.${id}.def` as StringKey), t(lang, `appendix.${id}.source` as StringKey),
+      t(loc.lang, `appendix.${id}.term` as StringKey), formulaText(loc, `appendix.${id}.def` as StringKey), t(loc.lang, `appendix.${id}.source` as StringKey),
     ]), fonts, { size: sc.table });
 }

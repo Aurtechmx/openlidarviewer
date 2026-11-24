@@ -157,6 +157,8 @@ function rig(chunkCount = 2): Rig {
       unitFrameOf: () => ({ geographic: false, verticalRefused: false }),
       getSummaries: () => [profileSummary()],
       removeMeasurement: (id: string) => { removed.push(id); return { measurement: { id, name: id }, index: 0, epoch: 0 }; },
+      sceneOrigin: null,
+      elevationDatum: null,
       profileCorridorOf: () => null,
       renameMeasurement: () => {},
       resampleProfile: () => {},
@@ -164,6 +166,7 @@ function rig(chunkCount = 2): Rig {
     },
     measureMode: false,
     clouds: () => [{}],
+    classificationEpoch: () => 0,
     profileSeam: { section, sectionChunks },
     requestFrame: () => {},
   };
@@ -201,7 +204,7 @@ const dockOf = (r: Rig): FakeEl | null => r.appRoot.querySelector('section.olv-w
 async function openDock(r: Rig): Promise<void> {
   await r.mount.ensure();
   const panel = r.mount.panel!;
-  const expand = (panel.element as unknown as FakeEl).querySelector('button.olv-mp-chart-expand');
+  const expand = (panel.element as unknown as FakeEl).querySelector('button.olv-mp-open-workbench');
   expect(expand).not.toBeNull();
   expand!.dispatchEvent({ type: 'click', stopPropagation: () => {} });
   await settleUntil(() => dockOf(r) !== null);
@@ -235,12 +238,32 @@ describe('the mount hands the presenter the corridor generator', () => {
   });
 });
 
+describe('the dock exports its returns', () => {
+  it('offers the control, and says on the panel why nothing was saved', async () => {
+    const r = rig(1);
+    await openDock(r);
+    const button = [...(dockOf(r)!.querySelectorAll('button') as unknown as FakeEl[])].find((b) => b.textContent === 'Export returns')!;
+    expect(button).toBeDefined();
+    button.dispatchEvent({ type: 'click', stopPropagation: () => {} });
+    await settleUntil(() => statusOf(r).startsWith('The section is still'));
+    expect(statusOf(r)).toBe('The section is still being read. Export again when it has finished.');
+
+    while (frames.length > 0) frames.shift()!();
+    await settleUntil(() => button.textContent === 'Export returns');
+    r.profile.pickLayers = ['closed-scan'];
+    button.dispatchEvent({ type: 'click', stopPropagation: () => {} });
+    await settleUntil(() => statusOf(r).startsWith('Not exported'));
+    expect(statusOf(r)).toMatch(/^Not exported: a scan this profile was measured on is not open/);
+    expect(button.disabled).toBe(false);
+  });
+});
+
 describe('the dock opens only on a settled source', () => {
   /** Press Expand, then wait for the stored chart's dialog, which opens in place of a refused dock. */
   const pressExpandAndFallBack = async (r: Rig): Promise<void> => {
     const body = new FakeEl('body');
     (globalThis as unknown as { document: { body: FakeEl } }).document.body = body;
-    const expand = (r.mount.panel!.element as unknown as FakeEl).querySelector('button.olv-mp-chart-expand');
+    const expand = (r.mount.panel!.element as unknown as FakeEl).querySelector('button.olv-mp-open-workbench');
     expand!.dispatchEvent({ type: 'click', stopPropagation: () => {} });
     await settleUntil(() => body.querySelector('div.olv-result-focus') !== null);
     expect(body.querySelector('div.olv-result-focus')).not.toBeNull();
@@ -292,9 +315,9 @@ describe('the dock does not outlive what it is a section of', () => {
     while (frames.length > 0) frames.shift()!();
     expect(dockOf(r)).not.toBeNull();
 
-    const del = (r.mount.panel!.element as unknown as FakeEl).querySelector('button.olv-mp-del');
+    const del = (r.mount.panel!.element as unknown as FakeEl).querySelector('button.olv-mp-profile-clear');
     expect(del).not.toBeNull();
-    del!.dispatchEvent({ type: 'click' });
+    del!.dispatchEvent({ type: 'click', stopPropagation: () => {} });
 
     expect(r.removed).toEqual(['p1']);
     expect(dockOf(r)).toBeNull();

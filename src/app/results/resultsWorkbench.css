@@ -23,6 +23,13 @@
   outline: 2px solid var(--accent);
   outline-offset: 2px;
 }
+/* A type's heading with the control that exports every result under it. */
+.olv-results-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-xs);
+}
 .olv-mp-open-workbench {
   appearance: none;
   display: block;

@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   buildProfileReturnsCsv,
+  profileReturnsCsvChunks,
   type ProfileReturnsCsvOptions,
   type ProfileReturnsSource,
 } from '../src/render/measure/profileReturnsCsv';
@@ -152,8 +153,8 @@ describe('profile returns CSV — absent channels', () => {
   it('leaves x/y/z blank for a layer that supplied no coordinates', () => {
     const { csv } = buildProfileReturnsCsv(mixedSection(), baseOptions(MIXED_SOURCES));
     const { header, body } = rowsOf(csv);
-    expect(col(header, body, 'x')).toEqual(['500000.111', '500001.000', '']);
-    expect(col(header, body, 'z')).toEqual(['100.250', '101.500', '']);
+    expect(col(header, body, 'x')).toEqual(['500000.111', '500001', '']);
+    expect(col(header, body, 'z')).toEqual(['100.25', '101.5', '']);
   });
 });
 
@@ -273,6 +274,7 @@ describe('profile returns CSV — receipt', () => {
       system: 'metric',
       unitName: 'metre',
       metresPerUnit: 1,
+      verticalMetresPerUnit: null,
       crs: 'NAD83 / UTM zone 13N (EPSG:26913)',
     });
     expect(receipt.vertical.label).toBe('Elevation');
@@ -395,5 +397,66 @@ describe('profile returns CSV — shape', () => {
     );
     expect(rowsOf(csv).body).toHaveLength(0);
     expect(receipt.acceptedCount).toBe(0);
+  });
+});
+
+describe('profile returns CSV: what a live source can do to a row', () => {
+  it('writes a value the source flags invalid as an empty cell, as the point CSV does', () => {
+    const { csv } = buildProfileReturnsCsv(mixedSection(), baseOptions([
+      { ...MIXED_SOURCES[0]!, attributeInvalid: new Uint8Array([2, 1]) },
+      MIXED_SOURCES[1]!,
+    ]));
+    const { header, body } = rowsOf(csv);
+    expect(col(header, body, 'intensity')).toEqual(['', '7', '']);
+    expect(col(header, body, 'r')).toEqual(['10', '', '']);
+  });
+
+  it('names a rescaled intensity as normalised', () => {
+    const { csv, receipt } = buildProfileReturnsCsv(mixedSection(), baseOptions([
+      { ...MIXED_SOURCES[0]!, intensityNote: 'intensity: normalised' }, MIXED_SOURCES[1]!,
+    ]));
+    const { header } = rowsOf(csv);
+    expect(header).toContain('intensity_normalised');
+    expect(header).not.toContain('intensity');
+    expect(receipt.sources[0]!.intensityNote).toBe('intensity: normalised');
+  });
+
+  it('keeps every digit a coordinate holds, in plain decimals', () => {
+    const { csv } = buildProfileReturnsCsv(mixedSection(), baseOptions([
+      { ...MIXED_SOURCES[0]!, readXYZ: (_i, out) => { out[0] = 500000.12345; out[1] = -1.5e-8; out[2] = 0; return true; } },
+    ]));
+    const { header, body } = rowsOf(csv);
+    expect(col(header, body, 'x')[0]).toBe('500000.12345');
+    expect(col(header, body, 'y')[0]).toBe('-0.000000015');
+    expect(col(header, body, 'z')[0]).toBe('0');
+  });
+
+  it('counts the rows left without a coordinate by reason', () => {
+    const { csv, receipt } = buildProfileReturnsCsv(mixedSection(), baseOptions([
+      { ...MIXED_SOURCES[0]!, readXYZ: (i, out) => { out.fill(1); return i === 0; } },
+      { slot: 1, layerId: 'L1', layerName: 'scan', streamingNodeKey: '0-0-0-0', missing: 'evicted' },
+    ]));
+    expect(receipt.coordinates).toEqual({ written: 1, blankEvicted: 1, blankUnavailable: 0, blankUnmatched: 1 });
+    expect(col(rowsOf(csv).header, rowsOf(csv).body, 'x')).toEqual(['1', '', '']);
+  });
+
+  it('never lets a non-finite coordinate through as a partial row', () => {
+    const { csv, receipt } = buildProfileReturnsCsv(mixedSection(), baseOptions([
+      { ...MIXED_SOURCES[0]!, readXYZ: (_i, out) => { out[0] = 1; out[1] = Number.NaN; out[2] = 3; return true; } },
+    ]));
+    expect(col(rowsOf(csv).header, rowsOf(csv).body, 'x')).toEqual(['', '', '']);
+    expect(receipt.coordinates.written).toBe(0);
+  });
+
+  it('writes the same bytes in chunks as whole', () => {
+    const options = baseOptions(MIXED_SOURCES);
+    const it = profileReturnsCsvChunks(mixedSection(), options, 1);
+    const chunks: string[] = [];
+    let step = it.next();
+    while (!step.done) { chunks.push(step.value); step = it.next(); }
+    const whole = buildProfileReturnsCsv(mixedSection(), options);
+    expect(chunks).toHaveLength(3);
+    expect(chunks.join('')).toBe(whole.csv);
+    expect(step.value).toEqual(whole.receipt);
   });
 });

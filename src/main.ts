@@ -595,7 +595,7 @@ const lassoVolumeTool = new LassoVolumeTool(stage.canvas, {
     const crsCaveat = volumeUnitCaveat(ctx);
     showLassoToast(
       `${stock?.headline ?? `Volume · net ${formatVolumeNumber(out.result.net * vol)} m³`} · ` +
-        `footprint ${areaM2} m² · ${out.selectedCount.toLocaleString()} points${budgetCaption}${crsCaveat} · ${out.selectionBasis.clause}.${stock?.suffix ?? ''} Estimate from the point cloud, not survey-grade.`,
+        `footprint ${areaM2} m² · ${out.selectedCount.toLocaleString('en-US')} points${budgetCaption}${crsCaveat} · ${out.selectionBasis.clause}.${stock?.suffix ?? ''} Estimate from the point cloud, not survey-grade.`,
       pendingLassoSave && crsVerdict.canSaveMeasurement
         ? { label: 'Save to session', onClick: saveLassoVolumeIfPending }
         : undefined,
@@ -1044,7 +1044,7 @@ const inspector = new Inspector({
   onToggleLock: (id, locked) => viewer.setCloudLocked(id, locked),
   onCompareLayers: compareLoadedLayers,
   onExportDifference: () => inspector.compareDifference.download(downloadText),
-  compareScene: { slot: layers, ids: () => viewer.clouds(), lookup: (id) => viewer.getCloud(id), stableIdFor: (id) => runtime.layerIdentity.stableIdFor(id) },
+  compareScene: { slot: layers, ids: () => viewer.clouds(), lookup: (id) => viewer.getCloud(id), stableIdFor: (id) => runtime.layerIdentity.stableIdFor(id), inputKeyFor: (id) => { const c = viewer.getCloud(id); return c ? JSON.stringify([crsService.resolveFor({ name: c.name, detected: c.metadata?.crs ?? undefined, source: 'las-vlr', identity: datasetIdentity(c) }), viewer.classificationEpoch(id)]) : ''; } },
   onSaveView: saveCurrentView,
   onApplyView: (index) => applyView(index),
   onRenameView: (index, name) => {

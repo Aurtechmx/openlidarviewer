@@ -177,7 +177,8 @@ export class CommandPalette {
   private _refresh(): void {
     const query = this._input.value;
     // In painted order: rows are grouped by section, and a row's index must name the command it shows.
-    this._ranked = groupBySection(rankActions(query, [...this._actions, ...this._extra])).flatMap((g) => g.rows);
+    const listed = [...this._actions, ...this._extra].filter((a) => query.trim() !== '' || !a.searchOnly);
+    this._ranked = groupBySection(rankActions(query, listed)).flatMap((g) => g.rows);
     this._selected = this._ranked.length > 0 ? 0 : -1;
     this._render();
   }

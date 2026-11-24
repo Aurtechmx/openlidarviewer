@@ -30,6 +30,10 @@
  * one addEventListener registration (skipped when no event target exists).
  */
 
+import { RELOAD_ADVICE } from '../io/loadErrors';
+
+export { RELOAD_ADVICE };
+
 /** Whether a caught failure is a swept-away code chunk, or an ordinary error. */
 export type StaleChunkVerdict = 'stale-chunk' | 'other';
 
@@ -282,7 +286,7 @@ export function chunkReloadAction(): { label: string; onClick: () => void } | un
 /** A failed chunk, in words: what could not load, the next step, and what that step costs. */
 export function chunkFailureText(what: string): string {
   if (!browserOnline()) return `${what} could not load. You are offline. Try again when back online.`;
-  return `${what} could not load. Reload the page to try again. A reload closes open scans, so save your session first if you can.`;
+  return `${what} could not load. ${RELOAD_ADVICE}`;
 }
 
 /** Note that a failure was shown, so the safety net does not repeat it. */

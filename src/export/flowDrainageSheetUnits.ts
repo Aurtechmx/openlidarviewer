@@ -1,11 +1,15 @@
 /**
- * flowDrainageSheetUnits.ts: the linear unit of the drainage sheet's frame.
- * and why the catchment study is unavailable. Kept apart from the PDF builder
- * so the Lab can name both without loading pdf-lib.
+ * flowDrainageSheetUnits.ts: the linear unit of the drainage sheet's frame,
+ * the languages it is written in and why the catchment study is unavailable. Kept apart from the PDF builder
+ * so the Lab can name them without loading pdf-lib.
  */
 
 import { UNIT_FACTORS } from '../units/units';
+import type { ReportLanguage } from '../simulation/flowPulse/watershed/watershedReportModel';
 import type { ReportGate } from '../simulation/flowPulse/watershed/reportGate';
+
+/** The languages the sheet's catalogs have. */
+export const DRAINAGE_SHEET_LANGUAGES: readonly ReportLanguage[] = ['en', 'es'];
 
 export type DrainageLinearUnit = 'metre' | 'foot' | 'us-survey-foot' | 'unknown';
 

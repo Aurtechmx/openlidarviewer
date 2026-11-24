@@ -368,7 +368,7 @@ export function buildViewerKeyBindings(
     // ── main.ts:753 group (isEditableTarget guard on all three) ──────────
     {
       id: 'space-reorient',
-      help: 'Hold while a tool is active to rotate or pan, then release to resume.',
+      help: 'Hold while a tool is active to orbit or pan, then release to resume.',
       match: { code: 'Space' },
       priority: 100,
       contextTag: 'tool-active',
@@ -622,7 +622,7 @@ export function buildViewerKeyBindings(
     //    Present so a future collision lint knows they are taken. ──────────
     {
       id: 'reserved-nav-controller',
-      help: 'Navigation: 1 to 4 pick the mode, R frames the scan, F focuses the centre, H shows or hides the navigation panel, G toggles the hand tool, WASD and the arrows move.',
+      help: 'Navigation: 1 to 4 pick the mode, R frames the scan, F focuses the centre, H shows or hides the navigation panel, G toggles Pan, WASD and the arrows move.',
       // Real `key` values (not `e.code` strings), so the collision lint reads
       // them as occupied slots and can catch a dispatched binding placed on a
       // nav key in a shared scope. Both cases are listed because the lint

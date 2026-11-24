@@ -249,7 +249,7 @@ export function evaluateContourStudioLaunchState(
     status: 'available',
     title: 'Contour deliverable available',
     message:
-      'The analyzed terrain surface, recommended grid and interval, and validation ' +
+      'The analysed terrain surface, recommended grid and interval, and validation ' +
       'limits are ready to export as a contour deliverable.',
     visible: true,
     actionEnabled: true,

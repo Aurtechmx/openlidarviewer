@@ -67,9 +67,9 @@ describe('drawHypsometricCurve', () => {
     const s = fresh();
     const relArea = Float64Array.from({ length: 21 }, (_, k) => 1 - (k / 20) ** 0.7);
     const relHeight = Float64Array.from({ length: 21 }, (_, k) => k / 20);
-    drawHypsometricCurve(pageOf(s), BOX, { value: { relArea, relHeight, integral: 0.4372 } }, 'es', fonts);
+    drawHypsometricCurve(pageOf(s), BOX, { value: { relArea, relHeight, integral: 0.4372 } }, { lang: 'es', numberStyle: 'comma' }, fonts);
     const all = s.texts.map((t) => t.text).join(' ');
-    expect(all).toContain(`IH = ${formatNumber('es', 0.4372, 2)}`);
+    expect(all).toContain(`IH = ${formatNumber('comma', 0.4372, 2)}`);
     expect(all).toContain('Curva hipsométrica');
     // the curve closes at (0, 1): its path runs to the top-left of the plot
     expect(s.paths.length).toBeGreaterThan(0);
@@ -78,7 +78,7 @@ describe('drawHypsometricCurve', () => {
 
   it('says why when the curve is withheld', () => {
     const s = fresh();
-    drawHypsometricCurve(pageOf(s), BOX, { withheld: 'vertical-unresolved' }, 'en', fonts);
+    drawHypsometricCurve(pageOf(s), BOX, { withheld: 'vertical-unresolved' }, { lang: 'en', numberStyle: 'point' }, fonts);
     expect(s.texts.map((t) => t.text).join(' ')).toMatch(/Not drawn/);
     inside(s, BOX);
   });
@@ -89,7 +89,7 @@ describe('drawChannelProfile', () => {
     const s = fresh();
     // three interpolated runs: one at the divide end, one in the middle, one single cell
     const interp = [1, 1, 0, 0, 0, 1, 1, 1, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
-    drawChannelProfile(pageOf(s), BOX, channel(interp), 'en', fonts);
+    drawChannelProfile(pageOf(s), BOX, channel(interp), { lang: 'en', numberStyle: 'point' }, fonts);
     const all = s.texts.map((t) => t.text).join(' ');
     expect(all).toMatch(/vertical exaggeration [\d.,]+×/);
     const dashed = s.paths.filter((p) => JSON.stringify(p.dash) === JSON.stringify(PROFILE_INTERPOLATED_DASH));
@@ -99,7 +99,7 @@ describe('drawChannelProfile', () => {
 
   it('draws no dashed stretch over fully measured ground', () => {
     const s = fresh();
-    drawChannelProfile(pageOf(s), BOX, channel(new Array(12).fill(0)), 'es', fonts);
+    drawChannelProfile(pageOf(s), BOX, channel(new Array(12).fill(0)), { lang: 'es', numberStyle: 'comma' }, fonts);
     expect(s.paths.filter((p) => JSON.stringify(p.dash) === JSON.stringify(PROFILE_INTERPOLATED_DASH))).toHaveLength(0);
     expect(s.texts.map((t) => t.text).join(' ')).toMatch(/exageración vertical/);
     inside(s, BOX);

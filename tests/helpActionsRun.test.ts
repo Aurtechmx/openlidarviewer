@@ -74,10 +74,10 @@ describe('Help actions', () => {
     for (const id of ['help.copy-diagnostics', 'help.offline-save', 'help.offline-remove', 'help.session-recovery-clear']) a.run(id);
     await settle();
     expect(a.notify.mock.calls.map((c) => c[0])).toEqual([
-      'Could not load the diagnostics report. Nothing was changed. Reload the page and try again.',
-      'Could not start the offline download. Reload the page and try again.',
-      'Could not remove the offline copy. Reload the page and try again.',
-      'Could not clear recovery data. Reload the page and try again.',
+      'Could not load the diagnostics report. Nothing was changed. Reload the page to try again; a reload closes open scans, so save your session first if you can.',
+      'Could not start the offline download. Reload the page to try again; a reload closes open scans, so save your session first if you can.',
+      'Could not remove the offline copy. Reload the page to try again; a reload closes open scans, so save your session first if you can.',
+      'Could not clear recovery data. Reload the page to try again; a reload closes open scans, so save your session first if you can.',
     ]);
   });
 
@@ -87,7 +87,7 @@ describe('Help actions', () => {
     a.run('help.session-recovery-clear');
     await settle();
     expect(a.notify.mock.calls.map((c) => c[0])).toEqual([
-      'Could not clear recovery data. Reload the page and try again.',
+      'Could not clear recovery data. Reload the page to try again; a reload closes open scans, so save your session first if you can.',
     ]);
   });
 
@@ -115,7 +115,7 @@ describe('Help actions', () => {
     await settle();
     expect(recovery.on).toBe(false);
     expect(a.notify.mock.calls.map((c) => c[0])).toEqual([
-      'Session recovery is off. Could not clear recovery data. Reload the page and try again.',
+      'Session recovery is off. Could not clear recovery data. Reload the page to try again; a reload closes open scans, so save your session first if you can.',
     ]);
   });
 

@@ -382,13 +382,21 @@ export function aggregate(
   const fH = Number.isFinite(unitToMetres) && unitToMetres > 0 ? unitToMetres : 1;
   const fV = Number.isFinite(verticalUnitToMetres) && verticalUnitToMetres > 0 ? verticalUnitToMetres : fH;
   const values: number[] = [];
+  /** The panel's caption for each contributing member it grades red. */
+  const unverified: string[] = [];
   for (const m of measurements) {
     const v = valueForDimension(m, dimension, worldUp, fH, fV);
-    if (v !== null && Number.isFinite(v)) values.push(v);
+    if (v === null || !Number.isFinite(v)) continue;
+    values.push(v);
+    if (m.trust?.grade === 'red') unverified.push(m.trust.caption);
   }
   const contributingCount = values.length;
   const clipLeftOut = dimension === 'volume-fill' && measurements.some((m) => m.kind === 'box' && m.clipRegion === true);
-  const note = clipLeftOut ? CHAIN_CLIP_REGION_LEFT_OUT : undefined;
+  const clipNote = clipLeftOut ? CHAIN_CLIP_REGION_LEFT_OUT : undefined;
+  const supportNote = unverified.length > 0
+    ? `${unverified.length} of ${contributingCount} graded red: ${[...new Set(unverified)].join('; ')}`
+    : undefined;
+  const note = [clipNote, supportNote].filter((n) => n !== undefined).join('; ') || undefined;
   const volumeDimension = dimension === 'volume-fill' || dimension === 'volume-cut' || dimension === 'volume-net';
   if (volumeDimension && contributingCount === 0 && operation !== 'count' && measurements.length > 0) {
     // The first member with a reason of its own lends the chain that reason.
@@ -401,7 +409,7 @@ export function aggregate(
       if (reason !== null) break;
     }
     const refusal = reason
-      ? `${reason}${note ? ` ${note[0]!.toUpperCase()}${note.slice(1)}.` : ''}`
+      ? `${reason}${clipNote ? ` ${clipNote[0]!.toUpperCase()}${clipNote.slice(1)}.` : ''}`
       : clipLeftOut ? CHAIN_CLIP_REGION_WITHHELD : CHAIN_NO_MEASURED_VOLUME;
     return { value: Number.NaN, unit: '', contributingCount: 0, totalCount, operation, dimension, refusal };
   }
@@ -519,9 +527,10 @@ export function formatChainResult(result: ChainResult, system: UnitSystem = 'met
     return `${result.value} of ${result.totalCount}`;
   }
   if (!Number.isFinite(result.value)) return '—';
+  const note = result.note ? ` (${result.note})` : '';
   // Angles and grades read at 1 decimal, as the panel prints them.
   if (result.dimension === 'angle' || result.dimension === 'grade') {
-    return `${result.value.toFixed(1)} ${result.unit}`.trim();
+    return `${`${result.value.toFixed(1)} ${result.unit}`.trim()}${note}`;
   }
   const sign = result.value < 0 ? '-' : '';
   const abs = Math.abs(result.value);
@@ -539,5 +548,5 @@ export function formatChainResult(result: ChainResult, system: UnitSystem = 'met
     default:
       text = `${abs.toFixed(displayDecimals(abs, 2, 4))} ${result.unit}`.trim();
   }
-  return `${sign}${text}${result.note ? ` (${result.note})` : ''}`;
+  return `${sign}${text}${note}`;
 }

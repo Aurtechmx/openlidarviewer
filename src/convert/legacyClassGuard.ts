@@ -75,7 +75,7 @@ export function countLegacyClassWrap(classification: Uint8Array | null | undefin
  */
 export function legacyClassWrapRefusal(wrap: LegacyClassWrap): string {
   const loss = describeLoss(inspectLegacyConversion(wrap.codes), FIRST_EXTENDED_PDRF);
-  const points = `${wrap.points.toLocaleString()} point${wrap.points === 1 ? '' : 's'}`;
+  const points = `${wrap.points.toLocaleString('en-US')} point${wrap.points === 1 ? '' : 's'}`;
   return (
     `LAS 1.2 was not written. In ${points}, ${loss}. Choose LAS 1.4 to keep them, ` +
     `or tick "${LEGACY_CLASS_WRAP_OPT_IN}" to write each as its low 5 bits.`
@@ -87,7 +87,7 @@ export function legacyClassWrapWarning(points: number): string {
   const tail = 'so 33 reads back as 1 and 64 as 0; use LAS 1.4 to preserve them.';
   return points === 1
     ? `LAS 1.2 stores 5-bit classes — 1 point with a class > 31 wraps to its low 5 bits (class & 31), ${tail}`
-    : `LAS 1.2 stores 5-bit classes — ${points.toLocaleString()} points with classes > 31 wrap to their low 5 bits (class & 31), ${tail}`;
+    : `LAS 1.2 stores 5-bit classes — ${points.toLocaleString('en-US')} points with classes > 31 wrap to their low 5 bits (class & 31), ${tail}`;
 }
 
 /**
@@ -129,7 +129,7 @@ export function countLegacyReturnClamp(
 }
 
 function pointsLabel(points: number): string {
-  return `${points.toLocaleString()} point${points === 1 ? '' : 's'}`;
+  return `${points.toLocaleString('en-US')} point${points === 1 ? '' : 's'}`;
 }
 
 /** The refusal, with the count and both ways forward. */

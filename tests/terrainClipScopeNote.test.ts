@@ -24,6 +24,8 @@ describe('the Terrain page with a clip box active', () => {
     expect(note.textContent).toBe(CLIP_SCOPE_NOTE);
     // The gather reads loaded points, which a reduced load, a stream or the
     // gather's cap can make a sample; the note must not promise the whole file.
+    expect(CLIP_SCOPE_NOTE).toMatch(/terrain analysis ignores it and reads the loaded points of the visible scans inside and outside the box/);
+    expect(CLIP_SCOPE_NOTE).toMatch(/Results and terrain exports are not limited to the box/);
     expect(CLIP_SCOPE_NOTE).not.toMatch(/whole scan|whole file|every point/);
     expect(panel.clipScopeNoteShown()).toBe(false);
     panel.setClipScopeNote(true);

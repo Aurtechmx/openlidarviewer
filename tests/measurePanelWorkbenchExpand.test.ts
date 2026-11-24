@@ -48,7 +48,7 @@ function profileSummary(id = 'p1', name = 'Section A'): MeasurementSummary {
   return { id, kind: 'profile', name, value: '70.00 m', profileChart };
 }
 
-/** Mount a panel and hand back its Expand button and the chart wrapper. */
+/** Mount a panel and hand back the control that expands the profile (the labelled button, or the chart without a workbench) and the chart. */
 function mountPanel(
   openProfileWorkbench?: (s: MeasurementSummary) => Promise<boolean>,
 ): { panel: MeasurePanel; expand: FakeEl; wrap: FakeEl } {
@@ -62,10 +62,10 @@ function mountPanel(
   });
   panel.update([profileSummary()]);
   const root = panel.element as unknown as FakeEl;
-  const expand = root.querySelector('button.olv-mp-chart-expand');
-  expect(expand).not.toBeNull();
   const wrap = root.querySelector('div.olv-mp-chart-wrap');
   expect(wrap).not.toBeNull();
+  const expand = openProfileWorkbench ? root.querySelector('button.olv-mp-open-workbench') : wrap;
+  expect(expand).not.toBeNull();
   return { panel, expand: expand!, wrap: wrap! };
 }
 
@@ -203,8 +203,8 @@ describe('a rejected open is a refusal, not an unhandled rejection', () => {
 
 describe('the Expand control names the surface it actually opens', () => {
   it('says a dock on a wide viewport and a focus view otherwise, when one is offered', () => {
-    const { expand, wrap } = mountPanel(() => Promise.resolve(true));
-    for (const node of [expand, wrap]) {
+    const { wrap } = mountPanel(() => Promise.resolve(true));
+    for (const node of [wrap]) {
       const name = node.getAttribute('aria-label')!;
       expect(name).toContain('docked section workbench');
       expect(name).toContain('wide viewport');
@@ -216,8 +216,8 @@ describe('the Expand control names the surface it actually opens', () => {
   });
 
   it('promises the focus view alone when no host wired a workbench', () => {
-    const { expand, wrap } = mountPanel();
-    for (const node of [expand, wrap]) {
+    const { wrap } = mountPanel();
+    for (const node of [wrap]) {
       expect(node.getAttribute('aria-label')).toBe('Expand profile Section A to a focus view');
       expect(node.title).not.toContain('workbench');
     }

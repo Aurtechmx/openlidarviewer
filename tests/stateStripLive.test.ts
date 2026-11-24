@@ -208,7 +208,7 @@ describe('strip UI', () => {
     expect(btn().hidden).toBe(true);
     strip.render(readStrip(reads({ clip: () => ({ kept: 16739, total: 31839 }) })));
     expect(btn().hidden).toBe(false);
-    expect(btn().textContent).toContain(`Clipped: ${(16739).toLocaleString()} of ${(31839).toLocaleString()} points`);
+    expect(btn().textContent).toContain(`Clipped: ${(16739).toLocaleString('en-US')} of ${(31839).toLocaleString('en-US')} points`);
     btn().fire('click');
     expect(open).toHaveBeenCalledWith('clip');
   });
@@ -228,7 +228,7 @@ describe('strip UI', () => {
     expect(item().textContent).toBe('Clip on · Showing outside box');
     // Counted: the protected phrase, then the side.
     strip.render(readStrip(reads({ clip: () => ({ kept: 1234, total: 3600, mode: 'keep-inside' }), clipOn: () => 'keep-inside' })));
-    expect(item().textContent).toBe(`Clipped: ${(1234).toLocaleString()} of ${(3600).toLocaleString()} points · Showing inside box`);
+    expect(item().textContent).toBe(`Clipped: ${(1234).toLocaleString('en-US')} of ${(3600).toLocaleString('en-US')} points · Showing inside box`);
     // Off: both go.
     strip.render(readStrip(reads({ clip: () => null, clipOn: () => null })));
     expect(item().hidden).toBe(true);

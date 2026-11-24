@@ -152,7 +152,7 @@ const settle = (): Promise<void> => new Promise((r) => setTimeout(r, 0));
 
 describe('auto-classify refusal shown beside the button', () => {
   it('shows the reason after a refused run and clears it on the next click', async () => {
-    const reason = 'Classify · this scan carries producer classes, so they stay as they are. Press Clear classes first to replace them.';
+    const reason = 'Auto-classify · this scan carries producer classes, so they stay as they are. Press Clear classes first to replace them.';
     let refuse = true;
     const { root } = await makeUi(async () => (refuse ? reason : undefined));
     const auto = root.byTestId('reclass-auto')!;

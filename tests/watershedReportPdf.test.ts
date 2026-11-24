@@ -149,18 +149,34 @@ describe('buildWatershedReportPdf', () => {
     expect(dashes.length).toBeLessThanOrEqual(4);
   }, 240_000);
 
-  it('a Spanish report uses decimal commas on its KPIs', async () => {
+  it('writes numbers in the chosen style, apart from the language', async () => {
     const v = valleys.es!;
-    const texts = await drawnTexts(v.model, v);
     const a = v.model.sections[0]!.morph.areaM2;
     if (!('value' in a)) throw new Error('fixture area withheld');
-    const area = formatArea('es', a.value);
-    expect(area).toMatch(/\d,\d\d ha$/);
     // A Not supported catchment marks each figure with "~".
     const mark = v.model.sections[0]!.quality.verdict === 'not-supported' ? '~\u00a0' : '';
-    expect(texts).toContain(`${mark}${area}`);
-    const en = await drawnTexts(valleys.en!.model, valleys.en!);
-    expect(en).toContain(`${mark}${formatArea('en', a.value)}`);
+    expect(v.model.numberStyle).toBe('point');
+    for (const [language, numberStyle, pattern, kc] of [
+      ['es', 'point', /\d\.\d\d\u00a0ha$/, '0.282'], ['es', 'comma', /\d,\d\d\u00a0ha$/, '0,282'],
+      ['en', 'point', /\d\.\d\d\u00a0ha$/, '0.282'], ['en', 'comma', /\d,\d\d\u00a0ha$/, '0,282'],
+    ] as const) {
+      const area = formatArea(numberStyle, a.value);
+      expect(area).toMatch(pattern);
+      const texts = await drawnTexts({ ...v.model, language, numberStyle }, v);
+      expect(texts).toContain(`${mark}${area}`);
+      const all = joined(texts);
+      expect(all).toContain(kc);
+      // A section number is a name, not a figure.
+      expect(all).toContain('2.1.2');
+    }
+  }, 240_000);
+
+  it('prints the draft notice on every page of an unreviewed language, and on no English page', async () => {
+    const count = async (v: Valley) => (await drawnTexts(v.model, v)).filter((x) => /pendiente de revisión|not yet reviewed/.test(x));
+    const es = await count(valleys.es!);
+    expect(new Set(es)).toEqual(new Set(['Español (México) (traducción pendiente de revisión)']));
+    expect(es).toHaveLength(8);
+    expect(await count(valleys.en!)).toEqual([]);
   }, 240_000);
 
   it('marks every printed figure of a Not supported catchment and explains the mark', async () => {
@@ -171,9 +187,9 @@ describe('buildWatershedReportPdf', () => {
     expect(all).toContain('Values marked ~ belong to a catchment the data do not support.');
     const a = s.morph.areaM2;
     if (!('value' in a)) throw new Error('fixture area withheld');
-    expect(all).toContain(`~ ${formatArea('en', a.value).replace(/\u00a0/g, ' ')}`);
+    expect(all).toContain(`~ ${formatArea('point', a.value).replace(/\u00a0/g, ' ')}`);
     const supported = v.model.sections.find((x) => x.quality.verdict === 'supported');
-    if (supported && 'value' in supported.morph.areaM2) expect(all).not.toContain(`~ ${formatArea('en', supported.morph.areaM2.value).replace(/\u00a0/g, ' ')}`);
+    if (supported && 'value' in supported.morph.areaM2) expect(all).not.toContain(`~ ${formatArea('point', supported.morph.areaM2.value).replace(/\u00a0/g, ' ')}`);
   }, 240_000);
 
   it('counts unlisted hollows by the depth criterion and labels the rank as the site rank', async () => {
@@ -202,7 +218,7 @@ describe('open catchments and withheld densities', () => {
       const a = c3.morph.areaM2;
       if (!('value' in a)) throw new Error('fixture area withheld');
       expect(a.bound).toBe('minimum');
-      expect(all).toContain(`≥ ${formatArea(lang, a.value)}`.replace(/\s+/g, ' '));
+      expect(all).toContain(`≥ ${formatArea('point', a.value)}`.replace(/\s+/g, ' '));
       // Shape ratios, slopes and hypsometry are withheld; the report says so once per page, not per figure.
       for (const g of [c3.morph.gravelius, c3.morph.meanSlopePct, c3.morph.hypsometry, c3.channel.slope1085]) expect('withheld' in g).toBe(true);
       expect(all).not.toContain(withheldText(lang, 'open-catchment'));
@@ -210,7 +226,7 @@ describe('open catchments and withheld densities', () => {
       expect(once(t(lang, 'figures.openNote'))).toBe(1);
       expect(once(t(lang, 'summary.kpi.openNote'))).toBe(1);
       // The edge share appears under the headline and on the quality page.
-      expect(once(t(lang, 'summary.edgeShare', { share: formatPercent(lang, c3.edgeInflowShare, 0) }))).toBe(2);
+      expect(once(t(lang, 'summary.edgeShare', { share: formatPercent('point', c3.edgeInflowShare, 0) }))).toBe(2);
     }, 240_000);
   }
 
@@ -249,8 +265,8 @@ describe('open catchments and withheld densities', () => {
     const v = valleys.en!;
     const all = joined(await drawnTexts(v.model, v));
     expect(all).toContain(t('en', 'cover.measuredShare', {
-      share: formatPercent('en', v.model.site.measuredShare),
-      data: formatPercent('en', v.model.site.gridDataShare),
+      share: formatPercent('point', v.model.site.measuredShare),
+      data: formatPercent('point', v.model.site.gridDataShare),
     }).replace(/\s+/g, ' '));
   }, 240_000);
 

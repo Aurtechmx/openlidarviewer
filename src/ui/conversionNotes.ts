@@ -29,7 +29,7 @@ export function conversionNotes(report: Pick<ConvertReport, 'log' | 'events'>): 
 
 /** The status line after a write: the outcome and the count, not the first warning. */
 export function exportedLine(points: number, entries: number, summary: string, scope: string, crsNote?: string): string {
-  const head = `Exported ${points.toLocaleString()} point${points === 1 ? '' : 's'}`;
+  const head = `Exported ${points.toLocaleString('en-US')} point${points === 1 ? '' : 's'}`;
   const crs = crsNote ? ` · ${crsNote}` : '';
   return entries > 0 ? `${head} with ${summary}${scope}${crs}` : `${head}${scope}${crs}`;
 }

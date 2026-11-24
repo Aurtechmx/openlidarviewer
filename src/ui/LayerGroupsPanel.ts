@@ -360,7 +360,7 @@ export class LayerGroupsPanel {
       );
     }
     if (rows.length === 0) {
-      rows.push(el('p', { className: 'olv-group-pick-empty', text: 'No layers loaded. Open a scan to list it here.' }));
+      rows.push(el('p', { className: 'olv-group-pick-empty', text: 'Open a scan to begin.' }));
     }
     return el('div', { className: 'olv-group-picker' }, rows);
   }

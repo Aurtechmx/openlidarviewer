@@ -138,7 +138,7 @@ export function buildContourReviewSummary(
     label: 'Source',
     value: sourceValue,
     rationale: [
-      `${tally.measured.toLocaleString()} measured ground cells`,
+      `${tally.measured.toLocaleString('en-US')} measured ground cells`,
       `${pct(covered / total)} of the surveyed area is covered`,
       ...(tally.measured > 0 && groundDerived
         ? ['Ground was derived by the viewer’s classifier, not read from the source file. Validate before using it as survey ground.']

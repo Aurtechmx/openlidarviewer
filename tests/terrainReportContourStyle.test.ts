@@ -9,14 +9,16 @@ import { analyseContours, type AnalyseContoursResult } from '../src/terrain/cont
 import type { TerrainPoint } from '../src/terrain/TerrainContracts';
 import type { ContourShapeStyle } from '../src/terrain/contour/contourShapeStyle';
 
-const hoisted = vi.hoisted(() => ({ reportStyles: [] as (string | undefined)[] }));
+const hoisted = vi.hoisted(() => ({ reportStyles: [] as (string | undefined)[], locales: [] as unknown[] }));
 
 vi.mock('../src/io/download', () => ({ triggerDownload: () => {}, downloadBytes: () => {} }));
 vi.mock('../src/render/measure/terrainReportPdf', () => ({
-  buildTerrainReportPdf: async (r: AnalyseContoursResult) => {
+  buildTerrainReportPdf: async (r: AnalyseContoursResult, _opts: unknown, render: { locale?: unknown }) => {
     hoisted.reportStyles.push(r.generationParams?.contourStyle);
+    hoisted.locales.push(render.locale);
     return new Uint8Array([1]);
   },
+  exportLocale: () => ({ lang: 'es', numberStyle: 'point' }),
 }));
 
 import { FakeEl, installAnalysePanelDom } from './helpers/analysePanelDom';
@@ -49,5 +51,6 @@ describe('terrain report contour style', () => {
     internals._contourStyle = 'generalized';
     await internals._exportTerrainReport(new FakeEl('button'));
     expect(hoisted.reportStyles).toEqual(['generalized']);
+    expect(hoisted.locales).toEqual([{ lang: 'es', numberStyle: 'point' }]);
   });
 });

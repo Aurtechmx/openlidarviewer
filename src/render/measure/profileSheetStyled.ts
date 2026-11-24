@@ -23,6 +23,8 @@ import type { ProfileSheetKey } from '../../i18n/deliverables/profileSheet';
 import type { DeliverableStatus, ProfileDeliverable } from '../../model/deliverableFields';
 import type { ContourFeatureModel } from '../../terrain/contour/contourFeatureModel';
 import { PROFILE_TYPE, STEEP_PERCENT, type ProfilePalette } from './profileSheetPalette';
+import { supportVerdict } from '../../export/supportVerdict';
+import type { MeasurementTrust } from './measurementTrust';
 import type { ProfileChartSample } from './types';
 import {
   buildRoundChainageBand,
@@ -105,6 +107,8 @@ export interface StyledProfileSheet {
   readonly subtitle: string;
   /** The suitability note, printed in the header and on every footer. */
   readonly suitability: string;
+  /** The panel's support grade and caption, printed at the head of the sheet. Null when the measurement is not graded. */
+  readonly support: Pick<MeasurementTrust, 'grade' | 'caption'> | null;
   /** Stations, ascending chainage, metres; height null over a gap. */
   readonly stations: ReadonlyArray<{ readonly chainage: number; readonly elevation: number | null }>;
   readonly lengthM: number;
@@ -225,9 +229,11 @@ export async function drawStyledProfileSheet(page: PDFPage, s: StyledProfileShee
   title.forEach((ln, i) => drawDisplay(page, ln, X0 - 2, top(title.length > 1 ? 46 + i * 23 : 66), tsz, f, t.ink));
   if (s.logo) drawLogo(page, s.logo, M - 12, top(74), X0 - M - 8, 50, t);
   if (s.deliverable.company) text(p, fitLine(s.deliverable.company, f.sansBold, T.label, 560, f), X0, top(22), T.label, { font: f.sansBold, color: t.dim });
+  // A graded profile states its support grade over the status, which then sits a little lower.
+  const drop = drawSupport(p, s, top) ? 6 : 0;
   const suit = wrapSheetText(s.suitability, f.sans, T.label, 240, f);
-  text(p, W.say(STATUS_KEY[s.deliverable.status ?? 'preliminary']), PW - M, top(44), T.value, { font: f.sansBold, align: 'right' });
-  suit.slice(0, 2).forEach((ln, i) => text(p, ln, PW - M, top(60 + i * 13), T.label, { color: t.dim, align: 'right' }));
+  text(p, W.say(STATUS_KEY[s.deliverable.status ?? 'preliminary']), PW - M, top(44 + drop), T.value, { font: f.sansBold, align: 'right' });
+  suit.slice(0, 2).forEach((ln, i) => text(p, ln, PW - M, top(60 + drop + i * 13), T.label, { color: t.dim, align: 'right' }));
   const hx = X0 + Math.max(...title.map((ln) => sheetTextWidth(ln, f.sansBold, tsz, f))) + 28;
   const hw = PW - M - 262 - hx;
   let psz: number = T.value;
@@ -362,6 +368,22 @@ export async function drawStyledProfileSheet(page: PDFPage, s: StyledProfileShee
   drawTrueShape(p, s, runs, { X0, drawW, len, top: low(708), bottom: low(738), exaggeration: scales.exaggeration, mapY, PW });
 
   drawNotes(p, s, low(748), low(812), PW);
+}
+
+/** The support grade and its caption at the head of the sheet, set on a solid plate when it is red. False when there is none. */
+function drawSupport(p: Pen, s: StyledProfileSheet, top: (v: number) => number): boolean {
+  const verdict = supportVerdict({ trust: s.support });
+  if (verdict === null) return false;
+  const { f, t } = p, size = PROFILE_TYPE.label, right = p.page.getWidth() - M, red = s.support?.grade === 'red';
+  const lines = wrapSheetText(p.w.say('supportHead', { t_v: verdict }), f.sansBold, size, 430, f);
+  const base = lines.length > 1 ? 22 : 30;
+  if (red) {
+    const w = Math.max(...lines.map((ln) => sheetTextWidth(ln, f.sansBold, size, f)));
+    const foot = base + (lines.length - 1) * 13 + 3.5;
+    p.page.drawRectangle({ x: right - w - 5, y: top(foot), width: w + 10, height: foot - base + 10, color: pdfColor(t.warn) });
+  }
+  lines.forEach((ln, i) => text(p, ln, right, top(base + i * 13), size, { font: f.sansBold, color: red ? t.paper : s.support?.grade === 'green' ? t.ink : t.warn, align: 'right' }));
+  return true;
 }
 
 /** The catalog row of each status. */

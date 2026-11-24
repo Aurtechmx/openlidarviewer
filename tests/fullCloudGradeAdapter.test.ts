@@ -429,6 +429,6 @@ describe('gradeFullCloud — a source that states no point total', () => {
     const outcome = await gradeFullCloud({ source: src, decoder: fakeDecoder(), grade: () => null });
     expect(outcome.kind).toBe('graded');
     if (outcome.kind !== 'graded') return;
-    expect(outcome.run.coverage.label).toBe('no points available to grade');
+    expect(outcome.run.coverage.label).toBe('no points available to check');
   });
 });

@@ -291,6 +291,8 @@ function fakePlot(section: ProfileSectionResult): WorkbenchSectionPlot {
       detail: [],
       drawn: indices.length,
     },
+    section,
+    filter: null,
     indices,
     imageRequest: (surface, size, opts) =>
       buildProfileSectionImageRequest({

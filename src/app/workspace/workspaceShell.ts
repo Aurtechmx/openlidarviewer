@@ -90,7 +90,7 @@ export interface WorkspaceShellDeps {
   overlayTail: readonly HTMLElement[];
   analysePanel: () => (Panel & AnalyseHostPanel & ShelfTerrainPanel) | null;
   objectPanel: () => Panel | null;
-  measurePanel: () => (Panel & { openInWorkbench?(id: string): boolean }) | null;
+  measurePanel: () => (Panel & { openInWorkbench?(id: string): boolean; exportProfilePdf?(id: string): Promise<void> }) | null;
   setMeasureMountElement: (fn: (el: HTMLElement) => void) => void;
   hasScan: () => boolean;
   toast?: (message: string) => void;
@@ -408,7 +408,10 @@ export function mountWorkspaceShell(d: WorkspaceShellDeps): WorkspaceShell {
     router?.navigate({ mode: 'work', page: 'measure' });
     return panel.openInWorkbench(id);
   };
-  const shelf = d.results ? mountResultsShelf(d.results, d.analysePanel, d.export, (route) => router?.navigate(route), d.runAction, openWorkbench) : null;
+  // One profile's export, in the panel's own dialog.
+  const exportProfile = (id: string): Promise<void> =>
+    d.measurePanel()?.exportProfilePdf?.(id) ?? Promise.reject(new Error('The measurements panel is not mounted.'));
+  const shelf = d.results ? mountResultsShelf(d.results, d.analysePanel, d.export, (route) => router?.navigate(route), d.runAction, openWorkbench, exportProfile, d.toast) : null;
   if (shelf) { leftPanels.append(shelf.element); d.addTeardown(() => shelf.dispose()); }
 
   // "Export all N points": per-layer facts through the Export panel, opened on the Output page.

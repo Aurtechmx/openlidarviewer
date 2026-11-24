@@ -108,7 +108,7 @@ export function createDataHome(d: DataHomeDeps): DataHome {
   const openBtn = el('button', { className: 'olv-data-open', type: 'button', text: actionTitle('scan.open') });
   openBtn.addEventListener('click', () => d.openFile());
   const empty = el('div', { className: 'olv-data-empty' }, [
-    el('p', { text: 'Open a point cloud to begin' }),
+    el('p', { text: 'Open a scan to begin.' }),
     openBtn,
   ]);
   const element = el('section', { className: 'olv-data-home' }, [

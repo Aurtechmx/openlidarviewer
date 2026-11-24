@@ -55,18 +55,23 @@ describe('streamingProgress — fraction + labels', () => {
     expect(p.nodesLabel).toBe('200 / 200 nodes resident');
   });
 
-  it('formats the points readout as same-unit millions (X.XM / Y.YM pts)', () => {
+  it('formats the points readout in millions when both counts are', () => {
     const p = streamingProgress(
       status({ displayedPoints: 1_500_000, sourcePoints: 6_000_000 }),
     );
     expect(p.pointsLabel).toBe('1.5M / 6.0M pts');
   });
 
-  it('sub-100k displayed points read as 0.0M (honest at scale, same unit on both sides)', () => {
+  it('a small count is never shown as 0.0M', () => {
     const p = streamingProgress(
       status({ displayedPoints: 42_000, sourcePoints: 4_200_000 }),
     );
-    expect(p.pointsLabel).toBe('0.0M / 4.2M pts');
+    expect(p.pointsLabel).toBe('42.0K / 4.2M pts');
+  });
+
+  it('states a 4,096-point view', () => {
+    const p = streamingProgress(status({ displayedPoints: 4096, sourcePoints: 4096 }));
+    expect(p.pointsLabel).toBe('4.1K / 4.1K pts');
   });
 
   it('never emits a negative fraction or width even with bogus zero/negative inputs', () => {

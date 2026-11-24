@@ -1,0 +1,162 @@
+{
+ "plain": {
+  "styled": "5b77dbc0825506030e25b0fdee18d1ff1b1eb0c22a2f2725105595bbb64b7b5a",
+  "classic": "14a285be2d87e23efc6755335e5f03c1e5f2c85aa0b55d24d142937ce1c3ffa5"
+ },
+ "untitled": {
+  "styled": "f16f586acc269b1cdb7003e1a7c3170f116fd879b36f56f0e0e6952687fda424",
+  "classic": "752c3b3298fffa6b08b1a8a53ab0f820b2e6f16e7fa0a175f626c89d5551ea7f"
+ },
+ "dark": {
+  "styled": "eb3d38be3fe377b724d1ea0205b7a2a8721112ec366169b8c90a8a61e6b0879c",
+  "classic": "14a285be2d87e23efc6755335e5f03c1e5f2c85aa0b55d24d142937ce1c3ffa5"
+ },
+ "provenance": {
+  "styled": "08987a48ba887a1f838ced8bf2e8eb509d0f8797f77a3e4ece61dd01eacdfe3f",
+  "classic": "6e6fa3eacb2db5b3e70ea95e31c61a4ad78d4931f1b47867e6de33b8d5da63b6"
+ },
+ "ready": {
+  "styled": "6f8f3d6aff440d476fe798f65fd773dbf7f8a4e1b5c9f8389baa5370e526663b",
+  "classic": "0925968b34da3d660625c365ef42a1701e9de51f55c23cddea2d63cb7d30898a"
+ },
+ "blocked": {
+  "styled": "79c56f26a370ff13a91755a1be1189a58f6a6ad13c1faab23208bf36a91df44e",
+  "classic": "1ead6d144774e3b8d66987f3b3b1cf40fe96704c1bd544405a8efc7d7f0a9510"
+ },
+ "withheld": {
+  "styled": "08987a48ba887a1f838ced8bf2e8eb509d0f8797f77a3e4ece61dd01eacdfe3f",
+  "classic": "6e6fa3eacb2db5b3e70ea95e31c61a4ad78d4931f1b47867e6de33b8d5da63b6"
+ },
+ "sample": {
+  "styled": "92568d4edf2156ab18e0ec23b22fbfe60ca13d73bbef16ae73849d83442c22b3",
+  "classic": "a9df896e6b93ca91b0c4d2f5e172c0ad51c5d4254ef8184c3e1b85f403ea1aec"
+ },
+ "sampleReduced": {
+  "styled": "093c2c3c028db7db214fdd79395ffedd3ded38096df312d1f836d83adaf3f5a0",
+  "classic": "4ae0302ec1a72cc19fbc2fd4a7f6a423e9b82411603419c264978a0f4e7deb04"
+ },
+ "resident": {
+  "styled": "c9627226214e0722c41b4464cf928523078af191ed9e841d4b99674702ae8800",
+  "classic": "fb44fc789b4e149506a1ada274c31e11d491dccf6111ceb5449d4db61f12eb8b"
+ },
+ "residentSub": {
+  "styled": "3ef7b1d0cf1f868ff701027b1400ff39491d174c52d5688358eb95a276fab6ca",
+  "classic": "eac5621d7c5a5c74d3c7b59d18841038fd3597377be8d002ce8293bc6e8da990"
+ },
+ "truncated": {
+  "styled": "ddb565019aca6fd79ce69194366d4c3d6506f986b0f8e666413e2a6337128fab",
+  "classic": "c85b5de89b2f94efc19354c1d96655c5406cec655e603632991672a8e41bdee8"
+ },
+ "subsample": {
+  "styled": "b9b36b8ff9fe9d95bd92c64ebcdcff0e4c307502aac411a68fa9d377207174c1",
+  "classic": "c05ee6bfdf7c7029b79fe930a9463e67ed5c5921195a5ed973853cf18d159aa4"
+ },
+ "georefUnknown": {
+  "styled": "8b90f81af54b131066128f08f15468529c0ad5bbc1db59ad9846c37a578cbb73",
+  "classic": "55231ce8a37e7625e3e1e4233a24dad28b2142fd61ae8919766db3ae235e5da4"
+ },
+ "geographic": {
+  "styled": "40e7e8bcef1719636ebcc919b03b6a4629ec4728df53558e0918408c51a6a56b",
+  "classic": "2b862435ca165e6d9fe006d3092c1f756869155baf29686df02dbf62eb94a442"
+ },
+ "datumUnknown": {
+  "styled": "cdac658147b99b81b2f5482c721dee3622346dcfe141e17a72e040266f9e4fb6",
+  "classic": "0d9b33d78d3bc5fbd4f29c2deec22d0b045dc9e9825fab864927eda7291ba48c"
+ },
+ "trueNorth": {
+  "styled": "beb25b4d112b606925977d899da10bd804d364f7d601e3076533fa70e703587b",
+  "classic": "14a285be2d87e23efc6755335e5f03c1e5f2c85aa0b55d24d142937ce1c3ffa5"
+ },
+ "trueNorthEast": {
+  "styled": "07ff7fa60116f39a4b8fc1544604115ada95a5e6c55e56ba5bb3b405e905af36",
+  "classic": "120f9628cd6336b41c9e3cb1bb118d538ab39d1346ccc556246fb432f4e09b1f"
+ },
+ "feet": {
+  "styled": "3ca308b0ff03bb06ef12230885f730bbaef59a79d8b7c408a4ad8bd063d362da",
+  "classic": "a6bce989aad8dd7c190a2416b3bf8bc34c8bedd394dba39e6d10dc89c366d6fb"
+ },
+ "units": {
+  "styled": "fdfa4673f6a114c4c74634e39e9ecb77482e37a8456bbb96e2322508c4158352",
+  "classic": "aadff53bcf2e6256d4645488cade0159fd4140d12e5774713aa8bc027e51d4c7"
+ },
+ "noRelief": {
+  "styled": "01aed9553f6f9a016ba7f24d2274dd48ff4723b10a4e13e2ad51a60384880ecf",
+  "classic": "14a285be2d87e23efc6755335e5f03c1e5f2c85aa0b55d24d142937ce1c3ffa5"
+ },
+ "allKinds": {
+  "styled": "e6c5dcdb21de533b7b828d6e68d35e7fa7593ad65da0b6ed75432b5f00ea4873",
+  "classic": "7a49349062bb2a6c96e70d6192c831bfac7956d4f6afbe7faf3c3d3dd5dcc070"
+ },
+ "noContours": {
+  "styled": "b5d73608c26ca8c32c4febb461289628147d396fdfa85729a1979a75f0b6cf21",
+  "classic": "1bb47b17198f850abab40f26dd22ff454fcd49fd67ae3c3a8b2044cf8f12cd46"
+ },
+ "measured": {
+  "styled": "fa7a8577d56234f9dbff005433126db84d5c678eafd8655b269b919a8b8075bd",
+  "classic": "8e07c45b5c1ea7b10cf7718448e8ecc0d2ed922df236ef2297d58db3ad06e763"
+ },
+ "measuredPortrait": {
+  "styled": "225a4c282e950001c73d41efab1e1259eca81ab251c2f206d7e77465468d1a2f",
+  "classic": "86f4ae7a85f905e9810f4c7ab457b386b9c91015984b7ba6ed977564e861ea92"
+ },
+ "many": {
+  "styled": "11857fce75d39ce0ed806b611ea4cc84ada89e62bbf1e5986504542e94943498",
+  "classic": "604b8729517c80d23d6bacafdcc04cb87d66ace99b73f52232febba65c9a136b"
+ },
+ "oneMore": {
+  "styled": "fa22c6b53f1095f16996d1feb3ccf8e0271d4301842007c474eae05f422fb551",
+  "classic": "6b6f086189a87d08b94bf30813fe51fd69cb039359dd1c357f11f9381f20c9b1"
+ },
+ "engineering": {
+  "styled": "375e7ea045f6d5b3e997bca6741c4eefbfc56601282cb33f1935e27c6ef727cc",
+  "classic": "c9f7d98fc7c85a3e632f3ab2f36a0d1ddbdfbca4331dbc4d6bf41f109b7ea04d"
+ },
+ "survey": {
+  "styled": "0e86d686cc05de53defff9ca804d19140e552b920eb0cf8e12fd9cc4863a80ea",
+  "classic": "4adf8eff6ac9d94bfe4851238e8e46ac52cbe6fed6dd2c0a024ef5d8d96078cb"
+ },
+ "research": {
+  "styled": "3952181b585f4518cf3430c5dff4291b3068b62d6023f1f05f1eb59bfdc17d70",
+  "classic": "3fa587bffe10351f21cf4f65b5ec064391a88e2ce0bd922748186fc77f557681"
+ },
+ "presentation": {
+  "styled": "ba989d3a7d7f03cda1bd8ab205342a0ef4f2a893aab7e240ab15847d4b64a169",
+  "classic": "bc38260393b0b65260adfaefab4922d0efd577a5fc4353204c1fb85b5dbec2d5"
+ },
+ "custom": {
+  "styled": "38ba2d94eecdcb8d4287e7ad7d65483f5a072216e6ef9c5b34aefc8b258c777d",
+  "classic": "67a5deac3ffd6a6704c550bed9ac05ef9eb806056127fe6c7125d43fd7ac0529"
+ },
+ "customPlain": {
+  "styled": "a1f00eabe0c4935b55d5af79d8c5c42a5a406711e8a1c1f1d9ef18654499e855",
+  "classic": "15fed16fdcc044db7b22e86f0887eebd57619ec606f456544e06286f20073671"
+ },
+ "cartographicOnly": {
+  "styled": "a658c91af3d2df5d17b01ccf476e250c8fb23567e215eaec179180d96ab090d8",
+  "classic": "af4f82168a106eafe1d135a027ad2647a2a4d9c1c6f4ad4b1f343cf2b37616e2"
+ },
+ "crisp": {
+  "styled": "bc9b2c1934aaa18b2f6a5e78248472c9c0ffe3f3484a552cc5430db874bb509f",
+  "classic": "2289aad33f121ea031693234ad506259f91f0a232150a6139d85623e424a520c"
+ },
+ "styles": {
+  "styled": "1f8ae1c0dcec83cd418c3d079a71b2090477c5d3efbf6c7c3ba03284abcf1c12",
+  "classic": "013f16608e20b7f7a06fd11bf533d64e9a79c98c2f76347fa4a0fc9a7e7c38fe"
+ },
+ "generalized": {
+  "styled": "8a85f8fc0b6a2b76b30d8b59302d7273da30e7888e65f4cb97ebdb6b59a1220d",
+  "classic": "fc34b2cadc78e436abecf663f6cefed39d37a8a02e3314db49a21bc993d66e86"
+ },
+ "a3": {
+  "styled": "2a79f849f0c83beb7c326be07fb832535fc5c9abd8221efbeb690d59d2e4e210",
+  "classic": "554fe76ca8e4e42a74cb3850ec5029410a58d1f9b60be40be68d97510e58cfb7"
+ },
+ "a3Portrait": {
+  "styled": "1fcc61e475dd7853fece521694b71bdfff6418d7523825c030b44e30d9db3ca6",
+  "classic": "dcf23ce120bc55a055d8af16789fec7db681ccb8a4d7bbddf0dc30e323346ebf"
+ },
+ "a4Portrait": {
+  "styled": "ca43a3b518ca58b69e241db9ca7c3c1b7c85d04a1caf902f47fe042afa5b9c29",
+  "classic": "adba4263e17cc16c7286193d75b7a261b98ba06d76bb2aab7ec2a2f79652dfe2"
+ }
+}

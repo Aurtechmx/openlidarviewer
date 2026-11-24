@@ -1,7 +1,7 @@
 /**
  * classifyActions.ts
  *
- * The derive actions behind the Classes panel: Classify (derive) and Fill
+ * The derive actions behind the Classes panel: Auto-classify scan (derive) and Fill
  * unclassified. Clear and Restore live in `render/class/classLayer.ts`.
  * Lazy-loaded on first use, so the classifier client and its option
  * builders never enter the startup shell. The host hands in a small deps
@@ -116,7 +116,7 @@ function activeLoadedCloud(d: ClassifyActionsDeps, label: string): { id: string;
  */
 export async function runDeriveClassification(d: ClassifyActionsDeps): Promise<string | void> {
   if (classifyRunning) return;
-  const target = activeLoadedCloud(d, 'Classify');
+  const target = activeLoadedCloud(d, 'Auto-classify');
   if (!target) return;
   const { cloud } = target;
   // Only derive when there is no producer classification to disturb. A scan that
@@ -132,7 +132,7 @@ export async function runDeriveClassification(d: ClassifyActionsDeps): Promise<s
     ? 0
     : classificationCoverage(cloud.classification, cloud.pointCount).producer;
   if (producerLive > 0) {
-    const refused = 'Classify · this scan carries producer classes, so they stay as they are. Press Clear classes first to replace them.';
+    const refused = 'Auto-classify · this scan carries producer classes, so they stay as they are. Press Clear classes first to replace them.';
     d.toast(refused);
     return refused; // also shown beside the button that ran it
   }
@@ -140,15 +140,15 @@ export async function runDeriveClassification(d: ClassifyActionsDeps): Promise<s
   // alone is noisy — a green, locally-smooth canopy isn't mistaken for a roof.
   const heightRefusal = classifierVerticalRefusal(d.crsService.context());
   if (heightRefusal) {
-    d.toast(`Classify · not run: ${heightRefusal}`);
+    d.toast(`Auto-classify · not run: ${heightRefusal}`);
     return;
   }
   const deriveOptions = classifierOptions(cloud, d.crsService.context());
 
   classifyRunning = true;
-  d.toast('Classify · deriving ground / vegetation / building…');
+  d.toast('Auto-classify · deriving ground / vegetation / building…');
   try {
-    const outcome = await performClassificationDerive(d, cloud, target.id, deriveOptions, 'Classify');
+    const outcome = await performClassificationDerive(d, cloud, target.id, deriveOptions, 'Auto-classify');
     if (!outcome) return;
     const { result, confPct } = outcome;
     d.afterDerive();
@@ -162,7 +162,7 @@ export async function runDeriveClassification(d: ClassifyActionsDeps): Promise<s
       .join(' · ');
     const confText = confPct !== null ? ` Support ${(confPct / 100).toFixed(2)}.` : '';
     const warnText = result.warnings.length > 0 ? ` ⚠ ${result.warnings[0]}` : '';
-    d.toast(`Classify · derived (heuristic, not survey-grade): ${top}.${confText} Auto-classify ${AUTO_CLASSIFY_LIMITS}${warnText}`);
+    d.toast(`Auto-classify · derived (heuristic, not survey-grade): ${top}.${confText} Auto-classify ${AUTO_CLASSIFY_LIMITS}${warnText}`);
   } catch (err) {
     // A refusal also lands on the Classes caption, which outlives the toast.
     reportClassifyFailure(err, d.toast, d.legend);
@@ -183,12 +183,12 @@ export async function runFillUnclassified(d: ClassifyActionsDeps): Promise<void>
   if (!target) return;
   const { cloud } = target;
   if (cloud.classificationProvenance !== 'source' || !cloud.classification) {
-    d.toast('Fill unclassified · no producer classification to preserve — use Classify (derive).');
+    d.toast('Fill unclassified · no producer classification to preserve — use Auto-classify scan (derive).');
     return;
   }
   const cov = classificationCoverage(cloud.classification, cloud.pointCount);
   if (cov.producer === 0) {
-    d.toast('Fill unclassified · no producer classes here — use Classify (derive) for the whole scan.');
+    d.toast('Fill unclassified · no producer classes here — use Auto-classify scan (derive) for the whole scan.');
     return;
   }
   if (cov.unclassified === 0) {
@@ -206,14 +206,14 @@ export async function runFillUnclassified(d: ClassifyActionsDeps): Promise<void>
     ...classifierOptions(cloud, d.crsService.context()),
   };
   classifyRunning = true;
-  d.toast(`Fill unclassified · deriving ${cov.unclassified.toLocaleString()} points (producer classes kept)…`);
+  d.toast(`Fill unclassified · deriving ${cov.unclassified.toLocaleString('en-US')} points (producer classes kept)…`);
   try {
     const outcome = await performClassificationDerive(d, cloud, target.id, deriveOptions, 'Fill unclassified');
     if (!outcome) return;
     const { confPct } = outcome;
     d.afterDerive();
     const confText = confPct !== null ? ` Support ${(confPct / 100).toFixed(2)}.` : '';
-    d.toast(`Fill unclassified · filled ${cov.unclassified.toLocaleString()} points (heuristic); producer classes kept.${confText}`);
+    d.toast(`Fill unclassified · filled ${cov.unclassified.toLocaleString('en-US')} points (heuristic); producer classes kept.${confText}`);
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     if (!/abort/i.test(msg)) d.toast(`Fill unclassified · failed: ${msg}`);

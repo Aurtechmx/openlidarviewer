@@ -384,6 +384,10 @@ export interface WorkbenchPlotFrame {
 /** A composed section, with the means to draw it again at a new size. */
 export interface WorkbenchSectionPlot {
   readonly view: WorkbenchSectionView;
+  /** The section drawn, whole: a returns export writes every one of its points. */
+  readonly section: ProfileSectionResult;
+  /** What the display filter kept and why, or null when nothing is filtered. */
+  readonly filter: ProfileRawFilterDescriptor | null;
   /** The section indices actually drawn, in draw order. */
   readonly indices: Uint32Array;
   /**
@@ -769,6 +773,8 @@ export function prepareWorkbenchSection(options: ComposeSectionOptions): Workben
       detail,
       drawn: indices.length,
     },
+    section,
+    filter: filterDescriptor,
     indices,
     imageRequest: (surface, size, opts) =>
       buildProfileSectionImageRequest({

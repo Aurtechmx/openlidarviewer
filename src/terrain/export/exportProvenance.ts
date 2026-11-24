@@ -938,7 +938,7 @@ function fmtM(v: number | null | undefined): string {
 }
 
 const KEY_WIDTH = 18;
-function kv(key: string, value: string): string {
+export function kv(key: string, value: string): string {
   // Keys wider than the column still need a gutter, or the stamp jams into
   // "NVA-style (95%, hold-out)0.27 m".
   return `${key.padEnd(Math.max(KEY_WIDTH, key.length + 2))}${value}`;

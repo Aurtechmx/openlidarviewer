@@ -333,6 +333,143 @@ describe('results shelf actions', () => {
     expect(live.ownText).toBe('Profile 1 cannot open in the Profile Workbench: it has no chart. Its row on the Measure page says why.');
   });
 
+  function exportShelf(over: Partial<Parameters<typeof createResultsShelf>[0]> = {}) {
+    const o = owners(() => 'a');
+    for (const n of [1, 2]) o.measurements.push({ id: `p${n}`, name: `Profile ${n}`, kind: 'profile', points: [[0, 0, 0], [1, 0, 0]], owner: { layerId: 'a' } });
+    o.measurements.push({ id: 'd1', name: 'Distance 1', kind: 'distance', points: [[0, 0, 0], [1, 0, 0]], owner: { layerId: 'a' } });
+    o.index.refresh();
+    const exportProfile = vi.fn(async (_id: string) => {});
+    const exportTo = vi.fn(() => true);
+    const notify = vi.fn();
+    const shelf = createResultsShelf({
+      index: o.index, navigate: vi.fn(), aim: vi.fn(), exportTo, exportProfile, notify,
+      activeLayerId: () => 'a', layerName: (id) => ({ a: 'north.laz', b: 'south.laz' })[id] ?? null, ...over,
+    });
+    const root = shelf.element as unknown as FakeEl;
+    const button = (id: string) => root.find((e) => e.dataset.resultId === id)!.find((e) => e.hasClass('olv-results-export'));
+    const live = () => root.find((e) => e.hasClass('olv-results-live'))!.ownText;
+    return { o, root, button, live, exportProfile, exportTo, notify };
+  }
+
+  it('Export on the second of two profiles opens that profile, not the collection', async () => {
+    const s = exportShelf();
+    const btn = s.button('measurement:p2')!;
+    expect(btn.getAttribute('aria-label')).toBe('Export Profile 2 as PDF');
+    btn.fire('click');
+    await Promise.resolve();
+    expect(s.exportProfile.mock.calls).toEqual([['p2']]);
+    expect(s.exportTo).not.toHaveBeenCalled();
+    expect(s.live()).toBe('Opening the PDF export of Profile 2.');
+  });
+
+  it('a second press while the dialog is open does nothing, and a later one opens again', async () => {
+    let close!: () => void;
+    const exportProfile = vi.fn(() => new Promise<void>((r) => { close = r; }));
+    const s = exportShelf({ exportProfile });
+    s.button('measurement:p1')!.fire('click');
+    s.button('measurement:p2')!.fire('click');
+    expect(exportProfile.mock.calls).toEqual([['p1']]);
+    close();
+    await new Promise((r) => setTimeout(r));
+    s.button('measurement:p2')!.fire('click');
+    expect(exportProfile).toHaveBeenLastCalledWith('p2');
+  });
+
+  it('other measurements export together, from a control that says so', () => {
+    const s = exportShelf();
+    expect(s.button('measurement:d1')).toBeUndefined();
+    const all = s.root.find((e) => e.hasClass('olv-results-export-all'))!;
+    expect(all.getAttribute('aria-label')).toBe('Export all measurements');
+    all.fire('click');
+    expect(s.exportTo).toHaveBeenCalledWith('measurements');
+    expect(s.exportProfile).not.toHaveBeenCalled();
+    expect(s.live()).toBe('Export opened with all measurements selected.');
+  });
+
+  it('a profile deleted since the list was drawn is refused, and no neighbour is exported', () => {
+    const s = exportShelf();
+    const btn = s.button('measurement:p2')!;
+    s.o.measurements.splice(1, 1);
+    btn.fire('click');
+    expect(s.exportProfile).not.toHaveBeenCalled();
+    expect(s.notify).toHaveBeenCalledWith('Profile 2 is no longer available, so it was not exported.');
+  });
+
+  it('a profile of a closed or hidden scan is refused with the reason', () => {
+    const closed = exportShelf({ activeLayerId: () => 'b', layerName: (id) => (id === 'b' ? 'south.laz' : null) });
+    closed.button('measurement:p2')!.fire('click');
+    expect(closed.exportProfile).not.toHaveBeenCalled();
+    expect(closed.notify).toHaveBeenCalledWith(expect.stringContaining('the scan it was made on is closed'));
+    const hidden = exportShelf({ layerHidden: (id) => id === 'a' });
+    hidden.button('measurement:p2')!.fire('click');
+    expect(hidden.exportProfile).not.toHaveBeenCalled();
+    expect(hidden.notify).toHaveBeenCalledWith(expect.stringContaining('north.laz is hidden'));
+  });
+
+  it('a profile of another open scan still exports: its dialog names that scan', () => {
+    const s = exportShelf({ activeLayerId: () => 'b' });
+    s.button('measurement:p2')!.fire('click');
+    expect(s.exportProfile).toHaveBeenCalledWith('p2');
+  });
+
+  it('passes on the reason the export gives, and says when it could not open', async () => {
+    const refused = exportShelf({ exportProfile: () => Promise.reject(Object.assign(new Error('Not exported: why.'), { name: 'ProfileExportRefusal' })) });
+    refused.button('measurement:p1')!.fire('click');
+    await new Promise((r) => setTimeout(r));
+    expect(refused.notify).toHaveBeenCalledWith('Profile 1: Not exported: why.');
+    const log = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const failed = exportShelf({ exportProfile: () => Promise.reject(new Error('chunk')) });
+    failed.button('measurement:p1')!.fire('click');
+    await new Promise((r) => setTimeout(r));
+    log.mockRestore();
+    expect(failed.notify).toHaveBeenCalledWith(expect.stringMatching(/^The export of Profile 1 did not open\. /));
+  });
+
+  it('through the mount, only a profile with a chart reaches the export, and its scan must be shown', async () => {
+    installLiveFakeDom();
+    const ms = ['p1', 'p2'].map((id) => ({ id, name: id, kind: 'profile', points: [] }));
+    let shown = true;
+    const exportProfile = vi.fn(async (_id: string) => {});
+    const notify = vi.fn();
+    const mounted = mountResultsShelf({
+      viewer: {
+        measure: { getMeasurements: () => ms, getSummaries: () => [{ id: 'p1' }, { id: 'p2', profileChart: [1, 2] }] },
+        clouds: () => ['a'], isCloudVisible: () => shown, getCloud: () => ({ name: 'a.laz' }),
+        getCameraPose: () => ({ position: [0, 0, 1], target: [0, 0, 0] }), applyCameraPose: vi.fn(),
+      },
+      identity: { stableIdFor: (id) => id },
+      scans: { activeExportTargetId: () => 'a', onActiveChange: () => () => {} },
+      terrainRunner: new FakeRunner(),
+    }, () => null, null, vi.fn(), undefined, undefined, exportProfile, notify);
+    const press = async (id: string) => {
+      (mounted.element as unknown as FakeEl).find((e) => e.dataset.resultId === `measurement:${id}`)!.find((e) => e.hasClass('olv-results-export'))!.fire('click');
+      await new Promise((r) => setTimeout(r));
+    };
+    await press('p1');
+    expect(exportProfile).not.toHaveBeenCalled();
+    expect(notify).toHaveBeenLastCalledWith(expect.stringContaining('it has no chart'));
+    await press('p2');
+    expect(exportProfile.mock.calls).toEqual([['p2']]);
+    shown = false;
+    await press('p2');
+    expect(exportProfile).toHaveBeenCalledTimes(1);
+    expect(notify).toHaveBeenLastCalledWith(expect.stringContaining('a.laz is hidden'));
+    mounted.dispose();
+  });
+
+  it('a terrain result of another scan, or a hidden contour layer, is refused', () => {
+    const s = shelfFor('b');
+    const root = s.shelf.element as unknown as FakeEl;
+    root.find((e) => e.dataset.resultId === 'terrain:a')!.find((e) => e.hasClass('olv-results-export'))!.fire('click');
+    expect(s.exportTo).not.toHaveBeenCalled();
+    expect(root.find((e) => e.hasClass('olv-results-live'))!.ownText).toContain('it is from north.laz. Make that scan active');
+    const c = exportShelf();
+    c.o.runner.put('a', { name: 'Contours', visible: false, sourceScanIds: ['a'], bounds: null });
+    c.button('contours:a')!.fire('click');
+    expect(c.exportTo).not.toHaveBeenCalled();
+    expect(c.notify).toHaveBeenCalledWith('Contours is hidden. Show it, then export again.');
+  });
+
   it('names another source and leaves the active layer alone', () => {
     const s = shelfFor('b');
     const root = s.shelf.element as unknown as FakeEl;

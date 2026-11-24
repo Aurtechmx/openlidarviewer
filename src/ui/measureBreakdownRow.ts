@@ -52,6 +52,9 @@ export interface BreakdownLine {
   readonly title: string;
 }
 
+/** The headline tooltip of a distance: the headline length is the slant, so the line does not repeat it. */
+export const SLANT_NOTE = 'The length is the slant: the straight line through space between the two points.';
+
 /** Said on a line when a compound CRS declares a height unit unlike the horizontal one. */
 const MIXED_UNITS_LINE_NOTE =
   'This scan declares a different unit for height than for the horizontal axes. ' +
@@ -86,7 +89,6 @@ export function breakdownParts(
     const parts = [
       `Run ${len(line.horizontalM)}`,
       `Rise ${len(line.verticalM)}`,
-      `Slant ${len(line.length3dM)}`,
     ];
     if (Number.isFinite(line.gradePercent)) {
       parts.push(`Grade ${fmt.formatGrade(line.gradePercent)} (${fmt.formatAngle(line.gradeAngleDeg)})`);
@@ -95,7 +97,7 @@ export function breakdownParts(
       text: parts.join(' · '),
       title: line.mixedUnits
         ? MIXED_UNITS_LINE_NOTE
-        : 'Run is the map-plane distance, rise the height change, slant the straight line through space.',
+        : 'Run is the map-plane distance, rise the height change.',
     };
   }
 

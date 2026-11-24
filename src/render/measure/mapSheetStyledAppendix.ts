@@ -15,14 +15,13 @@ import {
   sheetText,
   wrapSheetText,
 } from '../../export/sheetKit/primitives';
-import type { PurposeAppendixContent } from './mapSheetPdf';
+import type { PurposeAppendixContent, SettingGroup } from './mapSheetPdf';
+import type { MapSheetWords } from '../../export/localizeMapSheet';
+import type { MapSheetKey } from '../../i18n/deliverables/mapSheet';
 
-/** The settings, grouped by what they decide. A key not listed lands in the last group. */
-const GROUPS: ReadonlyArray<readonly [string, readonly string[]]> = [
-  ['Line geometry', ['Geometry', 'Cartographic smoothing', 'Generalization']],
-  ['Index and labels', ['Contour index interval', 'Labels']],
-  ['Appearance', ['Hillshade', 'Hypsometric tint']],
-  ['Packaging', ['Exploratory output allowed', 'Complete package']],
+/** The setting groups in page order, and their headings. */
+const GROUPS: ReadonlyArray<readonly [SettingGroup, MapSheetKey]> = [
+  ['line', 'gLine'], ['labels', 'gLabels'], ['appearance', 'gAppearance'], ['packaging', 'gPackaging'],
 ];
 
 /** Reading size for values, the statement and the validation note, before page scaling. */
@@ -41,16 +40,11 @@ interface Sz { readonly k: number; readonly read: number; readonly lead: number 
 
 type Group = { readonly name: string; readonly rows: ReadonlyArray<readonly [string, string]> };
 
-function groupsOf(settings: PurposeAppendixContent['settings']): Group[] {
-  const used = new Set<string>();
-  const out: Group[] = GROUPS.map(([name, keys]) => {
-    const rows = settings.filter(([k]) => keys.includes(k));
-    rows.forEach(([k]) => used.add(k));
-    return { name, rows };
-  });
-  const rest = settings.filter(([k]) => !used.has(k));
-  if (rest.length > 0) out[out.length - 1] = { ...out[out.length - 1]!, rows: [...out[out.length - 1]!.rows, ...rest] };
-  return out.filter((g) => g.rows.length > 0);
+function groupsOf(settings: PurposeAppendixContent['settings'], words: MapSheetWords): Group[] {
+  return GROUPS.map(([id, name]) => ({
+    name: words.say(name),
+    rows: settings.filter(([, , group]) => group === id).map(([key, value]) => [words.translate(key), words.translate(value)] as const),
+  })).filter((g) => g.rows.length > 0);
 }
 
 /** A group heading: a rule, then the name in the accent colour, larger than the keys under it. */
@@ -101,6 +95,7 @@ export function drawStyledPurposeAppendix(
   pageLabel: string,
   t: SheetTokens,
   f: SheetFonts,
+  words: MapSheetWords,
 ): void {
   const [PW, PH] = pageSize;
   const page = doc.addPage([PW, PH]);
@@ -111,18 +106,18 @@ export function drawStyledPurposeAppendix(
   let y = PH - margin - SHEET_TYPE.kicker * k;
 
   // Kicker, title and statement. The statement keeps a reading measure.
-  sheetText(page, 'CONTOUR MAP  ·  DELIVERABLE', x, y, { font: f.sansBold, size: SHEET_TYPE.kicker * k, color: t.accent }, f);
+  sheetText(page, words.say('kickerDeliverable'), x, y, { font: f.sansBold, size: SHEET_TYPE.kicker * k, color: t.accent }, f);
   y -= (SHEET_SPACE.sm + SHEET_TYPE.title) * k;
-  sheetText(page, content.title, x, y, { font: f.sansBold, size: SHEET_TYPE.title * k, color: t.ink }, f);
+  sheetText(page, words.translate(content.title), x, y, { font: f.sansBold, size: SHEET_TYPE.title * k, color: t.ink }, f);
   y -= SHEET_SPACE.md * k + z.read;
-  y = paragraph(page, content.statement, x, y, Math.min(w, 430 * k), t.dim, f, z);
+  y = paragraph(page, words.translate(content.statement), x, y, Math.min(w, 430 * k), t.dim, f, z);
   y -= SHEET_SPACE.xl * k;
 
   // Settings in two columns. Reading order runs down the left column, then
   // the right: the first half of the groups on the left.
   const gutter = SHEET_SPACE.xl * k;
   const colW = (w - gutter) / 2;
-  const groups = groupsOf(content.settings);
+  const groups = groupsOf(content.settings, words);
   const half = Math.ceil(groups.length / 2);
   const cols = [y, y];
   groups.forEach((g, i) => {
@@ -134,18 +129,18 @@ export function drawStyledPurposeAppendix(
   // The validation note: a callout with a bar in the warning colour, from the
   // first line's cap height to the last line's baseline.
   if (content.validation) {
-    y = groupHeading(page, 'Validation appendix', x, y, w, t, f, z);
+    y = groupHeading(page, words.say('validation'), x, y, w, t, f, z);
     const top = y + z.read * 0.75;
     const tone = { warn: t.warn, dim: t.dim, ink: t.ink } as const;
     const inset = SHEET_SPACE.lg * k;
     let last = y;
     content.validation.forEach((ln, i) => {
       if (i > 0) y -= SHEET_SPACE.sm * k;
-      last = y = paragraph(page, ln.text, x + inset, y, Math.min(w, 520 * k) - inset, tone[ln.tone], f, z) + z.lead;
+      last = y = paragraph(page, words.translate(ln.text), x + inset, y, Math.min(w, 520 * k) - inset, tone[ln.tone], f, z) + z.lead;
       y -= z.lead;
     });
     page.drawRectangle({ x, y: last - z.read * 0.25, width: 3, height: top - (last - z.read * 0.25), color: pdfColor(t.warn) });
   }
 
-  drawFooter(page, footerLeft, pageLabel, margin, PW - margin, margin, t, f);
+  drawFooter(page, footerLeft, pageLabel, margin, PW - margin, margin, t, f, words.draft);
 }

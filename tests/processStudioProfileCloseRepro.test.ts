@@ -262,7 +262,7 @@ describe('profile Expand → Close must not disturb the Process Studio', () => {
     // Open the Profile workbench through the real Measurements panel Expand.
     await r.mount.ensure();
     const panel = r.mount.panel!;
-    const expand = (panel.element as unknown as FakeEl).querySelector('button.olv-mp-chart-expand');
+    const expand = (panel.element as unknown as FakeEl).querySelector('button.olv-mp-open-workbench');
     expect(expand).not.toBeNull();
     expand!.dispatchEvent({ type: 'click', stopPropagation: () => {} });
     await settleUntil(() => dockOf(r) !== null);
@@ -298,7 +298,7 @@ describe('profile Expand → Close restores the AnalysePanel it hid', () => {
     // Open the real workbench via the Measurements panel Expand.
     await r.mount.ensure();
     const panel = r.mount.panel!;
-    const expand = (panel.element as unknown as FakeEl).querySelector('button.olv-mp-chart-expand');
+    const expand = (panel.element as unknown as FakeEl).querySelector('button.olv-mp-open-workbench');
     expand!.dispatchEvent({ type: 'click', stopPropagation: () => {} });
     await settleUntil(() => dockOf(r) !== null);
     while (frames.length > 0) frames.shift()!();
@@ -323,7 +323,7 @@ describe('profile Expand → Close restores the AnalysePanel it hid', () => {
     r.analyseProfileVisibility.hideForProfile();
     await r.mount.ensure();
     const panel = r.mount.panel!;
-    const expand = (panel.element as unknown as FakeEl).querySelector('button.olv-mp-chart-expand');
+    const expand = (panel.element as unknown as FakeEl).querySelector('button.olv-mp-open-workbench');
     expand!.dispatchEvent({ type: 'click', stopPropagation: () => {} });
     await settleUntil(() => dockOf(r) !== null);
     while (frames.length > 0) frames.shift()!();

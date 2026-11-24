@@ -73,7 +73,7 @@ function countZeroReturns(g: { readonly count: number; readonly returnNumber?: U
 
 /** The refusal a LAS 1.2 write returns when the overlap flag would be dropped. */
 function legacyOverlapDropRefusal(points: number): string {
-  const label = `${points.toLocaleString()} point${points === 1 ? '' : 's'}`;
+  const label = `${points.toLocaleString('en-US')} point${points === 1 ? '' : 's'}`;
   return (
     `LAS 1.2 was not written. ${label} ${points === 1 ? 'carries' : 'carry'} the overlap flag, which LAS 1.2 has no place for. ` +
     `Choose LAS 1.4 to keep it, or tick "${LEGACY_OVERLAP_DROP_OPT_IN}" to write the base class without it.`
@@ -606,7 +606,7 @@ export function convertCloud(
         const loss = describeLoss(inspectLegacyConversion([], true), LEGACY_PDRF_FOR_LOSS);
         record({
           id: 'overlap-dropped', kind: 'dropped', level: 'warn', points: overlapped, acknowledged: true,
-          message: `LAS 1.2 cannot record the overlap flag \u2014 ${overlapped.toLocaleString()} point${overlapped === 1 ? '' : 's'} ${overlapped === 1 ? 'carries' : 'carry'} it and ${loss}; the base class is written and the overlap mark is dropped. Use LAS 1.4 to preserve it.`,
+          message: `LAS 1.2 cannot record the overlap flag \u2014 ${overlapped.toLocaleString('en-US')} point${overlapped === 1 ? '' : 's'} ${overlapped === 1 ? 'carries' : 'carry'} it and ${loss}; the base class is written and the overlap mark is dropped. Use LAS 1.4 to preserve it.`,
         });
       }
       const recordLegacy = fitProvenance(lasProvenance, datumNote, events);
@@ -643,7 +643,7 @@ export function convertCloud(
         : writeXyzBytes(g, opts.asciiPrecision ?? 3, geo, datumNote, asciiProvenance, { epsg: outEpsg, crsName: sourceCrs?.name ?? null });
   }
 
-  log.push({ level: 'info', message: `Wrote ${g.count.toLocaleString()} points as ${spec.label}.` });
+  log.push({ level: 'info', message: `Wrote ${g.count.toLocaleString('en-US')} points as ${spec.label}.` });
   // XYZ / ASC carry the CRS only as a header comment, so a `.prj` sidecar is the
   // machine-readable record. Keep mode uses the source WKT when it has one, and
   // otherwise the stored definition of its EPSG code (a file that carries only

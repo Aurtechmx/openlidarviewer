@@ -187,6 +187,14 @@ test('Export mode: the map sheet defaults to Light, with the relief and the shee
   await group.getByRole('button', { name: 'Contour map sheet (PDF)' }).click();
   await expect(dialog).toBeVisible({ timeout: 20_000 });
   await expect(styleSelect(dialog)).toHaveValue('dark');
+  // Notes left as they were are made again for the sheet; typed ones are kept for this scan.
+  const notes = dialog.getByLabel('Project / Notes');
+  await expect(notes).toHaveValue(/^Contours from .+ · interval /);
+  await notes.fill('Bank survey');
+  await Promise.all([page.waitForEvent('download', { timeout: 60_000 }), dialog.getByRole('button', { name: 'Export PDF' }).click()]);
+  await expect(dialog).toBeHidden();
+  await group.getByRole('button', { name: 'Contour map sheet (PDF)' }).click();
+  await expect(notes).toHaveValue('Bank survey');
 });
 
 test('Export mode: the contour map PNG draws the sheet and carries its provenance', async ({ page }) => {

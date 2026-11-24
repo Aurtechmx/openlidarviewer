@@ -20,6 +20,7 @@
  * is testable in Node and adds one factory call to `main.ts`.
  */
 
+import { RELOAD_COST } from '../io/loadErrors';
 import { useBoxAsClip, type BoxToClipDeps } from './boxToClip';
 import { buildResultModel } from './measureResultModel';
 import { MeasureResultCard } from '../ui/MeasureResultCard';
@@ -256,7 +257,7 @@ export function createClipFlowFromShell(sh: ClipFlowShell): ClipFlow {
     stopMeasureTool: () => { if (v().measureMode) sh.toggleMeasure(); },
     setBoxKind: () => v().measure.setKind('box'),
     // The page is asked for to be read, so a phone sheet opens rather than drops.
-    openDetails: (id) => { sh.openPage('measure', { reveal: true }); const p = sh.measurePanel(); if (p) p.focusRow(id); else sh.toast('The Measurements list is not available. If it does not appear, reload the page; a reload closes open scans.'); },
+    openDetails: (id) => { sh.openPage('measure', { reveal: true }); const p = sh.measurePanel(); if (p) p.focusRow(id); else sh.toast(`The Measurements list is not available. If it does not appear, reload the page; ${RELOAD_COST}`); },
     deleteMeasurement: (id) => sh.deleteMeasurement(id),
     lookingDown: () => sh.ready() && looksDown(v().getCameraPose(), v().measure.worldUp),
     setFootprintHint: (on) => { if (sh.ready()) v().measure.boxFootprint = on; },

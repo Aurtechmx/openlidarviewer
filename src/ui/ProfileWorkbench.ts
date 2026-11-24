@@ -108,6 +108,13 @@ export interface ProfileWorkbenchOptions {
    */
   readonly onExportImage?: () => Promise<void>;
   /**
+   * Save the section's returns as CSV with a receipt. Resolves to the line to
+   * announce, or null when nothing was saved because the panel closed. A
+   * refusal rejects with the reason, which the panel shows. Absent renders no
+   * returns control.
+   */
+  readonly onExportReturns?: (onProgress: (fraction: number) => void) => Promise<string | null>;
+  /**
    * Show or hide the 3D outline of the corridor the section sampled from — its
    * sampling support, not an uncertainty band. Absent means no corridor control
    * is rendered (there is no 3D scene to draw into). Off by default.
@@ -189,6 +196,10 @@ const EXPORT_FAILED_LABEL = 'Export failed';
 const EXPORT_PNG_LABEL = 'Export PNG';
 const EXPORT_PNG_WORKING_LABEL = 'Saving\u2026';
 
+/** The returns control's resting label, and the state it passes through. */
+const EXPORT_RETURNS_LABEL = 'Export returns';
+const EXPORT_RETURNS_WORKING_LABEL = 'Saving\u2026';
+
 /** How long a failed export keeps saying so before the control resets. */
 const EXPORT_FAILED_MS = 1800;
 
@@ -218,6 +229,7 @@ class ProfileWorkbench {
   private readonly _titleInput: HTMLInputElement | null;
   private readonly _exportBtn: HTMLButtonElement | null;
   private readonly _exportImageBtn: HTMLButtonElement | null;
+  private readonly _exportReturnsBtn: HTMLButtonElement | null;
   private readonly _corridorBtn: HTMLButtonElement | null;
   private readonly _rawScope: HTMLSelectElement | null;
   private readonly _status: HTMLElement;
@@ -330,6 +342,20 @@ class ProfileWorkbench {
       this._on(btn, 'click', () => void this._exportImage(btn));
     }
 
+    this._exportReturnsBtn = options.onExportReturns
+      ? el('button', {
+          className: 'olv-workbench-btn',
+          type: 'button',
+          text: EXPORT_RETURNS_LABEL,
+          ariaLabel: 'Export every return in this section as CSV with a JSON receipt',
+          tip: 'Save every return in this section as CSV with a JSON receipt, in one ZIP.',
+        })
+      : null;
+    if (this._exportReturnsBtn) {
+      const btn = this._exportReturnsBtn;
+      this._on(btn, 'click', () => void this._exportReturns(btn));
+    }
+
     // A toggle, not an action: it flips the 3D sample-corridor outline on and
     // off. aria-pressed carries the state so it reads as a toggle to assistive
     // tech; off by default, so the scene is unchanged until the user asks.
@@ -373,7 +399,7 @@ class ProfileWorkbench {
       this._on(select, 'change', () => options.onRawScope?.(select.value as ProfileRawScope));
     }
 
-    const exportBtns = [this._exportBtn, this._exportImageBtn].filter(
+    const exportBtns = [this._exportBtn, this._exportImageBtn, this._exportReturnsBtn].filter(
       (b): b is HTMLButtonElement => b !== null,
     );
     const actions = [
@@ -576,6 +602,38 @@ class ProfileWorkbench {
     if (this._closed) return;
     btn.textContent = EXPORT_PNG_LABEL;
     btn.disabled = false;
+  }
+
+  /**
+   * Save the returns, and say on the panel what happened. A refusal is a
+   * sentence the user can act on, so it goes to the status line as it is.
+   */
+  private async _exportReturns(btn: HTMLButtonElement): Promise<void> {
+    const run = this._options.onExportReturns;
+    if (!run || btn.disabled) return;
+    btn.disabled = true;
+    btn.textContent = EXPORT_RETURNS_WORKING_LABEL;
+    let said: string | null = null;
+    let failed = false;
+    try {
+      said = await run((fraction) => {
+        if (!this._closed) btn.textContent = `${EXPORT_RETURNS_WORKING_LABEL} ${Math.floor(fraction * 100)}%`;
+      });
+    } catch (error) {
+      failed = !(error instanceof Error && error.name === 'ProfileReturnsRefusal');
+      said = failed ? 'The returns could not be exported.' : (error as Error).message;
+      if (failed) console.error('OpenLiDARViewer: the profile returns export failed.', error);
+    }
+    if (this._closed) return;
+    if (said !== null) this._status.textContent = said;
+    if (failed) {
+      btn.textContent = EXPORT_FAILED_LABEL;
+      await new Promise((r) => setTimeout(r, EXPORT_FAILED_MS));
+      if (this._closed) return;
+    }
+    btn.textContent = EXPORT_RETURNS_LABEL;
+    btn.disabled = false;
+    focusIfLost(btn);
   }
 
   setCollapsed(collapsed: boolean): void {

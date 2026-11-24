@@ -1,5 +1,5 @@
 import { test, expect, type Page } from '@playwright/test';
-import { seedStaleReloadCooldown } from './helpers';
+import { dropTinyLas, seedStaleReloadCooldown } from './helpers';
 
 /**
  * v0.3.9 command palette — Cmd-K / Ctrl-K.
@@ -264,4 +264,23 @@ test('a clicked row runs the command it shows when ranking mixes sections', asyn
   await page.locator('[role=option]').filter({ hasText: /^Save session/ }).click();
   await page.waitForTimeout(800);
   await expect(page.getByText('Recovery data in this browser was deleted.')).toHaveCount(0);
+});
+
+test('typing a kind of measurement offers it, and Enter arms it', async ({ page }) => {
+  await openPalette(page);
+  await page.locator('.olv-palette-input').fill('profile');
+  const row = page.locator('.olv-palette-row', { hasText: 'Profile measurement' });
+  await expect(row).toHaveAttribute('aria-disabled', 'true');
+  await expect(row).toContainText('Open a scan first.');
+  await page.keyboard.press('Escape');
+  await dropTinyLas(page);
+  await expect(page.locator('.olv-empty')).toBeHidden({ timeout: 20_000 });
+  for (const kind of ['Profile', 'Area']) {
+    await page.keyboard.press('ControlOrMeta+KeyK');
+    await page.locator('.olv-palette-input').fill(kind.toLowerCase());
+    await expect(page.locator('.olv-palette-row').first()).toContainText(`${kind} measurement`);
+    await page.keyboard.press('Enter');
+    await expect(page.locator('.olv-measure-bar')).toBeVisible();
+    await expect(page.locator('.olv-mkind-active', { hasText: kind })).toBeVisible();
+  }
 });

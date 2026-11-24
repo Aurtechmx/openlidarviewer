@@ -12,11 +12,9 @@
  *     coverage/readiness + not-survey-grade + README caveat). When neither
  *     applies, no banner renders.
  *
- *  2. COMPACT TILE FOOTERS — each raster tile (coverage / relief / canopy)
- *     used to stack a full-width "Click the map to sample a point." row above
- *     a full-width "Export PNG" row. The readout + action now share one
- *     compact `.olv-analyse-tile-footer` line per tile; the hint text and the
- *     export button are both still present (nothing disclosed is removed).
+ *  2. ONE HINT AND ONE PNG EXPORT: the raster tiles (coverage / relief /
+ *     canopy) share one sample hint and one PNG export that lists every map.
+ *     Each tile keeps its own readout.
  */
 
 import { describe, it, expect, beforeAll } from 'vitest';
@@ -106,33 +104,69 @@ describe('AnalysePanel — consolidated not-survey-grade banner', () => {
   });
 });
 
-describe('AnalysePanel — compact per-tile footers', () => {
-  it('each raster tile carries ONE footer line holding the sample hint + Export PNG', async () => {
+describe('AnalysePanel: repeated statements', () => {
+  async function shown(): Promise<FakeEl> {
     const { AnalysePanel } = await import('../src/ui/AnalysePanel');
     const panel = new AnalysePanel({});
-    const result = analyseContours(hillScene(), {
-      cellSizeM: 2,
-      crs: 'EPSG:32610',
-      verticalDatum: 'EPSG:5703',
-    });
-    panel.update(result);
-    const root = panel.element as unknown as FakeEl;
+    panel.update(analyseContours(hillScene(), { cellSizeM: 2, crs: 'EPSG:32610', verticalDatum: 'EPSG:5703' }));
+    return panel.element as unknown as FakeEl;
+  }
+  const inDetails = (node: FakeEl): boolean => {
+    for (let n = node.parent; n; n = n.parent) if (n.tagName === 'details') return true;
+    return false;
+  };
 
-    const footers = root.findByClassSubstring('olv-analyse-tile-footer');
-    // Coverage + relief tiles at minimum (canopy joins when the CHM renders).
-    expect(footers.length).toBeGreaterThanOrEqual(2);
-    for (const footer of footers) {
-      // The hint readout and the export action share the single footer line.
-      expect(footer.findByClassSubstring('olv-analyse-sample')).toHaveLength(1);
-      expect(footer.findContaining('Export PNG')).toHaveLength(1);
+  it('the raster tiles share one sample hint and one PNG export listing every map', async () => {
+    const root = await shown();
+    const tiles = root.findByClass('olv-analyse-raster-tile');
+    expect(tiles.length).toBeGreaterThanOrEqual(2);
+    expect(root.findContaining('Click the map to sample a point.')).toHaveLength(1);
+    const buttons = root.findByText('Export PNG');
+    expect(buttons).toHaveLength(1);
+    expect(buttons[0].title).toContain('Not a georeferenced raster.');
+    const select = buttons[0].parent!.children.find((n) => n.tagName === 'select')!;
+    expect(select.getAttribute('aria-label')).toBe('Map to export');
+    expect(select.children.map((o) => o.ownText)).toEqual(
+      tiles.map((t) => t.findByClass('olv-analyse-sublabel')[0].ownText),
+    );
+    // Each tile keeps its own live readout, empty until a sample.
+    for (const tile of tiles) {
+      const [readout] = tile.findByClass('olv-analyse-sample');
+      expect(readout.ownText).toBe('');
+      expect(readout.getAttribute('aria-live')).toBe('polite');
     }
+  });
 
-    // Nothing disclosed was removed: every hint readout still exists, one per
-    // tile footer (none stacked as standalone full-width rows any more).
-    const hints = root.findContaining('Click the map to sample a point.');
-    expect(hints).toHaveLength(footers.length);
-    for (const hint of hints) {
-      expect(footers.some((f) => f.findByClassSubstring('olv-analyse-sample').includes(hint))).toBe(true);
-    }
+  it('states the canopy height figures once, with the unit', async () => {
+    const root = await shown();
+    const stats = root.findContaining('p95 ');
+    expect(stats).toHaveLength(1);
+    expect(stats[0].ownText).toMatch(/^Above-ground height: p95 .*(m|ft|unverified)/);
+  });
+
+  it('has one Validation detail, holding the check rows and the hold-out figures', async () => {
+    const root = await shown();
+    expect(root.findContaining('Validation detail')).toHaveLength(1);
+    const [checks] = root.findByClass('olv-fit-checks');
+    expect(checks.findByClass('olv-fit-row').length).toBeGreaterThan(0);
+    expect(checks.textContent).toMatch(/Vertical RMSE:/);
+    expect(root.findContaining('Vertical RMSE:')).toHaveLength(1);
+  });
+
+  it('puts the contour share definitions in the visible key', async () => {
+    const root = await shown();
+    const [defs] = root.findContaining('Sparse ground: measured, but with fewer ground returns than a typical cell.');
+    expect(defs.className).toBe('olv-analyse-legend-item');
+    expect(defs.ownText).toContain('Interpolated: filled from nearby ground. Gap: too little support to trust.');
+    expect(root.hints().some((t) => t.includes('Sparse ground'))).toBe(false);
+  });
+
+  it('keeps the derived complexity figure in Surface model stats and its caveat visible at rest', async () => {
+    const root = await shown();
+    const [caveat] = root.findByClass('olv-analyse-derived-caveat');
+    expect(caveat.ownText).toContain('reliability threshold');
+    expect(inDetails(caveat)).toBe(false);
+    const [value] = root.findByClass('olv-analyse-derived-value');
+    expect(value.parent!.className).toBe('olv-analyse-assess-metricwrap');
   });
 });

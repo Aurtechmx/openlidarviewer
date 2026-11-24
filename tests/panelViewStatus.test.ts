@@ -98,3 +98,44 @@ describe('StreamingPanel — current-view readiness line', () => {
     expect(panel.paused).toBe(false);
   });
 });
+
+describe('StreamingPanel: the Nodes, Points and Cache rows', () => {
+  const stats = (root: FakeEl) => byClass(root, 'olv-section-collapsible') as unknown as FakeEl & { open: boolean };
+  const settled = model({ state: 'settled', headline: 'Current view ready', fraction: 1, detail: '10 / 10 requested nodes resident' });
+  const incomplete = model({ state: 'incomplete', headline: 'Current view incomplete', detail: '9 / 10 requested nodes resident' });
+
+  it('close when the view is ready, with the headline and counts outside them, and open when it is incomplete', async () => {
+    const { panel, root } = await makePanel();
+    expect(stats(root).open).toBe(true);
+    panel.setViewStatus(model({}));
+    expect(stats(root).open).toBe(true);
+    panel.setViewStatus(settled);
+    expect(stats(root).open).toBe(false);
+    const inside = (n: FakeEl, text: string): boolean => findContaining(n, text) !== undefined;
+    for (const text of ['Current view ready', '10 / 10 requested nodes resident']) {
+      expect(inside(root, text)).toBe(true);
+      expect(inside(stats(root), text)).toBe(false);
+    }
+    panel.setViewStatus(incomplete);
+    expect(stats(root).open).toBe(true);
+  });
+
+  it('stay as the user left them until the next scan', async () => {
+    const { panel, root } = await makePanel();
+    byClass(root, 'olv-section-summary')!.click();
+    panel.setViewStatus(settled);
+    expect(stats(root).open).toBe(true);
+    panel.resetForScan();
+    panel.setViewStatus(settled);
+    expect(stats(root).open).toBe(false);
+    panel.hide();
+    expect(stats(root).open).toBe(true);
+  });
+
+  it('state a 4,096-point view the same way in the headline counts and in the rows', async () => {
+    const { panel, root } = await makePanel();
+    panel.setStatus({ loadedNodes: 1, knownNodes: 1, displayedPoints: 4096, sourcePoints: 4096, cacheBytes: 0 });
+    expect(byClass(root, 'olv-stream-prog-points')!.textContent).toBe('4.1K / 4.1K pts');
+    expect(findContaining(stats(root), '4.1K / 4.1K')).toBeDefined();
+  });
+});

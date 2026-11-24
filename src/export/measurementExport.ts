@@ -888,6 +888,8 @@ function csvCell(v: string | number): string {
   return neutralise || /[",\r\n]/.test(cell) ? `"${cell.replaceAll(/"/g, '""')}"` : cell;
 }
 
+export { supportVerdict } from './supportVerdict';
+
 /** The support grade and caption of `m`, as `support_grade` and `support`, or nothing. */
 function supportProps(m: Measurement, ctx: MeasurementExportContext): Record<string, string> {
   if (!ctx.supportOf) return {};

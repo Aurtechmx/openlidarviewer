@@ -93,7 +93,7 @@ export interface ClassSemanticsPlan {
 }
 
 function pointsLabel(points: number): string {
-  return `${points.toLocaleString()} point${points === 1 ? '' : 's'}`;
+  return `${points.toLocaleString('en-US')} point${points === 1 ? '' : 's'}`;
 }
 
 function reading(code: number, pdrf: number): string {

@@ -20,7 +20,7 @@
  */
 
 import {
-  PDFDocument, StandardFonts, rgb, concatTransformationMatrix, drawObject, lineTo, moveTo, popGraphicsState,
+  PDFDocument, type PDFFont, StandardFonts, rgb, concatTransformationMatrix, drawObject, lineTo, moveTo, popGraphicsState,
   pushGraphicsState, setLineCap, setLineWidth, setStrokingRgbColor, stroke, LineCapStyle,
   type PDFPage,
 } from 'pdf-lib';
@@ -30,6 +30,7 @@ import type { ReportFonts } from './sheetKit/fonts';
 import {
   PALETTE, drawRuns, heading, paragraph, sectionTitle, table, widthOf, type PageCursor, type PageSize,
 } from './watershedReport/pageKit';
+import { drainageWords, type DrainageWords } from './localizeDrainage';
 import { SOURCE_NOT_SUPPLIED_NOTE, sourceSha256Text } from '../science/exportDigestRecord';
 import { crsOriginLine } from '../science/crsOrigin';
 import { sourceInterpretationLines, sourceInterpretationOf } from '../science/sourceInterpretation';
@@ -55,7 +56,8 @@ import { scaleBarUnit } from '../render/measure/scaleBar';
 import { winAnsiSafe } from '../winAnsiText';
 import type { FlowPulsePackageOptions } from './flowPulsePackage';
 import type { DtmGrid } from '../terrain/ground/cellConfidence';
-import { buildWatershedReportModel, chooseOutlets, watershedReportGate, type ReportOutlet, type WatershedReportModel } from '../simulation/flowPulse/watershed/watershedReportModel';
+import { buildWatershedReportModel, chooseOutlets, watershedReportGate, type ReportLocale, type ReportOutlet, type WatershedReportModel } from '../simulation/flowPulse/watershed/watershedReportModel';
+import { t } from '../simulation/flowPulse/watershed/watershedStrings';
 import { partitionWatersheds } from '../simulation/flowPulse/watershed/watershedPartition';
 import { DEFAULT_NETWORK_THRESHOLD_M2 } from '../simulation/flowPulse/watershed/flowNetwork';
 import { traceDivide, type TracedDivide } from '../simulation/flowPulse/watershed/divideTrace';
@@ -85,6 +87,8 @@ export interface FlowDrainageSheetOptions extends Pick<FlowPulsePackageOptions,
   readonly depressionRows?: number;
   /** The analysed DTM (coverage, confidence, counts), for the catchment study. Omitted: no study. */
   readonly dtm?: DtmGrid | null;
+  /** Language and number style of the printed sheet. Default English with point decimals. */
+  readonly locale?: ReportLocale;
   /** Project title for the cover. Default the basename. */
   readonly title?: string;
   /** Metres per vertical unit; null withholds every height, slope and relief in the study. */
@@ -213,8 +217,12 @@ function peakLines(label: string, e: PeakFlowEstimate): string[] {
   ];
 }
 
-/** Everything the sheet prints, as data. */
+/** The sheet as it was before it had a choice. */
+const ENGLISH_SHEET: ReportLocale = { lang: 'en', numberStyle: 'point' };
+
+/** Everything the sheet prints, as data: its own lines in English, put into `options.locale` as they are drawn. */
 export function buildDrainageSheetModel(result: FlowPulseResult, options: FlowDrainageSheetOptions = {}): DrainageSheetModel {
+  const locale = options.locale ?? ENGLISH_SHEET;
   const grid = result.grid;
   const cols = grid.cols;
   const basename = options.basename ?? 'flow-pulse';
@@ -252,7 +260,7 @@ export function buildDrainageSheetModel(result: FlowPulseResult, options: FlowDr
     }
     const model = buildWatershedReportModel({
       result, dtm: options.dtm!, outlets,
-      language: 'en', title: options.title ?? basename, thresholdM2,
+      language: locale.lang, numberStyle: locale.numberStyle, title: options.title ?? basename, thresholdM2,
       verticalToMetres: vToM, originZ: vToM == null ? null : options.elevationOrigin ?? null,
       crsName: options.crsName ?? null, generatedAt: new Date(options.generationDateIso ?? Date.now()),
       software: buildIdentityProvenance(build), sourceSha256: options.sourceSha256 ?? options.digests?.sourceSha256 ?? null,
@@ -263,7 +271,7 @@ export function buildDrainageSheetModel(result: FlowPulseResult, options: FlowDr
         ? `Flow lines: cells whose estimated peak flow reaches ${DISPLAY_THRESHOLD_M3S * 1000} L/s at ${settingText(rainfall)} (at least ${num(thresholdM2, 0)} m2 draining), the Lab's line threshold.`
         : `Flow lines: cells with at least ${num(thresholdM2, 0)} m2 draining to them.`,
       model: studied ? model : { ...model, sections: [] },
-      names: options.catchment && studied ? { C1: 'your catchment' } : {},
+      names: options.catchment && studied ? { C1: t(locale.lang, 'catchment.yours') } : {},
     };
     if (studied && model.sections.length === 0) catchmentStudyWithheld = 'No watershed on the grid is large enough to study.';
   } else if (want('catchment')) {
@@ -492,10 +500,15 @@ function text(page: PDFPage, s: string, x: number, y: number, size: number, font
   return drawRuns(page, safe(s), x, y, { font: bold ? fonts.bodyBold : fonts.body, size, color }, fonts);
 }
 
+/** The map sheet's scale label, with its grouping pinned rather than read from the host. */
+function scaleLabel(scaleN: number, unit: DrainageLinearUnit): string {
+  return unit !== 'unknown' && scaleN > 0 ? `1:${num(scaleN, 0)}` : mapScaleLabel(scaleN, unit);
+}
+
 /** The plan-view drainage map, full text width, with its legend and frame notes below. */
-function drawDrainageMap(c: PageCursor, doc: PDFDocument, result: FlowPulseResult, map: DrainageMapModel, fonts: ReportFonts, roomBelow = 0): PageCursor {
+function drawDrainageMap(c: PageCursor, doc: PDFDocument, result: FlowPulseResult, map: DrainageMapModel, fonts: ReportFonts, w: DrainageWords, roomBelow = 0): PageCursor {
   const page = c.page;
-  let cur = heading(c, 'Drainage map', 'Flow lines, outlets and your selection', null, fonts);
+  let cur = heading(c, w.line(SECTION_LABEL.map), w.line('Flow lines, outlets and your selection'), null, fonts);
   const g = result.grid;
   const cols = g.cols, rows = g.rows;
   const box = { minX: map.ox, minY: map.oy, maxX: map.ox + cols * map.cellX, maxY: map.oy + rows * map.cellY };
@@ -604,13 +617,13 @@ function drawDrainageMap(c: PageCursor, doc: PDFDocument, result: FlowPulseResul
   for (const v of gridTicks(box.minX, box.maxX, stepW)) {
     const x = px(v);
     page.drawLine({ start: { x, y: oy }, end: { x, y: oy + t.drawnH }, thickness: 0.3, color: PALETTE.rule, opacity: 0.9 });
-    const s = num(v, dec);
+    const s = w.num(num(v, dec));
     text(page, s, x - widthOf(s, fonts.body, 7, fonts) / 2, oy - 10, 7, fonts, false, PALETTE.mute);
   }
   for (const v of gridTicks(box.minY, box.maxY, stepW)) {
     const y = py(v);
     page.drawLine({ start: { x: t.ox, y }, end: { x: t.ox + t.drawnW, y }, thickness: 0.3, color: PALETTE.rule, opacity: 0.9 });
-    const s = num(v, dec);
+    const s = w.num(num(v, dec));
     text(page, s, t.ox - 4 - widthOf(s, fonts.body, 7, fonts), y - 2.5, 7, fonts, false, PALETTE.mute);
   }
   page.drawRectangle({ x: t.ox, y: oy, width: t.drawnW, height: t.drawnH, borderColor: PALETTE.ink, borderWidth: 0.6 });
@@ -618,7 +631,7 @@ function drawDrainageMap(c: PageCursor, doc: PDFDocument, result: FlowPulseResul
   const nx = t.ox + t.drawnW - 14, ny = oy + t.drawnH - 8;
   page.drawRectangle({ x: nx - 10, y: ny - 30, width: 20, height: 28, color: rgb(1, 1, 1), opacity: 0.85 });
   page.drawSvgPath('M 0 0 L 5 13 L 0 10 L -5 13 Z', { x: nx, y: ny - 4, color: PALETTE.ink });
-  text(page, 'N', nx - 3.5, ny - 27, 8, fonts, true);
+  text(page, w.line('N'), nx - 3.5, ny - 27, 8, fonts, true);
 
   // Below the map: scale, frame notes on the left; the legend on the right.
   let ly = oy - 30;
@@ -631,22 +644,22 @@ function drawDrainageMap(c: PageCursor, doc: PDFDocument, result: FlowPulseResul
       page.drawRectangle({ x: cur.left + (i * bar.barPt) / bar.segments, y: leftY, width: bar.barPt / bar.segments, height: 4, color: i % 2 ? rgb(1, 1, 1) : PALETTE.ink, borderColor: PALETTE.ink, borderWidth: 0.5 });
     }
     text(page, '0', cur.left - 2, leftY - 10, 7, fonts);
-    const end = `${Number((bar.totalGround / divisor).toPrecision(6))} ${unit}`;
+    const end = w.line(`${Number((bar.totalGround / divisor).toPrecision(6))} ${unit}`);
     text(page, end, cur.left + bar.barPt - widthOf(end, fonts.body, 7, fonts) / 2, leftY - 10, 7, fonts);
     leftY -= 26;
   }
   const scaleN = map.unitToMetres != null ? Math.round(mapScaleRatio(t.scale, map.unitToMetres)) : 0;
   let left: PageCursor = { ...cur, right: cur.left + colW, y: leftY + 6 };
-  for (const line of [`Scale ${mapScaleLabel(scaleN, map.linearUnit)} on the printed page.`, `Coordinate system: ${map.crsText}.`, `${map.gridText}.`, 'Grey shading: hillshade of the analysed DTM, sun from the north-west.']) {
-    left = paragraph(left, line, fonts, { size: 9 });
+  for (const line of [`Scale ${scaleLabel(scaleN, map.linearUnit)} on the printed page.`, `Coordinate system: ${map.crsText}.`, `${map.gridText}.`, 'Grey shading: hillshade of the analysed DTM, sun from the north-west.']) {
+    left = paragraph(left, w.line(line), fonts, { size: 9 });
   }
   let right: PageCursor = { ...cur, left: cur.left + colW + 20, y: ly + 10 };
   right = { ...right, y: right.y - 2 };
-  text(page, 'LEGEND', right.left, right.y - 9, 9, fonts, true, PALETTE.mute);
+  text(page, w.line('LEGEND'), right.left, right.y - 9, 9, fonts, true, PALETTE.mute);
   let y = right.y - 24;
   const item = (draw: (x: number, y: number) => void, label: string): void => {
     draw(right.left + 8, y + 3);
-    const p = paragraph({ ...right, left: right.left + 22, y: y + 9 }, label, fonts, { size: 9 });
+    const p = paragraph({ ...right, left: right.left + 22, y: y + 9 }, w.line(label), fonts, { size: 9 });
     y = p.y - 6;
   };
   item((x, yy) => page.drawLine({ start: { x: x - 7, y: yy }, end: { x: x + 7, y: yy }, thickness: 1.5, color: WATER }),
@@ -666,9 +679,10 @@ function drawDrainageMap(c: PageCursor, doc: PDFDocument, result: FlowPulseResul
 }
 
 /** Hydrology summary and traced-path lines: `# ` starts a section, `- ` a list item, `Label: value` a lead. */
-function drawLines(c: PageCursor, lines: readonly string[], fonts: ReportFonts): PageCursor {
+function drawLines(c: PageCursor, lines: readonly string[], fonts: ReportFonts, w: DrainageWords): PageCursor {
   let cur = c;
-  for (const raw of lines) {
+  for (const english of lines) {
+    const raw = w.line(english);
     if (raw.startsWith('# ')) { cur = sectionTitle(cur, safe(raw.slice(2)), fonts); continue; }
     if (raw.startsWith('- ')) { cur = paragraph({ ...cur, left: cur.left + 10 }, safe(`- ${raw.slice(2)}`), fonts, { size: 9 }); cur = { ...cur, left: c.left }; continue; }
     const k = raw.indexOf(': ');
@@ -678,19 +692,27 @@ function drawLines(c: PageCursor, lines: readonly string[], fonts: ReportFonts):
   return cur;
 }
 
-function drawDepressionTable(c: PageCursor, table_: DrainageTable, fonts: ReportFonts): PageCursor {
-  let cur = sectionTitle(c, 'Depressions, largest first', fonts);
-  cur = paragraph(cur, safe(table_.note), fonts, { size: 9.5 });
+function drawDepressionTable(c: PageCursor, table_: DrainageTable, fonts: ReportFonts, w: DrainageWords): PageCursor {
+  let cur = sectionTitle(c, w.line('Depressions, largest first'), fonts);
+  cur = paragraph(cur, safe(w.line(table_.note)), fonts, { size: 9.5 });
   if (table_.rows.length === 0) return cur;
-  const w = cur.right - cur.left;
+  const width = cur.right - cur.left;
   const shares = [0.08, 0.1, 0.14, 0.17, 0.25, 0.13, 0.13];
-  return table(cur, table_.header.map((h, i) => ({ title: safe(h), align: i === 0 ? 'left' as const : 'right' as const, width: Math.floor(w * shares[i]!) })), table_.rows, fonts, { size: 9 });
+  return table(cur, table_.header.map((h, i) => ({ title: safe(w.line(h)), align: i === 0 ? 'left' as const : 'right' as const, width: Math.floor(width * shares[i]!) })), table_.rows.map((row) => row.map(w.num)), fonts, { size: 9 });
+}
+
+/** A standard face that writes a character it lacks as its nearest form, where pdf-lib throws. */
+function winAnsiFont(font: PDFFont): PDFFont {
+  const encode = font.encodeText.bind(font), width = font.widthOfTextAtSize.bind(font);
+  font.encodeText = (text) => encode(safe(text));
+  font.widthOfTextAtSize = (text, size) => width(safe(text), size);
+  return font;
 }
 
 /** Default Helvetica faces, used only when the report fonts cannot be embedded. */
 async function fallbackFonts(doc: PDFDocument): Promise<ReportFonts> {
-  const body = await doc.embedFont(StandardFonts.Helvetica);
-  const bodyBold = await doc.embedFont(StandardFonts.HelveticaBold);
+  const body = winAnsiFont(await doc.embedFont(StandardFonts.Helvetica));
+  const bodyBold = winAnsiFont(await doc.embedFont(StandardFonts.HelveticaBold));
   return { title: body, titleBold: bodyBold, body, bodyBold, symbol: await doc.embedFont(StandardFonts.Symbol) };
 }
 
@@ -700,6 +722,8 @@ export interface DrainageSheetRenderOptions {
   /** PNG encoder for the map rasters. Default the platform-zlib encoder. */
   readonly encodePng?: (rgba: Uint8Array, w: number, h: number) => Promise<Uint8Array>;
   readonly size?: PageSize;
+  /** Told of a line the export language has no wording for, which is printed in English. */
+  readonly onMiss?: (text: string) => void;
 }
 
 /** Build the drainage sheet PDF. Needs `options.dtm` (the analysed DTM). */
@@ -709,7 +733,8 @@ export async function buildFlowDrainageSheetPdf(
   const model = buildDrainageSheetModel(result, options);
   const study = model.catchmentStudy;
   if (!study) throw new Error('The drainage sheet needs the analysed DTM of the run.');
-  const status = model.statusLines.slice(0, 1).join(' ');
+  const w = drainageWords(options.locale ?? ENGLISH_SHEET, render.onMiss);
+  const status = w.line(model.statusLines[0] ?? '');
   const { bytes } = await renderWatershedReport(study.model, {
     size: render.size ?? 'letter',
     encodePng: render.encodePng ?? encodePng,
@@ -723,20 +748,20 @@ export async function buildFlowDrainageSheetPdf(
       // The map page carries the traced path and catchment under its legend; the
       // summary page carries the depression table after the hydrology figures.
       if (model.map) {
-        let c = drawDrainageMap(h.start('M', SECTION_LABEL.map), h.doc, result, model.map, h.fonts, model.traced ? 15 * model.traced.length : 0);
-        if (model.traced) c = drawLines(c, model.traced, h.fonts);
+        let c = drawDrainageMap(h.start('M', w.line(SECTION_LABEL.map)), h.doc, result, model.map, h.fonts, w, model.traced ? 15 * model.traced.length : 0);
+        if (model.traced) c = drawLines(c, model.traced, h.fonts, w);
         h.tag('map');
       }
       const traced = model.map ? null : model.traced;
       if (model.summary || traced || model.depressions) {
         const title = model.summary ? 'What the run found' : 'Your selection';
-        let c = heading(h.start('H', model.summary ? SECTION_LABEL.summary : SECTION_LABEL.traced), model.summary ? 'Hydrology summary' : 'Traced path and depressions', title, null, h.fonts);
+        let c = heading(h.start('H', w.line(model.summary ? SECTION_LABEL.summary : SECTION_LABEL.traced)), w.line(model.summary ? SECTION_LABEL.summary : 'Traced path and depressions'), w.line(title), null, h.fonts);
         if (model.summary) {
-          c = paragraph(c, safe(model.statusLines.join(' ')), h.fonts, { size: 9 });
-          c = drawLines(c, model.summary, h.fonts);
+          c = paragraph(c, safe(model.statusLines.map(w.line).join(' ')), h.fonts, { size: 9 });
+          c = drawLines(c, model.summary, h.fonts, w);
         }
-        if (traced) c = drawLines(c, traced, h.fonts);
-        if (model.depressions) drawDepressionTable(c, model.depressions, h.fonts);
+        if (traced) c = drawLines(c, traced, h.fonts, w);
+        if (model.depressions) drawDepressionTable(c, model.depressions, h.fonts, w);
         h.tag('summary');
       }
     },

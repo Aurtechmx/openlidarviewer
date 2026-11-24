@@ -99,6 +99,36 @@ export function sectionLabelHeight(k = 1): number {
   return 2 * SHEET_SPACE.md * k;
 }
 
+/** Splits a section heading into lines its letterspaced capitals fit in `width`. */
+export function wrapSectionLabel(label: string, width: number, f: SheetFonts, k = 1): string[] {
+  const size = SHEET_TYPE.section * k;
+  const out: string[] = [];
+  for (const word of label.split(' ')) {
+    const next = out.length > 0 ? `${out[out.length - 1]} ${word}` : word;
+    const w = sheetTextWidth(next.toUpperCase(), f.sansBold, size, f) + next.length * size * CAPS_TRACKING;
+    if (out.length > 0 && w <= width) out[out.length - 1] = next;
+    else out.push(word);
+  }
+  return out;
+}
+
+/** Height of a heading already split into `lines`, to the y {@link drawSectionLines} returns. */
+export function sectionLinesHeight(lines: number, k = 1): number {
+  return sectionLabelHeight(k) + (lines - 1) * SHEET_TYPE.section * 1.3 * k;
+}
+
+/** {@link drawSectionLabel} for a heading of several lines. */
+export function drawSectionLines(
+  page: PDFPage, lines: readonly string[], x: number, y: number, width: number, t: SheetTokens, f: SheetFonts, k = 1,
+): number {
+  let cy = drawSectionLabel(page, lines[0]!, x, y, width, t, f, k);
+  for (const line of lines.slice(1)) {
+    cy -= SHEET_TYPE.section * 1.3 * k;
+    sheetCaps(page, line, x, cy + SHEET_SPACE.md * k, { font: f.sansBold, size: SHEET_TYPE.section * k, color: t.dim }, f);
+  }
+  return cy;
+}
+
 /** What a legend row's key shows. */
 export type LegendKey =
   | { readonly kind: 'line'; readonly color: SheetRgb; readonly width: number; readonly dash?: readonly number[]; readonly opacity?: number }
@@ -197,6 +227,9 @@ export function dataBlockHeight(rows: readonly DataRow[], width: number, f: Shee
   return lines * SHEET_TYPE.dataValue * 1.5 * k;
 }
 
+/** How far below the footer's line its note sits, points. */
+export const FOOTER_NOTE_DROP = 10;
+
 export interface ScaleBarSpec {
   /** Page points per world (source CRS) unit. */
   readonly scalePtPerWorld: number;
@@ -208,6 +241,8 @@ export interface ScaleBarSpec {
    * source linear unit, so a foot CRS reads ft and an unresolved one reads units.
    */
   readonly unitFor: (totalGround: number) => { readonly unit: string; readonly divisor: number };
+  /** Rewrites a tick value in the export's number style; absent leaves it as it is. */
+  readonly num?: (s: string) => string;
 }
 
 /**
@@ -229,7 +264,8 @@ export function drawScaleBar(page: PDFPage, spec: ScaleBarSpec, x: number, y: nu
   const ty = y - h - 9;
   const o = { font: f.mono, size: SHEET_TYPE.tick, color: t.ink };
   for (let i = 0; i <= bar.segments; i += 2) {
-    const lbl = formatScaleTick((bar.segGround * i) / divisor);
+    const tick = formatScaleTick((bar.segGround * i) / divisor);
+    const lbl = spec.num ? spec.num(tick) : tick;
     const w = sheetTextWidth(lbl, f.mono, o.size, f);
     sheetText(page, lbl, i === 0 ? x : x + i * segPt - w / 2, ty, o, f);
   }
@@ -249,17 +285,31 @@ export type NorthSpec =
   /** A local frame with no known bearing. */
   | { readonly kind: 'local' };
 
+/** The arrow's words in another language, and the right edge they must keep to. */
+export interface NorthWords {
+  readonly grid: string;
+  readonly true: string;
+  readonly localUp: string;
+  readonly unknown: string;
+  readonly angle: (degrees: string, east: boolean) => string;
+  readonly right: number;
+}
+
 /**
  * North arrow centred at (cx, cy), about 26 points tall, with its label above.
  * A true-north arrow also prints its angle from grid north; a local frame
  * says that north is unknown instead of drawing an arrow that implies it.
  */
-export function drawNorthArrow(page: PDFPage, spec: NorthSpec, cx: number, cy: number, t: SheetTokens, f: SheetFonts): void {
+export function drawNorthArrow(page: PDFPage, spec: NorthSpec, cx: number, cy: number, t: SheetTokens, f: SheetFonts, words?: NorthWords): void {
+  const centred = (s: string, y: number, o: TextOpts): void => {
+    const over = words ? Math.max(0, cx + sheetTextWidth(s, o.font, o.size, f) / 2 - words.right) : 0;
+    sheetTextCentred(page, s, cx - over, y, o, f);
+  };
   const label = { font: f.sansBold, size: SHEET_TYPE.legend, color: t.ink };
   if (spec.kind === 'local') {
     const o = { font: f.sans, size: SHEET_TYPE.note, color: t.dim };
-    sheetTextCentred(page, 'Local grid up', cx, cy + 4, { ...label, color: t.dim }, f);
-    sheetTextCentred(page, 'true north unknown', cx, cy - 6, o, f);
+    centred(words?.localUp ?? 'Local grid up', cy + 4, { ...label, color: t.dim });
+    centred(words?.unknown ?? 'true north unknown', cy - 6, o);
     return;
   }
   const angle = spec.kind === 'true' ? spec.convergenceDeg : 0;
@@ -271,12 +321,12 @@ export function drawNorthArrow(page: PDFPage, spec: NorthSpec, cx: number, cy: n
   const [lx, ly] = rot(-5, 3), [rx, ry] = rot(5, 3), [hx, hy] = rot(0, 14);
   // drawSvgPath flips y about its origin; pass absolute points with y negated.
   page.drawSvgPath(`M ${hx} ${-hy} L ${lx} ${-ly} L ${rx} ${-ry} Z`, { x: 0, y: 0, color: pdfColor(t.ink) });
-  const name = spec.kind === 'true' ? 'True N' : 'Grid N';
-  sheetTextCentred(page, name, cx, cy + 20, label, f);
+  const name = spec.kind === 'true' ? (words?.true ?? 'True N') : (words?.grid ?? 'Grid N');
+  centred(name, cy + 20, label);
   if (spec.kind === 'true') {
-    const side = angle >= 0 ? 'E' : 'W';
-    const txt = `${Math.abs(angle).toFixed(2)}° ${side} of grid N`;
-    sheetTextCentred(page, txt, cx, cy - 22, { font: f.mono, size: SHEET_TYPE.tick, color: t.dim }, f);
+    const deg = Math.abs(angle).toFixed(2);
+    const txt = words ? words.angle(deg, angle >= 0) : `${deg}° ${angle >= 0 ? 'E' : 'W'} of grid N`;
+    centred(txt, cy - 22, { font: f.mono, size: SHEET_TYPE.tick, color: t.dim });
   }
 }
 
@@ -339,14 +389,15 @@ export function drawCoordinateTicks(
   }
 }
 
-/** The sheet footer: a rule, left text and a right-aligned page label. */
+/** The sheet footer: a rule, left text and a right-aligned page label, and a note on a line of its own below. */
 export function drawFooter(
-  page: PDFPage, left: string, pageLabel: string, x: number, right: number, y: number, t: SheetTokens, f: SheetFonts,
+  page: PDFPage, left: string, pageLabel: string, x: number, right: number, y: number, t: SheetTokens, f: SheetFonts, note: string | null = null,
 ): void {
   page.drawLine({ start: { x, y: y + 12 }, end: { x: right, y: y + 12 }, thickness: t.weight.rule, color: pdfColor(t.rule) });
   const o = { font: f.sans, size: SHEET_TYPE.footer, color: t.dim };
   sheetText(page, left, x, y, o, f);
   if (pageLabel) sheetTextRight(page, pageLabel, right, y, { ...o, font: f.mono }, f);
+  if (note) sheetText(page, note, x, y - FOOTER_NOTE_DROP, o, f);
 }
 
 /** Fills the page with the style's paper colour. Call first, before anything else is drawn. */

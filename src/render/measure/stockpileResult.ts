@@ -148,5 +148,5 @@ export function withheldClause(w: VolumeWithheldCounts | undefined): string {
   const tail = noise ? ` · ${noise}` : '';
   if (w.exclusionUnavailable) return ` · ${reducedSampleClause(w)}${tail}`;
   if (w.excluded === 'unknown') return ' · Withheld flags unavailable' + tail;
-  return (w.excluded > 0 ? ` · ${w.excluded.toLocaleString()} Withheld points excluded` : '') + tail;
+  return (w.excluded > 0 ? ` · ${w.excluded.toLocaleString('en-US')} Withheld points excluded` : '') + tail;
 }

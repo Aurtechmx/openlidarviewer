@@ -98,13 +98,13 @@ export function sampleBudgetRefusal(
   const decodedBytes = points * DECODED_BYTES_PER_POINT;
   if (points <= MAX_SAMPLE_POINTS && decodedBytes <= MAX_SAMPLE_DECODED_BYTES) return null;
   return {
-    headline: 'Full-cloud grade unavailable: the sample exceeds the safe decode budget',
+    headline: 'Full-cloud check unavailable: the sample exceeds the safe decode budget',
     note:
-      `Grading this cloud would decode ${formatPointCount(points)} points into a single ` +
+      `Checking this cloud would decode ${formatPointCount(points)} points into a single ` +
       `${formatBytesIn(decodedBytes, 'MiB', 0)} buffer, above the ${formatPointCount(MAX_SAMPLE_POINTS)}-point safe ceiling. ` +
-      `The selected octree node is larger than the whole-cloud sample budget, so the grade ` +
+      `The selected octree node is larger than the whole-cloud sample budget, so the check ` +
       `declines it here rather than force a multi-gigabyte allocation the streaming loader ` +
-      `itself would refuse. Grade a smaller scan or lower the sample budget.`,
+      `itself would refuse. Check a smaller scan or lower the sample budget.`,
   };
 }
 
@@ -140,13 +140,13 @@ export interface UnstatedPointTotal {
  * stated.
  */
 export const UNSTATED_POINT_TOTAL: UnstatedPointTotal = {
-  headline: 'Full-cloud grade unavailable: this format states no point total',
+  headline: 'Full-cloud check unavailable: this format states no point total',
   note:
     "This scan's index says where its tiles are, not how many points they hold. " +
-    'The per-tile counts a grade would add up are decode-admission estimates, so a ' +
+    'The per-tile counts a check would add up are decode-admission estimates, so a ' +
     'point total, a coverage percent, or a density scaled by them would be a ' +
     'fabricated figure rather than a measurement. COPC and EPT scans state a real ' +
-    'total and grade normally.',
+    'total and check normally.',
 };
 
 /** The honesty + scaling facts derived from a {@link SamplingPlan}. */
@@ -193,7 +193,7 @@ export interface OctreeCompleteness {
 const COMPLETE: OctreeCompleteness = { complete: true, errorCount: 0 };
 
 const SAMPLED_NOTE =
-  'Graded from a representative octree sample — density and coverage are estimated for the whole cloud, not measured exhaustively.';
+  'Read from a representative octree sample — density and coverage are estimated for the whole cloud, not measured exhaustively.';
 
 /**
  * The caveat for a grade over an INCOMPLETE hierarchy — some of the file never
@@ -204,7 +204,7 @@ const SAMPLED_NOTE =
  */
 function incompleteNote(sampledPoints: number, errorCount: number): string {
   const base =
-    `This scan's point hierarchy did not fully load, so the grade covers only the ` +
+    `This scan's point hierarchy did not fully load, so the check covers only the ` +
     `${formatPointCount(sampledPoints)} points that were read — a partial figure, not the whole file.`;
   if (errorCount <= 0) return base;
   const noun = errorCount === 1 ? 'load error was' : 'load errors were';
@@ -256,7 +256,7 @@ export function fullCloudGradeCoverage(
   let label: string;
   let note: string;
   if (totalPoints <= 0) {
-    label = 'no points available to grade';
+    label = 'no points available to check';
     note = SAMPLED_NOTE;
   } else if (scope === 'exhaustive') {
     label = `all ${formatPointCount(totalPoints)} points (exact)`;
@@ -266,7 +266,7 @@ export function fullCloudGradeCoverage(
     // percentage-of-total wording is deliberately withheld — the denominator we
     // have (loaded-node sum) is not the file's true count, so a "% of total"
     // here would itself be a quiet fabrication.
-    label = `${formatPointCount(sampledPoints)} points graded (partial)`;
+    label = `${formatPointCount(sampledPoints)} points checked (partial)`;
     note = incompleteNote(sampledPoints, completeness.errorCount);
   } else {
     label = `${formatPointCount(sampledPoints)} of ${formatPointCount(totalPoints)} points (${percentLabel(fraction, coveragePercent)}, sampled)`;

@@ -80,7 +80,7 @@ describe('map sheet dialog without a granted permit', () => {
     expect(hoisted.downloads).toHaveLength(0);
     expect(d.closed()).toBe(0);
     expect(d.errLine.style.display).not.toBe('none');
-    expect(d.errLine.textContent).toMatch(/not exported/i);
+    expect(d.errLine.textContent).toMatch(/map sheet withheld/i);
     expect(d.errLine.textContent).toMatch(/Contour Studio/);
     expect(d.exportBtn.disabled).toBe(false);
 

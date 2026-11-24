@@ -121,7 +121,7 @@ Open the Tools tab and start Measure, or press M. A toolbar appears over the vie
 - Height: vertical difference between a pair of points
 - Angle: the angle at a corner
 - Slope: rise, run, angle, and grade percent
-- Profile: a cross-section between a pair of points, with a height chart. Its Endpoint gradient is the net change between the first and last stations that have data, and it says how many stations between them are missing, for example "5.00% (spans 1 missing station)". Its PDF prints at standard horizontal and vertical scales, with a station band at round chainages and the steepest grade over one station pair and over a stated minimum distance.
+- Profile: a cross-section between a pair of points, with a height chart. Its Endpoint gradient is the net change between the first and last stations that have data, and it says how many stations between them are missing, for example "5.00% (spans 1 missing station)". Its PDF prints at standard horizontal and vertical scales, with a station band at round chainages and the steepest grade over one station pair and over a stated minimum distance. In the Profile Workbench, Export returns saves every return the corridor accepted as a CSV and a JSON receipt in one ZIP; a streamed scan gives the points that were loaded when the section was read.
 - Box: two opposite corners, reported as width, depth, height and volume
 - Volume: cut and fill against a base level, from a polygon or a lasso. For a polygon the base level is the median of the outline's vertex heights. The row shows it under the result (marked local when the scan has no datum), Copy result and the PDF report carry it, and the measurement CSV and GeoJSON write it as `base_level`
 
@@ -182,7 +182,7 @@ The blocked hold-out RMSE comes with a 95% confidence interval when two or more 
 - Contour vectors: GeoJSON in the scan's own coordinates, GeoJSON in WGS 84, DXF, or SVG
 - Export Contours: a printable map sheet, where you also pick the contour interval from the ones this surface supports
 - Intelligence report (PDF): the assessment, coverage, accuracy figures and warnings in one sheet
-- Drainage sheet (PDF), from Flow Pulse next to Drainage in 3D: a dialog picks the sections (drainage map, hydrology summary, traced path and catchment, depression table). The sheet has a cover page, a site map with labelled catchments, catchment pages and an appendix of definitions and sources. Every page is marked PREVIEW.
+- Drainage sheet (PDF), from Flow Pulse next to Drainage in 3D: a dialog picks the sections (drainage map, hydrology summary, traced path and catchment, depression table). The sheet has a cover page, a site map with labelled catchments, catchment pages and an appendix of definitions and sources. The dialog also sets the language (English or Spanish, a draft translation that says so on every page) and the number style. Every page is marked PREVIEW.
 - Flow Pulse and Terrain Access packages (ZIP): when the scan has an EPSG code but no WKT, each placed raster gets a `.prj` with the source coordinate system, and the README says so.
 
 Once a run exists, the Export tab's Products list also offers DEM package (ZIP) and Contour map sheet (PDF). They run the same exports as the Analyse buttons. The map sheet button opens the map sheet dialog. If the sheet is refused, the dialog stays open and says why. A button that cannot run is disabled and shows the reason on hover, for example "No contours at this interval to export." or that the analysis belongs to a different scan.
@@ -246,7 +246,7 @@ The clip changes what you see, not what you have. A point-cloud export made with
 
 ## Classify
 
-If a scan carries no classification at all, Classify (derive) works out ground, vegetation and building classes and shows them in the Classes panel on the Data tab. If the scan already carries classes from the surveyor, Classify leaves them alone and says so. Use Fill unclassified points instead, which derives only the gaps and keeps every class the file shipped with.
+If a scan carries no classification at all, Auto-classify scan (derive) works out ground, vegetation and building classes and shows them in the Classes panel on the Data tab. If the scan already carries classes from the surveyor, Classify leaves them alone and says so. Use Fill unclassified points instead, which derives only the gaps and keeps every class the file shipped with.
 
 Both actions need points in memory, so neither runs on a streaming scan.
 

@@ -68,6 +68,17 @@ describe('createDerivedLayersList', () => {
     expect(tags).toContain('Change · exploratory');
   });
 
+  it('leaves Show and Opacity for contours to their own block and keeps the exploratory tag', () => {
+    const store = new DerivedLayerStore();
+    const { element } = createDerivedLayersList({ store, onSetVisible: () => {}, onSetOpacity: () => {} });
+    store.put({ id: 'contours:a', type: 'contours', name: 'Contours', sourceScanIds: ['a'] });
+    expect(qa(element, 'input')).toHaveLength(0);
+    expect(q(element, '.olv-analyse-layer-name').textContent).toBe('Contours');
+    expect(qa(element, '.olv-analyse-layer-tag')).toHaveLength(0);
+    store.put({ id: 'contours:a', type: 'contours', name: 'Contours', sourceScanIds: ['a'], evidenceExploratory: true });
+    expect(q(element, '.olv-analyse-layer-tag').textContent).toBe('Contours · exploratory');
+  });
+
   it('routes a visibility toggle back through the handler, not the store', () => {
     const store = new DerivedLayerStore();
     const calls: { layer: DerivedLayer; visible: boolean }[] = [];
@@ -76,16 +87,16 @@ describe('createDerivedLayersList', () => {
       onSetVisible: (layer, visible) => calls.push({ layer, visible }),
       onSetOpacity: () => {},
     });
-    store.put({ id: 'contours:a', type: 'contours', name: 'Contours', sourceScanIds: ['a'] });
+    store.put({ id: 'slope:a', type: 'slope', name: 'Slope', sourceScanIds: ['a'] });
     const cb = q(element, 'input');
     cb.checked = false;
     cb.dispatchEvent({ type: 'change' });
     expect(calls).toHaveLength(1);
     expect(calls[0].visible).toBe(false);
-    expect(calls[0].layer.id).toBe('contours:a');
+    expect(calls[0].layer.id).toBe('slope:a');
     // The list itself did not write the store — the record is still visible
     // until the service applies the change and notifies.
-    expect(store.get('contours:a')!.visible).toBe(true);
+    expect(store.get('slope:a')!.visible).toBe(true);
   });
 
   it('routes an opacity change through the handler', () => {
@@ -96,7 +107,7 @@ describe('createDerivedLayersList', () => {
       onSetVisible: () => {},
       onSetOpacity: (_layer, opacity) => calls.push(opacity),
     });
-    store.put({ id: 'contours:a', type: 'contours', name: 'Contours', sourceScanIds: ['a'] });
+    store.put({ id: 'slope:a', type: 'slope', name: 'Slope', sourceScanIds: ['a'] });
     const range = qa(element, 'input').find((i) => i.type === 'range');
     range.value = '40';
     range.dispatchEvent({ type: 'input' });

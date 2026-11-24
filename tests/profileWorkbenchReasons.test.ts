@@ -68,7 +68,7 @@ describe('a section read that throws', () => {
 describe('wiring', () => {
   const mount = readFileSync(new URL('../src/app/measurePanelMount.ts', import.meta.url), 'utf8');
   it('turns a load failure and a narrow window into a toast', () => {
-    expect(mount).toContain("'The Profile Workbench could not open, so this shows the focus view. Reload the page to try again.'");
+    expect(mount).toContain('`The Profile Workbench could not open, so this shows the focus view. ${RELOAD_ADVICE}`');
     expect(mount).toContain("'The Profile Workbench needs a wider window, so this shows the focus view.'");
   });
   it('the shelf says why a profile has nothing to open', () => {

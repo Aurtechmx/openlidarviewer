@@ -24,4 +24,16 @@ describe('formatCount', () => {
     expect(formatCount(1_000_000)).toBe('1.0M');
     expect(formatCount(2_500_000)).toBe('2.5M');
   });
+
+  it('never rounds a K up to 1000.0K', () => {
+    expect(formatCount(999_949)).toBe('999.9K');
+    expect(formatCount(999_950)).toBe('1.0M');
+    expect(formatCount(999_999)).toBe('1.0M');
+  });
+
+  it('has no band above M, so a large count stays in M', () => {
+    expect(formatCount(999_949_999)).toBe('999.9M');
+    expect(formatCount(999_950_000)).toBe('1000.0M');
+    expect(formatCount(1_500_000_000)).toBe('1500.0M');
+  });
 });

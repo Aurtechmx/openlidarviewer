@@ -524,3 +524,19 @@ describe('profile section seam — the request can name its own up axis', () => 
     expect(Array.from(own.points.height)).toEqual([3]);
   });
 });
+
+describe('profile section seam: where the classes came from', () => {
+  const recorded = (classes?: { provenance: string; epoch: number }, classification: number[] | undefined = [2, 2, 2, 2]): string | undefined => {
+    const one = { ...layer({ id: 'one', points: [1, 0, 1, 2, 0, 2, 3, 0, 3, 4, 0, 4], ...(classification ? { classification } : {}) }), ...(classes ? { classes } : {}) };
+    const s = createProfileSectionSeam(deps({ layers: () => [one] })).sampleSeries(A, B, { corridorHalfWidth: 1 } as never) as unknown as { provenanceInput?: { sources: { classification: string }[] } } | null;
+    return s?.provenanceInput?.sources[0]?.classification;
+  };
+  it('says producer for classes read from the file, and only for those', () => {
+    expect(recorded()).toBe('producer');
+    expect(recorded({ provenance: 'source', epoch: 0 })).toBe('producer');
+    expect(recorded({ provenance: 'source', epoch: 1 })).toBe('derived');
+    expect(recorded({ provenance: 'derived', epoch: 1 })).toBe('derived');
+    expect(recorded({ provenance: 'cleared', epoch: 2 })).toBe('derived');
+    expect(recorded({ provenance: 'none', epoch: 0 }, [])).toBe('absent');
+  });
+});

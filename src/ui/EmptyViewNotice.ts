@@ -33,7 +33,7 @@ export interface EmptyViewActions {
 
 /** The card's sentence, or null when nothing on could explain an empty view. */
 export function emptyViewText(c: EmptyViewCauses): string | null {
-  if (c.scansHidden) return 'No points are drawn: every scan is hidden. Press Show scans, or tick Show or hide in Data.';
+  if (c.scansHidden) return 'No points are drawn: every scan is hidden. Press Show scans, or tick a scan in Data.';
   const on = [
     c.clip && 'the clip box',
     c.classes && 'the class filter',

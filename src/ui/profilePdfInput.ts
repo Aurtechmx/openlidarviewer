@@ -71,6 +71,8 @@ export function profilePdfInputFor(
     provenance: s.profileProvenance ?? null,
     coverageNote: s.profileCoverageNote ?? null,
     pickedRiseM: s.profilePickedRiseM ?? null,
+    // The grade and caption the panel shows for this measurement, as captured.
+    support: s.trust ?? null,
     generatedAt: options.generatedAt,
   };
 }

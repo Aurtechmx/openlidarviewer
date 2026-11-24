@@ -62,7 +62,7 @@ export function fineDecimals(v: number): number {
  */
 export function magnitudeFixed(v: number, maxDecimals: number): string {
   const d = Math.min(maxDecimals, fineDecimals(v));
-  return d === 0 ? Math.round(v).toLocaleString() : v.toFixed(d);
+  return d === 0 ? Math.round(v).toLocaleString('en-US') : v.toFixed(d);
 }
 
 /**
@@ -423,7 +423,7 @@ export function spaceMetrics(
   if (clippedCount > 0) {
     notes.push({ code: 'stray-excluded', count: clippedCount });
     reasons.push(
-      `${clippedCount.toLocaleString()} stray return(s) outside the dense footprint were excluded — dimensions describe the scanned space, matching the floor-plan sheet.`,
+      `${clippedCount.toLocaleString('en-US')} stray return(s) outside the dense footprint were excluded — dimensions describe the scanned space, matching the floor-plan sheet.`,
     );
   }
 
@@ -679,8 +679,8 @@ export function spaceMetrics(
   if (sampleScale > 1) {
     notes.push({ code: 'density-scaled', measured: m, loaded: sourcePointCount });
     reasons.push(
-      `Density and spacing are scaled from a ${m.toLocaleString()}-point measured subset ` +
-        `to the ${sourcePointCount.toLocaleString()}-point loaded sample ` +
+      `Density and spacing are scaled from a ${m.toLocaleString('en-US')}-point measured subset ` +
+        `to the ${sourcePointCount.toLocaleString('en-US')}-point loaded sample ` +
         `(uniform-stride assumption). The loaded sample is what the viewer holds, ` +
         `which may itself be a subset of the file.`,
     );

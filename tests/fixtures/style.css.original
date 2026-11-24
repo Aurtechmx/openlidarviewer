@@ -5989,8 +5989,6 @@ body:has(.olv-anno-editor:not(.olv-hidden)) .olv-toast.olv-recovery-notice { dis
 }
 @media (prefers-reduced-motion: reduce) { .olv-mp-resize { transition: none; } }
 
-/* Expand-to-focus control in a profile row header — unobtrusive icon button in
- * the same house line-icon family as the dock glyphs. Opens the focus surface. */
 /* The profile chart is the click target for the focus surface. A hairline
    ring on hover/focus confirms the whole chart is interactive. */
 .olv-mp-chart-wrap {
@@ -6003,34 +6001,6 @@ body:has(.olv-anno-editor:not(.olv-hidden)) .olv-toast.olv-recovery-notice { dis
 .olv-mp-chart-wrap:focus-visible {
   outline: var(--focus-ring); outline-offset: var(--focus-ring-offset);
 }
-/* Always-visible badge in the corner the eye lands on — the pill fill and
-   border are what make it discoverable (the icon it replaces was
-   transparent until hovered). The wrap owns the click, so the badge is inert. */
-/* The named way into the focus view. It sits at the end of the vertical-stretch
-   strip because that row is already where a reader adjusts how the profile is
-   drawn, and because the chart's own corners are taken: the top-right glyph is
-   decorative and the bottom-right is the native resize grip. Auto margin pushes
-   it away from the stretch chips so the two groups do not read as one set. */
-
-.olv-mp-chart-expand {
-  position: absolute; top: 6px; right: 6px;
-  display: inline-flex; align-items: center; justify-content: center;
-  width: 24px; height: 24px; padding: 0;
-  color: var(--text-dim);
-  background: var(--panel);
-  border: 0.5px solid var(--hairline-strong); border-radius: var(--radius-sm);
-  /* A real button now. It was pointer-events: none — a mark shaped like a
-     control that could not be clicked, which is why nobody used it and why a
-     duplicate labelled button ended up in the chip strip below, overflowing
-     the panel. The colour no longer waits for hover either: an affordance that
-     is invisible until you are already over it is not discoverable. */
-  cursor: pointer;
-  transition: color var(--dur-fast) var(--ease-standard),
-              border-color var(--dur-fast) var(--ease-standard);
-}
-.olv-mp-chart-expand svg { width: 15px; height: 15px; }
-.olv-mp-chart-expand:hover,
-.olv-mp-chart-expand:focus-visible { color: var(--text); border-color: var(--accent); }
 @media (prefers-reduced-motion: reduce) { .olv-mp-chart-wrap { transition: none; } }
 .olv-mp-title { font-size: var(--text-sm); font-weight: 500; margin-bottom: var(--space-lg); }
 .olv-mp-list { display: flex; flex-direction: column; gap: var(--space-sm); min-width: 0; }
@@ -6414,8 +6384,7 @@ body:has(.olv-anno-editor:not(.olv-hidden)) .olv-toast.olv-recovery-notice { dis
  * pushes the button to the right so it doesn't compete visually with
  * the chart itself; the button borrows the same destructive rose
  * vocabulary as `.olv-measure-clear` and `.olv-tool-close` so the
- * action type reads without parsing the label (v0.3.10 honesty
- * patch — users could not find the existing per-row × delete). */
+ * action type reads without parsing the label. */
 .olv-mp-row-action {
   display: flex; justify-content: flex-end; gap: var(--space-sm);
   padding: var(--space-2xs) var(--space-xs) 0 var(--space-xs);
@@ -6431,7 +6400,7 @@ body:has(.olv-anno-editor:not(.olv-hidden)) .olv-toast.olv-recovery-notice { dis
     transform 90ms var(--ease-standard);
 }
 @media (pointer: coarse) {
-  .olv-mp-profile-pdf { min-height: 44px; display: inline-flex; align-items: center; justify-content: center; }
+  .olv-mp-profile-pdf, .olv-mp-profile-clear { min-height: 44px; display: inline-flex; align-items: center; justify-content: center; }
 }
 .olv-mp-profile-pdf:hover {
   color: var(--text);
@@ -9395,15 +9364,15 @@ body.olv-cvd .olv-di-confidence-chip[data-band="red"]     { background: #d55e00;
 .olv-sign .olv-export-fullres-hint { overflow-wrap: anywhere; }
 /* ── Terrain page disclosures ──────────────────────────────────────────────
    Every "▸ more" row on the Terrain page (Why?, Validation detail, Notes,
-   Workflow detail, the cause line, Surface model stats, All metrics, Derived
-   complexity, Evidence) is the View rail's disclosure row (`.olv-section-
+   Workflow detail, the cause line, Surface model stats, All metrics,
+   Evidence) is the View rail's disclosure row (`.olv-section-
    summary`, 40-inspector.css): sentence-case label at --text-xs/600 in
    --text-faint, a drawn caret that turns on open, a 24 px pointer target. One
-   rule, so the nine summaries cannot drift apart again in glyph, size or
+   rule, so the eight summaries cannot drift apart again in glyph, size or
    weight. Colour exceptions follow it (the cause line keeps its caution hue). */
 :is(.olv-why-summary, .olv-fit-caveats-summary, .olv-analyse-workflow-details-summary,
   .olv-analyse-why-summary, .olv-analyse-assess-metrics-summary,
-  .olv-analyse-derived-label, .olv-analyse-details-summary) {
+  .olv-analyse-details-summary) {
   display: flex; align-items: center; gap: var(--space-sm);
   min-height: 24px; padding: 0;
   cursor: pointer; list-style: none; user-select: none;
@@ -9413,10 +9382,10 @@ body.olv-cvd .olv-di-confidence-chip[data-band="red"]     { background: #d55e00;
 }
 :is(.olv-why-summary, .olv-fit-caveats-summary, .olv-analyse-workflow-details-summary,
   .olv-analyse-why-summary, .olv-analyse-assess-metrics-summary,
-  .olv-analyse-derived-label, .olv-analyse-details-summary)::-webkit-details-marker { display: none; }
+  .olv-analyse-details-summary)::-webkit-details-marker { display: none; }
 :is(.olv-why-summary, .olv-fit-caveats-summary, .olv-analyse-workflow-details-summary,
   .olv-analyse-why-summary, .olv-analyse-assess-metrics-summary,
-  .olv-analyse-derived-label, .olv-analyse-details-summary)::before {
+  .olv-analyse-details-summary)::before {
   content: '';
   flex-shrink: 0;
   width: 0; height: 0;
@@ -9427,17 +9396,17 @@ body.olv-cvd .olv-di-confidence-chip[data-band="red"]     { background: #d55e00;
 }
 details[open] > :is(.olv-why-summary, .olv-fit-caveats-summary, .olv-analyse-workflow-details-summary,
   .olv-analyse-why-summary, .olv-analyse-assess-metrics-summary,
-  .olv-analyse-derived-label, .olv-analyse-details-summary)::before { transform: rotate(90deg); }
+  .olv-analyse-details-summary)::before { transform: rotate(90deg); }
 :is(.olv-why-summary, .olv-fit-caveats-summary, .olv-analyse-workflow-details-summary,
-  .olv-analyse-assess-metrics-summary, .olv-analyse-derived-label,
+  .olv-analyse-assess-metrics-summary,
   .olv-analyse-details-summary):hover { color: var(--text-dim); }
 :is(.olv-fit-caveats-summary, .olv-analyse-workflow-details-summary, .olv-analyse-why-summary,
-  .olv-analyse-assess-metrics-summary, .olv-analyse-derived-label,
+  .olv-analyse-assess-metrics-summary,
   .olv-analyse-details-summary):focus-visible { outline: var(--focus-ring); outline-offset: var(--focus-ring-offset); }
 @media (prefers-reduced-motion: reduce) {
   :is(.olv-why-summary, .olv-fit-caveats-summary, .olv-analyse-workflow-details-summary,
     .olv-analyse-why-summary, .olv-analyse-assess-metrics-summary,
-    .olv-analyse-derived-label, .olv-analyse-details-summary)::before { transition: none; }
+    .olv-analyse-details-summary)::before { transition: none; }
 }
 
 /* Terrain assessment: export readiness and the products it grades. It is a
@@ -9491,13 +9460,9 @@ details[open] > :is(.olv-why-summary, .olv-fit-caveats-summary, .olv-analyse-wor
 .olv-analyse-assess-export.is-preview .olv-analyse-assess-export-verdict { color: var(--caution); }
 .olv-analyse-assess-export.is-blocked .olv-analyse-assess-export-verdict { color: var(--rating-blocked); }
 
-/* Derived complexity (v0.5.4) — one compact line under the assessment: the
-   VRM/TPI figures with window and units, pre-formatted by the analysis chunk.
-   Descriptive (never a good/bad colour); the density caveat below it reuses
-   the .olv-caveat honesty primitive. */
-.olv-analyse-derived {
-  margin-top: var(--space-lg);
-}
+/* Derived complexity: the VRM/TPI figures with window and units, in Surface
+   model stats. Descriptive (never a good/bad colour); its density caveat sits
+   outside that disclosure and reuses the .olv-caveat primitive. */
 .olv-analyse-derived-value {
   font-size: var(--text-body); color: var(--text-dim); overflow-wrap: anywhere;
   font-variant-numeric: tabular-nums; margin-top: var(--space-xs);
@@ -9787,6 +9752,7 @@ details[open] > :is(.olv-why-summary, .olv-fit-caveats-summary, .olv-analyse-wor
   display: flex; align-items: center; gap: var(--space-sm); cursor: pointer;
   font-size: var(--text-xs); color: var(--text-dim); user-select: none;
 }
+.olv-analyse-layer-name { font-size: var(--text-xs); color: var(--text-dim); }
 .olv-analyse-layer-toggle input { accent-color: var(--accent); cursor: pointer; }
 .olv-analyse-layer-slider { display: flex; align-items: center; gap: var(--space-md); }
 .olv-analyse-layer-tag {
@@ -9806,6 +9772,8 @@ details[open] > :is(.olv-why-summary, .olv-fit-caveats-summary, .olv-analyse-wor
   font-variant-numeric: tabular-nums; padding: var(--space-2xs) 0;
   border-top: 0.5px dashed var(--hairline);
 }
+/* Empty until the first sample; kept rendered so the live region announces. */
+.olv-analyse-sample:empty { padding: 0; border-top: 0; }
 .olv-analyse-sample.is-empty { color: var(--text-faint); }
 /* Sampled-cell crosshair — rides above the raster, survives re-light/resize. */
 .olv-analyse-raster-wrap { position: relative; line-height: 0; }
@@ -9847,17 +9815,9 @@ details[open] > :is(.olv-why-summary, .olv-fit-caveats-summary, .olv-analyse-wor
   padding: var(--space-xs) var(--space-md); cursor: pointer;
 }
 .olv-analyse-surface-dl:hover { border-color: var(--accent); }
-/* v0.5.5 P12 — compact per-tile footer: the click-to-sample readout and the
-   tile's Export PNG action share ONE line, so adjacent raster tiles
-   (coverage / relief / canopy) stop repeating full-width hint + button
-   blocks. The readout truncates rather than wraps; its full text stays
-   available to assistive tech via the live region. */
+/* The one PNG export under the raster tiles: map choice and action on a line. */
 .olv-analyse-tile-footer {
   display: flex; align-items: center; gap: var(--space-sm); min-width: 0;
-}
-.olv-analyse-tile-footer .olv-analyse-sample {
-  flex: 1 1 auto; min-width: 0; overflow: hidden;
-  text-overflow: ellipsis; white-space: nowrap;
 }
 .olv-analyse-tile-footer .olv-analyse-surface-dl {
   flex: 0 0 auto; align-self: center;
@@ -12699,7 +12659,7 @@ body.olv-cvd .olv-layerhealth-report-line[data-status="warn"] { color: #e69f00; 
 
 /* Clip flow and result card on a phone: 44 px touch targets. */
 @media (pointer: coarse) and (max-width: 767px) {
-  .olv-result-btn, .olv-clip-draw, .olv-clip-clear,
+  .olv-result-btn, .olv-clip-draw, .olv-clip-clear, .olv-clip-focus,
   .olv-clip-advanced-summary, .olv-result-dismiss, .olv-clip-enable {
     min-height: 44px; min-width: 44px;
     display: inline-flex; align-items: center; justify-content: center;
@@ -13324,7 +13284,7 @@ body.olv-cvd .olv-layerhealth-report-line[data-status="warn"] { color: #e69f00; 
   /* The ViewCube sizes its own faces, spots and Home control for coarse
      pointers (viewCube.ts: 156 px cube, 44 px hit areas). */
   /* Clip flow and result card. */
-  .olv-result-btn, .olv-clip-draw, .olv-clip-clear,
+  .olv-result-btn, .olv-clip-draw, .olv-clip-clear, .olv-clip-focus,
   .olv-clip-advanced-summary, .olv-result-dismiss, .olv-clip-enable {
     min-height: 44px; min-width: 44px;
     display: inline-flex; align-items: center; justify-content: center;

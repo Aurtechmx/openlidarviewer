@@ -144,7 +144,7 @@ test.describe('Analyse panel — keyboard raster sampling', () => {
     const readout = tile.locator('.olv-analyse-sample');
     const crosshair = tile.locator('.olv-analyse-xhair');
 
-    await expect(readout).toContainText('Click the map');
+    await expect(readout).toHaveText('');
     await expect(crosshair).not.toBeVisible();
 
     await canvas.focus();
@@ -153,7 +153,7 @@ test.describe('Analyse panel — keyboard raster sampling', () => {
 
     await expect(crosshair).toBeVisible();
     // Same as the mouse: hovering/moving the cursor never samples on its own.
-    await expect(readout).toContainText('Click the map');
+    await expect(readout).toHaveText('');
 
     await page.keyboard.press('Enter');
     await expect(readout).toContainText('Sample ·');
@@ -173,23 +173,15 @@ test.describe('Analyse panel — keyboard raster sampling', () => {
   });
 });
 
-test.describe('Measurements panel — profile chart expander tab order', () => {
-  test('the corner Expand button is out of the tab order and the accessibility tree', async ({ page }) => {
-    await placeProfile(page);
-    const chartExpand = page.locator('.olv-mp-chart-expand').first();
-    await expect(chartExpand).toHaveAttribute('tabindex', '-1');
-    await expect(chartExpand).toHaveAttribute('aria-hidden', 'true');
-  });
-
-  test('tabbing away from the chart wrapper does not land on the corner button', async ({ page }) => {
+test.describe('Measurements panel: profile chart opens the workbench', () => {
+  test('the chart has no second control, and Tab moves on from it', async ({ page }) => {
     await placeProfile(page);
     const chartWrap = page.locator('.olv-mp-chart-wrap').first();
-    const chartExpand = page.locator('.olv-mp-chart-expand').first();
-
+    await expect(chartWrap.locator('button')).toHaveCount(0);
     await chartWrap.focus();
     await expect(chartWrap).toBeFocused();
     await page.keyboard.press('Tab');
-    await expect(chartExpand).not.toBeFocused();
+    await expect(chartWrap).not.toBeFocused();
   });
 
   test('Enter on the chart wrapper still opens the profile workbench', async ({ page }) => {
@@ -200,9 +192,9 @@ test.describe('Measurements panel — profile chart expander tab order', () => {
     await expect(page.locator('.olv-workbench')).toBeVisible({ timeout: 10_000 });
   });
 
-  test('the corner button still opens the workbench for a mouse click (unchanged)', async ({ page }) => {
+  test('a mouse click on the chart opens the workbench', async ({ page }) => {
     await placeProfile(page);
-    await page.locator('.olv-mp-chart-expand').first().click();
+    await page.locator('.olv-mp-chart-wrap').first().click();
     await expect(page.locator('.olv-workbench')).toBeVisible({ timeout: 10_000 });
   });
 });

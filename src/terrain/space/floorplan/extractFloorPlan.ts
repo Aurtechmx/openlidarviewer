@@ -527,7 +527,7 @@ export function extractFloorPlan(
   const n = Math.floor(positions.length / 3);
   if (n < minPoints) {
     return emptyModel([
-      `Too few points (${n.toLocaleString()} < ${minPoints.toLocaleString()}) to trace walls — no plan extracted.`,
+      `Too few points (${n.toLocaleString('en-US')} < ${minPoints.toLocaleString('en-US')}) to trace walls — no plan extracted.`,
       SUITABILITY_NOTE,
     ], [{ code: 'too-few', n, min: minPoints }, { code: 'suitability' }]);
   }
@@ -772,7 +772,7 @@ export function extractFloorPlan(
   if (slice.clippedCount > 0) {
     notes.push({ code: 'stray', count: slice.clippedCount });
     reasons.push(
-      `${slice.clippedCount.toLocaleString()} stray return(s) outside the dense footprint were excluded as outliers.`,
+      `${slice.clippedCount.toLocaleString('en-US')} stray return(s) outside the dense footprint were excluded as outliers.`,
     );
   }
   let snapReason: string;

@@ -18,7 +18,7 @@
 import type { ExportDigests } from '../science/exportDigestRecord';
 import { formatGroupedInt } from '../science/withheldCounts';
 import type { Measurement, Vec3 } from '../render/measure/types';
-import { areaWithheldNote, boxVolumeWithheldNote, formatVolumeNumber, measurementMetrics, refusalNote, roundMeasured, reducedSampleCaveat, unresolvedMetricKeys, unresolvedNote, type AxisSteps } from './measurementExport';
+import { areaWithheldNote, boxVolumeWithheldNote, formatVolumeNumber, measurementMetrics, refusalNote, roundMeasured, reducedSampleCaveat, supportVerdict, unresolvedMetricKeys, unresolvedNote, type AxisSteps } from './measurementExport';
 import {
   buildReportManifest,
   canonicalize,
@@ -170,6 +170,12 @@ export function measurementsToFindings(
   const u = (unit: string): string => unitLabel(unit, verified);
   const findings: ReportFinding[] = [];
   measurements.forEach((m, i) => {
+    // The panel's support grade rides as the last caveat, under a figure and
+    // under a withheld one alike; an ungraded measurement adds none.
+    const support = supportVerdict(m);
+    const push = (f: ReportFinding): void => {
+      findings.push(support ? { ...f, caveats: [...(f.caveats ?? []), `Support grade: ${support}`] } : f);
+    };
     const steps = frame.positionSteps?.(m) ?? null;
     const metrics = measurementMetrics(m, up, unitToMetres, verticalToMetres, 3, steps);
     // A figure the live tool refuses is recorded as an explicit null with the
@@ -178,7 +184,7 @@ export function measurementsToFindings(
     if (refused) {
       if (Object.keys(metrics).length === 0) return;
       const label = m.name?.trim() || `${m.kind} ${i + 1}`;
-      findings.push({ label, value: null, unit: '', caveats: [refused] });
+      push({ label, value: null, unit: '', caveats: [refused] });
       return;
     }
     // An Area ring that establishes no area is recorded as an explicit null with
@@ -186,7 +192,7 @@ export function measurementsToFindings(
     const areaNote = areaWithheldNote(m, up, unitToMetres, verticalToMetres) ?? boxVolumeWithheldNote(m, up);
     if (areaNote) {
       const label = m.name?.trim() || `${m.kind} ${i + 1}`;
-      findings.push({ label, value: null, unit: '', caveats: [areaNote] });
+      push({ label, value: null, unit: '', caveats: [areaNote] });
       return;
     }
     const primary = PRIMARY[m.kind];
@@ -196,7 +202,7 @@ export function measurementsToFindings(
     const vv = Number.isFinite(verticalToMetres) && verticalToMetres > 0 ? verticalToMetres : unitToMetres;
     if (unresolved && primary && unresolvedMetricKeys(m, up, unitToMetres, vv, steps).includes(primary.key)) {
       const label = m.name?.trim() || `${m.kind} ${i + 1}`;
-      findings.push({ label, value: null, unit: '', caveats: [unresolved] });
+      push({ label, value: null, unit: '', caveats: [unresolved] });
       return;
     }
     let value: number | null = null;
@@ -281,9 +287,9 @@ export function measurementsToFindings(
       // net either. An unswitched record without a net (never written by
       // the app) still falls back to its cross-check under a label saying so.
       if (vol.net !== undefined) {
-        findings.push({ label, value: roundTo3(vol.net * V), unit: u('m³'), confidence: vol.confidence, caveats });
+        push({ label, value: roundTo3(vol.net * V), unit: u('m³'), confidence: vol.confidence, caveats });
       } else if (vol.crossCheck && vol.gridAuthority !== 'withheld') {
-        findings.push({
+        push({
           label: `${label} (cut-fill cross-check — grid volume withheld)`,
           value: roundTo3(vol.crossCheck.net * V),
           unit: u('m³'),
@@ -292,11 +298,11 @@ export function measurementsToFindings(
         });
       } else {
         // Withheld with nothing to show: an explicit null under the reason.
-        findings.push({ label: `${label} (volume withheld)`, value: null, unit: '', confidence: vol.confidence, caveats });
+        push({ label: `${label} (volume withheld)`, value: null, unit: '', confidence: vol.confidence, caveats });
       }
       return;
     }
-    findings.push(unresolved ? { label, value, unit, caveats: [unresolved] } : { label, value, unit });
+    push(unresolved ? { label, value, unit, caveats: [unresolved] } : { label, value, unit });
   });
   return findings;
 }

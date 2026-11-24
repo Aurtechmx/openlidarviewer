@@ -4,8 +4,9 @@
  * The Analyse panel's raster and relief previews: the surface statistics, the
  * bare-earth elevation histogram, the canopy-height tile, the coverage
  * (trust) tile with its confidence toggle, and the relief tile with its
- * interactive sun and palette. Each tile carries its legend, a click-to-sample
- * readout and a print-resolution PNG export. The host is what the panel
+ * interactive sun and palette. Each tile carries its legend and a
+ * click-to-sample readout; one sample hint and one print-resolution PNG
+ * export serve them all. The host is what the panel
  * lends: its callbacks for the map context, the export basename and the
  * confidence colour toggle, the current result for the samplers, and the slot
  * for the confidence button so the panel keeps its label in step. Browser-
@@ -38,6 +39,15 @@ export interface SurfaceTilesHost {
   getResult(): AnalyseContoursResult | null;
   /** The coverage tile built its confidence toggle; the panel owns its label. */
   setConfidenceColorButton(button: HTMLButtonElement): void;
+}
+
+/** A preview map the shared PNG export can save. */
+interface MapExport {
+  readonly label: string;
+  readonly canvas: HTMLCanvasElement;
+  readonly cols: number;
+  readonly rows: number;
+  readonly filename: string;
 }
 
 export interface MountedSurfaceTiles {
@@ -79,6 +89,8 @@ function placeCrosshair(crosshair: HTMLElement, fx: number, fy: number): void {
 
 export class SurfaceTiles {
   private _cancelRepaint: (() => void) | null = null;
+  /** The maps the PNG export offers, in tile order. */
+  private _exports: MapExport[] = [];
   private readonly host: SurfaceTilesHost;
 
   constructor(host: SurfaceTilesHost) {
@@ -88,6 +100,7 @@ export class SurfaceTiles {
   /** The tiles for a result: stats, histogram, canopy, coverage and relief, in order. */
   render(r: AnalyseContoursResult): MountedSurfaceTiles {
     this._cancelRepaint = null;
+    this._exports = [];
     const out: HTMLElement[] = [];
     const s = r.surface;
     if (!s) return { elements: out, cancelRepaint: null };
@@ -119,9 +132,10 @@ export class SurfaceTiles {
     const canopyMax = Number.isFinite(s.canopy.maxHeightM) && s.canopy.maxHeightM > 0
       ? s.canopy.maxHeightM
       : 1;
+    const tiles: HTMLElement[] = [];
     const chm = this._rasterPreview({
       label: 'Canopy height (CHM)',
-      caption: `Above ground · p95 ${fmt(s.canopy.p95HeightM)}${vu} · max ${fmt(s.canopy.maxHeightM)}${vu}`,
+      caption: 'Above ground',
       values: s.canopy.heightM,
       cols: r.dtm.cols,
       rows: r.dtm.rows,
@@ -133,16 +147,19 @@ export class SurfaceTiles {
       legend: { min: 0, max: s.canopy.maxHeightM, palette: DEFAULT_CANOPY_PALETTE, unit: this._verticalUnitToken() },
       filename: 'canopy-height',
     });
-    if (chm) out.push(chm);
+    if (chm) tiles.push(chm);
 
     // Coverage, a green/yellow/red trust read of the bare-earth DTM. Same
     // confidence the dashed-contour evidence uses, so the two agree.
     const coverage = this._coverageTile(r);
-    if (coverage) out.push(coverage);
+    if (coverage) tiles.push(coverage);
 
     // Relief, multi-directional / single-sun hillshade with adjustable sun.
     const relief = this._reliefTile(r, s);
-    if (relief) out.push(relief);
+    if (relief) tiles.push(relief);
+    if (tiles.length > 0) {
+      out.push(el('div', { className: 'olv-analyse-caption', text: SAMPLE_HINT }), ...tiles, this._exportBar());
+    }
     return { elements: out, cancelRepaint: this._cancelRepaint };
   }
 
@@ -151,8 +168,8 @@ export class SurfaceTiles {
    * interpolated) / red (weak/extrapolated or gap), with empty cells left
    * transparent. A projection of the per-cell DTM confidence the pipeline
    * already computes; no new analysis. Carries a 3-stop legend, a click-to-
-   * sample readout reporting the cell's confidence + grade word, an Export PNG
-   * button, and the honesty caption. Never claims survey-grade.
+   * sample readout reporting the cell's confidence + grade word, and the
+   * honesty caption. Never claims survey-grade.
    */
   private _coverageTile(r: AnalyseContoursResult): HTMLElement | null {
     const cols = r.dtm.cols;
@@ -186,12 +203,8 @@ export class SurfaceTiles {
     const readout = this._sampleReadout();
     this._attachCoverageSampler(canvas, wrap.crosshair, cols, rows, readout);
 
-    const dl = el('button', {
-      className: 'olv-analyse-surface-dl', text: 'Export PNG',
-      title: 'Save this tile as a PNG image at its own cell grid. Not a georeferenced raster.',
-    });
-    dl.addEventListener('click', () => this._downloadRasterPng(canvas, cols, rows, 'coverage'));
-    tile.append(this._tileFooter(readout, dl));
+    tile.append(readout);
+    this._exports.push({ label: 'Coverage (trust)', canvas, cols, rows, filename: 'coverage' });
 
     // Link to the 3D 'Confidence' colour mode, the colourblind-safe twin of
     // this tile, painting the SAME buckets onto the point cloud itself. Lives
@@ -279,8 +292,7 @@ export class SurfaceTiles {
 
   /**
    * Render a grid raster as a north-up preview tile with a heading, caption,
-   * optional colour-ramp legend, click-to-sample, and a print-resolution PNG
-   * export. Shared raster-preview system used by the canopy-height tile.
+   * optional colour-ramp legend and click-to-sample. Shared raster-preview system used by the canopy-height tile.
    */
   private _rasterPreview(opts: {
     label: string;
@@ -332,12 +344,8 @@ export class SurfaceTiles {
     const readout = this._sampleReadout();
     this._attachSampler(canvas, wrap.crosshair, cols, rows, readout);
 
-    const dl = el('button', {
-      className: 'olv-analyse-surface-dl', text: 'Export PNG',
-      title: 'Save this tile as a PNG image at its own cell grid. Not a georeferenced raster.',
-    });
-    dl.addEventListener('click', () => this._downloadRasterPng(canvas, cols, rows, opts.filename));
-    tile.append(this._tileFooter(readout, dl));
+    tile.append(readout);
+    this._exports.push({ label: opts.label, canvas, cols, rows, filename: opts.filename });
     return tile;
   }
 
@@ -547,30 +555,38 @@ export class SurfaceTiles {
     const readout = this._sampleReadout();
     this._attachSampler(canvas, wrap.crosshair, cols, rows, readout);
 
-    const dl = el('button', {
-      className: 'olv-analyse-surface-dl', text: 'Export PNG',
-      title: 'Save this tile as a PNG image at its own cell grid. Not a georeferenced raster.',
-    });
-    dl.addEventListener('click', () => this._downloadRasterPng(canvas, cols, rows, 'relief'));
-    tile.append(this._tileFooter(readout, dl));
+    tile.append(readout);
+    this._exports.push({ label: 'Relief (hillshade)', canvas, cols, rows, filename: 'relief' });
 
     repaint();
     return tile;
   }
 
-  /**
-   * v0.5.5 P12, compact per-tile footer. Adjacent raster tiles (coverage,
-   * relief, canopy) each stacked a full-width "Click the map to sample a
-   * point." row above a full-width "Export PNG" row, so the rail repeated
-   * the same two blocks map after map. The readout and the tile's action
-   * button now share ONE compact line per map. Nothing is removed, the
-   * readout keeps its live-region semantics and its hint text, and the
-   * button keeps its behaviour; only the presentation is consolidated.
-   */
-  private _tileFooter(readout: HTMLElement, ...actions: HTMLElement[]): HTMLElement {
-    const footer = el('div', { className: 'olv-analyse-tile-footer' });
-    footer.append(readout, ...actions);
-    return footer;
+  /** One PNG export for every map: choose the map, then save it. */
+  private _exportBar(): HTMLElement {
+    const maps = this._exports;
+    const bar = el('div', { className: 'olv-analyse-tile-footer' });
+    const select = document.createElement('select');
+    select.className = 'olv-analyse-relief-select';
+    select.setAttribute('aria-label', 'Map to export');
+    select.setAttribute('data-tip', 'Choose which map to save as a PNG image.');
+    for (const m of maps) {
+      const opt = document.createElement('option');
+      opt.value = m.filename;
+      opt.textContent = m.label;
+      select.append(opt);
+    }
+    select.value = maps[0].filename;
+    const dl = el('button', {
+      className: 'olv-analyse-surface-dl', text: 'Export PNG',
+      title: 'Save the chosen map as a PNG image at its own cell grid. Not a georeferenced raster.',
+    });
+    dl.addEventListener('click', () => {
+      const m = maps.find((x) => x.filename === select.value);
+      if (m) this._downloadRasterPng(m.canvas, m.cols, m.rows, m.filename);
+    });
+    bar.append(select, dl);
+    return bar;
   }
 
   /** A grid-sized canvas styled as a preview raster. */
@@ -612,7 +628,7 @@ export class SurfaceTiles {
 
   /** A polite live region for sample readouts (screen readers announce updates). */
   private _sampleReadout(): HTMLElement {
-    const readout = el('div', { className: 'olv-analyse-sample', text: SAMPLE_HINT });
+    const readout = el('div', { className: 'olv-analyse-sample' });
     readout.setAttribute('role', 'status');
     readout.setAttribute('aria-live', 'polite');
     return readout;
@@ -803,7 +819,7 @@ export class SurfaceTiles {
     wrap.append(el('div', {
       className: 'olv-analyse-caption',
       text:
-        `${fmt(hist.min)} – ${fmt(hist.max)}${this._verticalSuffix()} · ${hist.total.toLocaleString()} cells` +
+        `${fmt(hist.min)} – ${fmt(hist.max)}${this._verticalSuffix()} · ${hist.total.toLocaleString('en-US')} cells` +
         (absolute ? '' : ' · local frame (no vertical origin)'),
     }));
     return wrap;

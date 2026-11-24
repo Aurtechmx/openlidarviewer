@@ -26,12 +26,12 @@ from the tree and fails when a cell drifts.
 | Core numerics | `src/process`, `src/numeric.ts`, `src/units` | ~3.4k | Compensated sums, Welford, unit types. No dependencies. |
 | Model | `src/model` | ~4.5k | `PointCloud`, layer model. Plain data. |
 | Geo | `src/geo` | ~6.5k | CRS math, `ProjectSpatialFrame`, transforms. |
-| Science domain | `src/terrain`, `src/validation`, `src/analysis`, `src/science` | ~56k | Ground filtering, DTM, contours, derivatives, hold-out RMSE, evidence model. UI-free by lint. |
+| Science domain | `src/terrain`, `src/validation`, `src/analysis`, `src/science` | ~57k | Ground filtering, DTM, contours, derivatives, hold-out RMSE, evidence model. UI-free by lint. |
 | I/O | `src/io` | ~43k | Format loaders (LAS/LAZ/PLY/PCD/PTX/E57/…), COPC + EPT streaming sources, range transports, session. |
-| Render | `src/render` | ~88k | three.js/WebGPU scene, streaming scheduler, measurement tools, colour modes. |
-| Export / report | `src/export`, `src/report`, `src/convert` | ~27k | Studio exporters, PDF/report builders, batch conversion. |
-| Application services | `src/app` | ~35k | Composition root and the services that own shared state. |
-| UI | `src/ui` | ~49k | Panels, Inspector, Studio surfaces, onboarding. |
+| Render | `src/render` | ~89k | three.js/WebGPU scene, streaming scheduler, measurement tools, colour modes. |
+| Export / report | `src/export`, `src/report`, `src/convert` | ~28k | Studio exporters, PDF/report builders, batch conversion. |
+| Application services | `src/app` | ~36k | Composition root and the services that own shared state. |
+| UI | `src/ui` | ~50k | Panels, Inspector, Studio surfaces, onboarding. |
 | Shell | `src/main.ts` | 4,156 | Wiring. A monolith under decomposition. |
 
 ## Composition root

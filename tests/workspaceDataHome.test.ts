@@ -84,7 +84,7 @@ describe('Data home rows', () => {
   it('with no scan shows only the open prompt, wired to the open action', async () => {
     const t = await home({ hasScan: () => false });
     expect(t.empty.hidden).toBe(false);
-    expect(t.empty.textContent).toContain('Open a point cloud to begin');
+    expect(t.empty.textContent).toContain('Open a scan to begin.');
     expect(t.root.find((e) => e.hasClass('olv-data-class-section'))!.hidden).toBe(true);
     for (const l of ['Source and metadata', 'Layer Health']) expect(t.byLabel(l).hidden).toBe(true);
     t.empty.find((e) => e.tagName === 'button')!.fire('click');

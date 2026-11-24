@@ -17,7 +17,7 @@
  * `analyseContours()` result (same fixture as tests/analysePanelCoverageTile.test.ts)
  * so the tiles actually render.
  */
-import { describe, it, expect, beforeAll } from 'vitest';
+import { describe, it, expect, beforeAll, vi } from 'vitest';
 import { analyseContours } from '../src/terrain/contour/analyseContours';
 import { FakeEl } from './helpers/canvasKeyboardDomFake';
 import { hillScene } from './helpers/hillSceneFixture';
@@ -115,12 +115,11 @@ describe('Analyse surface tiles — keyboard cell sampling', () => {
     const canvas = firstCanvas(tile)!;
     const readout = findReadout(tile)!;
 
-    expect(readout.textContent).toMatch(/Click the map/);
+    expect(readout.textContent).toBe('');
     canvas.dispatchEvent({ type: 'keydown', key: 'ArrowRight', preventDefault() {} } as never);
     canvas.dispatchEvent({ type: 'keydown', key: 'Enter', preventDefault() {} } as never);
 
     expect(readout.textContent).toMatch(/^Sample · /);
-    expect(readout.textContent).not.toMatch(/Click the map/);
   });
 
   it('Enter samples the canopy-height cursor cell (the sampleTerrain path)', async () => {
@@ -148,5 +147,22 @@ describe('Analyse surface tiles — keyboard cell sampling', () => {
     } as never);
 
     expect(readout.textContent).toMatch(/^Sample · /);
+  });
+
+  it('the one PNG export saves the chosen map', async () => {
+    const { SurfaceTiles } = await import('../src/ui/analyseSurfaceTiles');
+    const saved: unknown[][] = [];
+    const spy = vi
+      .spyOn(SurfaceTiles.prototype as unknown as { _downloadRasterPng(...a: unknown[]): void }, '_downloadRasterPng')
+      .mockImplementation((...a) => { saved.push(a); });
+    const elements = await render();
+    const bar = elements[elements.length - 1] as unknown as { children: (FakeEl & { value: string })[] };
+    const [select, button] = bar.children;
+    button.dispatchEvent({ type: 'click' } as never);
+    select.value = 'relief';
+    button.dispatchEvent({ type: 'click' } as never);
+    expect(saved.map((a) => a[3])).toEqual(['canopy-height', 'relief']);
+    expect(saved[1][0]).toBe(firstCanvas(findTile(elements, 'Relief (hillshade)')));
+    spy.mockRestore();
   });
 });

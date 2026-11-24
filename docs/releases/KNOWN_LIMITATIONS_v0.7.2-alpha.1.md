@@ -455,7 +455,7 @@ consecutive passes, counted by `scripts/ios-streak.mjs`.
 fails the build when either passes its recorded baseline, so a raise is a hand
 edit to `docs/validation/monolith-size-baseline.json` and always shows in the
 diff.
-Fan-out is 95 for the shell, 73 for the renderer, across 1261 modules with no
+Fan-out is 95 for the shell, 73 for the renderer, across 1276 modules with no
 dependency cycles. Fan-out counts the distinct modules a file imports with a
 value import, source files and external packages alike; type-only and dynamic
 imports are not counted. The shell and the renderer figures are held
@@ -744,16 +744,18 @@ Reprojecting the scan to a polar projected CRS such as EPSG:3413 or EPSG:3031
 lets it run. Within ±89° the east–west scale is the ellipsoid's at the grid
 latitude.
 
-## Exports carry the geographic refusal, not the endpoint grade
+## Drawn labels carry the geographic refusal, not the endpoint grade
 
 On a geographic CRS the PDF report, profile sheet, CSV, GeoJSON, KML, findings,
 integrity report, chain total and drawn labels withhold every figure but
-heights, as the Measure panel does. The measurement CSV and GeoJSON carry each
-measurement's support grade and the panel's caption for it, and the Light and
-Dark map sheets print it beside each measurement. The PDF report, KML,
-findings, integrity report, chain total and drawn labels do not yet: there a
-measurement with an endpoint in empty space, which reads Unverified in the
-panel, is still published as a number without the grade. On a compound CRS
+heights, as the Measure panel does. The measurement CSV and GeoJSON, the Light
+and Dark map sheets, the PDF report, the KML, the findings and the integrity
+report carry each measurement's support grade and the panel's caption for it. A
+chain total says how many of its members are graded red. The profile sheets
+print it too. The labels drawn in the view do not: a measurement with an endpoint in empty
+space, which reads Unverified in the panel, still shows its number there
+without the grade. An ungraded measurement prints no grade in the PDF report,
+KML, findings and integrity report. On a compound CRS
 whose height unit differs from its horizontal unit, the panel, the exports and
 the PDF all compute 3D lengths, grades and tilted areas with each axis in its
 own unit.
@@ -1031,15 +1033,27 @@ keeps the Grid N arrow, and a local frame says that north is unknown. The
 angle is the convergence at the map centre; it changes slightly across a
 large sheet.
 
+## A returns export holds what the section read
+
+A returns export of a streamed scan holds the points loaded when the section
+was read; rows whose node has since been unloaded have no x, y, z. A section
+whose CSV would pass 1 GiB is refused. A negative station is written with a
+leading apostrophe, because a spreadsheet would evaluate it.
+
 ## Export languages
 
-Only the space and object report, the floor plan preview and the Studio image
-card are translated so far; the map and profile sheets and the other reports
-are in English. ASPRS class names in a class-filter note stay in English. The Spanish, Portuguese, French
-and German text has not been reviewed by a geomatics reviewer, so each report
-in those languages carries a Language line that says the translation is not
-yet reviewed. A truncation note copied from the scan stays in English. The
-app itself is in English.
+The space and object report, the floor plan preview, the Studio image card, the
+Light and Dark profile and map sheets, the Terrain Intelligence report and the
+Contour Studio PDF can be written in Spanish, Portuguese, French or German, and
+the drainage sheet in Spanish. Classic profile and map sheets, the contour SVG
+and PNG, the scan report, the other reports and every data file are in English.
+ASPRS class names in a class-filter note, names, codes and text the user typed
+are printed as given. The translations have not been reviewed by a geomatics
+reviewer; each sheet or report says so. A terrain report or Contour Studio PDF
+holding a sentence with no translation is written in English and says so; on
+the profile, map and drainage sheets a line with no translation stays in
+English. A truncation note copied from the scan stays in English. The app
+itself is in English.
 
 ## Sheet styles
 

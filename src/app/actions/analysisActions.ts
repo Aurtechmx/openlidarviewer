@@ -59,7 +59,7 @@ export function contributeAnalysisActions(deps: AnalysisActionDeps): Action[] {
       get unavailable() { return scanRequired(deps.hasScan); },
       title: 'Run terrain analysis',
       section: 'Analyse',
-      hint: 'Classify ground, build the DTM, validate it, and check contour readiness.',
+      hint: 'Classify ground, build the digital terrain model (DTM), validate it, and check contour readiness.',
       keywords: ['terrain', 'analysis', 'run', 'dtm', 'ground', 'surface', 'analyse'],
       run: () => {
         void openTerrainAnalysis(deps.terrainAnalysisEntry, true);

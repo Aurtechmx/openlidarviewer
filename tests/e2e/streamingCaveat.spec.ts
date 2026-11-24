@@ -61,12 +61,13 @@ test.describe('streaming caveats', () => {
     await expectFullyResident(page);
     const run = page.locator('.olv-analyse-run');
     await expect(run).toHaveText('Re-run analysis', { timeout: 120_000 });
+    await expect(run).toBeEnabled({ timeout: 120_000 });
     // The panel line counts the nodes the VIEW requested; the analysis scope
     // clears only once every known octree node has been uploaded for picking,
     // which can land a frame later (Firefox). Re-run until the scan scope
     // reads full; a stale scope would never clear and still fails here.
     // Each re-run is started only after the previous one has finished: a
-    // click while the button reads "Analysing…" restarts the run, and a
+    // click while a run is in flight restarts the run, and a
     // software renderer can need more than a minute per run.
     // The scope line is matched, not the word alone: the panel's Why section
     // lists every product, and Footprints there is rightly blocked for any
@@ -75,7 +76,8 @@ test.describe('streaming caveats', () => {
     let scopeFull = false;
     for (let attempt = 0; attempt < 3 && !scopeFull; attempt++) {
       await run.click();
-      await expect(run).toHaveText('Re-run analysis', { timeout: 180_000 });
+      // The button is disabled while a run is in flight.
+      await expect(run).toBeEnabled({ timeout: 180_000 });
       scopeFull = !((await panel.textContent()) ?? '').includes(PARTIAL);
     }
     expect(scopeFull, 'scan scope still reads resident-only after three full re-runs').toBe(true);

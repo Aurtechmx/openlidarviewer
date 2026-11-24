@@ -155,9 +155,8 @@ import type { IssueRow, ProfileDeliverable } from '../../model/deliverableFields
 import type { ProfileSetContext } from './profileSheetPages';
 import {
   countsPerStation, drawFollowingSheets, drawStyledProfileSheet, embedLogo, embedSheetFonts, NO_SOURCE_RECORD, planMissingNote, profilePalette,
-  profileScaleRatios, profileWords, residencyWord, STATUS_KEY, type MethodSheetInput,
+  profileScaleRatios, profileWords, residencyWord, STATUS_KEY, supportRows, type MethodSheetInput, type ProfileSupport,
 } from './profilePdfParts';
-
 
 export interface ProfilePdfInput {
   /**
@@ -235,6 +234,8 @@ export interface ProfilePdfInput {
    * own end-station figures, which are read on a different basis.
    */
   readonly pickedRiseM?: number | null;
+  /** The panel's support grade and caption for the measurement. Absent, or null, when it is not graded: nothing is printed. */
+  readonly support?: ProfileSupport;
   /**
    * Vertical exaggeration asked for (e.g. the on-screen chart's). Used when it
    * is a standard ratio and the relief fits the plot at it; otherwise the
@@ -1097,8 +1098,7 @@ export async function buildProfilePdf(input: ProfilePdfInput): Promise<Uint8Arra
     crs: crsLabel,
     notes,
     ...(own.status && own.status !== 'preliminary' ? { status: words.say(STATUS_KEY[own.status]).toUpperCase() } : {}),
-    ...(own.drawingNo ? { drawingNo: own.drawingNo } : {}),
-    ...(own.revision ? { revision: own.revision } : {}),
+    ...(own.drawingNo ? { drawingNo: own.drawingNo } : {}), ...(own.revision ? { revision: own.revision } : {}),
     ...(own.issues ? { issues: own.issues } : {}),
   };
   const sheets: EmittedSheet[] = [];
@@ -1119,8 +1119,7 @@ export async function buildProfilePdf(input: ProfilePdfInput): Promise<Uint8Arra
         stations: stats.stations, lengthM: len, pages: [],
       }
     : null;
-  const minEl = stats.minElevation;
-  const maxEl = stats.maxElevation;
+  const minEl = stats.minElevation, maxEl = stats.maxElevation;
   const span = stats.reliefSpan;
   if (styled) {
     // The Light or Dark sheet one, in the sheet kit's style.
@@ -1160,7 +1159,7 @@ export async function buildProfilePdf(input: ProfilePdfInput): Promise<Uint8Arra
       groundLineLabel: words.translate(legend.seriesName),
       countsPerStation: countsPerStation(input.samples),
       planMissingNote: ((n) => (n ? words.translate(n) : null))(planMissingNote(input.extras)),
-      extras: input.extras ?? null,
+      extras: input.extras ?? null, support: input.support ?? null,
     });
   } else {
     const page = doc.addPage([PAGE_W, PAGE_H]);
@@ -1512,6 +1511,7 @@ export async function buildProfilePdf(input: ProfilePdfInput): Promise<Uint8Arra
   // trusted. `limit` marks a value that states a limitation rather than a
   // measurement, which is set bold for the same reason a measurement is.
   const notesRows: Array<{ item: string; value: string; remark: string; limit?: boolean }> = [
+    ...supportRows(input.support),
     {
       item: 'Length (horizontal)',
       value: lenStr(len),

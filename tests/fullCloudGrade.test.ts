@@ -66,7 +66,7 @@ describe('fullCloudGradeCoverage', () => {
     const cov = fullCloudGradeCoverage(plan);
     expect(cov.samplePointScale).toBe(1);
     expect(cov.coveragePercent).toBe(0);
-    expect(cov.label).toBe('no points available to grade');
+    expect(cov.label).toBe('no points available to check');
     expect(Number.isFinite(cov.samplePointScale)).toBe(true);
   });
 

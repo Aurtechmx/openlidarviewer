@@ -81,7 +81,7 @@ export function contributeExportActions(deps: ExportActionDeps): Action[] {
       id: 'session.export',
       title: actionTitle('session.export'),
       section: 'Export',
-      hint: 'Save measurements, annotations and views as an .olvsession file.',
+      hint: 'Save measurements, annotations, views, camera and render settings as an .olvsession file. Class edits are not stored.',
       keywords: ['save', 'session', 'olvsession', 'export', 'measurements', 'annotations', 'views', 'json'],
       run: () => {
         void deps.exportSession();
@@ -133,7 +133,7 @@ export function contributeExportActions(deps: ExportActionDeps): Action[] {
       id: 'report.verify',
       title: 'Verify report with verification checksum…',
       section: 'Export',
-      hint: 'Check a report JSON — confirm its digest still matches its contents.',
+      hint: 'Check that the verification checksum (a SHA-256 digest) in a report JSON still matches its contents.',
       keywords: ['verify integrity report', 'integrity', 'digest', 'checksum', 'tamper', 'check', 'sha', 'validate', 'verify'],
       run: () => {
         // A failed chunk reaches the shared lazy-load toast, whose Try again verifies the same file.

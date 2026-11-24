@@ -156,8 +156,8 @@ const MODE_TIP: Record<ColorMode, string> = {
 const QUALITIES: StreamingQuality[] = ['low', 'balanced', 'high'];
 
 /** Grade button labels — it toggles between starting and cancelling a run. */
-const GRADE_LABEL = 'Grade full cloud';
-const GRADE_CANCEL_LABEL = 'Cancel grade';
+const GRADE_LABEL = 'Check full cloud';
+const GRADE_CANCEL_LABEL = 'Cancel check';
 
 /** Render a world dimension — coarse for large extents, finer for small ones. */
 function formatDim(n: number): string {
@@ -196,7 +196,7 @@ export function spacingRowFor(
   if (format === 'ept') {
     return {
       label: 'Node budget',
-      value: `~${Math.round(spacing).toLocaleString()} pts/node`,
+      value: `~${Math.round(spacing).toLocaleString('en-US')} pts/node`,
       title: 'EPT octree resolution — target points per node, not a metric spacing.',
     };
   }
@@ -259,15 +259,8 @@ export interface StreamingProgress {
   readonly determinate: boolean;
   /** Compact "X / Y nodes resident" line. */
   readonly nodesLabel: string;
-  /** Tabular "X.XM / Y.YM pts" line (millions, one decimal). */
+  /** Tabular "4.1K / 4.2M pts" line, in the same format as the Points row. */
   readonly pointsLabel: string;
-}
-
-/** Format a raw point count as "X.XM" (millions, one decimal). */
-function pointsMillions(n: number): string {
-  // Sub-100k reads as "0.0M", which is honest at this scale and keeps the two
-  // sides of the ratio in the SAME unit (no "12k / 4.2M" mixed-unit row).
-  return `${(Math.max(0, n) / 1_000_000).toFixed(1)}M`;
 }
 
 /**
@@ -286,8 +279,8 @@ export function streamingProgress(status: StreamingStatus): StreamingProgress {
     fraction,
     determinate,
     nodesLabel: `${status.loadedNodes} / ${determinate ? known : '?'} nodes resident`,
-    pointsLabel: `${pointsMillions(status.displayedPoints)} / ${
-      status.sourcePoints === null ? '?' : pointsMillions(status.sourcePoints)
+    pointsLabel: `${formatCount(Math.max(0, status.displayedPoints))} / ${
+      status.sourcePoints === null ? '?' : formatCount(status.sourcePoints)
     } pts`,
   };
 }
@@ -316,6 +309,13 @@ export class StreamingPanel {
   private readonly _nodes: HTMLElement;
   private readonly _points: HTMLElement;
   private readonly _cache: HTMLElement;
+  /**
+   * The Nodes, Points and Cache rows. Closed when the view is ready: the
+   * headline and the counts beside the bar stay. Open again when the view is
+   * incomplete. Once the user has opened or closed it, it is left alone.
+   */
+  private readonly _stats: HTMLDetailsElement;
+  private _statsTouched = false;
   private readonly _modeRow: HTMLElement;
   private readonly _qualityRow: HTMLElement;
   private readonly _pause: HTMLButtonElement;
@@ -363,6 +363,17 @@ export class StreamingPanel {
     this._nodes = el('span', { className: 'olv-streaming-stat', text: '—' });
     this._points = el('span', { className: 'olv-streaming-stat', text: '—' });
     this._cache = el('span', { className: 'olv-streaming-stat', text: '—' });
+    const statsHead = el('summary', { className: 'olv-streaming-label olv-section-summary', text: 'Streaming' });
+    statsHead.addEventListener('click', () => { this._statsTouched = true; });
+    this._stats = el('details', { className: 'olv-section-collapsible' }, [
+      statsHead,
+      el('div', { className: 'olv-streaming-rows' }, [
+        this._statRow('Nodes', this._nodes),
+        this._statRow('Points', this._points),
+        this._statRow('Cache', this._cache),
+      ]),
+    ]);
+    this._stats.open = true;
     this._modeRow = el('div', { className: 'olv-streaming-chips' });
     this._qualityRow = el('div', { className: 'olv-streaming-chips' });
     for (const quality of QUALITIES) {
@@ -465,17 +476,12 @@ export class StreamingPanel {
       this._progress,
       el('div', { className: 'olv-streaming-label', text: 'Scan' }),
       this._summary,
-      el('div', { className: 'olv-streaming-label', text: 'Streaming' }),
-      el('div', { className: 'olv-streaming-rows' }, [
-        this._statRow('Nodes', this._nodes),
-        this._statRow('Points', this._points),
-        this._statRow('Cache', this._cache),
-      ]),
+      this._stats,
       el('div', { className: 'olv-streaming-label', text: 'Colour' }),
       this._modeRow,
       el('div', { className: 'olv-streaming-label', text: 'Quality' }),
       this._qualityRow,
-      el('div', { className: 'olv-streaming-label', text: 'Full-cloud grade' }),
+      el('div', { className: 'olv-streaming-label', text: 'Full-cloud check' }),
       el('div', { className: 'olv-streaming-actions' }, [this._gradeBtn]),
       this._gradeResult,
       el('div', { className: 'olv-streaming-actions' }, [this._pause]),
@@ -525,6 +531,8 @@ export class StreamingPanel {
    * title are the new scan's and are left to its open.
    */
   resetForScan(): void {
+    this._stats.open = true;
+    this._statsTouched = false;
     this._paused = false;
     this._pause.textContent = 'Pause';
     this._gradeRunning = false;
@@ -626,6 +634,10 @@ export class StreamingPanel {
       if (view.state === 'settled') this._firstViewReady = true;
       this._openScan = null;
       this._setPlainLine(view.headline);
+    }
+    if (!this._statsTouched) {
+      if (view.state === 'settled') this._stats.open = false;
+      else if (view.state === 'incomplete') this._stats.open = true;
     }
     this._progress.classList.remove('olv-hidden');
     this._progressNodes.textContent = view.detail;
@@ -785,7 +797,7 @@ export class StreamingPanel {
   /** Neutral end state for a user-cancelled grade (not an error). */
   setGradeCancelled(): void {
     this._endGradeRun();
-    this._showGrade(false, this._gradeLine('Grade cancelled.'));
+    this._showGrade(false, this._gradeLine('Check cancelled.'));
   }
 
   /** One grade-result line. */
@@ -810,7 +822,7 @@ export class StreamingPanel {
   /** Update the live status numbers + the determinate progress treatment. */
   setStatus(status: StreamingStatus): void {
     this._nodes.textContent = `${status.loadedNodes} / ${status.knownNodes}`;
-    this._points.textContent = `${formatCount(status.displayedPoints)} / ${
+    this._points.textContent = `${formatCount(Math.max(0, status.displayedPoints))} / ${
       status.sourcePoints === null ? 'Unknown' : formatCount(status.sourcePoints)
     }`;
     this._cache.textContent = formatBytes(status.cacheBytes);

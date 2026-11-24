@@ -91,12 +91,11 @@ const CRC_TABLE = (() => {
   return t;
 })();
 
-function crc32(bytes: Uint8Array): number {
-  let c = 0xffffffff;
-  for (const b of bytes) {
-    c = CRC_TABLE[(c ^ b) & 0xff] ^ (c >>> 8);
-  }
-  return (c ^ 0xffffffff) >>> 0;
+/** Continue a CRC-32 over `bytes`; pass the last result back in to go on. */
+export function crc32(bytes: Uint8Array, crc = 0): number {
+  let c = ~crc;
+  for (let i = 0; i < bytes.length; i++) c = CRC_TABLE[(c ^ bytes[i]!) & 0xff]! ^ (c >>> 8);
+  return ~c >>> 0;
 }
 
 const utf8 = (s: string): Uint8Array => new TextEncoder().encode(s);
@@ -110,30 +109,58 @@ const utf8 = (s: string): Uint8Array => new TextEncoder().encode(s);
  *   {@link assessZipDownload} first and fall back to per-file downloads.
  */
 export function buildZip(entries: ReadonlyArray<ZipEntry>): Uint8Array {
-  const LFH = 30; // local file header fixed size
-  const CDH = 46; // central directory header fixed size
+  const parts = zipStoreParts(
+    entries.map((e) => ({ name: e.name, size: e.bytes.length, crc: () => crc32(e.bytes), parts: [e.bytes] })),
+  );
+  let total = 0;
+  for (const part of parts) total += part.length;
+  const out = new Uint8Array(total);
+  let p = 0;
+  for (const part of parts) {
+    out.set(part, p);
+    p += part.length;
+  }
+  return out;
+}
 
+/** One entry whose bytes are held in pieces, so an archive of it is never one buffer. */
+export interface ZipPartsEntry<P> {
+  readonly name: string;
+  /** The byte length of `parts` together. */
+  readonly size: number;
+  /** The CRC-32 of `parts` together; a thunk so a caller may defer it past the checks. */
+  readonly crc: () => number;
+  readonly parts: readonly P[];
+}
+
+/**
+ * The archive as an ordered list of pieces: headers as bytes, and the entries'
+ * own pieces untouched. A `Blob` over the list is the file, so a large entry
+ * is never copied into one buffer. Same limits and name checks as
+ * {@link buildZip}, which is this joined.
+ */
+export function zipStoreParts<P>(entries: ReadonlyArray<ZipPartsEntry<P>>): Array<P | Uint8Array<ArrayBuffer>> {
   if (entries.length > ZIP_MAX_ENTRIES) {
     throw new Error(
       `Cannot build a ZIP of ${entries.length.toLocaleString('en-US')} files — the format allows at most ${ZIP_MAX_ENTRIES.toLocaleString('en-US')}.`,
     );
   }
-
   for (const e of entries) {
     const unsafe = unsafeEntryName(e.name);
     if (unsafe) throw new Error(`Cannot ZIP "${singleLine(e.name)}": ${unsafe}.`);
   }
+  const LFH = 30; // local file header fixed size
+  const CDH = 46; // central directory header fixed size
 
   let size = 0;
   const meta = entries.map((e) => {
-    if (e.bytes.length > ZIP_MAX_ENTRY_BYTES) {
+    if (e.size > ZIP_MAX_ENTRY_BYTES) {
       throw new Error(`Cannot ZIP "${e.name}": it exceeds the 4 GiB per-file ZIP limit.`);
     }
     const nameBytes = utf8(e.name);
-    const crc = crc32(e.bytes);
     const offset = size;
-    size += LFH + nameBytes.length + e.bytes.length;
-    return { nameBytes, crc, offset, data: e.bytes };
+    size += LFH + nameBytes.length + e.size;
+    return { nameBytes, crc: e.crc(), offset, size: e.size, parts: e.parts };
   });
 
   const centralStart = size;
@@ -144,27 +171,31 @@ export function buildZip(entries: ReadonlyArray<ZipEntry>): Uint8Array {
   if (total > ZIP_MAX_TOTAL_BYTES) {
     throw new Error('Cannot build the ZIP: the combined archive would exceed the 4 GiB ZIP limit.');
   }
-  const out = new Uint8Array(total);
-  const view = new DataView(out.buffer);
-  let p = 0;
+  const out: Array<P | Uint8Array<ArrayBuffer>> = [];
 
   // ── Local file headers + data ──────────────────────────────────────────
   for (const m of meta) {
-    view.setUint32(p, 0x04034b50, true); // LFH signature
-    view.setUint16(p + 4, 20, true); // version needed
-    view.setUint16(p + 6, 0x0800, true); // flags: UTF-8 filename
-    view.setUint16(p + 8, 0, true); // method: store
-    view.setUint16(p + 10, 0, true); // mod time
-    view.setUint16(p + 12, 0x21, true); // mod date (1980-01-01)
-    view.setUint32(p + 14, m.crc, true);
-    view.setUint32(p + 18, m.data.length, true); // compressed size
-    view.setUint32(p + 22, m.data.length, true); // uncompressed size
-    view.setUint16(p + 26, m.nameBytes.length, true);
-    view.setUint16(p + 28, 0, true); // extra length
-    out.set(m.nameBytes, p + 30);
-    out.set(m.data, p + 30 + m.nameBytes.length);
-    p += LFH + m.nameBytes.length + m.data.length;
+    const head = new Uint8Array(LFH + m.nameBytes.length);
+    const view = new DataView(head.buffer);
+    view.setUint32(0, 0x04034b50, true); // LFH signature
+    view.setUint16(4, 20, true); // version needed
+    view.setUint16(6, 0x0800, true); // flags: UTF-8 filename
+    view.setUint16(8, 0, true); // method: store
+    view.setUint16(10, 0, true); // mod time
+    view.setUint16(12, 0x21, true); // mod date (1980-01-01)
+    view.setUint32(14, m.crc, true);
+    view.setUint32(18, m.size, true); // compressed size
+    view.setUint32(22, m.size, true); // uncompressed size
+    view.setUint16(26, m.nameBytes.length, true);
+    view.setUint16(28, 0, true); // extra length
+    head.set(m.nameBytes, LFH);
+    out.push(head);
+    for (const part of m.parts) out.push(part);
   }
+
+  const tail = new Uint8Array(centralSize + 22);
+  const view = new DataView(tail.buffer);
+  let p = 0;
 
   // ── Central directory ──────────────────────────────────────────────────
   for (const m of meta) {
@@ -176,8 +207,8 @@ export function buildZip(entries: ReadonlyArray<ZipEntry>): Uint8Array {
     view.setUint16(p + 12, 0, true);
     view.setUint16(p + 14, 0x21, true);
     view.setUint32(p + 16, m.crc, true);
-    view.setUint32(p + 20, m.data.length, true);
-    view.setUint32(p + 24, m.data.length, true);
+    view.setUint32(p + 20, m.size, true);
+    view.setUint32(p + 24, m.size, true);
     view.setUint16(p + 28, m.nameBytes.length, true);
     view.setUint16(p + 30, 0, true); // extra
     view.setUint16(p + 32, 0, true); // comment
@@ -185,7 +216,7 @@ export function buildZip(entries: ReadonlyArray<ZipEntry>): Uint8Array {
     view.setUint16(p + 36, 0, true); // internal attrs
     view.setUint32(p + 38, 0, true); // external attrs
     view.setUint32(p + 42, m.offset, true); // offset of LFH
-    out.set(m.nameBytes, p + 46);
+    tail.set(m.nameBytes, p + 46);
     p += CDH + m.nameBytes.length;
   }
 
@@ -199,5 +230,6 @@ export function buildZip(entries: ReadonlyArray<ZipEntry>): Uint8Array {
   view.setUint32(p + 16, centralStart, true);
   view.setUint16(p + 20, 0, true);
 
+  out.push(tail);
   return out;
 }

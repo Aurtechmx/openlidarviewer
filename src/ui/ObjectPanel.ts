@@ -104,15 +104,15 @@ export interface ObjectPanelCallbacks {
 }
 
 const m1 = (v: number): string => (Number.isFinite(v) ? v.toFixed(2) : '—');
-const i0 = (v: number): string => (Number.isFinite(v) ? Math.round(v).toLocaleString() : '—');
+const i0 = (v: number): string => (Number.isFinite(v) ? Math.round(v).toLocaleString('en-US') : '—');
 const cm = (v: number): string => (Number.isFinite(v) ? `${(v * 100).toFixed(1)} cm` : '—');
 /** "12.3 m (40.4 ft)" — metres with feet in parentheses. */
 const mft = (v: number): string =>
   Number.isFinite(v) ? `${v.toFixed(1)} m (${metresToFeet(v).toFixed(1)} ft)` : '—';
 const areaMft = (v: number): string =>
-  Number.isFinite(v) ? `${Math.round(v).toLocaleString()} m² (${Math.round(sqMetresToSqFeet(v)).toLocaleString()} ft²)` : '—';
+  Number.isFinite(v) ? `${Math.round(v).toLocaleString('en-US')} m² (${Math.round(sqMetresToSqFeet(v)).toLocaleString('en-US')} ft²)` : '—';
 const volMft = (v: number): string =>
-  Number.isFinite(v) ? `${Math.round(v).toLocaleString()} m³ (${Math.round(cubicMetresToCubicFeet(v)).toLocaleString()} ft³)` : '—';
+  Number.isFinite(v) ? `${Math.round(v).toLocaleString('en-US')} m³ (${Math.round(cubicMetresToCubicFeet(v)).toLocaleString('en-US')} ft³)` : '—';
 // Object-scale variants — compact scans are routinely < 1 m² / < 1 m³, where
 // the interior path's integer rounding would erase the figure. The precision
 // follows the MAGNITUDE (magnitudeFixed): two decimals keep a sub-cubic-metre
@@ -184,8 +184,8 @@ const SOURCE_FORMAT: ObjectUnitFormat = {
   len: (v) => (Number.isFinite(v) ? `${v.toFixed(1)} ${SU}` : '—'),
   areaFine: (v) => (Number.isFinite(v) ? `${magnitudeFixed(v, 2)} ${SU_SQ}` : '—'),
   volFine: (v) => (Number.isFinite(v) ? `${magnitudeFixed(v, 2)} ${SU_CU}` : '—'),
-  area: (v) => (Number.isFinite(v) ? `${Math.round(v).toLocaleString()} ${SU_SQ}` : '—'),
-  vol: (v) => (Number.isFinite(v) ? `${Math.round(v).toLocaleString()} ${SU_CU}` : '—'),
+  area: (v) => (Number.isFinite(v) ? `${Math.round(v).toLocaleString('en-US')} ${SU_SQ}` : '—'),
+  vol: (v) => (Number.isFinite(v) ? `${Math.round(v).toLocaleString('en-US')} ${SU_CU}` : '—'),
   spacing: (v) => (Number.isFinite(v) ? `${v.toFixed(3)} ${SU}` : '—'),
   density: (v) => (Number.isFinite(v) ? `${v.toFixed(1)} pts per square source unit` : '—'),
 };
@@ -673,7 +673,7 @@ export class ObjectPanel {
         OBJECT_ENVELOPE_VOLUME_HINT),
       this._row('Bounding surface area', f.areaFine(metrics.surfaceAreaM2),
         OBJECT_SURFACE_AREA_HINT),
-      this._row('Points · spacing', `${metrics.pointCount.toLocaleString()} · ~${f.spacing(metrics.medianSpacingM)}`),
+      this._row('Points · spacing', `${metrics.pointCount.toLocaleString('en-US')} · ~${f.spacing(metrics.medianSpacingM)}`),
       // Was "Scan completeness", which read as capture completeness. The ratio
       // bins directions about the centroid, so its ceiling is the shape of the
       // point set, not how much of the object was scanned.

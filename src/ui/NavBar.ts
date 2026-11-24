@@ -78,7 +78,7 @@ const MODES: ModeDef[] = [
     mode: 'orbit',
     label: 'Orbit',
     spatial: '1 of 4',
-    hint: 'Inspect from outside — drag to rotate, scroll to zoom, double-click to focus on a point',
+    hint: 'Inspect from outside — drag to orbit, scroll to zoom, double-click to focus on a point',
     // Curved arrow orbiting a central point.
     icon: `<svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
 <circle cx="12" cy="12" r="3" fill="currentColor"/>
@@ -121,7 +121,7 @@ const PAN_MODE: ModeDef = {
   mode: 'pan',
   label: 'Pan',
   spatial: '4 of 4',
-  hint: 'Pan view — grab the scene and drag it; scroll still zooms (G or 4)',
+  hint: 'Pan: grab the scene and drag it; scroll still zooms (G or 4)',
   // An open hand, original artwork in the dockIcons house style
   // (24×24, currentColor, 1.6 px stroke, round caps/joins).
   icon: `<svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
@@ -175,11 +175,11 @@ const LEGEND_OPEN_KEY = 'olv.nav.legendOpen';
 const PROMPT_LOOK = 'Click the scan to look around';
 const PROMPT_LOOK_SUB = 'WASD to move · Esc or click to release';
 /** The prompt while a modal tool owns clicks — the Help guide's own sentence. */
-const PROMPT_TOOL = 'Hold Space while a tool is active to rotate or pan, then release to resume.';
+const PROMPT_TOOL = 'Hold Space while a tool is active to orbit or pan, then release to resume.';
 /** What the hold-Space hint lifts above: a bottom toast and the first-run hint. */
 const PROMPT_CLEAR_OF = ['.olv-lasso-toast.olv-visible', '.olv-touch-hint.olv-visible'];
 
-const TOUCH_HINT_TEXT = 'Drag to rotate · Pinch to zoom · Two fingers to pan';
+const TOUCH_HINT_TEXT = 'Drag to orbit · Pinch to zoom · Two fingers to pan';
 /** The one-time desktop hint, and the flag that records it was shown. */
 const FIRST_USE_HINT_TEXT = 'Drag to orbit · Scroll to zoom · Double-click to focus';
 const FIRST_USE_HINT_KEY = 'olv.nav.firstUseHint';
@@ -398,7 +398,7 @@ export class NavBar {
     ]);
     // The Pan chip (its 4 / G bindings) exists only while the hand tool does
     // (`?handPan=off` reverts the legend to the v0.5.4 trio).
-    const panChip = legendItem(['4', 'G'], 'Pan view');
+    const panChip = legendItem(['4', 'G'], 'Pan');
     this._panLegendItems = [panChip];
     const modesGroup = el('div', { className: 'olv-legend-group' }, [
       legendItem(['Esc'], 'Release cursor'),
@@ -407,7 +407,7 @@ export class NavBar {
     ]);
     const metaGroup = el('div', { className: 'olv-legend-group' }, [
       legendItem(['F'], 'Focus'),
-      legendItem(['H'], 'Toggle this'),
+      legendItem(['H'], 'Hide this panel'),
     ]);
     // v0.3.9 Smart camera presets — four buttons (T / I / O / P) that
     // jump the camera to a named pose. Mounted in the HUD so they
@@ -438,7 +438,7 @@ export class NavBar {
       });
       cameraPresetsRow.append(btn);
     }
-    // v0.3.10 — Explicit dismiss control. The `H Toggle this` legend
+    // v0.3.10 — Explicit dismiss control. The `H Hide this panel` legend
     // item teaches the keyboard shortcut, but discoverability is poor
     // for users who haven't read it. An X in the title row turns the
     // HUD into a normal closable panel that users already understand,
@@ -497,7 +497,7 @@ export class NavBar {
     // off returns the scene the user had. State lives with the caller.
     const planToggle = el('button', {
       className: 'olv-cam-chip olv-plan-toggle',
-      title: 'Plan view: look straight down in parallel projection with the hand tool on the drag. Turning it off restores your view.',
+      title: 'Plan view: look straight down in parallel projection with a drag that pans. Turning it off restores your view.',
       ariaLabel: 'Plan view', // registry name, held by actionNames.test.ts
     });
     planToggle.setAttribute('aria-pressed', 'false');
@@ -514,8 +514,8 @@ export class NavBar {
     const hudDismiss = el('button', {
       className: 'olv-nav-hud-close',
       text: '×',
-      title: 'Hide navigation help (H)',
-      ariaLabel: 'Hide navigation help',
+      title: 'Hide navigation panel (H)',
+      ariaLabel: 'Hide navigation panel',
     }) as HTMLButtonElement;
     hudDismiss.addEventListener('click', () => {
       hudDismiss.blur();

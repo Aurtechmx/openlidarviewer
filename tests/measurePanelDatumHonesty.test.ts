@@ -104,9 +104,9 @@ function focusView(scene: Scene): FakeEl {
   openResultFocus.mockClear();
   const root = mount(scene);
   const expand = root
-    .querySelectorAll('button')
+    .querySelectorAll('div.olv-mp-chart-wrap')
     .find((b) => (b.getAttribute('aria-label') ?? '').includes('Expand'));
-  expect(expand, 'the profile row offers an Expand button').toBeDefined();
+  expect(expand, 'the profile chart opens the focus view').toBeDefined();
   expand!.dispatchEvent({ type: 'click', stopPropagation: () => {} });
   expect(openResultFocus).toHaveBeenCalledTimes(1);
   const opts = openResultFocus.mock.calls[0]![0] as { render: (c: unknown) => void };

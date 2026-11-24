@@ -65,8 +65,6 @@
 }
 @media (prefers-reduced-motion: reduce) { .olv-mp-resize { transition: none; } }
 
-/* Expand-to-focus control in a profile row header — unobtrusive icon button in
- * the same house line-icon family as the dock glyphs. Opens the focus surface. */
 /* The profile chart is the click target for the focus surface. A hairline
    ring on hover/focus confirms the whole chart is interactive. */
 .olv-mp-chart-wrap {
@@ -79,34 +77,6 @@
 .olv-mp-chart-wrap:focus-visible {
   outline: var(--focus-ring); outline-offset: var(--focus-ring-offset);
 }
-/* Always-visible badge in the corner the eye lands on — the pill fill and
-   border are what make it discoverable (the icon it replaces was
-   transparent until hovered). The wrap owns the click, so the badge is inert. */
-/* The named way into the focus view. It sits at the end of the vertical-stretch
-   strip because that row is already where a reader adjusts how the profile is
-   drawn, and because the chart's own corners are taken: the top-right glyph is
-   decorative and the bottom-right is the native resize grip. Auto margin pushes
-   it away from the stretch chips so the two groups do not read as one set. */
-
-.olv-mp-chart-expand {
-  position: absolute; top: 6px; right: 6px;
-  display: inline-flex; align-items: center; justify-content: center;
-  width: 24px; height: 24px; padding: 0;
-  color: var(--text-dim);
-  background: var(--panel);
-  border: 0.5px solid var(--hairline-strong); border-radius: var(--radius-sm);
-  /* A real button now. It was pointer-events: none — a mark shaped like a
-     control that could not be clicked, which is why nobody used it and why a
-     duplicate labelled button ended up in the chip strip below, overflowing
-     the panel. The colour no longer waits for hover either: an affordance that
-     is invisible until you are already over it is not discoverable. */
-  cursor: pointer;
-  transition: color var(--dur-fast) var(--ease-standard),
-              border-color var(--dur-fast) var(--ease-standard);
-}
-.olv-mp-chart-expand svg { width: 15px; height: 15px; }
-.olv-mp-chart-expand:hover,
-.olv-mp-chart-expand:focus-visible { color: var(--text); border-color: var(--accent); }
 @media (prefers-reduced-motion: reduce) { .olv-mp-chart-wrap { transition: none; } }
 .olv-mp-title { font-size: var(--text-sm); font-weight: 500; margin-bottom: var(--space-lg); }
 .olv-mp-list { display: flex; flex-direction: column; gap: var(--space-sm); min-width: 0; }
@@ -490,8 +460,7 @@
  * pushes the button to the right so it doesn't compete visually with
  * the chart itself; the button borrows the same destructive rose
  * vocabulary as `.olv-measure-clear` and `.olv-tool-close` so the
- * action type reads without parsing the label (v0.3.10 honesty
- * patch — users could not find the existing per-row × delete). */
+ * action type reads without parsing the label. */
 .olv-mp-row-action {
   display: flex; justify-content: flex-end; gap: var(--space-sm);
   padding: var(--space-2xs) var(--space-xs) 0 var(--space-xs);
@@ -507,7 +476,7 @@
     transform 90ms var(--ease-standard);
 }
 @media (pointer: coarse) {
-  .olv-mp-profile-pdf { min-height: 44px; display: inline-flex; align-items: center; justify-content: center; }
+  .olv-mp-profile-pdf, .olv-mp-profile-clear { min-height: 44px; display: inline-flex; align-items: center; justify-content: center; }
 }
 .olv-mp-profile-pdf:hover {
   color: var(--text);

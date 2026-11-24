@@ -515,8 +515,8 @@ describe('mapScaleLabel — no numeric ratio without a known ground unit', () =>
     expect(mapScaleLabel(2400, undefined)).toBe('units unknown');
   });
   it('prints the ratio for a resolved unit', () => {
-    expect(mapScaleLabel(2400, 'metre')).toBe(`1:${(2400).toLocaleString()}`);
-    expect(mapScaleLabel(2400, 'us-survey-foot')).toBe(`1:${(2400).toLocaleString()}`);
+    expect(mapScaleLabel(2400, 'metre')).toBe(`1:${(2400).toLocaleString('en-US')}`);
+    expect(mapScaleLabel(2400, 'us-survey-foot')).toBe(`1:${(2400).toLocaleString('en-US')}`);
   });
 });
 

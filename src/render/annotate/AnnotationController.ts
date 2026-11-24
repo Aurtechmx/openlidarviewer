@@ -9,6 +9,7 @@
  * Browser-bound (DOM); the pure data model it relies on is `annotate/types.ts`.
  */
 
+import { RELOAD_ADVICE } from '../../io/loadErrors';
 import type * as THREE from 'three/webgpu';
 import type {
   Annotation,
@@ -205,7 +206,7 @@ export class AnnotationController {
       },
       (err: unknown) => {
         console.warn('[annotate] editor chunk failed to load', err);
-        this._setHint('The annotation editor could not load. Reload the page to use it. A reload closes open scans, so save your session first if you can.');
+        this._setHint(`The annotation editor could not load. ${RELOAD_ADVICE}`);
       },
     );
   }

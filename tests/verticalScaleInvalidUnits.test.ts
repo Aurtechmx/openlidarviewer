@@ -107,7 +107,7 @@ describe('Classify and Fill unclassified', () => {
   it('Classify does not run, and says why, in a frame with an unreadable height unit', async () => {
     const { toasts, bare } = deps();
     await runDeriveClassification(bare);
-    expect(toasts.at(-1)).toMatch(/^Classify · not run: the height unit .* could not be read/);
+    expect(toasts.at(-1)).toMatch(/^Auto-classify · not run: the height unit .* could not be read/);
     expect(bare.viewer.applyDerivedClassification).not.toHaveBeenCalled();
   });
 

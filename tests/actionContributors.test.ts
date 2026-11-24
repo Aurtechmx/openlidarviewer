@@ -87,7 +87,7 @@ describe('action contributors', () => {
     expect(deps.toggleReferencePlane).toHaveBeenCalled();
     actions.find((a) => a.id === 'view.save-state')!.run();
     expect(deps.saveCurrentView).not.toHaveBeenCalled(); // no scan: refused with a toast
-    expect(toast).toHaveBeenCalledWith(expect.stringMatching(/Load a scan first/));
+    expect(toast).toHaveBeenCalledWith(expect.stringMatching(/Open a scan first/));
   });
 
   it('tool actions run the derived classification and toggle the lasso', async () => {

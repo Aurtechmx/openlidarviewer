@@ -1,14 +1,14 @@
 /* ── Terrain page disclosures ──────────────────────────────────────────────
    Every "▸ more" row on the Terrain page (Why?, Validation detail, Notes,
-   Workflow detail, the cause line, Surface model stats, All metrics, Derived
-   complexity, Evidence) is the View rail's disclosure row (`.olv-section-
+   Workflow detail, the cause line, Surface model stats, All metrics,
+   Evidence) is the View rail's disclosure row (`.olv-section-
    summary`, 40-inspector.css): sentence-case label at --text-xs/600 in
    --text-faint, a drawn caret that turns on open, a 24 px pointer target. One
-   rule, so the nine summaries cannot drift apart again in glyph, size or
+   rule, so the eight summaries cannot drift apart again in glyph, size or
    weight. Colour exceptions follow it (the cause line keeps its caution hue). */
 :is(.olv-why-summary, .olv-fit-caveats-summary, .olv-analyse-workflow-details-summary,
   .olv-analyse-why-summary, .olv-analyse-assess-metrics-summary,
-  .olv-analyse-derived-label, .olv-analyse-details-summary) {
+  .olv-analyse-details-summary) {
   display: flex; align-items: center; gap: var(--space-sm);
   min-height: 24px; padding: 0;
   cursor: pointer; list-style: none; user-select: none;
@@ -18,10 +18,10 @@
 }
 :is(.olv-why-summary, .olv-fit-caveats-summary, .olv-analyse-workflow-details-summary,
   .olv-analyse-why-summary, .olv-analyse-assess-metrics-summary,
-  .olv-analyse-derived-label, .olv-analyse-details-summary)::-webkit-details-marker { display: none; }
+  .olv-analyse-details-summary)::-webkit-details-marker { display: none; }
 :is(.olv-why-summary, .olv-fit-caveats-summary, .olv-analyse-workflow-details-summary,
   .olv-analyse-why-summary, .olv-analyse-assess-metrics-summary,
-  .olv-analyse-derived-label, .olv-analyse-details-summary)::before {
+  .olv-analyse-details-summary)::before {
   content: '';
   flex-shrink: 0;
   width: 0; height: 0;
@@ -32,17 +32,17 @@
 }
 details[open] > :is(.olv-why-summary, .olv-fit-caveats-summary, .olv-analyse-workflow-details-summary,
   .olv-analyse-why-summary, .olv-analyse-assess-metrics-summary,
-  .olv-analyse-derived-label, .olv-analyse-details-summary)::before { transform: rotate(90deg); }
+  .olv-analyse-details-summary)::before { transform: rotate(90deg); }
 :is(.olv-why-summary, .olv-fit-caveats-summary, .olv-analyse-workflow-details-summary,
-  .olv-analyse-assess-metrics-summary, .olv-analyse-derived-label,
+  .olv-analyse-assess-metrics-summary,
   .olv-analyse-details-summary):hover { color: var(--text-dim); }
 :is(.olv-fit-caveats-summary, .olv-analyse-workflow-details-summary, .olv-analyse-why-summary,
-  .olv-analyse-assess-metrics-summary, .olv-analyse-derived-label,
+  .olv-analyse-assess-metrics-summary,
   .olv-analyse-details-summary):focus-visible { outline: var(--focus-ring); outline-offset: var(--focus-ring-offset); }
 @media (prefers-reduced-motion: reduce) {
   :is(.olv-why-summary, .olv-fit-caveats-summary, .olv-analyse-workflow-details-summary,
     .olv-analyse-why-summary, .olv-analyse-assess-metrics-summary,
-    .olv-analyse-derived-label, .olv-analyse-details-summary)::before { transition: none; }
+    .olv-analyse-details-summary)::before { transition: none; }
 }
 
 /* Terrain assessment: export readiness and the products it grades. It is a
@@ -96,13 +96,9 @@ details[open] > :is(.olv-why-summary, .olv-fit-caveats-summary, .olv-analyse-wor
 .olv-analyse-assess-export.is-preview .olv-analyse-assess-export-verdict { color: var(--caution); }
 .olv-analyse-assess-export.is-blocked .olv-analyse-assess-export-verdict { color: var(--rating-blocked); }
 
-/* Derived complexity (v0.5.4) — one compact line under the assessment: the
-   VRM/TPI figures with window and units, pre-formatted by the analysis chunk.
-   Descriptive (never a good/bad colour); the density caveat below it reuses
-   the .olv-caveat honesty primitive. */
-.olv-analyse-derived {
-  margin-top: var(--space-lg);
-}
+/* Derived complexity: the VRM/TPI figures with window and units, in Surface
+   model stats. Descriptive (never a good/bad colour); its density caveat sits
+   outside that disclosure and reuses the .olv-caveat primitive. */
 .olv-analyse-derived-value {
   font-size: var(--text-body); color: var(--text-dim); overflow-wrap: anywhere;
   font-variant-numeric: tabular-nums; margin-top: var(--space-xs);
@@ -392,6 +388,7 @@ details[open] > :is(.olv-why-summary, .olv-fit-caveats-summary, .olv-analyse-wor
   display: flex; align-items: center; gap: var(--space-sm); cursor: pointer;
   font-size: var(--text-xs); color: var(--text-dim); user-select: none;
 }
+.olv-analyse-layer-name { font-size: var(--text-xs); color: var(--text-dim); }
 .olv-analyse-layer-toggle input { accent-color: var(--accent); cursor: pointer; }
 .olv-analyse-layer-slider { display: flex; align-items: center; gap: var(--space-md); }
 .olv-analyse-layer-tag {
@@ -411,6 +408,8 @@ details[open] > :is(.olv-why-summary, .olv-fit-caveats-summary, .olv-analyse-wor
   font-variant-numeric: tabular-nums; padding: var(--space-2xs) 0;
   border-top: 0.5px dashed var(--hairline);
 }
+/* Empty until the first sample; kept rendered so the live region announces. */
+.olv-analyse-sample:empty { padding: 0; border-top: 0; }
 .olv-analyse-sample.is-empty { color: var(--text-faint); }
 /* Sampled-cell crosshair — rides above the raster, survives re-light/resize. */
 .olv-analyse-raster-wrap { position: relative; line-height: 0; }
@@ -452,17 +451,9 @@ details[open] > :is(.olv-why-summary, .olv-fit-caveats-summary, .olv-analyse-wor
   padding: var(--space-xs) var(--space-md); cursor: pointer;
 }
 .olv-analyse-surface-dl:hover { border-color: var(--accent); }
-/* v0.5.5 P12 — compact per-tile footer: the click-to-sample readout and the
-   tile's Export PNG action share ONE line, so adjacent raster tiles
-   (coverage / relief / canopy) stop repeating full-width hint + button
-   blocks. The readout truncates rather than wraps; its full text stays
-   available to assistive tech via the live region. */
+/* The one PNG export under the raster tiles: map choice and action on a line. */
 .olv-analyse-tile-footer {
   display: flex; align-items: center; gap: var(--space-sm); min-width: 0;
-}
-.olv-analyse-tile-footer .olv-analyse-sample {
-  flex: 1 1 auto; min-width: 0; overflow: hidden;
-  text-overflow: ellipsis; white-space: nowrap;
 }
 .olv-analyse-tile-footer .olv-analyse-surface-dl {
   flex: 0 0 auto; align-self: center;

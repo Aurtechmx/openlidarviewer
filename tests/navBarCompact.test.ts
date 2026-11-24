@@ -119,17 +119,26 @@ describe('guidance', () => {
     expect((bar.touchHint as unknown as FakeEl).allText()).toContain('Pinch to zoom');
   });
 
+  it('names the panel, Pan and orbiting one way', async () => {
+    const { readFileSync } = await import('node:fs');
+    const nav = readFileSync(new URL('../src/ui/NavBar.ts', import.meta.url), 'utf8');
+    expect(nav).toContain("legendItem(['H'], 'Hide this panel')");
+    expect(nav).toContain("legendItem(['4', 'G'], 'Pan')");
+    expect(nav).toContain("'Drag to orbit · Pinch to zoom · Two fingers to pan'");
+    expect(nav).not.toContain('Hide navigation help');
+  });
+
   it('while a modal tool is armed the prompt offers hold-Space, in the Help guide’s words', async () => {
     const { bar } = await navbar();
     const prompt = bar.prompt as unknown as FakeEl;
     bar.setMeasuring(true);
     expect(prompt.classList.contains('olv-visible')).toBe(true);
-    expect(prompt.allText()).toContain('Hold Space while a tool is active to rotate or pan, then release to resume.');
+    expect(prompt.allText()).toContain('Hold Space while a tool is active to orbit or pan, then release to resume.');
     bar.setMeasuring(false);
     expect(prompt.classList.contains('olv-visible')).toBe(false);
     const { readFileSync } = await import('node:fs');
     const help = readFileSync(new URL('../src/app/helpCatalog.ts', import.meta.url), 'utf8');
-    expect(help).toContain('Hold Space while a tool is active to rotate or pan, then release to resume.');
+    expect(help).toContain('Hold Space while a tool is active to orbit or pan, then release to resume.');
   });
 });
 

@@ -165,3 +165,29 @@ describe('the Before/After picker', () => {
     expect(p.selection()).toEqual({ before: 'A', after: 'C' });
   });
 });
+
+describe('a change to what the comparison read', () => {
+  it('drops the difference when a layer CRS or its classes change, before a read or a download', () => {
+    const layers = new Map<string, object>([['A', {}], ['B', {}]]);
+    const key = new Map([['A', 'EPSG:32613#0'], ['B', 'EPSG:32613#0']]);
+    const slot: { lastDifference: HeldDifference | null } = { lastDifference: null };
+    const diff = createCompareDifference({
+      slot, ids: () => [...layers.keys()], selection: () => ({ before: 'A', after: 'B' }), lookup: (id) => layers.get(id),
+      stableIdFor: (id) => id, inputKeyFor: (id) => key.get(id) ?? '', setDifferenceAvailable: () => {}, setCompareResult: () => {},
+    });
+    const hold = (): void => {
+      diff.begin(['A', 'B'], layers.get('A'), layers.get('B'));
+      diff.hold({ stem: 'a-to-b', asc: () => 'ncols 1' });
+    };
+    hold();
+    expect(diff.current()?.stem).toBe('a-to-b');
+    key.set('B', 'EPSG:2263#0');
+    expect(diff.current()).toBeNull();
+    hold();
+    key.set('A', 'EPSG:32613#1');
+    const files: string[] = [];
+    diff.download((f) => files.push(f));
+    expect(files).toEqual([]);
+    expect(slot.lastDifference).toBeNull();
+  });
+});

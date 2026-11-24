@@ -136,7 +136,7 @@ export interface InspectorCallbacks {
   /** Download the most recent comparison's signed difference as a georeferenced raster. */
   onExportDifference?: () => void;
   /** The loaded scans, for binding a finished comparison to the pair it was computed from. */
-  compareScene?: Pick<CompareDifferenceDeps, 'slot' | 'ids' | 'lookup' | 'stableIdFor'>;
+  compareScene?: Pick<CompareDifferenceDeps, 'slot' | 'ids' | 'lookup' | 'stableIdFor' | 'inputKeyFor'>;
   /** Save the current camera viewpoint. */
   onSaveView: () => void;
   /** Fly to a saved viewpoint by index. */

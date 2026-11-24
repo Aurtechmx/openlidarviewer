@@ -41,8 +41,8 @@ export function contributeWorkflowActions(deps: WorkflowActionDeps): Action[] {
       // makes the file format explicit, and the save toast confirms
       // both what was saved and what the recipient needs to use it.
       hint:
-        'Records camera presets, Frame all, tools and themes only — to replay later you ' +
-        '(or the recipient) need the same scan open.',
+        'Records camera presets, Frame all, tools and themes, never scan data. A replay ' +
+        'needs the same scan open.',
       keywords: ['record', 'macro', 'demo'],
       run: () => deps.startWorkflowRecording(),
     },
@@ -51,8 +51,8 @@ export function contributeWorkflowActions(deps: WorkflowActionDeps): Action[] {
       title: 'Stop and save workflow (.olvworkflow)',
       section: 'Workflow',
       hint:
-        'Saves a replay of camera presets, Frame all, tools and themes — replay needs ' +
-        'the same scan loaded on the other end.',
+        'Saves the recording as a replay file. A replay needs the same scan open on the ' +
+        'other end.',
       keywords: ['export', 'finish', 'save'],
       run: () => {
         if (deps.workflowController.countingDown) {

@@ -3,17 +3,17 @@
  * decide the sections the builder draws, and the Lab offers the button.
  */
 import { readFileSync } from 'node:fs';
-import { beforeAll, describe, expect, it } from 'vitest';
+import { afterEach, beforeAll, describe, expect, it } from 'vitest';
 
 class FakeEl {
-  className = ''; textContent = ''; type = ''; checked = false; disabled = false; tagName: string;
+  className = ''; textContent = ''; type = ''; value = ''; hidden = false; checked = false; disabled = false; tagName: string;
   readonly dataset: Record<string, string> = {};
   readonly children: FakeEl[] = [];
   private readonly handlers: Record<string, (() => void)[]> = {};
   constructor(tag: string) { this.tagName = tag.toUpperCase(); }
   setAttribute(): void {}
   getAttribute(): string | null { return null; }
-  append(c: FakeEl | string): void { if (typeof c !== 'string') this.children.push(c); }
+  append(...kids: (FakeEl | string)[]): void { for (const c of kids) if (typeof c !== 'string') this.children.push(c); }
   addEventListener(t: string, h: () => void): void { (this.handlers[t] ??= []).push(h); }
   fire(t: string): void { for (const h of this.handlers[t] ?? []) h(); }
   all(): FakeEl[] { return this.children.flatMap((c) => [c, ...c.all()]); }
@@ -26,7 +26,11 @@ beforeAll(() => {
   g.HTMLAnchorElement = class {};
 });
 
-const { drainageSheetDialog, drainageSheetOptions, verticalToMetresOf } = await import('../src/ui/fieldSimulation/flowDrainageSheetDialog');
+import { DRAINAGE_SHEET_LANGUAGES } from '../src/export/flowDrainageSheetUnits';
+import { setExportLanguage, setExportNumberStyle } from '../src/i18n/exportLocale';
+import { CATALOG } from '../src/simulation/flowPulse/watershed/watershedStrings';
+
+const { drainageSheetDialog, drainageSheetOptions, exportDrainageSheet, verticalToMetresOf } = await import('../src/ui/fieldSimulation/flowDrainageSheetDialog');
 
 function open(hasPath: boolean, catchmentReason: string | null = null) {
   let picked: Record<string, boolean> | null = null;
@@ -78,6 +82,44 @@ describe('the drainage sheet dialog', () => {
     expect(verticalToMetresOf('ft', 'foot')).toBe(0.3048);
     expect(verticalToMetresOf('ft', 'unknown')).toBeNull();
     expect(verticalToMetresOf('units', 'metre')).toBeNull();
+  });
+});
+
+describe('the sheet language', () => {
+  const run = { outcome: { ok: true, grid: { cols: 3 } } as never, stale: false, path: null, catchment: null, basename: 's', georef: null, rainfall: null, snappedFrom: null, linearUnit: 'metre' as const, sections: {} as never };
+  const localeOf = () => { const o = drainageSheetOptions(run); return o.ok ? o.options.locale : null; };
+  const select = (root: FakeEl) => root.all().find((e) => e.tagName === 'SELECT')!;
+  const notes = (root: FakeEl) => root.all().filter((e) => e.className === 'olv-object-note' && !e.hidden).map((e) => e.textContent);
+  afterEach(() => setExportLanguage('en'));
+
+  it('offers only the languages the catalogs have, English first', () => {
+    const { root } = open(true);
+    expect(select(root).children.map((o) => [o.value, o.textContent])).toEqual([['en', 'English'], ['es', 'Español (México) (draft)']]);
+    expect([...DRAINAGE_SHEET_LANGUAGES].sort()).toEqual(Object.keys(CATALOG).sort());
+    expect(localeOf()).toEqual({ lang: 'en', numberStyle: 'point' });
+  });
+
+  it('hands the builder the chosen language and number style', () => {
+    const { root } = open(true);
+    select(root).value = 'es';
+    select(root).fire('change');
+    expect(localeOf()).toEqual({ lang: 'es', numberStyle: 'point' });
+    setExportNumberStyle('comma');
+    expect(localeOf()).toEqual({ lang: 'es', numberStyle: 'comma' });
+  });
+
+  it('uses English and says so when the session language is another one', async () => {
+    const { root } = open(true);
+    expect(notes(root).join(' ')).not.toContain('Not available');
+    setExportLanguage('fr');
+    expect(select(root).value).toBe('en');
+    expect(notes(root)).toContain('Not available in Français; it is written in English.');
+    expect(localeOf()).toEqual({ lang: 'en', numberStyle: 'comma' });
+    const said = await exportDrainageSheet(run, (async () => new Uint8Array()) as never, () => {});
+    expect(said).toBe('Drainage sheet downloaded. Not available in Français; it is written in English.');
+    setExportLanguage('es');
+    expect(notes(root).join(' ')).not.toContain('Not available');
+    expect(await exportDrainageSheet(run, (async () => new Uint8Array()) as never, () => {})).toBe('Drainage sheet downloaded.');
   });
 });
 

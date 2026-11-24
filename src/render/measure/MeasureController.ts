@@ -140,7 +140,7 @@ const UNDO_TITLE = 'Remove the last point you placed (or press Backspace, or Ctr
 const UNDO_DISABLED_TITLE = 'Undo last point (Backspace or Ctrl/Cmd+Z). Nothing to undo: the shape is finished.';
 /** The hint when Undo is asked for with nothing drafted. */
 export const NOTHING_TO_UNDO_HINT =
-  'Nothing to undo here. To remove a finished measurement, use Delete on its result card or × in the Measurements list.';
+  'Nothing to undo here. To remove a finished measurement, use Delete on its result card, or × or Clear profile in the Measurements list.';
 
 /** Inline crosshair glyph for the snap toggle (kept local to avoid touching the icon set). */
 const SNAP_ICON =
@@ -654,9 +654,7 @@ export class MeasureController {
       btn.addEventListener('click', () => {
         btn.blur();
         // Clicking the SAME kind that's already active exits the
-        // measure mode entirely — this is the "Click the kind again
-        // or press Esc to exit" affordance documented in the
-        // tooltip. The user gets back to free navigation with one
+        // measure mode entirely, as the Done button's tooltip says. The user gets back to free navigation with one
         // click on a button they already know how to find.
         if (this._kind === k) {
           this._cb.onExit();
@@ -697,7 +695,7 @@ export class MeasureController {
       unsafeHtml: ICON_FINISH + '<span class="olv-mlabel">Finish</span>',
       title:
         'Close the in-progress polygon and compute the result.\n' +
-        '• Same as double-clicking the cloud or pressing Enter.',
+        '• Same as clicking the first vertex, double-clicking the cloud or pressing Enter.',
       tip: 'Finish polygon · ↵',
       ariaLabel: 'Finish polygon',
     });

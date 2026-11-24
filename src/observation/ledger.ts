@@ -289,7 +289,7 @@ export function checkVoxelDomainBudget(
       verdict: 'blocked',
       cellCount,
       estimatedBytes,
-      reason: `Domain ${grid.nx}x${grid.ny}x${grid.nz} = ${cellCount.toLocaleString()} cells is at or over the hard ceiling of ${hardMaxCells.toLocaleString()}; no reasonable grid is this large.`,
+      reason: `Domain ${grid.nx}x${grid.ny}x${grid.nz} = ${cellCount.toLocaleString('en-US')} cells is at or over the hard ceiling of ${hardMaxCells.toLocaleString('en-US')}; no reasonable grid is this large.`,
     };
   }
 
@@ -298,7 +298,7 @@ export function checkVoxelDomainBudget(
       verdict: 'coarsen',
       cellCount,
       estimatedBytes,
-      reason: `Domain ${grid.nx}x${grid.ny}x${grid.nz} = ${cellCount.toLocaleString()} cells (${(estimatedBytes / (1024 * 1024)).toFixed(0)} MiB worst case) is over the working budget; a coarser voxel edge, a smaller ROI or subsampling is recommended.`,
+      reason: `Domain ${grid.nx}x${grid.ny}x${grid.nz} = ${cellCount.toLocaleString('en-US')} cells (${(estimatedBytes / (1024 * 1024)).toFixed(0)} MiB worst case) is over the working budget; a coarser voxel edge, a smaller ROI or subsampling is recommended.`,
     };
   }
 
@@ -306,7 +306,7 @@ export function checkVoxelDomainBudget(
     verdict: 'ready',
     cellCount,
     estimatedBytes,
-    reason: `Domain ${grid.nx}x${grid.ny}x${grid.nz} = ${cellCount.toLocaleString()} cells (${(estimatedBytes / (1024 * 1024)).toFixed(1)} MiB worst case) is within budget.`,
+    reason: `Domain ${grid.nx}x${grid.ny}x${grid.nz} = ${cellCount.toLocaleString('en-US')} cells (${(estimatedBytes / (1024 * 1024)).toFixed(1)} MiB worst case) is within budget.`,
   };
 }
 

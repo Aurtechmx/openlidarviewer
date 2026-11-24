@@ -10,6 +10,7 @@
  * build when it activates.
  * Loaded on demand from the Help actions, never at startup.
  */
+import { RELOAD_ADVICE } from '../io/loadErrors';
 import { storageRemove, storageSet } from '../ui/safeStorage';
 import { formatBytesIn } from '../io/formatByteSize';
 
@@ -92,7 +93,7 @@ export async function makeAvailableOffline(notify: Notify, env: OfflineCopyEnv =
         notify(`Offline copy incomplete: ${r.failed} of ${r.total} files failed. Run Make available offline again when online.`);
         resolve(false);
       } else if (r.reason === 'build-mismatch') {
-        notify('The site was updated while saving, so nothing was saved and any earlier offline copy is kept. Reload the page and try again.');
+        notify(`The site was updated while saving, so nothing was saved and any earlier offline copy is kept. ${RELOAD_ADVICE}`);
         resolve(false);
       } else {
         notify('Could not make the app available offline. Check the connection and try again.');

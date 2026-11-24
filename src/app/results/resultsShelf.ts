@@ -17,6 +17,7 @@
  */
 
 import './resultsWorkbench.css';
+import { RELOAD_ADVICE } from '../../io/loadErrors';
 import {
   RESULT_TYPE_LABELS,
   RESULT_TYPE_ORDER,
@@ -48,6 +49,15 @@ export interface ResultsShelfDeps {
   openLabPage?(entry: ResultEntry): boolean;
   /** Open a profile measurement in the Profile Workbench. False when it cannot. */
   openWorkbench?(measurementId: string): boolean;
+  /**
+   * Open the export of one profile, by measurement id, until its dialog
+   * closes. Rejects with a `ProfileExportRefusal` when it cannot be exported.
+   */
+  exportProfile?(measurementId: string): Promise<void>;
+  /** Whether an open layer is hidden in the scene. */
+  layerHidden?(id: string): boolean;
+  /** Show a message on screen; the shelf's own status line is for screen readers. */
+  notify?(message: string): void;
   /** Clock for row times; injectable for tests. */
   now?: () => number;
 }
@@ -80,6 +90,9 @@ const STATUS_LABEL: Readonly<Record<ResultEntry['status'], string>> = {
   hidden: 'Hidden',
   stale: 'Out of date',
 };
+
+/** Products whose export holds every result of the type, not one of them. */
+const COLLECTION: Readonly<Partial<Record<ResultExportProduct, string>>> = { measurements: 'measurements', findings: 'findings' };
 
 let shelfSeq = 0;
 
@@ -119,6 +132,57 @@ export function createResultsShelf(deps: ResultsShelfDeps): ResultsShelf {
       : `Showing ${e.title}.`;
   }
 
+  function say(message: string): void {
+    live.textContent = message;
+    deps.notify?.(message);
+  }
+
+  /** Why a result cannot be exported from here now, or null. */
+  function refusal(e: ResultEntry): string | null {
+    if (e.status === 'hidden') return `${e.title} is hidden. Show it, then export again.`;
+    const src = e.sourceIdentity;
+    const active = deps.activeLayerId();
+    const name = src ? deps.layerName(src) : null;
+    if (src && src !== active && !name) return `${e.title} was not exported: the scan it was made on is closed. Reopen it, then export again.`;
+    if (src && deps.layerHidden?.(src)) return `${e.title} was not exported: ${name ?? 'its scan'} is hidden. Show that scan, then export again.`;
+    // The terrain products are of the active scan: never export its result under another's name.
+    if (!e.workbench && src && active && src !== active) return `${e.title} was not exported: it is from ${name}. Make that scan active, then export again.`;
+    return null;
+  }
+
+  function openExport(product: ResultExportProduct, name: string): void {
+    live.textContent = deps.exportTo(product)
+      ? `Export opened with ${name} selected.`
+      : `Export opened. ${name[0]!.toUpperCase()}${name.slice(1)}: no export here yet.`;
+  }
+
+  // One profile export at a time: the promise lasts until its dialog closes.
+  let exporting = false;
+  async function exportOne(id: string, measurementId: string, btn: HTMLButtonElement, run: (id: string) => Promise<void>): Promise<void> {
+    if (exporting) return;
+    const title = deps.index.entries().find((x) => x.id === id)?.title ?? 'This result';
+    deps.index.refresh();
+    const e = deps.index.entries().find((x) => x.id === id);
+    const why = e ? refusal(e) : `${title} is no longer available, so it was not exported.`;
+    if (why || !e) { say(why!); return; }
+    // The dialog gives focus back to the button that opened it.
+    btn.focus({ preventScroll: true });
+    live.textContent = `Opening the PDF export of ${e.title}.`;
+    exporting = true;
+    try {
+      await run(measurementId);
+    } catch (err) {
+      if (err instanceof Error && err.name === 'ProfileExportRefusal') say(`${e.title}: ${err.message}`);
+      else {
+        // eslint-disable-next-line no-console
+        console.error('OpenLiDARViewer: profile PDF export failed.', err);
+        say(`The export of ${e.title} did not open. ${RELOAD_ADVICE}`);
+      }
+    } finally {
+      exporting = false;
+    }
+  }
+
   function row(e: ResultEntry): HTMLLIElement {
     const li = node('li', 'olv-results-row');
     li.dataset.resultId = e.id;
@@ -152,16 +216,20 @@ export function createResultsShelf(deps: ResultsShelfDeps): ResultsShelf {
       });
       actions.append(wb);
     }
-    if (e.exportProduct) {
-      const product = e.exportProduct;
+    // A profile exports on its own. Other measurements and the findings export
+    // together, from their heading: a row never names one and exports them all.
+    const product = e.exportProduct;
+    const { workbench, id } = e;
+    const run = workbench ? deps.exportProfile : undefined;
+    if (product && (run || !COLLECTION[product])) {
       const exp = node('button', 'olv-results-export', 'Export');
       exp.type = 'button';
-      exp.setAttribute('aria-label', `Export ${e.title}`);
+      exp.setAttribute('aria-label', `Export ${e.title}${run ? ' as PDF' : ''}`);
       exp.addEventListener('click', () => {
-        const marked = deps.exportTo(product);
-        live.textContent = marked
-          ? `Export opened with ${e.title} selected.`
-          : `Export opened. ${e.title} has no export here yet.`;
+        if (run) { void exportOne(id, workbench!, exp, run); return; }
+        const why = refusal(e);
+        if (why) say(why);
+        else openExport(product, e.title);
       });
       actions.append(exp);
     }
@@ -190,7 +258,17 @@ export function createResultsShelf(deps: ResultsShelfDeps): ResultsShelf {
       const ul = node('ul', 'olv-results-list');
       ul.setAttribute('aria-labelledby', headingId);
       ul.append(...group.map(row));
-      panel.append(h, ul);
+      const product = group.find((e) => e.exportProduct)?.exportProduct;
+      const all = product && COLLECTION[product];
+      if (product && all) {
+        const head = node('div', 'olv-results-head');
+        const exp = node('button', 'olv-results-export olv-results-export-all', 'Export all');
+        exp.type = 'button';
+        exp.setAttribute('aria-label', `Export all ${all}`);
+        exp.addEventListener('click', () => openExport(product, `all ${all}`));
+        head.append(h, exp);
+        panel.append(head, ul);
+      } else panel.append(h, ul);
     }
     if (hadFocus) {
       const back = focusedId ? panel.querySelector<HTMLElement>(`[data-result-id="${CSS.escape(focusedId)}"] .olv-results-focus`) : null;

@@ -29,6 +29,7 @@
  * state, and could not reach a failed static dependency of the chunk.
  */
 
+import { RELOAD_COST } from '../io/loadErrors';
 import { browserOnline, chunkFailureText, chunkReloadAction, classifyLoadError, clearChunkFailure, countChunkFailure, markChunkFailureReported } from './staleChunkReload';
 
 /** A trigger element that can carry a visible pending cue while its chunk loads. */
@@ -144,7 +145,7 @@ function report(toast: LazyLoadToast, err: unknown, label: string, retry?: () =>
     return;
   }
   if (countChunkFailure(label) < 2) {
-    toast.show(retry ? `The ${label} could not load.` : `The ${label} could not load. Try again. If it keeps failing, reload the page.`, tryAgain);
+    toast.show(retry ? `The ${label} could not load.` : `The ${label} could not load. Try again. If it keeps failing, reload the page; ${RELOAD_COST}`, tryAgain);
     return;
   }
   toast.show(chunkFailureText(`The ${label}`), chunkReloadAction());

@@ -110,7 +110,7 @@ describe('exportProduct(contours) through the export adapter', () => {
 
   it('says the PDF was not made, with a next step, when the dialog build throws', () => {
     const src = readFileSync(new URL('../src/ui/AnalysePanel.ts', import.meta.url), 'utf8');
-    expect(src).toContain("errLine.textContent = 'The PDF could not be made, so nothing was saved. Reload the page and try again.';");
+    expect(src).toContain('errLine.textContent = `The PDF could not be made, so nothing was saved. ${RELOAD_ADVICE}`;');
     expect(src).not.toContain('see the console');
   });
 
@@ -118,7 +118,7 @@ describe('exportProduct(contours) through the export adapter', () => {
     const p = await panel();
     (p as unknown as { _handleContourStudioExport: () => Promise<never> })._handleContourStudioExport = () => Promise.reject(new Error('Failed to fetch dynamically imported module'));
     const outcome = await p.exportProduct('contours', new FakeEl('button'));
-    expect(outcome).toEqual({ ok: false, reason: 'The map sheet could not load, so nothing was exported. Reload the page and try again.' });
+    expect(outcome).toEqual({ ok: false, reason: 'The map sheet could not load, so nothing was exported. Reload the page to try again; a reload closes open scans, so save your session first if you can.' });
   });
 
   it('returns the gate reason when the Studio launch state is unavailable', async () => {

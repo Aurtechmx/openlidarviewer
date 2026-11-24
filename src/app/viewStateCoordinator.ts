@@ -333,10 +333,10 @@ export function saveViewWithNotice(deps: {
   showLassoToast: (message: string) => void;
 }): void {
   if (!deps.hasScan()) {
-    deps.showLassoToast('Load a scan first — a view state captures the open scan.');
+    deps.showLassoToast('Open a scan first. A saved view captures the open scan.');
     return;
   }
   deps.saveCurrentView();
   const name = deps.bookmarks.get(deps.bookmarks.count() - 1)?.name ?? 'View';
-  deps.showLassoToast(`View state saved — “${name}” (rename it in the panel list).`);
+  deps.showLassoToast(`View saved: “${name}” (rename it in Saved views).`);
 }

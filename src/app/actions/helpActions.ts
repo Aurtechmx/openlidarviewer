@@ -3,6 +3,7 @@
  *
  * The onboarding tour replay, the keyboard shortcut sheet and Copy diagnostics.
  */
+import { RELOAD_ADVICE } from '../../io/loadErrors';
 import type { Action } from '../../ui/actionRegistry';
 import type { TourHandle } from '../../ui/onboarding/bootTour';
 import type { ShortcutSheet } from '../../ui/ShortcutSheet';
@@ -53,7 +54,7 @@ export function contributeHelpActions(deps: HelpActionDeps): Action[] {
         const notify = deps.notify ?? (() => {});
         void loadCopyDiagnostics()
           .then((m) => m.copyDiagnostics(deps.getViewer ?? (() => null), notify))
-          .catch(() => notify('Could not load the diagnostics report. Nothing was changed. Reload the page and try again.'));
+          .catch(() => notify(`Could not load the diagnostics report. Nothing was changed. ${RELOAD_ADVICE}`));
       },
     },
     {
@@ -88,7 +89,7 @@ export function contributeHelpActions(deps: HelpActionDeps): Action[] {
         const notify = deps.notify ?? (() => {});
         void loadOfflineCopy()
           .then((m) => m.makeAvailableOffline(notify))
-          .catch(() => notify('Could not start the offline download. Reload the page and try again.'));
+          .catch(() => notify(`Could not start the offline download. ${RELOAD_ADVICE}`));
       },
     },
     {
@@ -101,7 +102,7 @@ export function contributeHelpActions(deps: HelpActionDeps): Action[] {
         const notify = deps.notify ?? (() => {});
         void loadOfflineCopy()
           .then((m) => m.removeOfflineCopy(notify))
-          .catch(() => notify('Could not remove the offline copy. Reload the page and try again.'));
+          .catch(() => notify(`Could not remove the offline copy. ${RELOAD_ADVICE}`));
       },
     },
     {
@@ -121,7 +122,7 @@ export function contributeHelpActions(deps: HelpActionDeps): Action[] {
         void loadRecovery()
           .then((m) => m.clearRecoveryJournal())
           .then(() => notify('Session recovery is off. Work saved for recovery in this browser was deleted.'))
-          .catch(() => notify('Session recovery is off. Could not clear recovery data. Reload the page and try again.'));
+          .catch(() => notify(`Session recovery is off. Could not clear recovery data. ${RELOAD_ADVICE}`));
       },
     },
     {
@@ -135,7 +136,7 @@ export function contributeHelpActions(deps: HelpActionDeps): Action[] {
         void loadRecovery()
           .then((m) => m.clearRecoveryJournal())
           .then(() => notify('Recovery data in this browser was deleted.'))
-          .catch(() => notify('Could not clear recovery data. Reload the page and try again.'));
+          .catch(() => notify(`Could not clear recovery data. ${RELOAD_ADVICE}`));
       },
     },
   );

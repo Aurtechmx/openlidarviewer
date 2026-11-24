@@ -93,7 +93,7 @@ export function recommendGrid(input: GridRecommendationInput): GridRecommendatio
   let cellSizeM = densityCell;
   if (!feasible) {
     cellSizeM = GRID_LADDER_M.at(-1)!;
-    reasons.push(`No ladder grid fits the ${Math.round(area)} m² extent in memory — even a ${cellSizeM} m cell exceeds the ${budget.toLocaleString()}-cell budget. Coarsen further, tile the extent, or refuse; do not allocate this grid as-is.`);
+    reasons.push(`No ladder grid fits the ${Math.round(area)} m² extent in memory — even a ${cellSizeM} m cell exceeds the ${budget.toLocaleString('en-US')}-cell budget. Coarsen further, tile the extent, or refuse; do not allocate this grid as-is.`);
   } else if (!cellFits(cellSizeM)) {
     cellSizeM = cellOptionsM[0];
     reasons.push(`Grid coarsened to ${cellSizeM} m so the ${Math.round(area)} m² extent fits in memory.`);

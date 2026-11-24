@@ -10,18 +10,23 @@
  */
 import {
   exportLocale,
+  offeredLocale,
   onExportLocaleChange,
   setExportLanguage,
   setExportNumberStyle,
   type ExportLocale,
 } from '../i18n/exportLocale';
-import { EXPORT_LANGUAGES, asExportLanguage } from '../i18n/languages';
+import { EXPORT_LANGUAGES, asExportLanguage, languageInfo, type ExportLanguage } from '../i18n/languages';
 import { NUMBER_STYLES } from '../i18n/numberStyle';
 import { el } from './dom';
 
 interface ControlParts {
   readonly select: HTMLSelectElement;
   readonly styles: readonly HTMLInputElement[];
+  /** The languages offered here, when fewer than all. */
+  readonly offered: readonly ExportLanguage[] | null;
+  /** Says when the session's language is not offered here. */
+  readonly missing: HTMLElement | null;
 }
 
 const controls = new Set<WeakRef<HTMLElement>>();
@@ -29,8 +34,17 @@ const partsOf = new WeakMap<HTMLElement, ControlParts>();
 let subscribed = false;
 let controlCount = 0;
 
+/** What an export not written in `lang` says about it, or null when it is. */
+export function notOfferedText(lang: ExportLanguage, offered: readonly ExportLanguage[]): string | null {
+  return offered.includes(lang) ? null : `Not available in ${languageInfo(lang).name}; it is written in English.`;
+}
+
 function show(parts: ControlParts, locale: ExportLocale): void {
-  parts.select.value = locale.lang;
+  parts.select.value = parts.offered ? offeredLocale(locale, parts.offered).lang : locale.lang;
+  if (parts.missing) {
+    parts.missing.textContent = notOfferedText(locale.lang, parts.offered!) ?? '';
+    parts.missing.hidden = parts.missing.textContent === '';
+  }
   for (const input of parts.styles) input.checked = input.value === locale.numberStyle;
 }
 
@@ -52,8 +66,9 @@ export function languageOptionText(id: string): string {
 /**
  * A Language picker and a Numbers segmented choice, bound to the session's
  * export language and number style, with a one-line note on what they apply to.
+ * `offered` limits the languages to those the deliverable is written in.
  */
-export function exportLanguageControl(appliesTo: string): HTMLElement {
+export function exportLanguageControl(appliesTo: string, offered: readonly ExportLanguage[] | null = null): HTMLElement {
   if (!subscribed) { onExportLocaleChange(showAll); subscribed = true; }
   const id = `olv-export-lang-${++controlCount}`;
   const block = el('div', { className: 'olv-export-lang' });
@@ -65,6 +80,7 @@ export function exportLanguageControl(appliesTo: string): HTMLElement {
   select.id = `${id}-select`;
   select.className = 'olv-export-lang-select';
   for (const lang of EXPORT_LANGUAGES) {
+    if (offered && !offered.includes(lang.id)) continue;
     const option = document.createElement('option');
     option.value = lang.id;
     option.lang = lang.tag;
@@ -101,7 +117,13 @@ export function exportLanguageControl(appliesTo: string): HTMLElement {
   numRow.append(seg);
 
   block.append(langRow, numRow, el('div', { className: 'olv-object-note', text: appliesTo }));
-  const parts: ControlParts = { select, styles };
+  let missing: HTMLElement | null = null;
+  if (offered) {
+    missing = el('div', { className: 'olv-object-note' });
+    missing.setAttribute('role', 'status');
+    block.append(missing);
+  }
+  const parts: ControlParts = { select, styles, offered, missing };
   show(parts, exportLocale());
   partsOf.set(block, parts);
   controls.add(new WeakRef(block));

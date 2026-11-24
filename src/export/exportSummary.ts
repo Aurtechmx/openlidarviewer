@@ -305,7 +305,7 @@ export function buildExportSummary(input: ExportSummaryInput): ExportSummary {
   }
 
   // ── composed one-liner ───────────────────────────────────────────────────
-  const pointCountLabel = `${approximate ? 'about ' : ''}${n.toLocaleString()} point${n === 1 ? '' : 's'}`;
+  const pointCountLabel = `${approximate ? 'about ' : ''}${n.toLocaleString('en-US')} point${n === 1 ? '' : 's'}`;
   const crsLabel = crsLabelFor(input);
   const formatLabel = gzip ? `${spec.label} (.gz)` : spec.label;
   const parts = [pointCountLabel, formatLabel];

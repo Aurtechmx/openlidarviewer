@@ -23,7 +23,7 @@ async function panelWithToggles() {
     onGradeFullCloud() {}, onCancelGrade() {},
   });
   const root = panel.element as unknown as FakeEl;
-  return { panel, root, toggles, pause: root.findByText('Pause')[0]!, grade: root.findByText('Grade full cloud')[0]! };
+  return { panel, root, toggles, pause: root.findByText('Pause')[0]!, grade: root.findByText('Check full cloud')[0]! };
 }
 
 describe('StreamingPanel.resetForScan', () => {
@@ -40,7 +40,7 @@ describe('StreamingPanel.resetForScan', () => {
 
     expect(t.panel.paused).toBe(false);
     expect(t.pause.textContent).toBe('Pause');
-    expect(t.grade.textContent).toBe('Grade full cloud');
+    expect(t.grade.textContent).toBe('Check full cloud');
     expect(t.grade.disabled).toBe(false);
     expect(t.root.findContaining('Decoding 3 / 10 nodes…')).toBeUndefined();
     // The reset describes the panel, not the renderer: no toggle is reported.

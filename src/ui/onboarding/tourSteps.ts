@@ -72,7 +72,7 @@ export const DEFAULT_TOUR: readonly TourStep[] = [
     target: '.olv-open-btn',
     title: 'Open a scan',
     body:
-      'Drop a .las, .laz, .e57, or .ply file anywhere on the page, pick one ' +
+      'Drop a scan (LAS, LAZ, E57, PLY and more) anywhere on the page, pick one ' +
       'with this button, or stream a *.copc.laz* URL from the field below.',
     placement: 'bottom',
   },

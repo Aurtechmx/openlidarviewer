@@ -73,6 +73,8 @@ const DASH = '—';
 export interface TerrainReportRow {
   readonly label: string;
   readonly value: string;
+  /** The English label of a translated row, which decides whether its value may be capped. */
+  readonly capLabel?: string;
 }
 
 /** A titled block of label/value rows. */
@@ -222,7 +224,7 @@ function fmtM(v: number | null | undefined): string {
 
 /** Format an integer with thousands grouping, or an em-dash when absent. */
 function fmtInt(v: number | null | undefined): string {
-  return v != null && Number.isFinite(v) ? Math.round(v).toLocaleString() : DASH;
+  return v != null && Number.isFinite(v) ? Math.round(v).toLocaleString('en-US') : DASH;
 }
 
 /** Format a 0..1 fraction as a whole percent, or an em-dash when absent. */
@@ -307,7 +309,7 @@ export function buildTerrainReportContent(
   // fraction of a degree (200 cells of 1e-5° is 0.002°) and rounds to "0 × 0".
   // Degrees are printed to three significant figures instead.
   const fmtExtent = (v: number): string =>
-    footprintUnit === 'degrees' ? String(Number(v.toPrecision(3))) : Math.round(v).toLocaleString();
+    footprintUnit === 'degrees' ? String(Number(v.toPrecision(3))) : Math.round(v).toLocaleString('en-US');
   const gridExtent =
     cols != null && rows != null && cell != null
       ? `${fmtExtent(cols * cell)} × ${fmtExtent(rows * cell)} ${footprintUnit}`

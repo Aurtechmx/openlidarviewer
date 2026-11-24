@@ -105,12 +105,13 @@ test('after running on a scan: readiness, chips, recommendations, and gated expo
   expect(await page.locator('.olv-analyse-chip').count()).toBe(0);
 
   // Surface models (inside Evidence): stats + raster preview tiles (canopy
-  // height + relief), each with a click-to-sample readout and PNG export.
+  // height + relief), with one sample hint and one PNG export for them all.
   await expect(page.locator('.olv-analyse-surface-stat').first()).toContainText(/height|Slope/i);
   await expect(page.locator('canvas.olv-analyse-raster').first()).toBeVisible();
   await expect(page.locator('.olv-analyse-relief-toggle')).toContainText(/Multi-directional/i);
-  await expect(page.locator('.olv-analyse-sample').first()).toBeVisible();
-  await expect(page.locator('.olv-analyse-surface-dl').first()).toContainText(/Export PNG/i);
+  await expect(page.getByText('Click the map to sample a point.')).toHaveCount(1);
+  await expect(page.locator('.olv-analyse-surface-dl', { hasText: 'Export PNG' })).toHaveCount(1);
+  await expect(page.getByRole('combobox', { name: 'Map to export' })).toBeVisible();
   // The grid and interval recommendation are WITHHELD here, and the row says
   // why: the dropped PLY carries no CRS, the ladders are metre ladders, and a
   // recommendation sized from raw coordinates was the defect. This spec used to

@@ -7,7 +7,7 @@
  * analysis result so the tile actually renders. Asserts:
  *   - the "Coverage (trust)" tile is present with its honesty caption,
  *   - the 3-stop legend (strong / moderate / weak) is rendered,
- *   - the tile carries its own Export PNG button.
+ *   - the shared PNG export offers the tile.
  */
 
 import { describe, it, expect, beforeAll } from 'vitest';
@@ -35,7 +35,7 @@ describe('AnalysePanel — coverage tile', () => {
     const root = panel.element as unknown as FakeEl;
 
     // The tile heading.
-    expect(root.findByText('Coverage (trust)')).toHaveLength(1);
+    expect(root.findByText('Coverage (trust)').filter((n) => n.tagName !== 'option')).toHaveLength(1);
 
     // The honesty caption — green/yellow/red = measured/interpolated/unreliable.
     expect(root.findContaining(COVERAGE_CAPTION).length).toBeGreaterThan(0);
@@ -45,9 +45,9 @@ describe('AnalysePanel — coverage tile', () => {
     expect(root.findContaining('moderate — interpolated')).toHaveLength(1);
     expect(root.findContaining('weak — extrapolated / gap')).toHaveLength(1);
 
-    // Coverage tile gets its own Export PNG button (one of several PNG buttons
-    // in the surface row — assert at least the coverage one exists).
-    expect(root.findByText('Export PNG').length).toBeGreaterThanOrEqual(1);
+    // The one PNG export lists the coverage map.
+    expect(root.findByText('Export PNG')).toHaveLength(1);
+    expect(root.findByText('Coverage (trust)').filter((n) => n.tagName === 'option')).toHaveLength(1);
 
     // Honesty: nothing in the rendered tree claims survey-grade for coverage.
     expect(root.findContaining('survey-grade coverage')).toHaveLength(0);

@@ -72,6 +72,8 @@ export interface Action extends ActionDescriptor {
    * on the disabled row.
    */
   readonly unavailable?: string;
+  /** Listed by the palette only for a query it matches, not while browsing. */
+  readonly searchOnly?: boolean;
 }
 
 /**
@@ -227,7 +229,7 @@ export function findDuplicateIds(actions: readonly Action[]): string[] {
  * and Analyse pages do not exist. Commands that need them leave the palette, as
  * the "Go to" entries already do; a link can surface Measure or Annotate.
  */
-const ANALYSE_PANEL_ACTIONS = new Set(['analyse.run', 'analyse.contours', 'analyse.flowPulse', 'analyse.terrainAccess', 'analyse.observatory']);
+const NO_SURFACE = new Set(['analyse.run', 'analyse.contours', 'analyse.flowPulse', 'analyse.terrainAccess', 'analyse.observatory', 'tool.inspect']);
 
 export function actionsForLayout<A extends { readonly id: string }>(
   actions: A[],
@@ -235,8 +237,8 @@ export function actionsForLayout<A extends { readonly id: string }>(
 ): A[] {
   if (!o.bare) return actions;
   return actions.filter((a) => {
-    if (ANALYSE_PANEL_ACTIONS.has(a.id) || a.id === 'tool.inspect') return false;
-    if (a.id === 'tool.measure') return o.measurements;
+    if (NO_SURFACE.has(a.id)) return false;
+    if (/^tool\.measure/.test(a.id)) return o.measurements;
     if (a.id === 'tool.annotate') return o.annotations;
     return true;
   });

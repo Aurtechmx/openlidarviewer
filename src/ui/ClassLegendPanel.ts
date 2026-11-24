@@ -534,7 +534,7 @@ export class ClassLegendPanel {
     if (this._presentCodes().length > 0) this._hasChannel = true;
     // Same rows, new counts: the nodes survive, so a press and focus do too.
     if (this._rowShape() === this._renderedShape) {
-      for (const [code, span] of this._countSpans) span.textContent = (this._counts.get(code) ?? 0).toLocaleString();
+      for (const [code, span] of this._countSpans) span.textContent = (this._counts.get(code) ?? 0).toLocaleString('en-US');
       return;
     }
     this._listPress.run(() => this._render());
@@ -695,7 +695,7 @@ export class ClassLegendPanel {
 
     const count = el('span', {
       className: 'olv-cl-count',
-      text: (this._counts.get(code) ?? 0).toLocaleString(),
+      text: (this._counts.get(code) ?? 0).toLocaleString('en-US'),
       title: 'Loaded points (display sample)',
     });
     this._countSpans.set(code, count);

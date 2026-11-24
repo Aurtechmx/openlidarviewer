@@ -8,13 +8,18 @@
  *
  * Spanish follows the SCT and INEGI vocabulary (cuenca, parteaguas, cauce
  * principal, tiempo de concentración, coeficiente de compacidad de Gravelius,
- * pendiente media, curva hipsométrica, orden de corriente) and writes numbers
- * with a decimal comma and a no-break space between thousands.
+ * pendiente media, curva hipsométrica, orden de corriente). It is a draft until
+ * a reviewer signs it off (`reviewed` in i18n/languages.ts).
+ *
+ * How numbers are written is a choice of its own (i18n/numberStyle.ts), not a
+ * property of the language. The catalog writes its fixed constants with a point.
  *
  * Pure: no DOM, no I/O.
  */
 
-import type { ReportLanguage } from './watershedReportModel';
+import { fill } from '../../../i18n/message';
+import { grouped, restyleNumbers, type NumberStyle } from '../../../i18n/numberStyle';
+import type { ReportLanguage, ReportLocale } from './watershedReportModel';
 
 const EN = {
   // Cover
@@ -328,6 +333,9 @@ const EN = {
   'figures.notSupportedNote': 'Values marked ~ belong to a catchment the data do not support. Read them as rough indications.',
   'method.methodsList': 'Priority-Flood depression filling, D8 flow routing and accumulation, depression inventory, watershed partition, Strahler order, divide tracing, catchment shape and relief, main channel, quality verdict.',
   'cover.notes': 'Notes',
+  'draft.note': '{language} (translation not yet reviewed)',
+  'software.built': 'built',
+  'catchment.yours': 'your catchment',
 } as const;
 
 export type StringKey = keyof typeof EN;
@@ -457,11 +465,11 @@ const ES: Record<StringKey, string> = {
   'map.legend.divide': 'Parteaguas',
   'map.legend.studied': 'Cuenca de aportación estudiada',
   'map.legend.watersheds': 'Cuencas del levantamiento',
-  'map.legend.minor': 'Cuencas del levantamiento menores',
+  'map.legend.minor': 'Cuencas menores',
   'map.legend.order': 'Línea de flujo, orden {order}',
   'map.legend.mainChannel': 'Cauce principal',
   'map.legend.outlet': 'Salida',
-  'map.legend.depression': 'Depresión del modelo de superficie',
+  'map.legend.depression': 'Depresión del modelo',
   'map.legend.interpolated': 'Terreno interpolado',
   'map.legend.noData': 'Sin datos',
   'map.coords.local': 'Coordenadas en metros desde la esquina suroeste de la malla. Se desconoce el sistema de coordenadas, por lo que son locales.',
@@ -531,7 +539,7 @@ const ES: Record<StringKey, string> = {
   'summary.edgeShare': 'El {share} del parteaguas está en el borde de los datos, por donde entra agua de fuera del levantamiento.',
   'cover.sourceNoFile': '{points} puntos · {area} analizadas con celdas de {cell}',
   'kpi.withheld': 'No se indica',
-  'network.ordersTitle': 'Líneas de flujo por orden de corriente (Strahler)',
+  'network.ordersTitle': 'Líneas de flujo por orden (Strahler)',
   'network.noLines': 'Ninguna línea de flujo dentro de esta cuenca drena el umbral de {threshold}.',
   'network.hollowsTitle': 'Depresiones del modelo de superficie',
   'network.noHollows': 'El terreno no tiene depresiones dentro de esta cuenca.',
@@ -559,10 +567,10 @@ const ES: Record<StringKey, string> = {
   'appendix.perimeter.def': 'Longitud del parteaguas trazado, simplificado con Douglas-Peucker a una celda.',
   'appendix.perimeter.source': 'SCT M-PRY-CAR-1-06-003/24',
   'appendix.gravelius.term': 'Coeficiente de compacidad de Gravelius Kc',
-  'appendix.gravelius.def': 'Kc = 0,282 P / √A. Vale 1 para un círculo; valores mayores indican un parteaguas menos compacto.',
+  'appendix.gravelius.def': 'Kc = 0.282 P / √A. Vale 1 para un círculo; valores mayores indican un parteaguas menos compacto.',
   'appendix.gravelius.source': 'SCT M-PRY-CAR-1-06-003/24',
   'appendix.elongation.term': 'Relación de elongación Re',
-  'appendix.elongation.def': 'Re = 1,128 √A / Lb: el diámetro de un círculo de la misma área entre la longitud de la cuenca. El encabezado lee Re de 0,9 o más como casi circular, de 0,7 a 0,9 como ovalada y menor de 0,7 como alargada.',
+  'appendix.elongation.def': 'Re = 1.128 √A / Lb: el diámetro de un círculo de la misma área entre la longitud de la cuenca. El encabezado lee Re de 0.9 o más como casi circular, de 0.7 a 0.9 como ovalada y menor de 0.7 como alargada.',
   'appendix.elongation.source': 'USGS WRI 95-4287, apéndice A',
   'appendix.circularity.term': 'Relación de circularidad Rc',
   'appendix.circularity.def': 'Rc = 4πA / P²: el área entre el área de un círculo con el mismo perímetro.',
@@ -583,10 +591,10 @@ const ES: Record<StringKey, string> = {
   'appendix.meanSlope.def': 'Promedio de la pendiente de Horn de las celdas de la cuenca, en porcentaje.',
   'appendix.meanSlope.source': 'USGS StreamStats, características de cuenca (BSLDEM10M)',
   'appendix.channelLength.term': 'Longitud del cauce principal L',
-  'appendix.channelLength.def': 'Trayectoria D8 más larga que termina en la salida. Los pasos D8 pueden alargarla hasta un 8,2 %.',
+  'appendix.channelLength.def': 'Trayectoria D8 más larga que termina en la salida. Los pasos D8 pueden alargarla hasta un 8.2 %.',
   'appendix.channelLength.source': 'USGS StreamStats (LFPLENGTH)',
   'appendix.slope1085.term': 'Pendiente 10–85',
-  'appendix.slope1085.def': 'S = (E₈₅ − E₁₀) / 0,75 L, entre los puntos al 10 % y al 85 % de la longitud desde la salida.',
+  'appendix.slope1085.def': 'S = (E₈₅ − E₁₀) / 0.75 L, entre los puntos al 10 % y al 85 % de la longitud desde la salida.',
   'appendix.slope1085.source': 'USGS WRI 95-4287, apéndice A; USGS StreamStats (CSL1085LFP)',
   'appendix.taylorSchwarz.term': 'Pendiente de Taylor–Schwarz',
   'appendix.taylorSchwarz.def': 'S = [L / Σ li/√Si]² sobre 10 tramos de igual longitud.',
@@ -620,6 +628,9 @@ const ES: Record<StringKey, string> = {
   'figures.notSupportedNote': 'Los valores marcados con ~ son de una cuenca sin respaldo en los datos. Léalos como indicaciones aproximadas.',
   'method.methodsList': 'Relleno Priority-Flood, flujo y acumulación D8, inventario de depresiones, partición en cuencas, orden de Strahler, trazo del parteaguas, forma y relieve, cauce principal, calificación de calidad.',
   'cover.notes': 'Notas',
+  'draft.note': '{language} (traducción pendiente de revisión)',
+  'software.built': 'compilado',
+  'catchment.yours': 'su cuenca',
 };
 
 export const CATALOG: Readonly<Record<ReportLanguage, Readonly<Record<StringKey, string>>>> = { en: EN, es: ES };
@@ -656,31 +667,30 @@ export const FIXED_NUMBER_KEYS: ReadonlySet<StringKey> = new Set<StringKey>([
 
 /** The string for `key`, with each `{name}` replaced by its parameter. */
 export function t(lang: ReportLanguage, key: StringKey, params: Record<string, string | number> = {}): string {
-  const template = CATALOG[lang][key];
-  return template.replace(/\{(\w+)\}/g, (_, name: string) => {
-    if (!(name in params)) throw new RangeError(`watershed string ${key}: missing parameter ${name}`);
-    return String(params[name]);
-  });
+  return fill(CATALOG[lang][key], params, `watershed string ${key}`);
+}
+
+/** A definition with its formula constants in the locale's number style. Not for sources: "section 2.1.2" is a name. */
+export function formulaText(loc: ReportLocale, key: StringKey): string {
+  return restyleNumbers(t(loc.lang, key), loc.numberStyle);
 }
 
 const NBSP = '\u00a0';
 
-/** Fixed digits; English groups thousands with a comma, Spanish with a no-break space and a decimal comma. */
-/** No-break space: thousands separator in Spanish and the gap before a unit. */
+/** No-break space: thousands separator in the comma style and the gap before a unit. */
 export const UNIT_GAP = NBSP;
 
-export function formatNumber(lang: ReportLanguage, value: number, digits: number): string {
+/** Fixed digits, grouped in thousands: 1,234.5 in the point style, 1 234,5 in the comma style. */
+export function formatNumber(style: NumberStyle, value: number, digits: number): string {
   const fixed = Math.abs(value).toFixed(digits);
   const [whole, frac] = fixed.split('.');
-  const sep = lang === 'es' ? NBSP : ',';
-  const grouped = whole.replace(/\B(?=(\d{3})+(?!\d))/g, sep);
-  const sign = value < 0 && Number(fixed) !== 0 ? '-' : '';
-  return sign + grouped + (frac !== undefined ? (lang === 'es' ? ',' : '.') + frac : '');
+  const body = `${grouped(style, Number(whole))}${frac !== undefined ? (style === 'comma' ? ',' : '.') + frac : ''}`;
+  return value < 0 && Number(fixed) !== 0 ? `-${body}` : body;
 }
 
 /** Hectares (two decimals) from 1 ha up, whole square metres below; "≥ " for a minimum. */
-export function formatArea(lang: ReportLanguage, m2: number, bound?: 'minimum'): string {
-  const body = m2 >= 10_000 ? `${formatNumber(lang, m2 / 10_000, 2)}${NBSP}ha` : `${formatNumber(lang, m2, 0)}${NBSP}m²`;
+export function formatArea(style: NumberStyle, m2: number, bound?: 'minimum'): string {
+  const body = m2 >= 10_000 ? `${formatNumber(style, m2 / 10_000, 2)}${NBSP}ha` : `${formatNumber(style, m2, 0)}${NBSP}m²`;
   return bound === 'minimum' ? `≥ ${body}` : body;
 }
 

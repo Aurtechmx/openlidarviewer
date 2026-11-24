@@ -196,6 +196,8 @@ export interface MeasurementReader {
     readonly owner?: { readonly layerId?: string };
     readonly pickLayers?: readonly string[];
   }[];
+  /** Summaries, read only to say whether a profile has a chart to export. */
+  getSummaries?(): readonly { readonly id: string; readonly profileChart?: readonly unknown[] | null }[];
 }
 
 /**

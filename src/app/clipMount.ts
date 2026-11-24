@@ -23,6 +23,7 @@
 
 import { ClipPanel, type ClipKeptCount } from '../ui/ClipPanel';
 import { createClipFlowFromShell, type ClipFlow, type ClipFlowShell } from './clipFlow';
+import { canFocusClip, focusClip } from './clipFocus';
 import { sumClipCounts } from '../render/clip/clipBox';
 import { fitMergedBounds } from '../render/clip/fitBoundsInProject';
 import { toggleTool } from './toggleTool';
@@ -108,6 +109,8 @@ export function mountClip(d: ClipMountDeps): ClipMount {
     },
     onOutline: (box, active) => live()?.setClipOutline(box, active),
     fitBounds: () => fitMergedBounds(live()?.mergedVisibleBounds(true) ?? null),
+    onFocus: () => focusClip(live(), d.toast),
+    canFocus: () => canFocusClip(live()),
     keptCount: () => clipCountFor(live(), d.activeId()),
     // The units the Inspect card gives the same local X, Y, Z (none asserted when unknown).
     units: () => {

@@ -192,7 +192,7 @@ function primaryLimiter(i: ScanStoryInputs): string {
 /** The one most-useful next action, derived from the primary limiter. */
 function nextStep(i: ScanStoryInputs): string {
   if (i.surfaceTier === 'Blocked') return 'Re-capture or densify — the current surface has too little bare earth.';
-  if (i.coverageMode === 'resident-only') return 'Let the full cloud stream in, then re-run the analysis for a settled grade.';
+  if (i.coverageMode === 'resident-only') return 'Let the full cloud stream in, then re-run the analysis for a settled result.';
   if (i.coverageMode === 'sampled') return 'Run terrain on a smaller tile so every point is read.';
   if (i.coverageMode === 'display-sample') return 'Convert to COPC/EPT, or open a smaller tile, so every point is read.';
   if (i.groundVisibility === 'poor' || i.groundVisibility === 'fair') {

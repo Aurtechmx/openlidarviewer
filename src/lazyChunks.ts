@@ -264,6 +264,9 @@ export const loadProfileExport = () => import('./ui/profileExportFlow');
  */
 export const loadMapSheetPdf = () => import('./render/measure/mapSheetStyled');
 
+/** Load the map sheet dialog's language choice, when the dialog opens. */
+export const loadMapSheetLanguage = () => import('./ui/mapSheetLanguage');
+
 /** Load the profile sheet's returns, plan and crossing builder, on a styled profile export. */
 export const loadProfileSheetExtras = () => import('./app/profileSheetExtras');
 

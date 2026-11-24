@@ -61,7 +61,7 @@ describe('the Undo button', () => {
     measure.undoLastPoint();
     expect(hintText(measure)).toBe(NOTHING_TO_UNDO_HINT);
     expect(NOTHING_TO_UNDO_HINT).toBe(
-      'Nothing to undo here. To remove a finished measurement, use Delete on its result card or × in the Measurements list.',
+      'Nothing to undo here. To remove a finished measurement, use Delete on its result card, or × or Clear profile in the Measurements list.',
     );
   });
 });
