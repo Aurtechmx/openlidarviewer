@@ -389,7 +389,11 @@ function reachOf(stations: StyledProfileSheet['stations'], from: number, to: num
   const a = interpolateStationHeight(pts, from), b = interpolateStationHeight(pts, to);
   if (a == null || b == null) return [];
   out.push([from, a]);
-  for (const s of stations) if (s.chainage > from && s.chainage < to) { if (s.elevation == null) return []; out.push([s.chainage, s.elevation]); }
+  for (const s of stations) {
+    if (!(s.chainage > from && s.chainage < to)) continue;
+    if (s.elevation == null) return [];
+    out.push([s.chainage, s.elevation]);
+  }
   out.push([to, b]);
   return out;
 }

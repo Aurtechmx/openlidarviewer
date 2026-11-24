@@ -16,9 +16,9 @@ const PNG = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJA
 
 describe('text', () => {
   it('drops control and direction characters and caps the length by character', () => {
-    expect(cleanLine('  a\u0000b‮c\r\nd​  ', 50)).toBe('abc d');
+    expect(cleanLine('  a\u0000b\u202ec\r\nd\u200b  ', 50)).toBe('abc d');
     expect(cleanLine('\u{1F600}'.repeat(5), 3)).toBe('\u{1F600}'.repeat(3));
-    expect(cleanLine(' ​ ', 10)).toBeUndefined();
+    expect(cleanLine(' \u200b ', 10)).toBeUndefined();
     expect(cleanLine(5, 10)).toBeUndefined();
   });
   it('keeps paragraphs in notes, one blank line at most', () => {

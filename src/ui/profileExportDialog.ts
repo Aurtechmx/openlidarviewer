@@ -57,7 +57,7 @@ export function parseChainage(raw: string, unit: 'metric' | 'imperial' | 'unveri
 }
 
 /** Characters the sheet fonts may not have. */
-export const unusualCharacters = (s: string): boolean => /[^\u0009\u000a -ɏʻ-˝‐-…‰′″‹›₠-₿№™Ω←-↓∂-≥]/u.test(s);
+export const unusualCharacters = (s: string): boolean => /[^\t\n -ɏʻ-˝‐-…‰′″‹›₠-₿№™Ω←-↓∂-≥]/u.test(s);
 
 /** Image types a logo can be given as; each is redrawn as PNG. */
 const LOGO_TYPES = ['image/png', 'image/jpeg', 'image/webp', 'image/svg+xml'];
