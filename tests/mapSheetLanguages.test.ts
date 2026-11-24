@@ -263,3 +263,22 @@ describe('the catalog', () => {
     }
   });
 });
+
+describe('the title and notes the app makes', () => {
+  it.each(['es', 'pt', 'fr', 'de'] as const)('are in the sheet\'s language (%s), and typed text is as typed', async (lang) => {
+    const { defaultMapNotes, defaultMapTitle } = await import('../src/render/measure/mapSheetExportOptions');
+    const locale = { lang, numberStyle: 'point' as const };
+    for (const unit of [1, 0.3048, null]) {
+      const title = defaultMapTitle({ title: 'reach — Contours', basename: 'reach' });
+      const notes = defaultMapNotes({ basename: 'reach', intervalM: 0.5, crs: unit ? 'EPSG:6346' : null, verticalUnitToMetres: unit });
+      const { ts, missed } = await drawn(mapInput({ ...MAP_STATES.measured, locale, title, notes }));
+      const all = ts.map((t) => t.text).join(' ');
+      expect(missed).toEqual([]);
+      expect(all).not.toMatch(/— Contours|Contours from|interval|no CRS|unit unverified/);
+      expect(all).toContain('reach —');
+    }
+    const typed = await drawn(mapInput({ ...MAP_STATES.measured, locale, title: 'My Contours', notes: 'Contours from my drone · by hand' }));
+    expect(typed.ts.map((t) => t.text).join(' ')).toContain('My Contours');
+    expect(typed.ts.map((t) => t.text).join(' ')).toContain('Contours from my drone');
+  });
+});

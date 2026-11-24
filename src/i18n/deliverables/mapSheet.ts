@@ -24,6 +24,11 @@ const rows = <K extends string>(r: Record<K, Row>): Readonly<Record<K, Row>> => 
 export const MAP_SHEET_TEXT = rows({
   // ── document and footer ────────────────────────────────────────────────
   title: ['Contour Map', 'Mapa de curvas de nivel', 'Mapa de curvas de nível', 'Carte en courbes de niveau', 'Höhenlinienkarte'],
+  genTitle: ['{u_base} — Contours', '{u_base} — Curvas de nivel', '{u_base} — Curvas de nível', '{u_base} — Courbes de niveau', '{u_base} — Höhenlinien'],
+  genTitleBare: ['Contours', 'Curvas de nivel', 'Curvas de nível', 'Courbes de niveau', 'Höhenlinien'],
+  genNotes: ['Contours from {u_base} · interval {t_interval} · {u_crs}', 'Curvas de nivel de {u_base} · equidistancia {t_interval} · {u_crs}', 'Curvas de nível de {u_base} · equidistância {t_interval} · {u_crs}', 'Courbes de niveau de {u_base} · équidistance {t_interval} · {u_crs}', 'Höhenlinien aus {u_base} · Äquidistanz {t_interval} · {u_crs}'],
+  genAuto: ['auto', 'automática', 'automática', 'automatique', 'automatisch'],
+  genNoCrs: ['no CRS', 'sin SRC', 'sem SRC', 'sans SCR', 'kein KBS'],
   kicker: ['CONTOUR MAP', 'MAPA DE CURVAS DE NIVEL', 'MAPA DE CURVAS DE NÍVEL', 'CARTE EN COURBES DE NIVEAU', 'HÖHENLINIENKARTE'],
   kickerDeliverable: ['CONTOUR MAP  ·  DELIVERABLE', 'MAPA DE CURVAS DE NIVEL  ·  ENTREGABLE', 'MAPA DE CURVAS DE NÍVEL  ·  ENTREGÁVEL', 'CARTE EN COURBES DE NIVEAU  ·  LIVRABLE', 'HÖHENLINIENKARTE  ·  LIEFERUNG'],
   footApp: ['OpenLiDARViewer - terrain analysis', 'OpenLiDARViewer - análisis del terreno', 'OpenLiDARViewer - análise do terreno', "OpenLiDARViewer - analyse du terrain", 'OpenLiDARViewer - Geländeanalyse'],

@@ -134,7 +134,7 @@ export async function buildStyledMapSheetPdf(
 ): Promise<Uint8Array> {
   const doc = await PDFDocument.create();
   const words = mapSheetWords(input.locale, input.onUntranslated);
-  doc.setTitle(input.title ?? words.say('title'), { showInWindowTitleBar: true });
+  doc.setTitle(input.title == null ? words.say('title') : words.made(input.title), { showInWindowTitleBar: true });
   doc.setLanguage(words.tag);
   doc.setAuthor('OpenLiDARViewer');
   if (input.provenance) {
@@ -519,7 +519,7 @@ function panelBlocks(
   const noteStep = (k: number): number => SHEET_TYPE.note * k * 1.4;
 
   // ── header ───────────────────────────────────────────────────────────────
-  const title = input.title ?? words.say('title');
+  const title = input.title == null ? words.say('title') : words.made(input.title);
   const subtitle = input.relief
     ? words.say('subtitleCells', { n: fmtNum(input.relief.cellSize), t_unit: unit })
     : words.say('subtitle');
@@ -765,7 +765,7 @@ function panelBlocks(
   });
 
   // ── notes ────────────────────────────────────────────────────────────────
-  const notes = (input.notes ?? '').trim();
+  const notes = words.made((input.notes ?? '').trim());
   if (notes) {
     const noteLines = (w: number, k: number): string[] => wrapSheetText(notes, f.sans, SHEET_TYPE.note * k, w, f).slice(0, 4);
     blocks.push({

@@ -14,6 +14,7 @@
 
 import type { SheetSize, SheetOrientation } from './mapSheetPdf';
 import { verticalUnitSuffix } from '../../units/units';
+import { made } from '../../i18n/generatedText';
 import { companyDetails, isEmptyFields, type CompanyDetails } from '../../model/deliverableFields';
 
 /** Sheet-size choices offered in the dialog (value drives {@link SheetSize}). */
@@ -69,15 +70,18 @@ export function ensurePdfExtension(name: string): string {
   return /\.pdf$/i.test(name) ? name.replace(/\.pdf$/i, '.pdf') : `${name}.pdf`;
 }
 
+const TITLE_SUFFIX = ' — Contours';
+
 /**
  * Default sheet title — the host's map context title when present (the
  * `<scan> — Contours` string), else derived from the export basename so the
  * field is never blank.
  */
 export function defaultMapTitle(p: { title?: string | null; basename: string }): string {
-  if (p.title?.trim()) return p.title.trim();
+  const given = p.title?.trim();
+  if (given) return given.endsWith(TITLE_SUFFIX) ? made(given, { base: given.slice(0, -TITLE_SUFFIX.length) }) : given;
   const base = (p.basename ?? '').trim();
-  return base ? `${base} — Contours` : 'Contours';
+  return made(base ? `${base}${TITLE_SUFFIX}` : 'Contours', { base });
 }
 
 /**
@@ -100,8 +104,8 @@ export function defaultMapNotes(p: {
     p.intervalM != null && Number.isFinite(p.intervalM)
       ? `${p.intervalM}${verticalUnitSuffix(p.verticalUnitToMetres)}`
       : 'auto';
-  const crs = p.crs?.trim() ? p.crs.trim() : 'no CRS';
-  return `Contours from ${base} · interval ${interval} · ${crs}`;
+  const crs = p.crs?.trim() || null;
+  return made(`Contours from ${base} · interval ${interval} · ${crs ?? 'no CRS'}`, { base, interval, crs });
 }
 
 /** Notes the user typed, by the scan they were typed for. This tab only. */

@@ -41,6 +41,7 @@ The format is based on Keep a Changelog and the project follows Semantic Version
 
 ### Fixed
 
+- A map sheet's own title and note are written in the sheet's language; text you type is printed as typed.
 - The map sheet's notes are made again for each scan and state the interval drawn; they could carry an earlier scan's name, interval and coordinate system. Notes you type stay with their scan. Prepared by is suggested from your company details.
 - A profile's sources record derived and edited classes as derived; they were recorded as the producer's.
 - Point counts just under a million read 1.0M instead of 1000.0K.

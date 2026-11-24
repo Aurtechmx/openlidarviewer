@@ -4,11 +4,14 @@
  */
 import { MAP_SHEET_TEXT, type MapSheetKey } from '../i18n/deliverables/mapSheet';
 import { ENGLISH, type ExportLocale } from '../i18n/exportLocale';
+import { generatedFrom } from '../i18n/generatedText';
 import { sheetLocalizer, type SheetWords } from './localizeSheet';
 
 export interface MapSheetWords extends SheetWords<MapSheetKey> {
   /** True when the sheet is not in English, so its boxes must make room for longer words. */
   readonly translated: boolean;
+  /** A title or note the app made, in the export language; text the user typed as typed. */
+  made(text: string): string;
   /** A measurement's figure: clauses joined by middle dots, each with its own row or figures alone. */
   value(text: string): string;
 }
@@ -20,6 +23,12 @@ export function mapSheetWords(locale: ExportLocale = ENGLISH, onMiss?: (text: st
   return {
     ...w,
     translated: locale.lang !== 'en',
+    made: (text) => {
+      const g = locale.lang === 'en' && locale.numberStyle === 'point' ? null : generatedFrom(text);
+      if (!g) return text;
+      if (g.interval === undefined) return g.base ? w.say('genTitle', { u_base: g.base }) : w.say('genTitleBare');
+      return w.say('genNotes', { u_base: g.base, t_interval: g.interval, u_crs: g.crs ?? w.say('genNoCrs') });
+    },
     value: (text) => text.split(/(\s+·\s+)/).map((part, i) => (i % 2 === 1 ? part : w.translate(part))).join(''),
   };
 }
