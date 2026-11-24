@@ -27,7 +27,7 @@ import { exportDigests, type SourceDigest } from '../science/exportDigestRecord'
 import { triggerDownload } from '../io/download';
 import { intensityNormalisationLine, type PointCloud } from '../model/PointCloud';
 import {
-  profileReturnsCsvChunks,
+  CHUNK_ROWS, profileReturnsCsvChunks,
   profileReturnsReceiptJson,
   type ClassificationProvenance,
   type ProfileReturnsReceipt,
@@ -396,7 +396,6 @@ export async function exportProfileReturns(ports: ProfileReturnsPorts, r: Profil
   let receipt: ProfileReturnsReceipt;
   try {
     let since = performance.now();
-    const perChunk = 2048;
     for (;;) {
       const step = rows.next();
       if (step.done) {
@@ -408,7 +407,7 @@ export async function exportProfileReturns(ports: ProfileReturnsPorts, r: Profil
       size += bytes.length;
       chunks++;
       // Refused on the projection, so a section that cannot fit is not built first.
-      const done = Math.min(points.count, chunks * perChunk);
+      const done = Math.min(points.count, chunks * CHUNK_ROWS);
       if (size > cap || (size / done) * points.count > cap) {
         throw new ProfileReturnsRefusal(
           `Not exported: ${formatCount(points.count)} returns would make a file over ${Math.round(cap / (1024 * 1024))} MiB. Narrow the corridor or draw a shorter profile, then export again.`,

@@ -279,7 +279,7 @@ function csvExact(v: number): string {
 }
 
 /** Rows per yielded chunk. */
-const CHUNK_ROWS = 2048;
+export const CHUNK_ROWS = 2048;
 
 /** The provenances a row may name. */
 const NAMED_CLASS_SOURCES: ReadonlySet<string> = new Set(['source', 'derived', 'edited', 'cleared', 'unknown']);

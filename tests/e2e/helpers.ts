@@ -675,10 +675,11 @@ export const WORKBENCH_WIDE = { width: 1440, height: 900 };
  * [-5, +5] on each axis, so a run along X sits inside it with points either
  * side of the corridor.
  */
-export async function placeProfile(page: Page): Promise<void> {
+/** `drop` opens the scan; the default one has no return on the line itself. */
+export async function placeProfile(page: Page, drop: (page: Page) => Promise<void> = dropDenseGridPly): Promise<void> {
   await page.setViewportSize(WORKBENCH_WIDE);
   await page.goto('/?test=1');
-  await dropDenseGridPly(page);
+  await drop(page);
   await expect(page.locator('.olv-empty')).toBeHidden({ timeout: 20_000 });
   await page.waitForTimeout(500); // the test API mounts on viewerLoaded
   await page.locator('.olv-tool', { hasText: 'Measure' }).click();
