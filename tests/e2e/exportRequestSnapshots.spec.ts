@@ -89,7 +89,7 @@ async function quickExport(page: Page, exp: Locator, format: string): Promise<{ 
 
 async function conversionXyz(page: Page, exp: Locator): Promise<string> {
   await exp.locator('.olv-bc-pill', { hasText: /^XYZ$/ }).click();
-  const w = page.waitForEvent('download');
+  const w = page.waitForEvent('download', (d) => /\.xyz$/i.test(d.suggestedFilename()));
   await exp.locator('.olv-bc-convert').click();
   const d = await w;
   return readFileSync((await d.path())!, 'utf8');
