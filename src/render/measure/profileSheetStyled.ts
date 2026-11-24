@@ -34,6 +34,7 @@ import {
   lineCrossesBox,
   verticalScaleStatement,
   type ProfileScales,
+  tickDecimals,
 } from './profileSheetLayout';
 
 /** The corridor's returns, in metres along the line and metres of height. */
@@ -297,7 +298,7 @@ export async function drawStyledProfileSheet(page: PDFPage, s: StyledProfileShee
   for (let n = 0, eD = scales.firstTick; eD <= scales.axisHiM * s.k + 1e-9 && n < 64; n++, eD = scales.firstTick + n * scales.tickStep) {
     const y = mapY(eD / s.k);
     line(p, X0, y, X1, y, t.rule, 0.5);
-    if (y > sectionBottom + 4) text(p, W.num(eD.toFixed(scales.tickStep < 0.1 ? 2 : 1)), X0 - 16, y - 3.6, T.label, { color: t.dim, align: 'right' });
+    if (y > sectionBottom + 4) text(p, W.num(eD.toFixed(tickDecimals(scales.tickStep))), X0 - 16, y - 3.6, T.label, { color: t.dim, align: 'right' });
   }
   const rets = s.extras?.returns;
   if (rets && rets.count > 0) await drawReturns(page, s, rets, { x: X0, y: sectionBottom, w: drawW, h: sectionH }, mapX, mapY);

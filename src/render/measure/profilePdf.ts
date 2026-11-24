@@ -144,6 +144,7 @@ import {
   fitTitleValue,
   placeCalloutLabel,
   verticalScaleStatement,
+  tickDecimals,
 } from './profileSheetLayout';
 // Metres → feet, single-sourced: this module used to keep its own copy.
 import { FT_PER_M as FEET_PER_METRE } from '../../units/units';
@@ -1253,7 +1254,7 @@ export async function buildProfilePdf(input: ProfilePdfInput): Promise<Uint8Arra
         rule(page, plotLeft, y, drawRight, y, GRID_MINOR, 0.5);
         // Right-aligned against the axis, so a column of heights reads down
         // its last figure.
-        const tick = eD.toFixed(scales.tickStep < 0.1 ? 2 : 1);
+        const tick = eD.toFixed(tickDecimals(scales.tickStep));
         put(
           page,
           tick,
