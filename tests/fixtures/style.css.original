@@ -2578,6 +2578,8 @@ body:has(.olv-measure-bar:not(.olv-hidden)) .olv-toast.is-finishing { visibility
  * 24 px target and may wrap under the text instead of overflowing. */
 .olv-toast-cancel { min-height: 24px; }
 .olv-toast-row:has(.olv-toast-cancel:not(.olv-hidden) ~ .olv-toast-cancel:not(.olv-hidden)) { flex-wrap: wrap; }
+/* The message keeps a readable width, so the controls go under it. */
+.olv-toast-row:has(.olv-toast-cancel:not(.olv-hidden) ~ .olv-toast-cancel:not(.olv-hidden)) .olv-toast-text { flex-basis: 200px; }
 .olv-toast-queue { flex: none; white-space: nowrap; }
 .olv-toast-bar { height: 3px; border-radius: 2px; background: var(--hairline); overflow: hidden; }
 .olv-toast-bar-fill {

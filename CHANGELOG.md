@@ -44,6 +44,7 @@ The format is based on Keep a Changelog and the project follows Semantic Version
 - A map sheet's own title and note are written in the sheet's language; text you type is printed as typed.
 - The map sheet's notes are made again for each scan and state the interval drawn; they could carry an earlier scan's name, interval and coordinate system. Notes you type stay with their scan. Prepared by is suggested from your company details.
 - A profile's sources record derived and edited classes as derived; they were recorded as the producer's.
+- An error message with two controls keeps a readable width. The streaming panel leaves out its Scan heading when it has no rows.
 - Point counts just under a million read 1.0M instead of 1000.0K.
 - An elevation difference is dropped when a compared scan's coordinate system is reassigned or its classes are edited. It stayed on screen and could still be downloaded.
 - Grouped numbers use a comma for thousands in every browser, on screen and in exports, instead of following the browser's language; an export written with a decimal comma keeps its chosen style.

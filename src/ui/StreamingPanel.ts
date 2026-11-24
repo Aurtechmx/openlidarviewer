@@ -305,6 +305,8 @@ export class StreamingPanel {
   private readonly _progressFill: HTMLElement;
   private readonly _progressNodes: HTMLElement;
   private readonly _progressPoints: HTMLElement;
+  /** Shown only while the Scan section has rows. */
+  private readonly _scanLabel = el('div', { className: 'olv-streaming-label olv-hidden', text: 'Scan' });
   private readonly _summary: HTMLElement;
   private readonly _nodes: HTMLElement;
   private readonly _points: HTMLElement;
@@ -474,7 +476,7 @@ export class StreamingPanel {
       head,
       this._phase,
       this._progress,
-      el('div', { className: 'olv-streaming-label', text: 'Scan' }),
+      this._scanLabel,
       this._summary,
       this._stats,
       el('div', { className: 'olv-streaming-label', text: 'Colour' }),
@@ -511,6 +513,7 @@ export class StreamingPanel {
     // new one replaced them.
     this._title.textContent = DEFAULT_TITLE;
     this._summary.replaceChildren();
+    this._scanLabel.classList.add('olv-hidden');
     // Reset the progress treatment for the next scan.
     // Drops the busy scan too; the next open starts its own.
     this._setPlainLine('');
@@ -704,6 +707,7 @@ export class StreamingPanel {
       ),
     );
     this._summary.replaceChildren(...rows);
+    this._scanLabel.classList.toggle('olv-hidden', rows.length === 0);
   }
 
   /**
