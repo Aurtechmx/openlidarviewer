@@ -101,7 +101,7 @@ export function createSunShading(
         if (e.cloud === cloud && e.codes) { shadeRgb(rgb, e.codes, table); return; }
       }
     },
-    note: () => (on() && heightLayers().some(([id]) => entries.get(id)?.codes) ? SHADED_NOTE : null),
+    note: (cloud) => (on() && heightLayers().some(([id, c]) => c === cloud && entries.get(id)?.codes) ? SHADED_NOTE : null),
   });
 
   function repaint(): void {
@@ -182,6 +182,8 @@ export function createSunShading(
       const was = table !== null;
       settings = cleanSun({ ...settings, ...patch });
       table = settings.strength > 0 ? buildSunTable(settings) : null;
+      // Turning it on again tries a pass that failed once more.
+      if (!was && table) for (const [id, e] of entries) if (e.refusal === FAILED_REASON) entries.delete(id);
       if (was !== (table !== null)) { sync(); return; }
       say();
       if (!table) return;

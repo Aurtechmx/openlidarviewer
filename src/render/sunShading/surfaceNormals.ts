@@ -467,7 +467,7 @@ export function estimateCellSize(
       const x = Math.floor((sample[j] * scale[0] - min[0]) / cell);
       const y = Math.floor((sample[j + 1] * scale[1] - min[1]) / cell);
       const z = Math.floor((sample[j + 2] * scale[2] - min[2]) / cell);
-      if (x === x && y === y && z === z) seen.add((x * 1024 + y) * 1024 + z);
+      if (Number.isFinite(x + y + z)) seen.add((x * 1024 + y) * 1024 + z);
     }
     occupied = seen.size;
     if (used / occupied >= 6) break;

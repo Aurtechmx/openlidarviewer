@@ -67,9 +67,14 @@ import type { LayerSpatialTransform } from '../../geo/ProjectSpatialFrame';
 import type { ProfileChartSample, Vec3 } from './types';
 import { combinedTruncationNote, type Truncation } from '../../io/truncation';
 
-/** Whether the app assigned any of the classes: derived, or edited since the file was read. */
-const classesAreDerived = (c: { readonly provenance: string; readonly epoch: number } | undefined): boolean =>
-  c !== undefined && c.provenance !== 'none' && (c.provenance !== 'source' || c.epoch > 0);
+/** Where a layer's class codes came from. Cleared codes are no classes, unless some were assigned by hand after. */
+function classesOrigin(c: ProfileSeamLayer['classes'], codes: ArrayLike<number>): 'producer' | 'derived' | 'absent' {
+  if (!c || c.provenance === 'none') return 'producer';
+  if (c.provenance === 'source') return c.epoch > 0 ? 'derived' : 'producer';
+  if (c.provenance !== 'cleared') return 'derived';
+  for (let i = 0; i < codes.length; i++) if (codes[i] !== 1) return 'derived';
+  return 'absent';
+}
 
 /**
  * One loaded static layer offered to the seam.
@@ -580,9 +585,7 @@ export function createProfileSectionSeam(deps: ProfileSectionSeamDeps): ProfileS
             layerId: layer.id,
             displayName: layer.displayName ?? layer.id,
             classification:
-              alignedClassification(layer.channels, pos.length) === undefined
-                ? ('absent' as const)
-                : classesAreDerived(layer.classes) ? ('derived' as const) : ('producer' as const),
+              ((codes) => (codes === undefined ? ('absent' as const) : classesOrigin(layer.classes, codes)))(alignedClassification(layer.channels, pos.length)),
             streaming: false,
             truncation: layer.truncation ?? null,
           })),

@@ -179,7 +179,7 @@ export function buildColorLegend(host: ColorLegendHost): ColorLegend {
         fullRange: range.fullRange,
         elevationUnit: host.elevationUnitLabel(),
         cloud: shared ? undefined : [cloud, upAxis],
-        shading: mode === 'elevation' ? elevationShadeNote() : null,
+        shading: mode === 'elevation' ? elevationShadeNote(cloud) : null,
       });
     },
 

@@ -79,7 +79,7 @@ describe('off', () => {
     t.crsMoved();
     expect(t.jobs).toHaveLength(0);
     expect(t.repaint).not.toHaveBeenCalled();
-    expect(elevationShadeNote()).toBeNull();
+    expect(elevationShadeNote(t.layers.get('1')?.cloud ?? cloud())).toBeNull();
     expect(Array.from(t.bytes())).toEqual(Array.from(plain));
   });
 
@@ -94,7 +94,7 @@ describe('off', () => {
     t.sun.set({ strength: 0 });
     expect(t.repaint.mock.calls.length).toBe(before + 1);
     expect(Array.from(t.bytes())).toEqual(plain);
-    expect(elevationShadeNote()).toBeNull();
+    expect(elevationShadeNote(t.layers.get('1')?.cloud ?? cloud())).toBeNull();
   });
 });
 
@@ -105,11 +105,12 @@ describe('on', () => {
     t.sun.set({ strength: 0.8 });
     expect(t.last()).toMatchObject({ busy: true, enabled: true });
     expect(Array.from(t.bytes())).toEqual(plain);
-    expect(elevationShadeNote()).toBeNull();
+    expect(elevationShadeNote(t.layers.get('1')?.cloud ?? cloud())).toBeNull();
     t.jobs[0].resolve();
     await t.tick();
     expect(t.last()).toMatchObject({ busy: false, status: '' });
-    expect(elevationShadeNote()).toBe(SHADED_NOTE);
+    expect(elevationShadeNote(t.layers.get('1')?.cloud ?? cloud())).toBe(SHADED_NOTE);
+    expect(elevationShadeNote(cloud())).toBeNull(); // another layer's legend
     expect(Array.from(t.bytes())).not.toEqual(plain);
     expect(t.sun.heldBytes()).toBe(N * 2);
     expect(t.legend).toHaveBeenCalled(); // the shell's own legend hook still runs
@@ -177,7 +178,7 @@ describe('what ends a pass or drops its result', () => {
     t.layers.clear();
     t.viewer.onColorContextChanged?.();
     expect(t.sun.heldBytes()).toBe(0);
-    expect(elevationShadeNote()).toBeNull();
+    expect(elevationShadeNote(t.layers.get('1')?.cloud ?? cloud())).toBeNull();
   });
 
   it('a new vertical unit drops the codes and lights the layer again', async () => {
@@ -187,7 +188,7 @@ describe('what ends a pass or drops its result', () => {
     await t.tick();
     t.state.crs = projected({ verticalUnitToMetres: 0.3048 });
     t.crsMoved();
-    expect(elevationShadeNote()).toBeNull();
+    expect(elevationShadeNote(t.layers.get('1')?.cloud ?? cloud())).toBeNull();
     expect(t.jobs).toHaveLength(2);
     expect(t.jobs[1].frame).toEqual({ upAxis: 2, verticalScale: 0.3048 });
   });
@@ -220,7 +221,12 @@ describe('what ends a pass or drops its result', () => {
     await t.tick();
     expect(t.last().status).toMatch(/could not run/);
     expect(t.jobs).toHaveLength(1);
-    expect(elevationShadeNote()).toBeNull();
+    expect(elevationShadeNote(t.layers.get('1')?.cloud ?? cloud())).toBeNull();
+    t.sun.set({ strength: 0.5 });
+    expect(t.jobs).toHaveLength(1);
+    t.sun.set({ strength: 0 });
+    t.sun.set({ strength: 1 });
+    expect(t.jobs).toHaveLength(2); // turning it on again tries once more
     warn.mockRestore();
   });
 

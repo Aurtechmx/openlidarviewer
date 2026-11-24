@@ -94,7 +94,7 @@ describe('the sheet language', () => {
 
   it('offers only the languages the catalogs have, English first', () => {
     const { root } = open(true);
-    expect(select(root).children.map((o) => [o.value, o.textContent])).toEqual([['en', 'English'], ['es', 'Español (México) (draft)']]);
+    expect(select(root).children.map((o) => [o.value, o.textContent])).toEqual([['en', 'English'], ['es', 'Español (México) (draft)'], ['', '']]);
     expect([...DRAINAGE_SHEET_LANGUAGES].sort()).toEqual(Object.keys(CATALOG).sort());
     expect(localeOf()).toEqual({ lang: 'en', numberStyle: 'point' });
   });
@@ -112,7 +112,8 @@ describe('the sheet language', () => {
     const { root } = open(true);
     expect(notes(root).join(' ')).not.toContain('Not available');
     setExportLanguage('fr');
-    expect(select(root).value).toBe('en');
+    expect(select(root).value).toBe('');
+    expect(select(root).children.at(-1)!.textContent).toBe('Français (not offered)');
     expect(notes(root)).toContain('Not available in Français; it is written in English.');
     expect(localeOf()).toEqual({ lang: 'en', numberStyle: 'comma' });
     const said = await exportDrainageSheet(run, (async () => new Uint8Array()) as never, () => {});

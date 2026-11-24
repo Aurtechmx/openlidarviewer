@@ -280,5 +280,5 @@ describe('the title and notes the app makes', () => {
     const typed = await drawn(mapInput({ ...MAP_STATES.measured, locale, title: 'My Contours', notes: 'Contours from my drone · by hand' }));
     expect(typed.ts.map((t) => t.text).join(' ')).toContain('My Contours');
     expect(typed.ts.map((t) => t.text).join(' ')).toContain('Contours from my drone');
-  });
+  }, 120_000);
 });

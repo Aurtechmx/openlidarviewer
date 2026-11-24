@@ -1131,8 +1131,8 @@ const inspector = new Inspector({
 // write path for the CRS section, and `CrsService.current()` is the
 // single source of truth.
 crsService.subscribe((resolved) => {
-  if (resolved) inspector.setCrs(resolved);
-  else inspector.clearCrs();
+  if (resolved) inspector.setCrs(resolved); else inspector.clearCrs();
+  inspector.compareDifference.dropStale(); // a comparison read the CRS before this
 });
 
 // Inspector load-time card refreshers (Provenance + Dataset Intelligence) and
@@ -1367,7 +1367,7 @@ const ensureActionRegistry = retryableOnce((): Promise<Action[]> => loadActionRe
   syncLassoButton,
   runDeriveClassification,
   runFillUnclassified,
-  runTool,
+  runTool, openToolPage: (p) => workspaceShell?.openToolPage(p),
   buildCurrentStoryInputs,
   startWorkflowRecording,
   dispatchWorkflowEvent,
@@ -2179,7 +2179,7 @@ const terrainRunner = createTerrainAnalysisRunner({
 // counts; `noteClassificationEdited` drops the cache, caveats the result and
 // recounts. An undo of a first attach also returns the legend to empty.
 void viewerLoaded.then((v) => {
-  v.onClassificationEdited = (id) => { noteClassificationEdited({
+  v.onClassificationEdited = (id) => { inspector.compareDifference.dropStale(); noteClassificationEdited({
     classification: v.getCloud(id)?.classification, provenance: v.getCloud(id)?.classificationProvenance, active: id === scans.activeId,
     legend: classLegendPanel,
     clearTerrainCache: () => terrainRunner.abortAndClearCache(),

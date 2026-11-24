@@ -230,6 +230,9 @@ export interface CompareDifferenceDeps {
   readonly retireRun?: () => void;
 }
 
+/** Shown in place of a comparison whose scans' coordinate system or classes changed. */
+export const COMPARE_INPUTS_CHANGED = 'The comparison was cleared: the coordinate system or the classes of a compared scan changed. Compare again.';
+
 /**
  * Binds the shown comparison and its difference raster to the pair they were
  * computed from, and drops both (the download button and the result text too)
@@ -261,11 +264,13 @@ export function createCompareDifference(deps: CompareDifferenceDeps) {
     },
     dropStale(): void {
       if (!shown || compareResultCurrent(shown, deps.ids(), deps.selection(), deps.lookup, deps.stableIdFor, deps.inputKeyFor)) return;
+      // The pair is still there and named: what the comparison read of it changed.
+      const inputsChanged = compareResultCurrent(shown, deps.ids(), deps.selection(), deps.lookup, deps.stableIdFor, (id) => [shown!.before, shown!.after].find((p) => p.viewerId === id)?.inputKey ?? '');
       shown = null;
       deps.retireRun?.();
       deps.slot.lastDifference = null;
       deps.setDifferenceAvailable(false);
-      deps.setCompareResult([]);
+      deps.setCompareResult(inputsChanged ? [COMPARE_INPUTS_CHANGED] : []);
     },
     /** Download the held difference as an ESRI ASCII grid. */
     download(downloadText: (filename: string, text: string) => void): void {

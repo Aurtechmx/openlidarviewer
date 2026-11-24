@@ -67,6 +67,8 @@ export interface ResultEntry {
   readonly createdAt: number;
   /** The layer id the result was computed on, or null when not recorded. */
   readonly sourceIdentity: string | null;
+  /** True when `sourceIdentity` is only the layer that was active when the result was first seen. */
+  readonly sourceInferred?: boolean;
   readonly status: 'ready' | 'hidden' | 'stale';
   /** The task page that owns the result. */
   readonly route: ResultRoute;
@@ -200,6 +202,12 @@ export interface MeasurementReader {
   getSummaries?(): readonly { readonly id: string; readonly profileChart?: readonly unknown[] | null }[];
 }
 
+/** The recorded layer, or the one first seen, marked as such. */
+function sourceOf(recorded: string | null, firstSeenId: () => string | null): Pick<ResultEntry, 'sourceIdentity' | 'sourceInferred'> {
+  const seen = firstSeenId(); // always asked, so the first layer is kept
+  return recorded !== null ? { sourceIdentity: recorded } : { sourceIdentity: seen, sourceInferred: true };
+}
+
 /**
  * The layer a measurement was picked on, as the Measure panel reads it (pick
  * record, else owner). A closed layer keeps its raw stable id, which resolves
@@ -241,7 +249,7 @@ export function measurementSource(
           id: `measurement:${m.id}`,
           type: 'measurement' as const,
           title: m.name,
-          sourceIdentity: measurementIdentity(m, layerOf, activeLayer) ?? seen.of(m.id),
+          ...sourceOf(measurementIdentity(m, layerOf, activeLayer), () => seen.of(m.id)),
           status: 'ready' as const,
           route: { mode: 'work' as const, page: 'measure' },
           anchor: centroid(m.points),

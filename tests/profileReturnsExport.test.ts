@@ -211,12 +211,12 @@ describe('profile returns export: the files', () => {
 
   it('makes plain file names out of hostile ones', async () => {
     const r = rig();
-    r.state.source = { ...r.state.source, scanName: '../..\\evil‮' };
+    r.state.source = { ...r.state.source, scanName: '../..\\evil\u202e' };
     r.state.summaries = [{ ...(r.state.summaries[0] as object), name: 'a/b:c'.repeat(200) }];
     const { files } = await r.run();
     const names = [files[0]!.name, ...(await unzip(files[0]!.blob)).keys()];
     for (const n of names) {
-      expect(n).not.toMatch(/[\\/:‮]/);
+      expect(n).not.toMatch(/[\\/:\u202e]/);
       expect(n).toContain('-returns');
       expect(new TextEncoder().encode(n).length).toBeLessThanOrEqual(200);
     }

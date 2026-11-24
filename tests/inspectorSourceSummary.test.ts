@@ -42,3 +42,22 @@ describe('Inspector source summary signal', () => {
     expect(ins.sourceSummary()).toBe('PLY');
   });
 });
+
+describe('the shown comparison', () => {
+  it('is dropped when the scene says what it read has changed', () => {
+    const key = new Map([['A', '1'], ['B', '1']]);
+    const layers = new Map<string, object>([['A', {}], ['B', {}]]);
+    const ins = new Inspector({
+      ...fakeCallbacks(),
+      compareScene: { slot: { lastDifference: null }, ids: () => [...layers.keys()], lookup: (id) => layers.get(id) as never, stableIdFor: (id) => id, inputKeyFor: (id) => key.get(id)! },
+    });
+    const said = vi.spyOn(ins, 'setCompareResult');
+    ins.compareDifference.begin(['A', 'B'], layers.get('A'), layers.get('B'));
+    ins.compareDifference.hold({ stem: 'a-to-b', asc: () => 'ncols 1' });
+    ins.compareDifference.dropStale();
+    expect(said).not.toHaveBeenCalled();
+    key.set('B', '2');
+    ins.compareDifference.dropStale();
+    expect(said).toHaveBeenCalledWith([expect.stringContaining('Compare again')]);
+  });
+});

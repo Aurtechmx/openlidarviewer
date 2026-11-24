@@ -537,6 +537,7 @@ describe('profile section seam: where the classes came from', () => {
     expect(recorded({ provenance: 'source', epoch: 1 })).toBe('derived');
     expect(recorded({ provenance: 'derived', epoch: 1 })).toBe('derived');
     expect(recorded({ provenance: 'cleared', epoch: 2 })).toBe('derived');
+    expect(recorded({ provenance: 'cleared', epoch: 1 }, [1, 1, 1, 1])).toBe('absent');
     expect(recorded({ provenance: 'none', epoch: 0 }, [])).toBe('absent');
   });
 });

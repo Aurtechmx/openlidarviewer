@@ -10,7 +10,6 @@
  */
 import {
   exportLocale,
-  offeredLocale,
   onExportLocaleChange,
   setExportLanguage,
   setExportNumberStyle,
@@ -27,6 +26,8 @@ interface ControlParts {
   readonly offered: readonly ExportLanguage[] | null;
   /** Says when the session's language is not offered here. */
   readonly missing: HTMLElement | null;
+  /** The disabled option for a session language that is not offered here. */
+  readonly unoffered: HTMLOptionElement | null;
 }
 
 const controls = new Set<WeakRef<HTMLElement>>();
@@ -40,7 +41,13 @@ export function notOfferedText(lang: ExportLanguage, offered: readonly ExportLan
 }
 
 function show(parts: ControlParts, locale: ExportLocale): void {
-  parts.select.value = parts.offered ? offeredLocale(locale, parts.offered).lang : locale.lang;
+  const away = parts.offered !== null && !parts.offered.includes(locale.lang);
+  if (parts.unoffered) {
+    // Shown while it is the session's language, so choosing one that is offered is a change.
+    parts.unoffered.hidden = !away;
+    parts.unoffered.textContent = away ? `${languageInfo(locale.lang).name} (not offered)` : '';
+  }
+  parts.select.value = away ? '' : locale.lang;
   if (parts.missing) {
     parts.missing.textContent = notOfferedText(locale.lang, parts.offered!) ?? '';
     parts.missing.hidden = parts.missing.textContent === '';
@@ -87,6 +94,13 @@ export function exportLanguageControl(appliesTo: string, offered: readonly Expor
     option.textContent = languageOptionText(lang.id);
     select.append(option);
   }
+  let unoffered: HTMLOptionElement | null = null;
+  if (offered) {
+    unoffered = document.createElement('option');
+    unoffered.value = '';
+    unoffered.disabled = true;
+    select.append(unoffered);
+  }
   select.addEventListener('change', () => setExportLanguage(asExportLanguage(select.value)));
   langRow.append(langLabel, select);
 
@@ -123,7 +137,7 @@ export function exportLanguageControl(appliesTo: string, offered: readonly Expor
     missing.setAttribute('role', 'status');
     block.append(missing);
   }
-  const parts: ControlParts = { select, styles, offered, missing };
+  const parts: ControlParts = { select, styles, offered, missing, unoffered };
   show(parts, exportLocale());
   partsOf.set(block, parts);
   controls.add(new WeakRef(block));

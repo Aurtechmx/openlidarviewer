@@ -12,8 +12,8 @@ import type { PointCloud } from '../../model/PointCloud';
 export interface ElevationShade {
   /** Shade `cloud`'s interleaved RGB in place; does nothing while it is not ready. */
   shade(cloud: PointCloud, rgb: Uint8Array): void;
-  /** The legend sentence, or null when no shown layer is shaded. */
-  note(): string | null;
+  /** The legend sentence for `cloud`, or null when it is not shaded. */
+  note(cloud: PointCloud): string | null;
 }
 
 let active: ElevationShade | null = null;
@@ -28,6 +28,6 @@ export function shadeElevation(cloud: PointCloud, rgb: Uint8Array): Uint8Array {
   return rgb;
 }
 
-export function elevationShadeNote(): string | null {
-  return active?.note() ?? null;
+export function elevationShadeNote(cloud: PointCloud): string | null {
+  return active?.note(cloud) ?? null;
 }

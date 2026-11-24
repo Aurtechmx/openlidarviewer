@@ -429,16 +429,18 @@ describe('results shelf actions', () => {
     installLiveFakeDom();
     const ms = ['p1', 'p2'].map((id) => ({ id, name: id, kind: 'profile', points: [] }));
     let shown = true;
+    let active = 'a';
+    let open = ['a'];
     const exportProfile = vi.fn(async (_id: string) => {});
     const notify = vi.fn();
     const mounted = mountResultsShelf({
       viewer: {
         measure: { getMeasurements: () => ms, getSummaries: () => [{ id: 'p1' }, { id: 'p2', profileChart: [1, 2] }] },
-        clouds: () => ['a'], isCloudVisible: () => shown, getCloud: () => ({ name: 'a.laz' }),
+        clouds: () => open, isCloudVisible: () => shown, getCloud: (id) => (open.includes(id) ? { name: `${id}.laz` } : undefined),
         getCameraPose: () => ({ position: [0, 0, 1], target: [0, 0, 0] }), applyCameraPose: vi.fn(),
       },
       identity: { stableIdFor: (id) => id },
-      scans: { activeExportTargetId: () => 'a', onActiveChange: () => () => {} },
+      scans: { activeExportTargetId: () => active, onActiveChange: () => () => {} },
       terrainRunner: new FakeRunner(),
     }, () => null, null, vi.fn(), undefined, undefined, exportProfile, notify);
     const press = async (id: string) => {
@@ -454,6 +456,12 @@ describe('results shelf actions', () => {
     await press('p2');
     expect(exportProfile).toHaveBeenCalledTimes(1);
     expect(notify).toHaveBeenLastCalledWith(expect.stringContaining('a.laz is hidden'));
+    // The scan was only the active one when the profile was drawn, so closing it withholds nothing.
+    shown = true;
+    active = 'b';
+    open = ['b'];
+    await press('p2');
+    expect(exportProfile).toHaveBeenCalledTimes(2);
     mounted.dispose();
   });
 

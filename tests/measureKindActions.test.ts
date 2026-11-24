@@ -5,6 +5,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import { contributeToolActions } from '../src/app/actions/toolActions';
 import { actionsForLayout, rankActions, type Action } from '../src/ui/actionRegistry';
+import { ShortcutSheet } from '../src/ui/ShortcutSheet';
 import { CommandPalette } from '../src/ui/CommandPalette';
 import { buildTestActionRegistry } from './helpers/actionRegistryFixture';
 import { FakeEl, installLiveFakeDom } from './helpers/liveFakeDom';
@@ -14,7 +15,8 @@ function rig(measureMode: boolean) {
   const calls: string[] = [];
   viewer.measure.setKind.mockImplementation((k: string) => calls.push(k));
   const runTool = vi.fn((t: string) => { calls.push(t); viewer.measureMode = !viewer.measureMode; });
-  const actions = contributeToolActions({ getViewer: () => viewer as never, runTool, hasScan: () => true } as never);
+  const openToolPage = (page: string) => void calls.push(`page:${page}`);
+  const actions = contributeToolActions({ getViewer: () => viewer as never, runTool, hasScan: () => true, openToolPage } as never);
   return { viewer, calls, run: (kind: string) => actions.find((a) => a.id === `tool.measure.${kind}`)!.run() };
 }
 const goTo: Action = { id: 'goto.workspace.profile-workbench', title: 'Go to Profile Workbench', section: 'Go to', keywords: ['Profile Workbench'], run: () => {} };
@@ -40,10 +42,10 @@ describe('measurement kinds in the palette', () => {
     expect(r.calls).toEqual(['measure', 'profile']);
   });
 
-  it('with Measure already on only sets the kind', () => {
+  it('with Measure already on opens its page and sets the kind', () => {
     const r = rig(true);
     r.run('area');
-    expect(r.calls).toEqual(['area']);
+    expect(r.calls).toEqual(['page:measure', 'area']);
     expect(r.viewer.measureMode).toBe(true);
   });
 
@@ -67,5 +69,17 @@ describe('measurement kinds in the palette', () => {
     expect(ids('  ').filter((i) => i.startsWith('tool.measure'))).toEqual(['tool.measure']);
     expect(ids('')).toHaveLength(all.length - 9);
     expect(ids('profile')).toContain('tool.measure.profile');
+  });
+
+  it('is in the shortcut sheet for a query and not while browsing', () => {
+    installLiveFakeDom();
+    const sheet = new ShortcutSheet();
+    const read = sheet as unknown as { _input: { value: string }; _refresh(): void; _render(r: Array<{ action: Action }>): void; _actions: readonly Action[] };
+    let ids: string[] = [];
+    read._render = (r) => { ids = r.map((x) => x.action.id); };
+    read._actions = all;
+    const rows = (q: string): string[] => { read._input.value = q; read._refresh(); return ids; };
+    expect(rows(' ')).toHaveLength(all.length - 9);
+    expect(rows('profile')).toContain('tool.measure.profile');
   });
 });

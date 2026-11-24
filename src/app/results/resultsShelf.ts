@@ -140,10 +140,12 @@ export function createResultsShelf(deps: ResultsShelfDeps): ResultsShelf {
   /** Why a result cannot be exported from here now, or null. */
   function refusal(e: ResultEntry): string | null {
     if (e.status === 'hidden') return `${e.title} is hidden. Show it, then export again.`;
+    // A layer that was only active at the time does not own the result, so its closing withholds nothing.
+    const inferred = e.sourceInferred === true;
     const src = e.sourceIdentity;
     const active = deps.activeLayerId();
     const name = src ? deps.layerName(src) : null;
-    if (src && src !== active && !name) return `${e.title} was not exported: the scan it was made on is closed. Reopen it, then export again.`;
+    if (src && !inferred && src !== active && !name) return `${e.title} was not exported: the scan it was made on is closed. Reopen it, then export again.`;
     if (src && deps.layerHidden?.(src)) return `${e.title} was not exported: ${name ?? 'its scan'} is hidden. Show that scan, then export again.`;
     // The terrain products are of the active scan: never export its result under another's name.
     if (!e.workbench && src && active && src !== active) return `${e.title} was not exported: it is from ${name}. Make that scan active, then export again.`;

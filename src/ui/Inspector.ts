@@ -1803,6 +1803,7 @@ export class Inspector {
       ids: () => this._cb.compareScene?.ids() ?? [],
       lookup: (id) => this._cb.compareScene?.lookup(id),
       stableIdFor: (id) => this._cb.compareScene?.stableIdFor(id) ?? null,
+      inputKeyFor: (id) => this._cb.compareScene?.inputKeyFor?.(id) ?? '',
       selection: () => this._comparePicker?.selection() ?? { before: null, after: null },
       setDifferenceAvailable: (on) => this.setDifferenceAvailable(on),
       setCompareResult: (lines) => this.setCompareResult(lines),

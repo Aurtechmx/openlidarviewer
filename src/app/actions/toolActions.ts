@@ -29,6 +29,8 @@ export interface ToolActionDeps {
    */
   runTool: (tool: SceneTool) => void;
   hasScan?: () => boolean;
+  /** Open a tool's page without toggling the tool. */
+  openToolPage?: (page: 'measure') => void;
 }
 
 /** A palette row per kind of measurement; the titles read as the kind first, so typing it finds it. */
@@ -70,7 +72,8 @@ export function contributeToolActions(deps: ToolActionDeps): Action[] {
       run: () => {
         const viewer = deps.getViewer();
         // Measure stays on when it already is; the controller says what a change of kind discards.
-        if (!viewer.measureMode) deps.runTool('measure');
+        if (viewer.measureMode) deps.openToolPage?.('measure');
+        else deps.runTool('measure');
         viewer.measure.setKind(kind);
       },
     })),
