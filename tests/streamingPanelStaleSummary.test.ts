@@ -60,7 +60,7 @@ describe('the Scan heading', () => {
     const panel = new StreamingPanel(noopPanelCallbacks());
     const label = (panel as unknown as { _scanLabel: FakeEl })._scanLabel;
     const hidden = (): boolean => label.classList.contains('olv-hidden');
-    expect(hidden()).toBe(true);
+    expect(label.className).toContain('olv-hidden');
     panel.setSummary(COPC_SUMMARY);
     expect(hidden()).toBe(false);
     panel.hide();
