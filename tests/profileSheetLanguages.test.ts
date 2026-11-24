@@ -101,6 +101,8 @@ async function drawn(input: ProfilePdfInput): Promise<{ ts: Drawn[]; missed: str
     ts.push({ text: t, size: o?.size ?? 0, x: o?.x ?? 0, y: o?.y ?? 0, right: (o?.x ?? 0) + (o?.font?.widthOfTextAtSize(t, o.size ?? 0) ?? 0), page: this });
     return orig.call(this, t, o as never);
   });
+  // The drawing is what is read here; writing the file subsets every font.
+  vi.spyOn(PDFDocument.prototype, 'save').mockResolvedValue(new Uint8Array());
   await buildProfilePdf({ ...input, onUntranslated: (m) => missed.push(m) });
   vi.restoreAllMocks();
   return { ts, missed };
@@ -115,14 +117,16 @@ const copied = (t: string): string => t
   .replace(/\b(Station|station|stations|Source|source|Sources|sources|statique|Corridor|corridor|Note|note)\b/g, '');
 
 function noOverlap(ts: readonly Drawn[]): void {
+  const hits: string[] = [];
   for (const p of new Set(ts.map((t) => t.page))) {
     const on = ts.filter((t) => t.page === p && t.text.trim() !== '');
     for (let i = 0; i < on.length; i++) for (let j = i + 1; j < on.length; j++) {
       const a = on[i]!, b = on[j]!;
       const x = Math.min(a.right, b.right) - Math.max(a.x, b.x), y = Math.min(a.y + a.size * 0.7, b.y + b.size * 0.7) - Math.max(a.y, b.y);
-      expect(x > 0.5 && y > 0.5, `${a.text} | ${b.text}`).toBe(false);
+      if (x > 0.5 && y > 0.5) hits.push(`${a.text} | ${b.text}`);
     }
   }
+  expect(hits).toEqual([]);
 }
 
 describe('the profile set in every export language', () => {
@@ -234,6 +238,24 @@ describe('the longest fields', () => {
       expect(ts.filter((t) => t.y < 20 && t.text.includes(note)).length).toBe(pages - 1);
     }
   }, 120_000);
+});
+
+describe('notes taller than a column', () => {
+  it.each(['a3', 'tabloid'] as const)('go on in the next column and sheet, on the page, with none lost (%s)', async (paper) => {
+    const lines = Array.from({ length: 170 }, (_, i) => `n${i}x`);
+    const { ts } = await drawn(base({ deliverable: { notes: lines.join('\n') }, paper }));
+    noOverlap(ts);
+    for (const t of ts) expect(t.y, t.text).toBeGreaterThanOrEqual(12);
+    for (const ln of lines) expect(ts.filter((t) => t.text === ln), ln).toHaveLength(1);
+  });
+  it('a word wider than the column is cut at its edge', async () => {
+    const word = 'W'.repeat(300);
+    const { ts } = await drawn(base({ deliverable: { notes: word } }));
+    // Sheet one has no room for it and refers to the method sheet.
+    expect(ts.filter((t) => /W{5}/.test(t.text)).map((t) => t.text.replace(/[^W]/g, '')).join('')).toBe(word);
+    for (const t of ts) expect(t.right, t.text).toBeLessThanOrEqual(1190.55 - 6);
+    noOverlap(ts);
+  });
 });
 
 describe('the catalog', () => {

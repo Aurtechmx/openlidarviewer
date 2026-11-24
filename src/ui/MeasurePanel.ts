@@ -8,7 +8,7 @@
  */
 
 import { classifyLoadError, reportChunkFailure } from '../app/staleChunkReload';
-import { el } from './dom';
+import { el, focusIfLost } from './dom';
 import { ICON_EXPAND } from './dockIcons';
 import { openResultFocus } from './ResultFocus';
 import { triggerDownload } from '../io/download';
@@ -811,6 +811,7 @@ export class MeasurePanel {
     }
     btn.textContent = label;
     btn.disabled = false;
+    focusIfLost(btn);
   }
 
   /**

@@ -94,6 +94,10 @@ describe('typed values', () => {
     expect(parseChainage('100', 'imperial')).toBeCloseTo(30.48, 9);
     for (const bad of ['', '-3', 'abc', '1e9', '1+', 'Infinity']) expect(parseChainage(bad, 'metric')).toBeNull();
     expect(parseChainage('1+20', 'unverified')).toBeNull();
+    // 1,250 is 1250 to some readers and 1.25 to others; 0,125 and 12,5 read one way.
+    for (const two of ['1,250', '12,345', '123,456']) expect(parseChainage(two, 'metric')).toBeNull();
+    expect(parseChainage('0,125', 'metric')).toBe(0.125);
+    expect(parseChainage('12,5', 'metric')).toBe(12.5);
   });
   it('names the characters the sheet fonts may lack', () => {
     for (const ok of ['Río Bravo, 3 m² – “x” é ñ ß ø ł', '20 °C ± 1', '']) expect(unusualCharacters(ok), ok).toBe(false);

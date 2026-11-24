@@ -16,7 +16,7 @@ import { rgb, setCharacterSpacing, type PDFDocument, type PDFFont, type PDFImage
 import { encodePng } from '../../export/sheetKit/png';
 import { stripSheetRaster, type SheetReliefInput } from '../../export/sheetKit/contourSheetModel';
 import type { SheetFonts } from '../../export/sheetKit/fonts';
-import { clipPolyline, drawPaper, pdfColor, sheetText, sheetTextRight, sheetTextWidth, wrapSheetText } from '../../export/sheetKit/primitives';
+import { clipPolyline, drawPaper, pdfColor, sheetText, sheetTextRight, sheetTextWidth, wrapSheetText, wrapWithin } from '../../export/sheetKit/primitives';
 import type { SheetRgb } from '../../export/sheetKit/tokens';
 import type { ProfileWords } from '../../export/localizeProfile';
 import type { ProfileSheetKey } from '../../i18n/deliverables/profileSheet';
@@ -236,7 +236,7 @@ export async function drawStyledProfileSheet(page: PDFPage, s: StyledProfileShee
   // A long subtitle takes two lines, a little smaller.
   if (sheetTextWidth(s.subtitle, f.sans, T.body, f) <= hw) text(p, s.subtitle, hx, top(66), T.body, { color: t.dim });
   else {
-    const [one = '', ...rest] = wrapSheetText(s.subtitle, f.sans, T.label, hw, f);
+    const [one = '', ...rest] = wrapWithin(s.subtitle, f.sans, T.label, hw, f);
     [one, rest.join(' ')].forEach((ln, i) => text(p, fitLine(ln, f.sans, T.label, hw, f), hx, top(64 + i * 13), T.label, { color: t.dim }));
   }
 
@@ -665,7 +665,7 @@ function drawNotes(p: Pen, s: StyledProfileSheet, yTop: number, yBot: number, PW
   const block = titleBlock(p, s);
   const cols = block.length > 0 ? 2 : 3;
   const rows = Math.max(1, Math.floor((yTop - yBot - 4) / step));
-  const blocks = [...s.notes.map((n, i) => `${i + 1}. ${n}`), ...(s.facts.length ? [s.facts.join(' ')] : []), ...(s.deliverable.notes ? [`${p.w.say('projectNotes')}: ${s.deliverable.notes.replace(/\n+/g, ' ')}`] : [])].map((n) => wrapSheetText(n, f.sans, size, cw, f));
+  const blocks = [...s.notes.map((n, i) => `${i + 1}. ${n}`), ...(s.facts.length ? [s.facts.join(' ')] : []), ...(s.deliverable.notes ? [`${p.w.say('projectNotes')}: ${s.deliverable.notes.replace(/\n+/g, ' ')}`] : [])].map((n) => wrapWithin(n, f.sans, size, cw, f));
   // The user's title block: label and value, two pairs a row, whole on the technical notes.
   const bx = M + 2 * (cw + gap), pw = (cw - 14) / 2;
   block.slice(0, rows * 2).forEach(([k, v], i) => {

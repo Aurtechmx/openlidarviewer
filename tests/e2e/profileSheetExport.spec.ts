@@ -177,4 +177,38 @@ test('the dialog prints what the user adds, in the language chosen, and keeps it
   dialog = await openProfileDialog(page);
   await page.keyboard.press('Escape');
   await expect(dialog).toBeHidden();
+  await expect(page.locator('.olv-mp-profile-pdf', { hasText: 'Export PDF' }).first()).toBeFocused();
+  // Text selected by dragging out of the dialog does not close it.
+  dialog = await openProfileDialog(page);
+  const box = (await dialog.getByLabel('Title', { exact: true }).boundingBox())!;
+  await page.mouse.move(box.x + 60, box.y + box.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(4, box.y + box.height / 2, { steps: 6 });
+  await page.mouse.up();
+  await expect(dialog.getByLabel('Title', { exact: true })).toHaveValue('Río Bravo, sección 4');
+  // A press that starts outside closes it.
+  await page.mouse.click(4, 300);
+  await expect(dialog).toBeHidden();
+  // A comma that reads two ways is asked about; the length as shown is on the line.
+  dialog = await openProfileDialog(page);
+  const marks = dialog.locator('details', { hasText: 'Marked points' }).locator('summary');
+  if (!(await dialog.getByLabel('Chainage, marked point 1').isVisible())) await marks.first().click();
+  await dialog.getByLabel('Chainage, marked point 1').fill('1,250');
+  await dialog.getByRole('button', { name: 'Export PDF' }).click();
+  await expect(dialog.getByRole('alert')).toContainText('could be read two ways');
+  // Export waits while a logo is being read, and a removed logo does not come back.
+  await page.evaluate(() => {
+    const gate = new Promise<void>((r) => { (window as unknown as { __read: () => void }).__read = r; });
+    Object.defineProperty(HTMLImageElement.prototype, 'onload', {
+      configurable: true,
+      set(this: HTMLImageElement, fn: () => void) { void gate.then(() => { if (this.complete) fn(); else this.addEventListener('load', fn); }); },
+    });
+  });
+  await dialog.getByLabel('Logo', { exact: true }).setInputFiles({ name: 'logo.png', mimeType: 'image/png', buffer: logo });
+  await expect(dialog.getByRole('button', { name: 'Export PDF' })).toBeDisabled();
+  await dialog.getByRole('button', { name: 'Remove logo' }).click();
+  await expect(dialog.getByRole('button', { name: 'Export PDF' })).toBeEnabled();
+  await page.evaluate(() => (window as unknown as { __read: () => void }).__read());
+  await page.waitForTimeout(300);
+  await expect(dialog.locator('.olv-pe-logo')).toBeHidden();
 });

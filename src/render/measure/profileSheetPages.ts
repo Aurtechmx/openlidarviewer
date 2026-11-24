@@ -10,7 +10,7 @@
  */
 import type { PDFDocument, PDFFont, PDFImage, PDFPage } from 'pdf-lib';
 import type { SheetFonts } from '../../export/sheetKit/fonts';
-import { drawPaper, pdfColor, sheetText, sheetTextRight, sheetTextWidth, wrapSheetText } from '../../export/sheetKit/primitives';
+import { drawPaper, pdfColor, sheetText, sheetTextRight, sheetTextWidth, wrapSheetText, wrapWithin } from '../../export/sheetKit/primitives';
 import type { SheetRgb } from '../../export/sheetKit/tokens';
 import type { ProfileWords } from '../../export/localizeProfile';
 import type { IssueRow, ProfileDeliverable } from '../../model/deliverableFields';
@@ -135,7 +135,7 @@ export function drawNotesSheet(c: ProfileSetContext, all: readonly NotesRow[]): 
   const f = c.fonts, t = c.tokens;
   const xi = 160, xv = 346, xr = 668;
   const layout = (k: number, pad: number) => rows.map((r) => {
-    const v = wrapSheetText(r.value, f.sansBold, T.figure * k, xr - xv - 24, f);
+    const v = wrapWithin(r.value, f.sansBold, T.figure * k, xr - xv - 24, f);
     const m = r.second ? [] : wrapSheetText(r.remark, f.sans, T.label * k, c.size[0] - M - xr, f);
     const s2 = r.second ? wrapSheetText(r.second[1], f.sansBold, T.figure * k, c.size[0] - M - xr - 170, f) : [];
     const it = wrapSheetText(r.item, f.sans, T.figure * k, xv - xi - 16, f);
@@ -274,7 +274,7 @@ export function drawMethodSheets(c: ProfileSetContext, p: {
     ...(d.notes ? [{ head: w.say('projectNotes'), lines: d.notes.split('\n').filter((ln) => ln.trim() !== '') }] : []),
     ...(d.marks?.length ? [{ head: w.say('markedPoints'), lines: d.marks.map((m, i) => `${i + 1}. ${p.formatStation(m.chainage)}  ${m.text}`) }] : []),
   ].map((b) => ({
-    head: b.head, paras: b.lines.map((ln) => wrapSheetText(ln, f.sans, T.figure, cw, f)),
+    head: b.head, paras: b.lines.map((ln) => wrapWithin(ln, f.sans, T.figure, cw, f)),
   }));
   const hOf = (b: { paras: string[][] }): number => 22 + b.paras.reduce((a, q) => a + q.length * step + 4, 0) + 10;
   let col = [0, 0, 0], top = y;
@@ -282,11 +282,24 @@ export function drawMethodSheets(c: ProfileSetContext, p: {
   for (const b of blocks) {
     let n = col.indexOf(Math.min(...col));
     if (col[n]! > 0 && top - col[n]! - hOf(b) < FLOOR) { more(Infinity); top = y; col = [0, 0, 0]; n = 0; }
-    const x = M + n * (cw + GAP), y0 = top - col[n]!;
-    put(o.i, b.head, x, y0, T.head, { font: f.sansBold });
-    let ly = y0 - 22;
-    for (const para of b.paras) { for (const ln of para) { put(o.i, ln, x, ly, T.figure); ly -= step; } ly -= 4; }
-    col[n]! += hOf(b);
+    let ly = top - col[n]!;
+    put(o.i, b.head, M + n * (cw + GAP), ly, T.head, { font: f.sansBold });
+    ly -= 22;
+    for (const para of b.paras) {
+      for (const ln of para) {
+        // A block taller than its column goes on in the next one, then on the next sheet.
+        while (ly < FLOOR) {
+          col[n] = top - FLOOR;
+          if (n < 2) n++;
+          else { more(Infinity); top = y; col = [0, 0, 0]; n = 0; }
+          ly = top - col[n]!;
+        }
+        put(o.i, ln, M + n * (cw + GAP), ly, T.figure);
+        ly -= step;
+      }
+      ly -= 4;
+    }
+    col[n] = top - ly + 10;
   }
   y = top - Math.max(...col) - 8;
 

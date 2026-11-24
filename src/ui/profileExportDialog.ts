@@ -16,6 +16,7 @@ import {
   type DeliverableStatus, type MarkedPoint, type ProfileDeliverable, type ProfileSheetFields,
 } from '../model/deliverableFields';
 import { rememberCompany, rememberedCompany } from './companyStore';
+import { chunkFailureText, classifyLoadError, reportChunkFailure } from '../app/staleChunkReload';
 import { el } from './dom';
 import { exportLanguageControl } from './exportLanguageControl';
 import { openModal } from './Modal';
@@ -40,13 +41,28 @@ export interface ProfileExportChoice {
   readonly unitSystem: 'metric' | 'imperial' | 'unverified';
 }
 
+/** What the dialog says when no file was made. */
+function failureText(e: unknown): string {
+  if (classifyLoadError(e) !== 'stale-chunk') return 'The PDF could not be made, so nothing was saved.';
+  reportChunkFailure('PDF export');
+  return chunkFailureText('PDF export');
+}
+
 const FEET = 1 / UNIT_FACTORS.M_PER_FT;
+
+/** Half of the last digit a chainage is shown with, so a value typed as shown is on the line. */
+const SHOWN_ROUNDING = 0.0005;
+
+/** A comma with three digits after it: 1,250 is 1250 to some readers and 1.25 to others. */
+export const ambiguousComma = (raw: string): boolean => /^[1-9]\d{0,2},\d{3}$/.test(raw.trim());
 
 /**
  * A chainage as typed, in metres of the line: "34.5", "34,5" or a station,
- * "0+034.50" (metric) or "1+13.45" (feet). Null when it is neither.
+ * "0+034.50" (metric) or "1+13.45" (feet). Null when it is neither, and when a
+ * comma could be a thousands or a decimal mark ("1,250").
  */
 export function parseChainage(raw: string, unit: 'metric' | 'imperial' | 'unverified'): number | null {
+  if (ambiguousComma(raw)) return null;
   const s = raw.trim().replace(',', '.');
   const st = /^(\d{1,4})\+(\d{1,3}(?:\.\d+)?)$/.exec(s);
   let v: number;
@@ -233,7 +249,8 @@ export function openProfileExportDialog(p: ProfileExportDialogInput, run: (c: Pr
   const fileName = input(p.defaultFileName.replace(/\.pdf$/i, ''), 120);
 
   // ── logo ───────────────────────────────────────────────────────────────
-  let logo = who.logoDataUrl;
+  let logo = who.logoDataUrl, logoTurn = 0, logoReading = false, busy = false;
+  const syncGo = (): void => { go.disabled = busy || logoReading; };
   const logoFile = document.createElement('input');
   logoFile.type = 'file';
   logoFile.accept = LOGO_TYPES.join(',');
@@ -252,13 +269,36 @@ export function openProfileExportDialog(p: ProfileExportDialogInput, run: (c: Pr
   logoFile.addEventListener('change', () => {
     const file = logoFile.files?.[0];
     if (!file) return;
-    logoSay.textContent = '';
-    void readLogo(file).then((d) => { logo = d; showLogo(); }, (e: unknown) => {
+    // Only the last choice counts, and Export waits for it.
+    const turn = ++logoTurn;
+    logoReading = true;
+    syncGo();
+    logoSay.textContent = 'Reading the logo…';
+    void readLogo(file).then((d) => {
+      if (turn !== logoTurn) return;
+      logo = d;
+      logoSay.textContent = '';
+    }, (e: unknown) => {
+      if (turn !== logoTurn) return;
       logoSay.textContent = e instanceof Error ? e.message : 'That image could not be read.';
       logoFile.value = '';
+    }).finally(() => {
+      if (turn !== logoTurn) return;
+      logoReading = false;
+      showLogo();
+      syncGo();
     });
   });
-  logoDrop.addEventListener('click', () => { logo = undefined; logoFile.value = ''; showLogo(); logoFile.focus(); });
+  logoDrop.addEventListener('click', () => {
+    logoTurn++;
+    logoReading = false;
+    logo = undefined;
+    logoFile.value = '';
+    logoSay.textContent = '';
+    showLogo();
+    syncGo();
+    logoFile.focus();
+  });
   showLogo();
   const logoField = field('Logo', logoFile, 'PNG, JPEG, WebP or SVG. Printed at the head of every Light and Dark sheet, on white on a Dark one.');
   logoField.append(logoShow, logoDrop, logoSay);
@@ -332,7 +372,7 @@ export function openProfileExportDialog(p: ProfileExportDialogInput, run: (c: Pr
   const footer = el('div', { className: 'olv-modal-actions' }, [err, chars, cancel, go]);
 
   return new Promise<boolean>((resolve) => {
-    let made = false, busy = false, closed = false;
+    let made = false, closed = false;
     const fail = (m: string): void => { err.textContent = m; err.hidden = false; };
     const handle = openModal({
       title: 'Export profile (PDF)', body, footer, returnFocusTo: p.returnFocusTo ?? null,
@@ -346,17 +386,18 @@ export function openProfileExportDialog(p: ProfileExportDialogInput, run: (c: Pr
       const out: MarkedPoint[] = [];
       for (const [c, t] of marks.rows()) {
         if (c!.trim() === '' && t!.trim() === '') continue;
+        if (ambiguousComma(c!)) return `“${c!.trim()}” could be read two ways. Type ${c!.trim().replace(',', '')} or ${c!.trim().replace(',', '.')}.`;
         const m = parseChainage(c!, p.unitSystem);
         if (m === null) return `“${c}” is not a chainage. Use a number, such as 34.5, or a station.`;
         if (t!.trim() === '') return `The marked point at ${c} has no text.`;
-        if (m > p.lengthM + 1e-6) return `The marked point at ${c} is past the end of the line (${toShown(p.lengthM)} ${unitOf[p.unitSystem]}).`;
+        if (m > p.lengthM + (p.unitSystem === 'imperial' ? SHOWN_ROUNDING / FEET : SHOWN_ROUNDING) + 1e-6) return `The marked point at ${c} is past the end of the line (${toShown(p.lengthM)} ${unitOf[p.unitSystem]}).`;
         out.push({ chainage: Math.min(m, p.lengthM), text: t! });
       }
       return out;
     };
 
     go.addEventListener('click', () => {
-      if (busy) return;
+      if (busy || logoReading) return;
       err.hidden = true;
       const mk = readMarks();
       if (typeof mk === 'string') { fail(mk); return; }
@@ -390,9 +431,10 @@ export function openProfileExportDialog(p: ProfileExportDialogInput, run: (c: Pr
       }, (e: unknown) => {
         // eslint-disable-next-line no-console
         console.error('OpenLiDARViewer: profile PDF export failed.', e);
-        fail(e instanceof Error && e.name === 'ProfileExportRefusal' ? e.message : 'The PDF could not be made, so nothing was saved. Reload the page and try again.');
+        fail(e instanceof Error && e.name === 'ProfileExportRefusal' ? e.message : failureText(e));
         busy = false;
-        go.disabled = cancel.disabled = false;
+        cancel.disabled = false;
+        syncGo();
         go.textContent = 'Export PDF';
       });
     });

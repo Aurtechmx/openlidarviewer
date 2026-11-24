@@ -28,6 +28,7 @@ The format is based on Keep a Changelog and the project follows Semantic Version
 
 ### Fixed
 
+- A dialog no longer closes when text selected in it is dragged outside.
 - With several scans open, the contour map sheet offers only measurements picked on the analysed scan and annotations placed on it, by the ownership rule the other scan-specific exports use. The layer that was active while the work was drawn no longer decides. The annotation checkbox, list and markers read one list. The scan report leaves out annotations placed on another scan and states why.
 - Light and Dark profile sheets draw the returns of the recorded sources only, matched by stable layer id; a scan shown since adds none, and returns that cannot be matched are left out with the reason. Profile sources are recorded by stable layer id in place of the file name, so two scans of one name are told apart. The plan strip is drawn from the scan the profile was picked on.
 - Index contour marks on the profile sheet are where the contour meets the line in plan; a contour elsewhere on the scan at the same height is no longer marked.
