@@ -226,7 +226,7 @@
   "devDependencies": {
     "@axe-core/playwright": "4.14.0",
     "@loaders.gl/las": "^4.5.4",
-    "@playwright/test": "^1.65.0",
+    "@playwright/test": "^1.65.1",
     "@stryker-mutator/core": "^10.1.1",
     "@stryker-mutator/vitest-runner": "^10.1.1",
     "@types/proj4": "^2.19.0",
